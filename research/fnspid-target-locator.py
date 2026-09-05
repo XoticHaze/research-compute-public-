@@ -5,6 +5,7 @@ import csv
 import hashlib
 import io
 import json
+import os
 import re
 import time
 import urllib.error
@@ -16,13 +17,18 @@ SOURCE = {
     "size": 23232979597,
     "lfs_sha256": "1a7a3eb8e6b97ec19f286f2cfca3371542bddb272ab1eb8f36e33ad98fa5c4da",
 }
-TARGETS = ["AMAT", "AMD", "AVGO", "DHI", "LEN", "MU", "NVR", "NVDA", "PHM", "TOL"]
+DEFAULT_TARGETS = ["AMAT", "AMD", "AVGO", "DHI", "LEN", "MU", "NVR", "NVDA", "PHM", "TOL"]
 CACHE = Path(".cache/fnspid-range")
 CHUNK = 1024 * 1024
-MAX_ITERS = 26
+MAX_ITERS = 18
 ROW_START = re.compile(rb"(?m)^(\d+),((?:19|20)\d{2}-\d{2}-\d{2} [^,\r\n]*),")
 SYMBOL_RE = re.compile(r"^[A-Z][A-Z0-9.\-]{0,11}$")
 DATE_RE = re.compile(r"^(?:19|20)\d{2}-\d{2}-\d{2}")
+
+
+def configured_targets():
+    raw = os.environ.get("FNSPID_TARGETS", "").strip()
+    return [x.strip().upper() for x in raw.split(",") if x.strip()] if raw else DEFAULT_TARGETS
 
 
 def url() -> str:
@@ -183,8 +189,9 @@ def locate(target: str):
 
 
 def main():
+    targets = configured_targets()
     results = []
-    for target in TARGETS:
+    for target in targets:
         try:
             results.append(locate(target))
         except Exception as exc:
@@ -193,7 +200,7 @@ def main():
         "schema": "research_compute_public.fnspid_target_locator.v1",
         "dataset": "Zihan1004/FNSPID",
         "source": SOURCE,
-        "targets": TARGETS,
+        "targets": targets,
         "results": results,
         "all_targets_found": all(x.get("found") for x in results),
         "found_count": sum(bool(x.get("found")) for x in results),
