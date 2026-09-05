@@ -1,0 +1,65 @@
+{
+  "schema": "selected_runtime_universe_14tu.v1",
+  "read_only": true,
+  "default_runtime_id": "crw_mnq_12m_proven_exec",
+  "runtime_ids": [
+    {
+      "runtime_id": "crw_mnq_12m_proven_exec",
+      "status": "active_selected",
+      "instrument_class": "FUT",
+      "strategy_id": "crw_score_multi_mode",
+      "strategy_profile": "proven_exec",
+      "parameter_preset_id": "crw_mnq_extreme_default",
+      "symbol": "MNQ",
+      "signal_symbol": "MNQ1!",
+      "timeframe": "12Min",
+      "execution_policy": {
+        "paper_submit_enabled": true,
+        "live_submit_enabled": false,
+        "max_contracts": 3,
+        "continuous_symbol_execution_blocked": true,
+        "dca_enabled": true,
+        "base_qty": 1,
+        "max_dca_adds": 2
+      },
+      "strategy_spec": {
+        "schema_version": "strategy_spec.v1",
+        "strategy_id": "crw_score_multi_mode",
+        "strategy_version": "pilot_v1",
+        "symbol": "MNQ",
+        "signal_symbol": "MNQ1!",
+        "asset_type": "futures",
+        "timeframe": "12Min",
+        "profile": "proven_exec",
+        "parameter_preset_id": "crw_mnq_extreme_default",
+        "parameters": {
+          "asset_class": "futures",
+          "symbol": "MNQ",
+          "signal_symbol": "MNQ1!",
+          "timeframe": "12Min",
+          "profile": "proven_exec",
+          "level": "Extreme",
+          "score_mode": "classic_z",
+          "entry_threshold": -2.8,
+          "exit_threshold": 4.5,
+          "dca_enabled": true,
+          "full_pine_optional_gates_enabled": false,
+          "paper_runtime_submit_authority": "bot_runtime_only",
+          "STRATEGY_TYPE": "Extreme",
+          "SCORE_TYPE": "Classic Z",
+          "ENTRY_EXTREME": -2.8,
+          "EXIT_EXTREME": 4.5,
+          "ENABLE_DCA": true,
+          "base_qty": 1,
+          "max_contracts": 3,
+          "max_dca_adds": 2
+        },
+        "data_policy": {},
+        "execution_policy": {},
+        "risk_policy": {},
+        "source": "selected_runtime_parameter_preset_activation_14th31hq"
+      },
+      "strategy_spec_digest": "3680e21e3bdbc38a1729cc38fd0c9d42d66242d970cce1617bbdd71c761a1ac6"
+    }
+  ]
+}
