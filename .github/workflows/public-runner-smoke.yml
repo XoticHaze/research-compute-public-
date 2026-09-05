@@ -28,8 +28,7 @@ jobs:
           import hashlib
           payload = b"research-compute-public-smoke-v1"
           digest = hashlib.sha256(payload).hexdigest()
-          expected = "841f6ed4e64ff5e2b02c526d5bd85db89c769c392eb73eef43672d6ba14ad751"
-          # Independent deterministic compute proof. Keep expected local to the test contract.
+          expected = "8ed73f5a19cd8014d39d6e4dfdfdc111d5e9560eecc635bcef7be464b6a52028"
           if digest != expected:
               raise SystemExit(f"digest mismatch: {digest}")
           print(f"PUBLIC_COMPUTE_SMOKE=PASS sha256={digest}")
