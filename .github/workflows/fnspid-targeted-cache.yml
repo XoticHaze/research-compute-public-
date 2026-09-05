@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'research/fnspid-parquet-capability-probe.py'
+      - 'research/fnspid-range-layout-probe.py'
       - 'research/fnspid-targeted-slice.py'
       - 'research/fnspid-targeted-slice.json'
       - '.github/workflows/fnspid-targeted-cache.yml'
@@ -25,4 +26,25 @@ jobs:
         with:
           name: fnspid-parquet-capability-receipt
           path: fnspid-parquet-capability-receipt.json
+          retention-days: 30
+
+  range-layout:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.16'
+      - name: Restore content-addressed FNSPID range cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/fnspid-range
+          key: fnspid-range-v1-5d4c018036bd82ca-1a7a3eb8e6b97ec1
+      - name: Probe bounded byte ranges and persist cache
+        run: python research/fnspid-range-layout-probe.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fnspid-range-layout-receipt
+          path: fnspid-range-layout-receipt.json
           retention-days: 30
