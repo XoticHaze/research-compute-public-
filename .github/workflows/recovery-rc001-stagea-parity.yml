@@ -1,0 +1,117 @@
+name: Recovery RC-001 Stage-A Parity
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/recovery-rc001-stagea-parity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rc001-stagea-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.16'
+
+      - name: Fetch exact already-public Stage-A adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .campaign
+          curl -fsSL https://raw.githubusercontent.com/XoticHaze/TextConverterToolbox/2d8995ba66502a4de25c64c1c32a67e132b05522/research/run_industry_stagea_public_runner_20260905.py -o .campaign/run_stagea.py
+          curl -fsSL https://raw.githubusercontent.com/XoticHaze/TextConverterToolbox/2d8995ba66502a4de25c64c1c32a67e132b05522/research/industry_stagea_public_runner_contract_20260905.json -o .campaign/contract.json
+          test "$(git hash-object .campaign/run_stagea.py)" = "9f7f802469dc6a33abd3431295d5232ebc4289c5"
+          test "$(git hash-object .campaign/contract.json)" = "e710cf483e3afb634275e462bfdc4bedd34319b9"
+          python -m json.tool .campaign/contract.json >/dev/null
+          python -m py_compile .campaign/run_stagea.py
+          echo 'PUBLIC_STAGEA_ADAPTER_IDENTITY=PASS'
+
+      - name: Install exact accepted numerical environment
+        run: python -m pip install --disable-pip-version-check -q numpy==2.4.6 pandas==3.0.5 scikit-learn==1.9.0 scipy==1.17.1
+
+      - name: Execute parity-only diagnostic and classify replay drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import importlib.util
+          import json
+          import os
+          from pathlib import Path
+
+          spec = importlib.util.spec_from_file_location('stagea', '.campaign/run_stagea.py')
+          mod = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          contract = json.loads(Path('.campaign/contract.json').read_text())
+
+          # Deliberately call only the accepted control matrix. New Batch-2 targets are never loaded here.
+          actual = mod._evaluate_matrix(
+              contract['parity_control']['families'],
+              contract['parity_control']['common_cutoff'],
+          )
+          expected = contract['parity_control']['accepted_family_summary']
+
+          families = {}
+          exact = True
+          decisions_match = True
+          for family, exp in expected.items():
+              row = actual['family_summary'][family]
+              state_delta = int(row['aggregate_primary_states']) - int(exp['aggregate_primary_states'])
+              net_delta = float(row['aggregate_stock_net25_mean_bps']) - float(exp['aggregate_stock_net25_mean_bps'])
+              rel_delta = float(row['aggregate_stock_after25_minus_sector_etf_mean_bps']) - float(exp['aggregate_stock_after25_minus_sector_etf_mean_bps'])
+              sub_delta = float(row['aggregate_sector_substitution50_mean_bps']) - float(exp['aggregate_sector_substitution50_mean_bps'])
+              pass_count_match = int(row['passing_symbols']) == int(exp['passing_symbols'])
+              family_exact = pass_count_match and state_delta == 0 and abs(net_delta) <= 1e-8 and abs(rel_delta) <= 1e-8 and abs(sub_delta) <= 1e-8
+              exact = exact and family_exact
+              decisions_match = decisions_match and pass_count_match
+              families[family] = {
+                  'passing_symbols_actual': int(row['passing_symbols']),
+                  'passing_symbols_expected': int(exp['passing_symbols']),
+                  'passing_symbols_match': pass_count_match,
+                  'state_count_delta': state_delta,
+                  'absolute_bps_delta': net_delta,
+                  'matched_etf_excess_bps_delta': rel_delta,
+                  'substitution50_bps_delta': sub_delta,
+                  'exact_parity': family_exact,
+              }
+
+          result = {
+              'schema': 'research_compute_public.rc001_stagea_parity_diagnostic.v1',
+              'queue_objective': 'RC-001',
+              'scientific_authority': 'XoticHaze/research-foundry issue #113 / accepted #142 lineage',
+              'adapter_source': 'XoticHaze/TextConverterToolbox@2d8995ba66502a4de25c64c1c32a67e132b05522',
+              'adapter_git_blob': '9f7f802469dc6a33abd3431295d5232ebc4289c5',
+              'contract_git_blob': 'e710cf483e3afb634275e462bfdc4bedd34319b9',
+              'selection_calendar': actual['selection_calendar'],
+              'family_deltas': families,
+              'accepted_family_decisions_match': decisions_match,
+              'exact_historical_parity': exact,
+              'classification': 'EXACT_PARITY' if exact else ('LIVE_SOURCE_REPLAY_DRIFT_WITH_DECISION_PARITY' if decisions_match else 'SCIENTIFIC_PARITY_BREAK'),
+              'target_batch2_loaded': False,
+              'promotion_authority': False,
+              'runtime_mutation': False,
+              'live_trading_change': False,
+          }
+          Path('.campaign/rc001-stagea-parity-diagnostic.json').write_text(json.dumps(result, indent=2, sort_keys=True) + '\n')
+          print('=== RC001_STAGEA_PARITY_DIAGNOSTIC ===')
+          print(json.dumps(result, sort_keys=True))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              f.write('## Recovery RC-001 — Stage-A parity\n\n')
+              f.write(f"Classification: **{result['classification']}**\n\n")
+              f.write(f"Accepted family pass-count decisions match: **{decisions_match}**\n\n")
+              f.write(f"Exact historical parity: **{exact}**\n\n")
+              f.write('Batch-2 target families were **not loaded**.\n')
+          PY
+
+      - name: Preserve diagnostic in immutable log
+        if: always()
+        run: |
+          if [ -f .campaign/rc001-stagea-parity-diagnostic.json ]; then
+            cat .campaign/rc001-stagea-parity-diagnostic.json
+          fi
