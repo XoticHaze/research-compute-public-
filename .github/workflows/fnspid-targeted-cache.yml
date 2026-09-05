@@ -2,15 +2,13 @@ name: FNSPID Targeted Cache
 on:
   pull_request:
     paths:
-      - 'research/fnspid-target-span-probe.py'
-      - 'research/fnspid-pilot-locator.json'
-      - 'research/fnspid-targeted-slice.py'
-      - 'research/fnspid-targeted-slice.json'
+      - 'research/fnspid-all-external-nvda-span-probe.py'
+      - 'research/fnspid-pilot-nasdaq-span.json'
       - '.github/workflows/fnspid-targeted-cache.yml'
 permissions:
   contents: read
 jobs:
-  span-probe:
+  all-external-nvda-gap:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -18,20 +16,25 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11.16'
-      - name: Restore source-identity range cache
-        uses: actions/cache@v4
+      - name: Restore content-addressed All_external range cache
+        uses: actions/cache/restore@v4
         with:
           path: .cache/fnspid-range
-          key: fnspid-span-v1-1a7a3eb8e6b97ec1-${{ hashFiles('research/fnspid-targeted-slice.json') }}
+          key: fnspid-all-external-v1-5d4c018036bd82ca-nvda-2015-${{ github.run_id }}
           restore-keys: |
-            fnspid-span-v1-1a7a3eb8e6b97ec1-
-            fnspid-range-v3-1a7a3eb8e6b97ec1-pilot-
+            fnspid-all-external-v1-5d4c018036bd82ca-nvda-2015-
             fnspid-range-v1-5d4c018036bd82ca-1a7a3eb8e6b97ec1
-          save-always: true
-      - name: Binary-locate symbol blocks and 2015 date cutoffs
-        run: python research/fnspid-target-span-probe.py
-      - uses: actions/upload-artifact@v4
+      - name: Binary-locate only the uncovered NVDA 2015-2021 source span
+        run: python research/fnspid-all-external-nvda-span-probe.py
+      - name: Publish source-gap receipt
+        uses: actions/upload-artifact@v4
         with:
-          name: fnspid-target-span-receipt
-          path: fnspid-target-span-receipt.json
+          name: fnspid-all-external-nvda-span-receipt
+          path: fnspid-all-external-nvda-span-receipt.json
           retention-days: 30
+      - name: Save every paid source range even after later failures
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/fnspid-range
+          key: fnspid-all-external-v1-5d4c018036bd82ca-nvda-2015-${{ github.run_id }}
