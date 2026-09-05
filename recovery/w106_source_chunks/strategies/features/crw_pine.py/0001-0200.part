@@ -1,0 +1,200 @@
+"""CRW Pine-derived feature builder.
+
+This module ports the computational feature layer from the CRW Pine script into
+Python without submitting orders, mutating strategy runtime, or depending on the
+broker.  It produces two kinds of columns:
+
+* reusable canonical fields such as SCORE_SELECTED, BASIS_SELECTED, TREND_UP;
+* CRW aliases such as CRW_SCORE_SELECTED, CRW_BASIS, CRW_DO_ENTER for TradingView
+  parity, chart overlays, alerts, and operator review.
+
+The runtime adapter can consume these fields later.  This first builder is
+feature-only and side-effect free.
+"""
+
+from __future__ import annotations
+
+import math
+from typing import Any, Mapping
+
+import pandas as pd
+
+from .crw_dca_contract import (
+    REFERENCE_MODE_TV_SIGNAL_CLOSE,
+    TIER_SEMANTICS_CORRECTED,
+    TIER_SEMANTICS_LEGACY_V0_2,
+    normalize_dca_tier_contract,
+    normalize_reference_model,
+    select_next_dca_tier,
+)
+
+
+Number = int | float
+
+
+STRATEGY_TYPE_DEFAULTS: dict[str, tuple[float, float]] = {
+    "Tight": (-0.8, 0.8),
+    "Wide": (-1.5, 1.5),
+    "Loose": (-2.5, 2.5),
+    "Extreme": (-2.0, 2.0),
+    "Ultra": (-3.5, 3.5),
+}
+
+_SCORE_MODE_ALIASES: dict[str, str] = {
+    "classic z": "Classic Z",
+    "classic_z": "Classic Z",
+    "z": "Classic Z",
+    "crw atr": "CRW ATR",
+    "crw_atr": "CRW ATR",
+    "atr": "CRW ATR",
+    "crw momentum": "CRW Momentum",
+    "crw_momentum": "CRW Momentum",
+    "momentum": "CRW Momentum",
+    "crw asymmetric": "CRW Asymmetric",
+    "crw_asymmetric": "CRW Asymmetric",
+    "asymmetric": "CRW Asymmetric",
+}
+
+_STRATEGY_TYPE_ALIASES: dict[str, str] = {
+    "tight": "Tight",
+    "wide": "Wide",
+    "loose": "Loose",
+    "extreme": "Extreme",
+    "ultra": "Ultra",
+}
+
+_ENTRY_FILTER_ALIASES: dict[str, str] = {
+    "none": "None",
+    "band only": "Band Only",
+    "band_only": "Band Only",
+    "trend only": "Trend Only",
+    "trend_only": "Trend Only",
+    "both": "Both",
+}
+
+_SIGNAL_LOGIC_ALIASES: dict[str, str] = {
+    "either": "Either",
+    "both": "Both",
+}
+
+
+def _config_value(config: Mapping[str, Any], *keys: str, default: Any = None) -> Any:
+    for key in keys:
+        if key in config:
+            return config.get(key)
+        upper = key.upper()
+        if upper in config:
+            return config.get(upper)
+        lower = key.lower()
+        if lower in config:
+            return config.get(lower)
+    return default
+
+
+def _as_bool(value: Any, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, str):
+        raw = value.strip().lower()
+        if raw in {"1", "true", "yes", "y", "on"}:
+            return True
+        if raw in {"0", "false", "no", "n", "off"}:
+            return False
+    return bool(value)
+
+
+def _as_int(value: Any, default: int, minimum: int | None = None) -> int:
+    try:
+        out = int(float(value))
+    except Exception:
+        out = int(default)
+    if minimum is not None:
+        out = max(out, minimum)
+    return out
+
+
+def _as_float(value: Any, default: float, minimum: float | None = None) -> float:
+    try:
+        out = float(value)
+    except Exception:
+        out = float(default)
+    if not math.isfinite(out):
+        out = float(default)
+    if minimum is not None:
+        out = max(out, minimum)
+    return out
+
+
+def _normalize_choice(value: Any, aliases: Mapping[str, str], default: str) -> str:
+    raw = str(value if value is not None else default).strip()
+    return aliases.get(raw.lower(), raw if raw in set(aliases.values()) else default)
+
+
+def _series(df: pd.DataFrame, name: str, default: float | None = None) -> pd.Series:
+    if name in df.columns:
+        return pd.to_numeric(df[name], errors="coerce")
+    if default is None:
+        return pd.Series([math.nan] * len(df), index=df.index, dtype="float64")
+    return pd.Series([float(default)] * len(df), index=df.index, dtype="float64")
+
+
+def _ema(values: pd.Series, length: int) -> pd.Series:
+    return values.ewm(span=max(1, int(length)), adjust=False, min_periods=max(1, int(length))).mean()
+
+
+def _sma(values: pd.Series, length: int) -> pd.Series:
+    return values.rolling(window=max(1, int(length)), min_periods=max(1, int(length))).mean()
+
+
+def _stdev(values: pd.Series, length: int) -> pd.Series:
+    # Pine ta.stdev defaults to a biased/population estimate.  ddof=0 is the
+    # closest pandas rolling equivalent for first parity passes.
+    return values.rolling(window=max(1, int(length)), min_periods=max(1, int(length))).std(ddof=0)
+
+
+def _rma(values: pd.Series, length: int) -> pd.Series:
+    # Wilder RMA approximation used by Pine ta.atr.  The first seeded values can
+    # differ slightly from TradingView, so parity harness should compare with a
+    # warmup buffer.
+    return values.ewm(alpha=1.0 / max(1, int(length)), adjust=False, min_periods=max(1, int(length))).mean()
+
+
+def _atr(df: pd.DataFrame, length: int) -> pd.Series:
+    high = _series(df, "high")
+    low = _series(df, "low")
+    close = _series(df, "close")
+    prev_close = close.shift(1)
+    tr = pd.concat([(high - low).abs(), (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
+    return _rma(tr, length)
+
+
+def _rsi(values: pd.Series, length: int) -> pd.Series:
+    delta = values.diff()
+    gains = delta.clip(lower=0)
+    losses = (-delta).clip(lower=0)
+    avg_gain = _rma(gains, length)
+    avg_loss = _rma(losses, length)
+    rs = avg_gain / avg_loss.replace(0, math.nan)
+    out = 100.0 - (100.0 / (1.0 + rs))
+    out = out.where(~((avg_loss == 0) & (avg_gain > 0)), 100.0)
+    out = out.where(~((avg_loss == 0) & (avg_gain == 0)), 50.0)
+    return out
+
+
+def _mfi(df: pd.DataFrame, length: int) -> pd.Series:
+    high = _series(df, "high")
+    low = _series(df, "low")
+    close = _series(df, "close")
+    volume = _series(df, "volume", 0.0)
+    typical = (high + low + close) / 3.0
+    raw_flow = typical * volume
+    positive = raw_flow.where(typical > typical.shift(1), 0.0)
+    negative = raw_flow.where(typical < typical.shift(1), 0.0)
+    pos_sum = positive.rolling(window=max(1, int(length)), min_periods=max(1, int(length))).sum()
+    neg_sum = negative.rolling(window=max(1, int(length)), min_periods=max(1, int(length))).sum()
+    ratio = pos_sum / neg_sum.replace(0, math.nan)
+    out = 100.0 - (100.0 / (1.0 + ratio))
+    out = out.where(~((neg_sum == 0) & (pos_sum > 0)), 100.0)
+    out = out.where(~((neg_sum == 0) & (pos_sum == 0)), 50.0)
