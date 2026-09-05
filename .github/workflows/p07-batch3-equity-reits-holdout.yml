@@ -33,6 +33,7 @@ jobs:
           from pathlib import Path
           import pandas as pd
 
+          receipt_path=Path('p07-equity-reits-holdout-receipt.json')
           contract=json.loads(Path('research/p07-batch3-contract.json').read_text())
           admission=json.loads(Path('research/p07-batch3-equity-reits-development-admission.json').read_text())
           assert admission['development_gate']['development_family_gate_pass'] is True
@@ -48,7 +49,7 @@ jobs:
           spec=importlib.util.spec_from_file_location('holdout','.campaign/holdout.py')
           base=importlib.util.module_from_spec(spec); spec.loader.exec_module(base)
 
-          def prime(symbols, cutoff_text):
+          def prime_exact(symbols, cutoff_text):
               cutoff=pd.Timestamp(cutoff_text)
               base._CACHE.clear(); loaded={}
               for symbol in symbols:
@@ -59,8 +60,29 @@ jobs:
                   loaded[symbol]=bounded
               base._CACHE.clear(); base._CACHE.update(loaded)
 
-          parity_holdout=('CCS','MHO','HOV','BZH'); parity_benchmark='ITB'; cutoff=contract['cutoff']
-          prime((*base.TRAIN,*parity_holdout,'QQQ',parity_benchmark), cutoff)
+          def prime_latest_common_at_or_before(symbols, ceiling_text):
+              ceiling=pd.Timestamp(ceiling_text)
+              base._CACHE.clear(); loaded={}; common=None; last_available={}
+              for symbol in symbols:
+                  frame=base._load(symbol)
+                  bounded=frame.loc[frame.timestamp <= ceiling].reset_index(drop=True)
+                  if bounded.empty:
+                      raise RuntimeError(f'{symbol}: no source rows at or before ceiling={ceiling.isoformat()}')
+                  loaded[symbol]=bounded
+                  last_available[symbol]=bounded.iloc[-1].timestamp.isoformat()
+                  dates=set(bounded.timestamp)
+                  common=dates if common is None else common.intersection(dates)
+              if not common:
+                  raise RuntimeError('no common target-selection timestamp at or before frozen ceiling')
+              chosen=max(common)
+              if chosen > ceiling:
+                  raise RuntimeError('derived target cutoff exceeds frozen development ceiling')
+              base._CACHE.clear()
+              base._CACHE.update({symbol: frame.loc[frame.timestamp <= chosen].reset_index(drop=True) for symbol,frame in loaded.items()})
+              return chosen, last_available
+
+          parity_holdout=('CCS','MHO','HOV','BZH'); parity_benchmark='ITB'; development_ceiling=contract['cutoff']
+          prime_exact((*base.TRAIN,*parity_holdout,'QQQ',parity_benchmark), development_ceiling)
           parity=base._evaluate_family(parity_holdout,parity_benchmark)
           expected={
               'external_alpha_passing_symbols':3,
@@ -75,33 +97,61 @@ jobs:
           parity_checks=base._assert_homebuilder_parity(parity,expected)
 
           holdout=tuple(target['external_holdouts']); benchmark=target['primary_industry_etf']
-          prime((*base.TRAIN,*holdout,'QQQ',benchmark), cutoff)
-          result=base._evaluate_family(holdout,benchmark)
-          alpha=result['broad_external_alpha']; sub=result['broad_benchmark_substitution50']
-          if alpha['passes']:
-              decision='CONFIRM_EQUITY_REIT_GENERIC_EXTERNAL_ALPHA'
-          else:
-              decision='REJECT_EQUITY_REIT_GENERIC_EXTERNAL_ALPHA'
-          out={
-              'schema':'research_compute_public.p07_batch3_equity_reits_holdout.v1',
-              'status':'PASS',
-              'development_admission':admission,
-              'parity':{'passed':True,'checks':parity_checks,'result':parity},
-              'target':{'family':'equity_reits','benchmark':benchmark,'common_cutoff':cutoff,'result':result},
-              'decision':decision,
-              'external_alpha_pass':alpha['passes'],
-              'substitution50_pass':sub['passes'],
-              'research_only':True,
-              'within_industry_scarcity_authority':False,
-              'cross_industry_funding_authority':False,
-              'passive_substitution_authority_from_alpha_only':False,
-              'promotion_authority':False,
-              'runtime_mutation':False,
-              'broker_action':False,
-              'live_trading_change':False,
-          }
-          Path('p07-equity-reits-holdout-receipt.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
-          print('P07_EQUITY_REITS_HOLDOUT='+json.dumps(out,sort_keys=True))
+          target_selection_symbols=(*base.TRAIN,*holdout,'QQQ')
+          try:
+              target_cutoff,last_available=prime_latest_common_at_or_before(target_selection_symbols,development_ceiling)
+              source_gate={
+                  'passed':True,
+                  'rule':'latest common target-selection date at or before frozen development cutoff; benchmark excluded until calendar frozen',
+                  'frozen_ceiling':development_ceiling,
+                  'selected_common_cutoff':target_cutoff.isoformat(),
+                  'last_available_at_or_before_ceiling':last_available,
+                  'first_attempt_run':33989280614,
+                  'first_attempt_observation':'AVB exact-ceiling check exposed last available 2026-08-24; no target economics were computed',
+              }
+              result=base._evaluate_family(holdout,benchmark)
+              assert result['selection_calendar']['common_cutoff'] == target_cutoff.isoformat()
+              alpha=result['broad_external_alpha']; sub=result['broad_benchmark_substitution50']
+              decision='CONFIRM_EQUITY_REIT_GENERIC_EXTERNAL_ALPHA' if alpha['passes'] else 'REJECT_EQUITY_REIT_GENERIC_EXTERNAL_ALPHA'
+              out={
+                  'schema':'research_compute_public.p07_batch3_equity_reits_holdout.v2',
+                  'status':'PASS',
+                  'development_admission':admission,
+                  'parity':{'passed':True,'checks':parity_checks,'result':parity},
+                  'source_availability_gate':source_gate,
+                  'target':{'family':'equity_reits','benchmark':benchmark,'common_cutoff':target_cutoff.isoformat(),'result':result},
+                  'decision':decision,
+                  'external_alpha_pass':alpha['passes'],
+                  'substitution50_pass':sub['passes'],
+                  'research_only':True,
+                  'within_industry_scarcity_authority':False,
+                  'cross_industry_funding_authority':False,
+                  'passive_substitution_authority_from_alpha_only':False,
+                  'promotion_authority':False,
+                  'runtime_mutation':False,
+                  'broker_action':False,
+                  'live_trading_change':False,
+              }
+              receipt_path.write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
+              print('P07_EQUITY_REITS_HOLDOUT='+json.dumps(out,sort_keys=True))
+          except Exception as exc:
+              out={
+                  'schema':'research_compute_public.p07_batch3_equity_reits_holdout.v2',
+                  'status':'FAIL',
+                  'error':f'{type(exc).__name__}: {exc}',
+                  'development_admission':admission,
+                  'parity_passed':True,
+                  'external_holdout':['AVB','EQR','ESS','DLR'],
+                  'target_outcome_interpretation_authorized':False,
+                  'research_only':True,
+                  'promotion_authority':False,
+                  'runtime_mutation':False,
+                  'broker_action':False,
+                  'live_trading_change':False,
+              }
+              receipt_path.write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
+              print('P07_EQUITY_REITS_HOLDOUT_FAIL='+json.dumps(out,sort_keys=True))
+              raise
           PY
       - name: Retain holdout receipt
         if: always()
