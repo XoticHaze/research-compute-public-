@@ -6,6 +6,8 @@ import hashlib
 import io
 import json
 import re
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -34,15 +36,43 @@ def fetch_range(start: int, length: int = CHUNK):
     if p.exists():
         return p.read_bytes(), True
     p.parent.mkdir(parents=True, exist_ok=True)
-    req = urllib.request.Request(url(), headers={"User-Agent": "research-compute-public/1", "Range": f"bytes={start}-{end}", "Accept-Encoding": "identity"})
-    with urllib.request.urlopen(req, timeout=120) as r:
-        if getattr(r, "status", None) != 206 or not r.headers.get("Content-Range"):
-            raise RuntimeError(f"range not honored: status={getattr(r, 'status', None)} content-range={r.headers.get('Content-Range')}")
-        data = r.read(length + 1)
-    if len(data) > length:
-        raise RuntimeError("bounded range exceeded")
-    p.write_bytes(data)
-    return data, False
+    last = None
+    for attempt in range(5):
+        req = urllib.request.Request(url(), headers={"User-Agent": "research-compute-public/1", "Range": f"bytes={start}-{end}", "Accept-Encoding": "identity"})
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                if getattr(r, "status", None) != 206 or not r.headers.get("Content-Range"):
+                    raise RuntimeError(f"range not honored: status={getattr(r, 'status', None)} content-range={r.headers.get('Content-Range')}")
+                data = r.read(length + 1)
+            if len(data) > length:
+                raise RuntimeError("bounded range exceeded")
+            p.write_bytes(data)
+            return data, False
+        except (urllib.error.URLError, ConnectionResetError, TimeoutError, RuntimeError) as exc:
+            last = exc
+            time.sleep(min(8, 2 ** attempt))
+    raise RuntimeError(f"range fetch failed after retries start={start} end={end}: {last}")
+
+
+def fetch_window(start: int, length: int):
+    parts = []
+    hits = 0
+    reads = 0
+    offset = start
+    remaining = length
+    while remaining > 0:
+        n = min(CHUNK, remaining)
+        data, hit = fetch_range(offset, n)
+        parts.append(data)
+        hits += int(hit)
+        reads += int(not hit)
+        if not data:
+            break
+        offset += len(data)
+        remaining -= len(data)
+        if len(data) < n:
+            break
+    return b"".join(parts), hits, reads
 
 
 def _valid(row):
@@ -58,7 +88,6 @@ def _valid(row):
 def valid_pairs(data: bytes):
     text = data.decode("utf-8", errors="replace")
     out = []
-    # Preferred path: identify likely physical record starts and parse one logical row.
     for m in ROW_START.finditer(data):
         pos = m.start()
         char_pos = len(data[:pos].decode("utf-8", errors="replace"))
@@ -71,9 +100,6 @@ def valid_pairs(data: bytes):
             out.append((pos, v[0], v[1]))
     if out:
         return out
-
-    # Fallback for chunks beginning inside a large quoted article. This parser already
-    # proved capable of recovering valid OCUL/OCX rows from the pathological midpoint.
     lines = text.splitlines()
     if lines:
         lines = lines[1:-1]
@@ -133,9 +159,9 @@ def locate(target: str):
             hi = max(0, mid - 1)
     center = best if best is not None else (lo + hi) // 2
     window_start = max(0, center - 2 * CHUNK)
-    data, hit = fetch_range(window_start, 4 * CHUNK)
-    cache_reads += int(hit)
-    network_reads += int(not hit)
+    data, window_hits, window_reads = fetch_window(window_start, 4 * CHUNK)
+    cache_reads += window_hits
+    network_reads += window_reads
     pairs = valid_pairs(data)
     exact = [(window_start + p, s, d) for p, s, d in pairs if s == target]
     neighbors = [(s, d) for _, s, d in pairs]
@@ -157,7 +183,12 @@ def locate(target: str):
 
 
 def main():
-    results = [locate(t) for t in TARGETS]
+    results = []
+    for target in TARGETS:
+        try:
+            results.append(locate(target))
+        except Exception as exc:
+            results.append({"target": target, "found": False, "failure": f"{type(exc).__name__}:{exc}", "trace": [], "network_reads": 0, "cache_reads": 0})
     out = {
         "schema": "research_compute_public.fnspid_target_locator.v1",
         "dataset": "Zihan1004/FNSPID",
@@ -165,8 +196,9 @@ def main():
         "targets": TARGETS,
         "results": results,
         "all_targets_found": all(x.get("found") for x in results),
-        "network_reads": sum(x["network_reads"] for x in results),
-        "cache_reads": sum(x["cache_reads"] for x in results),
+        "found_count": sum(bool(x.get("found")) for x in results),
+        "network_reads": sum(x.get("network_reads", 0) for x in results),
+        "cache_reads": sum(x.get("cache_reads", 0) for x in results),
         "cache_identity": "source_lfs_sha256+byte_range",
         "research_only": True,
         "promotion_authority": False,
