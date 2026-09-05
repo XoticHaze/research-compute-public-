@@ -1,0 +1,39 @@
+{
+  "schema": "research_compute_public.fnspid_pinned_target_locator.v1",
+  "source": {
+    "dataset": "Zihan1004/FNSPID",
+    "path": "Stock_news/nasdaq_exteral_data.csv",
+    "size_bytes": 23232979597,
+    "lfs_sha256": "1a7a3eb8e6b97ec19f286f2cfca3371542bddb272ab1eb8f36e33ad98fa5c4da"
+  },
+  "producer": {
+    "workflow_run_id": 33988721408,
+    "job_id": 101366963009,
+    "artifact_id": 9975959723,
+    "artifact_zip_sha256": "a1655f6bd75758978b944d2c2945ff405980365e5fa5087ab5673a3ede158d0f"
+  },
+  "targets": ["NVDA", "DHI"],
+  "results": [
+    {
+      "target": "NVDA",
+      "approx_center": 11343716389,
+      "window_start": 11341619237,
+      "window_bytes": 4194304,
+      "observed_rows": 591,
+      "observed_first_date": "2023-05-11 00:00:00 UTC",
+      "observed_last_date": "2023-03-13 00:00:00 UTC"
+    },
+    {
+      "target": "DHI",
+      "approx_center": 5308859348,
+      "window_start": 5306762196,
+      "window_bytes": 4194304,
+      "observed_rows": 601,
+      "observed_first_date": "2020-04-02 00:00:00 UTC",
+      "observed_last_date": "2017-06-12 00:00:00 UTC"
+    }
+  ],
+  "reuse_rule": "Use these pinned neighborhoods while source.lfs_sha256 is unchanged. Re-locate only after upstream source identity changes or when adding a new symbol.",
+  "research_only": true,
+  "promotion_authority": false
+}
