@@ -45,36 +45,55 @@ def fetch_range(start: int, length: int = CHUNK):
     return data, False
 
 
+def _valid(row):
+    if len(row) != 12:
+        return None
+    date = row[1].strip()
+    sym = row[3].strip().upper()
+    if not DATE_RE.match(date) or not SYMBOL_RE.match(sym):
+        return None
+    return sym, date
+
+
 def valid_pairs(data: bytes):
     text = data.decode("utf-8", errors="replace")
-    raw = data
     out = []
-    for m in ROW_START.finditer(raw):
+    # Preferred path: identify likely physical record starts and parse one logical row.
+    for m in ROW_START.finditer(data):
         pos = m.start()
-        piece = text[len(raw[:pos].decode("utf-8", errors="replace")) :]
+        char_pos = len(data[:pos].decode("utf-8", errors="replace"))
         try:
-            row = next(csv.reader(io.StringIO(piece)))
+            row = next(csv.reader(io.StringIO(text[char_pos:])))
         except (csv.Error, StopIteration):
             continue
-        if len(row) != 12:
-            continue
-        date = row[1].strip()
-        sym = row[3].strip().upper()
-        if not DATE_RE.match(date) or not SYMBOL_RE.match(sym):
-            continue
-        out.append((pos, sym, date))
+        v = _valid(row)
+        if v:
+            out.append((pos, v[0], v[1]))
+    if out:
+        return out
+
+    # Fallback for chunks beginning inside a large quoted article. This parser already
+    # proved capable of recovering valid OCUL/OCX rows from the pathological midpoint.
+    lines = text.splitlines()
+    if lines:
+        lines = lines[1:-1]
+    try:
+        rows = csv.reader(io.StringIO("\n".join(lines)))
+        logical_offset = 0
+        for row in rows:
+            v = _valid(row)
+            if v:
+                out.append((logical_offset, v[0], v[1]))
+            logical_offset += 1
+    except csv.Error:
+        pass
     return out
 
 
 def sample(start: int):
     data, hit = fetch_range(start)
     pairs = valid_pairs(data)
-    return {
-        "start": start,
-        "cache_hit": hit,
-        "sha256": hashlib.sha256(data).hexdigest(),
-        "pairs": pairs,
-    }
+    return {"start": start, "cache_hit": hit, "sha256": hashlib.sha256(data).hexdigest(), "pairs": pairs}
 
 
 def locate(target: str):
@@ -92,13 +111,15 @@ def locate(target: str):
         network_reads += int(not s["cache_hit"])
         pairs = s["pairs"]
         if not pairs:
-            # Shift half a chunk to escape a pathological partial quoted record.
-            s = sample(max(0, mid - CHUNK // 2))
-            cache_reads += int(s["cache_hit"])
-            network_reads += int(not s["cache_hit"])
-            pairs = s["pairs"]
+            for shift in (-CHUNK // 2, CHUNK // 2, -CHUNK, CHUNK):
+                s = sample(max(0, min(mid + shift, SOURCE["size"] - CHUNK)))
+                cache_reads += int(s["cache_hit"])
+                network_reads += int(not s["cache_hit"])
+                pairs = s["pairs"]
+                if pairs:
+                    break
         if not pairs:
-            raise RuntimeError(f"no structurally valid rows near byte {mid}")
+            return {"target": target, "found": False, "failure": f"no_structurally_valid_rows_near_{mid}", "trace": trace, "network_reads": network_reads, "cache_reads": cache_reads}
         syms = [p[1] for p in pairs]
         med = syms[len(syms)//2]
         trace.append({"offset": s["start"], "first": syms[0], "median": med, "last": syms[-1], "rows": len(syms), "cache_hit": s["cache_hit"]})
@@ -111,7 +132,6 @@ def locate(target: str):
         else:
             hi = max(0, mid - 1)
     center = best if best is not None else (lo + hi) // 2
-    # Inspect a bounded neighborhood for exact target rows and neighbors.
     window_start = max(0, center - 2 * CHUNK)
     data, hit = fetch_range(window_start, 4 * CHUNK)
     cache_reads += int(hit)
@@ -144,7 +164,7 @@ def main():
         "source": SOURCE,
         "targets": TARGETS,
         "results": results,
-        "all_targets_found": all(x["found"] for x in results),
+        "all_targets_found": all(x.get("found") for x in results),
         "network_reads": sum(x["network_reads"] for x in results),
         "cache_reads": sum(x["cache_reads"] for x in results),
         "cache_identity": "source_lfs_sha256+byte_range",
