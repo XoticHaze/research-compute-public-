@@ -63,14 +63,13 @@ def header_and_indices(data: bytes):
     first = text.splitlines()[0]
     header = next(csv.reader([first]))
     lower = {x.strip().lower(): i for i, x in enumerate(header)}
-    sym_i = next((lower[k] for k in ("stock", "ticker", "symbol") if k in lower), None)
+    sym_i = next((lower[k] for k in ("stock_symbol", "stock", "ticker", "symbol") if k in lower), None)
     date_i = next((lower[k] for k in ("date", "datetime", "timestamp", "published_at", "published") if k in lower), None)
     return header, sym_i, date_i
 
 
 def inspect_chunk(data: bytes, header_len: int | None, sym_i: int | None, date_i: int | None, is_start: bool):
     text = data.decode("utf-8", errors="replace")
-    # Keep only complete physical lines; validate logical rows by exact field count.
     lines = text.splitlines()
     if not is_start and lines:
         lines = lines[1:]
