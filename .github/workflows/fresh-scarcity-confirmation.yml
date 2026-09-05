@@ -1,0 +1,23 @@
+name: Fresh Scarcity Confirmation
+on:
+  push:
+    branches:
+      - assistant/fresh-scarcity-confirm-20260905-r1
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  confirm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install frozen environment
+        run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 scikit-learn==1.5.2
+      - name: Execute exact frozen fresh confirmation capsule
+        run: python research/fresh_scarcity_confirmation_20260905.py
+      - name: Preserve receipt in immutable log
+        if: always()
+        run: |
+          echo '=== FRESH SCARCITY CONFIRMATION RECEIPT ==='
+          if [ -f fresh_scarcity_confirmation_receipt_20260905.json ]; then cat fresh_scarcity_confirmation_receipt_20260905.json; fi
