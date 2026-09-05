@@ -1,0 +1,43 @@
+name: Public Research Runner Smoke
+
+on:
+  push:
+    branches:
+      - assistant/public-runner-smoke-20260905-r1
+    paths:
+      - .github/workflows/public-runner-smoke.yml
+  pull_request:
+    paths:
+      - .github/workflows/public-runner-smoke.yml
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Prove hosted runner execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "runner_os=${RUNNER_OS}"
+          echo "runner_arch=${RUNNER_ARCH}"
+          python3 - <<'PY'
+          import hashlib
+          payload = b"research-compute-public-smoke-v1"
+          digest = hashlib.sha256(payload).hexdigest()
+          expected = "841f6ed4e64ff5e2b02c526d5bd85db89c769c392eb73eef43672d6ba14ad751"
+          # Independent deterministic compute proof. Keep expected local to the test contract.
+          if digest != expected:
+              raise SystemExit(f"digest mismatch: {digest}")
+          print(f"PUBLIC_COMPUTE_SMOKE=PASS sha256={digest}")
+          PY
+          {
+            echo "## Public Research Runner Smoke"
+            echo
+            echo "PUBLIC_COMPUTE_SMOKE=PASS"
+            echo "runner_os=${RUNNER_OS}"
+            echo "runner_arch=${RUNNER_ARCH}"
+          } >> "$GITHUB_STEP_SUMMARY"
