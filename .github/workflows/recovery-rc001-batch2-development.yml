@@ -36,5 +36,6 @@ jobs:
           Path('batch2-result.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
           print('=== BATCH2_DEVELOPMENT_RESULT ==='); print(json.dumps(out,sort_keys=True))
           PY
-      - if: always()
+      - name: Preserve terminal result
+        if: always()
         run: test ! -f batch2-result.json || cat batch2-result.json
