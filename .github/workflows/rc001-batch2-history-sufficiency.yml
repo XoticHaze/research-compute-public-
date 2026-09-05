@@ -1,0 +1,39 @@
+name: RC001 Batch2 History Sufficiency
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/rc001-batch2-history-sufficiency.yml'
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Diagnose frozen family source history
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from urllib.parse import urlencode
+          from urllib.request import Request, urlopen
+          c=json.loads(Path('research/batch2-contract.json').read_text()); assert not c['external_holdouts_loaded']
+          def epoch(x): return int(datetime.fromisoformat(x).replace(tzinfo=timezone.utc).timestamp())
+          def probe(s):
+              q=urlencode({'period1':epoch('2014-01-01'),'period2':epoch('2026-09-02'),'interval':'1d','events':'history','includeAdjustedClose':'true'})
+              req=Request(f'https://query1.finance.yahoo.com/v8/finance/chart/{s}?{q}',headers={'User-Agent':'Mozilla/5.0 research-compute/1.0'})
+              with urlopen(req,timeout=30) as r: p=json.loads(r.read().decode())
+              z=(p.get('chart',{}).get('result') or [None])[0]; ts=[] if not z else (z.get('timestamp') or [])
+              return {'rows':len(ts),'first':datetime.fromtimestamp(ts[0],timezone.utc).date().isoformat() if ts else None,'last':datetime.fromtimestamp(ts[-1],timezone.utc).date().isoformat() if ts else None}
+          out={'schema':'research_compute_public.rc001_batch2_history_sufficiency.v1','research_only':True,'external_holdouts_loaded':False,'families':{}}
+          for family,spec in c['families'].items():
+              probes={s:probe(s) for s in list(spec['development_universe'])+[spec['primary_industry_etf']]}
+              latest=max((v['first'] for v in probes.values() if v['first']),default=None)
+              out['families'][family]={'symbols':probes,'latest_common_start':latest,'shortest_symbol':min(probes,key=lambda s:probes[s]['rows'])}
+          print('HISTORY_SUFFICIENCY='+json.dumps(out,sort_keys=True))
+          PY
