@@ -1,0 +1,113 @@
+name: P07 Batch3 Equity REITs External Holdout
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/p07-batch3-equity-reits-holdout.yml'
+      - 'research/p07-batch3-contract.json'
+      - 'research/p07-batch3-equity-reits-development-admission.json'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Materialize parity-proven public holdout evaluator
+        run: |
+          mkdir -p .campaign
+          curl -fsSL https://raw.githubusercontent.com/XoticHaze/TextConverterToolbox/6e4c35d66bf76ede83f4165fe4d46ef6c13c53f1/research/run_banks_generic_holdout_public_runner_20260905.py -o .campaign/holdout.py
+          test "$(git hash-object .campaign/holdout.py)" = e52ecb2bd1b0bc368d8f7520aec5948730b1bf60
+      - name: Install accepted holdout environment
+        run: python -m pip install --disable-pip-version-check -q numpy==2.4.6 pandas==3.0.5 scikit-learn==1.9.0 scipy==1.17.1
+      - name: Reproduce accepted Homebuilder parity then consume frozen REIT holdout
+        run: |
+          python - <<'PY'
+          import importlib.util, json
+          from pathlib import Path
+          import pandas as pd
+
+          contract=json.loads(Path('research/p07-batch3-contract.json').read_text())
+          admission=json.loads(Path('research/p07-batch3-equity-reits-development-admission.json').read_text())
+          assert admission['development_gate']['development_family_gate_pass'] is True
+          assert admission['development_gate']['passing_symbols'] == 5
+          assert admission['development_gate']['required_passing_symbols'] == 5
+          assert admission['artifact_digest'] == 'sha256:75771d51537195643deadeabc02d8585ddc436041c08f9596711f3b181447452'
+          assert admission['external_holdouts_loaded_in_development'] is False
+          target=contract['families']['equity_reits']
+          assert target['external_holdouts'] == ['AVB','EQR','ESS','DLR']
+          assert target['primary_industry_etf'] == 'VNQ'
+          assert contract['cutoff'] == '2026-09-01T13:30:00+00:00'
+
+          spec=importlib.util.spec_from_file_location('holdout','.campaign/holdout.py')
+          base=importlib.util.module_from_spec(spec); spec.loader.exec_module(base)
+
+          def prime(symbols, cutoff_text):
+              cutoff=pd.Timestamp(cutoff_text)
+              base._CACHE.clear(); loaded={}
+              for symbol in symbols:
+                  frame=base._load(symbol)
+                  bounded=frame.loc[frame.timestamp <= cutoff].reset_index(drop=True)
+                  if bounded.empty or bounded.iloc[-1].timestamp != cutoff:
+                      raise RuntimeError(f'{symbol}: exact cutoff unavailable expected={cutoff.isoformat()} last={None if bounded.empty else bounded.iloc[-1].timestamp.isoformat()}')
+                  loaded[symbol]=bounded
+              base._CACHE.clear(); base._CACHE.update(loaded)
+
+          parity_holdout=('CCS','MHO','HOV','BZH'); parity_benchmark='ITB'; cutoff=contract['cutoff']
+          prime((*base.TRAIN,*parity_holdout,'QQQ',parity_benchmark), cutoff)
+          parity=base._evaluate_family(parity_holdout,parity_benchmark)
+          expected={
+              'external_alpha_passing_symbols':3,
+              'external_alpha_passes':True,
+              'aggregate_matched_benchmark_alpha_bps_rounded2':41.11,
+              'substitution50_passing_symbols':1,
+              'substitution50_passes':False,
+              'aggregate_substitution50_bps_rounded2':16.11,
+              'symbol_alpha_pass':{'CCS':True,'MHO':False,'HOV':True,'BZH':True},
+              'symbol_substitution50_pass':{'CCS':False,'MHO':False,'HOV':False,'BZH':True},
+          }
+          parity_checks=base._assert_homebuilder_parity(parity,expected)
+
+          holdout=tuple(target['external_holdouts']); benchmark=target['primary_industry_etf']
+          prime((*base.TRAIN,*holdout,'QQQ',benchmark), cutoff)
+          result=base._evaluate_family(holdout,benchmark)
+          alpha=result['broad_external_alpha']; sub=result['broad_benchmark_substitution50']
+          if alpha['passes']:
+              decision='CONFIRM_EQUITY_REIT_GENERIC_EXTERNAL_ALPHA'
+          else:
+              decision='REJECT_EQUITY_REIT_GENERIC_EXTERNAL_ALPHA'
+          out={
+              'schema':'research_compute_public.p07_batch3_equity_reits_holdout.v1',
+              'status':'PASS',
+              'development_admission':admission,
+              'parity':{'passed':True,'checks':parity_checks,'result':parity},
+              'target':{'family':'equity_reits','benchmark':benchmark,'common_cutoff':cutoff,'result':result},
+              'decision':decision,
+              'external_alpha_pass':alpha['passes'],
+              'substitution50_pass':sub['passes'],
+              'research_only':True,
+              'within_industry_scarcity_authority':False,
+              'cross_industry_funding_authority':False,
+              'passive_substitution_authority_from_alpha_only':False,
+              'promotion_authority':False,
+              'runtime_mutation':False,
+              'broker_action':False,
+              'live_trading_change':False,
+          }
+          Path('p07-equity-reits-holdout-receipt.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          print('P07_EQUITY_REITS_HOLDOUT='+json.dumps(out,sort_keys=True))
+          PY
+      - name: Retain holdout receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p07-equity-reits-holdout-receipt
+          path: p07-equity-reits-holdout-receipt.json
+          if-no-files-found: error
+          retention-days: 14
