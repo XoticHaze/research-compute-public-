@@ -42,5 +42,13 @@ jobs:
           assert len(spec['development_universe'])==7
           r=m._evaluate_matrix({'chemicals':spec},'2026-09-01T13:30:00+00:00')
           out={'schema':'research_compute_public.rc001_chemicals_dow_sensitivity.v1','status':'PASS','family_summary':r['family_summary'],'original_development_n':8,'sensitivity_development_n':7,'excluded_for_sensitivity':['DOW'],'evaluator_patch':'cardinality_guard_only_7_or_8','interpretation':'sensitivity_only_not_frozen_gate','external_holdouts_loaded':False,'research_only':True,'promotion_authority':False}
+          Path('chemicals-dow-sensitivity-receipt.json').write_text(json.dumps(out,sort_keys=True,indent=2)+'\n')
           print('CHEMICALS_DOW_SENSITIVITY='+json.dumps(out,sort_keys=True))
           PY
+      - name: Upload sensitivity receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chemicals-dow-sensitivity-receipt
+          path: chemicals-dow-sensitivity-receipt.json
+          if-no-files-found: error
+          retention-days: 14
