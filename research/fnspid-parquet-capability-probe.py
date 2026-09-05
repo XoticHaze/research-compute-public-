@@ -13,8 +13,11 @@ UA = {"User-Agent": "research-compute-public/1"}
 
 def get_json(path: str):
     req = urllib.request.Request(f"{BASE}{path}", headers=UA)
-    with urllib.request.urlopen(req, timeout=120) as r:
-        return json.load(r)
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return json.load(r)
+    except Exception as exc:
+        return {"request_error": type(exc).__name__, "message": str(exc)}
 
 
 def main() -> None:
@@ -24,24 +27,23 @@ def main() -> None:
     parquet = get_json(f"/parquet?dataset={ds}")
     size = get_json(f"/size?dataset={ds}")
     files = parquet.get("parquet_files") or []
-    if not files:
-        raise SystemExit("no parquet files exposed by dataset server")
 
-    con = duckdb.connect()
-    con.execute("INSTALL httpfs")
-    con.execute("LOAD httpfs")
     schemas = []
-    for item in files[:4]:
-        url = item["url"]
-        rows = con.execute("DESCRIBE SELECT * FROM read_parquet(?)", [url]).fetchall()
-        schemas.append({
-            "config": item.get("config"),
-            "split": item.get("split"),
-            "filename": item.get("filename"),
-            "size": item.get("size"),
-            "url": url,
-            "columns": [{"name": r[0], "type": r[1]} for r in rows],
-        })
+    if files:
+        con = duckdb.connect()
+        con.execute("INSTALL httpfs")
+        con.execute("LOAD httpfs")
+        for item in files[:4]:
+            url = item["url"]
+            rows = con.execute("DESCRIBE SELECT * FROM read_parquet(?)", [url]).fetchall()
+            schemas.append({
+                "config": item.get("config"),
+                "split": item.get("split"),
+                "filename": item.get("filename"),
+                "size": item.get("size"),
+                "url": url,
+                "columns": [{"name": r[0], "type": r[1]} for r in rows],
+            })
 
     out = {
         "schema": "research_compute_public.fnspid_parquet_capability_probe.v1",
@@ -49,9 +51,11 @@ def main() -> None:
         "validity": validity,
         "splits": splits,
         "size": size,
+        "parquet_available": bool(files),
         "parquet_file_count": len(files),
         "parquet_files": files,
         "sample_schemas": schemas,
+        "next_route": "parquet_remote_filter" if files else "pinned_lfs_http_range_probe",
         "research_only": True,
         "promotion_authority": False,
     }
