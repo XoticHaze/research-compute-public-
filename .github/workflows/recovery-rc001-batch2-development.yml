@@ -1,7 +1,7 @@
 name: Recovery RC-001 Batch2 Development
 on:
-  push:
-    branches: [assistant/recovery-queue-stagea-parity-20260905-r1]
+  pull_request:
+    branches: [main]
     paths:
       - 'research/industry_opportunity_discovery_batch2_contract_20260905.json'
       - '.github/workflows/recovery-rc001-batch2-development.yml'
