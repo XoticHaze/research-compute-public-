@@ -22,7 +22,6 @@ REQUEST_END = "2021-08-16"
 CACHE = Path(".cache/fnspid-range")
 CHUNK = 1024 * 1024
 MAX_ITERS = 16
-# All_external has no leading Unnamed index. Each physical record begins with Date.
 ROW_START = re.compile(rb'(?m)^"?((?:19|20)\d{2}-\d{2}-\d{2}[^,\r\n]*)"?,')
 DATE_RE = re.compile(r"^(?:19|20)\d{2}-\d{2}-\d{2}")
 SYMBOL_RE = re.compile(r"^[A-Z][A-Z0-9.\-]{0,11}$")
@@ -78,7 +77,6 @@ def valid_rows(data: bytes):
             out.append((sym, date[:10]))
     if out:
         return out
-    # Fallback for arbitrary offsets inside multiline quoted articles.
     lines = text.splitlines()[1:-1]
     try:
         for row in csv.reader(io.StringIO("\n".join(lines))):
@@ -99,7 +97,8 @@ def sample(pos: int):
     for shift in (0, -CHUNK // 2, CHUNK // 2, -CHUNK, CHUNK):
         at = max(0, min(pos + shift, SOURCE["size_bytes"] - CHUNK))
         data, hit = fetch_range(at)
-        hits += int(hit); reads += int(not hit)
+        hits += int(hit)
+        reads += int(not hit)
         rows = valid_rows(data)
         if rows:
             syms = [x[0] for x in rows]
@@ -131,7 +130,8 @@ def symbol_boundary(upper: bool):
             break
         mid = (lo + hi) // 2
         s = sample(mid)
-        hits += s["cache_hits"]; reads += s["network_reads"]
+        hits += s["cache_hits"]
+        reads += s["network_reads"]
         trace.append(s)
         med = s["median_symbol"]
         go_right = med <= TARGET if upper else med < TARGET
@@ -143,7 +143,7 @@ def symbol_boundary(upper: bool):
 
 
 def target_sample(pos: int):
-    for delta in (0, -CHUNK, CHUNK, -2*CHUNK, 2*CHUNK):
+    for delta in (0, -CHUNK, CHUNK, -2 * CHUNK, 2 * CHUNK):
         s = sample(pos + delta)
         if s["target_rows"]:
             return s
@@ -156,13 +156,15 @@ def date_window(block_lo: int, block_hi: int):
     for frac in (0.05, 0.25, 0.5, 0.75, 0.95):
         s = target_sample(int(block_lo + (block_hi - block_lo) * frac))
         if s:
-            hits += s["cache_hits"]; reads += s["network_reads"]; probes.append(s)
+            hits += s["cache_hits"]
+            reads += s["network_reads"]
+            probes.append(s)
     dates = [x["target_median_date"] for x in probes if x["target_median_date"]]
     descending = len(dates) >= 3 and all(a >= b for a, b in zip(dates, dates[1:]))
     if not descending:
         return block_lo, block_hi, probes, False, hits, reads
 
-    def locate_cutoff(cutoff: str, newer_side: bool):
+    def locate_cutoff(cutoff: str):
         nonlocal hits, reads
         lo, hi = block_lo, block_hi
         trace = []
@@ -174,21 +176,18 @@ def date_window(block_lo: int, block_hi: int):
             if not s or not s["target_median_date"]:
                 hi = min(block_hi, mid + 2 * CHUNK)
                 continue
-            hits += s["cache_hits"]; reads += s["network_reads"]; trace.append(s)
-            d = s["target_median_date"]
-            # Dates decrease as byte offset increases.
-            if d > cutoff:
+            hits += s["cache_hits"]
+            reads += s["network_reads"]
+            trace.append(s)
+            if s["target_median_date"] > cutoff:
                 lo = mid + 1
             else:
                 hi = mid
-        return max(block_lo, lo - 3*CHUNK), min(block_hi, hi + 3*CHUNK), trace
+        return max(block_lo, lo - 3 * CHUNK), min(block_hi, hi + 3 * CHUNK), trace
 
-    # Start of requested missing window is the newer cutoff (2021-08-16), end is older 2015 cutoff.
-    newer_lo, newer_hi, t1 = locate_cutoff(REQUEST_END, True)
-    older_lo, older_hi, t2 = locate_cutoff(REQUEST_START, False)
-    materialize_start = newer_lo
-    materialize_end = older_hi
-    return materialize_start, materialize_end, probes + t1 + t2, True, hits, reads
+    newer_lo, _, t1 = locate_cutoff(REQUEST_END)
+    _, older_hi, t2 = locate_cutoff(REQUEST_START)
+    return newer_lo, older_hi, probes + t1 + t2, True, hits, reads
 
 
 def main():
@@ -211,13 +210,13 @@ def main():
         "observed_date_min": min(observed_dates) if observed_dates else None,
         "observed_date_max": max(observed_dates) if observed_dates else None,
         "covers_missing_window": bool(observed_dates and min(observed_dates) <= REQUEST_START and max(observed_dates) >= REQUEST_END),
-        "cache_hits": h1+h2+h3,
-        "network_reads": n1+n2+n3,
+        "cache_hits": h1 + h2 + h3,
+        "network_reads": n1 + n2 + n3,
         "symbol_lower_trace": lower_trace,
         "symbol_upper_trace": upper_trace,
         "date_trace": date_trace,
-        "research_only": true,
-        "promotion_authority": false
+        "research_only": True,
+        "promotion_authority": False,
     }
     Path("fnspid-all-external-nvda-span-receipt.json").write_text(json.dumps(out, indent=2, sort_keys=True) + "\n")
     print("FNSPID_ALL_EXTERNAL_NVDA_GAP=" + json.dumps(out, sort_keys=True))
