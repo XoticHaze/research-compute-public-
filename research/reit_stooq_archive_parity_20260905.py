@@ -3,9 +3,10 @@ from __future__ import annotations
 """Source-only archival/parity diagnostic for frozen Equity REIT holdout.
 
 Stooq is tested only as an independent archive candidate. No REIT model or target economics
-are computed. A candidate source is useful only if AVB/EQR have long history AND its daily
-return semantics closely reproduce Yahoo on unaffected ESS/DLR controls plus available
-recent AVB/EQR overlap. This diagnostic does not authorize a source switch by itself.
+are computed. A known liquid AAPL transport control distinguishes endpoint/access failure
+from REIT-specific history absence. A source candidate is useful only if AVB/EQR have long
+history AND daily-return semantics closely reproduce Yahoo on ESS/DLR plus available
+AVB/EQR overlap. This diagnostic does not authorize a source switch by itself.
 """
 
 import csv,json,io
@@ -15,7 +16,7 @@ from urllib.parse import urlencode
 from urllib.request import Request,urlopen
 import math,statistics
 
-SYMBOLS=('AVB','EQR','ESS','DLR'); START='20140101'; END='20260902'; OUT=Path('reit_stooq_archive_parity_20260905.json')
+SYMBOLS=('AVB','EQR','ESS','DLR'); CONTROL='AAPL'; START='20140101'; END='20260902'; OUT=Path('reit_stooq_archive_parity_20260905.json')
 
 def stooq(sym):
     url=f'https://stooq.com/q/d/l/?s={sym.lower()}.us&d1={START}&d2={END}&i=d'; req=Request(url,headers={'User-Agent':'Mozilla/5.0 research-compute-public/1.0'})
@@ -24,7 +25,7 @@ def stooq(sym):
     for row in rows:
         try: out[row['Date']]=float(row['Close'])
         except Exception: pass
-    return out
+    return out, text[:160]
 
 def yahoo(sym):
     p1=int(datetime(2014,1,1,tzinfo=timezone.utc).timestamp()); p2=int(datetime(2026,9,3,tzinfo=timezone.utc).timestamp()); q=urlencode({'period1':p1,'period2':p2,'interval':'1d','events':'history','includeAdjustedClose':'true'}); req=Request(f'https://query1.finance.yahoo.com/v8/finance/chart/{sym}?{q}',headers={'User-Agent':'Mozilla/5.0 research-compute-public/1.0'})
@@ -45,15 +46,19 @@ def corr(a,b):
     if len(a)<3:return None
     ma=sum(a)/len(a);mb=sum(b)/len(b);num=sum((x-ma)*(y-mb) for x,y in zip(a,b));da=math.sqrt(sum((x-ma)**2 for x in a));db=math.sqrt(sum((y-mb)**2 for y in b));return None if da==0 or db==0 else num/(da*db)
 
+def compare(sym):
+    st,preview=stooq(sym); yh=yahoo(sym); common=sorted(set(st)&set(yh)); sr=returns(st,common);yr=returns(yh,common); rd=sorted(set(sr)&set(yr)); a=[sr[d] for d in rd];b=[yr[d] for d in rd];diff=[abs(x-y)*10000.0 for x,y in zip(a,b)]
+    return {'stooq_rows':len(st),'stooq_first':min(st) if st else None,'stooq_last':max(st) if st else None,'stooq_response_preview':preview,'yahoo_rows':len(yh),'overlap_price_dates':len(common),'overlap_return_days':len(rd),'daily_return_corr':corr(a,b),'median_abs_return_diff_bps':None if not diff else float(statistics.median(diff)),'p95_abs_return_diff_bps':None if not diff else float(sorted(diff)[int(.95*(len(diff)-1))])}
+
 def main():
+    control=compare(CONTROL); transport_ok=control['stooq_rows']>=3000
     result={}; long_ok=[]; parity_ok=[]
     for s in SYMBOLS:
-        st=stooq(s); yh=yahoo(s); common=sorted(set(st)&set(yh)); sr=returns(st,common);yr=returns(yh,common); rd=sorted(set(sr)&set(yr)); a=[sr[d] for d in rd];b=[yr[d] for d in rd];diff=[abs(x-y)*10000.0 for x,y in zip(a,b)]
-        item={'stooq_rows':len(st),'stooq_first':min(st) if st else None,'stooq_last':max(st) if st else None,'yahoo_rows':len(yh),'overlap_price_dates':len(common),'overlap_return_days':len(rd),'daily_return_corr':corr(a,b),'median_abs_return_diff_bps':None if not diff else float(statistics.median(diff)),'p95_abs_return_diff_bps':None if not diff else float(sorted(diff)[int(.95*(len(diff)-1))])}
-        result[s]=item
-        if len(st)>=3000:long_ok.append(s)
+        item=compare(s); result[s]=item
+        if len_result:=item['stooq_rows']>=3000: long_ok.append(s)
         if item['overlap_return_days']>=10 and (item['daily_return_corr'] or -1)>=0.995 and (item['median_abs_return_diff_bps'] or 999)<=2.0:parity_ok.append(s)
-    candidate=bool('AVB' in long_ok and 'EQR' in long_ok and 'ESS' in parity_ok and 'DLR' in parity_ok and 'AVB' in parity_ok and 'EQR' in parity_ok)
-    out={'schema':'public_compute.reit_stooq_archive_parity.v1','generated_at':datetime.now(timezone.utc).isoformat(),'symbols':result,'long_history_symbols':long_ok,'return_parity_symbols':parity_ok,'candidate_source_mechanics_supported':candidate,'source_switch_authorized':False,'authorization_boundary':'even candidate=true only supports a separately frozen source-adapter parity consumer before any holdout model economics','target_returns_computed':False,'model_executed':False,'research_only':True}
+    candidate=bool(transport_ok and 'AVB' in long_ok and 'EQR' in long_ok and 'ESS' in parity_ok and 'DLR' in parity_ok and 'AVB' in parity_ok and 'EQR' in parity_ok)
+    status='SOURCE_TRANSPORT_UNAVAILABLE' if not transport_ok else ('CANDIDATE_SOURCE_MECHANICS_SUPPORTED' if candidate else 'SOURCE_AVAILABLE_BUT_REIT_PARITY_NOT_PROVEN')
+    out={'schema':'public_compute.reit_stooq_archive_parity.v2','generated_at':datetime.now(timezone.utc).isoformat(),'transport_control_symbol':CONTROL,'transport_control':control,'transport_control_pass':transport_ok,'status':status,'symbols':result,'long_history_symbols':long_ok,'return_parity_symbols':parity_ok,'candidate_source_mechanics_supported':candidate,'source_switch_authorized':False,'authorization_boundary':'even candidate=true only supports a separately frozen source-adapter parity consumer before any holdout model economics','target_returns_computed':False,'model_executed':False,'research_only':True}
     OUT.write_text(json.dumps(out,indent=2,sort_keys=True)+'\n');print('REIT_STOOQ_ARCHIVE_PARITY='+json.dumps(out,sort_keys=True))
 if __name__=='__main__':main()
