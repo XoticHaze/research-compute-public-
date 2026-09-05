@@ -4,6 +4,7 @@ on:
     paths:
       - 'research/fnspid-parquet-capability-probe.py'
       - 'research/fnspid-range-layout-probe.py'
+      - 'research/fnspid-target-locator.py'
       - 'research/fnspid-targeted-slice.py'
       - 'research/fnspid-targeted-slice.json'
       - '.github/workflows/fnspid-targeted-cache.yml'
@@ -47,4 +48,28 @@ jobs:
         with:
           name: fnspid-range-layout-receipt
           path: fnspid-range-layout-receipt.json
+          retention-days: 30
+
+  target-locator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.16'
+      - name: Restore growing content-addressed FNSPID range cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/fnspid-range
+          key: fnspid-range-v2-1a7a3eb8e6b97ec1-locator-${{ github.sha }}
+          restore-keys: |
+            fnspid-range-v2-1a7a3eb8e6b97ec1-locator-
+            fnspid-range-v1-5d4c018036bd82ca-1a7a3eb8e6b97ec1
+      - name: Locate frozen semiconductor and homebuilder ticker blocks
+        run: python research/fnspid-target-locator.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fnspid-target-locator-receipt
+          path: fnspid-target-locator-receipt.json
           retention-days: 30
