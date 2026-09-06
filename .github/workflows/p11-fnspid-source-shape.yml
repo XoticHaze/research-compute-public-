@@ -40,7 +40,8 @@ jobs:
           if not sf or not df: raise SystemExit(f'missing symbol/date fields: {reader.fieldnames}')
           target={'NVDA','AMD','AMAT','AVGO','MU','DHI','LEN','PHM','TOL','NVR'}
           shape=Counter(); examples=defaultdict(list); symbols=Counter(); years=Counter(); rows=0
-          off=re.compile(r'(?:Z|[+-]\d{2}:?\d{2})$'); tim=re.compile(r'[T ]\d{1,2}:\d{2}')
+          # Literal UTC is an explicit timezone token, not an inferred timezone.
+          off=re.compile(r'(?:Z|UTC|[+-]\d{2}:?\d{2})$',re.IGNORECASE); tim=re.compile(r'[T ]\d{1,2}:\d{2}')
           def classify(v):
             v=(v or '').strip()
             if not v:return 'empty'
@@ -68,7 +69,7 @@ jobs:
             'explicit_offset_fraction':(explicit/dated if dated else None),
             'target_symbol_rows':dict(symbols),'target_year_prefix_counts':dict(years),
             'decision':decision,
-            'full_object_materialized':False,'timezone_verified':False,
+            'full_object_materialized':False,'source_timestamp_semantics_verified':False,
             'strategy_spec_write':False,'runtime_activation':False,'broker_submit':False,'live_trading_change':False
           }
           out=Path(os.environ['RUNNER_TEMP'])/'p11-fnspid-source-shape-receipt.json'
