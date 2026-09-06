@@ -1,0 +1,77 @@
+{
+  "schema": "research_compute_public.p10_provider_breadth_contract.v1",
+  "research_only": true,
+  "private_data_loaded": false,
+  "dataset": "thatkavish/OpenComputePrices",
+  "release_tag": "latest-data",
+  "active_archive": {
+    "url": "https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/data.tar.gz",
+    "sha256": "ef087a8c36c86d46539cef8ee28c536480b182ff1b9546a64e5ee548d14815a6",
+    "member_basename": "_master.csv",
+    "release_as_of": "2026-07-29"
+  },
+  "historical_archives": [
+    {"url": "https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/archive_historical.csv.gz", "sha256": "c4ceddf400c608fd8a5f7a6a72d9cdda1720bcbb4dfaee572445703a5ed85b49"},
+    {"url": "https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/archive_2025-12.csv.gz", "sha256": "9c95c68383e9fcf0cff2beebde347934bada60d22593a86b7ec3dc74f6d7dbd5"},
+    {"url": "https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/archive_2026-01.csv.gz", "sha256": "be0f6cf1e882cce5a0efc2a4e3dd01349a45db1a270126f48887928a111fc198"},
+    {"url": "https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/archive_2026-02.csv.gz", "sha256": "eee9a847edf86b394ed66ae9efc1972d731faac0f68d1bbfbb4eb1b7f5a24a2d"},
+    {"url": "https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/archive_2026-03.csv.gz", "sha256": "f2d94854db5df05b88a950ad2a92bcf690ba5739013ffebe23d2db752807ee55"},
+    {"url": "https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/archive_2026-04.csv.gz", "sha256": "b319940a359f954c9167602a56a79acff786fab2c51ac99b680f097c8e5207ef"},
+    {"url": "https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/archive_2026-05.csv.gz", "sha256": "048c26007edfcfe83e0efc062837f7f021a4b8a996f23b454a1837449a9b0629"}
+  ],
+  "pricing_types": ["on_demand", "spot"],
+  "target_generations": ["H100", "B200"],
+  "training_pool_generations": ["H100", "H200", "B200"],
+  "horizon_months": [1, 3],
+  "minimum_common_on_demand_providers": 3,
+  "minimum_exact_spot_basis_providers": 2,
+  "minimum_training_states": 8,
+  "minimum_changed_origins_for_supported_result": 4,
+  "minimum_prior_months_for_depreciation": 3,
+  "material_improvement_fraction": 0.05,
+  "gate_models": {
+    "H100": "breadth_ols",
+    "B200": "breadth_ols_transport"
+  },
+  "state_policy": {
+    "provider_month_price": "last available provider-date median price within each provider/generation/pricing_type/calendar month",
+    "on_demand_breadth": "for providers present in consecutive months, (+1 up, -1 down, 0 unchanged) mean; requires minimum_common_on_demand_providers",
+    "on_demand_change_dispersion": "median absolute deviation of paired-provider monthly log changes; descriptive, not part of the primary gate",
+    "exact_spot_discount": "1 - spot/on_demand only when both pricing types exist for the same provider, generation and exact snapshot date; monthly state uses the last exact paired date and then the cross-provider median; no cross-date pairing",
+    "no_interpolation": true
+  },
+  "forecast_policy": {
+    "breadth_ols": "causal one-feature OLS of forward target log return on current on-demand provider repricing breadth, trained only on same-generation states whose outcomes are fully observed by the forecast origin",
+    "breadth_ols_transport": "same fixed OLS relationship trained only on other-generation H100/H200 states; B200 states are excluded from training",
+    "reliability_ols_secondary": "separate causal one-feature OLS on exact spot-discount median, reported only when support exists and never used to rescue the primary breadth gate",
+    "random_walk": "origin target-generation month-end index",
+    "depreciation": "causal target-generation log-price slope through origin with positive slope clipped to zero",
+    "comparison_subset": "changed outcomes only"
+  },
+  "advancement_gate": {
+    "required_generations": ["H100", "B200"],
+    "required_supported_winning_horizons_per_generation": 1,
+    "must_beat": ["random_walk", "depreciation"],
+    "minimum_relative_error_reduction": 0.05
+  },
+  "cache_policy": {
+    "emit_provider_month_panel": true,
+    "panel_columns": ["provider", "month", "generation", "pricing_type", "observation_date", "price_per_gpu_hour"],
+    "panel_format": "gzip_csv",
+    "panel_purpose": "reusable bounded input for later provider/reliability discriminators without re-downloading the active 967MB archive"
+  },
+  "decision_rule": {
+    "if_both_generations_pass": "MODELABLE_CANDIDATE_PROVIDER_BREADTH_PASS",
+    "if_only_one_generation_passes": "PROVIDER_BREADTH_NARROW_GENERATION_ONLY",
+    "if_supported_but_no_generation_passes": "PROVIDER_BREADTH_SUPPORTED_BUT_FAILS_BASELINES",
+    "if_insufficient": "record exact support deficit and do not lower thresholds",
+    "no_posthoc_feature_or_threshold_tuning": true
+  },
+  "boundaries": {
+    "no_private_input": true,
+    "no_interpolation": true,
+    "no_broker_or_runtime_authority": true,
+    "no_promotion_authority": true,
+    "no_live_trading_change": true
+  }
+}
