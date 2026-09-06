@@ -6,10 +6,12 @@ on:
       - research/fnspid-source-probe-20260906-r1
     paths:
       - "research/fnspid_next_session_arrival_ablation_20260906.py"
+      - "research/run_fnspid_next_session_arrival_20260906.py"
       - ".github/workflows/fnspid-next-session-arrival-contract.yml"
   pull_request:
     paths:
       - "research/fnspid_next_session_arrival_ablation_20260906.py"
+      - "research/run_fnspid_next_session_arrival_20260906.py"
       - ".github/workflows/fnspid-next-session-arrival-contract.yml"
 
 jobs:
@@ -21,8 +23,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: python -m pip install --disable-pip-version-check numpy pandas scikit-learn
-      - run: python -m py_compile research/fnspid_next_session_arrival_ablation_20260906.py
-      - name: Prove strict next-session and permutation contracts
+      - run: python -m py_compile research/fnspid_next_session_arrival_ablation_20260906.py research/run_fnspid_next_session_arrival_20260906.py
+      - name: Prove strict next-session, permutation, and span-gate contracts
         run: |
           python - <<'PY'
           import csv, tempfile
@@ -31,6 +33,7 @@ jobs:
           import numpy as np
           import pandas as pd
           import research.fnspid_next_session_arrival_ablation_20260906 as m
+          import research.run_fnspid_next_session_arrival_20260906 as dispatch
 
           with tempfile.TemporaryDirectory() as td:
               p=Path(td)/"news.csv"
@@ -38,14 +41,16 @@ jobs:
                   w=csv.DictWriter(fh, fieldnames=["Date","Stock_symbol","Publisher"])
                   w.writeheader()
                   for s in m.TEST:
-                      for y in range(2015, 2020):
-                          # Enough source shape for parsing; coverage pass is not the purpose here.
-                          w.writerow({"Date":f"{y}-01-02 16:00:00 UTC","Stock_symbol":s,"Publisher":"P"})
-              days=[date(2015,1,2),date(2015,1,5),date(2015,1,6)]
+                      for y in range(2015, 2024):
+                          w.writerow({"Date":f"{y}-12-01 16:00:00 UTC","Stock_symbol":s,"Publisher":"P"})
+              days=[date(2015,12,1),date(2015,12,2),date(2015,12,3)]
               events,audit=m._load_news(p,days)
-              # Jan 2 may NEVER be usable on Jan 2; it must map to Jan 5 (index 1).
               assert events["AMAT"].get(0,[]) == []
               assert events["AMAT"].get(1,[]) == ["P"]
+              spans=dispatch._recorded_span(p)
+              assert dispatch._span_pass(spans)
+              spans["AMAT"]["max"]="2022-12-31"
+              assert not dispatch._span_pass(spans)
 
           rows=[]
           for s in m.TEST:
