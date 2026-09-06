@@ -1,4 +1,4 @@
-name: P03 Private Preview Binding Ephemeral Rendezvous
+name: P03 Position Duration Ephemeral Rendezvous
 
 on:
   pull_request:
@@ -39,12 +39,7 @@ jobs:
           private_raw=private.private_bytes(serialization.Encoding.Raw,serialization.PrivateFormat.Raw,serialization.NoEncryption())
           public_raw=private.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)
           Path(os.environ['RUNNER_TEMP'],'p03-binding-private-key.b64').write_text(base64.b64encode(private_raw).decode('ascii'))
-          recipient={
-            'schema':'p03-private-binding-recipient-v1',
-            'run_id':os.environ['GITHUB_RUN_ID'],
-            'recipient_b64':base64.b64encode(public_raw).decode('ascii'),
-            'recipient_key_id':'sha256:'+hashlib.sha256(public_raw).hexdigest(),
-          }
+          recipient={'schema':'p03-private-binding-recipient-v1','run_id':os.environ['GITHUB_RUN_ID'],'recipient_b64':base64.b64encode(public_raw).decode('ascii'),'recipient_key_id':'sha256:'+hashlib.sha256(public_raw).hexdigest()}
           Path(os.environ['RUNNER_TEMP'],'p03-binding-recipient.json').write_text(json.dumps(recipient,sort_keys=True)+'\n')
           print('P03_BINDING_EPHEMERAL_RUN_ID='+os.environ['GITHUB_RUN_ID'])
           print('P03_BINDING_EPHEMERAL_RECIPIENT_KEY_ID='+recipient['recipient_key_id'])
@@ -62,12 +57,7 @@ jobs:
           print(json.dumps({'message':'rendezvous: publish one-run P03 binding recipient','content':content,'branch':branch}))
           PY
           )"
-          curl -fsSL -X PUT \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H 'Accept: application/vnd.github+json' \
-            -H 'X-GitHub-Api-Version: 2022-11-28' \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${recipient_path}" \
-            -d "$body" >/dev/null
+          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${recipient_path}" -d "$body" >/dev/null
           echo "P03_BINDING_EPHEMERAL_RECIPIENT_PATH=${recipient_path}"
       - name: Wait for structurally valid run-bound encrypted envelope
         env:
@@ -89,7 +79,7 @@ jobs:
               assert d['schema']=='p03-private-binding-x25519-v1'
               assert str(d['run_id'])==str(run_id)
               assert d['authority']=='research_only'
-              assert d['harness']=='mm_p03_preview_operator_binding_contract_v1'
+              assert d['harness']=='mm_p03_position_duration_operator_context_v1'
               assert len(base64.b64decode(d['sender_public_b64'],validate=True))==32
               assert len(base64.b64decode(d['nonce_b64'],validate=True))==12
               assert len(base64.b64decode(d['ciphertext_b64'],validate=True))>32
@@ -106,13 +96,10 @@ jobs:
             sleep 5
           done
           test "$found" = 1 || { echo 'valid run-bound encrypted envelope did not arrive'; exit 42; }
-      - name: Execute fixed private P03 preview binding contract
+      - name: Execute fixed private P03 position-duration contract
         run: |
           set -euo pipefail
-          python scripts/p03_private_binding_contract_consumer_v1.py \
-            --envelope "$RUNNER_TEMP/p03-binding-envelope.json" \
-            --private-key "$RUNNER_TEMP/p03-binding-private-key.b64" \
-            --run-id "$GITHUB_RUN_ID"
+          python scripts/p03_private_binding_contract_consumer_v1.py --envelope "$RUNNER_TEMP/p03-binding-envelope.json" --private-key "$RUNNER_TEMP/p03-binding-private-key.b64" --run-id "$GITHUB_RUN_ID"
       - name: Remove one-run private material
         if: always()
         run: rm -f "$RUNNER_TEMP/p03-binding-private-key.b64" "$RUNNER_TEMP/p03-binding-recipient.json" "$RUNNER_TEMP/p03-binding-envelope.json" "$RUNNER_TEMP/p03-binding-envelope.candidate.json"
