@@ -1,0 +1,69 @@
+name: PR285 Ephemeral Private Rendezvous
+
+on:
+  pull_request:
+    paths:
+      - 'rendezvous/requests/pr285-*.txt'
+
+permissions:
+  contents: read
+
+env:
+  RESPONSE_ROOT: rendezvous/responses
+
+jobs:
+  consume:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install fixed dependencies
+        run: python -m pip install --disable-pip-version-check cryptography numpy pandas scikit-learn pytest
+      - name: Generate one-run recipient
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import base64,hashlib,os
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric import x25519
+          private=x25519.X25519PrivateKey.generate()
+          private_raw=private.private_bytes(serialization.Encoding.Raw,serialization.PrivateFormat.Raw,serialization.NoEncryption())
+          public_raw=private.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)
+          Path(os.environ['RUNNER_TEMP'],'pr285-ephemeral-private.b64').write_text(base64.b64encode(private_raw).decode('ascii'))
+          recipient=base64.b64encode(public_raw).decode('ascii')
+          key_id='sha256:'+hashlib.sha256(public_raw).hexdigest()
+          print('PR285_EPHEMERAL_RUN_ID='+os.environ['GITHUB_RUN_ID'])
+          print('PR285_EPHEMERAL_RECIPIENT_B64='+recipient)
+          print('PR285_EPHEMERAL_RECIPIENT_KEY_ID='+key_id)
+          PY
+      - name: Wait for run-bound encrypted envelope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          response_path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/sealed-envelope.json"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${response_path}?ref=${GITHUB_HEAD_REF}"
+          found=0
+          for _ in $(seq 1 90); do
+            if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/sealed-envelope.json"; then
+              found=1
+              break
+            fi
+            sleep 5
+          done
+          test "$found" = 1 || { echo 'run-bound encrypted envelope did not arrive'; exit 42; }
+      - name: Consume privately and emit sanitized receipt
+        run: |
+          set -euo pipefail
+          python scripts/pr285_ephemeral_consumer_v1.py \
+            --envelope "$RUNNER_TEMP/sealed-envelope.json" \
+            --private-key "$RUNNER_TEMP/pr285-ephemeral-private.b64" \
+            --run-id "$GITHUB_RUN_ID"
+      - name: Remove one-run private material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/pr285-ephemeral-private.b64" "$RUNNER_TEMP/sealed-envelope.json" "$RUNNER_TEMP/pr285-payload.tar.gz"
