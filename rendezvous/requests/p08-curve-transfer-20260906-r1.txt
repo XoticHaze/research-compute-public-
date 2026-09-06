@@ -1,0 +1,10 @@
+P08_CURVE_TRANSFER_REQUEST_V1
+route=public_research_compute_current
+source_authority=research-foundry-pr220@0cb9a5bd944226ad3ca7eed83dbfff8525f18056
+scientific_contract=frozen
+baseline=same-band-return-plus-realized-volatility
+private_source_plaintext_public=false
+strategy_spec_write=false
+runtime_activation=false
+broker_submit=false
+live_trading_change=false
