@@ -1,0 +1,145 @@
+name: P05 Refining Regime Robustness 20260906
+
+on:
+  push:
+    paths:
+      - '.github/workflows/p05-refining-regime-robustness-20260906.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install numerical dependencies
+        run: python -m pip install --disable-pip-version-check -q numpy==2.4.6 pandas==3.0.5
+      - name: Execute refining regime cost capacity robustness
+        run: |
+          python - <<'PY'
+          import json
+          from collections import Counter, defaultdict
+          from datetime import datetime, timezone
+          from urllib.parse import urlencode
+          from urllib.request import Request, urlopen
+          import numpy as np
+          import pandas as pd
+
+          START='2015-08-01'
+          END='2026-09-06'
+          COSTS=[10.0,25.0,50.0]
+
+          def epoch(text):
+              return int(datetime.fromisoformat(text).replace(tzinfo=timezone.utc).timestamp())
+
+          def load(symbol):
+              q=urlencode({'period1':epoch(START),'period2':epoch(END),'interval':'1d','events':'history','includeAdjustedClose':'true'})
+              req=Request(f'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?{q}',headers={'User-Agent':'Mozilla/5.0 research-compute/1.0'})
+              with urlopen(req,timeout=30) as r:
+                  payload=json.loads(r.read().decode())
+              result=(payload.get('chart',{}).get('result') or [None])[0]
+              if not result: raise RuntimeError(f'{symbol}: no chart result')
+              ts=result.get('timestamp') or []
+              ind=result.get('indicators',{})
+              quote=(ind.get('quote') or [{}])[0]
+              adj=(ind.get('adjclose') or [{}])[0].get('adjclose')
+              close=adj or quote.get('close')
+              vol=quote.get('volume') or [None]*len(ts)
+              df=pd.DataFrame({'close':pd.to_numeric(pd.Series(close),errors='coerce').to_numpy(),'volume':pd.to_numeric(pd.Series(vol),errors='coerce').to_numpy()},index=pd.to_datetime(ts,unit='s',utc=True)).dropna(subset=['close']).sort_index()
+              return df
+
+          data={s:load(s) for s in ['CRAK','XLE','SPY']}
+          df=pd.concat([data['CRAK'].close.rename('CRAK'),data['CRAK'].volume.rename('CRAK_volume'),data['XLE'].close.rename('XLE'),data['SPY'].close.rename('SPY')],axis=1,join='inner').dropna(subset=['CRAK','XLE','SPY'])
+          df['rel20']=df.CRAK.pct_change(20)-df.XLE.pct_change(20)
+          df['spy60']=df.SPY.pct_change(60)
+          df['xle60']=df.XLE.pct_change(60)
+          df['spy_vol20']=df.SPY.pct_change().rolling(20).std(ddof=0)*np.sqrt(252)
+          df['dollar_volume20']=(df.CRAK*df.CRAK_volume).rolling(20).median()
+          usable=df.dropna().iloc[:-20].copy()
+          split=max(1,int(len(usable)*0.60))
+          train=usable.iloc[:split]
+          test=usable.iloc[split:]
+          rel_threshold=float(train.rel20.quantile(0.80))
+          vol_threshold=float(train.spy_vol20.median())
+          positions={ts:i for i,ts in enumerate(df.index)}
+          events=[]; last=-999
+          for ts,row in test.iterrows():
+              pos=positions[ts]
+              if row.rel20 < rel_threshold or pos-last < 20 or pos+20>=len(df):
+                  continue
+              raw_excess=float((df.CRAK.iloc[pos+20]/df.CRAK.iloc[pos]-1)-(df.XLE.iloc[pos+20]/df.XLE.iloc[pos]-1))*10000
+              events.append({
+                  'date':ts.isoformat(),
+                  'year':int(ts.year),
+                  'raw_forward20_excess_bps':raw_excess,
+                  'spy_trend':'up' if row.spy60>0 else 'down',
+                  'xle_trend':'up' if row.xle60>0 else 'down',
+                  'spy_vol':'high' if row.spy_vol20>vol_threshold else 'low',
+                  'dollar_volume20_usd':float(row.dollar_volume20),
+              })
+              last=pos
+
+          def stats(vals,cost):
+              a=np.array([v-cost for v in vals],dtype=float)
+              return {'n':int(len(a)),'mean_net_bps':None if len(a)==0 else float(a.mean()),'median_net_bps':None if len(a)==0 else float(np.median(a)),'win_rate':None if len(a)==0 else float((a>0).mean())}
+
+          raw=[e['raw_forward20_excess_bps'] for e in events]
+          cost_stress={str(int(c)):stats(raw,c) for c in COSTS}
+          regimes={}
+          for field in ['spy_trend','xle_trend','spy_vol']:
+              regimes[field]={}
+              for key in sorted(set(e[field] for e in events)):
+                  vals=[e['raw_forward20_excess_bps'] for e in events if e[field]==key]
+                  regimes[field][key]={str(int(c)):stats(vals,c) for c in COSTS}
+          years=Counter(e['year'] for e in events)
+          year_stats={str(y):stats([e['raw_forward20_excess_bps'] for e in events if e['year']==y],25.0) for y in sorted(years)}
+          dv=np.array([e['dollar_volume20_usd'] for e in events],dtype=float)
+          current={}
+          for h in [5,10,20,60,120,252]:
+              if len(df)>h:
+                  cr=float(df.CRAK.iloc[-1]/df.CRAK.iloc[-1-h]-1)
+                  br=float(df.XLE.iloc[-1]/df.XLE.iloc[-1-h]-1)
+                  current[str(h)]={'crak_return_pct':100*cr,'xle_return_pct':100*br,'excess_pp':100*(cr-br)}
+
+          required_regime_cells=[]
+          for field,cells in regimes.items():
+              for key,stress in cells.items():
+                  s=stress['25']
+                  if s['n']>=3:
+                      required_regime_cells.append((field,key,s))
+          robust_cells=sum(1 for _,_,s in required_regime_cells if s['mean_net_bps']>0 and s['win_rate']>=0.50)
+          overall=cost_stress['50']
+          diversified_years=sum(1 for s in year_stats.values() if s['n']>=1 and s['mean_net_bps']>0)
+          decision='CONTINUE_TO_ALLOCATOR' if (overall['n']>=10 and overall['mean_net_bps']>100 and overall['win_rate']>=0.65 and len(required_regime_cells)>=4 and robust_cells/len(required_regime_cells)>=0.75 and diversified_years>=3) else 'HOLD_OR_REJECT_REFINING'
+
+          payload={
+            'schema':'p05.refining_regime_robustness.v1',
+            'generated_at':datetime.now(timezone.utc).isoformat(),
+            'source':'Yahoo adjusted daily + raw volume through fixed HTTPS endpoint',
+            'window':{'start':START,'end_exclusive':END,'first_shared':df.index[0].isoformat(),'last_shared':df.index[-1].isoformat(),'rows':int(len(df))},
+            'method':{'signal':'CRAK minus XLE 20-session excess >= train-only q80','train_fraction':0.60,'threshold_excess_pp':100*rel_threshold,'test_start':test.index[0].isoformat(),'event_thinning_sessions':20,'forward_sessions':20,'cost_stress_bps':COSTS,'regime_thresholds_train_only':{'spy_vol20_ann_median':vol_threshold}},
+            'current_horizons':current,
+            'event_count':len(events),
+            'cost_stress':cost_stress,
+            'regimes':regimes,
+            'year_stats_at_25bps':year_stats,
+            'event_year_counts':{str(k):int(v) for k,v in sorted(years.items())},
+            'capacity_proxy':{'median_signal_20d_dollar_volume_usd':None if len(dv)==0 else float(np.median(dv)),'min_signal_20d_dollar_volume_usd':None if len(dv)==0 else float(dv.min()),'latest_20d_median_dollar_volume_usd':float(df.dollar_volume20.dropna().iloc[-1])},
+            'robust_regime_cells':robust_cells,'eligible_regime_cells':len(required_regime_cells),'positive_event_years_at_25bps':diversified_years,
+            'decision':decision,
+            'events':events,
+            'research_only':True,'allocation_authority':False,'promotion_authority':False,'live_trading_change':False
+          }
+          open('p05-refining-regime-robustness-20260906.json','w').write(json.dumps(payload,indent=2,sort_keys=True)+'\n')
+          print('P05_REFINING_ROBUSTNESS='+json.dumps(payload,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p05-refining-regime-robustness-20260906
+          path: p05-refining-regime-robustness-20260906.json
+          retention-days: 14
