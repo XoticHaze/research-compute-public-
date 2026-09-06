@@ -99,10 +99,13 @@ def build_states(px: pd.DataFrame) -> pd.DataFrame:
             row.update({k:float(vals[k]) for k in RATE_FEATURES})
             rows.append(row)
     df=pd.DataFrame(rows).sort_values(["signal_date","symbol"]).reset_index(drop=True)
-    dates=sorted(df.signal_date.unique())
-    blocks=np.array_split(np.array(dates,dtype="datetime64[ns]"),FOLDS)
-    mapping={pd.Timestamp(d):i+1 for i,b in enumerate(blocks) for d in b}
-    df["fold"]=df.signal_date.map(mapping).astype(int)
+    dates=list(pd.Index(df["signal_date"].drop_duplicates()).sort_values())
+    blocks=np.array_split(np.arange(len(dates), dtype=int), FOLDS)
+    mapping={dates[int(j)]: i+1 for i, block in enumerate(blocks) for j in block}
+    df["fold"]=df["signal_date"].map(mapping)
+    if df["fold"].isna().any():
+        raise RuntimeError("fold assignment produced unmapped signal dates")
+    df["fold"]=df["fold"].astype(int)
     return df
 
 def arm(df: pd.DataFrame, features: list[str], name: str) -> dict:
