@@ -33,8 +33,24 @@ jobs:
           result=runner._evaluate_matrix(contract['family'], contract['frozen_cutoff'])
           summary=result['family_summary']['biotech']
           assert summary['passing_symbols']==contract['expected_passing_symbols']
-          detail=[row for row in result['per_symbol'] if row['family']=='biotech']
-          output={'summary':summary,'per_symbol':detail,'external_holdouts_loaded':False,'research_only':True}
+          raw_detail=[row for row in result['per_symbol'] if row['family']=='biotech']
+          detail=[]
+          for row in raw_detail:
+            normalized=dict(row)
+            scientific_pass=normalized.pop('development_transport_pass', None)
+            assert isinstance(scientific_pass, bool)
+            normalized['development_symbol_gate_pass']=scientific_pass
+            normalized['development_symbol_gate_semantics']='scientific matched-benchmark breadth gate; not transport status'
+            detail.append(normalized)
+          output={
+            'summary':summary,
+            'per_symbol':detail,
+            'external_holdouts_loaded':False,
+            'research_only':True,
+            'transport_status':'NOT_EVALUATED_BY_THIS_SCIENTIFIC_RECEIPT',
+            'transport_semantics_note':'This workflow executed successfully on public compute. Per-symbol pass/fail is scientific development-gate evidence and is not a transport classification.',
+          }
+          assert all('development_transport_pass' not in row for row in detail)
           Path('biotech-nearmiss-detail-receipt.json').write_text(json.dumps(output,sort_keys=True,indent=2))
           print(json.dumps(output,sort_keys=True))
           PY
