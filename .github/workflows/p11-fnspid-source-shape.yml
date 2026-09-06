@@ -1,0 +1,84 @@
+name: P11 FNSPID Source Shape
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/p11-fnspid-source-shape.yml'
+      - 'research_requests/p11-fnspid-source-shape-*.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Probe exact pinned FNSPID object with bounded range
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://huggingface.co/datasets/Zihan1004/FNSPID/resolve/fcd1056328b3db04769d4530abe4158d086cffc1/Stock_news/nasdaq_exteral_data.csv'
+          curl -L --fail --silent --show-error --range 0-134217727 --max-filesize 140000000 -D "$RUNNER_TEMP/headers.txt" -o "$RUNNER_TEMP/fnspid.sample" "$url"
+          python - <<'PY'
+          import csv, json, os, re
+          from collections import Counter, defaultdict
+          from pathlib import Path
+
+          p=Path(os.environ['RUNNER_TEMP'])/'fnspid.sample'
+          raw=p.read_bytes()
+          text=raw.decode('utf-8','replace')
+          lines=text.splitlines(keepends=True)
+          if len(lines)<3: raise SystemExit('bounded sample did not contain complete CSV rows')
+          # Drop final potentially partial physical line only. csv handles quoted embedded newlines.
+          sample=''.join(lines[:-1])
+          reader=csv.DictReader(sample.splitlines())
+          if not reader.fieldnames: raise SystemExit('missing header')
+          lower={x.lower():x for x in reader.fieldnames}
+          sf=next((lower[x] for x in ('stock','ticker','symbol') if x in lower),None)
+          df=next((lower[x] for x in ('date','datetime','timestamp','published_at','published') if x in lower),None)
+          if not sf or not df: raise SystemExit(f'missing symbol/date fields: {reader.fieldnames}')
+          target={'NVDA','AMD','AMAT','AVGO','MU','DHI','LEN','PHM','TOL','NVR'}
+          shape=Counter(); examples=defaultdict(list); symbols=Counter(); years=Counter(); rows=0
+          off=re.compile(r'(?:Z|[+-]\d{2}:?\d{2})$'); tim=re.compile(r'[T ]\d{1,2}:\d{2}')
+          def classify(v):
+            v=(v or '').strip()
+            if not v:return 'empty'
+            if len(v)==10 and re.fullmatch(r'\d{4}-\d{2}-\d{2}',v):return 'date_only'
+            if tim.search(v): return 'datetime_explicit_offset' if off.search(v) else 'datetime_no_offset'
+            return 'other'
+          for r in reader:
+            rows+=1
+            ts=(r.get(df) or '').strip(); s=classify(ts); shape[s]+=1
+            if len(examples[s])<5 and ts not in examples[s]: examples[s].append(ts)
+            sym=(r.get(sf) or '').strip().upper()
+            if sym in target:
+              symbols[sym]+=1
+              if len(ts)>=4: years[ts[:4]]+=1
+          explicit=shape['datetime_explicit_offset']
+          dated=sum(shape.values())
+          decision=('P11_FNSPID_INTRADAY_SHAPE_PROMISING' if dated and explicit/dated>=0.9 else 'P11_FNSPID_INTRADAY_SHAPE_NOT_SUPPORTED')
+          receipt={
+            'schema':'p11-fnspid-source-shape-receipt-v1',
+            'authority':'research_only',
+            'source_commit':'fcd1056328b3db04769d4530abe4158d086cffc1',
+            'source_object_sha256':'1a7a3eb8e6b97ec19f286f2cfca3371542bddb272ab1eb8f36e33ad98fa5c4da',
+            'sample_bytes':len(raw),'parsed_rows':rows,'fieldnames':reader.fieldnames,
+            'timestamp_shape_counts':dict(shape),'timestamp_shape_examples':dict(examples),
+            'explicit_offset_fraction':(explicit/dated if dated else None),
+            'target_symbol_rows':dict(symbols),'target_year_prefix_counts':dict(years),
+            'decision':decision,
+            'full_object_materialized':False,'timezone_verified':False,
+            'strategy_spec_write':False,'runtime_activation':False,'broker_submit':False,'live_trading_change':False
+          }
+          out=Path(os.environ['RUNNER_TEMP'])/'p11-fnspid-source-shape-receipt.json'
+          out.write_text(json.dumps(receipt,indent=2,sort_keys=True)+'\n')
+          print('P11_FNSPID_SOURCE_SHAPE_RECEIPT='+json.dumps(receipt,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p11-fnspid-source-shape-${{ github.run_id }}
+          path: ${{ runner.temp }}/p11-fnspid-source-shape-receipt.json
+          if-no-files-found: error
+          retention-days: 30
