@@ -24,9 +24,12 @@ jobs:
           set -euo pipefail
           curl -fsSL https://raw.githubusercontent.com/XoticHaze/TextConverterToolbox/2d8995ba66502a4de25c64c1c32a67e132b05522/research/run_industry_stagea_public_runner_20260905.py -o /tmp/runner.py
           test "$(git hash-object /tmp/runner.py)" = 9f7f802469dc6a33abd3431295d5232ebc4289c5
+          # Source-only recovery: query1 returned HTTP 404 before the first symbol on run 34061554509.
+          # Yahoo's query2 chart endpoint exposes the same JSON/adjusted-close contract; scientific code is unchanged.
+          sed -i 's#https://query1.finance.yahoo.com/v8/finance/chart/#https://query2.finance.yahoo.com/v8/finance/chart/#' /tmp/runner.py
+          grep -q 'https://query2.finance.yahoo.com/v8/finance/chart/' /tmp/runner.py
           python - <<'PY'
           import importlib.util, json
-          import pandas as pd
           spec=importlib.util.spec_from_file_location('r','/tmp/runner.py')
           r=importlib.util.module_from_spec(spec); spec.loader.exec_module(r)
           family='regional_banks'; benchmark='KRE'
@@ -44,21 +47,15 @@ jobs:
               cutoff=common[-1].isoformat()
               out=r._evaluate_matrix({family:{'primary_industry_etf':benchmark,'development_universe':symbols}},cutoff)
               summary=out['family_summary'][family]
-              qqq=frames['QQQ'].set_index('timestamp').price
-              qqq_excess=[]
-              for row in out['per_symbol']:
-                  for fold in row['folds']:
-                      pass
-              # Reconstruct exact selected-state broad-market excess from evaluator records is intentionally omitted;
-              # broad-market context is reported over the exact common window instead of contaminating the frozen Stage-A gate.
               first=common[0]; last=common[-1]
-              qqq_window=float(qqq.loc[last]/qqq.loc[first]-1.0)
+              qqq=frames['QQQ'].set_index('timestamp').price
               kre=frames[benchmark].set_index('timestamp').price
+              qqq_window=float(qqq.loc[last]/qqq.loc[first]-1.0)
               kre_window=float(kre.loc[last]/kre.loc[first]-1.0)
               decision='ADVANCE_REGIONAL_BANKS_TO_INDEPENDENT_CONFIRMATION' if summary['development_family_gate_pass'] else 'REJECT_REGIONAL_BANKS_STAGEA'
               receipt={'schema':'p07-regional-banks-source-preflight.v1','family':family,'benchmark':benchmark,
-                       'development_universe':symbols,'source_support':'SUFFICIENT','preflight':preflight,
-                       'common_calendar_rows':len(common),'window_first':first.isoformat(),'window_last':last.isoformat(),
+                       'development_universe':symbols,'source_support':'SUFFICIENT','source_endpoint':'query2.finance.yahoo.com/v8/finance/chart',
+                       'preflight':preflight,'common_calendar_rows':len(common),'window_first':first.isoformat(),'window_last':last.isoformat(),
                        'matched_window_benchmark_return':kre_window,'matched_window_qqq_return':qqq_window,
                        'family_summary':summary,'per_symbol':out['per_symbol'],'decision':decision,
                        'frozen_stagea_cost_bps':25.0,'sector_substitution_stress_bps':50.0,
@@ -66,8 +63,8 @@ jobs:
                        'runtime_mutation':False,'live_trading_change':False}
           except Exception as exc:
               receipt={'schema':'p07-regional-banks-source-preflight.v1','family':family,'benchmark':benchmark,
-                       'development_universe':symbols,'source_support':'INSUFFICIENT','preflight':preflight,
-                       'source_error':f'{type(exc).__name__}: {exc}','decision':'SOURCE_FAILURE_NO_SCIENTIFIC_SCORE',
+                       'development_universe':symbols,'source_support':'INSUFFICIENT','source_endpoint':'query2.finance.yahoo.com/v8/finance/chart',
+                       'preflight':preflight,'source_error':f'{type(exc).__name__}: {exc}','decision':'SOURCE_FAILURE_NO_SCIENTIFIC_SCORE',
                        'research_only':True,'promotion_authority':False,'allocation_authority':False,
                        'runtime_mutation':False,'live_trading_change':False}
           open('p07-regional-banks-source-preflight-receipt.json','w').write(json.dumps(receipt,sort_keys=True,indent=2)+'\n')
