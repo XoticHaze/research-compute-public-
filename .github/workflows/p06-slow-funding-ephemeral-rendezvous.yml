@@ -85,7 +85,7 @@ jobs:
           path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/p06-slow-funding-envelope.json"
           api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${EXCHANGE_REF}"
           found=0
-          for _ in $(seq 1 90); do
+          for _ in $(seq 1 540); do
             if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/p06-envelope.json"; then found=1; break; fi
             sleep 5
           done
