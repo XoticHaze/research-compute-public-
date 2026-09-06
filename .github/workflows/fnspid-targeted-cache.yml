@@ -1,0 +1,43 @@
+name: FNSPID Targeted Cache
+on:
+  pull_request:
+    paths:
+      - 'research/fnspid-all-external-schema-probe.py'
+      - 'research/fnspid-all-external-nvda-span-probe.py'
+      - 'research/fnspid-pilot-nasdaq-span.json'
+      - '.github/workflows/fnspid-targeted-cache.yml'
+permissions:
+  contents: read
+jobs:
+  all-external-nvda-gap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.16'
+      - name: Restore content-addressed All_external range cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/fnspid-range
+          key: fnspid-all-external-v2-5d4c018036bd82ca-nvda-2015-${{ github.run_id }}
+          restore-keys: |
+            fnspid-all-external-v2-5d4c018036bd82ca-nvda-2015-
+            fnspid-all-external-schema-v1-5d4c018036bd82ca-
+            fnspid-all-external-v1-5d4c018036bd82ca-nvda-2015-
+            fnspid-range-v1-5d4c018036bd82ca-1a7a3eb8e6b97ec1
+      - name: Binary-locate uncovered NVDA span with sparse boundary recovery
+        run: python research/fnspid-all-external-nvda-span-probe.py
+      - name: Publish source-gap receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: fnspid-all-external-nvda-span-receipt
+          path: fnspid-all-external-nvda-span-receipt.json
+          retention-days: 30
+      - name: Save every paid source range even after later failures
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/fnspid-range
+          key: fnspid-all-external-v2-5d4c018036bd82ca-nvda-2015-${{ github.run_id }}

@@ -1,0 +1,28 @@
+{
+  "schema": "research_compute_public.fnspid_all_external_schema_receipt.v1",
+  "source": {
+    "dataset": "Zihan1004/FNSPID",
+    "path": "Stock_news/All_external.csv",
+    "size_bytes": 5731397037,
+    "lfs_sha256": "5d4c018036bd82ca821da71b7a9c0c7db3289642e0fc6f897ea69f4a0c5135c3"
+  },
+  "workflow_run_id": 34001587885,
+  "workflow_job_id": 101401300014,
+  "artifact_id": 9979639384,
+  "artifact_digest": "sha256:b37513f300abbd798a726a9d5788c4db6d60a822267e2f74a6f4ea9b687be839",
+  "bounded_head_bytes": 8388608,
+  "body_rows_parsed": 5000,
+  "canonical_rows_in_head": 5000,
+  "header": ["Date", "Article_title", "Stock_symbol", "Url", "Publisher", "Author", "Article", "Lsa_summary", "Luhn_summary", "Textrank_summary", "Lexrank_summary"],
+  "header_field_count": 11,
+  "date_column_index": 0,
+  "symbol_column_index": 2,
+  "first_2000_unique_symbols": 2,
+  "first_2000_symbols_non_decreasing": true,
+  "first_2000_dates_non_increasing": false,
+  "csv_parse_error_after_bounded_head": null,
+  "network_reads": 8,
+  "interpretation": "The All_external source schema matches the expected 11-column contract and the bounded file head is symbol ordered. Prior random-access failures are therefore narrowed to sparse record-boundary recovery around unusually large quoted article records, not a schema mismatch and not data absence.",
+  "research_only": true,
+  "promotion_authority": false
+}

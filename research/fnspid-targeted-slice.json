@@ -1,0 +1,31 @@
+{
+  "schema": "research_compute_public.fnspid_targeted_slice_spec.v1",
+  "source": {
+    "dataset": "Zihan1004/FNSPID",
+    "path": "Stock_news/nasdaq_exteral_data.csv",
+    "size_bytes": 23232979597,
+    "lfs_sha256": "1a7a3eb8e6b97ec19f286f2cfca3371542bddb272ab1eb8f36e33ad98fa5c4da"
+  },
+  "symbols": ["NVDA", "DHI"],
+  "start_date": "2015-01-01",
+  "end_date": "2023-12-31",
+  "columns": [
+    "Date",
+    "Article_title",
+    "Stock_symbol",
+    "Url",
+    "Publisher",
+    "Author",
+    "Article",
+    "Lsa_summary",
+    "Luhn_summary",
+    "Textrank_summary",
+    "Lexrank_summary"
+  ],
+  "preserve_raw_publication_timestamp": true,
+  "timezone_imputation": false,
+  "dedupe_during_transport": false,
+  "research_only": true,
+  "promotion_authority": false,
+  "role": "pipeline-validating pilot of frozen research-foundry #219 semiconductor/homebuilder universe; no scientific conclusion from this two-symbol subset"
+}

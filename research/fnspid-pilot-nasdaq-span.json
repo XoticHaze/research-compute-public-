@@ -1,0 +1,53 @@
+{
+  "schema": "research_compute_public.fnspid_pinned_target_span.v1",
+  "producer": {
+    "workflow_run_id": 33989197069,
+    "job_id": 101368240351,
+    "artifact_id": 9976111698,
+    "artifact_zip_sha256": "dd46f9ed64be52cecea6f8ffaec4ce7a0d047dbb15c7ed78dda81eb28ba94978"
+  },
+  "source": {
+    "dataset": "Zihan1004/FNSPID",
+    "path": "Stock_news/nasdaq_exteral_data.csv",
+    "size_bytes": 23232979597,
+    "lfs_sha256": "1a7a3eb8e6b97ec19f286f2cfca3371542bddb272ab1eb8f36e33ad98fa5c4da"
+  },
+  "requested_window": {
+    "start_date": "2015-01-01",
+    "end_date": "2023-12-31"
+  },
+  "results": [
+    {
+      "symbol": "NVDA",
+      "date_order_monotone_desc": true,
+      "symbol_block_start_approx": 11304752091,
+      "symbol_block_end_approx": 11375221338,
+      "materialize_start": 11304752091,
+      "materialize_end": 11375221338,
+      "materialize_bytes_approx": 70469247,
+      "observed_latest_date": "2023-12-12",
+      "observed_oldest_near_block_end": "2021-08-17",
+      "requested_window_coverage": "PARTIAL_NEEDS_SECOND_SOURCE_FOR_2015_TO_2021"
+    },
+    {
+      "symbol": "DHI",
+      "date_order_monotone_desc": true,
+      "symbol_block_start_approx": 5296836336,
+      "symbol_block_end_approx": 5319803772,
+      "materialize_start": 5296836336,
+      "materialize_end": 5318256217,
+      "materialize_bytes_approx": 21419881,
+      "observed_latest_date": "2023-12-16",
+      "observed_cutoff_region": "2015-01",
+      "requested_window_coverage": "COVERS_REQUESTED_START"
+    }
+  ],
+  "probe_io": {
+    "cache_hits": 23,
+    "network_reads_1mib": 58,
+    "saved_cache_archive_bytes": 14128576
+  },
+  "reuse_rule": "Reuse while source LFS SHA and requested window are unchanged. Do not repeat span discovery. Probe the second FNSPID Stock_news source only for uncovered requested history.",
+  "research_only": true,
+  "promotion_authority": false
+}

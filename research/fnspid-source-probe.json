@@ -1,0 +1,11 @@
+{
+  "schema": "research_compute_public.fnspid_source_probe.v1",
+  "scientific_authority": "XoticHaze/research-foundry#219",
+  "source_dataset": "Zihan1004/FNSPID",
+  "source_tree_api": "https://huggingface.co/api/datasets/Zihan1004/FNSPID/tree/main/Stock_news?recursive=false&expand=false",
+  "required_symbols": ["NVDA","AMD","AMAT","AVGO","MU","DHI","LEN","PHM","TOL","NVR"],
+  "required_date_range": ["2015-01-01","2023-12-31"],
+  "purpose": "Execution-plane source discovery only. Do not score news or change research semantics.",
+  "research_only": true,
+  "promotion_authority": false
+}
