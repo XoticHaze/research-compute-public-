@@ -1,0 +1,3 @@
+PR277 second distinct encrypted private-input rendezvous trigger r2.
+Fixed harness: research_foundry_pr277_domain_shift_v1.
+No private source or private data is present here.
