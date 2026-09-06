@@ -1,0 +1,4 @@
+P04_H24_DCA_REQUEST_V1
+purpose=real_private_input_consume
+route=public_research_compute_current
+scientific_contract=frozen
