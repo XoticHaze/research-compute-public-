@@ -1,0 +1,42 @@
+{
+  "schema": "public_compute.semiconductor_alfred_cycle_path_head_contract.v1",
+  "source_parent_pr": 44,
+  "cache_parent_pr": 45,
+  "development_universe": ["AMAT", "APH", "KLAC", "LRCX", "TXN", "NXPI", "ADI"],
+  "control": {
+    "representation": "exact PR31/PR34 19-feature representation",
+    "learner": "exact fixed shallow HistGradientBoostingRegressor from PR31/PR34",
+    "targets": ["terminal_net200_bps", "mfe20_bps", "adverse_excursion20_bps"],
+    "chronology": "exact PR31/PR34 folds, +1 entry delay, 20-session path hold, and purge"
+  },
+  "challenger": {
+    "representation": "control plus exact six features from the SHA-pinned PR45 first-print cache",
+    "features": [
+      "semi_ip_change_1m",
+      "semi_ip_change_3m",
+      "semi_ip_change_12m",
+      "hitek_capacity_utilization",
+      "hitek_capacity_utilization_change_3m",
+      "hitek_capacity_utilization_change_12m"
+    ],
+    "daily_join": "for a signal timestamp, use only the latest cache row with available_from <= signal calendar date",
+    "missing_policy": "drop rows lacking a complete frozen cycle vector; re-evaluate control on the exact same rows"
+  },
+  "learner_policy": "same fixed HGB for control and challenger; no hyperparameter, target, feature, threshold, cost, duration, or model-family sweep",
+  "target_specific_gate": {
+    "aggregate_spearman_above_control": true,
+    "aggregate_mae_below_control": true,
+    "aggregate_mae_below_historical_median_baseline": true,
+    "minimum_positive_spearman_folds": 3,
+    "minimum_baseline_mae_win_folds": 3,
+    "minimum_spearman_improvement_folds_vs_control": 3,
+    "minimum_mae_improvement_folds_vs_control": 3
+  },
+  "interpretation": "each path head independently earns or rejects cycle information; a passing head does not alter admission/ranking/duration or force this representation into other heads",
+  "external_semiconductor_holdouts_loaded": false,
+  "research_only": true,
+  "promotion_authority": false,
+  "runtime_mutation": false,
+  "broker_action": false,
+  "live_trading_change": false
+}
