@@ -31,12 +31,11 @@ jobs:
           text=raw.decode('utf-8','replace')
           lines=text.splitlines(keepends=True)
           if len(lines)<3: raise SystemExit('bounded sample did not contain complete CSV rows')
-          # Drop final potentially partial physical line only. csv handles quoted embedded newlines.
           sample=''.join(lines[:-1])
           reader=csv.DictReader(sample.splitlines())
           if not reader.fieldnames: raise SystemExit('missing header')
           lower={x.lower():x for x in reader.fieldnames}
-          sf=next((lower[x] for x in ('stock','ticker','symbol') if x in lower),None)
+          sf=next((lower[x] for x in ('stock','stock_symbol','ticker','symbol') if x in lower),None)
           df=next((lower[x] for x in ('date','datetime','timestamp','published_at','published') if x in lower),None)
           if not sf or not df: raise SystemExit(f'missing symbol/date fields: {reader.fieldnames}')
           target={'NVDA','AMD','AMAT','AVGO','MU','DHI','LEN','PHM','TOL','NVR'}
