@@ -1,0 +1,76 @@
+name: XLU89 public adjusted-daily cache
+
+on:
+  push:
+    branches:
+      - recovery/xlu89-public-market-cache-r1
+    paths:
+      - scripts/cache_public_adjusted_daily.py
+      - .github/workflows/xlu89-public-market-cache.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CACHE_KEY: xlu89-yahoo-adjusted-daily-20140101-20260903-amat-aph-xlu-smh-v1
+      OUTPUT_ROOT: .campaign/xlu89-public-market-cache
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install focused public-data dependency
+        run: python -m pip install --disable-pip-version-check pandas
+
+      - name: Restore reusable public market cache
+        id: market-cache
+        uses: actions/cache@v4
+        with:
+          path: .campaign/xlu89-public-market-cache
+          key: ${{ env.CACHE_KEY }}
+
+      - name: Fetch public adjusted daily data on cache miss
+        if: steps.market-cache.outputs.cache-hit != 'true'
+        run: |
+          python scripts/cache_public_adjusted_daily.py \
+            --symbols AMAT APH XLU SMH \
+            --start 2014-01-01 \
+            --end 2026-09-03 \
+            --output-root "$OUTPUT_ROOT"
+
+      - name: Verify reusable artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$OUTPUT_ROOT/adjusted-daily.csv"
+          test -s "$OUTPUT_ROOT/receipt.json"
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path(os.environ['OUTPUT_ROOT'])
+          receipt = json.loads((root / 'receipt.json').read_text())
+          digest = hashlib.sha256((root / 'adjusted-daily.csv').read_bytes()).hexdigest()
+          if digest != receipt['csv_sha256']:
+              raise SystemExit(f"cache digest mismatch: {digest} != {receipt['csv_sha256']}")
+          if sorted(receipt['symbols']) != ['AMAT', 'APH', 'SMH', 'XLU']:
+              raise SystemExit(f"unexpected symbols: {receipt['symbols']}")
+          print(json.dumps({'cache_hit': os.environ.get('CACHE_HIT'), 'csv_sha256': digest, 'rows': receipt['rows']}, sort_keys=True))
+          PY
+        env:
+          CACHE_HIT: ${{ steps.market-cache.outputs.cache-hit }}
+
+      - name: Upload reusable public market artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xlu89-public-adjusted-daily-20140101-20260903
+          path: .campaign/xlu89-public-market-cache/
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 6
