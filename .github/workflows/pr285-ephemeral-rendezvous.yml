@@ -11,6 +11,7 @@ permissions:
 env:
   RESPONSE_ROOT: rendezvous/responses
   RECIPIENT_ROOT: rendezvous/recipients
+  EXCHANGE_REF: rendezvous-exchange
 
 jobs:
   consume:
@@ -43,14 +44,14 @@ jobs:
           print('PR285_EPHEMERAL_RUN_ID='+os.environ['GITHUB_RUN_ID'])
           print('PR285_EPHEMERAL_RECIPIENT_KEY_ID='+key_id)
           PY
-      - name: Publish public recipient to PR branch
+      - name: Publish public recipient to exchange branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           recipient_path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}.json"
           payload="$(base64 -w0 "$RUNNER_TEMP/pr285-ephemeral-recipient.json")"
-          body="$(python - "$payload" "$GITHUB_HEAD_REF" <<'PY'
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
           import json,sys
           content,branch=sys.argv[1:]
           print(json.dumps({'message':'rendezvous: publish one-run PR285 recipient','content':content,'branch':branch}))
@@ -63,13 +64,13 @@ jobs:
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${recipient_path}" \
             -d "$body" >/dev/null
           echo "PR285_EPHEMERAL_RECIPIENT_PATH=${recipient_path}"
-      - name: Wait for run-bound encrypted envelope
+      - name: Wait for run-bound encrypted envelope on exchange branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           response_path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/sealed-envelope.json"
-          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${response_path}?ref=${GITHUB_HEAD_REF}"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${response_path}?ref=${EXCHANGE_REF}"
           found=0
           for _ in $(seq 1 90); do
             if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/sealed-envelope.json"; then
