@@ -2,8 +2,10 @@ from __future__ import annotations
 
 """Fixed sanitized consumer for the admitted private MNQ replay artifact.
 
-This is a route/data-plane proof only. It does not execute a strategy, expose bars,
-change StrategySpec/runtime state, submit orders or carry promotion authority.
+The encrypted capsule contains only a short-lived artifact retrieval capability.
+The capability is never logged; the artifact is fetched only after run-bound
+X25519 decryption and is then validated byte-for-byte in runner temp.
+This is a route/data-plane proof only, with no strategy or runtime authority.
 """
 
 import argparse
@@ -14,16 +16,20 @@ import json
 import tempfile
 import zipfile
 from pathlib import Path
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 from ephemeral_x25519_chunked_v1 import decrypt_assembled_ciphertext, sha256_bytes
 
 SCHEMA = "mnq-corpus-ephemeral-x25519-v1"
 HARNESS = "mnq_replay_identity_probe_v1"
+TICKET_SCHEMA = "mnq-corpus-artifact-fetch-ticket-v1"
 ARCHIVE_SHA256 = "86aae162c38354a0beb0abfc857f317f596a07c9e317d4d21e4fb799881c2b2e"
 DATASET_SHA256 = "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
 ROWS = 192553
 FIRST = "2019-05-05T22:00:00+00:00"
 LAST = "2026-02-19T02:12:00+00:00"
+MAX_ARCHIVE_BYTES = 10_000_000
 EXPECTED_FILES = {
     "output/manifest.json",
     "output/mnq-strategy-backtest-12min.csv",
@@ -31,6 +37,33 @@ EXPECTED_FILES = {
     "supplement-receipt.json",
     "publication.log",
 }
+
+
+def _fetch_artifact(ticket_bytes: bytes) -> bytes:
+    ticket = json.loads(ticket_bytes.decode("utf-8"))
+    if not isinstance(ticket, dict) or set(ticket) != {"schema", "download_url", "artifact_archive_sha256"}:
+        raise RuntimeError("MNQ artifact ticket field set mismatch")
+    if ticket["schema"] != TICKET_SCHEMA or ticket["artifact_archive_sha256"] != ARCHIVE_SHA256:
+        raise RuntimeError("MNQ artifact ticket identity mismatch")
+    parsed = urlparse(str(ticket["download_url"]))
+    if parsed.scheme != "https" or not parsed.hostname or not parsed.hostname.endswith(".oaiusercontent.com"):
+        raise RuntimeError("MNQ artifact ticket host rejected")
+    req = Request(str(ticket["download_url"]), headers={"User-Agent": "research-compute-public-fixed-consumer/1"})
+    chunks: list[bytes] = []
+    total = 0
+    with urlopen(req, timeout=60) as response:
+        while True:
+            block = response.read(1024 * 1024)
+            if not block:
+                break
+            total += len(block)
+            if total > MAX_ARCHIVE_BYTES:
+                raise RuntimeError("MNQ artifact exceeds fixed byte cap")
+            chunks.append(block)
+    payload = b"".join(chunks)
+    if sha256_bytes(payload) != ARCHIVE_SHA256:
+        raise RuntimeError("MNQ fetched artifact archive digest mismatch")
+    return payload
 
 
 def _validate_zip(payload: bytes) -> dict:
@@ -121,7 +154,7 @@ def main() -> None:
 
     envelope = json.loads(Path(args.envelope).read_text(encoding="utf-8"))
     ciphertext = Path(args.ciphertext).read_bytes()
-    plaintext = decrypt_assembled_ciphertext(
+    ticket = decrypt_assembled_ciphertext(
         envelope=envelope,
         ciphertext=ciphertext,
         private_key_path=Path(args.private_key),
@@ -130,7 +163,8 @@ def main() -> None:
         expected_harness=HARNESS,
         response_root=args.response_root,
     )
-    receipt = _validate_zip(plaintext)
+    payload = _fetch_artifact(ticket)
+    receipt = _validate_zip(payload)
     print("MNQ_CORPUS_EPHEMERAL_RECEIPT=" + json.dumps(receipt, sort_keys=True))
 
 
