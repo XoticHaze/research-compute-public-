@@ -1,0 +1,52 @@
+name: P11 FNSPID Real Materialization
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/p11_fnspid_bounded_materializer_v1.py'
+      - '.github/workflows/p11-fnspid-real-materialization.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      SOURCE_REVISION: fcd1056328b3db04769d4530abe4158d086cffc1
+      SOURCE_SHA256: 1a7a3eb8e6b97ec19f286f2cfca3371542bddb272ab1eb8f36e33ad98fa5c4da
+      SOURCE_URL: https://huggingface.co/datasets/Zihan1004/FNSPID/resolve/fcd1056328b3db04769d4530abe4158d086cffc1/Stock_news/nasdaq_exteral_data.csv?download=true
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Compile fixed materializer
+        run: python -m py_compile scripts/p11_fnspid_bounded_materializer_v1.py
+      - name: Stream pinned upstream object and materialize bounded receipt
+        run: |
+          set -euo pipefail
+          mkdir -p result
+          python scripts/p11_fnspid_bounded_materializer_v1.py "$SOURCE_URL" \
+            --receipt result/p11-fnspid-bounded-source-receipt.json \
+            --symbols NVDA,AMD,AMAT,AVGO,MU,DHI,LEN,PHM,TOL,NVR \
+            --start 2015-01-01 --end 2023-12-31 \
+            --source-sha256 "$SOURCE_SHA256" --source-revision "$SOURCE_REVISION"
+      - name: Validate sanitized receipt boundary
+        run: |
+          python - <<'PY'
+          import json
+          p=json.load(open('result/p11-fnspid-bounded-source-receipt.json'))
+          assert p['authority']=='research_only'
+          assert p['source_sha256_expected']=='1a7a3eb8e6b97ec19f286f2cfca3371542bddb272ab1eb8f36e33ad98fa5c4da'
+          assert p['strategy_spec_write'] is False and p['runtime_activation'] is False
+          assert p['broker_submit'] is False and p['live_trading_change'] is False
+          print('P11_SANITIZED_RECEIPT=PASS rows='+str(p['rows']))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p11-fnspid-bounded-source-receipt
+          retention-days: 30
+          if-no-files-found: error
+          path: result/p11-fnspid-bounded-source-receipt.json
