@@ -1,2 +1,3 @@
 PR285 first real encrypted private-input rendezvous proof, branch trigger r1.
 No private data is contained in this request file.
+Retry 2 uses published one-run recipient rendezvous.
