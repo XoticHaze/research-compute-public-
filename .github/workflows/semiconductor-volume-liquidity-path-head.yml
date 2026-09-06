@@ -1,0 +1,37 @@
+name: Semiconductor Volume Liquidity Path Head
+
+on:
+  pull_request:
+    paths:
+      - 'research/semiconductor_volume_liquidity_path_head_20260906.py'
+      - 'research/semiconductor_volume_liquidity_preflight_20260906.py'
+      - '.github/workflows/semiconductor-volume-liquidity-path-head.yml'
+      - 'research/semiconductor_path_head_predictability_20260905.py'
+      - 'research/fresh_scarcity_confirmation_20260905.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install exact numerical environment
+        run: python -m pip install --disable-pip-version-check -q numpy==2.4.6 pandas==3.0.5 scikit-learn==1.9.0 scipy==1.17.1
+      - name: Reprove frozen volume-liquidity source plane
+        run: python research/semiconductor_volume_liquidity_preflight_20260906.py
+      - name: Execute target-specific information-value audit
+        run: PYTHONPATH=. python -m research.semiconductor_volume_liquidity_path_head_20260906
+      - name: Retain deterministic path-head receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: semiconductor-volume-liquidity-path-head
+          path: semiconductor_volume_liquidity_path_head_20260906.json
+          retention-days: 14
+          if-no-files-found: error
