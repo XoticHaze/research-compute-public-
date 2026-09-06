@@ -3,3 +3,4 @@ authority=research_only
 private_authority=XoticHaze/research-foundry
 private_ref=assistant/slow-sector-funding-216-r1@848d0e576cf24bfc4015ae94b6f2e9ab74db7c4f
 harness=research_foundry_p06_slow_funding_216_v1
+trigger_nonce=20260906T1845Z-r5
