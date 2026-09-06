@@ -33,17 +33,21 @@ jobs:
           r=importlib.util.module_from_spec(spec); spec.loader.exec_module(r)
           original=['AMT','PLD','O','SPG','EQIX','PSA','WELL','DLR']
           fresh=['CCI','VICI','AVB','EQR','EXR','MAA','CPT','ARE']
+          cutoff='2026-08-24T13:30:00+00:00'
           assert not (set(original) & set(fresh))
           family={'reits_fresh_confirmation':{'primary_industry_etf':'VNQ','development_universe':fresh}}
-          out=r._evaluate_matrix(family,'2026-09-01T13:30:00+00:00')
+          out=r._evaluate_matrix(family,cutoff)
           s=out['family_summary']['reits_fresh_confirmation']
           receipt={
             'schema':'reit_stagea_fresh_confirmation.v1',
             'benchmark':'VNQ',
+            'cutoff':cutoff,
+            'cutoff_reason':'common bounded-source cutoff chosen before any fresh-panel model result; first attempt emitted no result because AVB ended 2026-08-24',
             'frozen_model':'TextConverterToolbox@2d8995ba66502a4de25c64c1c32a67e132b05522:run_industry_stagea_public_runner_20260905.py',
             'original_development_universe':original,
             'fresh_confirmation_universe':fresh,
             'panel_disjoint':True,
+            'symbol_substitution':False,
             'threshold_or_model_search':False,
             'external_holdouts_loaded':False,
             'family_summary':s,
