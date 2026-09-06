@@ -9,9 +9,9 @@ on:
 permissions:
   contents: read
 jobs:
-  all-external-schema:
+  all-external-nvda-gap:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,22 +21,23 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: .cache/fnspid-range
-          key: fnspid-all-external-schema-v1-5d4c018036bd82ca-${{ github.run_id }}
+          key: fnspid-all-external-v2-5d4c018036bd82ca-nvda-2015-${{ github.run_id }}
           restore-keys: |
+            fnspid-all-external-v2-5d4c018036bd82ca-nvda-2015-
             fnspid-all-external-schema-v1-5d4c018036bd82ca-
             fnspid-all-external-v1-5d4c018036bd82ca-nvda-2015-
             fnspid-range-v1-5d4c018036bd82ca-1a7a3eb8e6b97ec1
-      - name: Inspect actual bounded head schema and ordering
-        run: python research/fnspid-all-external-schema-probe.py
-      - name: Publish schema receipt
+      - name: Binary-locate uncovered NVDA span with sparse boundary recovery
+        run: python research/fnspid-all-external-nvda-span-probe.py
+      - name: Publish source-gap receipt
         uses: actions/upload-artifact@v4
         with:
-          name: fnspid-all-external-schema-receipt
-          path: fnspid-all-external-schema-receipt.json
+          name: fnspid-all-external-nvda-span-receipt
+          path: fnspid-all-external-nvda-span-receipt.json
           retention-days: 30
-      - name: Save every paid source range
+      - name: Save every paid source range even after later failures
         if: always()
         uses: actions/cache/save@v4
         with:
           path: .cache/fnspid-range
-          key: fnspid-all-external-schema-v1-5d4c018036bd82ca-${{ github.run_id }}
+          key: fnspid-all-external-v2-5d4c018036bd82ca-nvda-2015-${{ github.run_id }}
