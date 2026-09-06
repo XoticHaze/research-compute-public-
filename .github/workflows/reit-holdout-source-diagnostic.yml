@@ -1,0 +1,82 @@
+name: REIT Holdout Source Diagnostic
+
+on:
+  pull_request:
+    paths: ['.github/workflows/reit-holdout-source-diagnostic.yml']
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Compare Yahoo quote and adjusted-close coverage without model outcomes
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from urllib.parse import urlencode
+          from urllib.request import Request, urlopen
+
+          symbols=['CAT','JPM','UNH','XOM','COST','MSFT','AVB','EQR','ESS','DLR','QQQ','VNQ']
+          ceiling=datetime.fromisoformat('2026-09-01T13:30:00+00:00')
+          p1=int(datetime(2014,1,1,tzinfo=timezone.utc).timestamp())
+          p2=int(datetime(2026,9,3,tzinfo=timezone.utc).timestamp())
+          by_symbol={}
+          quote_sets={}; adj_sets={}; fallback_sets={}
+          for symbol in symbols:
+              q=urlencode({'period1':p1,'period2':p2,'interval':'1d','events':'history','includeAdjustedClose':'true'})
+              req=Request(f'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?{q}',headers={'User-Agent':'Mozilla/5.0 research-compute-public/1.0'})
+              with urlopen(req,timeout=30) as r: payload=json.loads(r.read().decode())
+              result=(payload.get('chart',{}).get('result') or [None])[0]
+              if not result: raise RuntimeError(f'{symbol}: no chart result')
+              ts=result.get('timestamp') or []
+              ind=result.get('indicators',{})
+              quote=((ind.get('quote') or [{}])[0].get('close') or [])
+              adj=((ind.get('adjclose') or [{}])[0].get('adjclose') or [])
+              def rows(values):
+                  out=[]
+                  for t,v in zip(ts,values):
+                      dt=datetime.fromtimestamp(t,tz=timezone.utc)
+                      if v is not None and dt <= ceiling: out.append(dt.isoformat())
+                  return out
+              qr=rows(quote); ar=rows(adj)
+              fr=[]
+              for i,t in enumerate(ts):
+                  dt=datetime.fromtimestamp(t,tz=timezone.utc)
+                  if dt > ceiling: continue
+                  av=adj[i] if i < len(adj) else None
+                  qv=quote[i] if i < len(quote) else None
+                  if av is not None or qv is not None: fr.append(dt.isoformat())
+              quote_sets[symbol]=set(qr); adj_sets[symbol]=set(ar); fallback_sets[symbol]=set(fr)
+              by_symbol[symbol]={
+                  'timestamp_count':len(ts),'quote_nonnull_at_or_before_ceiling':len(qr),'adjclose_nonnull_at_or_before_ceiling':len(ar),'elementwise_adj_or_close_nonnull':len(fr),
+                  'quote_first':qr[0] if qr else None,'quote_last':qr[-1] if qr else None,
+                  'adj_first':ar[0] if ar else None,'adj_last':ar[-1] if ar else None,
+                  'fallback_first':fr[0] if fr else None,'fallback_last':fr[-1] if fr else None,
+              }
+          selection=['CAT','JPM','UNH','XOM','COST','MSFT','AVB','EQR','ESS','DLR','QQQ']
+          def common(sets):
+              c=None
+              for s in selection: c=set(sets[s]) if c is None else c.intersection(sets[s])
+              c=sorted(c or [])
+              return {'rows':len(c),'first':c[0] if c else None,'last':c[-1] if c else None}
+          out={
+              'schema':'research_compute_public.reit_holdout_source_diagnostic.v1','ceiling':ceiling.isoformat(),'symbols':by_symbol,
+              'selection_common_quote_close':common(quote_sets),'selection_common_adjclose':common(adj_sets),'selection_common_elementwise_adj_or_close':common(fallback_sets),
+              'benchmark_excluded_from_selection_calendar':True,'target_returns_evaluated':False,'model_executed':False,'research_only':True
+          }
+          Path('reit-holdout-source-diagnostic.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          print('REIT_SOURCE_DIAGNOSTIC='+json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: reit-holdout-source-diagnostic
+          path: reit-holdout-source-diagnostic.json
+          if-no-files-found: error
+          retention-days: 14
