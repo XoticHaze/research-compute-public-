@@ -1,0 +1,61 @@
+name: FNSPID Next-Session Arrival Contract
+
+on:
+  push:
+    branches:
+      - research/fnspid-source-probe-20260906-r1
+    paths:
+      - "research/fnspid_next_session_arrival_ablation_20260906.py"
+      - ".github/workflows/fnspid-next-session-arrival-contract.yml"
+  pull_request:
+    paths:
+      - "research/fnspid_next_session_arrival_ablation_20260906.py"
+      - ".github/workflows/fnspid-next-session-arrival-contract.yml"
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --disable-pip-version-check numpy pandas scikit-learn
+      - run: python -m py_compile research/fnspid_next_session_arrival_ablation_20260906.py
+      - name: Prove strict next-session and permutation contracts
+        run: |
+          python - <<'PY'
+          import csv, tempfile
+          from datetime import date
+          from pathlib import Path
+          import numpy as np
+          import pandas as pd
+          import research.fnspid_next_session_arrival_ablation_20260906 as m
+
+          with tempfile.TemporaryDirectory() as td:
+              p=Path(td)/"news.csv"
+              with p.open("w", newline="", encoding="utf-8") as fh:
+                  w=csv.DictWriter(fh, fieldnames=["Date","Stock_symbol","Publisher"])
+                  w.writeheader()
+                  for s in m.TEST:
+                      for y in range(2015, 2020):
+                          # Enough source shape for parsing; coverage pass is not the purpose here.
+                          w.writerow({"Date":f"{y}-01-02 16:00:00 UTC","Stock_symbol":s,"Publisher":"P"})
+              days=[date(2015,1,2),date(2015,1,5),date(2015,1,6)]
+              events,audit=m._load_news(p,days)
+              # Jan 2 may NEVER be usable on Jan 2; it must map to Jan 5 (index 1).
+              assert events["AMAT"].get(0,[]) == []
+              assert events["AMAT"].get(1,[]) == ["P"]
+
+          rows=[]
+          for s in m.TEST:
+              for i in range(60):
+                  rows.append({"symbol":s,"a":float(i),"b":float(i+1)})
+          frame=pd.DataFrame(rows)
+          a=m._block_permute_training(frame,["a","b"],m.NEGATIVE_CONTROL_SEED)
+          b=m._block_permute_training(frame,["a","b"],m.NEGATIVE_CONTROL_SEED)
+          assert a.shape == (180,2)
+          assert np.array_equal(a,b)
+          assert sorted(a[:,0].tolist()) == sorted(frame.a.tolist())
+          print("FNSPID_NEXT_SESSION_CONTRACT=PASS")
+          PY
