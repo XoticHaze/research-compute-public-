@@ -10,7 +10,9 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 SCHEMA = "p12-review-guard-x25519-v1"
 HARNESS = "mm_p12_strategy_builder_review_guard_v1"
 INFO = b"commandcenter-p12-review-guard-v1"
-ALLOWED_FILES = {"manifest.json", "strategy_builder_review_guard.py", "tests/test_strategy_builder_review_guard.py"}
+SOURCE_PATH = "scripts/operator/strategy_builder_review_guard.py"
+TEST_PATH = "tests/test_strategy_builder_review_guard.py"
+ALLOWED_FILES = {"manifest.json", SOURCE_PATH, TEST_PATH}
 EXPECTED_TEST = "tests.test_strategy_builder_review_guard"
 
 
@@ -44,8 +46,11 @@ def consume(envelope_path: Path, private_key_path: Path, run_id: str):
         if manifest.get("schema")!="p12-review-guard-payload-v1" or manifest.get("harness")!=HARNESS or manifest.get("authority")!="research_only" or int(manifest.get("mm_pr",0))!=224 or manifest.get("test_module")!=EXPECTED_TEST:
             raise RuntimeError("manifest contract mismatch")
         with tempfile.TemporaryDirectory(prefix="p12-review-guard-") as td:
-            root=Path(td); tf.extractall(root); (root/"tests/__init__.py").write_text("")
-            source=(root/"strategy_builder_review_guard.py").read_bytes(); test=(root/"tests/test_strategy_builder_review_guard.py").read_bytes()
+            root=Path(td); tf.extractall(root)
+            (root/"tests").mkdir(parents=True,exist_ok=True); (root/"tests/__init__.py").write_text("")
+            (root/"scripts").mkdir(parents=True,exist_ok=True); (root/"scripts/__init__.py").write_text("")
+            (root/"scripts/operator").mkdir(parents=True,exist_ok=True); (root/"scripts/operator/__init__.py").write_text("")
+            source=(root/SOURCE_PATH).read_bytes(); test=(root/TEST_PATH).read_bytes()
             if hashlib.sha256(source).hexdigest()!=manifest["source_sha256"] or hashlib.sha256(test).hexdigest()!=manifest["test_sha256"]: raise RuntimeError("private source digest mismatch")
             proc=subprocess.run(["python","-m","unittest","-q",EXPECTED_TEST],cwd=root,env={**os.environ,"PYTHONDONTWRITEBYTECODE":"1"},stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=120)
     return {"schema":"p12-review-guard-receipt-v1","authority":"research_only","harness":HARNESS,"mm_pr":224,"mm_head_sha":manifest["mm_head_sha"],"payload_sha256":psha,"test_module":EXPECTED_TEST,"status":"PASS" if proc.returncode==0 else "FAIL","exit_code":proc.returncode,"captured_output_sha256":hashlib.sha256(proc.stdout).hexdigest()}
