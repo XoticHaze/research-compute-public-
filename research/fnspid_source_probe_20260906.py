@@ -10,9 +10,13 @@ import requests
 
 URL = "https://huggingface.co/datasets/Zihan1004/FNSPID/resolve/fcd1056328b3db04769d4530abe4158d086cffc1/Stock_news/nasdaq_exteral_data.csv"
 EXPECTED_SHA256 = "1a7a3eb8e6b97ec19f286f2cfca3371542bddb272ab1eb8f36e33ad98fa5c4da"
-CHUNK = 2 * 1024 * 1024
+CHUNK = 4 * 1024 * 1024
 OFFSET_RE = re.compile(r"(?:Z|[+-]\d{2}:?\d{2})$")
 TIME_RE = re.compile(r"[T ]\d{1,2}:\d{2}")
+# True record starts are numeric source index followed by an ISO-like date. This
+# lets an arbitrary byte range skip embedded Article newlines without pretending
+# every physical line is a CSV record.
+RECORD_START_RE = re.compile(rb"(?:^|\n)(?P<start>\d+),(?P<date>\d{4}-\d{2}-\d{2}[^,]*),")
 
 
 def timestamp_shape(value: str) -> str:
@@ -31,19 +35,52 @@ def timestamp_shape(value: str) -> str:
 
 
 def get_range(session: requests.Session, start: int, stop: int) -> tuple[requests.Response, bytes]:
-    r = session.get(URL, headers={"Range": f"bytes={start}-{stop}", "User-Agent": "research-compute/1.0"}, timeout=60, allow_redirects=True)
+    r = session.get(
+        URL,
+        headers={"Range": f"bytes={start}-{stop}", "User-Agent": "research-compute/1.0"},
+        timeout=60,
+        allow_redirects=True,
+    )
     r.raise_for_status()
     return r, r.content
 
 
-def complete_lines(blob: bytes, is_first: bool = False) -> list[str]:
+def parse_prefix(blob: bytes) -> tuple[list[str], list[dict[str, str]]]:
     text = blob.decode("utf-8", errors="replace")
-    lines = text.splitlines()
-    if not is_first and lines:
-        lines = lines[1:]
-    if lines and not text.endswith(("\n", "\r")):
-        lines = lines[:-1]
-    return lines
+    reader = csv.DictReader(io.StringIO(text))
+    header = list(reader.fieldnames or [])
+    rows: list[dict[str, str]] = []
+    try:
+        for row in reader:
+            if None in row:
+                continue
+            rows.append(row)
+            if len(rows) >= 5:
+                break
+    except csv.Error:
+        pass
+    return header, rows
+
+
+def parse_arbitrary_range(blob: bytes, header: list[str]) -> tuple[int | None, list[dict[str, str]]]:
+    matches = list(RECORD_START_RE.finditer(blob))
+    if not matches:
+        return None, []
+    # Start at the first complete record boundary visible inside the byte range.
+    start = matches[0].start("start")
+    text = blob[start:].decode("utf-8", errors="replace")
+    reader = csv.DictReader(io.StringIO(",".join(header) + "\n" + text))
+    rows: list[dict[str, str]] = []
+    try:
+        for row in reader:
+            if None in row:
+                continue
+            rows.append(row)
+            if len(rows) >= 5:
+                break
+    except csv.Error:
+        pass
+    return start, rows
 
 
 def main() -> None:
@@ -54,49 +91,48 @@ def main() -> None:
     offsets = [0, size // 4, size // 2, (3 * size) // 4, max(0, size - CHUNK)]
 
     first_response, first_blob = get_range(s, 0, CHUNK - 1)
-    first_lines = complete_lines(first_blob, is_first=True)
-    if not first_lines:
-        raise RuntimeError("first range produced no complete lines")
-    header_line = first_lines[0]
-    header = next(csv.reader([header_line]))
+    header, first_rows = parse_prefix(first_blob)
+    if not header:
+        raise RuntimeError("first range produced no CSV header")
     lower = {name.lower(): name for name in header}
-    symbol_field = next((lower[x] for x in ("stock", "ticker", "symbol") if x in lower), None)
+    symbol_field = next((lower[x] for x in ("stock", "stock_symbol", "ticker", "symbol") if x in lower), None)
     date_field = next((lower[x] for x in ("date", "datetime", "timestamp", "published_at", "published") if x in lower), None)
+    if not symbol_field or not date_field:
+        raise RuntimeError(f"required symbol/date fields absent: header={header}")
 
     chunks = []
-    for i, offset in enumerate(offsets):
-        response, blob = (first_response, first_blob) if offset == 0 else get_range(s, offset, min(size - 1, offset + CHUNK - 1))
-        lines = complete_lines(blob, is_first=(offset == 0))
-        data_lines = lines[1:] if offset == 0 else lines
-        rows = []
-        for line in data_lines[:1000]:
-            try:
-                values = next(csv.reader([line]))
-            except Exception:
-                continue
-            if len(values) != len(header):
-                continue
-            row = dict(zip(header, values))
-            rows.append(row)
-            if len(rows) >= 5:
-                break
+    for offset in offsets:
+        response, blob = (first_response, first_blob) if offset == 0 else get_range(
+            s, offset, min(size - 1, offset + CHUNK - 1)
+        )
+        if offset == 0:
+            boundary = 0
+            rows = first_rows
+        else:
+            boundary, rows = parse_arbitrary_range(blob, header)
         chunks.append({
             "offset": offset,
             "status": response.status_code,
             "content_range": response.headers.get("content-range"),
             "bytes_received": len(blob),
-            "sample_symbols": [r.get(symbol_field) for r in rows] if symbol_field else [],
-            "sample_dates": [r.get(date_field) for r in rows] if date_field else [],
-            "timestamp_shapes": [timestamp_shape(r.get(date_field, "")) for r in rows] if date_field else [],
-            "sample_rows": [{k: r.get(k) for k in header[: min(8, len(header))]} for r in rows[:2]],
+            "first_record_boundary_in_chunk": boundary,
+            "sample_symbols": [r.get(symbol_field) for r in rows],
+            "sample_dates": [r.get(date_field) for r in rows],
+            "timestamp_shapes": [timestamp_shape(r.get(date_field, "")) for r in rows],
+            "sample_rows": [
+                {k: r.get(k) for k in [date_field, symbol_field, "Article_title", "Url", "Publisher"] if k in r}
+                for r in rows[:2]
+            ],
         })
 
+    all_sample_symbols = [s for chunk in chunks for s in chunk["sample_symbols"] if s]
     payload = {
-        "schema": "research.fnspid_source_probe.v1",
+        "schema": "research.fnspid_source_probe.v2",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": URL,
         "source_commit": "fcd1056328b3db04769d4530abe4158d086cffc1",
         "expected_source_sha256": EXPECTED_SHA256,
+        "source_sha_status": "PINNED_FROM_UPSTREAM_METADATA_NOT_REHASHED_BY_PARTIAL_PROBE",
         "head": {
             "status": head.status_code,
             "final_url": head.url,
@@ -108,6 +144,8 @@ def main() -> None:
         "symbol_field": symbol_field,
         "date_field": date_field,
         "range_chunks": chunks,
+        "sample_symbol_order": all_sample_symbols,
+        "range_access_usable": all(chunk["status"] == 206 for chunk in chunks),
         "research_only": True,
     }
     with open("fnspid-source-probe-20260906.json", "w", encoding="utf-8") as fh:
