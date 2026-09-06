@@ -1,6 +1,10 @@
 name: Five Pass Alpha Discriminators 20260906
 
 on:
+  push:
+    paths:
+      - 'scripts/five_pass_alpha_discriminators_20260906.py'
+      - '.github/workflows/five-pass-alpha-discriminators-20260906.yml'
   pull_request:
     paths:
       - 'scripts/five_pass_alpha_discriminators_20260906.py'
