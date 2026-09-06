@@ -1,0 +1,43 @@
+name: P10 Provider History Discriminator
+on:
+  pull_request:
+    paths:
+      - 'research/compute_provider_history_discriminator.py'
+      - 'research/p10-provider-history-contract.json'
+      - '.github/workflows/p10-provider-history.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.16'
+      - name: Execute provider-conditioned historical discriminator
+        run: |
+          python research/compute_provider_history_discriminator.py \
+            research/p10-provider-history-contract.json \
+            p10-provider-history-result.json
+      - name: Validate terminal result
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('p10-provider-history-result.json').read_text())
+          assert r['schema']=='research_compute_public.p10_provider_history_discriminator.v1'
+          assert r['research_only'] is True
+          assert r['promotion_authority'] is False
+          assert r['private_data_loaded'] is False
+          print('P10_PROVIDER_HISTORY_CLASSIFICATION='+r['classification'])
+          print('P10_PROVIDER_HISTORY_BUCKETS='+str(r['strict_three_generation_bucket_count']))
+          print('P10_PROVIDER_HISTORY_RESULTS='+json.dumps(r['provider_results'],sort_keys=True))
+          print('P10_PROVIDER_HISTORY_COVERAGE='+json.dumps(r['coverage_top'][:20],sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p10-provider-history-result
+          path: p10-provider-history-result.json
+          retention-days: 30
