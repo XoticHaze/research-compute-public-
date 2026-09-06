@@ -1,0 +1,10 @@
+P04 H24 DCA real private-input execution request
+consumer=p04_h24_dca_consumer_v1.py
+h24_artifact=research-foundry/run33736634164/artifact9886127289
+h24_archive_sha256=15aeb9ebc460e1a552384e96259761db036a59cd3c27c62060f8c670a3075e4d
+lifecycle_artifact=mm-IBKR/run33810287878/artifact9914932522
+lifecycle_archive_sha256=e137e22ac00595d4b469ed490e241ab28e7e861e7dbe857f5533310ac725df4c
+execution_route=public_research_compute_current
+scientific_authority=research-foundry
+runtime_mutation=false
+live_trading_change=false
