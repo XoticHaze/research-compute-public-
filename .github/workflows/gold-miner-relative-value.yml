@@ -66,22 +66,24 @@ jobs:
               ctx[s]={20:mom(px[s],20),60:mom(px[s],60),100:mom(px[s],100)}
           ctx['gdx_minus_gld20']=ctx['GDX'][20]-ctx['GLD'][20]
 
+          # Calendar-indexed source series are deliberately converted to positional arrays
+          # before assignment so pandas cannot align DatetimeIndex values against RangeIndex rows.
           frames={}
           for s in DEV:
-              p=px[s]; ret1=p.pct_change(); m20=mom(p,20)
+              p=px[s]; ret1=p.pct_change(); m20=mom(p,20); m60=mom(p,60); m120=mom(p,120)
               f=pd.DataFrame({'signal_i':np.arange(len(cal),dtype=int),'timestamp':cal})
-              f['mom20']=m20; f['mom60']=mom(p,60); f['mom120']=mom(p,120)
-              f['vol20']=ret1.rolling(20,min_periods=20).std(ddof=0)
-              f['distance_high60']=p/p.rolling(60,min_periods=60).max()-1.0
-              f['rs_gdx20']=f.mom20-ctx['GDX'][20]; f['rs_gdx60']=f.mom60-ctx['GDX'][60]
-              f['gdx_mom20']=ctx['GDX'][20]; f['gdx_mom100']=ctx['GDX'][100]
-              f['gld_mom20']=ctx['GLD'][20]; f['gld_mom100']=ctx['GLD'][100]
-              f['uup_mom20']=ctx['UUP'][20]; f['uup_mom60']=ctx['UUP'][60]
-              f['ief_mom20']=ctx['IEF'][20]; f['ief_mom60']=ctx['IEF'][60]
-              f['gdx_minus_gld20']=ctx['gdx_minus_gld20']
+              f['mom20']=m20.to_numpy(); f['mom60']=m60.to_numpy(); f['mom120']=m120.to_numpy()
+              f['vol20']=ret1.rolling(20,min_periods=20).std(ddof=0).to_numpy()
+              f['distance_high60']=(p/p.rolling(60,min_periods=60).max()-1.0).to_numpy()
+              f['rs_gdx20']=(m20-ctx['GDX'][20]).to_numpy(); f['rs_gdx60']=(m60-ctx['GDX'][60]).to_numpy()
+              f['gdx_mom20']=ctx['GDX'][20].to_numpy(); f['gdx_mom100']=ctx['GDX'][100].to_numpy()
+              f['gld_mom20']=ctx['GLD'][20].to_numpy(); f['gld_mom100']=ctx['GLD'][100].to_numpy()
+              f['uup_mom20']=ctx['UUP'][20].to_numpy(); f['uup_mom60']=ctx['UUP'][60].to_numpy()
+              f['ief_mom20']=ctx['IEF'][20].to_numpy(); f['ief_mom60']=ctx['IEF'][60].to_numpy()
+              f['gdx_minus_gld20']=ctx['gdx_minus_gld20'].to_numpy()
               stock_gross=(p.shift(-(DELAY+H))/p.shift(-DELAY)-1.0)*10000.0
               gdx_gross=(px['GDX'].shift(-(DELAY+H))/px['GDX'].shift(-DELAY)-1.0)*10000.0
-              f['target_excess50']=stock_gross-COST-gdx_gross
+              f['target_excess50']=(stock_gross-COST-gdx_gross).to_numpy()
               frames[s]=f.replace([np.inf,-np.inf],np.nan)
 
           edges=np.linspace(MIN_TRAIN,len(cal)-(H+DELAY+1),FOLDS+1,dtype=int)
@@ -104,12 +106,12 @@ jobs:
                   if len(train)<1000 or len(test)<5: raise RuntimeError(f'{target} fold {fold}: train={len(train)} test={len(test)}')
                   model=Pipeline([('scale',StandardScaler()),('ridge',Ridge(alpha=10.0))])
                   model.fit(train[list(FEATURES)].to_numpy(float),train.target_excess50.to_numpy(float))
-                  pred=model.predict(test[list(FEATURES)].to_numpy(float))
-                  selected=test.loc[pred>0].copy()
+                  test['prediction_excess50']=model.predict(test[list(FEATURES)].to_numpy(float))
+                  selected=test.loc[test.prediction_excess50>0].copy()
                   for row in selected.itertuples(index=False):
                       i=int(row.signal_i); e=i+DELAY; x=e+H
                       stock_gross=float(px[target].iloc[x]/px[target].iloc[e]-1.0)*10000.0
-                      rec={'symbol':target,'fold':fold,'signal':cal[i].isoformat(),'entry':cal[e].isoformat(),'exit':cal[x].isoformat(),'prediction_excess50':float(pred[list(test.index).index(row.Index)] if hasattr(row,'Index') else 0.0),'stock_gross_bps':stock_gross}
+                      rec={'symbol':target,'fold':fold,'signal':cal[i].isoformat(),'entry':cal[e].isoformat(),'exit':cal[x].isoformat(),'prediction_excess50':float(row.prediction_excess50),'stock_gross_bps':stock_gross}
                       for b,v in {'GDX':px['GDX'],'SPY':broad['SPY'],'QQQ':broad['QQQ']}.items(): rec[f'{b}_gross_bps']=float(v.iloc[x]/v.iloc[e]-1.0)*10000.0
                       events.append(rec); target_events.append(rec)
               per_symbol[target]={'selected_states':len(target_events)}
