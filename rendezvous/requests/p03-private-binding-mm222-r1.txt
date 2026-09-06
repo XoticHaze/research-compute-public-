@@ -1,0 +1,8 @@
+P03_PRIVATE_BINDING_REQUEST_V1
+mm_repo=XoticHaze/mm-IBKR
+mm_pr=222
+mm_head_sha=012c82dfc61fd02672e15f7f8ce699b4f4404122
+harness=mm_p03_preview_operator_binding_contract_v1
+authority=research_only
+plaintext_private_source_forbidden_in_public_repo=true
+live_trading_mutation=false
