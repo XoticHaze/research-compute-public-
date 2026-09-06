@@ -1,0 +1,33 @@
+name: Semiconductor ALFRED Information Snapshot Cache
+on:
+  pull_request:
+    paths:
+      - 'research/semiconductor_alfred_information_snapshot_contract_20260906.json'
+      - 'research/semiconductor_alfred_information_snapshot_cache_20260906.py'
+      - 'research/validate_semiconductor_alfred_information_snapshot_cache_20260906.py'
+      - '.github/workflows/semiconductor-alfred-information-snapshot-cache.yml'
+permissions:
+  contents: read
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Build causal monthly information-snapshot cache
+        run: python research/semiconductor_alfred_information_snapshot_cache_20260906.py
+      - name: Validate exact generated cache
+        run: python research/validate_semiconductor_alfred_information_snapshot_cache_20260906.py semiconductor_alfred_information_snapshot_cache_20260906.json
+      - name: Retain exact cache and receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: semiconductor-alfred-information-snapshot-cache
+          path: |
+            semiconductor_alfred_information_snapshot_cache_20260906.json
+            semiconductor_alfred_information_snapshot_cache_receipt_20260906.json
+          retention-days: 14
+          if-no-files-found: warn
