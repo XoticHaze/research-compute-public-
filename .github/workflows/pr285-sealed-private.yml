@@ -41,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "${{ inputs.job_dir }}"
-          python "$GITHUB_WORKSPACE/scripts/validate_sealed_job_v1.py" sealed-job.json
+          python "$GITHUB_WORKSPACE/scripts/validate_sealed_job_v1.py" sealed-job.json >/dev/null
           python - <<'PY'
           import json, os
           p=json.load(open('sealed-job.json'))
@@ -54,17 +54,15 @@ jobs:
           cd "${{ inputs.job_dir }}"
           cipher="$(python -c "import json; print(json.load(open('sealed-job.json'))['ciphertext']['path'])")"
           age -d -i "$RUNNER_TEMP/age-identity.txt" -o "$RUNNER_TEMP/pr285-payload.tar.gz" "$cipher"
-      - name: Execute pinned private harness
+      - name: Execute pinned private harness privately
         run: |
           set -euo pipefail
           cd "${{ inputs.job_dir }}"
-          python "$GITHUB_WORKSPACE/scripts/validate_sealed_job_v1.py" sealed-job.json --decrypted "$RUNNER_TEMP/pr285-payload.tar.gz" | tee "$RUNNER_TEMP/pr285-receipt.json"
-      - name: Emit sanitized receipt
-        if: always()
+          python "$GITHUB_WORKSPACE/scripts/validate_sealed_job_v1.py" sealed-job.json --decrypted "$RUNNER_TEMP/pr285-payload.tar.gz" > "$RUNNER_TEMP/pr285-receipt.json" 2> "$RUNNER_TEMP/pr285-private-stderr.log"
+      - name: Emit sanitized receipt only
         run: |
           set -euo pipefail
-          if [ -f "$RUNNER_TEMP/pr285-receipt.json" ]; then
-            python - "$RUNNER_TEMP/pr285-receipt.json" <<'PY'
+          python - "$RUNNER_TEMP/pr285-receipt.json" <<'PY'
           import json,sys
           p=json.load(open(sys.argv[1]))
           hr=p.get('harness_result') or {}
@@ -73,7 +71,6 @@ jobs:
               out['families'][k]={'classification':v.get('classification'),'external_holdouts_loaded':v.get('external_holdouts_loaded'),'result_sha256':v.get('result_sha256')}
           print('PR285_SEALED_RECEIPT='+json.dumps(out,sort_keys=True))
           PY
-          fi
       - name: Remove protected plaintext
         if: always()
-        run: rm -f "$RUNNER_TEMP/age-identity.txt" "$RUNNER_TEMP/pr285-payload.tar.gz" "$RUNNER_TEMP/pr285-receipt.json"
+        run: rm -f "$RUNNER_TEMP/age-identity.txt" "$RUNNER_TEMP/pr285-payload.tar.gz" "$RUNNER_TEMP/pr285-receipt.json" "$RUNNER_TEMP/pr285-private-stderr.log"

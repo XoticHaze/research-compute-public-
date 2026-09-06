@@ -80,6 +80,12 @@ def _safe_extract(tf: tarfile.TarFile, root: Path) -> None:
     tf.extractall(root)
 
 
+def _run_quiet(args: list[str], cwd: Path) -> None:
+    completed = subprocess.run(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if completed.returncode != 0:
+        raise RuntimeError(f"private harness command failed rc={completed.returncode}")
+
+
 def run_pr285(payload_path: Path) -> dict:
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
@@ -94,18 +100,18 @@ def run_pr285(payload_path: Path) -> dict:
         for rel, digest in expected.items():
             if sha256(root / rel) != digest:
                 raise RuntimeError(f"PR285 inner digest mismatch: {rel}")
-        subprocess.run(["python", "-m", "py_compile", "research/industry_relative_value_stage1_20260905.py"], cwd=root, check=True)
-        subprocess.run(["python", "-m", "pytest", "-q", "tests/test_industry_relative_value_stage1_contracts_20260905.py"], cwd=root, check=True)
+        _run_quiet(["python", "-m", "py_compile", "research/industry_relative_value_stage1_20260905.py"], root)
+        _run_quiet(["python", "-m", "pytest", "-q", "tests/test_industry_relative_value_stage1_contracts_20260905.py"], root)
         results = {}
         for family, contract in {
             "energy_ep": "research/energy_ep_relative_value_stage1_contract_20260905.json",
             "aerospace_defense": "research/aerospace_defense_relative_value_stage1_contract_20260905.json",
         }.items():
             out = root / f"{family}.json"
-            subprocess.run([
+            _run_quiet([
                 "python", "-m", "research.industry_relative_value_stage1_20260905",
                 "--contract", contract, "--output", str(out)
-            ], cwd=root, check=True)
+            ], root)
             r = json.loads(out.read_text(encoding="utf-8"))
             if r.get("family") != family or r.get("external_holdouts", {}).get("loaded") is not False:
                 raise RuntimeError(f"PR285 result boundary failed: {family}")
@@ -113,7 +119,6 @@ def run_pr285(payload_path: Path) -> dict:
                 "classification": r.get("classification"),
                 "external_holdouts_loaded": False,
                 "result_sha256": sha256(out),
-                "result": r,
             }
         return {"harness": "research_foundry_pr285_stage1_v1", "families": results}
 
