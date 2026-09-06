@@ -1,0 +1,46 @@
+{
+  "schema": "public_compute.semiconductor_fundamental_consumer_contract.v1",
+  "parent_source_pr": 46,
+  "development_universe": ["AMAT", "APH", "KLAC", "LRCX", "TXN", "NXPI", "ADI"],
+  "control": {
+    "representation": "exact PR31/PR34 19-feature representation",
+    "learner": "exact fixed shallow HistGradientBoostingRegressor from PR31/PR34",
+    "targets": ["terminal_net200_bps", "mfe20_bps", "adverse_excursion20_bps"],
+    "chronology": "exact PR31/PR34 folds, delay, hold and purge"
+  },
+  "challenger_information": {
+    "source": "exact normalized cache emitted by PR46 source gate",
+    "join_rule": "for every signal session, only SEC facts with filed <= signal date are visible",
+    "first_consumer_scope": "unambiguous instant balance-sheet facts only",
+    "features": [
+      "inventory_to_assets",
+      "cash_to_assets",
+      "inventory_to_assets_change_vs_prior_annual_comparable",
+      "cash_to_assets_change_vs_prior_annual_comparable",
+      "balance_sheet_filing_age_days"
+    ],
+    "duration_fact_categories": ["revenue", "gross_profit", "operating_income"],
+    "duration_fact_policy": "source coverage may be retained, but these facts are excluded from this first consumer because duration disambiguation requires a separately frozen parser; no post-outcome inclusion"
+  },
+  "comparability": {
+    "instant_fact_selection": "within each accession/category select the row with latest period end; when multiple rows share the period end require one value after exact duplicate collapse",
+    "prior_annual_comparable": "most recent earlier filed observation with period end approximately one fiscal year earlier (330-400 days); unavailable values remain missing and are not imputed from future filings",
+    "model_rows": "challenger is evaluated only where all five predeclared fundamental features are finite; control is re-evaluated on the exact same rows"
+  },
+  "target_specific_gate": {
+    "aggregate_spearman_above_control": true,
+    "aggregate_mae_below_control": true,
+    "aggregate_mae_below_historical_median_baseline": true,
+    "minimum_positive_spearman_folds": 3,
+    "minimum_baseline_mae_win_folds": 3,
+    "minimum_spearman_improvement_folds_vs_control": 3,
+    "minimum_mae_improvement_folds_vs_control": 3
+  },
+  "interpretation": "each path head independently earns or rejects this modality; a passing head does not force the same information into other heads and does not define a trading utility",
+  "external_semiconductor_holdouts_loaded": false,
+  "research_only": true,
+  "promotion_authority": false,
+  "runtime_mutation": false,
+  "broker_action": false,
+  "live_trading_change": false
+}
