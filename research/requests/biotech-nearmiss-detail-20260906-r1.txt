@@ -1,0 +1,1 @@
+Execute the already-frozen Biotech near-miss detail consumer on the accepted Stage-A adapter. No contract mutation, external holdout loading, threshold search, promotion, runtime, broker, or live-trading authority.
