@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import re
+import sys
 import urllib.request
 from collections import Counter, defaultdict
 from datetime import datetime
@@ -18,6 +19,11 @@ SYMBOL_FIELDS=("stock","ticker","symbol","Stock_symbol")
 URL_FIELDS=("url","URL","Url")
 OFFSET_RE=re.compile(r"(?:Z|UTC|[+-]\d{2}:?\d{2})$")
 TIME_RE=re.compile(r"[T ]\d{1,2}:\d{2}")
+
+# FNSPID carries full article bodies. The stdlib CSV default (128 KiB) is too low
+# for valid rows, so raise only the parser field ceiling; the workload still streams
+# one row at a time and never materializes the full 23.2 GB source in memory.
+csv.field_size_limit(sys.maxsize)
 
 
 def _open(source: str):
@@ -67,11 +73,10 @@ def main():
     args=ap.parse_args()
     symbols={x.strip().upper() for x in args.symbols.split(",") if x.strip()}
     counts=Counter(); years=defaultdict(Counter); min_ts={}; max_ts={}; seen_urls=set(); dup_urls=0
-    shapes=Counter(); examples=defaultdict(list); selected_hash=hashlib.sha256(); source_hash=hashlib.sha256(); source_bytes=0
+    shapes=Counter(); examples=defaultdict(list); selected_hash=hashlib.sha256()
     with _open(args.source) as fh:
-        # Hash exact decoded CSV bytes is not equivalent to source bytes, so hash source identity is
-        # independently pinned by the immutable HF revision + published LFS SHA. We do not falsely
-        # call the streamed text digest the source object digest.
+        # Exact source identity is independently pinned by immutable HF revision +
+        # published LFS SHA. Do not relabel a decoded-text digest as the source hash.
         reader=csv.DictReader(fh)
         if not reader.fieldnames:
             raise SystemExit("FNSPID input has no CSV header")
