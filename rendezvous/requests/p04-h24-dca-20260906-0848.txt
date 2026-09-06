@@ -1,0 +1,6 @@
+P04_H24_DCA_REQUEST_V1
+purpose=real_private_input_consume
+route=public_research_compute_current
+scientific_contract=frozen
+h24_artifact=research-foundry/run33736634164/artifact9886127289
+lifecycle_artifact=mm-IBKR/run33810287878/artifact9914932522

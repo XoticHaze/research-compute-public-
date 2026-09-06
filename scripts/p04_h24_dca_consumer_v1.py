@@ -1,6 +1,7 @@
 from __future__ import annotations
-import argparse,base64,io,json,zipfile
+import argparse,base64,hashlib,io,json,zipfile
 from pathlib import Path
+from urllib.request import Request,urlopen
 import numpy as np
 import pandas as pd
 from ephemeral_x25519_chunked_v1 import decrypt_assembled_ciphertext
@@ -8,13 +9,34 @@ from ephemeral_x25519_chunked_v1 import decrypt_assembled_ciphertext
 SCHEMA='p04-h24-dca-ephemeral-x25519-v1'
 HARNESS='p04_h24_dca_v1'
 
+def _download_verified(url: str, expected_sha256: str) -> bytes:
+ req=Request(url,headers={'User-Agent':'p04-h24-dca-consumer-v1'})
+ with urlopen(req,timeout=120) as response:
+  data=response.read()
+ actual=hashlib.sha256(data).hexdigest()
+ if actual!=expected_sha256: raise SystemExit(f'artifact sha mismatch: {actual}')
+ return data
+
+def _artifact_bytes(node, prefix):
+ inline=f'{prefix}_zip_b64'
+ url=f'{prefix}_url'
+ digest=f'{prefix}_sha256'
+ if inline in node:
+  return base64.b64decode(node[inline])
+ if url in node and digest in node:
+  return _download_verified(str(node[url]),str(node[digest]))
+ raise SystemExit(f'missing {prefix} artifact payload')
+
 def main():
  p=argparse.ArgumentParser(); p.add_argument('--envelope',required=True); p.add_argument('--ciphertext',required=True); p.add_argument('--private-key',required=True); p.add_argument('--run-id',required=True); p.add_argument('--response-root',required=True); a=p.parse_args()
  env=json.loads(Path(a.envelope).read_text())
  raw=decrypt_assembled_ciphertext(envelope=env,ciphertext=Path(a.ciphertext).read_bytes(),private_key_path=Path(a.private_key),expected_schema=SCHEMA,expected_run_id=a.run_id,expected_harness=HARNESS,response_root=a.response_root)
  node=json.loads(raw)
- if set(node)!={'schema','authority','h24_zip_b64','lifecycle_zip_b64'} or node['schema']!='p04-h24-dca-private-payload-v1' or node['authority']!='research_only': raise SystemExit('payload contract mismatch')
- hz=zipfile.ZipFile(io.BytesIO(base64.b64decode(node['h24_zip_b64']))); lz=zipfile.ZipFile(io.BytesIO(base64.b64decode(node['lifecycle_zip_b64'])))
+ if node.get('schema')!='p04-h24-dca-private-payload-v1' or node.get('authority')!='research_only': raise SystemExit('payload contract mismatch')
+ allowed_inline={'schema','authority','h24_zip_b64','lifecycle_zip_b64'}
+ allowed_urls={'schema','authority','h24_url','h24_sha256','lifecycle_url','lifecycle_sha256'}
+ if set(node) not in (allowed_inline,allowed_urls): raise SystemExit('payload contract field mismatch')
+ hz=zipfile.ZipFile(io.BytesIO(_artifact_bytes(node,'h24'))); lz=zipfile.ZipFile(io.BytesIO(_artifact_bytes(node,'lifecycle')))
  h=pd.read_csv(hz.open('research/results/mnq_h24_oos_risk_surface_20260903/mnq-h24-oos-risk-surface.csv'))
  t=pd.read_csv(lz.open('result/mnq-crw-lifecycle-trades-canonical_-2.8.csv'))
  h['timestamp']=pd.to_datetime(h['timestamp'],utc=True); periods=sorted(h['period'].dropna().unique())
