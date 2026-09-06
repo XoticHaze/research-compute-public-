@@ -17,6 +17,7 @@
   "target_generations": ["H100", "B200"],
   "cross_generation_pool": ["H100", "H200", "B200"],
   "memory_bandwidth_tb_s": {"H100":3.35,"H200":4.8,"B200":8.0},
+  "minimum_cross_generation_sources": 2,
   "horizon_months": [1,3,6,12],
   "minimum_origins_for_supported_result": 4,
   "minimum_prior_months_for_depreciation": 3,
@@ -39,7 +40,7 @@
   "forecast_policy": {
     "random_walk": "origin target-generation month-end index",
     "depreciation": "origin price times exp(min(0, OLS log-price slope per observed calendar month) * horizon); fit only from target-generation monthly observations available through origin",
-    "bandwidth_cross_generation": "median origin-month price_per_bandwidth of all other available generations in cross_generation_pool, multiplied by target-generation frozen memory bandwidth",
+    "bandwidth_cross_generation": "requires at least two other generations in the origin month; median origin-month price_per_bandwidth of those other generations multiplied by target-generation frozen memory bandwidth",
     "changed_outcomes": "realized target index differs from origin target index by any nonzero amount",
     "no_future_information": true
   },
