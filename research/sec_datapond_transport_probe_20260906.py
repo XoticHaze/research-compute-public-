@@ -12,8 +12,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import datapond
+import duckdb
 
 OUT = Path("sec_datapond_transport_probe_20260906.json")
+REMOTE_DB = "https://huggingface.co/datasets/erlenbusch/sec-edgar/resolve/main/sec_edgar.duckdb"
 CIKS = (
     "0000006951", "0000820313", "0000319201", "0000707549",
     "0000097476", "0001413447", "0000006281",
@@ -21,8 +23,22 @@ CIKS = (
 FORMS = ("10-Q", "10-K", "20-F", "40-F")
 
 
+def connect_remote():
+    try:
+        return datapond.connect("sec_edgar"), "datapond_registry"
+    except ValueError as exc:
+        if "not found in registry" not in str(exc):
+            raise
+    con = duckdb.connect()
+    con.execute("INSTALL httpfs")
+    con.execute("LOAD httpfs")
+    con.execute(f"ATTACH '{REMOTE_DB}' AS sec_edgar (READ_ONLY)")
+    con.execute("USE sec_edgar")
+    return con, "direct_huggingface_duckdb_attach"
+
+
 def main() -> None:
-    con = datapond.connect("sec_edgar")
+    con, transport = connect_remote()
     tables = [r[0] for r in con.execute("SHOW TABLES").fetchall()]
     required = {"submissions", "numbers", "presentations", "tags"}
     missing = sorted(required - set(tables))
@@ -62,10 +78,11 @@ def main() -> None:
     }
     status = "PASS" if set(coverage) == set(CIKS) and all(v["distinct_filings"] >= 16 for v in coverage.values()) else "FAIL"
     receipt = {
-        "schema": "public_compute.sec_datapond_transport_probe.v1",
+        "schema": "public_compute.sec_datapond_transport_probe.v2",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": "erlenbusch/sec-edgar public-domain DuckDB derived from SEC Financial Statement Data Sets",
-        "transport": "datapond remote DuckDB over Hugging Face HTTP range access",
+        "transport": transport,
+        "remote_database": REMOTE_DB,
         "required_tables": sorted(required),
         "submissions_columns": schema,
         "development_ciks": list(CIKS),
@@ -97,7 +114,7 @@ if __name__ == "__main__":
         raise
     except Exception as exc:
         failure = {
-            "schema": "public_compute.sec_datapond_transport_probe.v1",
+            "schema": "public_compute.sec_datapond_transport_probe.v2",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "status": "TRANSPORT_OR_SCHEMA_FAILURE",
             "error": str(exc),
