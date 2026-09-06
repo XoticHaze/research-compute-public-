@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'rendezvous/requests/p03-private-binding-*.txt'
+      - '.github/workflows/p03-private-binding-ephemeral-rendezvous.yml'
+      - 'scripts/p03_private_binding_contract_consumer_v1.py'
 
 permissions:
   contents: write
@@ -67,7 +69,7 @@ jobs:
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${recipient_path}" \
             -d "$body" >/dev/null
           echo "P03_BINDING_EPHEMERAL_RECIPIENT_PATH=${recipient_path}"
-      - name: Wait for run-bound encrypted envelope
+      - name: Wait for structurally valid run-bound encrypted envelope
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -76,13 +78,34 @@ jobs:
           api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${response_path}?ref=${EXCHANGE_REF}"
           found=0
           for _ in $(seq 1 180); do
-            if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/p03-binding-envelope.json"; then
-              found=1
-              break
+            if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/p03-binding-envelope.candidate.json"; then
+              if python - "$RUNNER_TEMP/p03-binding-envelope.candidate.json" "$GITHUB_RUN_ID" <<'PY'
+          import base64,json,sys
+          path,run_id=sys.argv[1:]
+          try:
+              d=json.load(open(path,encoding='utf-8'))
+              required={'schema','run_id','authority','harness','recipient_key_id','sender_public_b64','nonce_b64','ciphertext_b64','plaintext_sha256'}
+              assert set(d)==required
+              assert d['schema']=='p03-private-binding-x25519-v1'
+              assert str(d['run_id'])==str(run_id)
+              assert d['authority']=='research_only'
+              assert d['harness']=='mm_p03_preview_operator_binding_contract_v1'
+              assert len(base64.b64decode(d['sender_public_b64'],validate=True))==32
+              assert len(base64.b64decode(d['nonce_b64'],validate=True))==12
+              assert len(base64.b64decode(d['ciphertext_b64'],validate=True))>32
+              assert len(d['plaintext_sha256'])==64
+          except Exception:
+              raise SystemExit(1)
+          PY
+              then
+                mv "$RUNNER_TEMP/p03-binding-envelope.candidate.json" "$RUNNER_TEMP/p03-binding-envelope.json"
+                found=1
+                break
+              fi
             fi
             sleep 5
           done
-          test "$found" = 1 || { echo 'run-bound encrypted envelope did not arrive'; exit 42; }
+          test "$found" = 1 || { echo 'valid run-bound encrypted envelope did not arrive'; exit 42; }
       - name: Execute fixed private P03 preview binding contract
         run: |
           set -euo pipefail
@@ -92,4 +115,4 @@ jobs:
             --run-id "$GITHUB_RUN_ID"
       - name: Remove one-run private material
         if: always()
-        run: rm -f "$RUNNER_TEMP/p03-binding-private-key.b64" "$RUNNER_TEMP/p03-binding-recipient.json" "$RUNNER_TEMP/p03-binding-envelope.json"
+        run: rm -f "$RUNNER_TEMP/p03-binding-private-key.b64" "$RUNNER_TEMP/p03-binding-recipient.json" "$RUNNER_TEMP/p03-binding-envelope.json" "$RUNNER_TEMP/p03-binding-envelope.candidate.json"
