@@ -1,0 +1,325 @@
+{
+  "allocation_authority": false,
+  "broker_action": false,
+  "decision": "GOLD_RELATIVE_VALUE_DEVELOPMENT_REJECTED_OR_PARKED",
+  "gate_checks": {
+    "aggregate_gdx_excess_positive": true,
+    "aggregate_spy_excess_positive": true,
+    "all_gdx_leave_one_symbol_out_positive": false,
+    "breadth_5_of_8": false,
+    "gdx_fold_breadth": true,
+    "spy_fold_breadth": true
+  },
+  "gdx_leave_one_symbol_out_excess50_bps": {
+    "AEM": 45.40222768855802,
+    "AGI": 44.93590541101232,
+    "AU": 10.145671905912168,
+    "FNV": 61.21435575734461,
+    "GOLD": 40.1822529499898,
+    "KGC": -3.9423648084711154,
+    "NEM": 41.261153851809496,
+    "WPM": 14.092599632377802
+  },
+  "live_trading_change": false,
+  "metrics_by_cost_bps": {
+    "100": {
+      "baselines": {
+        "GDX": {
+          "excess_bps_per_event": -18.12783539540017,
+          "fold_excess_bps": {
+            "2": 95.1972918276353,
+            "3": -114.66893021604473,
+            "4": 3.009235642193565,
+            "5": 41.658657786046746,
+            "6": -103.80973080779454
+          },
+          "matched_gross_bps_per_event": 538.7255400960582,
+          "positive_excess_folds": 3
+        },
+        "QQQ": {
+          "excess_bps_per_event": 200.54231523743863,
+          "fold_excess_bps": {
+            "2": 563.1580849368383,
+            "3": -800.3906252741708,
+            "4": 146.05331411142149,
+            "5": 22.97231545168646,
+            "6": 631.1666045755094
+          },
+          "matched_gross_bps_per_event": 320.0553894632194,
+          "positive_excess_folds": 4
+        },
+        "SPY": {
+          "excess_bps_per_event": 274.0356321394538,
+          "fold_excess_bps": {
+            "2": 639.1105142675798,
+            "3": -747.5357885929051,
+            "4": 179.90166629844998,
+            "5": 68.29036320376474,
+            "6": 756.0505407281088
+          },
+          "matched_gross_bps_per_event": 246.5620725612043,
+          "positive_excess_folds": 4
+        }
+      },
+      "candidate_net_bps_per_event": 520.597704700658,
+      "event_count": 237
+    },
+    "25": {
+      "baselines": {
+        "GDX": {
+          "excess_bps_per_event": 56.872164604599845,
+          "fold_excess_bps": {
+            "2": 170.19729182763533,
+            "3": -39.66893021604473,
+            "4": 78.00923564219356,
+            "5": 116.65865778604675,
+            "6": -28.809730807794562
+          },
+          "matched_gross_bps_per_event": 538.7255400960582,
+          "positive_excess_folds": 3
+        },
+        "QQQ": {
+          "excess_bps_per_event": 275.54231523743863,
+          "fold_excess_bps": {
+            "2": 638.1580849368383,
+            "3": -725.3906252741709,
+            "4": 221.05331411142149,
+            "5": 97.97231545168647,
+            "6": 706.1666045755094
+          },
+          "matched_gross_bps_per_event": 320.0553894632194,
+          "positive_excess_folds": 4
+        },
+        "SPY": {
+          "excess_bps_per_event": 349.03563213945375,
+          "fold_excess_bps": {
+            "2": 714.1105142675798,
+            "3": -672.5357885929052,
+            "4": 254.90166629844998,
+            "5": 143.29036320376474,
+            "6": 831.0505407281088
+          },
+          "matched_gross_bps_per_event": 246.5620725612043,
+          "positive_excess_folds": 4
+        }
+      },
+      "candidate_net_bps_per_event": 595.5977047006583,
+      "event_count": 237
+    },
+    "50": {
+      "baselines": {
+        "GDX": {
+          "excess_bps_per_event": 31.87216460459983,
+          "fold_excess_bps": {
+            "2": 145.19729182763533,
+            "3": -64.66893021604473,
+            "4": 53.009235642193566,
+            "5": 91.65865778604675,
+            "6": -53.809730807794566
+          },
+          "matched_gross_bps_per_event": 538.7255400960582,
+          "positive_excess_folds": 3
+        },
+        "QQQ": {
+          "excess_bps_per_event": 250.54231523743863,
+          "fold_excess_bps": {
+            "2": 613.1580849368383,
+            "3": -750.3906252741709,
+            "4": 196.05331411142149,
+            "5": 72.97231545168647,
+            "6": 681.1666045755094
+          },
+          "matched_gross_bps_per_event": 320.0553894632194,
+          "positive_excess_folds": 4
+        },
+        "SPY": {
+          "excess_bps_per_event": 324.03563213945375,
+          "fold_excess_bps": {
+            "2": 689.1105142675798,
+            "3": -697.5357885929052,
+            "4": 229.90166629844998,
+            "5": 118.29036320376476,
+            "6": 806.0505407281088
+          },
+          "matched_gross_bps_per_event": 246.5620725612043,
+          "positive_excess_folds": 4
+        }
+      },
+      "candidate_net_bps_per_event": 570.5977047006583,
+      "event_count": 237
+    }
+  },
+  "per_symbol": {
+    "AEM": {
+      "fold_gdx_excess_bps": {
+        "2": -221.90702805762533,
+        "3": 27.652169713397274,
+        "4": -188.03893937214843,
+        "5": 255.55187092262577,
+        "6": -225.27567580684703
+      },
+      "gdx_excess50_mean_bps": -46.21562805138732,
+      "net50_mean_bps": 495.76057861004114,
+      "pass": false,
+      "positive_gdx_folds": 2,
+      "states": 35
+    },
+    "AGI": {
+      "fold_gdx_excess_bps": {
+        "2": 96.73798290416053,
+        "3": -116.6979205902569,
+        "4": 319.7371325125662,
+        "5": -36.906835178756005,
+        "6": -349.45113126983244
+      },
+      "gdx_excess50_mean_bps": -65.63932927183616,
+      "net50_mean_bps": 421.05539508114026,
+      "pass": false,
+      "positive_gdx_folds": 2,
+      "states": 28
+    },
+    "AU": {
+      "fold_gdx_excess_bps": {
+        "2": 634.4953837485679,
+        "3": -575.0488804965512,
+        "4": 216.8855746093659,
+        "5": -88.24637619158085,
+        "6": 563.1397428774386
+      },
+      "gdx_excess50_mean_bps": 153.17841550560598,
+      "net50_mean_bps": 526.4080734374863,
+      "pass": true,
+      "positive_gdx_folds": 3,
+      "states": 36
+    },
+    "FNV": {
+      "fold_gdx_excess_bps": {
+        "2": 195.50553290622418,
+        "3": 36.97520906272683,
+        "4": -195.71217924253367,
+        "5": -450.676792725261,
+        "6": -362.01980692289635
+      },
+      "gdx_excess50_mean_bps": -216.94961637067584,
+      "net50_mean_bps": 400.1172724979647,
+      "pass": false,
+      "positive_gdx_folds": 2,
+      "states": 25
+    },
+    "GOLD": {
+      "fold_gdx_excess_bps": {
+        "2": -387.64553096676616,
+        "4": -27.996149541749826,
+        "5": 786.2725117140093,
+        "6": -365.65559649363854
+      },
+      "gdx_excess50_mean_bps": -41.87986946073605,
+      "net50_mean_bps": 669.1581398485804,
+      "pass": false,
+      "positive_gdx_folds": 1,
+      "states": 24
+    },
+    "KGC": {
+      "fold_gdx_excess_bps": {
+        "2": 359.5657544722096,
+        "3": 40.50534577903719,
+        "4": -176.10018083358287,
+        "5": 570.9061481673083,
+        "6": 221.94229106040237
+      },
+      "gdx_excess50_mean_bps": 253.27107370358388,
+      "net50_mean_bps": 809.5877637798301,
+      "pass": true,
+      "positive_gdx_folds": 4,
+      "states": 33
+    },
+    "NEM": {
+      "fold_gdx_excess_bps": {
+        "2": 201.86509382519648,
+        "3": 92.1965752140747,
+        "4": -88.84737256320375,
+        "5": -379.97781850182423,
+        "6": 132.2609302471236
+      },
+      "gdx_excess50_mean_bps": -35.46955137538664,
+      "net50_mean_bps": 496.9151108834958,
+      "pass": false,
+      "positive_gdx_folds": 3,
+      "states": 29
+    },
+    "WPM": {
+      "fold_gdx_excess_bps": {
+        "2": 480.90009444647495,
+        "3": 266.9849565907543,
+        "4": 530.5721212432617,
+        "5": 1.9408780743700238,
+        "6": -120.30561709088092
+      },
+      "gdx_excess50_mean_bps": 170.15766994410464,
+      "net50_mean_bps": 738.893795093047,
+      "pass": true,
+      "positive_gdx_folds": 4,
+      "states": 27
+    }
+  },
+  "promotion_authority": false,
+  "research_only": true,
+  "runtime_mutation": false,
+  "schema": "gold_miner_relative_value_development.v1",
+  "scientific_contract": {
+    "broad_benchmarks": [
+      "SPY",
+      "QQQ"
+    ],
+    "delay_sessions": 1,
+    "development_universe": [
+      "NEM",
+      "GOLD",
+      "AEM",
+      "WPM",
+      "FNV",
+      "KGC",
+      "AU",
+      "AGI"
+    ],
+    "evaluation_step_sessions": 40,
+    "external_holdouts": [
+      "RGLD",
+      "HMY",
+      "BTG",
+      "PAAS"
+    ],
+    "features": [
+      "mom20",
+      "mom60",
+      "mom120",
+      "vol20",
+      "distance_high60",
+      "rs_gdx20",
+      "rs_gdx60",
+      "gdx_mom20",
+      "gdx_mom100",
+      "gld_mom20",
+      "gld_mom100",
+      "uup_mom20",
+      "uup_mom60",
+      "ief_mom20",
+      "ief_mom60",
+      "gdx_minus_gld20"
+    ],
+    "folds": 6,
+    "holdouts_loaded": false,
+    "horizon_sessions": 40,
+    "industry_benchmark": "GDX",
+    "model": "leave-one-symbol-out StandardScaler+Ridge(alpha=10)",
+    "primary_cost_bps": 50.0,
+    "purge_sessions": 42,
+    "train_step_sessions": 5
+  },
+  "window": {
+    "calendar_first": "2014-03-17T13:30:00+00:00",
+    "calendar_last": "2026-09-02T13:30:00+00:00",
+    "first_selected_entry": "2018-10-02T13:30:00+00:00",
+    "last_selected_exit": "2026-05-22T13:30:00+00:00"
+  }
+}
