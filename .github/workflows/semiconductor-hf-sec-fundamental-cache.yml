@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'research/semiconductor_hf_sec_fundamental_cache_20260906.py'
+      - 'research/semiconductor_hf_sec_fundamental_cache_route2_20260906.py'
       - '.github/workflows/semiconductor-hf-sec-fundamental-cache.yml'
 permissions:
   contents: read
@@ -18,7 +19,9 @@ jobs:
       - name: Install exact public-cache environment
         run: python -m pip install --disable-pip-version-check -q pandas==3.0.5 pyarrow==21.0.0 huggingface_hub==0.34.4
       - name: Execute targeted SEC-derived fundamental cache preflight
-        run: python research/semiconductor_hf_sec_fundamental_cache_20260906.py
+        run: |
+          python research/semiconductor_hf_sec_fundamental_cache_20260906.py || \
+          python research/semiconductor_hf_sec_fundamental_cache_route2_20260906.py
       - name: Retain normalized cache and source receipt
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
