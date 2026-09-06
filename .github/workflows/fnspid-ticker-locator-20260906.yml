@@ -1,0 +1,28 @@
+name: FNSPID Ticker Locator 20260906
+
+on:
+  push:
+    branches:
+      - research/fnspid-source-probe-20260906-r1
+    paths:
+      - "research/fnspid_ticker_locator_20260906.py"
+      - ".github/workflows/fnspid-ticker-locator-20260906.yml"
+  workflow_dispatch:
+
+jobs:
+  locate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --disable-pip-version-check requests
+      - run: python research/fnspid_ticker_locator_20260906.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fnspid-ticker-locator-20260906
+          path: fnspid-ticker-locator-20260906.json
+          if-no-files-found: error
+          retention-days: 14
