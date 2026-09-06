@@ -1,0 +1,96 @@
+name: Sealed Job v1 Synthetic Proof
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/validate_sealed_job_v1.py'
+      - '.github/workflows/sealed-job-v1-synthetic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install standard age implementation
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq age
+      - name: Generate ephemeral fixture, encrypt, validate, decrypt, execute fixed harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'rm -f key.txt payload.json decrypted.json' EXIT
+          age-keygen -o key.txt >/dev/null 2>&1
+          recipient="$(age-keygen -y key.txt)"
+          key_id="sha256:$(printf '%s' "$recipient" | sha256sum | awk '{print $1}')"
+          printf '%s\n' '{"schema":"sealed-fixture-v1","values":[1,2,3]}' > payload.json
+          age -r "$recipient" -o payload.age payload.json
+          cipher_sha="$(sha256sum payload.age | awk '{print $1}')"
+          python - "$key_id" "$cipher_sha" <<'PY'
+          import json,sys
+          key_id,cipher_sha=sys.argv[1:]
+          obj={
+            'schema_version':'sealed-job-v1','job_id':'synthetic-sealed-sum-v1',
+            'mode':'sealed','authority':'research_only','harness':'deterministic_sum_v1',
+            'ciphertext':{'path':'payload.age','sha256':cipher_sha},
+            'encryption':{'algorithm':'age-x25519','recipient_key_id':key_id},
+          }
+          open('sealed-job.json','w').write(json.dumps(obj,sort_keys=True)+'\n')
+          PY
+          python scripts/validate_sealed_job_v1.py sealed-job.json
+
+          # Fail closed on plaintext-bearing fields.
+          python - <<'PY'
+          import json
+          x=json.load(open('sealed-job.json')); x['payload']={'values':[1,2,3]}
+          open('bad-plaintext.json','w').write(json.dumps(x))
+          PY
+          if python scripts/validate_sealed_job_v1.py bad-plaintext.json; then exit 31; fi
+
+          # Fail closed on authority escalation.
+          python - <<'PY'
+          import json
+          x=json.load(open('sealed-job.json')); x['authority']='runtime_trading'
+          open('bad-authority.json','w').write(json.dumps(x))
+          PY
+          if python scripts/validate_sealed_job_v1.py bad-authority.json; then exit 32; fi
+
+          # Fail closed on ciphertext tamper/digest mismatch.
+          python - <<'PY'
+          import json
+          x=json.load(open('sealed-job.json')); x['ciphertext']['sha256']='0'*64
+          open('bad-digest.json','w').write(json.dumps(x))
+          PY
+          if python scripts/validate_sealed_job_v1.py bad-digest.json; then exit 33; fi
+
+          age -d -i key.txt -o decrypted.json payload.age
+          result="$(python scripts/validate_sealed_job_v1.py sealed-job.json --decrypted decrypted.json)"
+          python - "$result" "$key_id" "$cipher_sha" <<'PY'
+          import json,sys
+          result=json.loads(sys.argv[1]); key_id=sys.argv[2]; cipher_sha=sys.argv[3]
+          assert result['authority']=='research_only'
+          assert result['harness_result']['sum']==6.0
+          receipt={
+            'schema':'sealed-job-v1-synthetic-receipt','status':'PASS',
+            'job_id':result['job_id'],'mode':'sealed','authority':'research_only',
+            'algorithm':'age-x25519','recipient_key_id':key_id,'ciphertext_sha256':cipher_sha,
+            'harness_result':result['harness_result'],
+            'negative_tests':{'plaintext_field_rejected':True,'authority_escalation_rejected':True,'digest_tamper_rejected':True},
+            'private_data_used':False,'persistent_secret_used':False,'private_integration_authority':False,
+            'promotion_authority':False,'runtime_mutation':False,'live_trading_change':False,
+          }
+          open('sealed-job-v1-synthetic-receipt.json','w').write(json.dumps(receipt,indent=2,sort_keys=True)+'\n')
+          print('SEALED_JOB_V1_SYNTHETIC='+json.dumps(receipt,sort_keys=True))
+          PY
+      - name: Retain synthetic proof receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sealed-job-v1-synthetic-receipt
+          path: sealed-job-v1-synthetic-receipt.json
+          if-no-files-found: error
+          retention-days: 14
