@@ -1,0 +1,41 @@
+name: P10 Monthly Curve State
+on:
+  pull_request:
+    paths:
+      - 'research/compute_monthly_curve_state_forward.py'
+      - 'research/p10-monthly-curve-state-contract.json'
+      - '.github/workflows/p10-monthly-curve-state.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Execute frozen monthly curve-state discriminator
+        run: |
+          python research/compute_monthly_curve_state_forward.py \
+            research/p10-monthly-curve-state-contract.json \
+            p10-monthly-curve-state-result.json
+      - name: Validate terminal result
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('p10-monthly-curve-state-result.json').read_text())
+          assert r['schema']=='research_compute_public.p10_monthly_curve_state_forward.v1'
+          assert r['research_only'] and not r['promotion_authority'] and not r['private_data_loaded']
+          print('P10_MONTHLY_CURVE_CLASSIFICATION='+r['classification'])
+          print('P10_MONTHLY_CURVE_WINS='+json.dumps(r['supported_winning_horizons'],sort_keys=True))
+          print('P10_MONTHLY_CURVE_GATE='+json.dumps(r['generation_gate'],sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p10-monthly-curve-state-result
+          path: p10-monthly-curve-state-result.json
+          retention-days: 30
