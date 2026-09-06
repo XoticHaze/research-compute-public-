@@ -17,6 +17,7 @@ TARGETS = ("AMAT", "AMD", "AVGO")
 START = "2015-01-01"
 END = "2023-12-31"
 MAX_RANGE_BYTES = 2 * 1024 * 1024 * 1024
+CSV_FIELD_LIMIT = 64 * 1024 * 1024
 UTC_LITERAL_RE = re.compile(r"\sUTC$")
 NUMERIC_OFFSET_RE = re.compile(r"(?:Z|[+-]\d{2}:?\d{2})$")
 TIME_RE = re.compile(r"[T ]\d{1,2}:\d{2}")
@@ -50,6 +51,11 @@ def day(value: str) -> str | None:
 
 
 def main() -> None:
+    # FNSPID article bodies can exceed Python's conservative 128 KiB CSV-field
+    # default. We never persist Article, but the parser must legally traverse it
+    # to reach the small metadata fields we do keep.
+    csv.field_size_limit(CSV_FIELD_LIMIT)
+
     headers = {
         "Range": f"bytes=0-{MAX_RANGE_BYTES - 1}",
         "User-Agent": "research-compute/1.0",
