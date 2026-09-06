@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Source-only point-in-time SEC fundamental coverage preflight.
 
-No return/path target is computed here.  Every candidate observation is keyed by the
+No return/path target is computed here. Every candidate observation is keyed by the
 SEC filing date carried by Company Facts, so a later consumer can use only filings
 known on or before a signal date and cannot leak a later restatement backward.
 """
@@ -15,6 +15,17 @@ from urllib.request import Request, urlopen
 
 OUT = Path("semiconductor_sec_fundamental_preflight_20260906.json")
 SYMBOLS = ("AMAT", "APH", "KLAC", "LRCX", "TXN", "NXPI", "ADI")
+# Stable SEC identities are part of this frozen development-universe contract.
+# This intentionally removes the blocked www.sec.gov ticker-discovery request.
+CIKS = {
+    "AMAT": "0000006951",
+    "APH": "0000820313",
+    "KLAC": "0000319201",
+    "LRCX": "0000707549",
+    "TXN": "0000097476",
+    "NXPI": "0001413447",
+    "ADI": "0000006281",
+}
 START_FILED = "2014-01-01"
 CUTOFF_FILED = "2026-09-03"
 FORMS = {"10-Q", "10-K", "20-F", "40-F"}
@@ -22,7 +33,7 @@ MIN_DISTINCT_FILINGS = 16
 MIN_FILED_YEARS = 8
 USER_AGENT = "XoticHaze research-compute-public- 152584286+XoticHaze@users.noreply.github.com"
 
-# Semantic categories are frozen before any model outcome.  Candidate tags only
+# Semantic categories are frozen before any model outcome. Candidate tags only
 # bridge US-GAAP / IFRS naming differences; the downstream feature meaning is the
 # category, never a symbol-specific post-hoc feature choice.
 CANDIDATES = {
@@ -70,33 +81,18 @@ def get_json(url: str):
             )
             with urlopen(req, timeout=30) as response:
                 return json.loads(response.read().decode("utf-8"))
-        except Exception as exc:  # retain deterministic terminal evidence
+        except Exception as exc:
             last = exc
             if attempt < 2:
                 time.sleep(1.0 + attempt)
     raise RuntimeError(f"GET failed after 3 attempts: {url}: {last}")
 
 
-def resolve_ciks():
-    payload = get_json("https://www.sec.gov/files/company_tickers.json")
-    by_ticker = {
-        str(v.get("ticker", "")).upper(): str(int(v["cik_str"])).zfill(10)
-        for v in payload.values()
-        if v.get("ticker") and v.get("cik_str") is not None
-    }
-    missing = [s for s in SYMBOLS if s not in by_ticker]
-    if missing:
-        raise RuntimeError(f"SEC ticker map missing symbols={missing}")
-    return {s: by_ticker[s] for s in SYMBOLS}
-
-
 def eligible_units(companyfacts, namespace: str, concept: str):
     fact = companyfacts.get("facts", {}).get(namespace, {}).get(concept)
     if not fact:
         return []
-    units = fact.get("units", {})
-    # These six categories are monetary and expected in USD for this universe.
-    rows = units.get("USD", [])
+    rows = fact.get("units", {}).get("USD", [])
     out = []
     for row in rows:
         filed = str(row.get("filed") or "")
@@ -138,19 +134,12 @@ def pick_category(companyfacts, candidates):
     scored = []
     for namespace, concept in candidates:
         rows = eligible_units(companyfacts, namespace, concept)
-        summary = summarize_candidate(rows)
-        scored.append(
-            {
-                "namespace": namespace,
-                "concept": concept,
-                **summary,
-            }
-        )
+        scored.append({"namespace": namespace, "concept": concept, **summarize_candidate(rows)})
     scored.sort(
         key=lambda x: (x["distinct_filings"], x["filed_years"], x["rows"]),
         reverse=True,
     )
-    best = scored[0]
+    best = dict(scored[0])
     best["eligible"] = bool(
         best["distinct_filings"] >= MIN_DISTINCT_FILINGS
         and best["filed_years"] >= MIN_FILED_YEARS
@@ -159,21 +148,18 @@ def pick_category(companyfacts, candidates):
 
 
 def main():
-    ciks = resolve_ciks()
     source = {}
     all_eligible = True
     for symbol in SYMBOLS:
-        facts = get_json(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{ciks[symbol]}.json")
+        cik = CIKS[symbol]
+        facts = get_json(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json")
         categories = {}
         for category, candidates in CANDIDATES.items():
             best, scored = pick_category(facts, candidates)
-            categories[category] = {
-                "selected": best,
-                "candidates": scored,
-            }
+            categories[category] = {"selected": best, "candidates": scored}
             all_eligible = all_eligible and bool(best["eligible"])
         source[symbol] = {
-            "cik": ciks[symbol],
+            "cik": cik,
             "entity_name": facts.get("entityName"),
             "categories": categories,
         }
@@ -184,6 +170,7 @@ def main():
         "schema": "public_compute.semiconductor_sec_fundamental_preflight.v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "development_universe": list(SYMBOLS),
+        "pinned_ciks": CIKS,
         "source": "SEC Company Facts",
         "source_endpoint_family": "data.sec.gov/api/xbrl/companyfacts",
         "filing_time_authority": "SEC filed date; later-filed restatements are unavailable to earlier signal dates",
@@ -218,4 +205,27 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception as exc:
+        failure = {
+            "schema": "public_compute.semiconductor_sec_fundamental_preflight.v1",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "development_universe": list(SYMBOLS),
+            "pinned_ciks": CIKS,
+            "status": "TRANSPORT_FAILURE",
+            "error": str(exc),
+            "targets_computed": False,
+            "model_executed": False,
+            "external_semiconductor_holdouts_loaded": False,
+            "research_only": True,
+            "promotion_authority": False,
+            "runtime_mutation": False,
+            "broker_action": False,
+            "live_trading_change": False,
+        }
+        OUT.write_text(json.dumps(failure, indent=2, sort_keys=True) + "\n")
+        print("SEMICONDUCTOR_SEC_FUNDAMENTAL_PREFLIGHT=" + json.dumps(failure, sort_keys=True))
+        raise
