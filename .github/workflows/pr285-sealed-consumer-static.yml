@@ -21,7 +21,7 @@ jobs:
           python-version: '3.11.16'
       - name: Compile consumer
         run: python -m py_compile scripts/validate_sealed_job_v1.py
-      - name: Prove fixed harness and envelope rejection
+      - name: Prove fixed harness, envelope rejection, and sanitized contract
         run: |
           set -euo pipefail
           tmp="$(mktemp -d)"
@@ -30,13 +30,17 @@ jobs:
           printf 'ciphertext-fixture' > payload.age
           sha="$(sha256sum payload.age | awk '{print $1}')"
           python - "$sha" "$GITHUB_WORKSPACE" <<'PY'
-          import importlib.util,json,sys
+          import importlib.util,json,sys,inspect
           from pathlib import Path
           sha,repo=sys.argv[1:]
           spec=importlib.util.spec_from_file_location('sealed',Path(repo)/'scripts/validate_sealed_job_v1.py')
           m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
           assert 'research_foundry_pr285_stage1_v1' in m.ALLOWED_HARNESS
           assert 'command' in m.FORBIDDEN and 'plaintext' in m.FORBIDDEN
+          src=inspect.getsource(m.run_pr285)
+          assert '"result": r' not in src and "'result': r" not in src
+          quiet=inspect.getsource(m._run_quiet)
+          assert 'stdout=subprocess.PIPE' in quiet and 'stderr=subprocess.PIPE' in quiet
           obj={'schema_version':'sealed-job-v1','job_id':'proof','mode':'sealed','authority':'research_only','harness':'research_foundry_pr285_stage1_v1','ciphertext':{'path':'payload.age','sha256':sha},'encryption':{'algorithm':'age-x25519','recipient_key_id':'sha256:'+'1'*64}}
           Path('sealed-job.json').write_text(json.dumps(obj))
           ok=m.validate_manifest(Path('sealed-job.json'))
@@ -49,5 +53,9 @@ jobs:
           try: m.validate_manifest(Path('bad2.json'))
           except RuntimeError: pass
           else: raise AssertionError('authority escalation was not rejected')
+          workflow=(Path(repo)/'.github/workflows/pr285-sealed-private.yml').read_text()
+          assert '| tee ' not in workflow
+          assert '> "$RUNNER_TEMP/pr285-receipt.json"' in workflow
+          assert 'PR285_SEALED_RECEIPT=' in workflow
           print('PR285_SEALED_STATIC=PASS')
           PY
