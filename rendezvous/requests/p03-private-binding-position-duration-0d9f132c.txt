@@ -9,4 +9,4 @@ contract=p03-private-binding-payload-v2
 authority=research_only
 plaintext_private_source_forbidden_in_public_repo=true
 live_trading_mutation=false
-nonce=corrected-binding-r2
+nonce=corrected-binding-r3-atomic-envelope
