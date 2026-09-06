@@ -1,0 +1,17 @@
+name: RC001 Batch2 Source Survivorship
+on:
+  pull_request:
+    paths:
+      - research/run_batch2_survivor_screen.py
+      - research/batch2-contract.json
+permissions:
+  contents: read
+jobs:
+  screen:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11.16'}
+      - run: python research/run_batch2_survivor_screen.py
