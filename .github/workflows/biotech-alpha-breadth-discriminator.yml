@@ -22,7 +22,7 @@ jobs:
           python - <<'PY'
           import importlib.util, json
           spec=importlib.util.spec_from_file_location('r','/tmp/runner.py'); r=importlib.util.module_from_spec(spec); spec.loader.exec_module(r)
-          family={'biotech':{'benchmark':'XBI','development':['REGN','VRTX','GILD','BIIB','ALNY','INCY','BMRN','UTHR'],'holdout':[]}}
+          family={'biotech':{'primary_industry_etf':'XBI','development_universe':['REGN','VRTX','GILD','BIIB','ALNY','INCY','BMRN','UTHR']}}
           out=r._evaluate_matrix(family,'2026-09-01T13:30:00+00:00')
           rows=[x for x in out['per_symbol'] if x['family']=='biotech']
           # Frozen diagnostic only: preserve candidate net return and matched XBI-relative excess.
