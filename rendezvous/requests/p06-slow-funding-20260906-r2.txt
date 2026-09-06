@@ -1,0 +1,7 @@
+request=p06-slow-funding-20260906-r2
+authority=research_only
+parent=P06
+child=P06-C-SLOW-FUNDING-ALLOCATOR-PUBLIC
+private_authority=XoticHaze/research-foundry
+private_ref=848d0e576cf24bfc4015ae94b6f2e9ab74db7c4f
+harness=research_foundry_p06_slow_funding_216_v1
