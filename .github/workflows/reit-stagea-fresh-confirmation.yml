@@ -33,16 +33,22 @@ jobs:
           r=importlib.util.module_from_spec(spec); spec.loader.exec_module(r)
           original=['AMT','PLD','O','SPG','EQIX','PSA','WELL','DLR']
           fresh=['CCI','VICI','AVB','EQR','EXR','MAA','CPT','ARE']
-          cutoff='2026-08-24T13:30:00+00:00'
+          benchmark='VNQ'
           assert not (set(original) & set(fresh))
-          family={'reits_fresh_confirmation':{'primary_industry_etf':'VNQ','development_universe':fresh}}
+          # Source-only preflight: derive the latest exact date shared by every fixed input
+          # before evaluating any fresh-panel model outcome. No symbol substitution is allowed.
+          required=[*r.TRAIN,*fresh,'QQQ',benchmark]
+          end_by_symbol={s:r._load(s).iloc[-1].timestamp for s in required}
+          cutoff=min(end_by_symbol.values()).isoformat()
+          family={'reits_fresh_confirmation':{'primary_industry_etf':benchmark,'development_universe':fresh}}
           out=r._evaluate_matrix(family,cutoff)
           s=out['family_summary']['reits_fresh_confirmation']
           receipt={
             'schema':'reit_stagea_fresh_confirmation.v1',
-            'benchmark':'VNQ',
+            'benchmark':benchmark,
             'cutoff':cutoff,
-            'cutoff_reason':'common bounded-source cutoff chosen before any fresh-panel model result; first attempt emitted no result because AVB ended 2026-08-24',
+            'source_endpoints':{k:v.isoformat() for k,v in sorted(end_by_symbol.items())},
+            'cutoff_reason':'latest common source endpoint across the prospectively fixed panel, frozen training set, QQQ and VNQ; derived before any model outcome',
             'frozen_model':'TextConverterToolbox@2d8995ba66502a4de25c64c1c32a67e132b05522:run_industry_stagea_public_runner_20260905.py',
             'original_development_universe':original,
             'fresh_confirmation_universe':fresh,
