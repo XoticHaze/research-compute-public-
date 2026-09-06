@@ -94,8 +94,15 @@ def valid_rows(data: bytes):
 def sample(pos: int):
     hits = reads = 0
     tried = []
-    for shift in (0, -CHUNK // 2, CHUNK // 2, -CHUNK, CHUNK):
+    shifts = [0, -CHUNK // 2, CHUNK // 2]
+    for multiple in (1, 2, 4, 8, 16):
+        shifts.extend((-multiple * CHUNK, multiple * CHUNK))
+    seen = set()
+    for shift in shifts:
         at = max(0, min(pos + shift, SOURCE["size_bytes"] - CHUNK))
+        if at in seen:
+            continue
+        seen.add(at)
         data, hit = fetch_range(at)
         hits += int(hit)
         reads += int(not hit)
@@ -118,7 +125,7 @@ def sample(pos: int):
                 "network_reads": reads,
             }
         tried.append(at)
-    raise RuntimeError(f"no structurally valid rows around {pos}; tried={tried}")
+    raise RuntimeError(f"no structurally valid rows within bounded +/-16MiB recovery around {pos}; tried={tried}")
 
 
 def symbol_boundary(upper: bool):
