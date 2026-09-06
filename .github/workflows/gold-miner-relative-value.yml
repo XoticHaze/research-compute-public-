@@ -1,0 +1,164 @@
+name: Gold Miner Relative-Value Challenger
+
+on:
+  push:
+    paths:
+      - '.github/workflows/gold-miner-relative-value.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install frozen environment
+        run: python -m pip install --disable-pip-version-check -q numpy==2.4.6 pandas==3.0.5 scikit-learn==1.9.0 scipy==1.17.1
+      - name: Execute prospectively frozen gold-miner relative-value model
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/XoticHaze/TextConverterToolbox/2d8995ba66502a4de25c64c1c32a67e132b05522/research/run_industry_stagea_public_runner_20260905.py -o /tmp/source.py
+          test "$(git hash-object /tmp/source.py)" = 9f7f802469dc6a33abd3431295d5232ebc4289c5
+          python - <<'PY'
+          import importlib.util, json, os
+          import numpy as np
+          import pandas as pd
+          from sklearn.linear_model import Ridge
+          from sklearn.pipeline import Pipeline
+          from sklearn.preprocessing import StandardScaler
+
+          spec=importlib.util.spec_from_file_location('src','/tmp/source.py')
+          src=importlib.util.module_from_spec(spec); spec.loader.exec_module(src)
+
+          DEV=('NEM','GOLD','AEM','WPM','FNV','KGC','AU','AGI')
+          HOLDOUT=('RGLD','HMY','BTG','PAAS')
+          CONTEXT=('GDX','GLD','UUP','IEF')
+          EVAL=('SPY','QQQ')
+          H=40; DELAY=1; COST=50.0; FOLDS=6; MIN_TRAIN=756; PURGE=42; TRAIN_STEP=5; TEST_STEP=40
+          FEATURES=('mom20','mom60','mom120','vol20','distance_high60','rs_gdx20','rs_gdx60',
+                    'gdx_mom20','gdx_mom100','gld_mom20','gld_mom100','uup_mom20','uup_mom60','ief_mom20','ief_mom60','gdx_minus_gld20')
+
+          # Holdouts are frozen in metadata and intentionally never loaded.
+          selection_symbols=(*DEV,*CONTEXT)
+          raw={s:src._load(s) for s in selection_symbols}
+          common=set(raw[selection_symbols[0]].timestamp)
+          for s in selection_symbols[1:]: common &= set(raw[s].timestamp)
+          cal=pd.DatetimeIndex(sorted(common))
+          if len(cal)<1800: raise RuntimeError(f'insufficient common calendar={len(cal)}')
+          px={s:raw[s].set_index('timestamp').price.reindex(cal) for s in selection_symbols}
+          if any(v.isna().any() for v in px.values()): raise RuntimeError('selection input missing on common calendar')
+
+          broad={}
+          for s in EVAL:
+              v=src._load(s).set_index('timestamp').price.reindex(cal)
+              if v.isna().any(): raise RuntimeError(f'{s}: broad baseline missing matched rows')
+              broad[s]=v
+
+          def mom(series,n): return series/series.shift(n)-1.0
+          ctx={}
+          for s in CONTEXT:
+              ctx[s]={20:mom(px[s],20),60:mom(px[s],60),100:mom(px[s],100)}
+          ctx['gdx_minus_gld20']=ctx['GDX'][20]-ctx['GLD'][20]
+
+          frames={}
+          for s in DEV:
+              p=px[s]; ret1=p.pct_change(); m20=mom(p,20)
+              f=pd.DataFrame({'signal_i':np.arange(len(cal),dtype=int),'timestamp':cal})
+              f['mom20']=m20; f['mom60']=mom(p,60); f['mom120']=mom(p,120)
+              f['vol20']=ret1.rolling(20,min_periods=20).std(ddof=0)
+              f['distance_high60']=p/p.rolling(60,min_periods=60).max()-1.0
+              f['rs_gdx20']=f.mom20-ctx['GDX'][20]; f['rs_gdx60']=f.mom60-ctx['GDX'][60]
+              f['gdx_mom20']=ctx['GDX'][20]; f['gdx_mom100']=ctx['GDX'][100]
+              f['gld_mom20']=ctx['GLD'][20]; f['gld_mom100']=ctx['GLD'][100]
+              f['uup_mom20']=ctx['UUP'][20]; f['uup_mom60']=ctx['UUP'][60]
+              f['ief_mom20']=ctx['IEF'][20]; f['ief_mom60']=ctx['IEF'][60]
+              f['gdx_minus_gld20']=ctx['gdx_minus_gld20']
+              stock_gross=(p.shift(-(DELAY+H))/p.shift(-DELAY)-1.0)*10000.0
+              gdx_gross=(px['GDX'].shift(-(DELAY+H))/px['GDX'].shift(-DELAY)-1.0)*10000.0
+              f['target_excess50']=stock_gross-COST-gdx_gross
+              frames[s]=f.replace([np.inf,-np.inf],np.nan)
+
+          edges=np.linspace(MIN_TRAIN,len(cal)-(H+DELAY+1),FOLDS+1,dtype=int)
+          fold_ranges=[(int(edges[i]),int(edges[i+1])) for i in range(FOLDS)]
+          events=[]
+          per_symbol={}
+          for target in DEV:
+              target_events=[]
+              for fold,(start,stop) in enumerate(fold_ranges,1):
+                  if fold<2: continue
+                  train_parts=[]
+                  for s in DEV:
+                      if s==target: continue
+                      d=frames[s]
+                      t=d[(d.signal_i < start-PURGE) & (d.signal_i % TRAIN_STEP == 0)].dropna(subset=[*FEATURES,'target_excess50'])
+                      train_parts.append(t)
+                  train=pd.concat(train_parts,ignore_index=True)
+                  test=frames[target][(frames[target].signal_i>=start)&(frames[target].signal_i<max(start,stop-(DELAY+H)))].copy()
+                  test=test[(test.signal_i-start)%TEST_STEP==0].dropna(subset=[*FEATURES,'target_excess50'])
+                  if len(train)<1000 or len(test)<5: raise RuntimeError(f'{target} fold {fold}: train={len(train)} test={len(test)}')
+                  model=Pipeline([('scale',StandardScaler()),('ridge',Ridge(alpha=10.0))])
+                  model.fit(train[list(FEATURES)].to_numpy(float),train.target_excess50.to_numpy(float))
+                  pred=model.predict(test[list(FEATURES)].to_numpy(float))
+                  selected=test.loc[pred>0].copy()
+                  for row in selected.itertuples(index=False):
+                      i=int(row.signal_i); e=i+DELAY; x=e+H
+                      stock_gross=float(px[target].iloc[x]/px[target].iloc[e]-1.0)*10000.0
+                      rec={'symbol':target,'fold':fold,'signal':cal[i].isoformat(),'entry':cal[e].isoformat(),'exit':cal[x].isoformat(),'prediction_excess50':float(pred[list(test.index).index(row.Index)] if hasattr(row,'Index') else 0.0),'stock_gross_bps':stock_gross}
+                      for b,v in {'GDX':px['GDX'],'SPY':broad['SPY'],'QQQ':broad['QQQ']}.items(): rec[f'{b}_gross_bps']=float(v.iloc[x]/v.iloc[e]-1.0)*10000.0
+                      events.append(rec); target_events.append(rec)
+              per_symbol[target]={'selected_states':len(target_events)}
+
+          if not events: raise RuntimeError('no selected events')
+          df=pd.DataFrame(events)
+          metrics={}
+          for cost in (25.0,50.0,100.0):
+              net=df.stock_gross_bps-cost
+              b={}
+              for base in ('GDX','SPY','QQQ'):
+                  excess=net-df[f'{base}_gross_bps']
+                  folds={str(int(f)):float(excess[df.fold==f].mean()) for f in sorted(df.fold.unique())}
+                  b[base]={'matched_gross_bps_per_event':float(df[f'{base}_gross_bps'].mean()),'excess_bps_per_event':float(excess.mean()),'positive_excess_folds':sum(v>0 for v in folds.values()),'fold_excess_bps':folds}
+              metrics[str(int(cost))]={'event_count':int(len(df)),'candidate_net_bps_per_event':float(net.mean()),'baselines':b}
+
+          symbol_detail={}
+          for s in DEV:
+              d=df[df.symbol==s]
+              net=d.stock_gross_bps-COST
+              gex=net-d.GDX_gross_bps
+              fold_means={str(int(f)):float(gex[d.fold==f].mean()) for f in sorted(d.fold.unique())}
+              symbol_detail[s]={'states':int(len(d)),'net50_mean_bps':float(net.mean()) if len(d) else None,'gdx_excess50_mean_bps':float(gex.mean()) if len(d) else None,'positive_gdx_folds':sum(v>0 for v in fold_means.values()),'fold_gdx_excess_bps':fold_means,
+                'pass':bool(len(d)>=20 and net.mean()>0 and gex.mean()>0 and sum(v>0 for v in fold_means.values())>=3) if len(d) else False}
+
+          loo={}
+          for s in DEV:
+              d=df[df.symbol!=s]; loo[s]=float(((d.stock_gross_bps-COST)-d.GDX_gross_bps).mean())
+          m50=metrics['50']
+          checks={
+            'breadth_5_of_8':sum(int(v['pass']) for v in symbol_detail.values())>=5,
+            'aggregate_gdx_excess_positive':m50['baselines']['GDX']['excess_bps_per_event']>0,
+            'aggregate_spy_excess_positive':m50['baselines']['SPY']['excess_bps_per_event']>0,
+            'gdx_fold_breadth':m50['baselines']['GDX']['positive_excess_folds']>=3,
+            'spy_fold_breadth':m50['baselines']['SPY']['positive_excess_folds']>=3,
+            'all_gdx_leave_one_symbol_out_positive':all(v>0 for v in loo.values()),
+          }
+          decision='ELIGIBLE_FOR_FRESH_CONFIRMATION' if all(checks.values()) else 'GOLD_RELATIVE_VALUE_DEVELOPMENT_REJECTED_OR_PARKED'
+          result={'schema':'gold_miner_relative_value_development.v1','scientific_contract':{'development_universe':DEV,'external_holdouts':HOLDOUT,'holdouts_loaded':False,'industry_benchmark':'GDX','broad_benchmarks':['SPY','QQQ'],'horizon_sessions':H,'delay_sessions':DELAY,'primary_cost_bps':COST,'model':'leave-one-symbol-out StandardScaler+Ridge(alpha=10)','features':FEATURES,'train_step_sessions':TRAIN_STEP,'evaluation_step_sessions':TEST_STEP,'folds':FOLDS,'purge_sessions':PURGE},
+             'window':{'calendar_first':cal[0].isoformat(),'calendar_last':cal[-1].isoformat(),'first_selected_entry':df.entry.min(),'last_selected_exit':df.exit.max()},'metrics_by_cost_bps':metrics,'per_symbol':symbol_detail,'gdx_leave_one_symbol_out_excess50_bps':loo,'gate_checks':checks,'decision':decision,'research_only':True,'promotion_authority':False,'allocation_authority':False,'runtime_mutation':False,'broker_action':False,'live_trading_change':False}
+          os.makedirs('results',exist_ok=True)
+          open('results/gold-miner-relative-value-development.json','w').write(json.dumps(result,sort_keys=True,indent=2)+'\n')
+          print('GOLD_MINER_RELATIVE_VALUE='+json.dumps(result,sort_keys=True))
+          PY
+      - name: Persist terminal result
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add results/gold-miner-relative-value-development.json
+          git commit -m 'research: persist gold miner relative-value result'
+          git push origin "HEAD:$GITHUB_REF_NAME"
