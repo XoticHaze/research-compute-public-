@@ -19,6 +19,7 @@ H = 40
 COST_BPS = 50.0
 RIDGE_ALPHA = 10.0
 FOLDS = 6
+MIN_TRAIN_STATES = 80
 MIN_SYMBOL_STATES = 20
 MIN_POS_FOLDS = 3
 MIN_SYMBOL_PASSES = 5
@@ -116,7 +117,7 @@ def arm(df: pd.DataFrame, features: list[str], name: str) -> dict:
         if test.empty: raise RuntimeError(f"empty fold {fold}")
         first_entry=test.entry_date.min()
         train=df[df.exit_date < first_entry].copy()
-        if len(train) < 200: raise RuntimeError(f"insufficient train fold {fold}: {len(train)}")
+        if len(train) < MIN_TRAIN_STATES: raise RuntimeError(f"insufficient train fold {fold}: {len(train)}")
         sc=StandardScaler().fit(train[features])
         m=Ridge(alpha=RIDGE_ALPHA).fit(sc.transform(train[features]),train.target_vnq_excess50_bps)
         test["pred_vnq_excess50_bps"]=m.predict(sc.transform(test[features]))
@@ -170,7 +171,7 @@ def main():
       "classification":cls,"window":{"common_start":str(px.index.min()),"common_end":str(px.index.max()),"rows":len(px)},
       "contract":{"development_symbols":DEV,"primary_benchmark":PRIMARY,"broad_benchmarks":BROAD,"rate_context":RATES,
         "frozen_external_holdouts_unopened":["DLR","VICI","AVB","EQR"],"horizon_sessions":H,"decision_spacing_sessions":H,
-        "execution_delay_sessions":1,"primary_cost_bps":COST_BPS,"model":"StandardScaler + Ridge(alpha=10)",
+        "execution_delay_sessions":1,"primary_cost_bps":COST_BPS,"minimum_training_states":MIN_TRAIN_STATES,"model":"StandardScaler + Ridge(alpha=10)",
         "admission":"predicted component-minus-VNQ excess after 50bps > 0","no_ticker_identity":True,
         "gate":f">={MIN_SYMBOL_PASSES}/8 symbols with >=20 states, positive mean VNQ excess and >=3 positive folds; aggregate excess vs VNQ and SPY positive"},
       "generic":generic,"rate_context":full,"research_only":True,"promotion_authority":False,"runtime_mutation":False,"live_trading_change":False}
