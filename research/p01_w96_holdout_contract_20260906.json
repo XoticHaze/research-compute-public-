@@ -1,0 +1,22 @@
+{
+  "schema": "p01-w96-holdout-public-contract-v1",
+  "authority": "research_only",
+  "harness": "p01_w96_entry_holdout_v1",
+  "source": {
+    "private_authority": "XoticHaze/research-foundry + XoticHaze/mm-IBKR owned MNQ corpus",
+    "holdout_start_exclusive": "2026-02-19T02:12:00Z",
+    "required_symbol": "MNQ",
+    "required_timeframe": "12Min"
+  },
+  "incumbent": {"window": 96, "entry_extreme": -2.8, "exit_extreme": 4.5},
+  "challenger": {"window": 96, "entry_extreme": -2.52, "exit_extreme": 4.5},
+  "frozen_equal_semantics": ["dca", "costs", "execution", "roll", "warmup"],
+  "receipt_metrics": ["trade_count", "net_points", "profit_factor", "sortino", "max_drawdown", "regime_coverage", "dca_behavior", "decision"],
+  "boundaries": {
+    "strategy_spec_write": false,
+    "runtime_activation": false,
+    "broker_submit": false,
+    "promotion_authority": false,
+    "live_trading_change": false
+  }
+}

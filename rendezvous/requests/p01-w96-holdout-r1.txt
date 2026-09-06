@@ -1,0 +1,6 @@
+P01 W96 fresh holdout secure rendezvous request.
+Authority: research_only
+Incumbent: W96 ENTRY -2.80 EXIT 4.50
+Challenger: W96 ENTRY -2.52 EXIT 4.50
+Holdout: MNQ 12Min strictly after 2026-02-19T02:12:00Z
+No StrategySpec write, runtime activation, broker submit, promotion authority, or live trading change.
