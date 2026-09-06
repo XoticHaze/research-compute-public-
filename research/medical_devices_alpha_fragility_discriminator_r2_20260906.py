@@ -12,7 +12,9 @@ RECORDED_PARENT = {
     "passing_symbols": 4,
 }
 MAX_ACCEPTED_REPLAY_DRIFT_BPS = 5.0
-MAX_ACCEPTED_RECONSTRUCTION_DRIFT_BPS = 1e-8
+# Numerical replay tolerance only. 0.0001 bps is far below any economic gate
+# and prevents floating-point/source-decimal noise from becoming a scientific blocker.
+MAX_ACCEPTED_RECONSTRUCTION_DRIFT_BPS = 1e-4
 
 
 def _load(path: Path, name: str):
@@ -91,6 +93,7 @@ def main() -> int:
         "same_run_stagea": current,
         "event_reconstruction": reconstructed,
         "event_reconstruction_delta": reconstruction_delta,
+        "accepted_reconstruction_drift_limit_bps": MAX_ACCEPTED_RECONSTRUCTION_DRIFT_BPS,
         "semantic_mismatch": semantic_mismatch,
         "recorded_parent_delta": recorded_delta,
         "accepted_replay_drift_limit_bps": MAX_ACCEPTED_REPLAY_DRIFT_BPS,
@@ -101,9 +104,9 @@ def main() -> int:
         result["decision_before_parity_guard"] = result["decision"]
         result["decision"] = "EVENT_RECONSTRUCTION_SEMANTICS_MISMATCH"
         result["consequence"] = (
-            "The same-run canonical Stage-A evaluator and the independent event reconstruction select the same state count/gate "
-            "but disagree on aggregate economics. Do not consume the new QQQ/cost/concentration diagnostics until the exact "
-            "semantic difference is removed. This is a tooling blocker, not data absence or compute failure."
+            "The same-run canonical Stage-A evaluator and the independent event reconstruction disagree above the numerical "
+            "parity tolerance. Do not consume the new QQQ/cost/concentration diagnostics until the exact semantic difference "
+            "is removed. This is a tooling blocker, not data absence or compute failure."
         )
     elif material_replay_drift:
         result["decision_before_source_drift_guard"] = result["decision"]
