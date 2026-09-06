@@ -1,0 +1,5 @@
+CommandCenter Opportunity Ledger public-compute execution request.
+Harness: commandcenter_opportunity_ledger_contract_v1
+Authority: contract_validation_only
+Private payload: exact four-file ledger contract package, encrypted to the one-run recipient.
+Expected public output: sanitized PASS/FAIL receipt only.
