@@ -1,0 +1,8 @@
+P03_PRIVATE_PYTEST_REQUEST_V1
+mm_repo=XoticHaze/mm-IBKR
+mm_pr=222
+mm_head_sha=cd529feec2726afb6116a670ae019156bd7f4b81
+harness=mm_p03_operator_context_pytest_v1
+authority=research_only
+plaintext_private_source_forbidden_in_public_repo=true
+live_trading_mutation=false
