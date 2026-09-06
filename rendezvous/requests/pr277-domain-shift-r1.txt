@@ -1,0 +1,4 @@
+PR277 second distinct encrypted private-input rendezvous.
+Fixed harness: research_foundry_pr277_domain_shift_v1.
+Private source and private data are not contained in this request.
+Research-only execution; no promotion, runtime, broker, sizing, or live-trading authority.
