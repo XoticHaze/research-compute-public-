@@ -1,0 +1,37 @@
+{
+  "schema": "public_research.sector_relative_reversal_regime_consumed.v1",
+  "source_run": 34024065390,
+  "source_job": 101461796091,
+  "source_artifact": 9986469689,
+  "source_artifact_zip_sha256": "84500a8d976d3f7073d64c071fa53570715d24d674735fa87d0230ea5770577c",
+  "parent_mechanism": "bottom-3 prior-21-session sector relative reversal",
+  "decision": "REGIME_CONDITIONAL_SIGNAL_NOT_SUPPORTED",
+  "matched_alpha_evidence": {
+    "spy_prior63_nonpositive": {
+      "events": 32,
+      "candidate_net10_mean_bps": 165.65530207222204,
+      "equal_sector_net10_mean_bps": 184.92133629992765,
+      "spy_gross_mean_bps": 202.70010427747803,
+      "qqq_gross_mean_bps": 250.1929074243709,
+      "excess_vs_equal_sector_mean_bps": -19.26603422770562,
+      "excess_vs_spy_mean_bps": -37.044802205256,
+      "excess_vs_qqq_mean_bps": -84.53760535214887
+    },
+    "spy_prior63_positive": {
+      "events": 116,
+      "candidate_net10_mean_bps": 90.95960166245538,
+      "equal_sector_net10_mean_bps": 68.64599427354283,
+      "spy_gross_mean_bps": 95.07971169895976,
+      "qqq_gross_mean_bps": 141.10517844313108,
+      "excess_vs_equal_sector_mean_bps": 22.313607388912565,
+      "excess_vs_spy_mean_bps": -4.12011003650436,
+      "excess_vs_qqq_mean_bps": -50.145576780675675
+    }
+  },
+  "interpretation": "The predeclared weak-market hypothesis is falsified. In SPY prior-63-session nonpositive regimes the candidate underperformed the matched equal-sector basket and both broad-market baselines. Positive-SPY regimes retained cross-sectional excess versus equal-sector but did not beat SPY or QQQ, so the evidence does not support scarce-capital allocation.",
+  "next_action": "close fixed sector relative-reversal allocator family; do not tune the regime threshold or promote on raw return",
+  "allocation_authority": false,
+  "promotion_authority": false,
+  "live_trading_change": false,
+  "research_only": true
+}
