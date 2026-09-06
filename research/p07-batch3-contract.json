@@ -1,0 +1,36 @@
+{
+  "schema": "research_compute_public.p07_batch3_contract.v1",
+  "frozen_at": "2026-09-05T20:05:00Z",
+  "purpose": "prospective Stage-A expansion across four new independently coherent families using the already-public frozen generic opportunity evaluator",
+  "selection_rule": "families and all development/holdout membership are frozen before any Batch-3 target outcome is evaluated; no substitutions after execution",
+  "cutoff": "2026-09-01T13:30:00+00:00",
+  "families": {
+    "large_pharma": {
+      "development_universe": ["JNJ", "PFE", "MRK", "BMY", "LLY", "ABBV", "AMGN", "ZTS"],
+      "primary_industry_etf": "XPH",
+      "external_holdouts": ["NVS", "GSK", "SNY", "TEVA"]
+    },
+    "consumer_staples": {
+      "development_universe": ["PG", "KO", "PEP", "CL", "KMB", "GIS", "HSY", "MKC"],
+      "primary_industry_etf": "XLP",
+      "external_holdouts": ["K", "SJM", "CAG", "CPB"]
+    },
+    "equity_reits": {
+      "development_universe": ["PLD", "AMT", "CCI", "O", "SPG", "PSA", "VTR", "WELL"],
+      "primary_industry_etf": "VNQ",
+      "external_holdouts": ["AVB", "EQR", "ESS", "DLR"]
+    },
+    "large_retail": {
+      "development_universe": ["WMT", "TGT", "TJX", "ROST", "BBY", "HD", "LOW", "ORLY"],
+      "primary_industry_etf": "XRT",
+      "external_holdouts": ["DKS", "AZO", "AAP", "BURL"]
+    }
+  },
+  "family_gate": "at least 5 of 8 development symbols pass the unchanged Stage-A symbol gate",
+  "external_holdouts_loaded": false,
+  "no_failed_family_rescue": true,
+  "research_only": true,
+  "promotion_authority": false,
+  "runtime_mutation": false,
+  "live_trading_change": false
+}
