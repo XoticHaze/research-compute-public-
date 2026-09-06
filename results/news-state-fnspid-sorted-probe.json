@@ -1,0 +1,32 @@
+{
+  "bounded_sample_rows": 0,
+  "causal_intraday_admission": "REQUIRES_SEPARATE_SOURCE_DATE_SEMANTICS_VERIFICATION",
+  "dataset": "sabareesh88/FNSPID_nasdaq_sorted",
+  "filter_errors": [],
+  "indexed_rows_across_requested_symbols": 0,
+  "normalized_sample_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "per_symbol": {},
+  "publication_time_verified": false,
+  "requested_symbols": [
+    "NVDA",
+    "AMD",
+    "AMAT",
+    "AVGO",
+    "MU",
+    "DHI",
+    "LEN",
+    "PHM",
+    "TOL",
+    "NVR"
+  ],
+  "research_only": true,
+  "schema": "foundry.news_state_fnspid_sorted_probe.v1",
+  "source_access_decision": "INDEXED_FILTER_UNAVAILABLE_OR_FAILED",
+  "validity": {
+    "filter": false,
+    "preview": true,
+    "search": false,
+    "statistics": true,
+    "viewer": true
+  }
+}

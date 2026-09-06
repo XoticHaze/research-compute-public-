@@ -1,0 +1,164 @@
+name: News State FNSPID Coverage Probe
+
+on:
+  push:
+    paths:
+      - '.github/workflows/news-state-fnspid-probe.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Execute bounded indexed-source probe
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import collections, hashlib, json, os, re, time
+          from urllib.parse import urlencode
+          from urllib.request import Request, urlopen
+
+          CANDIDATES=(
+            ('sabareesh88/FNSPID_nasdaq','default','train'),
+            ('clarencecla/FNSPID','default','train'),
+          )
+          SYMBOLS=('NVDA','AMD','AMAT','AVGO','MU','DHI','LEN','PHM','TOL','NVR')
+          BASE='https://datasets-server.huggingface.co'
+          OUT='results/news-state-fnspid-source-coverage.json'
+          SAMPLE='results/news-state-fnspid-normalized-sample.jsonl'
+          os.makedirs('results',exist_ok=True)
+
+          def get_json(path, params, retries=4):
+              url=BASE+path+'?'+urlencode(params)
+              last=None
+              for attempt in range(retries):
+                  try:
+                      req=Request(url,headers={'User-Agent':'research-foundry-news-state/1.0'})
+                      with urlopen(req,timeout=60) as r:
+                          body=r.read()
+                      return json.loads(body)
+                  except Exception as exc:
+                      last=exc
+                      if attempt+1<retries: time.sleep(2*(attempt+1))
+              raise RuntimeError(f'{path} failed after {retries} attempts: {type(last).__name__}: {last}')
+
+          selected=None; validity=[]
+          for ds,config,split in CANDIDATES:
+              try:
+                  valid=get_json('/is-valid',{'dataset':ds})
+                  validity.append({'dataset':ds,'response':valid})
+                  if bool(valid.get('filter')):
+                      selected=(ds,config,split); break
+              except Exception as exc:
+                  validity.append({'dataset':ds,'error':f'{type(exc).__name__}: {exc}'})
+          if selected is None:
+              raise RuntimeError('no FNSPID candidate exposes indexed /filter support: '+json.dumps(validity,sort_keys=True))
+
+          dataset,config,split=selected
+          def filt(symbol, order):
+              where=f'"Stock_symbol"=\'{symbol}\''
+              return get_json('/filter',{
+                  'dataset':dataset,'config':config,'split':split,'where':where,
+                  'orderby':f'"Date" {order}','offset':0,'length':100
+              })
+
+          shape_counts=collections.Counter(); publishers=collections.Counter(); urls=set(); dup_urls=0
+          per_symbol={}; samples=[]
+          explicit_re=re.compile(r'(?:Z|[+-]\d{2}:?\d{2}|\bUTC\b)\s*$')
+          time_re=re.compile(r'[T ]\d{1,2}:\d{2}')
+          def shape(v):
+              v=(v or '').strip()
+              if not v: return 'empty'
+              if len(v)==10 and re.fullmatch(r'\d{4}-\d{2}-\d{2}',v): return 'date_only'
+              if time_re.search(v): return 'datetime_explicit_zone' if explicit_re.search(v) else 'datetime_no_zone'
+              return 'other'
+          def row_payload(item):
+              return (item or {}).get('row',item or {})
+          def normalize(r):
+              article=(r.get('Article') or '')
+              return {
+                'schema':'foundry.news_event.source_sample.v1',
+                'source':'fnspid','dataset':dataset,
+                'published_raw':r.get('Date'),
+                'symbol':(r.get('Stock_symbol') or '').upper(),
+                'title':r.get('Article_title'),
+                'url':r.get('Url'),
+                'publisher':r.get('Publisher'),
+                'author':r.get('Author'),
+                'article_present':bool(article.strip()),
+                'article_sha256':hashlib.sha256(article.encode('utf-8',errors='replace')).hexdigest() if article else None,
+                'publication_timestamp_shape':shape(r.get('Date')),
+                'publication_time_verified':False,
+                'causal_intraday_admitted':False
+              }
+
+          for symbol in SYMBOLS:
+              asc=filt(symbol,'ASC'); desc=filt(symbol,'DESC')
+              arows=[row_payload(x) for x in asc.get('rows',[])]
+              drows=[row_payload(x) for x in desc.get('rows',[])]
+              total=asc.get('num_rows_total')
+              if total is None: total=asc.get('num_rows')
+              combined=arows[:10]+drows[:10]
+              for r in combined:
+                  s=shape(r.get('Date')); shape_counts[s]+=1
+                  pub=(r.get('Publisher') or '').strip() or '<missing>'; publishers[pub]+=1
+                  u=(r.get('Url') or '').strip()
+                  if u:
+                      if u in urls: dup_urls+=1
+                      urls.add(u)
+              ns=[normalize(r) for r in combined]
+              samples.extend(ns)
+              per_symbol[symbol]={
+                'indexed_row_count':total,
+                'first_raw_publication':arows[0].get('Date') if arows else None,
+                'last_raw_publication':drows[0].get('Date') if drows else None,
+                'sample_rows':len(combined),
+                'sample_timestamp_shapes':dict(collections.Counter(x['publication_timestamp_shape'] for x in ns)),
+                'article_present_sample_rows':sum(bool(x['article_present']) for x in ns),
+                'distinct_publishers_in_sample':len({x.get('publisher') for x in ns if x.get('publisher')}),
+              }
+
+          total_indexed=sum(v['indexed_row_count'] or 0 for v in per_symbol.values())
+          publisher_total=sum(publishers.values())
+          top_publishers=[{'publisher':k,'sample_rows':v,'sample_share':v/publisher_total if publisher_total else None} for k,v in publishers.most_common(10)]
+          receipt={
+            'schema':'foundry.news_state_source_access_coverage.v1',
+            'source':'FNSPID','access_plane':'huggingface_dataset_viewer_filter',
+            'selected_dataset':dataset,'config':config,'split':split,
+            'candidate_validity':validity,
+            'requested_symbols':list(SYMBOLS),
+            'families':{'semiconductors':['NVDA','AMD','AMAT','AVGO','MU'],'homebuilders':['DHI','LEN','PHM','TOL','NVR']},
+            'per_symbol':per_symbol,'indexed_rows_across_requested_symbols':total_indexed,
+            'bounded_sample_rows':len(samples),'sample_timestamp_shape_counts':dict(shape_counts),
+            'sample_duplicate_url_rows':dup_urls,'sample_unique_urls':len(urls),
+            'top_publishers_in_bounded_sample':top_publishers,
+            'publication_time_policy':'RAW_SOURCE_STRING_ONLY_NO_TIMEZONE_IMPUTATION',
+            'publication_time_verified':False,
+            'causal_intraday_admission':'REQUIRES_SEPARATE_SOURCE_DATE_SEMANTICS_VERIFICATION',
+            'normalized_sample_path':SAMPLE,
+            'normalized_sample_sha256':None,
+            'research_only':True,'promotion_authority':False,'allocation_authority':False,
+            'runtime_mutation':False,'broker_action':False,'live_trading_change':False
+          }
+          with open(SAMPLE,'w',encoding='utf-8') as f:
+              for x in samples: f.write(json.dumps(x,sort_keys=True,ensure_ascii=False)+'\n')
+          h=hashlib.sha256(open(SAMPLE,'rb').read()).hexdigest(); receipt['normalized_sample_sha256']=h
+          with open(OUT,'w',encoding='utf-8') as f: json.dump(receipt,f,sort_keys=True,indent=2); f.write('\n')
+          print('NEWS_STATE_FNSPID_PROBE='+json.dumps(receipt,sort_keys=True))
+          PY
+      - name: Persist source receipt and bounded normalized sample
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add results/news-state-fnspid-source-coverage.json results/news-state-fnspid-normalized-sample.jsonl
+          git commit -m 'research: persist FNSPID news coverage receipt'
+          git push origin "HEAD:$GITHUB_REF_NAME"
