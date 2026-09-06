@@ -1,0 +1,38 @@
+{
+  "schema": "public_compute.semiconductor_alfred_cycle_cache_contract.v1",
+  "parent_source_pr": 44,
+  "source": "ALFRED key-free graph CSV",
+  "source_series": {
+    "semiconductor_industrial_production": "IPG3344S",
+    "high_tech_capacity_utilization": "CAPUTLHITEK2S"
+  },
+  "availability_wall": {
+    "rule": "for observation month M, query ALFRED with vintage_date equal to the 25th of month M+1; derived features become usable on that vintage date and later",
+    "reason": "conservative publication wall after the normal G.17 mid-month release; avoids requiring a release-calendar parser in the first consumer"
+  },
+  "rebase_policy": {
+    "IPG3344S": "never concatenate raw index levels across first-print vintages because ALFRED documents historical index-base changes; compute percentage changes inside each single vintage snapshot",
+    "CAPUTLHITEK2S": "capacity-utilization percent level is retained, with changes computed inside the same vintage snapshot"
+  },
+  "features_frozen_before_equity_model_outcomes": [
+    "semi_ip_change_1m",
+    "semi_ip_change_3m",
+    "semi_ip_change_12m",
+    "hitek_capacity_utilization",
+    "hitek_capacity_utilization_change_3m",
+    "hitek_capacity_utilization_change_12m"
+  ],
+  "cache_window": {
+    "first_observation_month": "2015-01-01",
+    "last_observation_month": "2026-07-01"
+  },
+  "per_month_snapshot": "each ALFRED request must include at least the current observation and prior 12 monthly observations as they existed at that same vintage; no values from a later vintage may fill an earlier cache row",
+  "missing_policy": "fail closed for a monthly cache row when any predeclared feature cannot be derived from that vintage; do not current-history backfill",
+  "next_boundary": "a source PASS permits one cache-build run; only after that exact cache is retained and hashed may the separately frozen equity path-head consumer run",
+  "external_semiconductor_holdouts_loaded": false,
+  "research_only": true,
+  "promotion_authority": false,
+  "runtime_mutation": false,
+  "broker_action": false,
+  "live_trading_change": false
+}
