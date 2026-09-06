@@ -1,7 +1,9 @@
 name: RC001 Batch2 Development
 on:
   pull_request:
-    paths: ['research/batch2-contract.json']
+    paths:
+      - 'research/batch2-contract.json'
+      - '.github/workflows/rc001-batch2.yml'
 permissions:
   contents: read
 jobs:
@@ -17,13 +19,76 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/XoticHaze/TextConverterToolbox/2d8995ba66502a4de25c64c1c32a67e132b05522/research/run_industry_stagea_public_runner_20260905.py -o .campaign/runner.py
           test "$(git hash-object .campaign/runner.py)" = 9f7f802469dc6a33abd3431295d5232ebc4289c5
       - run: python -m pip install --disable-pip-version-check -q numpy==2.4.6 pandas==3.0.5 scikit-learn==1.9.0 scipy==1.17.1
-      - run: |
+      - name: Execute available Batch2 families and isolate source failures
+        run: |
           python - <<'PY'
-          import importlib.util,json
+          import importlib.util, json
           from pathlib import Path
-          s=importlib.util.spec_from_file_location('r','.campaign/runner.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)
-          c=json.loads(Path('research/batch2-contract.json').read_text()); assert not c['external_holdouts_loaded']
-          r=m._evaluate_matrix(c['families'],'2026-09-01T13:30:00+00:00')
-          out={'schema':'research_compute_public.rc001_batch2.v1','family_summary':r['family_summary'],'external_holdouts_loaded':False,'research_only':True,'promotion_authority':False}
+
+          s=importlib.util.spec_from_file_location('r','.campaign/runner.py')
+          m=importlib.util.module_from_spec(s); s.loader.exec_module(m)
+          c=json.loads(Path('research/batch2-contract.json').read_text())
+          assert not c['external_holdouts_loaded']
+          cutoff='2026-09-01T13:30:00+00:00'
+
+          shared=list(m.TRAIN)+['QQQ']
+          availability={}
+          for symbol in shared:
+              try:
+                  m._bounded(symbol, m.pd.Timestamp(cutoff))
+                  availability[symbol]={'available': True}
+              except Exception as exc:
+                  availability[symbol]={'available': False, 'error': f'{type(exc).__name__}:{exc}'}
+
+          family_preflight={}
+          runnable={}
+          for family,spec in c['families'].items():
+              symbols=list(spec['development_universe'])+[spec['primary_industry_etf']]
+              failures={}
+              for symbol in symbols:
+                  try:
+                      m._bounded(symbol, m.pd.Timestamp(cutoff))
+                  except Exception as exc:
+                      failures[symbol]=f'{type(exc).__name__}:{exc}'
+              family_preflight[family]={
+                  'source_available': not failures,
+                  'failures': failures,
+                  'development_symbols_checked': len(spec['development_universe']),
+                  'benchmark_checked': spec['primary_industry_etf'],
+              }
+              if not failures:
+                  runnable[family]=spec
+
+          shared_failures={k:v for k,v in availability.items() if not v['available']}
+          if shared_failures:
+              raise SystemExit('shared training/context source unavailable: '+json.dumps(shared_failures,sort_keys=True))
+
+          family_summary={}
+          if runnable:
+              result=m._evaluate_matrix(runnable, cutoff)
+              family_summary=result['family_summary']
+
+          for family in c['families']:
+              if family not in family_summary:
+                  family_summary[family]={
+                      'development_family_gate_pass': False,
+                      'source_support_status': 'INSUFFICIENT_SOURCE_SUPPORT',
+                      'source_failures': family_preflight[family]['failures'],
+                      'external_holdouts_loaded': False,
+                  }
+              else:
+                  family_summary[family]['source_support_status']='AVAILABLE_EXECUTED'
+
+          out={
+              'schema':'research_compute_public.rc001_batch2.v2',
+              'family_summary':family_summary,
+              'family_preflight':family_preflight,
+              'runnable_family_count':len(runnable),
+              'blocked_family_count':len(c['families'])-len(runnable),
+              'scope_note':'Source-blocked families are not substituted. Available families execute together on the frozen cutoff; blocked families are classified insufficient source support, not economic failures.',
+              'external_holdouts_loaded':False,
+              'research_only':True,
+              'promotion_authority':False,
+          }
           print('BATCH2_TERMINAL='+json.dumps(out,sort_keys=True))
           PY
