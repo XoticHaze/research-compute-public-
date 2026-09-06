@@ -1,0 +1,79 @@
+name: PR285 Sealed Private Research Consumer
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_dir:
+        description: Public-repo directory containing only sealed-job.json and ciphertext
+        required: true
+        default: sealed_jobs/research-foundry-pr285-stage1-v1
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_HARNESS: research_foundry_pr285_stage1_v1
+
+jobs:
+  consume:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install fixed dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age
+          python -m pip install --disable-pip-version-check numpy pandas scikit-learn pytest
+      - name: Fail closed unless protected identity is provisioned
+        env:
+          SEALED_JOB_AGE_IDENTITY: ${{ secrets.SEALED_JOB_AGE_IDENTITY }}
+        run: |
+          set -euo pipefail
+          test -n "$SEALED_JOB_AGE_IDENTITY" || { echo 'missing protected SEALED_JOB_AGE_IDENTITY'; exit 41; }
+          umask 077
+          printf '%s\n' "$SEALED_JOB_AGE_IDENTITY" > "$RUNNER_TEMP/age-identity.txt"
+      - name: Validate envelope before decrypt
+        run: |
+          set -euo pipefail
+          cd "${{ inputs.job_dir }}"
+          python "$GITHUB_WORKSPACE/scripts/validate_sealed_job_v1.py" sealed-job.json
+          python - <<'PY'
+          import json, os
+          p=json.load(open('sealed-job.json'))
+          assert p['harness']==os.environ['EXPECTED_HARNESS']
+          assert p['authority']=='research_only'
+          PY
+      - name: Decrypt in runner temp only
+        run: |
+          set -euo pipefail
+          cd "${{ inputs.job_dir }}"
+          cipher="$(python -c "import json; print(json.load(open('sealed-job.json'))['ciphertext']['path'])")"
+          age -d -i "$RUNNER_TEMP/age-identity.txt" -o "$RUNNER_TEMP/pr285-payload.tar.gz" "$cipher"
+      - name: Execute pinned private harness
+        run: |
+          set -euo pipefail
+          cd "${{ inputs.job_dir }}"
+          python "$GITHUB_WORKSPACE/scripts/validate_sealed_job_v1.py" sealed-job.json --decrypted "$RUNNER_TEMP/pr285-payload.tar.gz" | tee "$RUNNER_TEMP/pr285-receipt.json"
+      - name: Emit sanitized receipt
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -f "$RUNNER_TEMP/pr285-receipt.json" ]; then
+            python - "$RUNNER_TEMP/pr285-receipt.json" <<'PY'
+          import json,sys
+          p=json.load(open(sys.argv[1]))
+          hr=p.get('harness_result') or {}
+          out={'schema':'pr285-sealed-consumer-receipt-v1','manifest_status':p.get('manifest_status'),'job_id':p.get('job_id'),'authority':p.get('authority'),'harness':hr.get('harness'),'families':{}}
+          for k,v in (hr.get('families') or {}).items():
+              out['families'][k]={'classification':v.get('classification'),'external_holdouts_loaded':v.get('external_holdouts_loaded'),'result_sha256':v.get('result_sha256')}
+          print('PR285_SEALED_RECEIPT='+json.dumps(out,sort_keys=True))
+          PY
+          fi
+      - name: Remove protected plaintext
+        if: always()
+        run: rm -f "$RUNNER_TEMP/age-identity.txt" "$RUNNER_TEMP/pr285-payload.tar.gz" "$RUNNER_TEMP/pr285-receipt.json"
