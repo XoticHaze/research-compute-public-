@@ -1,0 +1,38 @@
+name: FNSPID Source Probe
+on:
+  pull_request:
+    paths:
+      - 'research/fnspid-source-probe.json'
+      - '.github/workflows/fnspid-source-probe.yml'
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.16'
+      - name: Probe authoritative public source tree
+        run: |
+          python - <<'PY'
+          import json, urllib.request
+          from pathlib import Path
+          c=json.loads(Path('research/fnspid-source-probe.json').read_text())
+          req=urllib.request.Request(c['source_tree_api'],headers={'User-Agent':'research-compute-public/1'})
+          with urllib.request.urlopen(req,timeout=60) as r:
+              items=json.load(r)
+          rows=[]
+          for x in items:
+              rows.append({k:x.get(k) for k in ('path','type','size','oid','lfs') if k in x})
+          out={'schema':'research_compute_public.fnspid_source_probe_receipt.v1','source_dataset':c['source_dataset'],'source_tree_api':c['source_tree_api'],'items':rows,'item_count':len(rows),'research_only':True,'promotion_authority':False}
+          print('FNSPID_SOURCE_PROBE='+json.dumps(out,sort_keys=True))
+          Path('fnspid-source-probe-receipt.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fnspid-source-probe-receipt
+          path: fnspid-source-probe-receipt.json
+          retention-days: 30
