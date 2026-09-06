@@ -1,0 +1,272 @@
+{
+  "allocation_authority": false,
+  "benchmark": "IYT",
+  "broker_action": false,
+  "decision": "DEVELOPMENT_ROBUSTNESS_FAIL_NO_HOLDOUT",
+  "development_universe": [
+    "UNP",
+    "CSX",
+    "NSC",
+    "CNI",
+    "CP",
+    "JBHT",
+    "ODFL",
+    "SAIA"
+  ],
+  "external_holdouts_loaded": false,
+  "family": "freight_transport",
+  "gate_checks": {
+    "industry_excess_positive_50bps": true,
+    "industry_fold_breadth_25bps": true,
+    "industry_leave_one_symbol_out_positive_25bps": true,
+    "spy_excess_positive_25bps": false,
+    "spy_fold_breadth_25bps": true
+  },
+  "live_trading_change": false,
+  "metrics_by_stock_round_trip_cost_bps": {
+    "100": {
+      "baselines": {
+        "IYT": {
+          "excess_bps_per_event": -46.141133619175605,
+          "fold_count": 5,
+          "fold_excess_bps": {
+            "2": 2.4821993020118494,
+            "3": 1.5285130928008632,
+            "4": -19.54127670840316,
+            "5": -146.74892348871737,
+            "6": -45.36905975462916
+          },
+          "matched_gross_bps_per_event": 114.23994550225686,
+          "positive_excess_folds": 2
+        },
+        "QQQ": {
+          "excess_bps_per_event": -109.7778912224736,
+          "fold_count": 5,
+          "fold_excess_bps": {
+            "2": -95.30084840670469,
+            "3": -209.9768219056767,
+            "4": -19.020356929184995,
+            "5": -226.7709174443181,
+            "6": -39.94487333194859
+          },
+          "matched_gross_bps_per_event": 177.87670310555487,
+          "positive_excess_folds": 0
+        },
+        "SPY": {
+          "excess_bps_per_event": -82.39780555534834,
+          "fold_count": 5,
+          "fold_excess_bps": {
+            "2": -55.31468331035485,
+            "3": -120.6936815743465,
+            "4": -38.23333812358878,
+            "5": -197.16042529975363,
+            "6": -12.889395228227327
+          },
+          "matched_gross_bps_per_event": 150.49661743842964,
+          "positive_excess_folds": 0
+        }
+      },
+      "candidate_net_bps_per_event": 68.09881188308128,
+      "event_count": 9405,
+      "folds": {},
+      "leave_one_symbol_out": {
+        "IYT": {
+          "CNI": -41.26397780747765,
+          "CP": -42.13697559817835,
+          "CSX": -43.108386657412034,
+          "JBHT": -46.317169219927536,
+          "NSC": -45.32466069908741,
+          "ODFL": -56.324914134951115,
+          "SAIA": -53.715761941145566,
+          "UNP": -40.88013827048999
+        },
+        "QQQ": {
+          "CNI": -103.60309806225884,
+          "CP": -108.12397863954922,
+          "CSX": -106.7494352714017,
+          "JBHT": -108.30204792788011,
+          "NSC": -108.35774795982245,
+          "ODFL": -119.1393790836842,
+          "SAIA": -115.67171637285482,
+          "UNP": -108.22296885026846
+        },
+        "SPY": {
+          "CNI": -75.18263909375615,
+          "CP": -80.17527333808623,
+          "CSX": -79.23686918899729,
+          "JBHT": -81.32609065187128,
+          "NSC": -81.44692541769801,
+          "ODFL": -92.72834570023588,
+          "SAIA": -88.0383936883993,
+          "UNP": -80.98571898386703
+        }
+      }
+    },
+    "25": {
+      "baselines": {
+        "IYT": {
+          "excess_bps_per_event": 28.858866380824402,
+          "fold_count": 5,
+          "fold_excess_bps": {
+            "2": 77.48219930201184,
+            "3": 76.52851309280086,
+            "4": 55.45872329159682,
+            "5": -71.74892348871738,
+            "6": 29.63094024537084
+          },
+          "matched_gross_bps_per_event": 114.23994550225686,
+          "positive_excess_folds": 4
+        },
+        "QQQ": {
+          "excess_bps_per_event": -34.77789122247358,
+          "fold_count": 5,
+          "fold_excess_bps": {
+            "2": -20.300848406704695,
+            "3": -134.9768219056767,
+            "4": 55.979643070814994,
+            "5": -151.7709174443181,
+            "6": 35.05512666805141
+          },
+          "matched_gross_bps_per_event": 177.87670310555487,
+          "positive_excess_folds": 2
+        },
+        "SPY": {
+          "excess_bps_per_event": -7.3978055553483415,
+          "fold_count": 5,
+          "fold_excess_bps": {
+            "2": 19.685316689645155,
+            "3": -45.6936815743465,
+            "4": 36.76666187641121,
+            "5": -122.16042529975364,
+            "6": 62.11060477177268
+          },
+          "matched_gross_bps_per_event": 150.49661743842964,
+          "positive_excess_folds": 3
+        }
+      },
+      "candidate_net_bps_per_event": 143.09881188308128,
+      "event_count": 9405,
+      "folds": {},
+      "leave_one_symbol_out": {
+        "IYT": {
+          "CNI": 33.736022192522356,
+          "CP": 32.863024401821654,
+          "CSX": 31.891613342587966,
+          "JBHT": 28.682830780072468,
+          "NSC": 29.675339300912594,
+          "ODFL": 18.675085865048885,
+          "SAIA": 21.284238058854438,
+          "UNP": 34.11986172951001
+        },
+        "QQQ": {
+          "CNI": -28.603098062258848,
+          "CP": -33.123978639549215,
+          "CSX": -31.7494352714017,
+          "JBHT": -33.30204792788011,
+          "NSC": -33.35774795982244,
+          "ODFL": -44.1393790836842,
+          "SAIA": -40.67171637285482,
+          "UNP": -33.22296885026845
+        },
+        "SPY": {
+          "CNI": -0.18263909375615853,
+          "CP": -5.17527333808623,
+          "CSX": -4.236869188997299,
+          "JBHT": -6.326090651871294,
+          "NSC": -6.446925417698011,
+          "ODFL": -17.728345700235867,
+          "SAIA": -13.038393688399305,
+          "UNP": -5.985718983867031
+        }
+      }
+    },
+    "50": {
+      "baselines": {
+        "IYT": {
+          "excess_bps_per_event": 3.8588663808243986,
+          "fold_count": 5,
+          "fold_excess_bps": {
+            "2": 52.48219930201184,
+            "3": 51.52851309280086,
+            "4": 30.458723291596826,
+            "5": -96.74892348871738,
+            "6": 4.630940245370838
+          },
+          "matched_gross_bps_per_event": 114.23994550225686,
+          "positive_excess_folds": 4
+        },
+        "QQQ": {
+          "excess_bps_per_event": -59.77789122247358,
+          "fold_count": 5,
+          "fold_excess_bps": {
+            "2": -45.30084840670469,
+            "3": -159.97682190567673,
+            "4": 30.979643070814998,
+            "5": -176.7709174443181,
+            "6": 10.055126668051408
+          },
+          "matched_gross_bps_per_event": 177.87670310555487,
+          "positive_excess_folds": 2
+        },
+        "SPY": {
+          "excess_bps_per_event": -32.397805555348334,
+          "fold_count": 5,
+          "fold_excess_bps": {
+            "2": -5.314683310354849,
+            "3": -70.69368157434651,
+            "4": 11.766661876411224,
+            "5": -147.16042529975363,
+            "6": 37.110604771772664
+          },
+          "matched_gross_bps_per_event": 150.49661743842964,
+          "positive_excess_folds": 2
+        }
+      },
+      "candidate_net_bps_per_event": 118.09881188308128,
+      "event_count": 9405,
+      "folds": {},
+      "leave_one_symbol_out": {
+        "IYT": {
+          "CNI": 8.736022192522348,
+          "CP": 7.863024401821647,
+          "CSX": 6.891613342587976,
+          "JBHT": 3.6828307800724662,
+          "NSC": 4.675339300912596,
+          "ODFL": -6.324914134951112,
+          "SAIA": -3.7157619411455665,
+          "UNP": 9.119861729510015
+        },
+        "QQQ": {
+          "CNI": -53.60309806225884,
+          "CP": -58.12397863954922,
+          "CSX": -56.7494352714017,
+          "JBHT": -58.30204792788011,
+          "NSC": -58.35774795982243,
+          "ODFL": -69.1393790836842,
+          "SAIA": -65.67171637285482,
+          "UNP": -58.22296885026846
+        },
+        "SPY": {
+          "CNI": -25.18263909375616,
+          "CP": -30.175273338086235,
+          "CSX": -29.236869188997293,
+          "JBHT": -31.326090651871283,
+          "NSC": -31.446925417698008,
+          "ODFL": -42.72834570023587,
+          "SAIA": -38.0383936883993,
+          "UNP": -30.98571898386703
+        }
+      }
+    }
+  },
+  "promotion_authority": false,
+  "qqq_is_opportunity_cost_context_not_gate": true,
+  "research_only": true,
+  "runtime_mutation": false,
+  "schema": "industry_stagea_batch8_broad_robustness.v1",
+  "selection_window": {
+    "first_signal": "2018-08-07T13:30:00+00:00",
+    "last_exit": "2026-08-03T13:30:00+00:00",
+    "source_cutoff": "2026-09-02T13:30:00+00:00"
+  }
+}
