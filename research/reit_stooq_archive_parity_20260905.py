@@ -1,64 +1,86 @@
 from __future__ import annotations
 
-"""Source-only archival/parity diagnostic for frozen Equity REIT holdout.
+"""Source-only archive coverage diagnostic for the frozen Equity REIT holdout.
 
-Stooq is tested only as an independent archive candidate. No REIT model or target economics
-are computed. A known liquid AAPL transport control distinguishes endpoint/access failure
-from REIT-specific history absence. A source candidate is useful only if AVB/EQR have long
-history AND daily-return semantics closely reproduce Yahoo on ESS/DLR plus available
-AVB/EQR overlap. This diagnostic does not authorize a source switch by itself.
+The prior Stooq attempt failed at source transport because the hosted runner received a
+JavaScript verification page. This continuation tests Nasdaq's public historical endpoint
+without changing the frozen AVB/EQR/ESS/DLR holdout, thresholds, model, or target semantics.
+It does not authorize a source switch or compute holdout economics.
 """
 
-import csv,json,io
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode
-from urllib.request import Request,urlopen
-import math,statistics
+from urllib.request import Request, urlopen
 
-SYMBOLS=('AVB','EQR','ESS','DLR'); CONTROL='AAPL'; START='20140101'; END='20260902'; OUT=Path('reit_stooq_archive_parity_20260905.json')
+SYMBOLS = ("AVB", "EQR", "ESS", "DLR")
+CONTROL = "AAPL"
+OUT = Path("reit_stooq_archive_parity_20260905.json")
 
-def stooq(sym):
-    url=f'https://stooq.com/q/d/l/?s={sym.lower()}.us&d1={START}&d2={END}&i=d'; req=Request(url,headers={'User-Agent':'Mozilla/5.0 research-compute-public/1.0'})
-    with urlopen(req,timeout=30) as r:text=r.read().decode()
-    rows=list(csv.DictReader(io.StringIO(text))); out={}
-    for row in rows:
-        try: out[row['Date']]=float(row['Close'])
-        except Exception: pass
-    return out, text[:160]
 
-def yahoo(sym):
-    p1=int(datetime(2014,1,1,tzinfo=timezone.utc).timestamp()); p2=int(datetime(2026,9,3,tzinfo=timezone.utc).timestamp()); q=urlencode({'period1':p1,'period2':p2,'interval':'1d','events':'history','includeAdjustedClose':'true'}); req=Request(f'https://query1.finance.yahoo.com/v8/finance/chart/{sym}?{q}',headers={'User-Agent':'Mozilla/5.0 research-compute-public/1.0'})
-    with urlopen(req,timeout=30) as r:p=json.loads(r.read().decode()); x=(p.get('chart',{}).get('result') or [None])[0]
-    ts=x.get('timestamp') or []; ind=x.get('indicators',{}); vals=((ind.get('adjclose') or [{}])[0].get('adjclose') or [])
-    out={}
-    for t,v in zip(ts,vals):
-        if v is not None:out[datetime.fromtimestamp(t,tz=timezone.utc).strftime('%Y-%m-%d')]=float(v)
-    return out
+def nasdaq(symbol: str) -> dict:
+    query = urlencode({"assetclass": "stocks", "fromdate": "01/01/2014", "todate": "09/01/2026", "limit": 5000})
+    url = f"https://api.nasdaq.com/api/quote/{symbol}/historical?{query}"
+    req = Request(url, headers={
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/128 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": f"https://www.nasdaq.com/market-activity/stocks/{symbol.lower()}/historical",
+    })
+    try:
+        with urlopen(req, timeout=30) as response:
+            status = response.status
+            body = response.read().decode("utf-8", errors="replace")
+        payload = json.loads(body)
+        rows = (((payload.get("data") or {}).get("tradesTable") or {}).get("rows") or [])
+        dates = [str(row.get("date")) for row in rows if isinstance(row, dict) and row.get("date")]
+        return {
+            "http_status": status,
+            "rows": len(rows),
+            "first_date": dates[-1] if dates else None,
+            "last_date": dates[0] if dates else None,
+            "long_history": len(rows) >= 1000,
+            "error": None,
+        }
+    except Exception as exc:
+        return {
+            "http_status": None,
+            "rows": 0,
+            "first_date": None,
+            "last_date": None,
+            "long_history": False,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
 
-def returns(px,dates):
-    r={}
-    for a,b in zip(dates[:-1],dates[1:]):
-        if px[a] and px[b]:r[b]=px[b]/px[a]-1.0
-    return r
 
-def corr(a,b):
-    if len(a)<3:return None
-    ma=sum(a)/len(a);mb=sum(b)/len(b);num=sum((x-ma)*(y-mb) for x,y in zip(a,b));da=math.sqrt(sum((x-ma)**2 for x in a));db=math.sqrt(sum((y-mb)**2 for y in b));return None if da==0 or db==0 else num/(da*db)
+def main() -> None:
+    control = nasdaq(CONTROL)
+    results = {symbol: nasdaq(symbol) for symbol in SYMBOLS}
+    long_history = [symbol for symbol, row in results.items() if row["long_history"]]
+    transport_ok = bool(control["long_history"])
+    candidate = transport_ok and len(long_history) == len(SYMBOLS)
+    out = {
+        "schema": "public_compute.reit_archive_source_probe.v3",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "source": "Nasdaq historical API",
+        "frozen_holdout": list(SYMBOLS),
+        "transport_control_symbol": CONTROL,
+        "transport_control": control,
+        "transport_control_pass": transport_ok,
+        "symbols": results,
+        "long_history_symbols": long_history,
+        "candidate_source_mechanics_supported": candidate,
+        "status": "CANDIDATE_SOURCE_MECHANICS" if candidate else ("SOURCE_TRANSPORT_UNAVAILABLE" if not transport_ok else "REIT_HISTORY_INCOMPLETE"),
+        "source_switch_authorized": False,
+        "authorization_boundary": "candidate source mechanics require separate return-parity proof before any frozen holdout economics",
+        "target_returns_computed": False,
+        "model_executed": False,
+        "research_only": True,
+    }
+    OUT.write_text(json.dumps(out, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print("REIT_ARCHIVE_SOURCE_PROBE=" + json.dumps(out, sort_keys=True))
 
-def compare(sym):
-    st,preview=stooq(sym); yh=yahoo(sym); common=sorted(set(st)&set(yh)); sr=returns(st,common);yr=returns(yh,common); rd=sorted(set(sr)&set(yr)); a=[sr[d] for d in rd];b=[yr[d] for d in rd];diff=[abs(x-y)*10000.0 for x,y in zip(a,b)]
-    return {'stooq_rows':len(st),'stooq_first':min(st) if st else None,'stooq_last':max(st) if st else None,'stooq_response_preview':preview,'yahoo_rows':len(yh),'overlap_price_dates':len(common),'overlap_return_days':len(rd),'daily_return_corr':corr(a,b),'median_abs_return_diff_bps':None if not diff else float(statistics.median(diff)),'p95_abs_return_diff_bps':None if not diff else float(sorted(diff)[int(.95*(len(diff)-1))])}
 
-def main():
-    control=compare(CONTROL); transport_ok=control['stooq_rows']>=3000
-    result={}; long_ok=[]; parity_ok=[]
-    for s in SYMBOLS:
-        item=compare(s); result[s]=item
-        if len_result:=item['stooq_rows']>=3000: long_ok.append(s)
-        if item['overlap_return_days']>=10 and (item['daily_return_corr'] or -1)>=0.995 and (item['median_abs_return_diff_bps'] or 999)<=2.0:parity_ok.append(s)
-    candidate=bool(transport_ok and 'AVB' in long_ok and 'EQR' in long_ok and 'ESS' in parity_ok and 'DLR' in parity_ok and 'AVB' in parity_ok and 'EQR' in parity_ok)
-    status='SOURCE_TRANSPORT_UNAVAILABLE' if not transport_ok else ('CANDIDATE_SOURCE_MECHANICS_SUPPORTED' if candidate else 'SOURCE_AVAILABLE_BUT_REIT_PARITY_NOT_PROVEN')
-    out={'schema':'public_compute.reit_stooq_archive_parity.v2','generated_at':datetime.now(timezone.utc).isoformat(),'transport_control_symbol':CONTROL,'transport_control':control,'transport_control_pass':transport_ok,'status':status,'symbols':result,'long_history_symbols':long_ok,'return_parity_symbols':parity_ok,'candidate_source_mechanics_supported':candidate,'source_switch_authorized':False,'authorization_boundary':'even candidate=true only supports a separately frozen source-adapter parity consumer before any holdout model economics','target_returns_computed':False,'model_executed':False,'research_only':True}
-    OUT.write_text(json.dumps(out,indent=2,sort_keys=True)+'\n');print('REIT_STOOQ_ARCHIVE_PARITY='+json.dumps(out,sort_keys=True))
-if __name__=='__main__':main()
+if __name__ == "__main__":
+    main()
