@@ -1,0 +1,39 @@
+name: P10 Pseudo Futures Cohort Robustness
+on:
+  pull_request:
+    paths:
+      - 'research/compute_pseudo_futures_cohort_robustness.py'
+      - 'research/p10-pseudo-futures-cohort-contract.json'
+      - '.github/workflows/p10-pseudo-futures-cohort.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.16'
+      - name: Execute paired-provider forecast robustness
+        run: |
+          python research/compute_pseudo_futures_cohort_robustness.py \
+            research/p10-pseudo-futures-cohort-contract.json \
+            p10-pseudo-futures-cohort-result.json
+      - name: Validate terminal result
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('p10-pseudo-futures-cohort-result.json').read_text())
+          assert r['schema']=='research_compute_public.p10_pseudo_futures_cohort_robustness.v1'
+          assert r['research_only'] and not r['promotion_authority'] and not r['private_data_loaded']
+          print('P10_COHORT_CLASSIFICATION='+r['classification'])
+          print('P10_COHORT_FOCUS='+json.dumps(r['focus_result'],sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p10-pseudo-futures-cohort-result
+          path: p10-pseudo-futures-cohort-result.json
+          retention-days: 30

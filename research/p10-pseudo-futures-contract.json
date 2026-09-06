@@ -1,0 +1,48 @@
+{
+  "schema": "research_compute_public.p10_pseudo_futures_contract.v1",
+  "research_only": true,
+  "private_data_loaded": false,
+  "dataset": "thatkavish/OpenComputePrices",
+  "release_tag": "latest-data",
+  "archives": [
+    {"url":"https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/archive_historical.csv.gz","sha256":"c4ceddf400c608fd8a5f7a6a72d9cdda1720bcbb4dfaee572445703a5ed85b49"},
+    {"url":"https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/archive_2025-12.csv.gz","sha256":"9c95c68383e9fcf0cff2beebde347934bada60d22593a86b7ec3dc74f6d7dbd5"},
+    {"url":"https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/archive_2026-01.csv.gz","sha256":"be0f6cf1e882cce5a0efc2a4e3dd01349a45db1a270126f48887928a111fc198"},
+    {"url":"https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/archive_2026-02.csv.gz","sha256":"eee9a847edf86b394ed66ae9efc1972d731faac0f68d1bbfbb4eb1b7f5a24a2d"},
+    {"url":"https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/archive_2026-03.csv.gz","sha256":"f2d94854db5df05b88a950ad2a92bcf690ba5739013ffebe23d2db752807ee55"},
+    {"url":"https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/archive_2026-04.csv.gz","sha256":"b319940a359f954c9167602a56a79acff786fab2c51ac99b680f097c8e5207ef"},
+    {"url":"https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/archive_2026-05.csv.gz","sha256":"048c26007edfcfe83e0efc062837f7f021a4b8a996f23b454a1837449a9b0629"}
+  ],
+  "pricing_type": "on_demand",
+  "target_generations": ["H100", "B200"],
+  "cross_generation_pool": ["H100", "H200", "B200"],
+  "memory_bandwidth_tb_s": {"H100":3.35,"H200":4.8,"B200":8.0},
+  "minimum_cross_generation_sources": 2,
+  "horizon_months": [1,3,6,12],
+  "minimum_origins_for_supported_result": 4,
+  "minimum_prior_months_for_depreciation": 3,
+  "material_improvement_fraction": 0.05,
+  "advancement_gate": {
+    "required_generations": ["H100","B200"],
+    "required_supported_horizons_per_generation": 1,
+    "comparison_subset": "changed_outcomes",
+    "challenger": "bandwidth_cross_generation",
+    "baselines": ["random_walk","depreciation"],
+    "minimum_relative_error_reduction_vs_each_baseline": 0.05
+  },
+  "index_policy": {
+    "provider_daily": "median price_per_gpu_hour within provider/date/generation after exact raw on_demand filtering",
+    "generation_daily": "equal-provider median of provider_daily values",
+    "generation_monthly": "last available generation_daily observation in each calendar month",
+    "no_interpolation": true,
+    "deduplicate_exact_rows": true
+  },
+  "forecast_policy": {
+    "random_walk": "origin target-generation month-end index",
+    "depreciation": "origin price times exp(min(0, OLS log-price slope per observed calendar month) * horizon); fit only from target-generation monthly observations available through origin",
+    "bandwidth_cross_generation": "requires at least two other generations in the origin month; median origin-month price_per_bandwidth of those other generations multiplied by target-generation frozen memory bandwidth",
+    "changed_outcomes": "realized target index differs from origin target index by any nonzero amount",
+    "no_future_information": true
+  },
+  "boundaries": {"no_private_input":true,"no_interpolation":true,"no_broker_or_runtime_authority":true,"no_promotion_authority":true,"no_live_trading_change":true}
+}
