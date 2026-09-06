@@ -13,7 +13,10 @@ permissions:
 env:
   RESPONSE_ROOT: rendezvous/responses
   RECIPIENT_ROOT: rendezvous/recipients
+  PRODUCER_REQUEST_ROOT: rendezvous/producer-requests
   EXCHANGE_REF: rendezvous-exchange
+  P03_MM_COMMIT: 0d9f132c8b45f685dfd0560975c28e46abc93e15
+  P03_HARNESS: mm_p03_position_duration_operator_context_v1
 
 jobs:
   consume:
@@ -44,12 +47,14 @@ jobs:
           print('P03_BINDING_EPHEMERAL_RUN_ID='+os.environ['GITHUB_RUN_ID'])
           print('P03_BINDING_EPHEMERAL_RECIPIENT_KEY_ID='+recipient['recipient_key_id'])
           PY
-      - name: Publish public recipient to exchange branch
+      - name: Publish recipient and producer request to exchange branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           recipient_path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}.json"
+          request_path="${PRODUCER_REQUEST_ROOT}/${GITHUB_RUN_ID}.json"
+          response_path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/sealed-envelope.json"
           payload="$(base64 -w0 "$RUNNER_TEMP/p03-binding-recipient.json")"
           body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
           import json,sys
@@ -58,7 +63,31 @@ jobs:
           PY
           )"
           curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${recipient_path}" -d "$body" >/dev/null
+          python - "$recipient_path" "$response_path" <<'PY' > "$RUNNER_TEMP/p03-producer-request.json"
+          import json,os,sys
+          recipient_path,response_path=sys.argv[1:]
+          print(json.dumps({
+            'schema':'p03-private-binding-producer-request-v1',
+            'run_id':os.environ['GITHUB_RUN_ID'],
+            'parent_id':'P03',
+            'authority':'research_only',
+            'harness':os.environ['P03_HARNESS'],
+            'mm_commit':os.environ['P03_MM_COMMIT'],
+            'recipient_path':recipient_path,
+            'expected_envelope_path':response_path,
+            'exchange_ref':os.environ['EXCHANGE_REF']
+          },sort_keys=True))
+          PY
+          request_payload="$(base64 -w0 "$RUNNER_TEMP/p03-producer-request.json")"
+          request_body="$(python - "$request_payload" "$EXCHANGE_REF" <<'PY'
+          import json,sys
+          content,branch=sys.argv[1:]
+          print(json.dumps({'message':'rendezvous: publish one-run P03 producer request','content':content,'branch':branch}))
+          PY
+          )"
+          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${request_path}" -d "$request_body" >/dev/null
           echo "P03_BINDING_EPHEMERAL_RECIPIENT_PATH=${recipient_path}"
+          echo "P03_BINDING_PRODUCER_REQUEST_PATH=${request_path}"
       - name: Wait for structurally valid run-bound encrypted envelope
         env:
           GH_TOKEN: ${{ github.token }}
@@ -102,4 +131,4 @@ jobs:
           python scripts/p03_private_binding_contract_consumer_v1.py --envelope "$RUNNER_TEMP/p03-binding-envelope.json" --private-key "$RUNNER_TEMP/p03-binding-private-key.b64" --run-id "$GITHUB_RUN_ID"
       - name: Remove one-run private material
         if: always()
-        run: rm -f "$RUNNER_TEMP/p03-binding-private-key.b64" "$RUNNER_TEMP/p03-binding-recipient.json" "$RUNNER_TEMP/p03-binding-envelope.json" "$RUNNER_TEMP/p03-binding-envelope.candidate.json"
+        run: rm -f "$RUNNER_TEMP/p03-binding-private-key.b64" "$RUNNER_TEMP/p03-binding-recipient.json" "$RUNNER_TEMP/p03-producer-request.json" "$RUNNER_TEMP/p03-binding-envelope.json" "$RUNNER_TEMP/p03-binding-envelope.candidate.json"
