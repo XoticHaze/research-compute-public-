@@ -1,0 +1,59 @@
+{
+  "schema": "public_compute.semiconductor_volume_liquidity_path_head.decision.v1",
+  "source_preflight_pr": 36,
+  "source_model_pr": 37,
+  "workflow_run": 34001615212,
+  "artifact_id": 9979652414,
+  "artifact_digest": "sha256:ed25f2759f74851167e60de643ae4538a398adab2f59159f017f322b075f845d",
+  "development_universe": ["AMAT", "APH", "KLAC", "LRCX", "TXN", "NXPI", "ADI"],
+  "external_panels_loaded": false,
+  "source_plane": {
+    "common_positive_price_volume_rows": 3186,
+    "minimum_complete_feature_rows_per_development_symbol": 3060,
+    "features": [
+      "volume_surprise252",
+      "volume_ratio20_60",
+      "dollar_volume_surprise252",
+      "amihud20",
+      "sector_volume_surprise_breadth",
+      "sector_volume_surprise_dispersion"
+    ]
+  },
+  "mfe20": {
+    "control_spearman": 0.17250094837838745,
+    "challenger_spearman": 0.19220486962066297,
+    "control_mae": 550.7949854567784,
+    "challenger_mae": 544.773295734417,
+    "challenger_median_baseline_mae": 554.2213336042151,
+    "spearman_improvement_folds_vs_control": 2,
+    "mae_improvement_folds_vs_control": 4,
+    "robust_information_increment": false
+  },
+  "adverse_excursion20": {
+    "control_spearman": -0.036042669449634336,
+    "challenger_spearman": -0.02825039488878442,
+    "control_mae": 449.9220820142693,
+    "challenger_mae": 448.12775828596807,
+    "challenger_median_baseline_mae": 413.87611208743095,
+    "robust_information_increment": false
+  },
+  "terminal_net200": {
+    "control_spearman": -0.03295840449507033,
+    "challenger_spearman": -0.02905029814923227,
+    "control_mae": 843.0889997825492,
+    "challenger_mae": 838.8480242828689,
+    "challenger_median_baseline_mae": 765.1093463807126,
+    "robust_information_increment": false
+  },
+  "decision": "VOLUME_LIQUIDITY_INFORMATION_NOT_JUSTIFIED_FOR_PATH_HEADS",
+  "consequence": {
+    "carry_volume_liquidity_into_multi_head_architecture": false,
+    "post_hoc_feature_tuning_authorized": false,
+    "next_information_direction": "causal semiconductor-cycle/fundamental information rather than additional market-derived transforms"
+  },
+  "research_only": true,
+  "promotion_authority": false,
+  "runtime_mutation": false,
+  "broker_action": false,
+  "live_trading_change": false
+}
