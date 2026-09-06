@@ -1,2 +1,0 @@
-PR285 first real encrypted private-input rendezvous proof.
-No private data is contained in this request file.
