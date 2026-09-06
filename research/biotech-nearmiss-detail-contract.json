@@ -1,0 +1,26 @@
+{
+  "schema": "research_compute_public.rc001_biotech_nearmiss_detail_contract.v1",
+  "scientific_parent": {
+    "public_batch2_pr": 38,
+    "public_batch2_run": 34002308237,
+    "accepted_stagea_adapter_commit": "2d8995ba66502a4de25c64c1c32a67e132b05522",
+    "accepted_stagea_adapter_blob": "9f7f802469dc6a33abd3431295d5232ebc4289c5"
+  },
+  "family": {
+    "biotech": {
+      "development_universe": ["REGN", "VRTX", "GILD", "BIIB", "ALNY", "INCY", "BMRN", "UTHR"],
+      "primary_industry_etf": "XBI"
+    }
+  },
+  "frozen_cutoff": "2026-09-01T13:30:00+00:00",
+  "expected_passing_symbols": 4,
+  "required_passing_symbols": 5,
+  "purpose": "Decompose the already-observed 4/8 Biotech development near-miss by symbol and fold before deciding whether a distinct architecture is justified. This run cannot change the frozen family decision or expose external holdouts.",
+  "external_holdouts_loaded": false,
+  "threshold_search": false,
+  "hyperparameter_search": false,
+  "promotion_authority": false,
+  "runtime_mutation": false,
+  "broker_action": false,
+  "live_trading_change": false
+}
