@@ -1,0 +1,29 @@
+name: P09 MNQ Multihorizon External Validation
+on:
+  pull_request:
+    paths:
+      - 'scripts/p09_mnq_multihorizon_external_validation_v1.py'
+      - '.github/workflows/p09-mnq-multihorizon-external.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install fixed research dependencies
+        run: python -m pip install --disable-pip-version-check pandas numpy yfinance
+      - name: Compile
+        run: python -m py_compile scripts/p09_mnq_multihorizon_external_validation_v1.py
+      - name: Execute external transfer discriminator
+        run: python scripts/p09_mnq_multihorizon_external_validation_v1.py | tee p09-receipt.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p09-mnq-multihorizon-external-${{ github.sha }}
+          path: p09-receipt.txt
+          if-no-files-found: error
+          retention-days: 30
