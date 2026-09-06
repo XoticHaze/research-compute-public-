@@ -1,0 +1,146 @@
+name: P05 Alpha Persistence 20260906
+
+on:
+  push:
+    paths:
+      - '.github/workflows/p05-alpha-persistence-20260906.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install numerical dependencies
+        run: python -m pip install --disable-pip-version-check -q numpy==2.4.6 pandas==3.0.5
+      - name: Execute matched-benchmark chronology-split persistence test
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from urllib.parse import urlencode
+          from urllib.request import Request, urlopen
+          import numpy as np
+          import pandas as pd
+
+          START='2022-02-01'
+          END='2026-09-06'
+          SWITCH_COST_BPS=10.0
+          PAIRS={
+              'CEG_vs_XLU':('CEG','XLU'),
+              'CRAK_vs_XLE':('CRAK','XLE'),
+              'MPC_vs_CRAK':('MPC','CRAK'),
+              'VLO_vs_CRAK':('VLO','CRAK'),
+          }
+
+          def epoch(text):
+              return int(datetime.fromisoformat(text).replace(tzinfo=timezone.utc).timestamp())
+
+          def load(symbol):
+              q=urlencode({'period1':epoch(START),'period2':epoch(END),'interval':'1d','events':'history','includeAdjustedClose':'true'})
+              req=Request(f'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?{q}',headers={'User-Agent':'Mozilla/5.0 research-compute/1.0'})
+              with urlopen(req,timeout=30) as r:
+                  payload=json.loads(r.read().decode())
+              result=(payload.get('chart',{}).get('result') or [None])[0]
+              if not result: raise RuntimeError(f'{symbol}: no chart result')
+              ts=result.get('timestamp') or []
+              ind=result.get('indicators',{})
+              adj=(ind.get('adjclose') or [{}])[0].get('adjclose')
+              close=adj or (ind.get('quote') or [{}])[0].get('close')
+              return pd.Series(pd.to_numeric(pd.Series(close),errors='coerce').to_numpy(),index=pd.to_datetime(ts,unit='s',utc=True),name=symbol).dropna().sort_index()
+
+          syms=sorted(set(['SPY']+[x for pair in PAIRS.values() for x in pair]))
+          px={s:load(s) for s in syms}
+
+          def max_dd(series):
+              r=series/series.cummax()-1.0
+              return float(r.min())
+
+          def evaluate(name,cand,bench):
+              df=pd.concat([px[cand],px[bench],px['SPY']],axis=1,join='inner').dropna()
+              c,b,m=df[cand],df[bench],df['SPY']
+              out={'candidate':cand,'benchmark':bench,'broad_market':'SPY','first':df.index[0].isoformat(),'last':df.index[-1].isoformat(),'rows':int(len(df))}
+              horizons={}
+              for h in (5,10,20,60,120):
+                  if len(df)<=h: continue
+                  cr=float(c.iloc[-1]/c.iloc[-1-h]-1)
+                  br=float(b.iloc[-1]/b.iloc[-1-h]-1)
+                  mr=float(m.iloc[-1]/m.iloc[-1-h]-1)
+                  horizons[str(h)]={'candidate_return_pct':100*cr,'benchmark_return_pct':100*br,'spy_return_pct':100*mr,'excess_vs_benchmark_pp':100*(cr-br),'excess_vs_spy_pp':100*(cr-mr)}
+              out['current_horizons']=horizons
+
+              rel20=c.pct_change(20)-b.pct_change(20)
+              usable=pd.DataFrame({'rel20':rel20,'c':c,'b':b}).dropna().iloc[:-20]
+              split=max(1,int(len(usable)*0.60))
+              train=usable.iloc[:split]
+              test=usable.iloc[split:]
+              threshold=float(train.rel20.quantile(0.80))
+              events=[]; last_pos=-999
+              full_index=df.index
+              positions={ts:i for i,ts in enumerate(full_index)}
+              for ts,row in test.iterrows():
+                  pos=positions[ts]
+                  if row.rel20 < threshold or pos-last_pos < 20 or pos+20>=len(df):
+                      continue
+                  c_f=float(c.iloc[pos+20]/c.iloc[pos]-1)
+                  b_f=float(b.iloc[pos+20]/b.iloc[pos]-1)
+                  ex=(c_f-b_f)*10000.0-SWITCH_COST_BPS
+                  events.append({'signal_date':ts.isoformat(),'forward20_candidate_pct':100*c_f,'forward20_benchmark_pct':100*b_f,'forward20_excess_net_bps':ex})
+                  last_pos=pos
+              vals=np.array([e['forward20_excess_net_bps'] for e in events],dtype=float)
+              persistence={
+                  'train_fraction':0.60,
+                  'threshold_train_q80_20d_excess_pp':100*threshold,
+                  'test_start':None if test.empty else test.index[0].isoformat(),
+                  'event_thinning_sessions':20,
+                  'switch_cost_bps':SWITCH_COST_BPS,
+                  'events':len(events),
+                  'mean_forward20_excess_net_bps':None if len(vals)==0 else float(vals.mean()),
+                  'median_forward20_excess_net_bps':None if len(vals)==0 else float(np.median(vals)),
+                  'win_rate':None if len(vals)==0 else float((vals>0).mean()),
+                  'event_details':events,
+              }
+              out['historical_oos_persistence']=persistence
+              tail=c.tail(min(120,len(c)))
+              btail=b.tail(min(120,len(b)))
+              out['risk_120_session']={
+                  'candidate_ann_vol_pct':float(tail.pct_change().std(ddof=0)*np.sqrt(252)*100),
+                  'benchmark_ann_vol_pct':float(btail.pct_change().std(ddof=0)*np.sqrt(252)*100),
+                  'candidate_max_drawdown_pct':100*max_dd(tail),
+                  'benchmark_max_drawdown_pct':100*max_dd(btail),
+              }
+              current20=horizons.get('20',{}).get('excess_vs_benchmark_pp')
+              p=persistence
+              if current20 is not None and current20>0 and p['events']>=5 and p['mean_forward20_excess_net_bps'] is not None and p['mean_forward20_excess_net_bps']>0 and p['win_rate']>=0.55:
+                  decision='CONTINUE_ROBUSTNESS'
+              elif current20 is not None and current20>0 and (p['events']<5 or p['mean_forward20_excess_net_bps'] is None):
+                  decision='HOLD_INSUFFICIENT_OOS_ANALOGS'
+              else:
+                  decision='DO_NOT_CHASE_CURRENT_EXCESS'
+              out['decision']=decision
+              return out
+
+          result={k:evaluate(k,*v) for k,v in PAIRS.items()}
+          payload={
+              'schema':'p05.matched_benchmark_alpha_persistence.v1',
+              'generated_at':datetime.now(timezone.utc).isoformat(),
+              'source':'Yahoo chart adjusted daily via fixed HTTPS endpoint',
+              'window':{'start':START,'end_exclusive':END},
+              'method':'Current matched-window returns plus chronology-split historical persistence. Threshold is q80 of prior 20-session excess learned on first 60% of usable history; evaluated only on later 40%; signals thinned by 20 sessions; forward excess charged 10 bps switching cost.',
+              'pairs':result,
+              'research_only':True,'allocation_authority':False,'promotion_authority':False,'runtime_mutation':False,'live_trading_change':False
+          }
+          open('p05-alpha-persistence-20260906.json','w').write(json.dumps(payload,indent=2,sort_keys=True)+'\n')
+          print('P05_ALPHA_PERSISTENCE='+json.dumps(payload,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p05-alpha-persistence-20260906
+          path: p05-alpha-persistence-20260906.json
+          retention-days: 14
