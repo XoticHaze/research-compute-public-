@@ -101,15 +101,15 @@ def main():
     label_terms = ",".join("?" for _ in all_labels)
     form_terms = ",".join("?" for _ in FORMS)
     sql = f"""
-        SELECT end, accn, fy, fp, form, filed, item, label, description,
-               unit_type, val_text, frame, start, val_dec, source_folder, filename
+        SELECT "end", accn, fy, fp, form, filed, item, label, description,
+               unit_type, val_text, frame, "start", val_dec, source_folder, filename
         FROM read_parquet(?, union_by_name=true, filename=true)
         WHERE ({folder_terms})
           AND label IN ({label_terms})
           AND UPPER(COALESCE(unit_type, '')) = 'USD'
           AND filed >= ? AND filed <= ?
           AND form IN ({form_terms})
-        ORDER BY source_folder, filed, accn, label, end NULLS FIRST, start NULLS FIRST
+        ORDER BY source_folder, filed, accn, label, "end" NULLS FIRST, "start" NULLS FIRST
     """
     params = [urls, *[f"CIK{cik}_%" for cik in SYMBOL_CIKS.values()], *all_labels, START_FILED, CUTOFF_FILED, *FORMS]
     cur = con.execute(sql, params)
