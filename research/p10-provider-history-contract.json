@@ -20,6 +20,10 @@
     {
       "url": "https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/archive_2026-03.csv.gz",
       "sha256": "f2d94854db5df05b88a950ad2a92bcf690ba5739013ffebe23d2db752807ee55"
+    },
+    {
+      "url": "https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/archive_2026-04.csv.gz",
+      "sha256": "b319940a359f954c9167602a56a79acff786fab2c51ac99b680f097c8e5207ef"
     }
   ],
   "memory_bandwidth_tb_s": {
