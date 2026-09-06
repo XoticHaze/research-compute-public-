@@ -21,10 +21,13 @@ def main():
     con.execute("INSTALL httpfs")
     con.execute("LOAD httpfs")
     schema = [r[0] for r in con.execute(f"DESCRIBE SELECT * FROM read_parquet('{URL}')").fetchall()]
-    required = {"source_folder", "label", "unit", "filed", "form", "accn"}
+    required = {"source_folder", "label", "unit_type", "filed", "form", "accn"}
     missing = sorted(required - set(schema))
     if missing:
         raise RuntimeError(f"root parquet missing required columns={missing}; columns={schema}")
+    unit_values = [str(r[0]) for r in con.execute(
+        f"SELECT DISTINCT unit_type FROM read_parquet('{URL}') WHERE source_folder LIKE 'CIK0000006951_%' AND label='Assets' LIMIT 20"
+    ).fetchall()]
     row = con.execute(
         f"""
         SELECT COUNT(*) AS rows,
@@ -35,16 +38,17 @@ def main():
         FROM read_parquet('{URL}')
         WHERE source_folder LIKE 'CIK0000006951_%'
           AND label = 'Assets'
-          AND UPPER(COALESCE(unit, '')) = 'USD'
+          AND UPPER(COALESCE(unit_type, '')) = 'USD'
           AND filed >= '2014-01-01' AND filed <= '2026-09-03'
           AND form IN ('10-Q','10-K','20-F','40-F')
         """
     ).fetchone()
     receipt = {
-        "schema": "public_compute.sec_hf_root_parquet_probe.v1",
+        "schema": "public_compute.sec_hf_root_parquet_probe.v2",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": URL,
         "columns": schema,
+        "asset_unit_type_values": unit_values,
         "probe": {
             "symbol": "AMAT",
             "cik": "0000006951",
@@ -78,7 +82,7 @@ if __name__ == "__main__":
         raise
     except Exception as exc:
         failure = {
-            "schema": "public_compute.sec_hf_root_parquet_probe.v1",
+            "schema": "public_compute.sec_hf_root_parquet_probe.v2",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "source": URL,
             "status": "TRANSPORT_OR_SCHEMA_FAILURE",
