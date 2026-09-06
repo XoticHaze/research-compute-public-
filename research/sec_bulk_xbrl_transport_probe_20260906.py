@@ -13,7 +13,7 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 OUT = Path("sec_bulk_xbrl_transport_probe_20260906.json")
-UA = "research-compute-public/1.0 (+https://github.com/XoticHaze/research-compute-public-)"
+UA = "XoticHaze research-compute-public 152584286+XoticHaze@users.noreply.github.com"
 ROUTES = {
     "official_companyfacts_bulk": "https://www.sec.gov/Archives/edgar/daily-index/xbrl/companyfacts.zip",
     "official_xbrl_archive_index": "https://www.sec.gov/Archives/edgar/daily-index/xbrl/",
