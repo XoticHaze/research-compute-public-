@@ -2,9 +2,9 @@ from __future__ import annotations
 
 """Materialize the frozen semiconductor SEC fundamental cache from the remote SEC FSD database.
 
-This is a source-only point-in-time consumer of the transport proven by
-sec_datapond_transport_probe_20260906.py. It preserves SEC filing dates and accession
-identities, freezes six semantic categories before model outcomes, and computes no target/model.
+The remote DuckDB transport was already proven. This version deliberately performs one
+batched seven-CIK/all-tag query so the source is scanned once rather than issuing dozens
+of small HTTP-range queries that previously triggered Hugging Face 429 responses.
 """
 
 import hashlib
@@ -31,8 +31,6 @@ SYMBOL_CIKS = {
     "NXPI": "0001413447",
     "ADI": "0000006281",
 }
-
-# Standard XBRL element names corresponding to the already-frozen semantic categories.
 TAGS = {
     "revenue": (
         "RevenueFromContractWithCustomerExcludingAssessedTax",
@@ -41,10 +39,7 @@ TAGS = {
         "Revenue",
     ),
     "gross_profit": ("GrossProfit",),
-    "operating_income": (
-        "OperatingIncomeLoss",
-        "ProfitLossFromOperatingActivities",
-    ),
+    "operating_income": ("OperatingIncomeLoss", "ProfitLossFromOperatingActivities"),
     "assets": ("Assets",),
     "inventory": (
         "InventoryNet",
@@ -57,6 +52,7 @@ TAGS = {
         "CashAndCashEquivalents",
     ),
 }
+ROW_NAMES = ("adsh", "cik", "filed", "form", "fy", "fp", "tag", "version", "ddate", "qtrs", "uom", "coreg", "value")
 
 
 def connect_remote():
@@ -72,7 +68,9 @@ def placeholders(n: int) -> str:
     return ",".join("?" for _ in range(n))
 
 
-def candidate_rows(con, cik: str, tag: str):
+def batched_rows(con):
+    ciks = tuple(SYMBOL_CIKS.values())
+    tags = tuple(sorted({tag for group in TAGS.values() for tag in group}))
     sql = f"""
         SELECT
             s.adsh,
@@ -90,15 +88,16 @@ def candidate_rows(con, cik: str, tag: str):
             n.value
         FROM submissions AS s
         JOIN numbers AS n USING (adsh)
-        WHERE LPAD(CAST(s.cik AS VARCHAR), 10, '0') = ?
+        WHERE LPAD(CAST(s.cik AS VARCHAR), 10, '0') IN ({placeholders(len(ciks))})
           AND s.form IN ({placeholders(len(FORMS))})
           AND s.filed >= ?
           AND s.filed <= ?
-          AND n.tag = ?
+          AND n.tag IN ({placeholders(len(tags))})
           AND UPPER(COALESCE(n.uom, '')) = 'USD'
-        ORDER BY s.filed, s.adsh, n.ddate, n.qtrs, n.coreg NULLS FIRST
+        ORDER BY cik, s.filed, s.adsh, n.tag, n.ddate, n.qtrs, n.coreg NULLS FIRST
     """
-    return con.execute(sql, [cik, *FORMS, START_FILED, CUTOFF_FILED, tag]).fetchall()
+    params = [*ciks, *FORMS, START_FILED, CUTOFF_FILED, *tags]
+    return con.execute(sql, params).fetchall()
 
 
 def summarize(rows):
@@ -115,12 +114,11 @@ def summarize(rows):
 
 
 def compact(rows):
-    names = ("adsh", "cik", "filed", "form", "fy", "fp", "tag", "version", "ddate", "qtrs", "uom", "coreg", "value")
     out = []
     seen = set()
     for row in rows:
-        rec = {k: (None if v is None else str(v)) for k, v in zip(names, row)}
-        key = tuple(rec[k] for k in names)
+        rec = {k: (None if v is None else str(v)) for k, v in zip(ROW_NAMES, row)}
+        key = tuple(rec[k] for k in ROW_NAMES)
         if key in seen:
             continue
         seen.add(key)
@@ -134,15 +132,20 @@ def canonical_bytes(obj):
 
 def main():
     con = connect_remote()
-    schemas = {}
-    for table in ("submissions", "numbers", "tags"):
-        schemas[table] = [str(r[0]) for r in con.execute(f"DESCRIBE {table}").fetchall()]
+    schemas = {table: [str(r[0]) for r in con.execute(f"DESCRIBE {table}").fetchall()] for table in ("submissions", "numbers", "tags")}
     for col in ("adsh", "cik", "filed", "form", "fy", "fp"):
         if col not in schemas["submissions"]:
             raise RuntimeError(f"submissions missing required column {col}: {schemas['submissions']}")
     for col in ("adsh", "tag", "version", "ddate", "qtrs", "uom", "coreg", "value"):
         if col not in schemas["numbers"]:
             raise RuntimeError(f"numbers missing required column {col}: {schemas['numbers']}")
+
+    rows = batched_rows(con)
+    if not rows:
+        raise RuntimeError("batched SEC FSD query returned zero rows")
+    by_cik_tag = {}
+    for row in rows:
+        by_cik_tag.setdefault((str(row[1]), str(row[6])), []).append(row)
 
     coverage = {}
     cache_symbols = {}
@@ -154,13 +157,10 @@ def main():
             candidates = []
             rows_by_tag = {}
             for tag in tags:
-                rows = candidate_rows(con, cik, tag)
-                rows_by_tag[tag] = rows
-                candidates.append({"tag": tag, **summarize(rows)})
-            candidates.sort(
-                key=lambda x: (x["distinct_filings"], x["filed_years"], x["rows"]),
-                reverse=True,
-            )
+                part = by_cik_tag.get((cik, tag), [])
+                rows_by_tag[tag] = part
+                candidates.append({"tag": tag, **summarize(part)})
+            candidates.sort(key=lambda x: (x["distinct_filings"], x["filed_years"], x["rows"]), reverse=True)
             selected = dict(candidates[0])
             selected["eligible"] = bool(
                 selected["distinct_filings"] >= MIN_DISTINCT_FILINGS
@@ -168,10 +168,7 @@ def main():
             )
             all_eligible = all_eligible and selected["eligible"]
             category_receipts[category] = {"selected": selected, "candidates": candidates}
-            cache_categories[category] = {
-                "tag": selected["tag"],
-                "rows": compact(rows_by_tag[selected["tag"]]),
-            }
+            cache_categories[category] = {"tag": selected["tag"], "rows": compact(rows_by_tag[selected["tag"]])}
         coverage[symbol] = {"cik": cik, "categories": category_receipts}
         cache_symbols[symbol] = {"cik": cik, "categories": cache_categories}
 
@@ -179,6 +176,7 @@ def main():
         "schema": "public_compute.semiconductor_sec_fundamental_cache.v1",
         "source": "erlenbusch/sec-edgar public-domain DuckDB derived from SEC Financial Statement Data Sets",
         "source_database": REMOTE_DB,
+        "transport": "one batched direct remote DuckDB query",
         "development_universe": list(SYMBOL_CIKS),
         "filing_time_authority": "SEC Financial Statement Data Sets submissions.filed; consumers must enforce filed <= signal date",
         "filed_window": {"start": START_FILED, "cutoff": CUTOFF_FILED},
@@ -188,14 +186,13 @@ def main():
     raw = canonical_bytes(cache)
     sha = hashlib.sha256(raw).hexdigest()
     CACHE.write_bytes(raw + b"\n")
-
     status = "PASS" if all_eligible else "FAIL"
     receipt = {
-        "schema": "public_compute.sec_datapond_semiconductor_preflight.v1",
+        "schema": "public_compute.sec_datapond_semiconductor_preflight.v2-batched",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": cache["source"],
         "source_database": REMOTE_DB,
-        "transport": "direct Hugging Face remote DuckDB attach",
+        "transport": cache["transport"],
         "development_universe": list(SYMBOL_CIKS),
         "semantic_categories_frozen_before_model_outcomes": list(TAGS),
         "eligibility_gate": {
@@ -232,7 +229,7 @@ if __name__ == "__main__":
         raise
     except Exception as exc:
         failure = {
-            "schema": "public_compute.sec_datapond_semiconductor_preflight.v1",
+            "schema": "public_compute.sec_datapond_semiconductor_preflight.v2-batched",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "status": "TRANSPORT_OR_SCHEMA_FAILURE",
             "error": str(exc),
