@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'research/compute_provider_breadth_forward.py'
+      - 'research/compute_provider_breadth_forward_runner.py'
       - 'research/p10-provider-breadth-contract.json'
       - '.github/workflows/p10-provider-breadth-forward.yml'
   workflow_dispatch:
@@ -19,7 +20,7 @@ jobs:
           python-version: '3.11'
       - name: Execute provider-breadth forward discriminator and cache panel
         run: |
-          python research/compute_provider_breadth_forward.py \
+          python research/compute_provider_breadth_forward_runner.py \
             research/p10-provider-breadth-contract.json \
             p10-provider-month-panel-20260729.csv.gz \
             p10-provider-breadth-result.json
