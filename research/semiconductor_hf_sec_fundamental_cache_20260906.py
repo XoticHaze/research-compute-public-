@@ -45,17 +45,29 @@ LABELS = {
 
 def discover_folder(paths, cik: str):
     prefix = f"CIK{cik}_"
-    folders = sorted({p.split("/", 1)[0] for p in paths if p.startswith(prefix) and "/" in p})
+    folders = sorted({part for p in paths for part in p.split("/") if part.startswith(prefix)})
     if len(folders) != 1:
-        raise RuntimeError(f"CIK{cik}: expected one repository folder, got {folders}")
+        hits = [p for p in paths if cik in p][:20]
+        raise RuntimeError(
+            f"CIK{cik}: expected one repository folder, got {folders}; "
+            f"path_count={len(paths)} cik_hits={hits} path_sample={paths[:10]}"
+        )
     return folders[0]
 
 
+def locate_rel(paths, folder: str, filename: str):
+    suffix = f"{folder}/{filename}"
+    matches = [p for p in paths if p == suffix or p.endswith("/" + suffix)]
+    if len(matches) > 1:
+        raise RuntimeError(f"{suffix}: ambiguous repository paths={matches}")
+    return matches[0] if matches else None
+
+
 def load_fact_frames(paths, revision: str, folder: str):
-    available = set(paths); frames = []; loaded = []
+    frames = []; loaded = []
     for filename in ("Facts_UsGaap.parquet", "Facts_IfrsFull.parquet"):
-        rel = f"{folder}/{filename}"
-        if rel not in available:
+        rel = locate_rel(paths, folder, filename)
+        if not rel:
             continue
         local = hf_hub_download(repo_id=DATASET, repo_type="dataset", filename=rel, revision=revision)
         raw = Path(local).read_bytes()
@@ -137,7 +149,7 @@ def main():
     cache = {"schema":"public_compute.semiconductor_sec_fundamental_cache.v1","source_dataset":DATASET,"source_dataset_revision":revision,"source_last_modified":str(info.last_modified) if info.last_modified else None,"development_universe":list(SYMBOLS),"filing_time_authority":"mirrored SEC filed field; consumers must enforce filed <= signal date","filed_window":{"start":START_FILED,"cutoff":CUTOFF_FILED},"semantic_categories":list(LABELS),"symbols":cache_symbols}
     raw=canonical_bytes(cache); cache_sha=hashlib.sha256(raw).hexdigest(); CACHE.write_bytes(raw+b"\n")
     status="PASS" if all_eligible else "FAIL"
-    receipt={"schema":"public_compute.semiconductor_hf_sec_fundamental_preflight.v3","generated_at":datetime.now(timezone.utc).isoformat(),"source_dataset":DATASET,"source_dataset_revision":revision,"source_last_modified":cache["source_last_modified"],"transport":"huggingface_hub paginated list_repo_files + targeted hf_hub_download","development_universe":list(SYMBOLS),"semantic_categories_frozen_before_model_outcomes":list(LABELS),"eligibility_gate":{"minimum_distinct_filings_per_category_per_symbol":MIN_DISTINCT_FILINGS,"minimum_filed_years_per_category_per_symbol":MIN_FILED_YEARS,"all_six_categories_required":True},"coverage":coverage,"normalized_cache":{"path":str(CACHE),"sha256":cache_sha,"bytes":len(raw)+1},"status":status,"targets_computed":False,"model_executed":False,"external_semiconductor_holdouts_loaded":False,"next_boundary":"PASS authorizes committing this exact normalized public cache and one development-only point-in-time information-value consumer against PR31/PR34 control","research_only":True,"promotion_authority":False,"runtime_mutation":False,"broker_action":False,"live_trading_change":False}
+    receipt={"schema":"public_compute.semiconductor_hf_sec_fundamental_preflight.v4","generated_at":datetime.now(timezone.utc).isoformat(),"source_dataset":DATASET,"source_dataset_revision":revision,"source_last_modified":cache["source_last_modified"],"transport":"huggingface_hub paginated list_repo_files + targeted hf_hub_download","development_universe":list(SYMBOLS),"semantic_categories_frozen_before_model_outcomes":list(LABELS),"eligibility_gate":{"minimum_distinct_filings_per_category_per_symbol":MIN_DISTINCT_FILINGS,"minimum_filed_years_per_category_per_symbol":MIN_FILED_YEARS,"all_six_categories_required":True},"coverage":coverage,"normalized_cache":{"path":str(CACHE),"sha256":cache_sha,"bytes":len(raw)+1},"status":status,"targets_computed":False,"model_executed":False,"external_semiconductor_holdouts_loaded":False,"next_boundary":"PASS authorizes committing this exact normalized public cache and one development-only point-in-time information-value consumer against PR31/PR34 control","research_only":True,"promotion_authority":False,"runtime_mutation":False,"broker_action":False,"live_trading_change":False}
     OUT.write_text(json.dumps(receipt,indent=2,sort_keys=True)+"\n"); print("SEMICONDUCTOR_HF_SEC_FUNDAMENTAL_PREFLIGHT="+json.dumps(receipt,sort_keys=True))
     if status!="PASS": raise SystemExit(2)
 
@@ -146,5 +158,5 @@ if __name__=="__main__":
     try: main()
     except SystemExit: raise
     except Exception as exc:
-        failure={"schema":"public_compute.semiconductor_hf_sec_fundamental_preflight.v3","generated_at":datetime.now(timezone.utc).isoformat(),"source_dataset":DATASET,"development_universe":list(SYMBOLS),"status":"TRANSPORT_OR_SCHEMA_FAILURE","error":str(exc),"targets_computed":False,"model_executed":False,"external_semiconductor_holdouts_loaded":False,"research_only":True,"promotion_authority":False,"runtime_mutation":False,"broker_action":False,"live_trading_change":False}
+        failure={"schema":"public_compute.semiconductor_hf_sec_fundamental_preflight.v4","generated_at":datetime.now(timezone.utc).isoformat(),"source_dataset":DATASET,"development_universe":list(SYMBOLS),"status":"TRANSPORT_OR_SCHEMA_FAILURE","error":str(exc),"targets_computed":False,"model_executed":False,"external_semiconductor_holdouts_loaded":False,"research_only":True,"promotion_authority":False,"runtime_mutation":False,"broker_action":False,"live_trading_change":False}
         OUT.write_text(json.dumps(failure,indent=2,sort_keys=True)+"\n"); print("SEMICONDUCTOR_HF_SEC_FUNDAMENTAL_PREFLIGHT="+json.dumps(failure,sort_keys=True)); raise
