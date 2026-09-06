@@ -95,7 +95,7 @@ def sample(pos: int):
     hits = reads = 0
     tried = []
     shifts = [0, -CHUNK // 2, CHUNK // 2]
-    for multiple in (1, 2, 4, 8, 16):
+    for multiple in (1, 2, 4, 8, 16, 32, 64, 128):
         shifts.extend((-multiple * CHUNK, multiple * CHUNK))
     seen = set()
     for shift in shifts:
@@ -125,7 +125,7 @@ def sample(pos: int):
                 "network_reads": reads,
             }
         tried.append(at)
-    raise RuntimeError(f"no structurally valid rows within bounded +/-16MiB recovery around {pos}; tried={tried}")
+    raise RuntimeError(f"no structurally valid rows within sparse +/-128MiB recovery around {pos}; tried={tried}")
 
 
 def symbol_boundary(upper: bool):
