@@ -1,0 +1,45 @@
+{
+  "schema": "public_compute.semiconductor_risk_regime_representation.decision.v1",
+  "source_pr": 35,
+  "source_head": "d68e3eb3b7e62106b7d709d39ed39fc2e9ac09d4",
+  "workflow_run": 34001379158,
+  "artifact_id": 9979589206,
+  "artifact_digest": "sha256:f7a4976b9f82d4a2e7cf9d67b19a33b49a5df88e06dcb1ccf1ca1a3fc6571472",
+  "parent_mfe_breadth_pr": 34,
+  "development_universe": ["AMAT", "APH", "KLAC", "LRCX", "TXN", "NXPI", "ADI"],
+  "external_panels_loaded": false,
+  "control_19": {
+    "mfe20_spearman": 0.1719949329630304,
+    "mfe20_mae": 550.7519719532878,
+    "mfe20_median_baseline_mae": 554.2213374551336,
+    "adverse20_spearman": -0.034545236929565404,
+    "terminal_net200_spearman": -0.03473770298148702
+  },
+  "full_risk_regime": {
+    "mfe20_spearman": 0.1791475597299702,
+    "mfe20_mae": 557.1614940145353,
+    "mfe20_median_baseline_mae": 554.2213374551336,
+    "mfe20_spearman_improvement_folds_vs_control": 2,
+    "adverse20_spearman": -0.018322866929285964,
+    "adverse20_mae": 452.36935363270413,
+    "adverse20_median_baseline_mae": 413.87611338550795,
+    "terminal_net200_spearman": 0.008979878212040169,
+    "terminal_net200_mae": 844.7086100181384,
+    "terminal_net200_median_baseline_mae": 765.1089220121464
+  },
+  "diagnostics_not_authorized_for_cherry_pick": {
+    "own_risk_mfe_spearman": 0.18471901310008404,
+    "market_risk_adverse_spearman": -0.006770963341412061
+  },
+  "decision": "RISK_REGIME_REPRESENTATION_NOT_JUSTIFIED",
+  "consequence": {
+    "build_multi_head_risk_duration_from_this_representation": false,
+    "post_hoc_feature_family_tuning_authorized": false,
+    "next_information_direction": "genuinely distinct modality rather than further price-state engineering"
+  },
+  "research_only": true,
+  "promotion_authority": false,
+  "runtime_mutation": false,
+  "broker_action": false,
+  "live_trading_change": false
+}
