@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "research/medical_devices_alpha_fragility_discriminator_20260906.py"
+      - "research/medical_devices_alpha_fragility_discriminator_r2_20260906.py"
       - ".github/workflows/medical-devices-alpha-fragility-20260906.yml"
   workflow_dispatch:
 
@@ -25,11 +26,15 @@ jobs:
         run: |
           curl -fsSL https://raw.githubusercontent.com/XoticHaze/TextConverterToolbox/2d8995ba66502a4de25c64c1c32a67e132b05522/research/run_industry_stagea_public_runner_20260905.py -o /tmp/stagea_runner.py
           test "$(git hash-object /tmp/stagea_runner.py)" = 9f7f802469dc6a33abd3431295d5232ebc4289c5
-          python -m py_compile /tmp/stagea_runner.py research/medical_devices_alpha_fragility_discriminator_20260906.py
+          python -m py_compile \
+            /tmp/stagea_runner.py \
+            research/medical_devices_alpha_fragility_discriminator_20260906.py \
+            research/medical_devices_alpha_fragility_discriminator_r2_20260906.py
       - name: Execute exact-window benchmark and dependency discriminator
         run: |
-          python research/medical_devices_alpha_fragility_discriminator_20260906.py \
+          python research/medical_devices_alpha_fragility_discriminator_r2_20260906.py \
             --runner /tmp/stagea_runner.py \
+            --discriminator research/medical_devices_alpha_fragility_discriminator_20260906.py \
             --output medical-devices-alpha-fragility-receipt.json
           python -m json.tool medical-devices-alpha-fragility-receipt.json >/dev/null
           cat medical-devices-alpha-fragility-receipt.json >> "$GITHUB_STEP_SUMMARY"
