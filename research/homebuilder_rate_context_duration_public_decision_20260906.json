@@ -1,0 +1,62 @@
+{
+  "schema": "public_compute.homebuilder_rate_context_duration.decision.v1",
+  "scientific_authority": {
+    "repo": "XoticHaze/research-foundry",
+    "pr": 278
+  },
+  "public_foundry": {
+    "repo": "XoticHaze/research-compute-public-",
+    "pr": 33,
+    "workflow_run": 34001185763,
+    "head": "321feecf7f39c2d332275c95b8e0f0e5aaf23969",
+    "artifact_id": 9979544799,
+    "artifact_digest": "sha256:4634410cd34e5b9535d1a3434e6aac31fce9c9e3baf823e6965841b9c790dabe"
+  },
+  "parity": {
+    "classification": "LIVE_SOURCE_REPLAY_DRIFT_WITH_DECISION_PARITY",
+    "accepted_family_decisions_match": true,
+    "homebuilders_passing_symbols_actual": 5,
+    "homebuilders_passing_symbols_expected": 5
+  },
+  "experiment": {
+    "admission_changed": false,
+    "duration_horizons": [5, 60],
+    "loso_target_symbol_excluded": true,
+    "external_homebuilder_holdouts_loaded": false,
+    "private_source_or_data_transferred": false
+  },
+  "control": {
+    "trades": 474,
+    "h5_share": 0.5780590717299579,
+    "mean_hold_sessions": 28.206751054852322,
+    "mean_net25_bps": 273.1409676402737,
+    "mean_matched_itb_excess_bps": 32.310580506234395,
+    "duration_mae_bps_per_session": 56.90712968488294
+  },
+  "rate_context": {
+    "trades": 584,
+    "h5_share": 0.6866438356164384,
+    "mean_hold_sessions": 22.23458904109589,
+    "mean_net25_bps": 222.80332061479157,
+    "mean_matched_itb_excess_bps": 16.37623628458827,
+    "duration_mae_bps_per_session": 58.625936942404444
+  },
+  "breadth_and_concentration": {
+    "economic_improvement_folds": 2,
+    "mae_improvement_folds": 1,
+    "max_positive_symbol_share": 0.8391294044440453,
+    "max_positive_year_share": 0.8703980894033012
+  },
+  "decision": "REJECT_RATE_CONTEXT_DURATION_DEVELOPMENT",
+  "consequence": {
+    "create_rate_context_prospective_observer": false,
+    "change_validated_homebuilder_admission": false,
+    "change_existing_plain_5_60_prospective_observer": false,
+    "post_hoc_rate_feature_or_alpha_tuning_authorized": false
+  },
+  "research_only": true,
+  "promotion_authority": false,
+  "runtime_mutation": false,
+  "broker_action": false,
+  "live_trading_change": false
+}
