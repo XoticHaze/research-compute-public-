@@ -51,9 +51,8 @@ def day(value: str) -> str | None:
 
 
 def main() -> None:
-    # FNSPID article bodies can exceed Python's conservative 128 KiB CSV-field
-    # default. We never persist Article, but the parser must legally traverse it
-    # to reach the small metadata fields we do keep.
+    # Article bodies can exceed Python's default 128 KiB CSV-field cap. Article
+    # is not persisted, but the CSV parser must traverse it to reach later rows.
     csv.field_size_limit(CSV_FIELD_LIMIT)
 
     headers = {
@@ -73,25 +72,31 @@ def main() -> None:
         shapes = Counter()
         min_ts: dict[str, str] = {}
         max_ts: dict[str, str] = {}
+        first_row_index: dict[str, int] = {}
+        last_row_index: dict[str, int] = {}
         seen_urls: set[str] = set()
         duplicate_urls = 0
         last_symbol = ""
         monotonic_violations = 0
+        violation_examples: list[dict[str, object]] = []
         scanned_rows = 0
-        saw_after_target = False
         output_rows: list[dict[str, str]] = []
 
+        # Deliberately consume the ENTIRE fixed byte prefix. Earlier probing found
+        # a ticker-order reversal, so lexicographic early stopping is not valid.
         for row in reader:
             scanned_rows += 1
             symbol = (row.get("Stock_symbol") or "").strip().upper()
             if symbol and last_symbol and symbol < last_symbol:
                 monotonic_violations += 1
+                if len(violation_examples) < 20:
+                    violation_examples.append({
+                        "row": scanned_rows,
+                        "previous_symbol": last_symbol,
+                        "current_symbol": symbol,
+                    })
             if symbol:
                 last_symbol = symbol
-
-            if all(counts[t] > 0 for t in TARGETS) and symbol > max(TARGETS):
-                saw_after_target = True
-                break
 
             if symbol not in TARGETS:
                 continue
@@ -109,6 +114,8 @@ def main() -> None:
             shapes[shape(raw_date)] += 1
             min_ts[symbol] = min(min_ts.get(symbol, raw_date), raw_date)
             max_ts[symbol] = max(max_ts.get(symbol, raw_date), raw_date)
+            first_row_index.setdefault(symbol, scanned_rows)
+            last_row_index[symbol] = scanned_rows
             output_rows.append({
                 "Date": raw_date,
                 "Stock_symbol": symbol,
@@ -119,13 +126,9 @@ def main() -> None:
 
         content_range = response.headers.get("content-range")
 
-    if monotonic_violations:
-        raise RuntimeError(f"source Stock_symbol order is not monotonic: violations={monotonic_violations}")
     missing = [t for t in TARGETS if counts[t] == 0]
     if missing:
-        raise RuntimeError(f"target symbols not reached inside bounded source range: {missing}; last_symbol={last_symbol}")
-    if not saw_after_target:
-        raise RuntimeError(f"bounded read did not prove completion beyond {max(TARGETS)}; last_symbol={last_symbol}")
+        raise RuntimeError(f"target symbols absent from fixed 2GiB prefix: {missing}; last_symbol={last_symbol}")
 
     with open("fnspid-bounded-semis-20260906.csv", "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=["Date", "Stock_symbol", "Article_title", "Url", "Publisher"])
@@ -133,16 +136,23 @@ def main() -> None:
         writer.writerows(output_rows)
 
     report = {
-        "schema": "research.fnspid_bounded_semis_receipt.v1",
+        "schema": "research.fnspid_bounded_semis_receipt.v2",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": URL,
         "source_commit": SOURCE_COMMIT,
         "expected_source_sha256": EXPECTED_SHA256,
         "source_sha_status": "PINNED_FROM_UPSTREAM_METADATA_NOT_FULL_REHASHED",
-        "content_range": content_range,
-        "scanned_rows_before_bound_exit": scanned_rows,
-        "last_symbol_before_exit": last_symbol,
+        "source_slice": {
+            "type": "DETERMINISTIC_FIXED_BYTE_PREFIX",
+            "requested_bytes": MAX_RANGE_BYTES,
+            "content_range": content_range,
+            "completeness": "BOUNDED_PREFIX_NOT_FULL_SOURCE",
+            "reason": "raw Stock_symbol order is not globally monotonic, so this receipt does not claim complete per-symbol FNSPID coverage",
+        },
+        "scanned_rows": scanned_rows,
+        "last_symbol": last_symbol,
         "symbol_order_monotonic_violations": monotonic_violations,
+        "symbol_order_violation_examples": violation_examples,
         "requested_symbols": list(TARGETS),
         "requested_date_range": {"start": START, "end": END},
         "rows": int(sum(counts.values())),
@@ -151,6 +161,8 @@ def main() -> None:
                 "rows": counts[s],
                 "min_raw_publication": min_ts.get(s),
                 "max_raw_publication": max_ts.get(s),
+                "first_scanned_row": first_row_index.get(s),
+                "last_scanned_row": last_row_index.get(s),
                 "years": dict(sorted(years[s].items())),
             }
             for s in TARGETS
@@ -166,7 +178,7 @@ def main() -> None:
         },
         "causal_intraday_admission": "REJECT_UPSTREAM_UTC_CONVERSION_UNSAFE",
         "conservative_daily_candidate": "STRICT_NEXT_TRADING_SESSION_AFTER_RECORDED_DATE_ONLY",
-        "daily_candidate_status": "READY_FOR_SEPARATE_NO_SAME_SESSION_ECONOMIC_ABLATION",
+        "daily_candidate_status": "BOUNDED_PREFIX_MATERIALIZED_AWAIT_COVERAGE_GATE",
         "research_only": True,
         "promotion_authority": False,
         "runtime_mutation": False,
