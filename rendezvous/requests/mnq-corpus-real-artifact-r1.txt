@@ -1,5 +1,0 @@
-Execute the exact private Research Foundry MNQ Strategy Backtest OHLC artifact through the chunked ephemeral route.
-Expected artifact archive SHA256: 86aae162c38354a0beb0abfc857f317f596a07c9e317d4d21e4fb799881c2b2e.
-Expected inner dataset SHA256: c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e.
-Transport revision: encrypted run-bound ticket carries only a short-lived signed retrieval capability; private artifact bytes are fetched after decryption and validated in runner temp.
-Research-only data-plane proof. No strategy execution, promotion, StrategySpec write, runtime, broker, or live-trading authority.
