@@ -1,0 +1,40 @@
+name: P10 Fair Value Challenger
+on:
+  pull_request:
+    paths:
+      - 'research/compute_fair_value_challenger.py'
+      - 'research/p10-fair-value-contract.json'
+      - '.github/workflows/p10-fair-value-challenger.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.16'
+      - name: Execute held-out fair-value challenger matrix
+        run: |
+          python research/compute_fair_value_challenger.py \
+            research/p10-fair-value-contract.json \
+            p10-fair-value-result.json
+      - name: Validate terminal result
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('p10-fair-value-result.json').read_text())
+          assert r['research_only'] and not r['promotion_authority'] and not r['private_data_loaded']
+          print('P10_FAIR_VALUE_CLASSIFICATION='+r['classification'])
+          print('P10_FAIR_VALUE_BEST_BW='+str(r['best_bandwidth_family_model']))
+          print('P10_FAIR_VALUE_DECISION='+json.dumps(r['decision_inputs'],sort_keys=True))
+          print('P10_FAIR_VALUE_CHEAP='+json.dumps(r['latest_ranking']['cheapest_residuals'][:10],sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p10-fair-value-result
+          path: p10-fair-value-result.json
+          retention-days: 30
