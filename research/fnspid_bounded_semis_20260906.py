@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import csv
-import io
+import hashlib
 import json
 import re
+import tempfile
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
+from pathlib import Path
 
 import requests
 
@@ -17,6 +19,9 @@ TARGETS = ("AMAT", "AMD", "AVGO")
 START = "2015-01-01"
 END = "2023-12-31"
 MAX_RANGE_BYTES = 2 * 1024 * 1024 * 1024
+SEGMENT_BYTES = 128 * 1024 * 1024
+TRANSFER_CHUNK = 8 * 1024 * 1024
+SEGMENT_RETRIES = 3
 CSV_FIELD_LIMIT = 64 * 1024 * 1024
 UTC_LITERAL_RE = re.compile(r"\sUTC$")
 NUMERIC_OFFSET_RE = re.compile(r"(?:Z|[+-]\d{2}:?\d{2})$")
@@ -50,41 +55,119 @@ def day(value: str) -> str | None:
         return None
 
 
+def _download_segment(session: requests.Session, start: int, stop: int, output) -> dict:
+    expected = stop - start + 1
+    last_error: Exception | None = None
+    for attempt in range(1, SEGMENT_RETRIES + 1):
+        try:
+            headers = {
+                "Range": f"bytes={start}-{stop}",
+                "Accept-Encoding": "identity",
+                "User-Agent": "research-compute/1.0",
+            }
+            with session.get(URL, headers=headers, stream=True, timeout=(30, 180), allow_redirects=True) as response:
+                response.raise_for_status()
+                if response.status_code != 206:
+                    raise RuntimeError(f"segment {start}-{stop}: expected HTTP 206, got {response.status_code}")
+                content_range = response.headers.get("content-range") or ""
+                expected_prefix = f"bytes {start}-{stop}/"
+                if not content_range.startswith(expected_prefix):
+                    raise RuntimeError(
+                        f"segment {start}-{stop}: unexpected Content-Range {content_range!r}"
+                    )
+                temp = tempfile.SpooledTemporaryFile(max_size=32 * 1024 * 1024)
+                received = 0
+                for chunk in response.iter_content(chunk_size=TRANSFER_CHUNK):
+                    if not chunk:
+                        continue
+                    temp.write(chunk)
+                    received += len(chunk)
+                if received != expected:
+                    raise RuntimeError(
+                        f"segment {start}-{stop}: short read {received} != {expected}"
+                    )
+                temp.seek(0)
+                while True:
+                    chunk = temp.read(TRANSFER_CHUNK)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+                temp.close()
+                return {
+                    "start": start,
+                    "stop": stop,
+                    "bytes": received,
+                    "attempt": attempt,
+                    "content_range": content_range,
+                }
+        except Exception as exc:  # bounded deterministic retry of exact bytes
+            last_error = exc
+    raise RuntimeError(f"segment {start}-{stop} failed after {SEGMENT_RETRIES} attempts: {last_error}")
+
+
+def _materialize_prefix(path: Path) -> list[dict]:
+    receipts: list[dict] = []
+    session = requests.Session()
+    with path.open("wb") as output:
+        start = 0
+        while start < MAX_RANGE_BYTES:
+            stop = min(MAX_RANGE_BYTES - 1, start + SEGMENT_BYTES - 1)
+            receipt = _download_segment(session, start, stop, output)
+            receipts.append(receipt)
+            print("FNSPID_PREFIX_SEGMENT=" + json.dumps(receipt, sort_keys=True), flush=True)
+            start = stop + 1
+    size = path.stat().st_size
+    if size != MAX_RANGE_BYTES:
+        raise RuntimeError(f"fixed prefix size mismatch {size} != {MAX_RANGE_BYTES}")
+    return receipts
+
+
 def main() -> None:
     # Article bodies can exceed Python's default 128 KiB CSV-field cap. Article
-    # is not persisted, but the CSV parser must traverse it to reach later rows.
+    # is not persisted, but the parser must traverse it to reach later rows.
     csv.field_size_limit(CSV_FIELD_LIMIT)
 
-    headers = {
-        "Range": f"bytes=0-{MAX_RANGE_BYTES - 1}",
-        "User-Agent": "research-compute/1.0",
-    }
-    with requests.get(URL, headers=headers, stream=True, timeout=(30, 300), allow_redirects=True) as response:
-        response.raise_for_status()
-        wrapper = io.TextIOWrapper(response.raw, encoding="utf-8", errors="replace", newline="")
-        reader = csv.DictReader(wrapper)
+    prefix_path = Path("fnspid-fixed-prefix-2gib.tmp")
+    segment_receipts = _materialize_prefix(prefix_path)
+    prefix_sha256 = hashlib.sha256()
+    with prefix_path.open("rb") as raw:
+        for chunk in iter(lambda: raw.read(TRANSFER_CHUNK), b""):
+            prefix_sha256.update(chunk)
+
+    counts = Counter()
+    years = defaultdict(Counter)
+    shapes = Counter()
+    min_ts: dict[str, str] = {}
+    max_ts: dict[str, str] = {}
+    first_row_index: dict[str, int] = {}
+    last_row_index: dict[str, int] = {}
+    seen_urls: set[str] = set()
+    duplicate_urls = 0
+    last_symbol = ""
+    monotonic_violations = 0
+    violation_examples: list[dict[str, object]] = []
+    scanned_rows = 0
+    output_rows: list[dict[str, str]] = []
+    truncated_tail_row = False
+
+    with prefix_path.open("r", encoding="utf-8", errors="replace", newline="") as fh:
+        reader = csv.DictReader(fh)
         required = {"Date", "Stock_symbol", "Url", "Publisher", "Article_title"}
         if not reader.fieldnames or not required.issubset(reader.fieldnames):
             raise RuntimeError(f"unexpected source schema: {reader.fieldnames}")
-
-        counts = Counter()
-        years = defaultdict(Counter)
-        shapes = Counter()
-        min_ts: dict[str, str] = {}
-        max_ts: dict[str, str] = {}
-        first_row_index: dict[str, int] = {}
-        last_row_index: dict[str, int] = {}
-        seen_urls: set[str] = set()
-        duplicate_urls = 0
-        last_symbol = ""
-        monotonic_violations = 0
-        violation_examples: list[dict[str, object]] = []
-        scanned_rows = 0
-        output_rows: list[dict[str, str]] = []
-
-        # Deliberately consume the ENTIRE fixed byte prefix. Earlier probing found
-        # a ticker-order reversal, so lexicographic early stopping is not valid.
-        for row in reader:
+        while True:
+            try:
+                row = next(reader)
+            except StopIteration:
+                break
+            except csv.Error as exc:
+                # The deterministic 2GiB prefix can terminate inside one quoted
+                # Article field. Only a parser error at the physical prefix tail
+                # is admissible; earlier parser errors remain fatal.
+                if fh.tell() >= MAX_RANGE_BYTES - TRANSFER_CHUNK:
+                    truncated_tail_row = True
+                    break
+                raise RuntimeError(f"CSV parse error before prefix tail at byte {fh.tell()}: {exc}") from exc
             scanned_rows += 1
             symbol = (row.get("Stock_symbol") or "").strip().upper()
             if symbol and last_symbol and symbol < last_symbol:
@@ -124,8 +207,6 @@ def main() -> None:
                 "Publisher": (row.get("Publisher") or "").strip(),
             })
 
-        content_range = response.headers.get("content-range")
-
     missing = [t for t in TARGETS if counts[t] == 0]
     if missing:
         raise RuntimeError(f"target symbols absent from fixed 2GiB prefix: {missing}; last_symbol={last_symbol}")
@@ -136,7 +217,7 @@ def main() -> None:
         writer.writerows(output_rows)
 
     report = {
-        "schema": "research.fnspid_bounded_semis_receipt.v2",
+        "schema": "research.fnspid_bounded_semis_receipt.v3",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": URL,
         "source_commit": SOURCE_COMMIT,
@@ -145,7 +226,10 @@ def main() -> None:
         "source_slice": {
             "type": "DETERMINISTIC_FIXED_BYTE_PREFIX",
             "requested_bytes": MAX_RANGE_BYTES,
-            "content_range": content_range,
+            "prefix_sha256": prefix_sha256.hexdigest(),
+            "segment_bytes": SEGMENT_BYTES,
+            "segment_receipts": segment_receipts,
+            "truncated_tail_row_discarded": truncated_tail_row,
             "completeness": "BOUNDED_PREFIX_NOT_FULL_SOURCE",
             "reason": "raw Stock_symbol order is not globally monotonic, so this receipt does not claim complete per-symbol FNSPID coverage",
         },
@@ -189,6 +273,7 @@ def main() -> None:
         json.dump(report, fh, indent=2, sort_keys=True)
         fh.write("\n")
     print("FNSPID_BOUNDED_SEMIS=" + json.dumps(report, sort_keys=True))
+    prefix_path.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
