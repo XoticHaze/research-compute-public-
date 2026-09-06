@@ -1,0 +1,210 @@
+name: P05 Capital-Level Closure 20260906
+
+on:
+  push:
+    branches:
+      - scheduler/p05-capital-closure-20260906-0504-r1
+    paths:
+      - .github/workflows/p05-capital-level-closure-20260906.yml
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install numerical dependencies
+        run: python -m pip install --disable-pip-version-check -q numpy==2.4.6 pandas==3.0.5
+      - name: Execute frozen P05 capital-level closure
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from urllib.parse import urlencode
+          from urllib.request import Request, urlopen
+          import numpy as np
+          import pandas as pd
+
+          START='2015-08-01'
+          END='2026-09-06'
+          TRAIN_FRACTION=0.60
+          SIGNAL_LOOKBACK=20
+          FORWARD=20
+          Q=0.80
+          EVENT_COST_BPS=50.0
+          SYMBOLS=['CRAK','XLE','SPY','QQQ']
+
+          def epoch(text):
+              return int(datetime.fromisoformat(text).replace(tzinfo=timezone.utc).timestamp())
+
+          def load(symbol):
+              q=urlencode({'period1':epoch(START),'period2':epoch(END),'interval':'1d','events':'history','includeAdjustedClose':'true'})
+              req=Request(f'https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?{q}',headers={'User-Agent':'Mozilla/5.0 research-compute/1.0'})
+              with urlopen(req,timeout=30) as r:
+                  payload=json.loads(r.read().decode())
+              result=(payload.get('chart',{}).get('result') or [None])[0]
+              if not result:
+                  raise RuntimeError(f'{symbol}: no chart result')
+              ts=result.get('timestamp') or []
+              ind=result.get('indicators',{})
+              quote=(ind.get('quote') or [{}])[0]
+              adj=(ind.get('adjclose') or [{}])[0].get('adjclose')
+              close=adj or quote.get('close')
+              vol=quote.get('volume') or [None]*len(ts)
+              return pd.DataFrame(
+                  {'close':pd.to_numeric(pd.Series(close),errors='coerce').to_numpy(),
+                   'volume':pd.to_numeric(pd.Series(vol),errors='coerce').to_numpy()},
+                  index=pd.to_datetime(ts,unit='s',utc=True)
+              ).dropna(subset=['close']).sort_index()
+
+          raw={s:load(s) for s in SYMBOLS}
+          df=pd.concat([
+              raw['CRAK'].close.rename('CRAK'), raw['CRAK'].volume.rename('CRAK_volume'),
+              raw['XLE'].close.rename('XLE'), raw['SPY'].close.rename('SPY'), raw['QQQ'].close.rename('QQQ')
+          ],axis=1,join='inner').dropna(subset=SYMBOLS)
+          df['rel20']=df.CRAK.pct_change(SIGNAL_LOOKBACK)-df.XLE.pct_change(SIGNAL_LOOKBACK)
+          df['dollar_volume20']=(df.CRAK*df.CRAK_volume).rolling(20).median()
+          usable=df.dropna(subset=['rel20']).iloc[:-FORWARD].copy()
+          split=max(1,int(len(usable)*TRAIN_FRACTION))
+          train=usable.iloc[:split]
+          test=usable.iloc[split:]
+          threshold=float(train.rel20.quantile(Q))
+          pos={ts:i for i,ts in enumerate(df.index)}
+
+          events=[]
+          last=-10**9
+          for ts,row in test.iterrows():
+              p=pos[ts]
+              if row.rel20 < threshold or p-last < FORWARD or p+FORWARD >= len(df):
+                  continue
+              rets={s:float(df[s].iloc[p+FORWARD]/df[s].iloc[p]-1.0) for s in SYMBOLS}
+              cand_net=(1.0+rets['CRAK'])*(1.0-EVENT_COST_BPS/10000.0)-1.0
+              events.append({
+                  'signal_date':ts.isoformat(),
+                  'exit_date':df.index[p+FORWARD].isoformat(),
+                  'signal_rel20_excess_pp':float(row.rel20*100.0),
+                  'crak_return_pct':rets['CRAK']*100.0,
+                  'candidate_net50_return_pct':cand_net*100.0,
+                  'xle_return_pct':rets['XLE']*100.0,
+                  'spy_return_pct':rets['SPY']*100.0,
+                  'qqq_return_pct':rets['QQQ']*100.0,
+                  'excess_vs_xle_net50_bps':(cand_net-rets['XLE'])*10000.0,
+                  'excess_vs_spy_net50_bps':(cand_net-rets['SPY'])*10000.0,
+                  'excess_vs_qqq_net50_bps':(cand_net-rets['QQQ'])*10000.0,
+                  'signal_dollar_volume20_usd':None if pd.isna(row.dollar_volume20) else float(row.dollar_volume20),
+                  'start_pos':p,
+                  'end_pos':p+FORWARD,
+              })
+              last=p
+
+          eval_start=test.index[0]
+          eval_end=df.index[-1]
+          start_p=pos[eval_start]
+          end_p=pos[eval_end]
+          daily={s:df[s].pct_change().fillna(0.0).to_numpy() for s in SYMBOLS}
+          strat_daily=np.zeros(len(df),dtype=float)
+          same_schedule={s:np.zeros(len(df),dtype=float) for s in ['XLE','SPY','QQQ']}
+          cost=EVENT_COST_BPS/10000.0
+          for e in events:
+              a=e['start_pos']; b=e['end_pos']
+              for j in range(a+1,b+1):
+                  strat_daily[j]=daily['CRAK'][j]
+                  for s in same_schedule:
+                      same_schedule[s][j]=daily[s][j]
+              if a+1 <= b:
+                  strat_daily[a+1]=(1.0+strat_daily[a+1])*(1.0-cost)-1.0
+
+          def equity_metrics(arr, lo, hi):
+              r=np.asarray(arr[lo+1:hi+1],dtype=float)
+              eq=np.cumprod(1.0+r)
+              total=float(eq[-1]-1.0) if len(eq) else 0.0
+              peak=np.maximum.accumulate(np.r_[1.0,eq])
+              curve=np.r_[1.0,eq]
+              dd=curve/peak-1.0
+              years=max((df.index[hi]-df.index[lo]).days/365.25,1/365.25)
+              cagr=float((1.0+total)**(1.0/years)-1.0) if total>-1.0 else -1.0
+              return {'return_pct':100*total,'cagr_pct':100*cagr,'max_drawdown_pct':100*float(dd.min())}
+
+          strategy=equity_metrics(strat_daily,start_p,end_p)
+          schedule_metrics={s:equity_metrics(a,start_p,end_p) for s,a in same_schedule.items()}
+          passive={}
+          for s in ['CRAK','XLE','SPY','QQQ']:
+              rr=float(df[s].iloc[end_p]/df[s].iloc[start_p]-1.0)
+              arr=np.zeros(len(df),dtype=float); arr[start_p+1:end_p+1]=daily[s][start_p+1:end_p+1]
+              passive[s]=equity_metrics(arr,start_p,end_p)
+              passive[s]['direct_return_pct']=100*rr
+
+          def event_summary(key):
+              vals=np.array([e[key] for e in events],dtype=float)
+              return {'n':int(len(vals)), 'mean_bps':None if not len(vals) else float(vals.mean()),
+                      'median_bps':None if not len(vals) else float(np.median(vals)),
+                      'win_rate':None if not len(vals) else float((vals>0).mean())}
+
+          event_excess={
+              'XLE':event_summary('excess_vs_xle_net50_bps'),
+              'SPY':event_summary('excess_vs_spy_net50_bps'),
+              'QQQ':event_summary('excess_vs_qqq_net50_bps'),
+          }
+
+          # Four chronology blocks over the frozen OOS test index. No threshold/model re-fit.
+          block_edges=np.linspace(start_p,end_p+1,5,dtype=int)
+          blocks=[]
+          for k in range(4):
+              lo,hi=int(block_edges[k]),int(block_edges[k+1]-1)
+              ev=[e for e in events if lo <= e['start_pos'] <= hi]
+              row={'block':k+1,'start':df.index[lo].isoformat(),'end':df.index[hi].isoformat(),'events':len(ev)}
+              for name,key in [('xle','excess_vs_xle_net50_bps'),('spy','excess_vs_spy_net50_bps'),('qqq','excess_vs_qqq_net50_bps')]:
+                  vals=[e[key] for e in ev]
+                  row[f'mean_excess_vs_{name}_bps']=None if not vals else float(np.mean(vals))
+              blocks.append(row)
+
+          occupancy=min(1.0,len(events)*FORWARD/max(1,end_p-start_p))
+          dv=[e['signal_dollar_volume20_usd'] for e in events if e['signal_dollar_volume20_usd'] is not None]
+          pos_blocks={b:sum(1 for row in blocks if row['events']>0 and row[f'mean_excess_vs_{b.lower()}_bps'] is not None and row[f'mean_excess_vs_{b.lower()}_bps']>0) for b in ['XLE','SPY','QQQ']}
+
+          alpha_supported=(
+              len(events)>=10 and
+              all(event_excess[b]['mean_bps'] is not None and event_excess[b]['mean_bps']>0 and event_excess[b]['win_rate']>=0.55 for b in ['XLE','SPY','QQQ']) and
+              all(pos_blocks[b]>=3 for b in ['XLE','SPY','QQQ'])
+          )
+          beats_passive_spy=strategy['return_pct']>passive['SPY']['return_pct']
+          if alpha_supported and beats_passive_spy:
+              decision='CAPITAL_ALLOCATOR_CANDIDATE'
+          elif alpha_supported:
+              decision='ALPHA_SLEEVE_ONLY_OPPORTUNITY_COST_FAIL'
+          else:
+              decision='P05_CAPITAL_LEVEL_NOT_SUPPORTED'
+
+          payload={
+              'schema':'p05.capital_level_closure.v1',
+              'generated_at':datetime.now(timezone.utc).isoformat(),
+              'source':'Yahoo chart adjusted daily + raw volume through fixed HTTPS endpoint',
+              'window':{'requested_start':START,'end_exclusive':END,'shared_first':df.index[0].isoformat(),'shared_last':df.index[-1].isoformat(),
+                        'oos_start':eval_start.isoformat(),'oos_end':eval_end.isoformat(),'rows':int(len(df))},
+              'frozen_method':{'signal':'CRAK minus XLE prior-20-session return >= train-only q80','train_fraction':TRAIN_FRACTION,
+                               'train_threshold_excess_pp':100*threshold,'event_thinning_sessions':FORWARD,'forward_sessions':FORWARD,
+                               'event_cost_bps':EVENT_COST_BPS,'no_threshold_search':True,'no_regime_filter_added':True},
+              'event_count':len(events),'capital_occupancy_fraction_proxy':occupancy,'round_trip_events':len(events),
+              'strategy_cash_aware_oos':strategy,'same_event_schedule_benchmarks':schedule_metrics,
+              'passive_full_oos_benchmarks':passive,'event_excess':event_excess,'chronology_blocks':blocks,
+              'positive_excess_blocks':pos_blocks,
+              'capacity_proxy':{'median_signal_20d_dollar_volume_usd':None if not dv else float(np.median(dv)),
+                                'min_signal_20d_dollar_volume_usd':None if not dv else float(np.min(dv))},
+              'decision':decision,'events':events,
+              'research_only':True,'allocation_authority':False,'promotion_authority':False,'runtime_mutation':False,'live_trading_change':False
+          }
+          open('p05-capital-level-closure-20260906.json','w').write(json.dumps(payload,indent=2,sort_keys=True)+'\n')
+          print('P05_CAPITAL_CLOSURE='+json.dumps(payload,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p05-capital-level-closure-20260906
+          path: p05-capital-level-closure-20260906.json
+          retention-days: 14
