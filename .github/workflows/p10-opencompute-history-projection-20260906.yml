@@ -1,0 +1,95 @@
+name: P10 OpenCompute History Projection 20260906
+
+on:
+  push:
+    branches:
+      - scheduler/p10-opencompute-history-20260906-r1
+    paths:
+      - .github/workflows/p10-opencompute-history-projection-20260906.yml
+
+permissions:
+  contents: read
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Fetch and verify exact public history asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 'https://github.com/thatkavish/OpenComputePrices/releases/download/latest-data/archive_historical.csv.gz' -o "$RUNNER_TEMP/archive_historical.csv.gz"
+          echo 'c4ceddf400c608fd8a5f7a6a72d9cdda1720bcbb4dfaee572445703a5ed85b49  '"$RUNNER_TEMP/archive_historical.csv.gz" | sha256sum -c -
+      - name: Materialize canonical public projection
+        shell: bash
+        run: |
+          python - <<'PY'
+          import csv, gzip, hashlib, json, os
+          from collections import defaultdict
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          src=Path(os.environ['RUNNER_TEMP'])/'archive_historical.csv.gz'
+          out=Path('p10-opencompute-history-projection.csv.gz')
+          manifest=Path('p10-opencompute-history-projection-manifest.json')
+          required={'snapshot_date','provider','gpu_name','price_per_gpu_hour','pricing_type'}
+          families=('A100','H100','H200','B200','B300')
+          rows_in=rows_out=0
+          dates=defaultdict(set); providers=set(); first=None; last=None
+          with gzip.open(src,'rt',encoding='utf-8-sig',newline='') as fi:
+              r=csv.DictReader(fi)
+              missing=required-set(r.fieldnames or [])
+              if missing:
+                  raise SystemExit(f'canonical OpenComputePrices fields missing: {sorted(missing)}')
+              with gzip.open(out,'wt',encoding='utf-8',newline='') as fo:
+                  w=csv.DictWriter(fo,fieldnames=['snapshot_date','provider','gpu_name','price_per_gpu_hour','pricing_type'])
+                  w.writeheader()
+                  for row in r:
+                      rows_in+=1
+                      gpu=str(row.get('gpu_name') or '')
+                      fam=next((x for x in families if x in gpu.upper()),None)
+                      try: price=float(row.get('price_per_gpu_hour') or '')
+                      except ValueError: price=0.0
+                      date=str(row.get('snapshot_date') or '')[:10]
+                      provider=str(row.get('provider') or '').strip()
+                      if not fam or price<=0 or not date or not provider:
+                          continue
+                      w.writerow({k:row.get(k,'') for k in w.fieldnames})
+                      rows_out+=1; dates[date].add(fam); providers.add(provider)
+                      first=date if first is None or date<first else first
+                      last=date if last is None or date>last else last
+          digest=hashlib.sha256(out.read_bytes()).hexdigest()
+          payload={
+              'schema':'p10.opencompute_history_projection.v1',
+              'generated_at':datetime.now(timezone.utc).isoformat(),
+              'source_repository':'thatkavish/OpenComputePrices',
+              'source_release_tag':'latest-data',
+              'source_asset':'archive_historical.csv.gz',
+              'source_asset_sha256':'c4ceddf400c608fd8a5f7a6a72d9cdda1720bcbb4dfaee572445703a5ed85b49',
+              'projection_sha256':digest,
+              'rows_input':rows_in,
+              'rows_projected':rows_out,
+              'providers':len(providers),
+              'first_snapshot_date':first,
+              'last_snapshot_date':last,
+              'dates_with_2plus_supported_families':sum(len(v)>=2 for v in dates.values()),
+              'columns':['snapshot_date','provider','gpu_name','price_per_gpu_hour','pricing_type'],
+              'public_source_only':True,
+              'research_only':True,
+              'promotion_authority':False,
+              'runtime_mutation':False,
+              'live_trading_change':False,
+          }
+          manifest.write_text(json.dumps(payload,indent=2,sort_keys=True)+'\n')
+          print('P10_OPENCOMPUTE_PROJECTION='+json.dumps(payload,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p10-opencompute-history-projection
+          path: |
+            p10-opencompute-history-projection.csv.gz
+            p10-opencompute-history-projection-manifest.json
+          retention-days: 14
+          if-no-files-found: error
