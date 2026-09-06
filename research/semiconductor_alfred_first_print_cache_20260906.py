@@ -62,10 +62,12 @@ def get_text(url: str):
 
 def fetch_window(series_id: str, observation_month: date, vintage: date):
     start = add_months(observation_month, -12)
+    # Use the URL shape already proven by PR #44: coed is the vintage date.  The
+    # required observation month is then selected locally from that same vintage.
     query = urlencode({
         "id": series_id,
         "cosd": start.isoformat(),
-        "coed": observation_month.isoformat(),
+        "coed": vintage.isoformat(),
         "vintage_date": vintage.isoformat(),
     })
     rows = list(csv.reader(io.StringIO(get_text(BASE + "?" + query))))
