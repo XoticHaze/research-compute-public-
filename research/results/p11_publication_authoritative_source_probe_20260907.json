@@ -1,0 +1,61 @@
+{
+  "schema": "p11.publication_authoritative_source_probe.result.v1",
+  "observed_at": "2026-09-07T12:02:56.419840Z",
+  "parent_id": "P11",
+  "provider": "ActuallyFreeAPI",
+  "endpoint": "https://actually-free-api.vercel.app/api/news",
+  "public_execution": {
+    "repository": "XoticHaze/research-compute-public-",
+    "run_id": 34119751340,
+    "job_id": 101734830057,
+    "head_sha": "f5784700bb9c417ad8bd16f080a6e77548c15259",
+    "conclusion": "success"
+  },
+  "decision": "REJECT_SECTOR_COVERAGE",
+  "provider_access_pass": true,
+  "publication_schema_pass": true,
+  "publication_semantics": {
+    "article_id": "id",
+    "publication_time": "pub_date",
+    "source": "source",
+    "symbol_attribution": "tickers",
+    "observed_rows_missing_required_fields": 0,
+    "observed_rows_with_bad_symbol_attribution": 0
+  },
+  "sector_coverage": {
+    "semiconductors": {
+      "required_symbols": ["AMAT", "NVDA", "AMD", "AVGO", "KLAC", "LRCX"],
+      "rows_by_symbol": {"AMAT": 36, "NVDA": 300, "AMD": 284, "AVGO": 228, "KLAC": 19, "LRCX": 27},
+      "total_rows_observed": 894,
+      "history_days": 180.4685,
+      "all_required_symbols_present": true,
+      "history_pass": true
+    },
+    "homebuilders": {
+      "required_symbols": ["DHI", "LEN", "PHM", "TOL"],
+      "rows_by_symbol": {"DHI": 3, "LEN": 10, "PHM": 2, "TOL": 0},
+      "total_rows_observed": 15,
+      "history_days": 177.6116,
+      "missing_symbols": ["TOL"],
+      "all_required_symbols_present": false,
+      "history_pass": false
+    }
+  },
+  "consequence": {
+    "scorer_calibration_released": false,
+    "economic_news_arms_released": false,
+    "next_action": "rotate_to_next_publication_authoritative_source_without_weakening_timestamp_gate"
+  },
+  "notes": [
+    "The first v1 probe incorrectly used a global oldest timestamp and was not accepted as source admission.",
+    "The v2 mechanism evaluates each declared sector independently and requires observed coverage for every predeclared symbol; no post-hoc economic threshold was tuned from the returned data.",
+    "This is a source-coverage rejection, not a transport failure and not a scientific rejection of the P11 news hypothesis."
+  ],
+  "safety": {
+    "private_input": false,
+    "broker_calls": false,
+    "runtime_mutation": false,
+    "strategy_spec_write": false,
+    "live_trading_change": false
+  }
+}
