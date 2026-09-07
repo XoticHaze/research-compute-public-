@@ -1,0 +1,31 @@
+name: P18 Semiconductor Gap Volume Drift
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p18_semiconductor_gap_volume_drift_20260907.py'
+      - '.github/workflows/p18-semiconductor-gap-volume-drift.yml'
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+      - name: Install fixed dependencies
+        run: python -m pip install 'numpy==2.1.3' 'pandas==2.2.3'
+      - name: Compile frozen workload
+        run: python -m py_compile research/p18_semiconductor_gap_volume_drift_20260907.py
+      - name: Execute frozen discriminator
+        run: python research/p18_semiconductor_gap_volume_drift_20260907.py
+      - name: Upload deterministic receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p18-semiconductor-gap-volume-drift-receipt
+          path: p18-semiconductor-gap-volume-drift-receipt.json
+          if-no-files-found: error
