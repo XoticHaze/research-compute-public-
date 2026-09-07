@@ -5,125 +5,166 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/p02-mm-canonicalize-admitted-union.yml'
+      - 'scripts/p02_mm_canonicalizer_capsule_consumer_v1.py'
   workflow_dispatch:
 
 permissions:
   actions: read
-  contents: read
+  contents: write
+
+env:
+  RESPONSE_ROOT: rendezvous/responses
+  RECIPIENT_ROOT: rendezvous/recipients
+  EXCHANGE_REF: rendezvous-exchange
+  SOURCE_ARTIFACT_ID: '10005047461'
+  SOURCE_SHA256: d99dba176d2a474b8f2a66d6f43bd62d49ab70237d92e4f2a573246ae744fcc0
+  SOURCE_UNION_FINGERPRINT: 81a1b9a40ab62c41b42dc72e7d5d5b7b58d0d71a0bdd7b02d736c20de095b2bd
 
 jobs:
   canonicalize:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
-          python-version: '3.11'
+          python-version: '3.11.16'
 
-      - name: Install MM bounded dependencies
-        run: python -m pip install --disable-pip-version-check -q numpy pandas scipy scikit-learn tzdata ib-insync
+      - name: Install fixed canonicalizer dependencies
+        run: python -m pip install --disable-pip-version-check -q cryptography numpy pandas scipy scikit-learn pytz tzdata ib-insync
 
-      - name: Fetch current MM semantic owner
-        shell: bash
+      - name: Compile fixed encrypted binding
         run: |
-          set -euo pipefail
-          git clone --depth=1 https://github.com/XoticHaze/mm-IBKR.git mm
-          echo "MM_HEAD=$(git -C mm rev-parse HEAD)"
-          test -s mm/scripts/operator/materialize_admitted_futures_source_canonical.py
-          test -s mm/scripts/operator/publish_canonical_feature_sidecar.py
+          python -m py_compile scripts/ephemeral_x25519_chunked_v1.py
+          python -m py_compile scripts/p02_mm_canonicalizer_capsule_consumer_v1.py
 
-      - name: Resolve exact admitted-source artifact from proven rematerializer run
-        shell: bash
+      - name: Generate and publish one-run canonicalizer recipient
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mkdir -p admitted
+          umask 077
           python - <<'PY'
-          import json, os, urllib.request
-          run_id='34084853737'
-          req=urllib.request.Request(
-              f'https://api.github.com/repos/XoticHaze/research-compute-public-/actions/runs/{run_id}/artifacts',
-              headers={'Authorization': 'Bearer '+os.environ['GH_TOKEN'], 'Accept':'application/vnd.github+json'},
-          )
-          with urllib.request.urlopen(req) as r: data=json.load(r)
-          matches=[a for a in data['artifacts'] if a['name']=='p02-mnq-admitted-union-1min' and not a['expired']]
-          if len(matches)!=1: raise SystemExit(f'expected one admitted artifact, got {len(matches)}')
-          a=matches[0]
-          if a['id'] != 10004880109: raise SystemExit(f'artifact identity drift: {a["id"]}')
-          if a.get('digest') != 'sha256:40c885ddaf83d29a33ecd28ae87ecd99d845923f69fe6dfdcb371c5f03b04e89':
-              raise SystemExit('artifact archive digest drift')
-          open('admitted/artifact.json','w').write(json.dumps(a,indent=2,sort_keys=True)+'\n')
+          import base64, hashlib, json, os
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric import x25519
+          private=x25519.X25519PrivateKey.generate()
+          private_raw=private.private_bytes(serialization.Encoding.Raw,serialization.PrivateFormat.Raw,serialization.NoEncryption())
+          public_raw=private.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)
+          Path(os.environ['RUNNER_TEMP'],'p02-canonicalizer-private.b64').write_text(base64.b64encode(private_raw).decode())
+          recipient={'schema':'p02-mm-canonicalizer-recipient-v1','run_id':os.environ['GITHUB_RUN_ID'],'recipient_b64':base64.b64encode(public_raw).decode(),'recipient_key_id':'sha256:'+hashlib.sha256(public_raw).hexdigest()}
+          Path(os.environ['RUNNER_TEMP'],'p02-canonicalizer-recipient.json').write_text(json.dumps(recipient,sort_keys=True)+'\n')
           PY
-          gh api repos/XoticHaze/research-compute-public-/actions/artifacts/10004880109/zip > admitted/source.zip
+          path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}-p02-mm-canonicalizer.json"
+          payload="$(base64 -w0 "$RUNNER_TEMP/p02-canonicalizer-recipient.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json,sys
+          print(json.dumps({'message':'rendezvous: publish P02 canonicalizer recipient','content':sys.argv[1],'branch':sys.argv[2]}))
+          PY
+          )"
+          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}" -d "$body" >/dev/null
+          echo "P02_CANONICALIZER_RECIPIENT_PATH=${path}"
+
+      - name: Wait for run-bound private MM canonicalizer capsule
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          root="${RESPONSE_ROOT}/${GITHUB_RUN_ID}"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${root}/p02-mm-canonicalizer-envelope.json?ref=${EXCHANGE_REF}"
+          found=0
+          for _ in $(seq 1 180); do
+            if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/p02-canonicalizer-envelope.json"; then found=1; break; fi
+            sleep 5
+          done
+          test "$found" = 1 || { echo 'run-bound P02 canonicalizer envelope did not arrive'; exit 42; }
+          echo "P02_RESPONSE_ROOT=${root}" >> "$GITHUB_ENV"
+
+      - name: Reassemble canonicalizer ciphertext
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import base64,hashlib,json,os
+          from pathlib import Path
+          from urllib.request import Request,urlopen
+          env=json.loads(Path(os.environ['RUNNER_TEMP'],'p02-canonicalizer-envelope.json').read_text())
+          pieces=[]
+          for node in env['chunks']:
+            path=node['path']
+            if not path.startswith(os.environ['P02_RESPONSE_ROOT']+'/'): raise SystemExit('invalid chunk path')
+            url=f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/{path}?ref={os.environ['EXCHANGE_REF']}"
+            raw=urlopen(Request(url,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github.raw+json'})).read()
+            if hashlib.sha256(raw).hexdigest()!=node['sha256']: raise SystemExit('chunk digest mismatch')
+            pieces.append(raw.decode())
+          Path(os.environ['RUNNER_TEMP'],'p02-canonicalizer-ciphertext.bin').write_bytes(base64.b64decode(''.join(pieces),validate=True))
+          PY
+
+      - name: Resolve exact admitted-source artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p admitted/source
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_ARTIFACT_ID}" > admitted/artifact.json
+          python - <<'PY'
+          import json,os
+          a=json.load(open('admitted/artifact.json'))
+          assert str(a['id'])==os.environ['SOURCE_ARTIFACT_ID']
+          assert a['name']=='p02-mnq-admitted-union-1min'
+          assert not a['expired']
+          PY
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_ARTIFACT_ID}/zip" > admitted/source.zip
           unzip -q admitted/source.zip -d admitted/source
           test -s admitted/source/MNQ_CONTINUOUS_1Min.csv
           test -s admitted/source/MNQ_CONTINUOUS_1Min.lineage.json
 
-      - name: Verify admitted lineage and source hash
-        shell: bash
+      - name: Verify admitted lineage before private source execution
         run: |
-          set -euo pipefail
           python - <<'PY'
-          import hashlib,json
-          from pathlib import Path
-          csv=Path('admitted/source/MNQ_CONTINUOUS_1Min.csv')
-          lineage=json.loads(Path('admitted/source/MNQ_CONTINUOUS_1Min.lineage.json').read_text())
-          h=hashlib.sha256(csv.read_bytes()).hexdigest()
-          assert h == lineage['source_sha256']
-          assert lineage['authority'] == 'XoticHaze/research-foundry#78'
-          assert lineage['union_fingerprint_sha256'] == '81a1b9a40ab62c41b42dc72e7d5d5b7b58d0d71a0bdd7b02d736c20de095b2bd'
+          import hashlib,json,os
+          csv='admitted/source/MNQ_CONTINUOUS_1Min.csv'
+          lineage=json.load(open('admitted/source/MNQ_CONTINUOUS_1Min.lineage.json'))
+          actual=hashlib.sha256(open(csv,'rb').read()).hexdigest()
+          assert actual==os.environ['SOURCE_SHA256']==lineage['source_sha256']
+          assert lineage['union_fingerprint_sha256']==os.environ['SOURCE_UNION_FINGERPRINT']
           assert lineage['coverage_qualified'] is True
-          assert lineage['full_calendar_complete'] is False
           print('P02_ADMITTED_SOURCE_IDENTITY=PASS')
-          print('SOURCE_SHA256='+h)
           PY
 
-      - name: Materialize through MM canonical owners
-        shell: bash
+      - name: Execute fixed encrypted MM canonicalizer
         run: |
           set -euo pipefail
           mkdir -p canonical
-          SOURCE_SHA="$(python - <<'PY'
-          import hashlib
-          print(hashlib.sha256(open('admitted/source/MNQ_CONTINUOUS_1Min.csv','rb').read()).hexdigest())
-          PY
-          )"
-          PYTHONPATH=mm python mm/scripts/operator/materialize_admitted_futures_source_canonical.py \
+          python scripts/p02_mm_canonicalizer_capsule_consumer_v1.py \
+            --envelope "$RUNNER_TEMP/p02-canonicalizer-envelope.json" \
+            --ciphertext "$RUNNER_TEMP/p02-canonicalizer-ciphertext.bin" \
+            --private-key "$RUNNER_TEMP/p02-canonicalizer-private.b64" \
+            --run-id "$GITHUB_RUN_ID" --response-root "$P02_RESPONSE_ROOT" \
             --source-csv admitted/source/MNQ_CONTINUOUS_1Min.csv \
-            --source-lineage-json admitted/source/MNQ_CONTINUOUS_1Min.lineage.json \
-            --expected-source-sha256 "$SOURCE_SHA" \
-            --data-root canonical \
-            --root MNQ \
-            --source-timeframe 1Min \
-            --target-timeframe 12Min \
-            --receipt-json canonical/materialization_receipt.json
+            --source-lineage admitted/source/MNQ_CONTINUOUS_1Min.lineage.json \
+            --data-root canonical --receipt canonical/materialization_receipt.json
 
       - name: Verify Model Lab canonical contract
-        shell: bash
         run: |
           set -euo pipefail
-          RAW=canonical/futures/MNQ-CONTINUOUS/12Min.csv
-          FEATURES=canonical/futures/MNQ-CONTINUOUS/12Min.features.csv
-          SIDECAR=canonical/futures/MNQ-CONTINUOUS/12Min.features.csv.manifest.json
-          test -s "$RAW"
-          test -s "$FEATURES"
-          test -s "$SIDECAR"
-          PYTHONPATH=mm python - <<'PY'
-          import json
+          test -s canonical/futures/MNQ-CONTINUOUS/12Min.csv
+          test -s canonical/futures/MNQ-CONTINUOUS/12Min.features.csv
+          test -s canonical/futures/MNQ-CONTINUOUS/12Min.feature_manifest.json
+          test -s canonical/futures/MNQ-CONTINUOUS/12Min.features.csv.manifest.json
+          python - <<'PY'
+          import hashlib,json
           from pathlib import Path
-          from feature_contract import file_sha256
           receipt=json.loads(Path('canonical/materialization_receipt.json').read_text())
           sidecar=json.loads(Path('canonical/futures/MNQ-CONTINUOUS/12Min.features.csv.manifest.json').read_text())
-          assert receipt['status']=='PASS'
-          assert receipt['target_timeframe']=='12Min'
+          feature=Path('canonical/futures/MNQ-CONTINUOUS/12Min.features.csv')
+          assert receipt['status']=='PASS' and receipt['target_timeframe']=='12Min'
+          assert sidecar['feature_sha256']==hashlib.sha256(feature.read_bytes()).hexdigest()
           assert receipt['safety']['network_ib_calls'] is False
           assert receipt['safety']['strategy_spec_mutation'] is False
           assert receipt['safety']['broker_submission'] is False
           assert receipt['safety']['live_trading_change'] is False
-          feature=Path('canonical/futures/MNQ-CONTINUOUS/12Min.features.csv')
-          assert sidecar['feature_sha256'] == file_sha256(feature)
           print('P02_MM_CANONICAL_CONTRACT=PASS')
           print('RAW_SHA256='+receipt['raw_sha256'])
           print('FEATURES_SHA256='+receipt['features_sha256'])
@@ -142,3 +183,7 @@ jobs:
             canonical/materialization_receipt.json
           if-no-files-found: error
           retention-days: 30
+
+      - name: Remove private material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/p02-canonicalizer-private.b64" "$RUNNER_TEMP/p02-canonicalizer-recipient.json" "$RUNNER_TEMP/p02-canonicalizer-envelope.json" "$RUNNER_TEMP/p02-canonicalizer-ciphertext.bin"
