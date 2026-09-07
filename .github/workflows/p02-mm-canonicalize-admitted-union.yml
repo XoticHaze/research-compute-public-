@@ -1,4 +1,5 @@
 name: P02 MM canonicalize admitted MNQ union
+# rendezvous nonce: 2026-09-07T07:38Z connector-private-producer
 
 on:
   pull_request:
