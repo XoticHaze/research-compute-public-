@@ -55,14 +55,27 @@ jobs:
           recipient_path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}.json"
           request_path="${PRODUCER_REQUEST_ROOT}/${GITHUB_RUN_ID}.json"
           response_path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/sealed-envelope.json"
-          payload="$(base64 -w0 "$RUNNER_TEMP/p03-binding-recipient.json")"
-          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
-          import json,sys
-          content,branch=sys.argv[1:]
-          print(json.dumps({'message':'rendezvous: publish one-run P03 binding recipient','content':content,'branch':branch}))
+
+          upsert_exchange_file() {
+            local path="$1"
+            local file="$2"
+            local message="$3"
+            local api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}"
+            local existing_sha=""
+            existing_sha="$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "${api}?ref=${EXCHANGE_REF}" | python -c 'import json,sys; d=json.load(sys.stdin); print(d.get("sha", ""))' || true)"
+            python - "$file" "$message" "$EXCHANGE_REF" "$existing_sha" <<'PY' > "$RUNNER_TEMP/p03-upsert-body.json"
+          import base64,json,sys
+          path,message,branch,sha=sys.argv[1:]
+          body={'message':message,'content':base64.b64encode(open(path,'rb').read()).decode('ascii'),'branch':branch}
+          if sha:
+              body['sha']=sha
+          print(json.dumps(body,separators=(',',':')))
           PY
-          )"
-          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${recipient_path}" -d "$body" >/dev/null
+            curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -d @"$RUNNER_TEMP/p03-upsert-body.json" >/dev/null
+          }
+
+          upsert_exchange_file "$recipient_path" "$RUNNER_TEMP/p03-binding-recipient.json" 'rendezvous: publish one-run P03 binding recipient'
+
           python - "$recipient_path" "$response_path" <<'PY' > "$RUNNER_TEMP/p03-producer-request.json"
           import json,os,sys
           recipient_path,response_path=sys.argv[1:]
@@ -78,14 +91,7 @@ jobs:
             'exchange_ref':os.environ['EXCHANGE_REF']
           },sort_keys=True))
           PY
-          request_payload="$(base64 -w0 "$RUNNER_TEMP/p03-producer-request.json")"
-          request_body="$(python - "$request_payload" "$EXCHANGE_REF" <<'PY'
-          import json,sys
-          content,branch=sys.argv[1:]
-          print(json.dumps({'message':'rendezvous: publish one-run P03 producer request','content':content,'branch':branch}))
-          PY
-          )"
-          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${request_path}" -d "$request_body" >/dev/null
+          upsert_exchange_file "$request_path" "$RUNNER_TEMP/p03-producer-request.json" 'rendezvous: publish one-run P03 producer request'
           echo "P03_BINDING_EPHEMERAL_RECIPIENT_PATH=${recipient_path}"
           echo "P03_BINDING_PRODUCER_REQUEST_PATH=${request_path}"
       - name: Wait for structurally valid run-bound encrypted envelope
@@ -95,12 +101,13 @@ jobs:
           set -euo pipefail
           response_path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/sealed-envelope.json"
           api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${response_path}?ref=${EXCHANGE_REF}"
+          expected_recipient_key_id="$(python -c 'import json,os; print(json.load(open(os.path.join(os.environ["RUNNER_TEMP"],"p03-binding-recipient.json"),encoding="utf-8"))["recipient_key_id"])')"
           found=0
           for _ in $(seq 1 180); do
             if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/p03-binding-envelope.candidate.json"; then
-              if python - "$RUNNER_TEMP/p03-binding-envelope.candidate.json" "$GITHUB_RUN_ID" <<'PY'
+              if python - "$RUNNER_TEMP/p03-binding-envelope.candidate.json" "$GITHUB_RUN_ID" "$expected_recipient_key_id" <<'PY'
           import base64,json,sys
-          path,run_id=sys.argv[1:]
+          path,run_id,expected_recipient_key_id=sys.argv[1:]
           try:
               d=json.load(open(path,encoding='utf-8'))
               required={'schema','run_id','authority','harness','recipient_key_id','sender_public_b64','nonce_b64','ciphertext_b64','plaintext_sha256'}
@@ -109,6 +116,7 @@ jobs:
               assert str(d['run_id'])==str(run_id)
               assert d['authority']=='research_only'
               assert d['harness']=='mm_p03_position_duration_operator_context_v1'
+              assert d['recipient_key_id']==expected_recipient_key_id
               assert len(base64.b64decode(d['sender_public_b64'],validate=True))==32
               assert len(base64.b64decode(d['nonce_b64'],validate=True))==12
               assert len(base64.b64decode(d['ciphertext_b64'],validate=True))>32
@@ -131,4 +139,4 @@ jobs:
           python scripts/p03_private_binding_contract_consumer_v1.py --envelope "$RUNNER_TEMP/p03-binding-envelope.json" --private-key "$RUNNER_TEMP/p03-binding-private-key.b64" --run-id "$GITHUB_RUN_ID"
       - name: Remove one-run private material
         if: always()
-        run: rm -f "$RUNNER_TEMP/p03-binding-private-key.b64" "$RUNNER_TEMP/p03-binding-recipient.json" "$RUNNER_TEMP/p03-producer-request.json" "$RUNNER_TEMP/p03-binding-envelope.json" "$RUNNER_TEMP/p03-binding-envelope.candidate.json"
+        run: rm -f "$RUNNER_TEMP/p03-binding-private-key.b64" "$RUNNER_TEMP/p03-binding-recipient.json" "$RUNNER_TEMP/p03-producer-request.json" "$RUNNER_TEMP/p03-upsert-body.json" "$RUNNER_TEMP/p03-binding-envelope.json" "$RUNNER_TEMP/p03-binding-envelope.candidate.json"
