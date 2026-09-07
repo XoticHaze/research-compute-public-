@@ -51,12 +51,25 @@ def load_oas() -> tuple[pd.Series, str, dict[str, object]]:
     with urlopen(req, timeout=45) as response:
         raw = response.read()
     digest = hashlib.sha256(raw).hexdigest()
-    frame = pd.read_csv(io.BytesIO(raw))
+    text = raw.decode("utf-8-sig", errors="strict")
+    lines = text.splitlines()
+    header_index = None
+    for index, line in enumerate(lines):
+        tokens = [token.strip().strip('"').lower() for token in line.split(",")]
+        has_date = any(token in {"date", "observation_date", "timestamp"} for token in tokens)
+        has_value = any(token in {"value", OAS_SERIES.lower(), "close"} for token in tokens)
+        if len(tokens) >= 2 and has_date and has_value:
+            header_index = index
+            break
+    if header_index is None:
+        raise RuntimeError(f"OAS mirror has no recognized CSV header; first_lines={lines[:8]!r}")
+    csv_body = "\n".join(lines[header_index:]) + "\n"
+    frame = pd.read_csv(io.StringIO(csv_body))
     lowered = {str(column).strip().lower(): column for column in frame.columns}
     date_col = next((lowered[key] for key in ("date", "observation_date", "timestamp") if key in lowered), None)
     value_col = next((lowered[key] for key in ("value", OAS_SERIES.lower(), "close") if key in lowered), None)
     if date_col is None or value_col is None:
-        raise RuntimeError(f"unexpected OAS mirror columns: {list(frame.columns)}")
+        raise RuntimeError(f"unexpected OAS mirror columns after preamble: {list(frame.columns)}")
     idx = pd.to_datetime(frame[date_col], utc=True, errors="coerce")
     values = pd.to_numeric(frame[value_col], errors="coerce")
     series = pd.Series(values.to_numpy(), index=idx, name=OAS_SERIES).dropna().sort_index()
@@ -77,6 +90,7 @@ def load_oas() -> tuple[pd.Series, str, dict[str, object]]:
         "first_timestamp": series.index.min().isoformat(),
         "last_timestamp": series.index.max().isoformat(),
         "fred_anchor": {"date": "2026-09-03", "value_percent": 2.65, "validated": True},
+        "metadata_preamble_lines": int(header_index),
     }
     return series, digest, provenance
 
