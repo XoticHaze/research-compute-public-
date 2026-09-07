@@ -1,0 +1,110 @@
+name: P02 canonicalize admitted MNQ source r1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/p02-canonicalize-admitted-mnq-r1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  canonicalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download exact admitted MNQ source artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source/admitted
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            /repos/${GITHUB_REPOSITORY}/actions/artifacts/10005047461/zip \
+            > source/admitted.zip
+          unzip -q source/admitted.zip -d source/admitted
+          test -s source/admitted/MNQ_CONTINUOUS_1Min.csv
+          test -s source/admitted/MNQ_CONTINUOUS_1Min.lineage.json
+          echo 'd99dba176d2a474b8f2a66d6f43bd62d49ab70237d92e4f2a573246ae744fcc0  source/admitted/MNQ_CONTINUOUS_1Min.csv' | sha256sum -c -
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('source/admitted/MNQ_CONTINUOUS_1Min.lineage.json').read_text())
+          assert d['source_sha256'] == 'd99dba176d2a474b8f2a66d6f43bd62d49ab70237d92e4f2a573246ae744fcc0'
+          assert d['union_fingerprint_sha256'] == '81a1b9a40ab62c41b42dc72e7d5d5b7b58d0d71a0bdd7b02d736c20de095b2bd'
+          assert d['coverage_qualified'] is True
+          print('P02_ADMITTED_SOURCE_ARTIFACT=PASS')
+          PY
+
+      - name: Fetch exact MM canonical owner
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source/mm
+          git -C source/mm init
+          git -C source/mm remote add origin https://github.com/XoticHaze/mm-IBKR.git
+          git -C source/mm fetch --depth=1 origin fd81406cec3860fb6f6452c8a3c2f638ee1ccfde
+          git -C source/mm checkout --detach FETCH_HEAD
+          test "$(git -C source/mm rev-parse HEAD)" = 'fd81406cec3860fb6f6452c8a3c2f638ee1ccfde'
+          echo 'P02_MM_CANONICAL_OWNER_PIN=PASS'
+
+      - name: Install MM materialization dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check -q -r source/mm/requirements.txt scipy tzdata
+
+      - name: Materialize canonical MNQ 12Min raw features manifest and sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p canonical-data canonical-receipt
+          python source/mm/scripts/operator/materialize_admitted_futures_source_canonical.py \
+            --source-csv source/admitted/MNQ_CONTINUOUS_1Min.csv \
+            --source-lineage-json source/admitted/MNQ_CONTINUOUS_1Min.lineage.json \
+            --expected-source-sha256 d99dba176d2a474b8f2a66d6f43bd62d49ab70237d92e4f2a573246ae744fcc0 \
+            --data-root canonical-data \
+            --root MNQ \
+            --source-timeframe 1Min \
+            --target-timeframe 12Min \
+            --receipt-json canonical-receipt/p02-canonical-materialization.json
+          test -s canonical-data/futures/MNQ-CONTINUOUS/12Min.csv
+          test -s canonical-data/futures/MNQ-CONTINUOUS/12Min.features.csv
+          test -s canonical-data/futures/MNQ-CONTINUOUS/12Min.feature_manifest.json
+          test -s canonical-data/futures/MNQ-CONTINUOUS/12Min.features.csv.sidecar.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('canonical-receipt/p02-canonical-materialization.json').read_text())
+          assert d['status'] == 'PASS'
+          assert d['source_sha256'] == 'd99dba176d2a474b8f2a66d6f43bd62d49ab70237d92e4f2a573246ae744fcc0'
+          assert d['source_timeframe'] == '1Min'
+          assert d['target_timeframe'] == '12Min'
+          assert d['safety']['network_ib_calls'] is False
+          assert d['safety']['strategy_spec_mutation'] is False
+          assert d['safety']['live_trading_change'] is False
+          print('P02_MM_CANONICAL_MATERIALIZATION=PASS')
+          print('FEATURES_SHA256=' + d['features_sha256'])
+          print('FEATURE_MANIFEST_HASH=' + d['feature_manifest_hash'])
+          print('TARGET_ROWS=' + str(d['target_rows']))
+          PY
+
+      - name: Upload exact canonical P02 data root
+        uses: actions/upload-artifact@v4
+        with:
+          name: p02-mnq-canonical-12min-r1
+          path: |
+            canonical-data/futures/MNQ-CONTINUOUS/
+            canonical-receipt/p02-canonical-materialization.json
+          if-no-files-found: error
+          retention-days: 30
