@@ -15,7 +15,9 @@ START = "1999-01-01"
 END = "2026-09-08"
 PRICE_SYMBOLS = ["SMH", "QQQ", "SPY"]
 OAS_SERIES = "BAMLH0A0HYM2"
-OAS_MIRROR_URL = "https://convextrade.com/metrics/bamlh0a0hym2/data.csv"
+OAS_ARCHIVE_COMMIT = "bf64e83fa4c2a6e72c37d3883476dc81bd9d2e31"
+OAS_ARCHIVE_URL = f"https://raw.githubusercontent.com/maaurocp/Trading_Protocol/{OAS_ARCHIVE_COMMIT}/data/raw/fred_BAMLH0A0HYM2.csv"
+OAS_TAIL_URL = "https://convextrade.com/metrics/bamlh0a0hym2/data.csv"
 OAS_MA_OBS = 252
 OAS_DELTA_OBS = 63
 PUBLICATION_LAG_DAYS = 7
@@ -26,6 +28,15 @@ OUT = "p17-credit-oas-semiconductor-switch-receipt.json"
 
 def epoch(value: str) -> int:
     return int(datetime.fromisoformat(value).replace(tzinfo=timezone.utc).timestamp())
+
+
+def fetch_bytes(url: str, timeout: int = 45) -> bytes:
+    req = Request(url, headers={"User-Agent": "Mozilla/5.0 research-compute/1.0"})
+    with urlopen(req, timeout=timeout) as response:
+        raw = response.read()
+    if not raw:
+        raise RuntimeError(f"empty response from {url}")
+    return raw
 
 
 def load_price(symbol: str) -> pd.Series:
@@ -46,53 +57,110 @@ def load_price(symbol: str) -> pd.Series:
     return series[~series.index.duplicated(keep="last")].sort_index()
 
 
-def load_oas() -> tuple[pd.Series, str, dict[str, object]]:
-    req = Request(OAS_MIRROR_URL, headers={"User-Agent": "Mozilla/5.0 research-compute/1.0"})
-    with urlopen(req, timeout=45) as response:
-        raw = response.read()
-    digest = hashlib.sha256(raw).hexdigest()
+def parse_archive(raw: bytes) -> pd.Series:
+    frame = pd.read_csv(io.BytesIO(raw), na_values=[".", ""])
+    date_col = "date" if "date" in frame.columns else "DATE"
+    value_col = OAS_SERIES
+    if date_col not in frame.columns or value_col not in frame.columns:
+        raise RuntimeError(f"unexpected archive columns: {list(frame.columns)}")
+    idx = pd.to_datetime(frame[date_col], utc=True, errors="coerce")
+    values = pd.to_numeric(frame[value_col], errors="coerce")
+    series = pd.Series(values.to_numpy(), index=idx, name=OAS_SERIES).dropna().sort_index()
+    return series[~series.index.duplicated(keep="last")]
+
+
+def parse_tail(raw: bytes) -> tuple[pd.Series, int]:
     text = raw.decode("utf-8-sig", errors="strict")
     lines = text.splitlines()
     header_index = None
     for index, line in enumerate(lines):
         tokens = [token.strip().strip('"').lower() for token in line.split(",")]
-        has_date = any(token in {"date", "observation_date", "timestamp"} for token in tokens)
-        has_value = any(token in {"value", OAS_SERIES.lower(), "close"} for token in tokens)
-        if len(tokens) >= 2 and has_date and has_value:
+        if "date" in tokens and any(token in {"value", "value_bps", OAS_SERIES.lower(), "close"} for token in tokens):
             header_index = index
             break
     if header_index is None:
-        raise RuntimeError(f"OAS mirror has no recognized CSV header; first_lines={lines[:8]!r}")
-    csv_body = "\n".join(lines[header_index:]) + "\n"
-    frame = pd.read_csv(io.StringIO(csv_body))
+        raise RuntimeError(f"OAS tail has no recognized CSV header; first_lines={lines[:8]!r}")
+    frame = pd.read_csv(io.StringIO("\n".join(lines[header_index:]) + "\n"))
     lowered = {str(column).strip().lower(): column for column in frame.columns}
-    date_col = next((lowered[key] for key in ("date", "observation_date", "timestamp") if key in lowered), None)
-    value_col = next((lowered[key] for key in ("value", OAS_SERIES.lower(), "close") if key in lowered), None)
+    date_col = lowered.get("date") or lowered.get("observation_date") or lowered.get("timestamp")
+    value_col = lowered.get("value") or lowered.get("value_bps") or lowered.get(OAS_SERIES.lower()) or lowered.get("close")
     if date_col is None or value_col is None:
-        raise RuntimeError(f"unexpected OAS mirror columns after preamble: {list(frame.columns)}")
+        raise RuntimeError(f"unexpected OAS tail columns: {list(frame.columns)}")
     idx = pd.to_datetime(frame[date_col], utc=True, errors="coerce")
     values = pd.to_numeric(frame[value_col], errors="coerce")
     series = pd.Series(values.to_numpy(), index=idx, name=OAS_SERIES).dropna().sort_index()
     series = series[~series.index.duplicated(keep="last")]
-    if len(series) < 1000:
-        raise RuntimeError(f"{OAS_SERIES}: insufficient mirror observations {len(series)}")
     if float(series.median()) > 50.0:
         series = series / 100.0
+    return series, int(header_index)
+
+
+def load_oas() -> tuple[pd.Series, str, dict[str, object]]:
+    archive_raw = fetch_bytes(OAS_ARCHIVE_URL)
+    tail_raw = fetch_bytes(OAS_TAIL_URL)
+    archive = parse_archive(archive_raw)
+    tail, preamble_lines = parse_tail(tail_raw)
+    if archive.index.min() > pd.Timestamp("1997-01-02", tz="UTC") or archive.index.max() < pd.Timestamp("2026-02-01", tz="UTC"):
+        raise RuntimeError(f"archive date span unexpected: {archive.index.min()} -> {archive.index.max()}")
+    if tail.index.min() > pd.Timestamp("2021-09-15", tz="UTC"):
+        raise RuntimeError(f"tail starts too late for overlap validation: {tail.index.min()}")
+
+    overlap_idx = archive.index.intersection(tail.index)
+    overlap = pd.DataFrame({"archive": archive.reindex(overlap_idx), "tail": tail.reindex(overlap_idx)}).dropna()
+    if len(overlap) < 500:
+        raise RuntimeError(f"insufficient OAS overlap rows: {len(overlap)}")
+    abs_diff = (overlap["archive"] - overlap["tail"]).abs()
+    median_abs_diff = float(abs_diff.median())
+    p99_abs_diff = float(abs_diff.quantile(0.99))
+    if median_abs_diff > 0.011 or p99_abs_diff > 0.051:
+        raise RuntimeError(f"OAS overlap mismatch: rows={len(overlap)} median_abs={median_abs_diff} p99_abs={p99_abs_diff}")
+
+    tail_only = tail.loc[tail.index > archive.index.max()]
+    series = pd.concat([archive, tail_only]).sort_index()
+    series = series[~series.index.duplicated(keep="last")]
+    if len(series) < 7000:
+        raise RuntimeError(f"stitched OAS history too short: {len(series)}")
     anchor_date = pd.Timestamp("2026-09-03", tz="UTC")
     anchor = series.loc[series.index == anchor_date]
     if anchor.empty or abs(float(anchor.iloc[-1]) - 2.65) > 0.011:
-        raise RuntimeError(f"OAS mirror failed FRED anchor 2026-09-03=2.65; observed={None if anchor.empty else float(anchor.iloc[-1])}")
+        raise RuntimeError(f"stitched OAS failed FRED anchor 2026-09-03=2.65; observed={None if anchor.empty else float(anchor.iloc[-1])}")
+
+    archive_sha256 = hashlib.sha256(archive_raw).hexdigest()
+    tail_sha256 = hashlib.sha256(tail_raw).hexdigest()
+    stitched_identity = hashlib.sha256(pd.util.hash_pandas_object(series, index=True).values.tobytes()).hexdigest()
     provenance = {
-        "provider": "Convex stable full-history mirror of FRED BAMLH0A0HYM2",
-        "url": OAS_MIRROR_URL,
-        "sha256": digest,
-        "rows": int(len(series)),
-        "first_timestamp": series.index.min().isoformat(),
-        "last_timestamp": series.index.max().isoformat(),
+        "authority_series": OAS_SERIES,
+        "archive": {
+            "provider": "maaurocp/Trading_Protocol public FRED archive",
+            "commit": OAS_ARCHIVE_COMMIT,
+            "url": OAS_ARCHIVE_URL,
+            "sha256": archive_sha256,
+            "rows": int(len(archive)),
+            "first_timestamp": archive.index.min().isoformat(),
+            "last_timestamp": archive.index.max().isoformat(),
+        },
+        "current_tail": {
+            "provider": "Convex mirror of FRED BAMLH0A0HYM2",
+            "url": OAS_TAIL_URL,
+            "sha256": tail_sha256,
+            "rows": int(len(tail)),
+            "first_timestamp": tail.index.min().isoformat(),
+            "last_timestamp": tail.index.max().isoformat(),
+            "metadata_preamble_lines": preamble_lines,
+        },
+        "overlap_validation": {
+            "rows": int(len(overlap)),
+            "median_abs_difference_percent": median_abs_diff,
+            "p99_abs_difference_percent": p99_abs_diff,
+            "accepted": True,
+        },
         "fred_anchor": {"date": "2026-09-03", "value_percent": 2.65, "validated": True},
-        "metadata_preamble_lines": int(header_index),
+        "stitched_rows": int(len(series)),
+        "stitched_first_timestamp": series.index.min().isoformat(),
+        "stitched_last_timestamp": series.index.max().isoformat(),
+        "stitched_content_identity": stitched_identity,
     }
-    return series, digest, provenance
+    return series, stitched_identity, provenance
 
 
 def month_end_indices(frame: pd.DataFrame) -> list[int]:
@@ -128,7 +196,7 @@ def main() -> None:
     prices = {symbol: load_price(symbol) for symbol in PRICE_SYMBOLS}
     common = pd.DatetimeIndex(sorted(set.intersection(*[set(series.index) for series in prices.values()])))
     frame = pd.DataFrame({symbol: series.reindex(common) for symbol, series in prices.items()}).dropna()
-    oas, oas_sha256, oas_provenance = load_oas()
+    oas, oas_identity, oas_provenance = load_oas()
     month_ends = month_end_indices(frame)
     decisions = []
     for n, i in enumerate(month_ends[:-1]):
@@ -182,7 +250,7 @@ def main() -> None:
         "schema": "public_research.p17_credit_oas_semiconductor_switch.v1",
         "research_only": True,
         "frozen_hypothesis": "At each month-end, use only ICE BofA US High Yield OAS observations at least seven calendar days old. Hold SMH for the next month when OAS is at or below its trailing 252-observation mean and has not risen over 63 observations; otherwise hold QQQ. Independent credit-state information should improve after-cost return versus SMH, QQQ, SPY and a static 50/50 SMH-QQQ opportunity set without using future macro observations.",
-        "sources": {"prices": {"provider": "Yahoo chart adjusted close", "query_host": "query1.finance.yahoo.com"}, "macro": {"authority_series": OAS_SERIES, "meaning": "ICE BofA US High Yield Index Option-Adjusted Spread", "materialization": oas_provenance, "runtime_sha256": oas_sha256}},
+        "sources": {"prices": {"provider": "Yahoo chart adjusted close", "query_host": "query1.finance.yahoo.com"}, "macro": {"authority_series": OAS_SERIES, "meaning": "ICE BofA US High Yield Index Option-Adjusted Spread", "materialization": oas_provenance, "runtime_identity": oas_identity}},
         "causality": {"publication_lag_days": PUBLICATION_LAG_DAYS, "macro_cutoff_rule": "latest OAS observation timestamp <= price decision timestamp minus seven calendar days", "trade_rule": "signal at month-end close, measure return to next month-end close"},
         "parameters": {"oas_mean_observations": OAS_MA_OBS, "oas_delta_observations": OAS_DELTA_OBS, "costs_bps": COSTS_BPS, "primary_cost_bps": PRIMARY_COST_BPS},
         "matched_window": {"signal_start": frame.index[int(decisions[0]["i"])].isoformat(), "return_end": frame.index[int(decisions[-1]["j"])].isoformat(), "common_price_rows": len(frame), "monthly_decisions": len(decisions)},
