@@ -1,0 +1,50 @@
+{
+  "schema": "public_research.p05_option_implied_vol_state_terminal.v1",
+  "research_only": true,
+  "parent_id": "P05",
+  "execution": {
+    "run_id": 34119133937,
+    "job_id": 101732846854,
+    "artifact_id": 10017484066,
+    "artifact_zip_sha256": "2f2a0f63c82c62370619aeb3913f6b56430d08f934373619e21d19029ddce7f2"
+  },
+  "source": {
+    "series": ["VIXCLS", "VXVCLS"],
+    "rows": 3185,
+    "first": "2014-01-02",
+    "last": "2026-09-01",
+    "raw_response_sha256": "c51dbf3733916593010864266dd8eeb44ea9eef52544e3f5497cf9d98b6a007d",
+    "canonical_rows_sha256": "3d0c71976b16f17a6d2ce21c4a87e7cc685bbbf0c07627ced6192a11a7a443ae",
+    "causal_join": "strictly previous available volatility close; same-day close never used"
+  },
+  "fixed_representation": "VIX > VIX3M on the prior available close; reduce new-entry capacity from 3 to 1 while leaving existing positions untouched",
+  "decision": "NOT_SUPPORTED_BOTH_SURFACES",
+  "surfaces": {
+    "homebuilders_biotech": {
+      "raw_capacity3_compound_stock_return": 0.4714629463720479,
+      "vix_backwardation_cap1_compound_stock_return": 0.46323502399118843,
+      "raw_compound_matched_etf_excess": 0.0024060820782692005,
+      "challenger_compound_matched_etf_excess": -0.009736281678498715,
+      "fold_wins_vs_raw": 1,
+      "positive_matched_etf_excess_folds": 1,
+      "candidate_backwardation_mean_matched_excess_bps": -111.21895946319326,
+      "candidate_contango_or_flat_mean_matched_excess_bps": 36.8206670679991
+    },
+    "consumer_staples_metals_reits_pharma": {
+      "raw_capacity3_compound_stock_return": 1.104107010781446,
+      "vix_backwardation_cap1_compound_stock_return": 0.9414763384439075,
+      "raw_compound_matched_etf_excess": -0.8364398665613932,
+      "challenger_compound_matched_etf_excess": -0.8204803841587205,
+      "fold_wins_vs_raw": 1,
+      "positive_matched_etf_excess_folds": 1,
+      "candidate_backwardation_mean_matched_excess_bps": -57.663745656419984,
+      "candidate_contango_or_flat_mean_matched_excess_bps": -0.9149724442990137
+    }
+  },
+  "parent_consequence": "The fixed option-implied backwardation capacity scaler is parked. Backwardation is directionally associated with worse matched-industry opportunity outcomes on both frozen surfaces, but this blunt capacity intervention does not robustly monetize that information. Do not tune VIX/VIX3M thresholds, capacity 1/2/3, or nearby blend rules as a rescue. Options-derived information remains eligible only through a materially richer independent representation such as ticker-level causal IV/skew/term information with an admitted historical source.",
+  "promotion_authority": false,
+  "allocation_runtime_authority": false,
+  "strategy_spec_mutation": false,
+  "broker_action": false,
+  "live_trading_change": false
+}
