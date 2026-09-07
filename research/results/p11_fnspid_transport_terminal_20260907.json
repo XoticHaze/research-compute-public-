@@ -1,0 +1,52 @@
+{
+  "schema": "public_research.p11_fnspid_transport_terminal.v1",
+  "research_only": true,
+  "parent_id": "P11",
+  "decision": "ROTATE_FNSPID_SOURCE_DO_NOT_RESCUE_TRANSPORT_AGAIN",
+  "scientific_result": "NOT_EVALUATED",
+  "publication_authority_result": "NOT_ESTABLISHED",
+  "transport_attempts": [
+    {
+      "mechanism": "indexed_huggingface_viewer_filter",
+      "result": "UNAVAILABLE",
+      "classification": "SERVER_SIDE_FILTER_CAPABILITY_REMOVED_FROM_KNOWN_MIRRORS",
+      "scientific_failure": false
+    },
+    {
+      "mechanism": "exact_pinned_23GB_csv_sequential_stream",
+      "result": "TIMEOUT",
+      "classification": "PUBLIC_EXECUTION_WINDOW_EXCEEDED_BEFORE_BOUNDED_RECEIPT",
+      "scientific_failure": false,
+      "representative_run_id": 34043222472
+    },
+    {
+      "mechanism": "pinned_native_parquet_bounded_sample",
+      "result": "EXHAUSTED",
+      "classification": "REMOTE_PARQUET_TRANSPORT_DID_NOT_COMPLETE_WITHIN_EXECUTION_WINDOW",
+      "scientific_failure": false,
+      "attempts": [
+        {
+          "result": "HTTP_429",
+          "mechanism_detail": "default_parallel_remote_scan"
+        },
+        {
+          "run_id": 34113037547,
+          "job_id": 101713403403,
+          "result": "CANCELLED_AFTER_30_MINUTES",
+          "mechanism_detail": "single DuckDB worker + metadata cache + 12 bounded retries + exponential backoff + 120 second HTTP timeout",
+          "consumer_step": "Execute pinned Parquet publication-authority validation",
+          "receipt_emitted": false
+        }
+      ]
+    }
+  ],
+  "interpretation": "FNSPID has not failed the causal publication-time scientific gate because the deterministic 30-row article sample never completed. It has failed the current bounded public-transport value test after three materially different mechanisms. A fourth transport rescue would violate the parent child-budget rule and delay independent news information.",
+  "next_action": "Rotate P11 to an already-approved source with explicit point-in-time publication metadata. Foundry #219 gives first preference to Alpaca/Benzinga historical News where actual project credentials admit it; otherwise select another publication-authoritative source and freeze source/coverage/scorer semantics before economic testing.",
+  "economic_gate": "DO_NOT_RUN_UNTIL_PUBLICATION_AUTHORITY_AND_SCORER_CALIBRATION_PASS",
+  "protected_boundaries": {
+    "strategy_spec_mutation": false,
+    "runtime_authority_change": false,
+    "broker_action": false,
+    "live_trading_change": false
+  }
+}
