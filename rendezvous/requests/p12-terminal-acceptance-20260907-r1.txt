@@ -1,0 +1,9 @@
+PARENT=P12
+CHILD=P12-C-REVIEWED-ACTIVATION-TERMINAL-ACCEPTANCE-R4
+PUBLIC_BINDING_SHA=7818b54d5bb85bccaa21b9cbd4beb12f5bb999db
+MM_HEAD_SHA=8784628729d92a53889b4b363e7a3c87c0ffff43
+AUTHORITY=product_non_live_acceptance
+EXPECT_MATCHED=review_guard_PASS+config_write_applied+canonical_writer_invoked+exact_readback
+EXPECT_MISMATCH=FAIL_CLOSED+zero_write+zero_readback
+LIVE_TRADING_CHANGES=forbidden
+BROKER_SUBMIT=forbidden
