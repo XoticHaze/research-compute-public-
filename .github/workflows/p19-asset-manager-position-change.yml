@@ -1,0 +1,49 @@
+name: P19 Asset Manager Position Change
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p19_asset_manager_position_change_20260907.py'
+      - '.github/workflows/p19-asset-manager-position-change.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  p19-asset-manager-position-change:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install scientific dependencies
+        run: python -m pip install --disable-pip-version-check numpy pandas
+      - name: Compile frozen discriminator
+        run: python -m py_compile research/p19_asset_manager_position_change_20260907.py
+      - name: Execute frozen discriminator
+        run: python research/p19_asset_manager_position_change_20260907.py
+      - name: Verify terminal receipt
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('p19-asset-manager-position-change-result.json')
+          r = json.loads(p.read_text())
+          assert r['status'] == 'PASS'
+          assert r['frozen_before_execution'] is True
+          assert r['frozen_contract']['parameter_search'] is False
+          assert r['safety']['live_trading_change'] is False
+          assert r['matched_window']['weekly_intervals'] >= 800
+          print(json.dumps({'decision': r['decision'], 'matched_window': r['matched_window'], 'primary': r['cost_results']['25'], 'positive_folds': r['positive_fold_count_vs_qqq'], 'positive_years': r['full_calendar_years_beating_qqq']}, indent=2))
+          PY
+      - name: Upload terminal evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p19-asset-manager-position-change-result
+          path: p19-asset-manager-position-change-result.json
+          if-no-files-found: warn
