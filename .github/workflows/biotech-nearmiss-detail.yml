@@ -1,6 +1,9 @@
 name: Biotech Near-Miss Detail
 on:
   pull_request:
+    paths:
+      - 'research/biotech-nearmiss-detail-contract.json'
+      - '.github/workflows/biotech-nearmiss-detail.yml'
   workflow_dispatch:
 permissions:
   contents: read
