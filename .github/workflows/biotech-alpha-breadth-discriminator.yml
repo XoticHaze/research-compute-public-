@@ -1,0 +1,48 @@
+name: Biotech Alpha Breadth Discriminator
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/biotech-alpha-breadth-discriminator.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install numerical environment
+        run: python -m pip install --disable-pip-version-check -q numpy==2.4.6 pandas==3.0.5 scikit-learn==1.9.0 scipy==1.17.1
+      - name: Execute benchmark-aware breadth discriminator
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/XoticHaze/TextConverterToolbox/2d8995ba66502a4de25c64c1c32a67e132b05522/research/run_industry_stagea_public_runner_20260905.py -o /tmp/runner.py
+          test "$(git hash-object /tmp/runner.py)" = 9f7f802469dc6a33abd3431295d5232ebc4289c5
+          python - <<'PY'
+          import importlib.util, json
+          spec=importlib.util.spec_from_file_location('r','/tmp/runner.py'); r=importlib.util.module_from_spec(spec); spec.loader.exec_module(r)
+          family={'biotech':{'primary_industry_etf':'XBI','development_universe':['REGN','VRTX','GILD','BIIB','ALNY','INCY','BMRN','UTHR']}}
+          out=r._evaluate_matrix(family,'2026-09-01T13:30:00+00:00')
+          rows=[x for x in out['per_symbol'] if x['family']=='biotech']
+          # Frozen diagnostic only: preserve candidate net return and matched XBI-relative excess.
+          ranked=sorted(rows,key=lambda x:x['stock_after25_minus_sector_etf_mean_bps'],reverse=True)
+          positive_excess=[x for x in rows if x['stock_after25_minus_sector_etf_mean_bps']>0]
+          robust=[x for x in rows if x['positive_sector_excess_folds']>=3 and x['stock_after25_minus_sector_etf_mean_bps']>0]
+          receipt={
+            'schema':'biotech_alpha_breadth_discriminator.v1',
+            'benchmark':'XBI','cost_bps':25,'external_holdouts_loaded':False,
+            'family_summary':out['family_summary']['biotech'],
+            'positive_matched_xbi_excess_symbols':[x['symbol'] for x in positive_excess],
+            'robust_matched_xbi_excess_symbols':[x['symbol'] for x in robust],
+            'ranked':[{'symbol':x['symbol'],'candidate_net25_bps':x['stock_net25_mean_bps'],'matched_xbi_excess_bps':x['stock_after25_minus_sector_etf_mean_bps'],'positive_xbi_excess_folds':x['positive_sector_excess_folds'],'states':x['primary_states']} for x in ranked],
+            'decision':'BROAD_ALPHA' if len(robust)>=5 else 'CONCENTRATED_ALPHA',
+            'research_only':True,'promotion_authority':False}
+          open('biotech-alpha-breadth-receipt.json','w').write(json.dumps(receipt,sort_keys=True,indent=2)+'\n')
+          print('BIOTECH_ALPHA_BREADTH='+json.dumps(receipt,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: biotech-alpha-breadth-receipt
+          path: biotech-alpha-breadth-receipt.json
+          retention-days: 14
