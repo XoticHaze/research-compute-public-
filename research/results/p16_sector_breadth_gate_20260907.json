@@ -1,0 +1,56 @@
+{
+  "schema": "public_research.p16_sector_breadth_gate_result.v1",
+  "research_only": true,
+  "source_run": {
+    "run_id": 34102404404,
+    "job_id": 101679592953,
+    "pr": 124,
+    "head_sha_before_receipt": "26fb2f28c944499a4d20dbdf3f6bc4333532f1c5"
+  },
+  "frozen_hypothesis": "Deploy the prior-126-session positive-momentum top-3 sector book only when at least 6 of 9 sector ETFs are above their own trailing-200-session mean; otherwise hold cash.",
+  "matched_window": {
+    "signal_start": "1999-12-31T14:30:00+00:00",
+    "return_end": "2026-08-31T13:30:00+00:00",
+    "common_rows": 6916,
+    "monthly_decisions": 320,
+    "full_years": 26
+  },
+  "deployment": {
+    "active_months": 224,
+    "cash_months": 96,
+    "active_fraction": 0.7,
+    "mean_breadth": 6.45
+  },
+  "primary_25bps": {
+    "candidate_cagr": 0.05599502226430686,
+    "raw_momentum_cagr": 0.07653122730789064,
+    "equal_sector_cagr": 0.08952591059501191,
+    "SPY_cagr": 0.08304561733046367,
+    "QQQ_cagr": 0.08756138448584694,
+    "candidate_max_drawdown": -0.2142351048382345,
+    "raw_momentum_max_drawdown": -0.30705722145264625,
+    "cagr_vs_raw": -0.020536205043583777,
+    "cagr_vs_equal_sector": -0.033530888330705055,
+    "cagr_vs_SPY": -0.027050595066156813,
+    "cagr_vs_QQQ": -0.03156636222154008,
+    "max_drawdown_improvement_vs_raw": 0.09282211661441175,
+    "positive_years_vs_raw": 7,
+    "positive_years_vs_equal_sector": 5,
+    "positive_years_vs_SPY": 8
+  },
+  "cost_stress": {
+    "candidate_cagr_10bps": 0.06267369500012987,
+    "candidate_cagr_25bps": 0.05599502226430686,
+    "candidate_cagr_50bps": 0.044940920638863124,
+    "raw_cagr_10bps": 0.08292644704179031,
+    "raw_cagr_25bps": 0.07653122730789064,
+    "raw_cagr_50bps": 0.06594432007182371
+  },
+  "decision": "P16_SECTOR_BREADTH_GATE_NOT_SUPPORTED",
+  "interpretation": "The breadth gate materially reduced drawdown but destroyed too much return and lacked year-level persistence. Do not tune the 6-of-9 threshold, trend window, momentum lookback, top-N, or revealed years. Rotate to a genuinely different information mechanism.",
+  "allocation_authority": false,
+  "promotion_authority": false,
+  "runtime_authority": false,
+  "broker_authority": false,
+  "live_trading_change": false
+}
