@@ -3,7 +3,8 @@ from __future__ import annotations
 import io
 import json
 import math
-from datetime import datetime, timedelta, timezone
+import time
+from datetime import datetime, timezone
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -58,10 +59,22 @@ def load_price(symbol: str) -> pd.Series:
 
 
 def load_oas() -> pd.Series:
-    url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={OAS_SERIES}"
-    req = Request(url, headers={"User-Agent": "Mozilla/5.0 research-compute/1.0"})
-    with urlopen(req, timeout=30) as response:
-        raw = response.read()
+    url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={OAS_SERIES}&cosd={START}&coed=2026-09-07"
+    last_error: Exception | None = None
+    raw: bytes | None = None
+    for attempt in range(1, 4):
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0 research-compute/1.0"})
+        try:
+            with urlopen(req, timeout=90) as response:
+                raw = response.read()
+            if raw:
+                break
+        except Exception as exc:
+            last_error = exc
+            if attempt < 3:
+                time.sleep(5 * attempt)
+    if not raw:
+        raise RuntimeError(f"FRED read exhausted after 3 attempts: {last_error!r}")
     frame = pd.read_csv(io.BytesIO(raw))
     if "DATE" not in frame.columns or OAS_SERIES not in frame.columns:
         raise RuntimeError(f"unexpected FRED columns: {list(frame.columns)}")
