@@ -1,0 +1,183 @@
+name: P02 Encrypted MM Canonicalizer
+
+on:
+  pull_request:
+    paths:
+      - 'rendezvous/requests/p02-mm-canonicalizer-*.txt'
+      - '.github/workflows/p02-encrypted-mm-canonicalizer.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  EXCHANGE_REF: rendezvous-exchange
+  RECIPIENT_ROOT: rendezvous/recipients
+  PRODUCER_REQUEST_ROOT: rendezvous/producer-requests
+  RESPONSE_ROOT: rendezvous/responses
+  MM_COMMIT: fd81406cec3860fb6f6452c8a3c2f638ee1ccfde
+  HARNESS: p02_mm_canonicalizer_fd81406c_v1
+  SOURCE_RUN_ID: '34085345387'
+  SOURCE_ARTIFACT: p02-mnq-admitted-union-1min
+  SOURCE_SHA256: d99dba176d2a474b8f2a66d6f43bd62d49ab70237d92e4f2a573246ae744fcc0
+
+jobs:
+  canonicalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install fixed canonicalizer environment
+        run: python -m pip install --disable-pip-version-check -q cryptography pandas numpy pytz ib_insync scipy scikit-learn ta
+      - name: Download admitted MNQ source artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/source"
+          gh run download "$SOURCE_RUN_ID" -R "$GITHUB_REPOSITORY" -n "$SOURCE_ARTIFACT" -D "$RUNNER_TEMP/source"
+          python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'source'
+          expected=os.environ['SOURCE_SHA256']
+          csvs=list(root.rglob('*.csv'))
+          matches=[]
+          for p in csvs:
+              h=hashlib.sha256(p.read_bytes()).hexdigest()
+              if h==expected: matches.append(p)
+          if len(matches)!=1: raise SystemExit(f'expected exactly one admitted CSV sha={expected}, got {matches}')
+          source=matches[0]
+          lineage=None
+          for p in root.rglob('*.json'):
+              try: d=json.loads(p.read_text())
+              except Exception: continue
+              declared=str(d.get('source_sha256') or d.get('sha256') or '').lower() if isinstance(d,dict) else ''
+              if declared==expected: lineage=p; break
+          if lineage is None:
+              # Preserve the artifact/run provenance without inventing data semantics.
+              lineage=root/'p02-source-lineage.json'
+              lineage.write_text(json.dumps({'schema':'p02.admitted_source_lineage.v1','authority':'research-compute-public admitted source materialization','source_run_id':os.environ['SOURCE_RUN_ID'],'source_artifact':os.environ['SOURCE_ARTIFACT'],'source_sha256':expected},sort_keys=True)+'\n')
+          out=Path(os.environ['GITHUB_ENV'])
+          with out.open('a') as f:
+              f.write(f'P02_SOURCE_CSV={source}\nP02_SOURCE_LINEAGE={lineage}\n')
+          print('P02_SOURCE_SHA256='+expected)
+          print('P02_SOURCE_CSV='+str(source))
+          print('P02_SOURCE_LINEAGE='+str(lineage))
+          PY
+      - name: Generate one-run recipient
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import base64,hashlib,json,os
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric import x25519
+          private=x25519.X25519PrivateKey.generate()
+          private_raw=private.private_bytes(serialization.Encoding.Raw,serialization.PrivateFormat.Raw,serialization.NoEncryption())
+          public_raw=private.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)
+          Path(os.environ['RUNNER_TEMP'],'p02-mm-private-key.b64').write_text(base64.b64encode(private_raw).decode())
+          r={'schema':'p02-mm-canonicalizer-recipient-v1','run_id':os.environ['GITHUB_RUN_ID'],'recipient_b64':base64.b64encode(public_raw).decode(),'recipient_key_id':'sha256:'+hashlib.sha256(public_raw).hexdigest()}
+          Path(os.environ['RUNNER_TEMP'],'p02-mm-recipient.json').write_text(json.dumps(r,sort_keys=True)+'\n')
+          print('P02_MM_RECIPIENT_KEY_ID='+r['recipient_key_id'])
+          PY
+      - name: Publish recipient and producer request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          recipient_path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}.json"
+          request_path="${PRODUCER_REQUEST_ROOT}/${GITHUB_RUN_ID}.json"
+          response_path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/sealed-envelope.json"
+          upsert() {
+            local path="$1" file="$2" message="$3" api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${1}"
+            local sha="$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' "${api}?ref=${EXCHANGE_REF}" | python -c 'import json,sys; d=json.load(sys.stdin); print(d.get("sha", ""))' || true)"
+            python - "$file" "$message" "$EXCHANGE_REF" "$sha" <<'PY' > "$RUNNER_TEMP/upsert.json"
+          import base64,json,sys
+          path,msg,branch,sha=sys.argv[1:]
+          d={'message':msg,'content':base64.b64encode(open(path,'rb').read()).decode(),'branch':branch}
+          if sha:d['sha']=sha
+          print(json.dumps(d,separators=(',',':')))
+          PY
+            curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' "$api" -d @"$RUNNER_TEMP/upsert.json" >/dev/null
+          }
+          upsert "$recipient_path" "$RUNNER_TEMP/p02-mm-recipient.json" 'rendezvous: publish P02 MM canonicalizer recipient'
+          python - "$recipient_path" "$response_path" <<'PY' > "$RUNNER_TEMP/p02-mm-producer-request.json"
+          import json,os,sys
+          recipient,response=sys.argv[1:]
+          print(json.dumps({'schema':'p02-mm-canonicalizer-producer-request-v1','run_id':os.environ['GITHUB_RUN_ID'],'parent_id':'P02','authority':'research_only','harness':os.environ['HARNESS'],'mm_commit':os.environ['MM_COMMIT'],'source_run_id':os.environ['SOURCE_RUN_ID'],'source_artifact':os.environ['SOURCE_ARTIFACT'],'source_sha256':os.environ['SOURCE_SHA256'],'recipient_path':recipient,'expected_envelope_path':response,'exchange_ref':os.environ['EXCHANGE_REF']},sort_keys=True))
+          PY
+          upsert "$request_path" "$RUNNER_TEMP/p02-mm-producer-request.json" 'rendezvous: publish P02 MM canonicalizer producer request'
+      - name: Wait for exact run-bound canonicalizer capsule
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          response_path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/sealed-envelope.json"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${response_path}?ref=${EXCHANGE_REF}"
+          expected_key="$(python -c 'import json,os; print(json.load(open(os.path.join(os.environ["RUNNER_TEMP"],"p02-mm-recipient.json")))["recipient_key_id"])')"
+          found=0
+          for _ in $(seq 1 240); do
+            if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/envelope.candidate.json"; then
+              if python - "$RUNNER_TEMP/envelope.candidate.json" "$GITHUB_RUN_ID" "$expected_key" <<'PY'
+          import base64,json,os,sys
+          p,run_id,key=sys.argv[1:]
+          try:
+              d=json.load(open(p)); req={'schema','run_id','authority','harness','mm_commit','recipient_key_id','sender_public_b64','nonce_b64','ciphertext_b64','plaintext_sha256'}
+              assert set(d)==req and d['schema']=='p02-mm-canonicalizer-x25519-v1' and str(d['run_id'])==str(run_id)
+              assert d['authority']=='research_only' and d['harness']==os.environ['HARNESS'] and d['mm_commit']==os.environ['MM_COMMIT'] and d['recipient_key_id']==key
+              assert len(base64.b64decode(d['sender_public_b64'],validate=True))==32 and len(base64.b64decode(d['nonce_b64'],validate=True))==12 and len(base64.b64decode(d['ciphertext_b64'],validate=True))>32 and len(d['plaintext_sha256'])==64
+          except Exception: raise SystemExit(1)
+          PY
+              then mv "$RUNNER_TEMP/envelope.candidate.json" "$RUNNER_TEMP/envelope.json"; found=1; break; fi
+            fi
+            sleep 5
+          done
+          test "$found" = 1 || { echo 'valid exact-run encrypted canonicalizer capsule did not arrive'; exit 42; }
+      - name: Decrypt capsule and execute MM canonical materializer
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64,hashlib,json,os,tarfile
+          from pathlib import Path
+          from cryptography.hazmat.primitives import hashes,serialization
+          from cryptography.hazmat.primitives.asymmetric import x25519
+          from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+          from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+          rt=Path(os.environ['RUNNER_TEMP']); d=json.loads((rt/'envelope.json').read_text())
+          priv=x25519.X25519PrivateKey.from_private_bytes(base64.b64decode((rt/'p02-mm-private-key.b64').read_text()))
+          sender=x25519.X25519PublicKey.from_public_bytes(base64.b64decode(d['sender_public_b64']))
+          shared=priv.exchange(sender); key=HKDF(algorithm=hashes.SHA256(),length=32,salt=None,info=b'p02-mm-canonicalizer-v1').derive(shared)
+          aad=f"{d['run_id']}|{d['harness']}|{d['mm_commit']}|{d['recipient_key_id']}".encode()
+          plain=ChaCha20Poly1305(key).decrypt(base64.b64decode(d['nonce_b64']),base64.b64decode(d['ciphertext_b64']),aad)
+          assert hashlib.sha256(plain).hexdigest()==d['plaintext_sha256']
+          capsule=rt/'mm-canonicalizer.tar.gz'; capsule.write_bytes(plain)
+          dest=rt/'mm'; dest.mkdir()
+          with tarfile.open(capsule,'r:gz') as tf:
+              for m in tf.getmembers():
+                  target=(dest/m.name).resolve()
+                  if dest.resolve() not in target.parents and target!=dest.resolve(): raise SystemExit('unsafe tar member')
+              tf.extractall(dest)
+          print('P02_MM_CAPSULE_SHA256='+hashlib.sha256(plain).hexdigest())
+          PY
+          cd "$RUNNER_TEMP/mm"
+          python scripts/operator/materialize_admitted_futures_source_canonical.py \
+            --source-csv "$P02_SOURCE_CSV" --source-lineage-json "$P02_SOURCE_LINEAGE" \
+            --expected-source-sha256 "$SOURCE_SHA256" --data-root "$RUNNER_TEMP/canonical" \
+            --root MNQ --source-timeframe 1Min --target-timeframe 12Min --receipt-json "$RUNNER_TEMP/canonical-receipt.json"
+          cat "$RUNNER_TEMP/canonical-receipt.json"
+      - name: Publish canonical materialization artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: p02-mnq-canonical-12min-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/canonical/**
+            ${{ runner.temp }}/canonical-receipt.json
+          if-no-files-found: error
+      - name: Remove one-run private material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/p02-mm-private-key.b64" "$RUNNER_TEMP/p02-mm-recipient.json" "$RUNNER_TEMP/p02-mm-producer-request.json" "$RUNNER_TEMP/envelope.json" "$RUNNER_TEMP/envelope.candidate.json" "$RUNNER_TEMP/mm-canonicalizer.tar.gz"
