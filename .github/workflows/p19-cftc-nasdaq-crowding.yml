@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'research/p19_cftc_nasdaq_crowding.py'
+      - 'research/p19_cftc_nasdaq_crowding_r2.py'
       - '.github/workflows/p19-cftc-nasdaq-crowding.yml'
 
 permissions:
@@ -21,9 +22,9 @@ jobs:
       - name: Install fixed environment
         run: python -m pip install --disable-pip-version-check -q pandas==2.2.3 numpy==2.1.3
       - name: Compile frozen workload
-        run: python -m py_compile research/p19_cftc_nasdaq_crowding.py
+        run: python -m py_compile research/p19_cftc_nasdaq_crowding_r2.py
       - name: Execute frozen discriminator
-        run: python research/p19_cftc_nasdaq_crowding.py --output p19-cftc-nasdaq-crowding-result.json
+        run: python research/p19_cftc_nasdaq_crowding_r2.py --output p19-cftc-nasdaq-crowding-result.json
       - name: Upload terminal result
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
