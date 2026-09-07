@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'research/opportunity_semiconductor_fundamental_cycle_allocator_20260907.py'
+      - 'research/opportunity_semiconductor_fundamental_cycle_allocator_runner_20260907.py'
       - '.github/workflows/opportunity-semiconductor-fundamental-cycle-allocator.yml'
   workflow_dispatch:
 
@@ -37,9 +38,9 @@ jobs:
           test -s sec_hf_root_parquet_semiconductor_cache_20260906.json
           test -s semiconductor_alfred_information_snapshot_cache_20260906.json
       - name: Compile integrated batch
-        run: python -m py_compile research/opportunity_semiconductor_fundamental_cycle_allocator_20260907.py
+        run: python -m py_compile research/opportunity_semiconductor_fundamental_cycle_allocator_20260907.py research/opportunity_semiconductor_fundamental_cycle_allocator_runner_20260907.py
       - name: Execute ranking and capital-scaling consumer
-        run: python research/opportunity_semiconductor_fundamental_cycle_allocator_20260907.py
+        run: python research/opportunity_semiconductor_fundamental_cycle_allocator_runner_20260907.py
       - name: Retain sanitized research receipt
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
