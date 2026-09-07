@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json, math, os, statistics, time, urllib.request
+import hashlib, json, math, os, statistics, time, urllib.request
 from datetime import datetime, timezone
 
 SYMS=("SMH","QQQ","SPY")
@@ -23,7 +23,7 @@ def fetch(sym):
             adj=(obj.get("indicators",{}).get("adjclose") or [{}])[0].get("adjclose")
             if not adj: adj=obj["indicators"]["quote"][0]["close"]
             rows={datetime.fromtimestamp(t,timezone.utc).date().isoformat():float(p) for t,p in zip(ts,adj) if p is not None and p>0}
-            return rows,{"url":url,"rows":len(rows)}
+            return rows,{"url":url,"rows":len(rows),"payload_sha256":hashlib.sha256(raw).hexdigest()}
         except Exception as e:
             last=e; time.sleep(2**k)
     raise RuntimeError(f"fetch failed {sym}: {last}")
