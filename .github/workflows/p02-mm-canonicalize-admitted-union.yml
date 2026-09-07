@@ -1,0 +1,144 @@
+name: P02 MM canonicalize admitted MNQ union
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/p02-mm-canonicalize-admitted-union.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  canonicalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install MM bounded dependencies
+        run: python -m pip install --disable-pip-version-check -q numpy pandas scipy scikit-learn tzdata ib-insync
+
+      - name: Fetch current MM semantic owner
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth=1 https://github.com/XoticHaze/mm-IBKR.git mm
+          echo "MM_HEAD=$(git -C mm rev-parse HEAD)"
+          test -s mm/scripts/operator/materialize_admitted_futures_source_canonical.py
+          test -s mm/scripts/operator/publish_canonical_feature_sidecar.py
+
+      - name: Resolve exact admitted-source artifact from proven rematerializer run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p admitted
+          python - <<'PY'
+          import json, os, urllib.request
+          run_id='34084853737'
+          req=urllib.request.Request(
+              f'https://api.github.com/repos/XoticHaze/research-compute-public-/actions/runs/{run_id}/artifacts',
+              headers={'Authorization': 'Bearer '+os.environ['GH_TOKEN'], 'Accept':'application/vnd.github+json'},
+          )
+          with urllib.request.urlopen(req) as r: data=json.load(r)
+          matches=[a for a in data['artifacts'] if a['name']=='p02-mnq-admitted-union-1min' and not a['expired']]
+          if len(matches)!=1: raise SystemExit(f'expected one admitted artifact, got {len(matches)}')
+          a=matches[0]
+          if a['id'] != 10004880109: raise SystemExit(f'artifact identity drift: {a["id"]}')
+          if a.get('digest') != 'sha256:40c885ddaf83d29a33ecd28ae87ecd99d845923f69fe6dfdcb371c5f03b04e89':
+              raise SystemExit('artifact archive digest drift')
+          open('admitted/artifact.json','w').write(json.dumps(a,indent=2,sort_keys=True)+'\n')
+          PY
+          gh api repos/XoticHaze/research-compute-public-/actions/artifacts/10004880109/zip > admitted/source.zip
+          unzip -q admitted/source.zip -d admitted/source
+          test -s admitted/source/MNQ_CONTINUOUS_1Min.csv
+          test -s admitted/source/MNQ_CONTINUOUS_1Min.lineage.json
+
+      - name: Verify admitted lineage and source hash
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          csv=Path('admitted/source/MNQ_CONTINUOUS_1Min.csv')
+          lineage=json.loads(Path('admitted/source/MNQ_CONTINUOUS_1Min.lineage.json').read_text())
+          h=hashlib.sha256(csv.read_bytes()).hexdigest()
+          assert h == lineage['source_sha256']
+          assert lineage['authority'] == 'XoticHaze/research-foundry#78'
+          assert lineage['union_fingerprint_sha256'] == '81a1b9a40ab62c41b42dc72e7d5d5b7b58d0d71a0bdd7b02d736c20de095b2bd'
+          assert lineage['coverage_qualified'] is True
+          assert lineage['full_calendar_complete'] is False
+          print('P02_ADMITTED_SOURCE_IDENTITY=PASS')
+          print('SOURCE_SHA256='+h)
+          PY
+
+      - name: Materialize through MM canonical owners
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p canonical
+          SOURCE_SHA="$(python - <<'PY'
+          import hashlib
+          print(hashlib.sha256(open('admitted/source/MNQ_CONTINUOUS_1Min.csv','rb').read()).hexdigest())
+          PY
+          )"
+          PYTHONPATH=mm python mm/scripts/operator/materialize_admitted_futures_source_canonical.py \
+            --source-csv admitted/source/MNQ_CONTINUOUS_1Min.csv \
+            --source-lineage-json admitted/source/MNQ_CONTINUOUS_1Min.lineage.json \
+            --expected-source-sha256 "$SOURCE_SHA" \
+            --data-root canonical \
+            --root MNQ \
+            --source-timeframe 1Min \
+            --target-timeframe 12Min \
+            --receipt-json canonical/materialization_receipt.json
+
+      - name: Verify Model Lab canonical contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW=canonical/futures/MNQ-CONTINUOUS/12Min.csv
+          FEATURES=canonical/futures/MNQ-CONTINUOUS/12Min.features.csv
+          SIDECAR=canonical/futures/MNQ-CONTINUOUS/12Min.features.csv.manifest.json
+          test -s "$RAW"
+          test -s "$FEATURES"
+          test -s "$SIDECAR"
+          PYTHONPATH=mm python - <<'PY'
+          import json
+          from pathlib import Path
+          from feature_contract import file_sha256
+          receipt=json.loads(Path('canonical/materialization_receipt.json').read_text())
+          sidecar=json.loads(Path('canonical/futures/MNQ-CONTINUOUS/12Min.features.csv.manifest.json').read_text())
+          assert receipt['status']=='PASS'
+          assert receipt['target_timeframe']=='12Min'
+          assert receipt['safety']['network_ib_calls'] is False
+          assert receipt['safety']['strategy_spec_mutation'] is False
+          assert receipt['safety']['broker_submission'] is False
+          assert receipt['safety']['live_trading_change'] is False
+          feature=Path('canonical/futures/MNQ-CONTINUOUS/12Min.features.csv')
+          assert sidecar['feature_sha256'] == file_sha256(feature)
+          print('P02_MM_CANONICAL_CONTRACT=PASS')
+          print('RAW_SHA256='+receipt['raw_sha256'])
+          print('FEATURES_SHA256='+receipt['features_sha256'])
+          print('FEATURE_MANIFEST_HASH='+receipt['feature_manifest_hash'])
+          PY
+
+      - name: Upload canonical MM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: p02-mm-canonical-mnq-12min
+          path: |
+            canonical/futures/MNQ-CONTINUOUS/12Min.csv
+            canonical/futures/MNQ-CONTINUOUS/12Min.features.csv
+            canonical/futures/MNQ-CONTINUOUS/12Min.feature_manifest.json
+            canonical/futures/MNQ-CONTINUOUS/12Min.features.csv.manifest.json
+            canonical/materialization_receipt.json
+          if-no-files-found: error
+          retention-days: 30
