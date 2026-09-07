@@ -1,0 +1,47 @@
+name: P02 MM Private Source Access Discriminator
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/p02-mm-private-source-access-discriminator.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Test scoped token against frozen MM blob without printing content
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MM_COMMIT: fd81406cec3860fb6f6452c8a3c2f638ee1ccfde
+        run: |
+          set -euo pipefail
+          url="https://api.github.com/repos/XoticHaze/mm-IBKR/contents/feature_contract.py?ref=${MM_COMMIT}"
+          code="$(curl -sS -o "$RUNNER_TEMP/mm-response.json" -w '%{http_code}' \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$url")"
+          echo "P02_MM_SOURCE_HTTP_STATUS=${code}"
+          if [ "$code" = 200 ]; then
+            python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path(os.environ['RUNNER_TEMP'],'mm-response.json').read_text())
+          assert d.get('sha')
+          assert d.get('encoding') == 'base64'
+          print('P02_MM_PRIVATE_SOURCE_ACCESS=SUPPORTED')
+          print('P02_MM_FEATURE_CONTRACT_BLOB_SHA='+d['sha'])
+          PY
+            exit 0
+          fi
+          if [ "$code" = 404 ] || [ "$code" = 403 ]; then
+            echo 'P02_MM_PRIVATE_SOURCE_ACCESS=NOT_AUTHORIZED'
+            exit 42
+          fi
+          echo 'P02_MM_PRIVATE_SOURCE_ACCESS=UNEXPECTED_HTTP_STATUS'
+          exit 43
