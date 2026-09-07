@@ -1,0 +1,103 @@
+name: Gold Miner Residual Ranker
+
+on:
+  push:
+    paths:
+      - '.github/workflows/gold-miner-residual-ranker.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install frozen environment
+        run: python -m pip install --disable-pip-version-check -q numpy==2.4.6 pandas==3.0.5 scikit-learn==1.9.0 scipy==1.17.1
+      - name: Execute frozen sector-residual cross-sectional discriminator
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/XoticHaze/TextConverterToolbox/2d8995ba66502a4de25c64c1c32a67e132b05522/research/run_industry_stagea_public_runner_20260905.py -o /tmp/source.py
+          test "$(git hash-object /tmp/source.py)" = 9f7f802469dc6a33abd3431295d5232ebc4289c5
+          python - <<'PY'
+          import importlib.util,json,os
+          import numpy as np, pandas as pd
+          from sklearn.linear_model import Ridge
+          from sklearn.pipeline import Pipeline
+          from sklearn.preprocessing import StandardScaler
+
+          spec=importlib.util.spec_from_file_location('src','/tmp/source.py'); src=importlib.util.module_from_spec(spec); spec.loader.exec_module(src)
+          DEV=('NEM','GOLD','AEM','WPM','FNV','KGC','AU','AGI')
+          HOLDOUT=('RGLD','HMY','BTG','PAAS') # sealed: never loaded
+          BASE=('GDX','GLD','SPY','QQQ')
+          H=20; DELAY=1; COSTS=(25.,50.,100.); PRIMARY=50.; MIN_TRAIN=756; PURGE=22; STEP=20; ALPHA=10.
+          raw={s:src._load(s) for s in (*DEV,*BASE)}
+          common=set(raw[DEV[0]].timestamp)
+          for s in (*DEV[1:],*BASE): common &= set(raw[s].timestamp)
+          cal=pd.DatetimeIndex(sorted(common)); px={s:raw[s].set_index('timestamp').price.reindex(cal) for s in (*DEV,*BASE)}
+          if len(cal)<1800 or any(v.isna().any() for v in px.values()): raise RuntimeError('insufficient/missing matched calendar')
+          def mom(p,n): return p/p.shift(n)-1
+          g=px['GDX']; gret=g.pct_change()
+          frames={}
+          for s in DEV:
+            p=px[s]; r=p.pct_change(); f=pd.DataFrame({'i':np.arange(len(cal)),'timestamp':cal})
+            for n in (20,60,126): f[f'rs{n}']=(mom(p,n)-mom(g,n)).to_numpy()
+            beta=r.rolling(126,min_periods=126).cov(gret)/gret.rolling(126,min_periods=126).var()
+            resid=r-beta*gret
+            f['beta126']=beta.to_numpy(); f['resid_vol20']=resid.rolling(20,min_periods=20).std(ddof=0).to_numpy(); f['resid_vol60']=resid.rolling(60,min_periods=60).std(ddof=0).to_numpy()
+            f['rel_dd60']=(p/p.rolling(60,min_periods=60).max()-g/g.rolling(60,min_periods=60).max()).to_numpy()
+            f['rs_accel']=((mom(p,20)-mom(g,20))-(mom(p,60)-mom(g,60))).to_numpy()
+            stock=(p.shift(-(DELAY+H))/p.shift(-DELAY)-1)*10000; bench=(g.shift(-(DELAY+H))/g.shift(-DELAY)-1)*10000
+            f['target']=(stock-bench).to_numpy(); frames[s]=f.replace([np.inf,-np.inf],np.nan)
+          FEATURES=('rs20','rs60','rs126','beta126','resid_vol20','resid_vol60','rel_dd60','rs_accel')
+          # Expanding chronology: every 20 sessions after minimum train, train only on prior rows across all development names.
+          events=[]
+          for i in range(MIN_TRAIN+PURGE,len(cal)-(DELAY+H),STEP):
+            train=[]
+            for s in DEV:
+              d=frames[s]; t=d[(d.i < i-PURGE)&(d.i%5==0)].dropna(subset=[*FEATURES,'target']); train.append(t)
+            tr=pd.concat(train,ignore_index=True)
+            if len(tr)<1000: continue
+            model=Pipeline([('scale',StandardScaler()),('ridge',Ridge(alpha=ALPHA))]); model.fit(tr[list(FEATURES)],tr.target)
+            rows=[]
+            for s in DEV:
+              q=frames[s][frames[s].i==i].dropna(subset=list(FEATURES))
+              if len(q): rows.append((s,float(model.predict(q[list(FEATURES)])[0])))
+            if len(rows)!=len(DEV): continue
+            rows.sort(key=lambda x:x[1],reverse=True); selected=[x[0] for x in rows[:3]]
+            e=i+DELAY; x=e+H
+            rec={'signal':cal[i].isoformat(),'entry':cal[e].isoformat(),'exit':cal[x].isoformat(),'selected':selected,'predictions':dict(rows)}
+            rec['candidate_gross']=float(np.mean([(px[s].iloc[x]/px[s].iloc[e]-1)*10000 for s in selected]))
+            rec['equal_dev_gross']=float(np.mean([(px[s].iloc[x]/px[s].iloc[e]-1)*10000 for s in DEV]))
+            for b in BASE: rec[f'{b}_gross']=float((px[b].iloc[x]/px[b].iloc[e]-1)*10000)
+            events.append(rec)
+          df=pd.DataFrame(events)
+          if len(df)<50: raise RuntimeError(f'too few decisions {len(df)}')
+          metrics={}
+          years=pd.to_datetime(df.entry).dt.year
+          for c in COSTS:
+            net=df.candidate_gross-c
+            bases={'GDX':df.GDX_gross,'GLD':df.GLD_gross,'SPY':df.SPY_gross,'QQQ':df.QQQ_gross,'EQUAL_DEV':df.equal_dev_gross}
+            metrics[str(int(c))]={}
+            for k,v in bases.items():
+              ex=net-v; yr={str(int(y)):float(ex[years==y].mean()) for y in sorted(years.unique())}
+              metrics[str(int(c))][k]={'excess_bps_per_decision':float(ex.mean()),'positive_years':sum(x>0 for x in yr.values()),'year_count':len(yr),'year_excess_bps':yr}
+          m=metrics['50']; checks={'gdx_positive':m['GDX']['excess_bps_per_decision']>0,'gdx_year_breadth':m['GDX']['positive_years']>=max(4,m['GDX']['year_count']-3),'equal_dev_positive':m['EQUAL_DEV']['excess_bps_per_decision']>0,'spy_positive':m['SPY']['excess_bps_per_decision']>0,'cost100_gdx_positive':metrics['100']['GDX']['excess_bps_per_decision']>0}
+          decision='ELIGIBLE_FOR_SEALED_HOLDOUT' if all(checks.values()) else 'GOLD_RESIDUAL_RANKER_NOT_SUPPORTED'
+          out={'schema':'gold_miner_residual_ranker.v1','contract':{'development':DEV,'sealed_holdout':HOLDOUT,'holdouts_loaded':False,'target':'forward_20_session_stock_minus_GDX_return','features':FEATURES,'model':'expanding pooled StandardScaler+Ridge(alpha=10)','selection':'top3 predicted residual','delay_sessions':DELAY,'horizon_sessions':H,'decision_step_sessions':STEP,'primary_cost_bps':PRIMARY},'window':{'calendar_first':cal[0].isoformat(),'calendar_last':cal[-1].isoformat(),'first_entry':df.entry.min(),'last_exit':df.exit.max(),'decisions':len(df)},'metrics':metrics,'checks':checks,'decision':decision,'research_only':True,'promotion_authority':False,'allocation_authority':False,'live_trading_change':False}
+          os.makedirs('results',exist_ok=True); open('results/gold-miner-residual-ranker.json','w').write(json.dumps(out,indent=2,sort_keys=True)+'\n'); print(json.dumps(out,sort_keys=True))
+          PY
+      - name: Persist terminal result
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add results/gold-miner-residual-ranker.json
+          git commit -m 'research: persist gold miner residual ranker result'
+          git push origin "HEAD:$GITHUB_REF_NAME"
