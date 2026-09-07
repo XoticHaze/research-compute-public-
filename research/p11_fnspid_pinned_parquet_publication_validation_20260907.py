@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import math
 import statistics
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import timezone
@@ -56,12 +55,23 @@ def materialize_deterministic_sample(urls: list[str]) -> tuple[list[dict], dict[
     con = duckdb.connect(database=":memory:")
     con.execute("INSTALL httpfs")
     con.execute("LOAD httpfs")
+    # The first public run proved that the pinned Parquet representation resolves,
+    # but DuckDB's default parallel remote scan tripped the Hub's request-rate limit
+    # (HTTP 429 on shard 15). Preserve the exact source/sample semantics and change
+    # only transport pressure: one DuckDB worker, metadata caching, and bounded
+    # exponential retry/backoff for remote range reads.
+    con.execute("SET threads=1")
+    con.execute("SET enable_http_metadata_cache=true")
+    con.execute("SET http_retries=12")
+    con.execute("SET http_retry_wait_ms=1000")
+    con.execute("SET http_retry_backoff=2")
+    con.execute("SET http_timeout=120")
     url_expr = "[" + ",".join(_q(u) for u in urls) + "]"
     symbols_expr = "(" + ",".join(_q(s) for s in SYMBOLS) + ")"
     query = f"""
         WITH base AS (
           SELECT Date, Stock_symbol, Url, Publisher, Article_title
-          FROM read_parquet({url_expr}, union_by_name=true)
+          FROM read_parquet({url_expr})
           WHERE upper(Stock_symbol) IN {symbols_expr}
         ), ranked AS (
           SELECT
@@ -170,7 +180,7 @@ def main() -> None:
 
     if sufficient and not unsafe and median is not None and median <= INTRADAY_MEDIAN_MAX_MINUTES and p95 is not None and p95 <= INTRADAY_P95_MAX_MINUTES:
         decision = "FNSPID_INTRADAY_PUBLICATION_AUTHORITY_SUPPORTED"
-        next_boundary = "Execute the already-frozen PRICE_STATE_CONTROL / NEWS_ONLY / PRICE_PLUS_NEWS / PERMUTED_NEWS economic ablation using FNSPID Date as conservative availability time."
+        next_boundary = "Run the frozen News State scorer-calibration gate if not already complete, then execute the fixed incremental-value ablation only if calibration admits a scorer."
     elif sufficient and not unsafe:
         decision = "FNSPID_CAUSAL_BUT_INTRADAY_TIMELINESS_NOT_SUPPORTED"
         next_boundary = "Retain for daily/descriptive causal research; do not run the frozen intraday ablation without a better publication-time source."
@@ -186,6 +196,15 @@ def main() -> None:
         "mirror_revision_requested": MIRROR_REVISION,
         "mirror_revision_resolved": resolved_revision,
         "mirror_native_parquet_shards": len(urls),
+        "remote_transport": {
+            "duckdb_threads": 1,
+            "http_retries": 12,
+            "http_retry_wait_ms": 1000,
+            "http_retry_backoff": 2,
+            "http_timeout_seconds": 120,
+            "metadata_cache": True,
+            "mechanism_change_reason": "first pinned-Parquet run reached the exact shard scan then failed HTTP 429 on shard 15 under default parallel remote I/O",
+        },
         "mirror_role": "existing admitted Nasdaq-only FNSPID transport mirror previously used by P11 indexed validation; Parquet replaces failed server-side /filter only",
         "upstream_semantic_parent": "Zdong104/FNSPID_Financial_News_Dataset@4054842ec476953b30ee874d4b7e8eea786a21fa",
         "upstream_pinned_object_sha256": UPSTREAM_PINNED_OBJECT_SHA256,
