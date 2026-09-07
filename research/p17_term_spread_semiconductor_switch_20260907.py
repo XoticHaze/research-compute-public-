@@ -5,9 +5,9 @@ from urllib.parse import urlencode
 from urllib.request import Request,urlopen
 import numpy as np
 import pandas as pd
-START='1999-01-01'; END='2026-09-08'; SYMBOLS=['SMH','QQQ','SPY']; LAG_DAYS=7; DELTA_OBS=63; COSTS=[10.0,25.0,50.0]; PRIMARY=25.0; OUT='p17-term-spread-semiconductor-switch-receipt.json'; FRED='https://fred.stlouisfed.org/graph/fredgraph.csv?id=T10Y2Y'
+START='1999-01-01'; END='2026-09-08'; SYMBOLS=['SMH','QQQ','SPY']; LAG_DAYS=7; DELTA_OBS=63; COSTS=[10.0,25.0,50.0]; PRIMARY=25.0; OUT='p17-term-spread-semiconductor-switch-receipt.json'; FRED='https://fred.stlouisfed.org/graph/fredgraph.csv?id=T10Y2Y&cosd=1999-01-01&coed=2026-09-08'
 def epoch(s): return int(datetime.fromisoformat(s).replace(tzinfo=timezone.utc).timestamp())
-def fetch(url,timeout=45):
+def fetch(url,timeout=60):
  r=Request(url,headers={'User-Agent':'Mozilla/5.0 research-compute/1.0'}); raw=urlopen(r,timeout=timeout).read();
  if not raw: raise RuntimeError('empty '+url)
  return raw
