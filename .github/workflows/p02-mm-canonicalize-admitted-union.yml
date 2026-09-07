@@ -67,6 +67,14 @@ jobs:
           curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}" -d "$body" >/dev/null
           echo "P02_CANONICALIZER_RECIPIENT_PATH=${path}"
 
+      - name: Publish run-bound private MM capsule through pinned private action
+        uses: XoticHaze/mm-IBKR/.github/actions/p02-canonicalizer-capsule@a169db4e4d47b517540c256a7acdc469479fbb39
+        with:
+          recipient: ${{ runner.temp }}/p02-canonicalizer-recipient.json
+          public-repo: ${{ github.repository }}
+          exchange-ref: ${{ env.EXCHANGE_REF }}
+          github-token: ${{ github.token }}
+
       - name: Wait for run-bound private MM canonicalizer capsule
         env:
           GH_TOKEN: ${{ github.token }}
