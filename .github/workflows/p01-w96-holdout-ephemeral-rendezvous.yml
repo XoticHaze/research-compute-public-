@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'rendezvous/requests/p01-w96-holdout-*.txt'
+      - '.github/workflows/p01-w96-holdout-ephemeral-rendezvous.yml'
+      - 'scripts/p01_w96_holdout_consumer_v1.py'
 
 permissions:
   contents: write
@@ -11,7 +13,9 @@ permissions:
 env:
   RESPONSE_ROOT: rendezvous/responses
   RECIPIENT_ROOT: rendezvous/recipients
+  PRODUCER_REQUEST_ROOT: rendezvous/producer-requests
   EXCHANGE_REF: rendezvous-exchange
+  P01_HARNESS: p01_w96_entry_holdout_v1
 
 jobs:
   consume:
@@ -46,22 +50,61 @@ jobs:
           print('P01_W96_HOLDOUT_RUN_ID='+os.environ['GITHUB_RUN_ID'])
           print('P01_W96_HOLDOUT_RECIPIENT_KEY_ID='+recipient['recipient_key_id'])
           PY
-      - name: Publish public recipient to exchange branch
+      - name: Publish recipient and producer request to exchange branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           recipient_path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}-p01-w96-holdout.json"
-          payload="$(base64 -w0 "$RUNNER_TEMP/p01-recipient.json")"
-          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
-          import json,sys
-          content,branch=sys.argv[1:]
-          print(json.dumps({'message':'rendezvous: publish one-run P01 W96 holdout recipient','content':content,'branch':branch}))
+          request_path="${PRODUCER_REQUEST_ROOT}/${GITHUB_RUN_ID}-p01-w96-holdout.json"
+          response_root="${RESPONSE_ROOT}/${GITHUB_RUN_ID}"
+          envelope_path="${response_root}/p01-w96-holdout-envelope.json"
+
+          upsert_exchange_file() {
+            local path="$1"
+            local file="$2"
+            local message="$3"
+            local api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}"
+            local existing_sha=""
+            existing_sha="$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "${api}?ref=${EXCHANGE_REF}" | python -c 'import json,sys; d=json.load(sys.stdin); print(d.get("sha", ""))' || true)"
+            python - "$file" "$message" "$EXCHANGE_REF" "$existing_sha" <<'PY' > "$RUNNER_TEMP/p01-upsert-body.json"
+          import base64,json,sys
+          path,message,branch,sha=sys.argv[1:]
+          body={'message':message,'content':base64.b64encode(open(path,'rb').read()).decode('ascii'),'branch':branch}
+          if sha:
+              body['sha']=sha
+          print(json.dumps(body,separators=(',',':')))
           PY
-          )"
-          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${recipient_path}" -d "$body" >/dev/null
+            curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -d @"$RUNNER_TEMP/p01-upsert-body.json" >/dev/null
+          }
+
+          upsert_exchange_file "$recipient_path" "$RUNNER_TEMP/p01-recipient.json" 'rendezvous: publish one-run P01 W96 holdout recipient'
+
+          python - "$recipient_path" "$envelope_path" <<'PY' > "$RUNNER_TEMP/p01-producer-request.json"
+          import json,os,sys
+          recipient_path,envelope_path=sys.argv[1:]
+          print(json.dumps({
+            'schema':'p01-w96-holdout-producer-request-v1',
+            'run_id':os.environ['GITHUB_RUN_ID'],
+            'parent_id':'P01',
+            'authority':'research_only',
+            'harness':os.environ['P01_HARNESS'],
+            'scientific_contract':{
+              'symbol':'MNQ',
+              'timeframe':'12Min',
+              'holdout_start_exclusive':'2026-02-19T02:12:00Z',
+              'incumbent':{'window':96,'entry_extreme':-2.8,'exit_extreme':4.5},
+              'challenger':{'window':96,'entry_extreme':-2.52,'exit_extreme':4.5}
+            },
+            'recipient_path':recipient_path,
+            'expected_envelope_path':envelope_path,
+            'exchange_ref':os.environ['EXCHANGE_REF']
+          },sort_keys=True))
+          PY
+          upsert_exchange_file "$request_path" "$RUNNER_TEMP/p01-producer-request.json" 'rendezvous: publish one-run P01 W96 producer request'
           echo "P01_W96_HOLDOUT_RECIPIENT_PATH=${recipient_path}"
-      - name: Wait for run-bound chunked envelope
+          echo "P01_W96_HOLDOUT_PRODUCER_REQUEST_PATH=${request_path}"
+      - name: Wait for structurally valid run-bound chunked envelope
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -69,12 +112,47 @@ jobs:
           response_root="${RESPONSE_ROOT}/${GITHUB_RUN_ID}"
           envelope_path="${response_root}/p01-w96-holdout-envelope.json"
           api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${envelope_path}?ref=${EXCHANGE_REF}"
+          expected_recipient_key_id="$(python -c 'import json,os; print(json.load(open(os.path.join(os.environ["RUNNER_TEMP"],"p01-recipient.json"),encoding="utf-8"))["recipient_key_id"])')"
           found=0
           for _ in $(seq 1 180); do
-            if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/p01-envelope.json"; then found=1; break; fi
+            if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/p01-envelope.candidate.json"; then
+              if python - "$RUNNER_TEMP/p01-envelope.candidate.json" "$GITHUB_RUN_ID" "$expected_recipient_key_id" "$response_root" <<'PY'
+          import base64,json,sys
+          path,run_id,expected_recipient_key_id,response_root=sys.argv[1:]
+          try:
+              d=json.load(open(path,encoding='utf-8'))
+              required={'schema','run_id','authority','harness','recipient_key_id','sender_public_b64','nonce_b64','ciphertext_sha256','plaintext_sha256','chunks'}
+              assert set(d)==required
+              assert d['schema']=='p01-w96-holdout-ephemeral-x25519-v1'
+              assert str(d['run_id'])==str(run_id)
+              assert d['authority']=='research_only'
+              assert d['harness']=='p01_w96_entry_holdout_v1'
+              assert d['recipient_key_id']==expected_recipient_key_id
+              assert len(base64.b64decode(d['sender_public_b64'],validate=True))==32
+              assert len(base64.b64decode(d['nonce_b64'],validate=True))==12
+              assert len(d['ciphertext_sha256'])==64 and len(d['plaintext_sha256'])==64
+              chunks=d['chunks']
+              assert isinstance(chunks,list) and 0 < len(chunks) <= 64
+              prefix=response_root.rstrip('/')+'/'
+              seen=set()
+              for node in chunks:
+                  assert set(node)=={'path','sha256','chars'}
+                  p=str(node['path'])
+                  assert p.startswith(prefix) and p not in seen and '..' not in p.split('/')
+                  seen.add(p)
+                  assert len(str(node['sha256']))==64 and int(node['chars'])>0
+          except Exception:
+              raise SystemExit(1)
+          PY
+              then
+                mv "$RUNNER_TEMP/p01-envelope.candidate.json" "$RUNNER_TEMP/p01-envelope.json"
+                found=1
+                break
+              fi
+            fi
             sleep 5
           done
-          test "$found" = 1 || { echo 'run-bound P01 W96 holdout envelope did not arrive'; exit 42; }
+          test "$found" = 1 || { echo 'valid run-bound P01 W96 holdout envelope did not arrive'; exit 42; }
           echo "P01_RESPONSE_ROOT=${response_root}" >> "$GITHUB_ENV"
       - name: Reassemble authenticated ciphertext chunks
         env:
@@ -112,4 +190,4 @@ jobs:
           python scripts/p01_w96_holdout_consumer_v1.py --envelope "$RUNNER_TEMP/p01-envelope.json" --ciphertext "$RUNNER_TEMP/p01-ciphertext.bin" --private-key "$RUNNER_TEMP/p01-private.b64" --run-id "$GITHUB_RUN_ID" --response-root "$P01_RESPONSE_ROOT"
       - name: Remove one-run private material
         if: always()
-        run: rm -f "$RUNNER_TEMP/p01-private.b64" "$RUNNER_TEMP/p01-recipient.json" "$RUNNER_TEMP/p01-envelope.json" "$RUNNER_TEMP/p01-ciphertext.bin"
+        run: rm -f "$RUNNER_TEMP/p01-private.b64" "$RUNNER_TEMP/p01-recipient.json" "$RUNNER_TEMP/p01-producer-request.json" "$RUNNER_TEMP/p01-upsert-body.json" "$RUNNER_TEMP/p01-envelope.json" "$RUNNER_TEMP/p01-envelope.candidate.json" "$RUNNER_TEMP/p01-ciphertext.bin"
