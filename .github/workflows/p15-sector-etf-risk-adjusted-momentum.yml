@@ -1,0 +1,51 @@
+name: P15 sector ETF risk-adjusted momentum
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p15_sector_etf_risk_adjusted_momentum_20260907.py'
+      - '.github/workflows/p15-sector-etf-risk-adjusted-momentum.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  p15-sector-etf-risk-adjusted-momentum:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile frozen discriminator
+        run: python -m py_compile research/p15_sector_etf_risk_adjusted_momentum_20260907.py
+      - name: Execute frozen discriminator
+        run: python research/p15_sector_etf_risk_adjusted_momentum_20260907.py
+      - name: Validate sanitized terminal receipt
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('results/p15_sector_etf_risk_adjusted_momentum_result_20260907.json')
+          d = json.loads(p.read_text())
+          assert d['decision'] in {
+              'P15_RISK_ADJUSTED_SECTOR_MOMENTUM_CONTINUE',
+              'P15_RISK_ADJUSTED_SECTOR_MOMENTUM_NOT_SUPPORTED',
+          }
+          assert d['matched_window']['monthly_decisions'] >= 60
+          assert d['primary_25bps_excess']['full_years'] >= 10
+          print('P15_TERMINAL_RECEIPT=PASS')
+          print('P15_DECISION=' + d['decision'])
+          PY
+      - name: Upload terminal result
+        uses: actions/upload-artifact@v4
+        with:
+          name: p15-sector-etf-risk-adjusted-momentum-result
+          path: results/p15_sector_etf_risk_adjusted_momentum_result_20260907.json
+          if-no-files-found: error
+          retention-days: 30
