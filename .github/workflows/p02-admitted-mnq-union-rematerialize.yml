@@ -1,0 +1,191 @@
+name: P02 admitted MNQ union rematerialization
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/p02-admitted-mnq-union-rematerialize.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rematerialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install bounded research dependencies
+        run: python -m pip install --disable-pip-version-check -q numpy pandas scipy scikit-learn tzdata
+
+      - name: Fetch pinned proven union implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source/textconverter
+          git -C source/textconverter init
+          git -C source/textconverter remote add origin https://github.com/XoticHaze/TextConverterToolbox.git
+          git -C source/textconverter fetch --depth=1 origin f9a6cdd5ce3824277b61e4500d997d77f2361a4d
+          git -C source/textconverter checkout --detach FETCH_HEAD
+          test "$(git -C source/textconverter rev-parse HEAD)" = "f9a6cdd5ce3824277b61e4500d997d77f2361a4d"
+          echo 'PINNED_UNION_IMPLEMENTATION=PASS'
+
+      - name: Fetch pinned deep MNQ primary source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source/deep
+          git -C source/deep init
+          git -C source/deep remote add origin https://github.com/mbytes21/MNQ_DATA.git
+          git -C source/deep fetch --depth=1 origin fc5508e2c152938d6d9eb70a36b888ae26107176
+          git -C source/deep checkout --detach FETCH_HEAD
+          test "$(git -C source/deep rev-parse HEAD)" = "fc5508e2c152938d6d9eb70a36b888ae26107176"
+          echo 'DEEP_MNQ_PRIMARY_PIN=PASS'
+
+      - name: Fetch and verify licensed Q4 fill source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source/licensed
+          curl --fail --location --retry 3 --retry-delay 2 \
+            'https://www.kaggle.com/api/v1/datasets/view/brandenmorris/mnq-1m-q4-2022-q4-2025-ts-ohlcv-sym' \
+            -o source/licensed/metadata.json
+          python - <<'PY'
+          import json
+          d=json.load(open('source/licensed/metadata.json', encoding='utf-8'))
+          text=json.dumps(d, sort_keys=True)
+          if 'CC BY 4.0' not in text:
+              raise SystemExit('expected CC BY 4.0 metadata not observed')
+          version=d.get('currentVersionNumber') or d.get('versionNumber')
+          if str(version) != '1':
+              raise SystemExit(f'dataset version drift: {version}')
+          print('LICENSED_MNQ_METADATA=PASS')
+          PY
+          curl --fail --location --retry 3 --retry-delay 2 \
+            'https://www.kaggle.com/api/v1/datasets/download/brandenmorris/mnq-1m-q4-2022-q4-2025-ts-ohlcv-sym' \
+            -o source/licensed/mnq.zip
+          echo '633eb4338a3aa60aedb542b12085acca29ff237c7cadff65442a638466f37667  source/licensed/mnq.zip' | sha256sum -c -
+          unzip -q source/licensed/mnq.zip -d source/licensed/extracted
+          aggregate="$(find source/licensed/extracted -type f -name 'mnq-ohlcv-1m.csv' -print -quit)"
+          test -n "$aggregate"
+          test -s "$aggregate"
+          cp "$aggregate" source/licensed/mnq-ohlcv-1m.csv
+          echo 'LICENSED_MNQ_FILL_PIN=PASS'
+
+      - name: Rebuild exact coverage-qualified admitted union bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/p02-source
+          PYTHONPATH=source/textconverter python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+          import pandas as pd
+          from research.deep_mnq_licensed_gap_fill import (
+              build_sources,
+              overlap_audit,
+              build_union,
+              _union_fingerprint,
+          )
+
+          EXPECTED_FINGERPRINT='81a1b9a40ab62c41b42dc72e7d5d5b7b58d0d71a0bdd7b02d736c20de095b2bd'
+          EXPECTED_RECEIPT='86dff1d2a105e333153c9cb9e4026b4dc362d72cf4fc2f833e668ee8b6c58045'
+
+          deep, licensed, sources = build_sources(
+              Path('source/deep/plaintext_csv'),
+              Path('source/licensed/mnq-ohlcv-1m.csv'),
+          )
+          overlap = overlap_audit(deep, licensed)
+          if not overlap['pass']:
+              raise SystemExit('historical overlap compatibility gate no longer passes')
+          union, fill = build_union(deep, licensed)
+          fingerprint = _union_fingerprint(union)
+          if fingerprint != EXPECTED_FINGERPRINT:
+              raise SystemExit(f'union fingerprint drift: {fingerprint}')
+
+          out_dir = Path('artifacts/p02-source')
+          full_path = out_dir / 'mnq_admitted_union_1min_with_provenance.csv'
+          ohlcv_path = out_dir / 'MNQ_CONTINUOUS_1Min.csv'
+
+          full = union.copy()
+          full['timestamp'] = pd.to_datetime(full['timestamp'], utc=True).dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+          full.to_csv(full_path, index=False, float_format='%.10g', lineterminator='\n')
+
+          ohlcv = full[['timestamp','open','high','low','close','volume']].copy()
+          ohlcv.to_csv(ohlcv_path, index=False, float_format='%.10g', lineterminator='\n')
+
+          def sha256(path: Path) -> str:
+              h=hashlib.sha256()
+              with path.open('rb') as f:
+                  for chunk in iter(lambda: f.read(1024*1024), b''):
+                      h.update(chunk)
+              return h.hexdigest()
+
+          lineage = {
+              'schema': 'commandcenter.admitted_market_source.v1',
+              'authority': 'XoticHaze/research-foundry#78',
+              'source_identity': 'mnq_coverage_qualified_repaired_union_1min_2022_2025',
+              'source_sha256': sha256(ohlcv_path),
+              'provenance_csv_sha256': sha256(full_path),
+              'rows': int(len(ohlcv)),
+              'first_timestamp': str(ohlcv.iloc[0]['timestamp']),
+              'last_timestamp': str(ohlcv.iloc[-1]['timestamp']),
+              'union_fingerprint_sha256': fingerprint,
+              'historical_receipt_sha256': EXPECTED_RECEIPT,
+              'historical_union_workflow_run_id': 33546057483,
+              'implementation_repo': 'XoticHaze/TextConverterToolbox',
+              'implementation_commit': 'f9a6cdd5ce3824277b61e4500d997d77f2361a4d',
+              'deep_primary': 'mbytes21/MNQ_DATA@fc5508e2c152938d6d9eb70a36b888ae26107176',
+              'licensed_fill_dataset': 'brandenmorris/mnq-1m-q4-2022-q4-2025-ts-ohlcv-sym',
+              'licensed_fill_version': 1,
+              'licensed_fill_zip_sha256': '633eb4338a3aa60aedb542b12085acca29ff237c7cadff65442a638466f37667',
+              'overlap_gate_pass': True,
+              'filled_minutes': int(len(fill)),
+              'coverage_qualified': True,
+              'full_calendar_complete': False,
+              'known_material_gaps': [
+                  ['2022-09-08T03:59:00Z','2022-11-16T00:00:00Z'],
+                  ['2025-11-12T23:59:00Z','2025-12-11T05:00:00Z'],
+              ],
+              'consumer_rule': 'This is an admitted coverage-qualified 1Min source node. It is not MM canonical feature authority. Feed compatible bytes through MM canonical materialization/feature contracts before Model Lab consumption, and do not claim full-calendar support across the two known residual gaps.',
+          }
+          (out_dir / 'MNQ_CONTINUOUS_1Min.lineage.json').write_text(
+              json.dumps(lineage, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          print('P02_ADMITTED_SOURCE_REMATERIALIZATION=PASS')
+          print('UNION_FINGERPRINT_SHA256=' + fingerprint)
+          print('OHLCV_SHA256=' + lineage['source_sha256'])
+          print('ROWS=' + str(len(ohlcv)))
+          PY
+
+      - name: Verify lineage contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('artifacts/p02-source/MNQ_CONTINUOUS_1Min.lineage.json')
+          d=json.loads(p.read_text())
+          assert d['authority'] == 'XoticHaze/research-foundry#78'
+          assert d['union_fingerprint_sha256'] == '81a1b9a40ab62c41b42dc72e7d5d5b7b58d0d71a0bdd7b02d736c20de095b2bd'
+          assert d['coverage_qualified'] is True
+          assert d['full_calendar_complete'] is False
+          assert len(d['known_material_gaps']) == 2
+          assert Path('artifacts/p02-source/MNQ_CONTINUOUS_1Min.csv').stat().st_size > 0
+          print('P02_ADMITTED_SOURCE_LINEAGE=PASS')
+          PY
+
+      - name: Upload admitted source bytes and lineage
+        uses: actions/upload-artifact@v4
+        with:
+          name: p02-mnq-admitted-union-1min
+          path: artifacts/p02-source/
+          if-no-files-found: error
+          retention-days: 30
