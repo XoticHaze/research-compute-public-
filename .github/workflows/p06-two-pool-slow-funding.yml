@@ -1,0 +1,26 @@
+name: P06 two-pool slow funding
+on:
+  pull_request:
+    paths:
+      - 'research/p06_two_pool_slow_funding.py'
+      - '.github/workflows/p06-two-pool-slow-funding.yml'
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile
+        run: python -m py_compile research/p06_two_pool_slow_funding.py
+      - name: Execute frozen discriminator
+        run: python research/p06_two_pool_slow_funding.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p06-two-pool-slow-funding-result
+          path: p06_two_pool_slow_funding_result.json
