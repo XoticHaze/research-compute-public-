@@ -1,0 +1,35 @@
+name: p21-soxx-independent-validation
+
+on:
+  pull_request:
+    paths:
+      - research/p21_soxx_volume_confirmed_breakout_validation.py
+      - .github/workflows/p21-soxx-independent-validation.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  p21-soxx-independent-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile frozen validation consumer
+        run: python -m py_compile research/p21_soxx_volume_confirmed_breakout_validation.py
+      - name: Execute independent semiconductor validation
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          P21_C3_OUTPUT: p21_soxx_volume_confirmed_breakout_validation_receipt.json
+        run: python research/p21_soxx_volume_confirmed_breakout_validation.py
+      - name: Upload sanitized receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: p21-soxx-independent-validation-receipt
+          path: p21_soxx_volume_confirmed_breakout_validation_receipt.json
+          if-no-files-found: error
+          retention-days: 30
