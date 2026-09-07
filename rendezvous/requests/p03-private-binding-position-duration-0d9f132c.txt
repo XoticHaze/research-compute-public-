@@ -1,0 +1,12 @@
+P03_PRIVATE_BINDING_REQUEST_V2
+parent=P03
+child=P03-C-POSITION-DURATION-CONSUMER
+mm_repo=XoticHaze/mm-IBKR
+mm_pr=227
+mm_head_sha=0d9f132c8b45f685dfd0560975c28e46abc93e15
+harness=mm_p03_preview_operator_binding_contract_v1
+contract=p03-private-binding-payload-v2
+authority=research_only
+plaintext_private_source_forbidden_in_public_repo=true
+live_trading_mutation=false
+nonce=corrected-binding-r3-atomic-envelope

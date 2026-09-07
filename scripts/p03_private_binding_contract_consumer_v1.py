@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Run-bound encrypted consumer for the fixed MM P03 preview-binding contract."""
+"""Run-bound encrypted consumer for the fixed MM P03 position-duration operator-context regression."""
 
 import argparse
 import base64
@@ -19,14 +19,15 @@ from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 SCHEMA = "p03-private-binding-x25519-v1"
-HARNESS = "mm_p03_preview_operator_binding_contract_v1"
+HARNESS = "mm_p03_position_duration_operator_context_v1"
 INFO = b"commandcenter-p03-private-binding-v1"
 ALLOWED_FILES = {
     "manifest.json",
-    "strategy_health_preview_binding.py",
-    "tests/test_strategy_health_preview_operator_context_binding.py",
+    "strategy_health_operator_context.py",
+    "tests/test_strategy_health_operator_context.py",
 }
-EXPECTED_TEST = "tests.test_strategy_health_preview_operator_context_binding"
+EXPECTED_TEST = "tests.test_strategy_health_operator_context"
+EXPECTED_MM_PR = 227
 
 
 def _b64d(value: str) -> bytes:
@@ -73,15 +74,15 @@ def _validate_payload(plaintext: bytes) -> dict:
         manifest = json.loads(stream.read().decode("utf-8"))
     required = {
         "schema", "harness", "authority", "mm_pr", "mm_head_sha", "test_module",
-        "binding_source_sha256", "test_sha256",
+        "operator_source_sha256", "operator_test_sha256",
     }
     if set(manifest) != required:
         raise RuntimeError("manifest field set mismatch")
-    if manifest["schema"] != "p03-private-binding-payload-v1":
+    if manifest["schema"] != "p03-position-duration-payload-v1":
         raise RuntimeError("payload schema mismatch")
     if manifest["harness"] != HARNESS or manifest["authority"] != "research_only":
         raise RuntimeError("payload harness/authority mismatch")
-    if int(manifest["mm_pr"]) != 222 or manifest["test_module"] != EXPECTED_TEST:
+    if int(manifest["mm_pr"]) != EXPECTED_MM_PR or manifest["test_module"] != EXPECTED_TEST:
         raise RuntimeError("payload target mismatch")
     return manifest
 
@@ -122,16 +123,16 @@ def consume(envelope_path: Path, private_key_path: Path, expected_run_id: str) -
         raise RuntimeError("decrypted payload digest mismatch")
 
     manifest = _validate_payload(plaintext)
-    with tempfile.TemporaryDirectory(prefix="p03-binding-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="p03-position-duration-") as tmp:
         root = Path(tmp)
         with tarfile.open(fileobj=io.BytesIO(plaintext), mode="r:gz") as tf:
             tf.extractall(root)
-        source = (root / "strategy_health_preview_binding.py").read_bytes()
-        test = (root / "tests/test_strategy_health_preview_operator_context_binding.py").read_bytes()
-        if hashlib.sha256(source).hexdigest() != manifest["binding_source_sha256"]:
-            raise RuntimeError("private binding source digest mismatch")
-        if hashlib.sha256(test).hexdigest() != manifest["test_sha256"]:
-            raise RuntimeError("private test digest mismatch")
+        source = root / "strategy_health_operator_context.py"
+        test = root / "tests/test_strategy_health_operator_context.py"
+        if hashlib.sha256(source.read_bytes()).hexdigest() != manifest["operator_source_sha256"]:
+            raise RuntimeError("private operator source digest mismatch")
+        if hashlib.sha256(test.read_bytes()).hexdigest() != manifest["operator_test_sha256"]:
+            raise RuntimeError("private operator test digest mismatch")
         (root / "tests/__init__.py").write_text("", encoding="utf-8")
         proc = subprocess.run(
             ["python", "-m", "unittest", "-q", EXPECTED_TEST],
@@ -143,10 +144,10 @@ def consume(envelope_path: Path, private_key_path: Path, expected_run_id: str) -
             timeout=120,
         )
         return {
-            "schema": "p03-private-binding-receipt-v1",
+            "schema": "p03-position-duration-receipt-v1",
             "authority": "research_only",
             "harness": HARNESS,
-            "mm_pr": 222,
+            "mm_pr": EXPECTED_MM_PR,
             "mm_head_sha": manifest["mm_head_sha"],
             "payload_sha256": plaintext_sha,
             "test_module": EXPECTED_TEST,
@@ -163,7 +164,7 @@ def main() -> None:
     p.add_argument("--run-id", required=True)
     args = p.parse_args()
     receipt = consume(Path(args.envelope), Path(args.private_key), args.run_id)
-    print("P03_PRIVATE_BINDING_RECEIPT=" + json.dumps(receipt, sort_keys=True))
+    print("P03_POSITION_DURATION_RECEIPT=" + json.dumps(receipt, sort_keys=True))
     if receipt["status"] != "PASS":
         raise SystemExit(1)
 
