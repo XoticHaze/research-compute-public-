@@ -1,4 +1,5 @@
 name: P02 admitted MNQ union rematerialization
+# execution nonce: p02-admitted-union-exec-r1
 
 on:
   pull_request:
