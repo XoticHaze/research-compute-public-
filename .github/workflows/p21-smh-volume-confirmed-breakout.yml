@@ -1,0 +1,35 @@
+name: p21-smh-volume-confirmed-breakout
+
+on:
+  pull_request:
+    paths:
+      - research/p21_smh_volume_confirmed_breakout.py
+      - .github/workflows/p21-smh-volume-confirmed-breakout.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  p21-smh-volume-confirmed-breakout:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile frozen consumer
+        run: python -m py_compile research/p21_smh_volume_confirmed_breakout.py
+      - name: Execute frozen economic discriminator
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          P21_C2_OUTPUT: p21_smh_volume_confirmed_breakout_receipt.json
+        run: python research/p21_smh_volume_confirmed_breakout.py
+      - name: Upload sanitized receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: p21-smh-volume-confirmirmed-breakout-receipt
+          path: p21_smh_volume_confirmed_breakout_receipt.json
+          if-no-files-found: error
+          retention-days: 30
