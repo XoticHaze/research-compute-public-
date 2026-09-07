@@ -1,0 +1,34 @@
+name: P19 CFTC Nasdaq Crowding
+
+on:
+  pull_request:
+    paths:
+      - 'research/p19_cftc_nasdaq_crowding.py'
+      - '.github/workflows/p19-cftc-nasdaq-crowding.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install fixed environment
+        run: python -m pip install --disable-pip-version-check -q pandas==2.2.3 numpy==2.1.3
+      - name: Compile frozen workload
+        run: python -m py_compile research/p19_cftc_nasdaq_crowding.py
+      - name: Execute frozen discriminator
+        run: python research/p19_cftc_nasdaq_crowding.py --output p19-cftc-nasdaq-crowding-result.json
+      - name: Upload terminal result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p19-cftc-nasdaq-crowding-result
+          path: p19-cftc-nasdaq-crowding-result.json
+          if-no-files-found: warn
+          retention-days: 30
