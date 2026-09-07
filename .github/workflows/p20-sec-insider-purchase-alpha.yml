@@ -1,0 +1,45 @@
+name: P20 SEC Insider Purchase Alpha
+
+on:
+  pull_request:
+    paths:
+      - 'research/p20_sec_insider_purchase_alpha.py'
+      - '.github/workflows/p20-sec-insider-purchase-alpha.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+
+jobs:
+  p20-sec-insider-purchase-alpha:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile frozen workload
+        run: python -m py_compile research/p20_sec_insider_purchase_alpha.py
+
+      - name: Execute frozen SEC insider purchase discriminator
+        env:
+          SEC_USER_AGENT: 'MM-IBKR research contact xotichaze@users.noreply.github.com'
+          P20_OUTPUT: 'p20_sec_insider_purchase_alpha_receipt.json'
+        run: python research/p20_sec_insider_purchase_alpha.py
+
+      - name: Publish terminal scientific receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p20-sec-insider-purchase-alpha-receipt
+          path: p20_sec_insider_purchase_alpha_receipt.json
+          if-no-files-found: error
+          retention-days: 30
