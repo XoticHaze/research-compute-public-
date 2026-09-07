@@ -1,0 +1,43 @@
+{
+  "schema": "public_research.opportunity_score_matched_alpha_calibration_terminal.v1",
+  "run_id": 34110929078,
+  "job_id": 101706746675,
+  "artifact_id": 10014319759,
+  "decision": "MATCHED_ALPHA_SCORE_CALIBRATION_NOT_SUPPORTED",
+  "architecture": {
+    "capacity": 3,
+    "calibrator": "StandardScaler + Ridge(alpha=10.0)",
+    "features": ["current Stage-A prediction_bps", "family one-hot identity", "prediction_bps x family interactions"],
+    "target": "realized stock return after 25 bp stock cost minus matched industry ETF gross return",
+    "training": "completed earlier folds only",
+    "ticker_identity_feature": false,
+    "ticker_historical_alpha_feature": false,
+    "parameter_search": false
+  },
+  "surfaces": {
+    "homebuilders_plus_biotech": {
+      "calibrated_compound_stock_return": 1.2992526912255191,
+      "raw_compound_stock_return": 0.4714624874329365,
+      "calibrated_compound_stock_minus_matched_etf": 0.6335074283007203,
+      "raw_compound_stock_minus_matched_etf": 0.002406825475510521,
+      "calibrated_positive_matched_excess_folds": 3,
+      "fold_wins_vs_raw": 1,
+      "decision": "CALIBRATION_NOT_SUPPORTED_ON_SURFACE"
+    },
+    "consumer_staples_metals_reits_pharma": {
+      "calibrated_compound_stock_return": 0.718849525830592,
+      "raw_compound_stock_return": 1.1041070185239352,
+      "calibrated_compound_stock_minus_matched_etf": -0.06683844046361309,
+      "raw_compound_stock_minus_matched_etf": -0.8364388438345536,
+      "calibrated_positive_matched_excess_folds": 1,
+      "fold_wins_vs_raw": 2,
+      "decision": "CALIBRATION_NOT_SUPPORTED_ON_SURFACE"
+    }
+  },
+  "parent_consequence": "Stop matched-alpha memory, recency-memory, and score-calibration allocator transformations. Retain matched-alpha history as research context only and rotate scarce-capital ranking into a genuinely independent information representation.",
+  "promotion_authority": false,
+  "allocation_runtime_authority": false,
+  "strategy_spec_mutation": false,
+  "broker_action": false,
+  "live_trading_change": false
+}
