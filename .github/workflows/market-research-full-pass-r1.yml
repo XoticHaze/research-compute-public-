@@ -1,0 +1,37 @@
+name: Market Research Full Pass R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/market_research_full_pass_r1.py'
+      - '.github/workflows/market-research-full-pass-r1.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        child:
+          - p38_biotech_relmom
+          - p39_homebuilder_trend
+          - p40_energy_reversal
+          - p41_gold_miners_relmom
+          - p42_regional_banks_recovery
+          - p43_defense_lowvol
+          - p44_software_dual_mom
+          - p45_smallcap_relmom
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install --disable-pip-version-check numpy pandas
+      - name: Execute frozen discriminator
+        run: python research/market_research_full_pass_r1.py --child '${{ matrix.child }}' --out 'result-${{ matrix.child }}.json'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: market-research-${{ matrix.child }}
+          path: result-${{ matrix.child }}.json
+          if-no-files-found: error
