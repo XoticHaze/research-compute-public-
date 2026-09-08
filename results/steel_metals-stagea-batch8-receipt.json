@@ -1,0 +1,545 @@
+{
+  "allocation_authority": false,
+  "benchmark": "SLX",
+  "broad_market_alpha_claim_authorized": false,
+  "cutoff": "2026-09-02T13:30:00+00:00",
+  "decision": "ADVANCE_TO_MATCHED_BROAD_ROBUSTNESS",
+  "development_universe": [
+    "NUE",
+    "STLD",
+    "CMC",
+    "MT",
+    "GGB",
+    "SID",
+    "CLF",
+    "RS"
+  ],
+  "external_holdouts_loaded": false,
+  "family": "steel_metals",
+  "family_summary": {
+    "aggregate_primary_states": 8965,
+    "aggregate_sector_substitution50_mean_bps": -9.605467382956133,
+    "aggregate_stock_after25_minus_sector_etf_mean_bps": 15.394532617043861,
+    "aggregate_stock_net25_mean_bps": 203.6350007427758,
+    "benchmark": "SLX",
+    "development_family_gate_pass": true,
+    "development_symbols": [
+      "NUE",
+      "STLD",
+      "CMC",
+      "MT",
+      "GGB",
+      "SID",
+      "CLF",
+      "RS"
+    ],
+    "external_holdouts_loaded": false,
+    "passing_symbols": 5,
+    "required_passing_symbols": 5
+  },
+  "frozen_external_holdouts": [
+    "TX",
+    "PKX",
+    "CENX",
+    "AA"
+  ],
+  "live_trading_change": false,
+  "next_if_advance": "same-event matched SPY/QQQ, cost stress, fold breadth, concentration; no holdout load until that consumer passes",
+  "per_symbol": [
+    {
+      "benchmark": "SLX",
+      "development_transport_pass": true,
+      "family": "steel_metals",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 232,
+          "sector_substitution50_mean_bps": -64.09696764080405,
+          "stock_after25_minus_sector_etf_mean_bps": -39.09696764080406,
+          "stock_net25_mean_bps": -36.84753848568924
+        },
+        {
+          "fold": 3,
+          "primary_states": 97,
+          "sector_substitution50_mean_bps": 386.48283396224707,
+          "stock_after25_minus_sector_etf_mean_bps": 411.48283396224707,
+          "stock_net25_mean_bps": 934.7227218949312
+        },
+        {
+          "fold": 4,
+          "primary_states": 201,
+          "sector_substitution50_mean_bps": 184.0513749689917,
+          "stock_after25_minus_sector_etf_mean_bps": 209.0513749689917,
+          "stock_net25_mean_bps": 380.6324421007333
+        },
+        {
+          "fold": 5,
+          "primary_states": 267,
+          "sector_substitution50_mean_bps": -122.16798335296323,
+          "stock_after25_minus_sector_etf_mean_bps": -97.16798335296323,
+          "stock_net25_mean_bps": -32.857889832216685
+        },
+        {
+          "fold": 6,
+          "primary_states": 204,
+          "sector_substitution50_mean_bps": 98.77482181101674,
+          "stock_after25_minus_sector_etf_mean_bps": 123.77482181101674,
+          "stock_net25_mean_bps": 535.5517031492218
+        }
+      ],
+      "positive_sector_excess_folds": 3,
+      "positive_stock_net_folds": 3,
+      "primary_states": 1001,
+      "sector_substitution50_mean_bps": 47.09678008456042,
+      "stock_after25_minus_sector_etf_mean_bps": 72.09678008456044,
+      "stock_net25_mean_bps": 258.8472395750402,
+      "symbol": "NUE"
+    },
+    {
+      "benchmark": "SLX",
+      "development_transport_pass": true,
+      "family": "steel_metals",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 216,
+          "sector_substitution50_mean_bps": -152.58005755748903,
+          "stock_after25_minus_sector_etf_mean_bps": -127.58005755748901,
+          "stock_net25_mean_bps": -153.18871378461077
+        },
+        {
+          "fold": 3,
+          "primary_states": 105,
+          "sector_substitution50_mean_bps": 307.7930665350858,
+          "stock_after25_minus_sector_etf_mean_bps": 332.79306653508587,
+          "stock_net25_mean_bps": 748.1852546655078
+        },
+        {
+          "fold": 4,
+          "primary_states": 232,
+          "sector_substitution50_mean_bps": 135.8920371001442,
+          "stock_after25_minus_sector_etf_mean_bps": 160.8920371001442,
+          "stock_net25_mean_bps": 393.2096479030899
+        },
+        {
+          "fold": 5,
+          "primary_states": 285,
+          "sector_substitution50_mean_bps": 107.45510048507221,
+          "stock_after25_minus_sector_etf_mean_bps": 132.45510048507222,
+          "stock_net25_mean_bps": 216.95617559196896
+        },
+        {
+          "fold": 6,
+          "primary_states": 244,
+          "sector_substitution50_mean_bps": 131.0348354921787,
+          "stock_after25_minus_sector_etf_mean_bps": 156.0348354921787,
+          "stock_net25_mean_bps": 602.6645369510107
+        }
+      ],
+      "positive_sector_excess_folds": 4,
+      "positive_stock_net_folds": 4,
+      "primary_states": 1082,
+      "sector_substitution50_mean_bps": 86.40031022119874,
+      "stock_after25_minus_sector_etf_mean_bps": 111.40031022119872,
+      "stock_net25_mean_bps": 319.38815613278837,
+      "symbol": "STLD"
+    },
+    {
+      "benchmark": "SLX",
+      "development_transport_pass": true,
+      "family": "steel_metals",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 222,
+          "sector_substitution50_mean_bps": 30.987588069495843,
+          "stock_after25_minus_sector_etf_mean_bps": 55.98758806949584,
+          "stock_net25_mean_bps": 102.41339552557368
+        },
+        {
+          "fold": 3,
+          "primary_states": 114,
+          "sector_substitution50_mean_bps": 54.09215241963382,
+          "stock_after25_minus_sector_etf_mean_bps": 79.0921524196338,
+          "stock_net25_mean_bps": 551.0974190056081
+        },
+        {
+          "fold": 4,
+          "primary_states": 210,
+          "sector_substitution50_mean_bps": 230.1819244417814,
+          "stock_after25_minus_sector_etf_mean_bps": 255.18192444178143,
+          "stock_net25_mean_bps": 474.51919813488723
+        },
+        {
+          "fold": 5,
+          "primary_states": 249,
+          "sector_substitution50_mean_bps": -36.07368331790219,
+          "stock_after25_minus_sector_etf_mean_bps": -11.073683317902201,
+          "stock_net25_mean_bps": 146.38397837820725
+        },
+        {
+          "fold": 6,
+          "primary_states": 235,
+          "sector_substitution50_mean_bps": -154.667333336852,
+          "stock_after25_minus_sector_etf_mean_bps": -129.667333336852,
+          "stock_net25_mean_bps": 209.69006784259776
+        }
+      ],
+      "positive_sector_excess_folds": 3,
+      "positive_stock_net_folds": 5,
+      "primary_states": 1030,
+      "sector_substitution50_mean_bps": 15.58716852400249,
+      "stock_after25_minus_sector_etf_mean_bps": 40.58716852400249,
+      "stock_net25_mean_bps": 263.04532790371564,
+      "symbol": "CMC"
+    },
+    {
+      "benchmark": "SLX",
+      "development_transport_pass": false,
+      "family": "steel_metals",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 234,
+          "sector_substitution50_mean_bps": -195.40703437883494,
+          "stock_after25_minus_sector_etf_mean_bps": -170.40703437883494,
+          "stock_net25_mean_bps": -248.87249861157431
+        },
+        {
+          "fold": 3,
+          "primary_states": 100,
+          "sector_substitution50_mean_bps": 224.4901689755685,
+          "stock_after25_minus_sector_etf_mean_bps": 249.49016897556857,
+          "stock_net25_mean_bps": 627.6815346905953
+        },
+        {
+          "fold": 4,
+          "primary_states": 259,
+          "sector_substitution50_mean_bps": -71.64322147259878,
+          "stock_after25_minus_sector_etf_mean_bps": -46.643221472598775,
+          "stock_net25_mean_bps": 242.835412210071
+        },
+        {
+          "fold": 5,
+          "primary_states": 316,
+          "sector_substitution50_mean_bps": -185.29623357664005,
+          "stock_after25_minus_sector_etf_mean_bps": -160.29623357664005,
+          "stock_net25_mean_bps": -59.20643041492978
+        },
+        {
+          "fold": 6,
+          "primary_states": 165,
+          "sector_substitution50_mean_bps": 442.92958887730475,
+          "stock_after25_minus_sector_etf_mean_bps": 467.92958887730475,
+          "stock_net25_mean_bps": 1085.03124791036
+        }
+      ],
+      "positive_sector_excess_folds": 2,
+      "positive_stock_net_folds": 3,
+      "primary_states": 1074,
+      "sector_substitution50_mean_bps": -25.42090424018304,
+      "stock_after25_minus_sector_etf_mean_bps": -0.4209042401830367,
+      "stock_net25_mean_bps": 212.05519967453546,
+      "symbol": "MT"
+    },
+    {
+      "benchmark": "SLX",
+      "development_transport_pass": true,
+      "family": "steel_metals",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 229,
+          "sector_substitution50_mean_bps": 50.216844266053144,
+          "stock_after25_minus_sector_etf_mean_bps": 75.21684426605314,
+          "stock_net25_mean_bps": 60.40778674759914
+        },
+        {
+          "fold": 3,
+          "primary_states": 151,
+          "sector_substitution50_mean_bps": -104.50027363566124,
+          "stock_after25_minus_sector_etf_mean_bps": -79.50027363566124,
+          "stock_net25_mean_bps": 387.9596193076804
+        },
+        {
+          "fold": 4,
+          "primary_states": 252,
+          "sector_substitution50_mean_bps": 241.02063792644722,
+          "stock_after25_minus_sector_etf_mean_bps": 266.0206379264472,
+          "stock_net25_mean_bps": 495.91578418964804
+        },
+        {
+          "fold": 5,
+          "primary_states": 332,
+          "sector_substitution50_mean_bps": -171.52901036581088,
+          "stock_after25_minus_sector_etf_mean_bps": -146.52901036581088,
+          "stock_net25_mean_bps": -44.158288708443756
+        },
+        {
+          "fold": 6,
+          "primary_states": 263,
+          "sector_substitution50_mean_bps": 89.20077846701393,
+          "stock_after25_minus_sector_etf_mean_bps": 114.20077846701393,
+          "stock_net25_mean_bps": 384.493578837732
+        }
+      ],
+      "positive_sector_excess_folds": 3,
+      "positive_stock_net_folds": 4,
+      "primary_states": 1227,
+      "sector_substitution50_mean_bps": 18.72004080748284,
+      "stock_after25_minus_sector_etf_mean_bps": 43.72004080748286,
+      "stock_net25_mean_bps": 231.33441131179413,
+      "symbol": "GGB"
+    },
+    {
+      "benchmark": "SLX",
+      "development_transport_pass": false,
+      "family": "steel_metals",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 223,
+          "sector_substitution50_mean_bps": 397.6673977922881,
+          "stock_after25_minus_sector_etf_mean_bps": 422.6673977922881,
+          "stock_net25_mean_bps": 353.61199938711457
+        },
+        {
+          "fold": 3,
+          "primary_states": 156,
+          "sector_substitution50_mean_bps": 71.55400862046544,
+          "stock_after25_minus_sector_etf_mean_bps": 96.55400862046544,
+          "stock_net25_mean_bps": 408.90662511366315
+        },
+        {
+          "fold": 4,
+          "primary_states": 292,
+          "sector_substitution50_mean_bps": -82.75407547061448,
+          "stock_after25_minus_sector_etf_mean_bps": -57.754075470614474,
+          "stock_net25_mean_bps": 165.0180033073392
+        },
+        {
+          "fold": 5,
+          "primary_states": 322,
+          "sector_substitution50_mean_bps": -279.5207253856357,
+          "stock_after25_minus_sector_etf_mean_bps": -254.5207253856357,
+          "stock_net25_mean_bps": -176.74936443589795
+        },
+        {
+          "fold": 6,
+          "primary_states": 290,
+          "sector_substitution50_mean_bps": -383.50909693481725,
+          "stock_after25_minus_sector_etf_mean_bps": -358.50909693481725,
+          "stock_net25_mean_bps": -3.888477296936767
+        }
+      ],
+      "positive_sector_excess_folds": 2,
+      "positive_stock_net_folds": 3,
+      "primary_states": 1283,
+      "sector_substitution50_mean_bps": -97.85288127062996,
+      "stock_after25_minus_sector_etf_mean_bps": -72.85288127062998,
+      "stock_net25_mean_bps": 103.4989965567656,
+      "symbol": "SID"
+    },
+    {
+      "benchmark": "SLX",
+      "development_transport_pass": false,
+      "family": "steel_metals",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 265,
+          "sector_substitution50_mean_bps": 4.530087372933801,
+          "stock_after25_minus_sector_etf_mean_bps": 29.53008737293379,
+          "stock_net25_mean_bps": -11.338028685788595
+        },
+        {
+          "fold": 3,
+          "primary_states": 115,
+          "sector_substitution50_mean_bps": 289.99798079322846,
+          "stock_after25_minus_sector_etf_mean_bps": 314.99798079322846,
+          "stock_net25_mean_bps": 765.6530920992215
+        },
+        {
+          "fold": 4,
+          "primary_states": 274,
+          "sector_substitution50_mean_bps": -326.54268572504185,
+          "stock_after25_minus_sector_etf_mean_bps": -301.54268572504185,
+          "stock_net25_mean_bps": -106.18206017294291
+        },
+        {
+          "fold": 5,
+          "primary_states": 332,
+          "sector_substitution50_mean_bps": -224.55898282841846,
+          "stock_after25_minus_sector_etf_mean_bps": -199.55898282841846,
+          "stock_net25_mean_bps": -125.3830927773447
+        },
+        {
+          "fold": 6,
+          "primary_states": 226,
+          "sector_substitution50_mean_bps": -144.9507566008351,
+          "stock_after25_minus_sector_etf_mean_bps": -119.95075660083509,
+          "stock_net25_mean_bps": 273.52176896065293
+        }
+      ],
+      "positive_sector_excess_folds": 2,
+      "positive_stock_net_folds": 2,
+      "primary_states": 1212,
+      "sector_substitution50_mean_bps": -133.8571850119112,
+      "stock_after25_minus_sector_etf_mean_bps": -108.85718501191121,
+      "stock_net25_mean_bps": 62.82209280966938,
+      "symbol": "CLF"
+    },
+    {
+      "benchmark": "SLX",
+      "development_transport_pass": true,
+      "family": "steel_metals",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 222,
+          "sector_substitution50_mean_bps": 177.49567110370907,
+          "stock_after25_minus_sector_etf_mean_bps": 202.49567110370907,
+          "stock_net25_mean_bps": 110.32019710482267
+        },
+        {
+          "fold": 3,
+          "primary_states": 133,
+          "sector_substitution50_mean_bps": -152.06599335704607,
+          "stock_after25_minus_sector_etf_mean_bps": -127.06599335704607,
+          "stock_net25_mean_bps": 187.05893741897637
+        },
+        {
+          "fold": 4,
+          "primary_states": 212,
+          "sector_substitution50_mean_bps": 286.01942036046796,
+          "stock_after25_minus_sector_etf_mean_bps": 311.01942036046796,
+          "stock_net25_mean_bps": 371.99152760618824
+        },
+        {
+          "fold": 5,
+          "primary_states": 264,
+          "sector_substitution50_mean_bps": 13.961689301846802,
+          "stock_after25_minus_sector_etf_mean_bps": 38.96168930184682,
+          "stock_net25_mean_bps": 136.90200081626836
+        },
+        {
+          "fold": 6,
+          "primary_states": 225,
+          "sector_substitution50_mean_bps": -151.93493406542046,
+          "stock_after25_minus_sector_etf_mean_bps": -126.93493406542046,
+          "stock_net25_mean_bps": 289.19365096974406
+        }
+      ],
+      "positive_sector_excess_folds": 3,
+      "positive_stock_net_folds": 5,
+      "primary_states": 1056,
+      "sector_substitution50_mean_bps": 46.70066742038205,
+      "stock_after25_minus_sector_etf_mean_bps": 71.70066742038205,
+      "stock_net25_mean_bps": 217.2754033808652,
+      "symbol": "RS"
+    }
+  ],
+  "promotion_authority": false,
+  "research_only": true,
+  "runtime_mutation": false,
+  "schema": "industry_stagea_batch8.v1",
+  "source": {
+    "CAT": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "CLF": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "CMC": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "COST": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "GGB": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "JPM": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "MSFT": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "MT": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "NUE": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "QQQ": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "RS": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "SID": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "SLX": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "STLD": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "UNH": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "XOM": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    }
+  },
+  "source_support": "SUFFICIENT"
+}

@@ -1,0 +1,545 @@
+{
+  "allocation_authority": false,
+  "benchmark": "IHE",
+  "broad_market_alpha_claim_authorized": false,
+  "cutoff": "2026-09-02T13:30:00+00:00",
+  "decision": "REJECT_OR_REARCHITECT",
+  "development_universe": [
+    "LLY",
+    "JNJ",
+    "MRK",
+    "PFE",
+    "ABBV",
+    "BMY",
+    "GSK",
+    "AZN"
+  ],
+  "external_holdouts_loaded": false,
+  "family": "pharmaceuticals",
+  "family_summary": {
+    "aggregate_primary_states": 8519,
+    "aggregate_sector_substitution50_mean_bps": -28.651129591652953,
+    "aggregate_stock_after25_minus_sector_etf_mean_bps": -3.6511295916529547,
+    "aggregate_stock_net25_mean_bps": 111.19362308673597,
+    "benchmark": "IHE",
+    "development_family_gate_pass": false,
+    "development_symbols": [
+      "LLY",
+      "JNJ",
+      "MRK",
+      "PFE",
+      "ABBV",
+      "BMY",
+      "GSK",
+      "AZN"
+    ],
+    "external_holdouts_loaded": false,
+    "passing_symbols": 3,
+    "required_passing_symbols": 5
+  },
+  "frozen_external_holdouts": [
+    "AMGN",
+    "NVS",
+    "SNY",
+    "TAK"
+  ],
+  "live_trading_change": false,
+  "next_if_advance": "same-event matched SPY/QQQ, cost stress, fold breadth, concentration; no holdout load until that consumer passes",
+  "per_symbol": [
+    {
+      "benchmark": "IHE",
+      "development_transport_pass": true,
+      "family": "pharmaceuticals",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 202,
+          "sector_substitution50_mean_bps": 65.62364238066985,
+          "stock_after25_minus_sector_etf_mean_bps": 90.62364238066982,
+          "stock_net25_mean_bps": 92.16303294628239
+        },
+        {
+          "fold": 3,
+          "primary_states": 118,
+          "sector_substitution50_mean_bps": -114.94719417448215,
+          "stock_after25_minus_sector_etf_mean_bps": -89.94719417448214,
+          "stock_net25_mean_bps": 179.79619023965694
+        },
+        {
+          "fold": 4,
+          "primary_states": 225,
+          "sector_substitution50_mean_bps": 303.5621770747323,
+          "stock_after25_minus_sector_etf_mean_bps": 328.5621770747323,
+          "stock_net25_mean_bps": 312.5127362197634
+        },
+        {
+          "fold": 5,
+          "primary_states": 210,
+          "sector_substitution50_mean_bps": 255.91119772726105,
+          "stock_after25_minus_sector_etf_mean_bps": 280.911197727261,
+          "stock_net25_mean_bps": 360.3423460004433
+        },
+        {
+          "fold": 6,
+          "primary_states": 242,
+          "sector_substitution50_mean_bps": -33.46954057858044,
+          "stock_after25_minus_sector_etf_mean_bps": -8.469540578580446,
+          "stock_net25_mean_bps": 160.33246854003173
+        }
+      ],
+      "positive_sector_excess_folds": 3,
+      "positive_stock_net_folds": 5,
+      "primary_states": 997,
+      "sector_substitution50_mean_bps": 113.97735144717105,
+      "stock_after25_minus_sector_etf_mean_bps": 138.97735144717103,
+      "stock_net25_mean_bps": 225.29648826444944,
+      "symbol": "LLY"
+    },
+    {
+      "benchmark": "IHE",
+      "development_transport_pass": false,
+      "family": "pharmaceuticals",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 196,
+          "sector_substitution50_mean_bps": 83.9450304465277,
+          "stock_after25_minus_sector_etf_mean_bps": 108.94503044652772,
+          "stock_net25_mean_bps": 147.04639984955796
+        },
+        {
+          "fold": 3,
+          "primary_states": 160,
+          "sector_substitution50_mean_bps": -53.90039682533156,
+          "stock_after25_minus_sector_etf_mean_bps": -28.900396825331562,
+          "stock_net25_mean_bps": 219.7388195836851
+        },
+        {
+          "fold": 4,
+          "primary_states": 260,
+          "sector_substitution50_mean_bps": -63.57488181174565,
+          "stock_after25_minus_sector_etf_mean_bps": -38.57488181174565,
+          "stock_net25_mean_bps": 14.838389792019367
+        },
+        {
+          "fold": 5,
+          "primary_states": 220,
+          "sector_substitution50_mean_bps": -30.293717524957156,
+          "stock_after25_minus_sector_etf_mean_bps": -5.293717524957153,
+          "stock_net25_mean_bps": -27.10819702813036
+        },
+        {
+          "fold": 6,
+          "primary_states": 139,
+          "sector_substitution50_mean_bps": -0.6455885961755328,
+          "stock_after25_minus_sector_etf_mean_bps": 24.35441140382446,
+          "stock_net25_mean_bps": 327.465787065588
+        }
+      ],
+      "positive_sector_excess_folds": 2,
+      "positive_stock_net_folds": 4,
+      "primary_states": 975,
+      "sector_substitution50_mean_bps": -15.850934836868161,
+      "stock_after25_minus_sector_etf_mean_bps": 9.149065163131835,
+      "stock_net25_mean_bps": 110.14484913410878,
+      "symbol": "JNJ"
+    },
+    {
+      "benchmark": "IHE",
+      "development_transport_pass": false,
+      "family": "pharmaceuticals",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 187,
+          "sector_substitution50_mean_bps": 141.8234365734367,
+          "stock_after25_minus_sector_etf_mean_bps": 166.82343657343668,
+          "stock_net25_mean_bps": 202.74938319159804
+        },
+        {
+          "fold": 3,
+          "primary_states": 197,
+          "sector_substitution50_mean_bps": -103.12883058881745,
+          "stock_after25_minus_sector_etf_mean_bps": -78.12883058881745,
+          "stock_net25_mean_bps": 144.18234233363108
+        },
+        {
+          "fold": 4,
+          "primary_states": 168,
+          "sector_substitution50_mean_bps": 237.97985751646826,
+          "stock_after25_minus_sector_etf_mean_bps": 262.97985751646826,
+          "stock_net25_mean_bps": 316.5610249269254
+        },
+        {
+          "fold": 5,
+          "primary_states": 261,
+          "sector_substitution50_mean_bps": -128.37188509266144,
+          "stock_after25_minus_sector_etf_mean_bps": -103.37188509266144,
+          "stock_net25_mean_bps": -65.87630082631634
+        },
+        {
+          "fold": 6,
+          "primary_states": 214,
+          "sector_substitution50_mean_bps": -179.52802698895667,
+          "stock_after25_minus_sector_etf_mean_bps": -154.52802698895667,
+          "stock_net25_mean_bps": 157.5461212746554
+        }
+      ],
+      "positive_sector_excess_folds": 2,
+      "positive_stock_net_folds": 4,
+      "primary_states": 1027,
+      "sector_substitution50_mean_bps": -25.062162326016615,
+      "stock_after25_minus_sector_etf_mean_bps": -0.06216232601660237,
+      "stock_net25_mean_bps": 132.44543692442585,
+      "symbol": "MRK"
+    },
+    {
+      "benchmark": "IHE",
+      "development_transport_pass": false,
+      "family": "pharmaceuticals",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 216,
+          "sector_substitution50_mean_bps": -97.88848826277788,
+          "stock_after25_minus_sector_etf_mean_bps": -72.88848826277788,
+          "stock_net25_mean_bps": -43.551582523564775
+        },
+        {
+          "fold": 3,
+          "primary_states": 159,
+          "sector_substitution50_mean_bps": 228.31856039856729,
+          "stock_after25_minus_sector_etf_mean_bps": 253.31856039856734,
+          "stock_net25_mean_bps": 491.05131418555084
+        },
+        {
+          "fold": 4,
+          "primary_states": 241,
+          "sector_substitution50_mean_bps": -63.410569356122046,
+          "stock_after25_minus_sector_etf_mean_bps": -38.41056935612206,
+          "stock_net25_mean_bps": -41.406819477721726
+        },
+        {
+          "fold": 5,
+          "primary_states": 301,
+          "sector_substitution50_mean_bps": -221.86045941050222,
+          "stock_after25_minus_sector_etf_mean_bps": -196.86045941050222,
+          "stock_net25_mean_bps": -135.12240269392208
+        },
+        {
+          "fold": 6,
+          "primary_states": 256,
+          "sector_substitution50_mean_bps": -297.20905283621374,
+          "stock_after25_minus_sector_etf_mean_bps": -272.20905283621374,
+          "stock_net25_mean_bps": 17.500187365568785
+        }
+      ],
+      "positive_sector_excess_folds": 1,
+      "positive_stock_net_folds": 2,
+      "primary_states": 1173,
+      "sector_substitution50_mean_bps": -121.9000216409592,
+      "stock_after25_minus_sector_etf_mean_bps": -96.90002164095917,
+      "stock_net25_mean_bps": 19.180885243816483,
+      "symbol": "PFE"
+    },
+    {
+      "benchmark": "IHE",
+      "development_transport_pass": false,
+      "family": "pharmaceuticals",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 239,
+          "sector_substitution50_mean_bps": -111.30592374276316,
+          "stock_after25_minus_sector_etf_mean_bps": -86.30592374276316,
+          "stock_net25_mean_bps": -96.78794748044673
+        },
+        {
+          "fold": 3,
+          "primary_states": 166,
+          "sector_substitution50_mean_bps": -53.494991707429435,
+          "stock_after25_minus_sector_etf_mean_bps": -28.49499170742945,
+          "stock_net25_mean_bps": 208.03719734086434
+        },
+        {
+          "fold": 4,
+          "primary_states": 220,
+          "sector_substitution50_mean_bps": 137.587585052809,
+          "stock_after25_minus_sector_etf_mean_bps": 162.587585052809,
+          "stock_net25_mean_bps": 170.03349792805284
+        },
+        {
+          "fold": 5,
+          "primary_states": 215,
+          "sector_substitution50_mean_bps": -24.920786037879218,
+          "stock_after25_minus_sector_etf_mean_bps": 0.07921396212078372,
+          "stock_net25_mean_bps": -27.44464555015599
+        },
+        {
+          "fold": 6,
+          "primary_states": 243,
+          "sector_substitution50_mean_bps": -112.73686940753045,
+          "stock_after25_minus_sector_etf_mean_bps": -87.73686940753045,
+          "stock_net25_mean_bps": 220.3556350425926
+        }
+      ],
+      "positive_sector_excess_folds": 2,
+      "positive_stock_net_folds": 3,
+      "primary_states": 1083,
+      "sector_substitution50_mean_bps": -35.05636560527205,
+      "stock_after25_minus_sector_etf_mean_bps": -10.056365605272054,
+      "stock_net25_mean_bps": 89.06283044967205,
+      "symbol": "ABBV"
+    },
+    {
+      "benchmark": "IHE",
+      "development_transport_pass": false,
+      "family": "pharmaceuticals",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 212,
+          "sector_substitution50_mean_bps": -22.995710531981896,
+          "stock_after25_minus_sector_etf_mean_bps": 2.004289468018103,
+          "stock_net25_mean_bps": -68.85604272259201
+        },
+        {
+          "fold": 3,
+          "primary_states": 195,
+          "sector_substitution50_mean_bps": -89.52046840229528,
+          "stock_after25_minus_sector_etf_mean_bps": -64.5204684022953,
+          "stock_net25_mean_bps": 161.20033240512535
+        },
+        {
+          "fold": 4,
+          "primary_states": 239,
+          "sector_substitution50_mean_bps": 20.043712513253727,
+          "stock_after25_minus_sector_etf_mean_bps": 45.043712513253716,
+          "stock_net25_mean_bps": 95.47579410511436
+        },
+        {
+          "fold": 5,
+          "primary_states": 265,
+          "sector_substitution50_mean_bps": -222.9630740513191,
+          "stock_after25_minus_sector_etf_mean_bps": -197.96307405131915,
+          "stock_net25_mean_bps": -106.12322498703496
+        },
+        {
+          "fold": 6,
+          "primary_states": 261,
+          "sector_substitution50_mean_bps": -289.7106877984871,
+          "stock_after25_minus_sector_etf_mean_bps": -264.710687798487,
+          "stock_net25_mean_bps": 69.71237073504443
+        }
+      ],
+      "positive_sector_excess_folds": 2,
+      "positive_stock_net_folds": 3,
+      "primary_states": 1172,
+      "sector_substitution50_mean_bps": -129.8983266378539,
+      "stock_after25_minus_sector_etf_mean_bps": -104.89832663785388,
+      "stock_net25_mean_bps": 25.364823117077297,
+      "symbol": "BMY"
+    },
+    {
+      "benchmark": "IHE",
+      "development_transport_pass": true,
+      "family": "pharmaceuticals",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 215,
+          "sector_substitution50_mean_bps": 102.3650301679022,
+          "stock_after25_minus_sector_etf_mean_bps": 127.3650301679022,
+          "stock_net25_mean_bps": 90.66951481117606
+        },
+        {
+          "fold": 3,
+          "primary_states": 143,
+          "sector_substitution50_mean_bps": -123.56536331475849,
+          "stock_after25_minus_sector_etf_mean_bps": -98.56536331475849,
+          "stock_net25_mean_bps": 201.6304317185385
+        },
+        {
+          "fold": 4,
+          "primary_states": 224,
+          "sector_substitution50_mean_bps": -93.59451973138925,
+          "stock_after25_minus_sector_etf_mean_bps": -68.59451973138924,
+          "stock_net25_mean_bps": -23.935627015047693
+        },
+        {
+          "fold": 5,
+          "primary_states": 208,
+          "sector_substitution50_mean_bps": 11.244748842118073,
+          "stock_after25_minus_sector_etf_mean_bps": 36.24474884211807,
+          "stock_net25_mean_bps": 85.66143746807181
+        },
+        {
+          "fold": 6,
+          "primary_states": 191,
+          "sector_substitution50_mean_bps": 47.87504167001418,
+          "stock_after25_minus_sector_etf_mean_bps": 72.87504167001418,
+          "stock_net25_mean_bps": 456.66931312516635
+        }
+      ],
+      "positive_sector_excess_folds": 3,
+      "positive_stock_net_folds": 4,
+      "primary_states": 981,
+      "sector_substitution50_mean_bps": -5.243116380845478,
+      "stock_after25_minus_sector_etf_mean_bps": 19.756883619154518,
+      "stock_net25_mean_bps": 150.8735318746676,
+      "symbol": "GSK"
+    },
+    {
+      "benchmark": "IHE",
+      "development_transport_pass": true,
+      "family": "pharmaceuticals",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 213,
+          "sector_substitution50_mean_bps": 232.63986151534425,
+          "stock_after25_minus_sector_etf_mean_bps": 257.63986151534425,
+          "stock_net25_mean_bps": 271.3139327280081
+        },
+        {
+          "fold": 3,
+          "primary_states": 162,
+          "sector_substitution50_mean_bps": 34.919171177050416,
+          "stock_after25_minus_sector_etf_mean_bps": 59.91917117705042,
+          "stock_net25_mean_bps": 292.84805807556285
+        },
+        {
+          "fold": 4,
+          "primary_states": 248,
+          "sector_substitution50_mean_bps": 66.616438729743,
+          "stock_after25_minus_sector_etf_mean_bps": 91.61643872974298,
+          "stock_net25_mean_bps": 93.25182673479306
+        },
+        {
+          "fold": 5,
+          "primary_states": 282,
+          "sector_substitution50_mean_bps": -112.72297050178321,
+          "stock_after25_minus_sector_etf_mean_bps": -87.72297050178321,
+          "stock_net25_mean_bps": -18.645533741176823
+        },
+        {
+          "fold": 6,
+          "primary_states": 206,
+          "sector_substitution50_mean_bps": -87.9804866104391,
+          "stock_after25_minus_sector_etf_mean_bps": -62.9804866104391,
+          "stock_net25_mean_bps": 288.5280962345996
+        }
+      ],
+      "positive_sector_excess_folds": 3,
+      "positive_stock_net_folds": 4,
+      "primary_states": 1111,
+      "sector_substitution50_mean_bps": 19.638357439400014,
+      "stock_after25_minus_sector_etf_mean_bps": 44.63835743940001,
+      "stock_net25_mean_bps": 164.2992380007662,
+      "symbol": "AZN"
+    }
+  ],
+  "promotion_authority": false,
+  "research_only": true,
+  "runtime_mutation": false,
+  "schema": "industry_stagea_batch8.v1",
+  "source": {
+    "ABBV": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "AZN": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "BMY": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "CAT": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "COST": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "GSK": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "IHE": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "JNJ": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "JPM": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "LLY": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "MRK": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "MSFT": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "PFE": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "QQQ": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "UNH": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "XOM": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    }
+  },
+  "source_support": "SUFFICIENT"
+}

@@ -1,0 +1,545 @@
+{
+  "allocation_authority": false,
+  "benchmark": "IYT",
+  "broad_market_alpha_claim_authorized": false,
+  "cutoff": "2026-09-02T13:30:00+00:00",
+  "decision": "ADVANCE_TO_MATCHED_BROAD_ROBUSTNESS",
+  "development_universe": [
+    "UNP",
+    "CSX",
+    "NSC",
+    "CNI",
+    "CP",
+    "JBHT",
+    "ODFL",
+    "SAIA"
+  ],
+  "external_holdouts_loaded": false,
+  "family": "freight_transport",
+  "family_summary": {
+    "aggregate_primary_states": 9405,
+    "aggregate_sector_substitution50_mean_bps": 3.8588964244141586,
+    "aggregate_stock_after25_minus_sector_etf_mean_bps": 28.858896424414166,
+    "aggregate_stock_net25_mean_bps": 143.0988371364257,
+    "benchmark": "IYT",
+    "development_family_gate_pass": true,
+    "development_symbols": [
+      "UNP",
+      "CSX",
+      "NSC",
+      "CNI",
+      "CP",
+      "JBHT",
+      "ODFL",
+      "SAIA"
+    ],
+    "external_holdouts_loaded": false,
+    "passing_symbols": 5,
+    "required_passing_symbols": 5
+  },
+  "frozen_external_holdouts": [
+    "CHRW",
+    "EXPD",
+    "KNX",
+    "FDX"
+  ],
+  "live_trading_change": false,
+  "next_if_advance": "same-event matched SPY/QQQ, cost stress, fold breadth, concentration; no holdout load until that consumer passes",
+  "per_symbol": [
+    {
+      "benchmark": "IYT",
+      "development_transport_pass": false,
+      "family": "freight_transport",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 229,
+          "sector_substitution50_mean_bps": 73.3222828615045,
+          "stock_after25_minus_sector_etf_mean_bps": 98.32228286150446,
+          "stock_net25_mean_bps": 206.76474956588874
+        },
+        {
+          "fold": 3,
+          "primary_states": 175,
+          "sector_substitution50_mean_bps": -109.1488924363717,
+          "stock_after25_minus_sector_etf_mean_bps": -84.14889243637171,
+          "stock_net25_mean_bps": 178.29462770993456
+        },
+        {
+          "fold": 4,
+          "primary_states": 278,
+          "sector_substitution50_mean_bps": -90.28732450326453,
+          "stock_after25_minus_sector_etf_mean_bps": -65.28732450326453,
+          "stock_net25_mean_bps": -22.459925834599336
+        },
+        {
+          "fold": 5,
+          "primary_states": 245,
+          "sector_substitution50_mean_bps": -76.545530876202,
+          "stock_after25_minus_sector_etf_mean_bps": -51.545530876201994,
+          "stock_net25_mean_bps": 104.25861154274341
+        },
+        {
+          "fold": 6,
+          "primary_states": 238,
+          "sector_substitution50_mean_bps": 30.7093381897968,
+          "stock_after25_minus_sector_etf_mean_bps": 55.70933818979677,
+          "stock_net25_mean_bps": 328.8514835988299
+        }
+      ],
+      "positive_sector_excess_folds": 2,
+      "positive_stock_net_folds": 4,
+      "primary_states": 1165,
+      "sector_substitution50_mean_bps": -33.35189887423684,
+      "stock_after25_minus_sector_etf_mean_bps": -8.351898874236841,
+      "stock_net25_mean_bps": 151.17325411356407,
+      "symbol": "UNP"
+    },
+    {
+      "benchmark": "IYT",
+      "development_transport_pass": false,
+      "family": "freight_transport",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 253,
+          "sector_substitution50_mean_bps": -2.9727881375133243,
+          "stock_after25_minus_sector_etf_mean_bps": 22.027211862486677,
+          "stock_net25_mean_bps": 90.39307039461738
+        },
+        {
+          "fold": 3,
+          "primary_states": 168,
+          "sector_substitution50_mean_bps": -89.24918988859436,
+          "stock_after25_minus_sector_etf_mean_bps": -64.24918988859436,
+          "stock_net25_mean_bps": 203.0752247049768
+        },
+        {
+          "fold": 4,
+          "primary_states": 290,
+          "sector_substitution50_mean_bps": -29.86239280989189,
+          "stock_after25_minus_sector_etf_mean_bps": -4.862392809891897,
+          "stock_net25_mean_bps": -16.884919455747838
+        },
+        {
+          "fold": 5,
+          "primary_states": 260,
+          "sector_substitution50_mean_bps": -122.94782316793014,
+          "stock_after25_minus_sector_etf_mean_bps": -97.94782316793014,
+          "stock_net25_mean_bps": 12.206358027125043
+        },
+        {
+          "fold": 6,
+          "primary_states": 229,
+          "sector_substitution50_mean_bps": 157.72718002317407,
+          "stock_after25_minus_sector_etf_mean_bps": 182.72718002317407,
+          "stock_net25_mean_bps": 371.397279402743
+        }
+      ],
+      "positive_sector_excess_folds": 2,
+      "positive_stock_net_folds": 4,
+      "primary_states": 1200,
+      "sector_substitution50_mean_bps": -16.8774858444153,
+      "stock_after25_minus_sector_etf_mean_bps": 8.122514155584694,
+      "stock_net25_mean_bps": 116.92757332365676,
+      "symbol": "CSX"
+    },
+    {
+      "benchmark": "IYT",
+      "development_transport_pass": true,
+      "family": "freight_transport",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 229,
+          "sector_substitution50_mean_bps": 68.25633724143796,
+          "stock_after25_minus_sector_etf_mean_bps": 93.25633724143796,
+          "stock_net25_mean_bps": 162.98819531696586
+        },
+        {
+          "fold": 3,
+          "primary_states": 158,
+          "sector_substitution50_mean_bps": -20.6018441492914,
+          "stock_after25_minus_sector_etf_mean_bps": 4.398155850708601,
+          "stock_net25_mean_bps": 258.8398751639972
+        },
+        {
+          "fold": 4,
+          "primary_states": 294,
+          "sector_substitution50_mean_bps": -119.7198738869454,
+          "stock_after25_minus_sector_etf_mean_bps": -94.7198738869454,
+          "stock_net25_mean_bps": -106.418637103884
+        },
+        {
+          "fold": 5,
+          "primary_states": 265,
+          "sector_substitution50_mean_bps": -5.315930690628436,
+          "stock_after25_minus_sector_etf_mean_bps": 19.684069309371566,
+          "stock_net25_mean_bps": 123.55787308128635
+        },
+        {
+          "fold": 6,
+          "primary_states": 239,
+          "sector_substitution50_mean_bps": 92.43580701919126,
+          "stock_after25_minus_sector_etf_mean_bps": 117.43580701919126,
+          "stock_net25_mean_bps": 356.746280757694
+        }
+      ],
+      "positive_sector_excess_folds": 4,
+      "positive_stock_net_folds": 4,
+      "primary_states": 1185,
+      "sector_substitution50_mean_bps": -1.804723059485674,
+      "stock_after25_minus_sector_etf_mean_bps": 23.195276940514333,
+      "stock_net25_mean_bps": 139.18912671948067,
+      "symbol": "NSC"
+    },
+    {
+      "benchmark": "IYT",
+      "development_transport_pass": false,
+      "family": "freight_transport",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 271,
+          "sector_substitution50_mean_bps": 19.372223273048938,
+          "stock_after25_minus_sector_etf_mean_bps": 44.37222327304894,
+          "stock_net25_mean_bps": 38.63830106193747
+        },
+        {
+          "fold": 3,
+          "primary_states": 151,
+          "sector_substitution50_mean_bps": 71.94622560044303,
+          "stock_after25_minus_sector_etf_mean_bps": 96.94622560044303,
+          "stock_net25_mean_bps": 296.11370911326287
+        },
+        {
+          "fold": 4,
+          "primary_states": 282,
+          "sector_substitution50_mean_bps": 23.052485906183403,
+          "stock_after25_minus_sector_etf_mean_bps": 48.0524859061834,
+          "stock_net25_mean_bps": 27.84074590273558
+        },
+        {
+          "fold": 5,
+          "primary_states": 288,
+          "sector_substitution50_mean_bps": -193.721895501045,
+          "stock_after25_minus_sector_etf_mean_bps": -168.721895501045,
+          "stock_net25_mean_bps": -68.76300864381923
+        },
+        {
+          "fold": 6,
+          "primary_states": 257,
+          "sector_substitution50_mean_bps": -6.929663325863538,
+          "stock_after25_minus_sector_etf_mean_bps": 18.070336674136435,
+          "stock_net25_mean_bps": 202.56330937601248
+        }
+      ],
+      "positive_sector_excess_folds": 4,
+      "positive_stock_net_folds": 4,
+      "primary_states": 1249,
+      "sector_substitution50_mean_bps": -27.989011834140126,
+      "stock_after25_minus_sector_etf_mean_bps": -2.9890118341401197,
+      "stock_net25_mean_bps": 76.29324581959521,
+      "symbol": "CNI"
+    },
+    {
+      "benchmark": "IYT",
+      "development_transport_pass": true,
+      "family": "freight_transport",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 233,
+          "sector_substitution50_mean_bps": 98.20947530383154,
+          "stock_after25_minus_sector_etf_mean_bps": 123.20947530383154,
+          "stock_net25_mean_bps": 125.72990170595195
+        },
+        {
+          "fold": 3,
+          "primary_states": 149,
+          "sector_substitution50_mean_bps": -188.84430586621818,
+          "stock_after25_minus_sector_etf_mean_bps": -163.84430586621818,
+          "stock_net25_mean_bps": 153.30402443809692
+        },
+        {
+          "fold": 4,
+          "primary_states": 255,
+          "sector_substitution50_mean_bps": 168.654820381704,
+          "stock_after25_minus_sector_etf_mean_bps": 193.65482038170398,
+          "stock_net25_mean_bps": 187.04327025611408
+        },
+        {
+          "fold": 5,
+          "primary_states": 272,
+          "sector_substitution50_mean_bps": -221.42767924318778,
+          "stock_after25_minus_sector_etf_mean_bps": -196.42767924318775,
+          "stock_net25_mean_bps": -38.24367618262022
+        },
+        {
+          "fold": 6,
+          "primary_states": 266,
+          "sector_substitution50_mean_bps": -22.344863169542766,
+          "stock_after25_minus_sector_etf_mean_bps": 2.6551368304572227,
+          "stock_net25_mean_bps": 205.2632786279389
+        }
+      ],
+      "positive_sector_excess_folds": 3,
+      "positive_stock_net_folds": 4,
+      "primary_states": 1175,
+      "sector_substitution50_mean_bps": -24.187299564412488,
+      "stock_after25_minus_sector_etf_mean_bps": 0.8127004355875072,
+      "stock_net25_mean_bps": 122.57970455100542,
+      "symbol": "CP"
+    },
+    {
+      "benchmark": "IYT",
+      "development_transport_pass": true,
+      "family": "freight_transport",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 232,
+          "sector_substitution50_mean_bps": -97.68945196624524,
+          "stock_after25_minus_sector_etf_mean_bps": -72.68945196624523,
+          "stock_net25_mean_bps": -5.1038416949046725
+        },
+        {
+          "fold": 3,
+          "primary_states": 121,
+          "sector_substitution50_mean_bps": 129.01709934730306,
+          "stock_after25_minus_sector_etf_mean_bps": 154.017099347303,
+          "stock_net25_mean_bps": 349.7090444844907
+        },
+        {
+          "fold": 4,
+          "primary_states": 260,
+          "sector_substitution50_mean_bps": 100.32212181807957,
+          "stock_after25_minus_sector_etf_mean_bps": 125.32212181807957,
+          "stock_net25_mean_bps": 126.28641750178515
+        },
+        {
+          "fold": 5,
+          "primary_states": 266,
+          "sector_substitution50_mean_bps": -137.4310012208701,
+          "stock_after25_minus_sector_etf_mean_bps": -112.43100122087007,
+          "stock_net25_mean_bps": 51.24246093173542
+        },
+        {
+          "fold": 6,
+          "primary_states": 218,
+          "sector_substitution50_mean_bps": 106.5207845540015,
+          "stock_after25_minus_sector_etf_mean_bps": 131.52078455400152,
+          "stock_net25_mean_bps": 309.9902516869437
+        }
+      ],
+      "positive_sector_excess_folds": 3,
+      "positive_stock_net_folds": 4,
+      "primary_states": 1097,
+      "sector_substitution50_mean_bps": 5.192117179194455,
+      "stock_after25_minus_sector_etf_mean_bps": 30.192117179194454,
+      "stock_net25_mean_bps": 141.45263549267545,
+      "symbol": "JBHT"
+    },
+    {
+      "benchmark": "IYT",
+      "development_transport_pass": true,
+      "family": "freight_transport",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 235,
+          "sector_substitution50_mean_bps": 238.32519067843185,
+          "stock_after25_minus_sector_etf_mean_bps": 263.32519067843185,
+          "stock_net25_mean_bps": 368.63499062154125
+        },
+        {
+          "fold": 3,
+          "primary_states": 145,
+          "sector_substitution50_mean_bps": 244.92874677030406,
+          "stock_after25_minus_sector_etf_mean_bps": 269.92874677030403,
+          "stock_net25_mean_bps": 503.94308741875466
+        },
+        {
+          "fold": 4,
+          "primary_states": 277,
+          "sector_substitution50_mean_bps": 89.12252319533476,
+          "stock_after25_minus_sector_etf_mean_bps": 114.12252319533475,
+          "stock_net25_mean_bps": 86.74539751185073
+        },
+        {
+          "fold": 5,
+          "primary_states": 277,
+          "sector_substitution50_mean_bps": -54.5654771327593,
+          "stock_after25_minus_sector_etf_mean_bps": -29.5654771327593,
+          "stock_net25_mean_bps": 151.84622862178588
+        },
+        {
+          "fold": 6,
+          "primary_states": 263,
+          "sector_substitution50_mean_bps": -48.99579875244005,
+          "stock_after25_minus_sector_etf_mean_bps": -23.995798752440034,
+          "stock_net25_mean_bps": 193.28577224763714
+        }
+      ],
+      "positive_sector_excess_folds": 3,
+      "positive_stock_net_folds": 5,
+      "primary_states": 1197,
+      "sector_substitution50_mean_bps": 73.69047182837697,
+      "stock_after25_minus_sector_etf_mean_bps": 98.69047182837697,
+      "stock_net25_mean_bps": 231.09858731155182,
+      "symbol": "ODFL"
+    },
+    {
+      "benchmark": "IYT",
+      "development_transport_pass": true,
+      "family": "freight_transport",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 220,
+          "sector_substitution50_mean_bps": 30.347592520278987,
+          "stock_after25_minus_sector_etf_mean_bps": 55.34759252027899,
+          "stock_net25_mean_bps": 83.89754424643554
+        },
+        {
+          "fold": 3,
+          "primary_states": 147,
+          "sector_substitution50_mean_bps": 449.34778958709387,
+          "stock_after25_minus_sector_etf_mean_bps": 474.34778958709387,
+          "stock_net25_mean_bps": 646.2762991522748
+        },
+        {
+          "fold": 4,
+          "primary_states": 278,
+          "sector_substitution50_mean_bps": 129.90925519100506,
+          "stock_after25_minus_sector_etf_mean_bps": 154.90925519100506,
+          "stock_net25_mean_bps": 120.99766868776555
+        },
+        {
+          "fold": 5,
+          "primary_states": 222,
+          "sector_substitution50_mean_bps": 77.16858876461417,
+          "stock_after25_minus_sector_etf_mean_bps": 102.16858876461417,
+          "stock_net25_mean_bps": 209.3915439308397
+        },
+        {
+          "fold": 6,
+          "primary_states": 270,
+          "sector_substitution50_mean_bps": -218.37861751420687,
+          "stock_after25_minus_sector_etf_mean_bps": -193.3786175142068,
+          "stock_net25_mean_bps": -0.8399937264265545
+        }
+      ],
+      "positive_sector_excess_folds": 4,
+      "positive_stock_net_folds": 4,
+      "primary_states": 1137,
+      "sector_substitution50_mean_bps": 58.93981384676523,
+      "stock_after25_minus_sector_etf_mean_bps": 83.93981384676523,
+      "stock_net25_mean_bps": 170.05765351918228,
+      "symbol": "SAIA"
+    }
+  ],
+  "promotion_authority": false,
+  "research_only": true,
+  "runtime_mutation": false,
+  "schema": "industry_stagea_batch8.v1",
+  "source": {
+    "CAT": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "CNI": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "COST": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "CP": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "CSX": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "IYT": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "JBHT": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "JPM": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "MSFT": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "NSC": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "ODFL": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "QQQ": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "SAIA": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "UNH": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "UNP": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "XOM": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    }
+  },
+  "source_support": "SUFFICIENT"
+}
