@@ -1,0 +1,78 @@
+name: News State FNSPID Sorted Probe
+
+on:
+  push:
+    paths:
+      - '.github/workflows/news-state-fnspid-sorted-probe.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Query sorted FNSPID indexed source
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import collections, hashlib, json, os, re, time
+          from urllib.parse import urlencode
+          from urllib.request import Request, urlopen
+          DATASET='sabareesh88/FNSPID_nasdaq_sorted'; CONFIG='default'; SPLIT='train'
+          SYMBOLS=('NVDA','AMD','AMAT','AVGO','MU','DHI','LEN','PHM','TOL','NVR')
+          BASE='https://datasets-server.huggingface.co'; os.makedirs('results',exist_ok=True)
+          def query(path,params,retries=4):
+              url=BASE+path+'?'+urlencode(params); last=None
+              for i in range(retries):
+                  try:
+                      with urlopen(Request(url,headers={'User-Agent':'research-foundry-news-state/1.0'}),timeout=60) as r: return json.loads(r.read())
+                  except Exception as e:
+                      last=e
+                      if i+1<retries: time.sleep(2*(i+1))
+              raise RuntimeError(f'{path}: {type(last).__name__}: {last}')
+          validity={}
+          try: validity=query('/is-valid',{'dataset':DATASET})
+          except Exception as e: validity={'probe_error':f'{type(e).__name__}: {e}'}
+          receipt={'schema':'foundry.news_state_fnspid_sorted_probe.v1','dataset':DATASET,'validity':validity,'requested_symbols':list(SYMBOLS),'per_symbol':{},'normalized_sample_sha256':None,'publication_time_verified':False,'causal_intraday_admission':'REQUIRES_SEPARATE_SOURCE_DATE_SEMANTICS_VERIFICATION','research_only':True}
+          samples=[]; errors=[]
+          if validity.get('filter') is True:
+              def filtered(sym,order):
+                  return query('/filter',{'dataset':DATASET,'config':CONFIG,'split':SPLIT,'where':f'"Stock_symbol"=\'{sym}\'','orderby':f'"Date" {order}','offset':0,'length':20})
+              for sym in SYMBOLS:
+                  try:
+                      a=filtered(sym,'ASC'); d=filtered(sym,'DESC')
+                      ar=[x.get('row',x) for x in a.get('rows',[])]; dr=[x.get('row',x) for x in d.get('rows',[])]
+                      rows=ar[:5]+dr[:5]
+                      receipt['per_symbol'][sym]={'indexed_row_count':a.get('num_rows_total',a.get('num_rows')),'first_raw_publication':ar[0].get('Date') if ar else None,'last_raw_publication':dr[0].get('Date') if dr else None,'bounded_sample_rows':len(rows)}
+                      for r in rows:
+                          article=r.get('Article') or ''
+                          samples.append({'schema':'foundry.news_event.source_sample.v1','source':'fnspid','dataset':DATASET,'published_raw':r.get('Date'),'symbol':(r.get('Stock_symbol') or '').upper(),'title':r.get('Article_title'),'url':r.get('Url'),'publisher':r.get('Publisher'),'author':r.get('Author'),'article_present':bool(article.strip()),'article_sha256':hashlib.sha256(article.encode('utf-8',errors='replace')).hexdigest() if article else None,'publication_time_verified':False,'causal_intraday_admitted':False})
+                  except Exception as e:
+                      errors.append({'symbol':sym,'error':f'{type(e).__name__}: {e}'})
+          receipt['filter_errors']=errors
+          receipt['indexed_rows_across_requested_symbols']=sum((v.get('indexed_row_count') or 0) for v in receipt['per_symbol'].values())
+          receipt['bounded_sample_rows']=len(samples)
+          sample_path='results/news-state-fnspid-sorted-sample.jsonl'
+          with open(sample_path,'w',encoding='utf-8') as f:
+              for x in samples: f.write(json.dumps(x,sort_keys=True,ensure_ascii=False)+'\n')
+          receipt['normalized_sample_sha256']=hashlib.sha256(open(sample_path,'rb').read()).hexdigest()
+          receipt['source_access_decision']='FILTERED_SAMPLE_MATERIALIZED' if samples and not errors else ('FILTER_PARTIAL' if samples else 'INDEXED_FILTER_UNAVAILABLE_OR_FAILED')
+          with open('results/news-state-fnspid-sorted-probe.json','w') as f: json.dump(receipt,f,sort_keys=True,indent=2); f.write('\n')
+          print('FNSPID_SORTED_PROBE='+json.dumps(receipt,sort_keys=True))
+          PY
+      - name: Persist receipt
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add results/news-state-fnspid-sorted-probe.json results/news-state-fnspid-sorted-sample.jsonl
+          git commit -m 'research: persist sorted FNSPID probe receipt'
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"
