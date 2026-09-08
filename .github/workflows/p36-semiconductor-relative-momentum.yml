@@ -21,6 +21,8 @@ jobs:
         run: python -m py_compile scripts/p36_semiconductor_relative_momentum_allocator.py
       - name: Execute frozen P36 discriminator
         run: python scripts/p36_semiconductor_relative_momentum_allocator.py
+      - name: Publish result summary
+        run: cat artifacts/p36_semiconductor_relative_momentum_allocator.json >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: p36-semiconductor-relative-momentum-${{ github.run_id }}
