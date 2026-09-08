@@ -1,0 +1,20 @@
+name: P24 SMH Overnight Intraday State
+on:
+  pull_request:
+    paths:
+      - 'research/p24_smh_overnight_intraday_state.py'
+      - '.github/workflows/p24-smh-overnight-intraday-state.yml'
+  workflow_dispatch:
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute frozen P24 discriminator
+        run: python research/p24_smh_overnight_intraday_state.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p24-smh-overnight-intraday-state-result
+          path: p24_result.json
+          if-no-files-found: error
