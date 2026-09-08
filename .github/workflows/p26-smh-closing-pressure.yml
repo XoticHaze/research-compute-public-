@@ -1,0 +1,20 @@
+name: P26 SMH Closing Pressure
+on:
+  pull_request:
+    paths:
+      - 'research/p26_smh_closing_pressure.py'
+      - '.github/workflows/p26-smh-closing-pressure.yml'
+  workflow_dispatch:
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute frozen P26 discriminator
+        run: python research/p26_smh_closing_pressure.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p26-smh-closing-pressure-result
+          path: p26_result.json
+          if-no-files-found: error
