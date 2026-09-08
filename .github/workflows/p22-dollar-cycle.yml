@@ -6,6 +6,9 @@ on:
       - 'scripts/p22_dollar_cycle_allocator.py'
       - '.github/workflows/p22-dollar-cycle.yml'
   workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
 jobs:
   p22:
     runs-on: ubuntu-latest
@@ -17,6 +20,19 @@ jobs:
           python-version: '3.11'
       - name: Execute frozen discriminator
         run: python scripts/p22_dollar_cycle_allocator.py
+      - name: Surface terminal result on the PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo '<!-- P22_DOLLAR_CYCLE_TERMINAL_RESULT -->'
+            echo '```json'
+            cat p22_dollar_cycle_result.json
+            echo '```'
+          } > p22_pr_comment.md
+          gh pr comment "$PR_NUMBER" --body-file p22_pr_comment.md
       - uses: actions/upload-artifact@v4
         if: always()
         with:
