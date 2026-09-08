@@ -9,6 +9,8 @@ import pandas as pd
 START="2000-01-01"
 END="2026-09-08"
 COSTS=(10,25,50)
+MORTGAGE_MIRROR_COMMIT="3003eb5e9a98206388edf188d97a7cb625678896"
+MORTGAGE_MIRROR_URL=f"https://raw.githubusercontent.com/nathan-cantafio/mortgages/{MORTGAGE_MIRROR_COMMIT}/MORTGAGE30US.csv"
 
 
 def get(url, attempts=5):
@@ -36,14 +38,16 @@ def yahoo(sym):
     return s,{"url":url,"sha256":hashlib.sha256(raw).hexdigest(),"rows":int(len(s)),"attempt":attempt}
 
 
-def fred(series):
-    url=f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}"
-    raw,attempt=get(url)
-    df=pd.read_csv(io.BytesIO(raw)); df.columns=["date","value"]
-    df["date"]=pd.to_datetime(df["date"]); df["value"]=pd.to_numeric(df["value"],errors="coerce")
-    s=df.dropna().set_index("date")["value"].sort_index()
-    if len(s)<100: raise RuntimeError(f"{series}_insufficient_rows={len(s)}")
-    return s,{"url":url,"sha256":hashlib.sha256(raw).hexdigest(),"rows":int(len(s)),"attempt":attempt}
+def mortgage_series():
+    raw,attempt=get(MORTGAGE_MIRROR_URL)
+    df=pd.read_csv(io.BytesIO(raw))
+    if list(df.columns[:2]) != ["DATE","MORTGAGE30US"]:
+        raise RuntimeError(f"mortgage_source_schema_mismatch:{list(df.columns)}")
+    df["DATE"]=pd.to_datetime(df["DATE"],errors="coerce")
+    df["MORTGAGE30US"]=pd.to_numeric(df["MORTGAGE30US"],errors="coerce")
+    s=df.dropna().set_index("DATE")["MORTGAGE30US"].sort_index()
+    if len(s)<1000: raise RuntimeError(f"MORTGAGE30US_insufficient_rows={len(s)}")
+    return s,{"url":MORTGAGE_MIRROR_URL,"sha256":hashlib.sha256(raw).hexdigest(),"rows":int(len(s)),"attempt":attempt,"mirror_repo":"nathan-cantafio/mortgages","mirror_commit":MORTGAGE_MIRROR_COMMIT,"upstream_identity":"Freddie Mac PMMS / FRED MORTGAGE30US","source_class":"PINNED_EXTERNAL_RESEARCH_MIRROR_NOT_MM_CANONICAL"}
 
 
 def cagr(r):
@@ -73,10 +77,11 @@ def main():
     prices={}; src={}
     for sym in ("ITB","QQQ","SPY"):
         prices[sym],src[sym]=yahoo(sym)
-    mort,src["MORTGAGE30US"]=fred("MORTGAGE30US")
+    mort,src["MORTGAGE30US"]=mortgage_series()
     m=pd.concat({k:v.resample("ME").last() for k,v in prices.items()},axis=1).dropna()
+    source_month_end=mort.index.max()+pd.offsets.MonthEnd(0)
+    m=m.loc[m.index<=source_month_end].copy()
     mortgage=mort.resample("ME").last().reindex(m.index,method="ffill")
-    # Frozen causal state: falling financing cost over prior 3 month-ends -> ITB next month, else QQQ.
     signal=(mortgage.diff(3)<0).astype(int)
     rets=m.pct_change()
     df=pd.DataFrame(index=m.index)
@@ -86,12 +91,7 @@ def main():
     df["gross"]=np.where(df["signal_itb"]==1,df["itb_ret"],df["qqq_ret"])
     df["static_50_50"]=0.5*df["itb_ret"]+0.5*df["qqq_ret"]
     switches=df["signal_itb"].diff().abs().fillna(1.0)
-    result={
-      "schema":"research.p32_mortgage_rate_homebuilder_allocator.v1",
-      "hypothesis":"Prior 3-month decline in US 30Y mortgage rate selects ITB for next month; otherwise QQQ.",
-      "window":{"start":str(df.index.min().date()),"end":str(df.index.max().date()),"months":int(len(df))},
-      "sources":src,"switches":int(switches.sum()),"controls":{},"cost_cases":{},
-    }
+    result={"schema":"research.p32_mortgage_rate_homebuilder_allocator.v1","hypothesis":"Prior 3-month decline in US 30Y mortgage rate selects ITB for next month; otherwise QQQ.","window":{"start":str(df.index.min().date()),"end":str(df.index.max().date()),"months":int(len(df))},"sources":src,"switches":int(switches.sum()),"controls":{},"cost_cases":{},"source_change_reason":"attempt1 live FRED fredgraph.csv timed out after bounded retries; mechanism changed to pinned GitHub mirror and sample is truncated to mirror coverage rather than forward-filled beyond source availability"}
     for name,col in (("ITB","itb_ret"),("QQQ","qqq_ret"),("SPY","spy_ret"),("STATIC_50_50_ITB_QQQ","static_50_50")):
         result["controls"][name]={"cagr":cagr(df[col]),"max_drawdown":maxdd(df[col]),"ann_vol":annvol(df[col])}
     for bps in COSTS:
@@ -101,7 +101,7 @@ def main():
     primary=result["cost_cases"]["25"]; stress=result["cost_cases"]["50"]
     result["decision"]="SUPPORTED_CANDIDATE_REQUIRES_INDEPENDENT_VALIDATION" if primary["excess_vs_static_50_50"]>0 and primary["positive_folds_vs_static"]>=3 and stress["excess_vs_static_50_50"]>0 else "NOT_SUPPORTED_ROTATE"
     result["protected_boundaries"]={"mm_canonical_claim":False,"strategy_spec_mutation":False,"runtime_authority_change":False,"broker_submission":False,"live_trading_change":False}
-    Path("artifacts").mkdir(exist_ok=True); out=Path("artifacts/p32_mortgage_rate_homebuilder_allocator.json"); out.write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
+    Path("artifacts").mkdir(exist_ok=True); Path("artifacts/p32_mortgage_rate_homebuilder_allocator.json").write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
     print("P32_RESULT="+json.dumps(result,sort_keys=True))
 
 if __name__=="__main__": main()
