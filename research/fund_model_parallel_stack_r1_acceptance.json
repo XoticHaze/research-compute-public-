@@ -1,0 +1,34 @@
+{
+  "schema": "fund_model_parallel_stack_r1_acceptance",
+  "objective": "converge existing evidence into one or more investable fund-model candidates",
+  "required_children_per_firing_when_runnable": [2, 6],
+  "children": [
+    "persistence",
+    "risk_state",
+    "allocation",
+    "diversification"
+  ],
+  "promote_gate_25bps": {
+    "after_cost_excess_cagr_positive": true,
+    "positive_excess_folds_min": 3,
+    "candidate_sharpe_gte_baseline": true
+  },
+  "portfolio_quality_fields": [
+    "matched_baseline",
+    "after_cost_excess",
+    "fold_persistence",
+    "max_drawdown",
+    "sharpe",
+    "calmar",
+    "turnover",
+    "cost_sensitivity",
+    "capital_allocation"
+  ],
+  "non_progress": [
+    "workflow_only",
+    "runner_only",
+    "materializer_only",
+    "ui_only",
+    "unconsumed_artifact"
+  ]
+}
