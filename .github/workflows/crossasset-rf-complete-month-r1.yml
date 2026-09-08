@@ -1,0 +1,33 @@
+name: Cross-Asset RF Complete-Month R1
+
+on:
+  pull_request:
+    paths:
+      - 'research/crossasset_rf_complete_month_r1.py'
+      - '.github/workflows/crossasset-rf-complete-month-r1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 scikit-learn==1.5.2 yfinance==0.2.65
+      - name: Execute cross-asset RF challenger
+        run: >-
+          python research/crossasset_rf_complete_month_r1.py
+          --child crossasset_rf
+          --out artifacts/crossasset_rf.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: combined-ml-crossasset_rf
+          path: artifacts/crossasset_rf.json
+          if-no-files-found: error
+          retention-days: 30
