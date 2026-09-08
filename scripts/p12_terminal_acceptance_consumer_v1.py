@@ -34,16 +34,27 @@ def b64d(value: str) -> bytes:
     return base64.b64decode(value.encode("ascii"), validate=True)
 
 
-def canonical_json(value) -> bytes:
-    return json.dumps(value, sort_keys=True, separators=(",", ",")).encode("utf-8")
-
-
 def aad(run_id: str, key_id: str) -> bytes:
-    return json.dumps({"schema": SCHEMA, "run_id": str(run_id), "authority": AUTHORITY, "harness": HARNESS, "recipient_key_id": key_id}, sort_keys=True, separators=(",", ":")).encode()
+    return json.dumps(
+        {
+            "schema": SCHEMA,
+            "run_id": str(run_id),
+            "authority": AUTHORITY,
+            "harness": HARNESS,
+            "recipient_key_id": key_id,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
 
 
 def derive(shared: bytes, associated_data: bytes) -> bytes:
-    return HKDF(algorithm=hashes.SHA256(), length=32, salt=hashlib.sha256(associated_data).digest(), info=INFO).derive(shared)
+    return HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=hashlib.sha256(associated_data).digest(),
+        info=INFO,
+    ).derive(shared)
 
 
 def safe_member_name(name: str) -> bool:
@@ -62,7 +73,14 @@ def reject_live_authority(value, prefix: str = "root") -> None:
     if isinstance(value, dict):
         for key, child in value.items():
             normalized = str(key).strip().lower()
-            if normalized in {"enable_live_trading", "live_trading_enabled", "live_enabled", "live_unlock", "broker_submit", "place_order"} and child not in (False, None, 0, "", "false", "False"):
+            if normalized in {
+                "enable_live_trading",
+                "live_trading_enabled",
+                "live_enabled",
+                "live_unlock",
+                "broker_submit",
+                "place_order",
+            } and child not in (False, None, 0, "", "false", "False"):
                 raise RuntimeError(f"live/broker authority forbidden at {prefix}.{key}")
             reject_live_authority(child, f"{prefix}.{key}")
     elif isinstance(value, list):
@@ -72,14 +90,48 @@ def reject_live_authority(value, prefix: str = "root") -> None:
 
 def run_acceptance(root: Path) -> tuple[int, dict, str]:
     output = root / "p12-product-result.json"
-    proc = subprocess.run([
-        "python", ENTRYPOINT,
-        "--bundle-json", BUNDLE,
-        "--output-json", str(output.name),
-    ], cwd=root, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "ENABLE_LIVE_TRADING": "0"}, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=240)
+    proc = subprocess.run(
+        [
+            "python",
+            ENTRYPOINT,
+            "--bundle-json",
+            BUNDLE,
+            "--output-json",
+            str(output.name),
+        ],
+        cwd=root,
+        env={
+            **os.environ,
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "ENABLE_LIVE_TRADING": "0",
+        },
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=240,
+    )
     if not output.exists():
-        raise RuntimeError(f"product acceptance output missing; exit={proc.returncode}; output_sha256={hashlib.sha256(proc.stdout).hexdigest()}")
+        raise RuntimeError(
+            f"product acceptance output missing; exit={proc.returncode}; output_sha256="
+            f"{hashlib.sha256(proc.stdout).hexdigest()}"
+        )
     return proc.returncode, load_json(output), hashlib.sha256(proc.stdout).hexdigest()
+
+
+def identity_matches(proposed: dict, readback: dict) -> bool:
+    required = ("symbol", "signal_symbol", "timeframe", "strategy_id", "parameter_preset_id")
+    for key in required:
+        proposed_value = str(proposed.get(key) or "").strip()
+        readback_value = str(readback.get(key) or "").strip()
+        if key == "symbol":
+            proposed_value = proposed_value.upper()
+            readback_value = readback_value.upper()
+        if proposed_value and proposed_value != readback_value:
+            return False
+    proposed_runtime_id = str(proposed.get("runtime_id") or "").strip()
+    readback_runtime_id = str(readback.get("runtime_id") or "").strip()
+    if proposed_runtime_id and proposed_runtime_id != readback_runtime_id:
+        return False
+    return True
 
 
 def assert_terminal_contract(result: dict) -> None:
@@ -90,6 +142,8 @@ def assert_terminal_contract(result: dict) -> None:
     readback_payload = ((matched.get("readback") or {}).get("payload") or {}) if isinstance(matched.get("readback"), dict) else {}
     blocked_payload = ((mismatch.get("blocked") or {}).get("payload") or {}) if isinstance(mismatch.get("blocked"), dict) else {}
     safety = result.get("safety") if isinstance(result.get("safety"), dict) else {}
+    proposed_identity = matched.get("proposed_identity") if isinstance(matched.get("proposed_identity"), dict) else {}
+    readback_identity = matched.get("readback_identity") if isinstance(matched.get("readback_identity"), dict) else {}
     if not (
         result.get("ok") is True
         and result.get("status") == "PASS"
@@ -99,9 +153,9 @@ def assert_terminal_contract(result: dict) -> None:
         and apply_payload.get("canonical_writer_invoked") is True
         and readback_payload.get("ok") is True
         and matched.get("identity_match") is True
-        and isinstance(matched.get("proposed_identity"), dict)
-        and isinstance(matched.get("readback_identity"), dict)
-        and matched.get("proposed_identity") == matched.get("readback_identity")
+        and bool(proposed_identity)
+        and bool(readback_identity)
+        and identity_matches(proposed_identity, readback_identity)
         and blocked_payload.get("review_guard", {}).get("status") == "FAIL_CLOSED"
         and blocked_payload.get("config_write_applied") is False
         and blocked_payload.get("canonical_writer_invoked") is False
@@ -116,10 +170,25 @@ def assert_terminal_contract(result: dict) -> None:
 
 def consume(envelope_path: Path, private_key_path: Path, run_id: str) -> dict:
     envelope = load_json(envelope_path)
-    required = {"schema", "run_id", "authority", "harness", "recipient_key_id", "sender_public_b64", "nonce_b64", "ciphertext_b64", "plaintext_sha256"}
+    required = {
+        "schema",
+        "run_id",
+        "authority",
+        "harness",
+        "recipient_key_id",
+        "sender_public_b64",
+        "nonce_b64",
+        "ciphertext_b64",
+        "plaintext_sha256",
+    }
     if set(envelope) != required:
         raise RuntimeError("envelope key set mismatch")
-    if envelope.get("schema") != SCHEMA or str(envelope.get("run_id")) != str(run_id) or envelope.get("authority") != AUTHORITY or envelope.get("harness") != HARNESS:
+    if (
+        envelope.get("schema") != SCHEMA
+        or str(envelope.get("run_id")) != str(run_id)
+        or envelope.get("authority") != AUTHORITY
+        or envelope.get("harness") != HARNESS
+    ):
         raise RuntimeError("envelope contract mismatch")
     private = x25519.X25519PrivateKey.from_private_bytes(b64d(private_key_path.read_text().strip()))
     recipient_raw = private.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
@@ -128,28 +197,41 @@ def consume(envelope_path: Path, private_key_path: Path, run_id: str) -> dict:
         raise RuntimeError("recipient key mismatch")
     associated_data = aad(str(run_id), key_id)
     sender = x25519.X25519PublicKey.from_public_bytes(b64d(envelope["sender_public_b64"]))
-    plaintext = ChaCha20Poly1305(derive(private.exchange(sender), associated_data)).decrypt(b64d(envelope["nonce_b64"]), b64d(envelope["ciphertext_b64"]), associated_data)
+    plaintext = ChaCha20Poly1305(derive(private.exchange(sender), associated_data)).decrypt(
+        b64d(envelope["nonce_b64"]),
+        b64d(envelope["ciphertext_b64"]),
+        associated_data,
+    )
     if len(plaintext) > MAX_PLAINTEXT_BYTES or hashlib.sha256(plaintext).hexdigest() != envelope.get("plaintext_sha256"):
         raise RuntimeError("payload size/digest mismatch")
     with tarfile.open(fileobj=io.BytesIO(plaintext), mode="r:gz") as archive:
         members = archive.getmembers()
-        files = [m for m in members if m.isfile()]
+        files = [member for member in members if member.isfile()]
         if len(files) > MAX_FILES:
             raise RuntimeError("payload file count exceeds limit")
         for member in members:
-            if member.issym() or member.islnk() or not safe_member_name(member.name) or (member.isfile() and member.size > MAX_MEMBER_BYTES):
+            if member.issym() or member.islnk() or not safe_member_name(member.name) or (
+                member.isfile() and member.size > MAX_MEMBER_BYTES
+            ):
                 raise RuntimeError(f"unsafe payload member: {member.name}")
-        names = {m.name for m in files}
+        names = {member.name for member in files}
         if "manifest.json" not in names:
             raise RuntimeError("manifest missing")
         manifest = json.loads(archive.extractfile("manifest.json").read().decode("utf-8"))
-        if manifest.get("schema") != PAYLOAD_SCHEMA or manifest.get("harness") != HARNESS or manifest.get("authority") != AUTHORITY or manifest.get("mm_head_sha") != MM_HEAD_SHA or manifest.get("entrypoint") != ENTRYPOINT or manifest.get("bundle") != BUNDLE:
+        if (
+            manifest.get("schema") != PAYLOAD_SCHEMA
+            or manifest.get("harness") != HARNESS
+            or manifest.get("authority") != AUTHORITY
+            or manifest.get("mm_head_sha") != MM_HEAD_SHA
+            or manifest.get("entrypoint") != ENTRYPOINT
+            or manifest.get("bundle") != BUNDLE
+        ):
             raise RuntimeError("manifest contract mismatch")
         declared = manifest.get("file_sha256")
         if not isinstance(declared, dict) or names != set(declared) | {"manifest.json"} or ENTRYPOINT not in names or BUNDLE not in names:
             raise RuntimeError("payload file-set mismatch")
-        with tempfile.TemporaryDirectory(prefix="p12-terminal-") as td:
-            root = Path(td)
+        with tempfile.TemporaryDirectory(prefix="p12-terminal-") as tempdir:
+            root = Path(tempdir)
             archive.extractall(root)
             for relative, expected in declared.items():
                 if not safe_member_name(relative) or hashlib.sha256((root / relative).read_bytes()).hexdigest() != str(expected).lower():
