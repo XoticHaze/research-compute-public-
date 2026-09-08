@@ -1,0 +1,26 @@
+name: P37 sector cross-sectional momentum
+on:
+  pull_request:
+    paths:
+      - 'scripts/p36_risk_p37_sector_momentum.py'
+      - '.github/workflows/p37-sector-cross-sectional-momentum.yml'
+  workflow_dispatch:
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install --disable-pip-version-check numpy pandas
+      - name: Execute frozen P37 discriminator
+        env:
+          RESEARCH_MODE: P37
+        run: python scripts/p36_risk_p37_sector_momentum.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p37-sector-cross-sectional-momentum
+          path: artifacts/p37_c1_sector_momentum.json
+          if-no-files-found: error
