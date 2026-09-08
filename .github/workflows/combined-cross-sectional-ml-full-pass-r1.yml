@@ -1,0 +1,46 @@
+name: Combined Cross-Sectional ML Full Pass R1
+
+on:
+  pull_request:
+    paths:
+      - 'research/combined_cross_sectional_ml_full_pass_r1.py'
+      - '.github/workflows/combined-cross-sectional-ml-full-pass-r1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    strategy:
+      fail-fast: false
+      matrix:
+        child:
+          - sector_ridge
+          - sector_hgb
+          - sector_rf
+          - industry_ridge
+          - industry_hgb
+          - industry_rf
+          - crossasset_ridge
+          - crossasset_hgb
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install focused research dependencies
+        run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 scikit-learn==1.5.2 yfinance==0.2.65
+      - name: Execute prospectively frozen child
+        run: >-
+          python research/combined_cross_sectional_ml_full_pass_r1.py
+          --child '${{ matrix.child }}'
+          --out 'artifacts/${{ matrix.child }}.json'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: combined-ml-${{ matrix.child }}
+          path: artifacts/${{ matrix.child }}.json
+          if-no-files-found: error
+          retention-days: 30
