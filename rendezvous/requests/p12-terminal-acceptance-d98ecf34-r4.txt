@@ -1,0 +1,5 @@
+P12-C-REVIEWED-ACTIVATION-TERMINAL-ACCEPTANCE-R4
+MM_HEAD_SHA=d98ecf34d5ae5209251f1cd7e3a996f18659d04f
+ENTRYPOINT=scripts/operator/p12_reviewed_activation_http_browser_acceptance.py
+PURPOSE=execute corrected product-level reviewed activation terminal acceptance with exact canonical readback identity and deliberate fail-closed mismatch
+ENABLE_LIVE_TRADING=0
