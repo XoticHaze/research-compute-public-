@@ -109,7 +109,6 @@ def run_p27():
     cols=['mom1','mom3','mom6','mom12','vol6','drawdown12']
     dates=sorted(panel.dropna(subset=cols).date.unique())
     weights=pd.DataFrame(0.0,index=m.index,columns=sectors)
-    predictions=[]
     min_date=pd.Timestamp('2003-01-31')
     for date in dates:
         date=pd.Timestamp(date)
@@ -123,9 +122,11 @@ def run_p27():
         ranked=sorted(zip(test.symbol,pred),key=lambda z:z[1],reverse=True)
         chosen=[x[0] for x in ranked[:2]]
         weights.loc[date,chosen]=0.5
-        predictions.append({'date':date.date().isoformat(),'chosen':chosen,'score_gap_top2_vs_median':float(np.mean([x[1] for x in ranked[:2]])-np.median([x[1] for x in ranked]))})
     weights=weights.loc[weights.sum(axis=1)>0]
     next_ret=mr[sectors].shift(-1).reindex(weights.index)
+    valid_next=next_ret.notna().all(axis=1)
+    weights=weights.loc[valid_next]
+    next_ret=next_ret.loc[valid_next]
     gross=(weights*next_ret).sum(axis=1)
     control=mr[sectors].mean(axis=1).shift(-1).reindex(weights.index)
     spy=mr['SPY'].shift(-1).reindex(weights.index); qqq=mr['QQQ'].shift(-1).reindex(weights.index)
@@ -136,7 +137,7 @@ def run_p27():
     net25,_=cost_adjust(gross,weights,25)
     folds=fold_excess(net25,control); years=yearly_excess(net25,control)
     gate=(costs['25']['excess_vs_sector_ew_cagr']>0 and costs['25']['excess_vs_spy_cagr']>0 and sum(f['excess_cagr']>0 for f in folds)>=3 and costs['50']['excess_vs_sector_ew_cagr']>0)
-    return {'schema':'p27-sector-cross-sectional-ridge.v1','child':'P27-C1','mechanism':'fixed expanding pooled Ridge cross-sectional sector excess-return ranker; top-2 next-month allocation','feature_contract':cols,'ridge_alpha':10.0,'universe':sectors,'matched_window':{'start':gross.dropna().index.min().date().isoformat(),'end':gross.dropna().index.max().date().isoformat(),'months':int(gross.dropna().shape[0])},'source':{'provider':'Yahoo Finance Chart v8 public endpoint','research_only':True,'canonical_mm_claim':False,'symbols':prov},'costs':costs,'turnover':{'mean_monthly':float(turnovers.mean()),'total':float(turnovers.sum())},'chronological_folds_25bps':folds,'yearly_excess_25bps':years,'positive_folds_25bps':sum(f['excess_cagr']>0 for f in folds),'positive_years_25bps':sum(y['excess']>0 for y in years),'represented_years':len(years),'decision':'P27_SECTOR_CROSS_SECTIONAL_ML_SUPPORTED_CANDIDATE' if gate else 'P27_SECTOR_CROSS_SECTIONAL_ML_NOT_SUPPORTED','research_only':True,'promotion_authority':False,'allocation_authority':False,'live_trading_change':False}
+    return {'schema':'p27-sector-cross-sectional-ridge.v1','child':'P27-C1','mechanism':'fixed expanding pooled Ridge cross-sectional sector excess-return ranker; top-2 next-month allocation','feature_contract':cols,'ridge_alpha':10.0,'universe':sectors,'matched_window':{'start':gross.index.min().date().isoformat(),'end':gross.index.max().date().isoformat(),'months':int(len(gross))},'source':{'provider':'Yahoo Finance Chart v8 public endpoint','research_only':True,'canonical_mm_claim':False,'symbols':prov},'costs':costs,'turnover':{'mean_monthly':float(turnovers.mean()),'total':float(turnovers.sum())},'chronological_folds_25bps':folds,'yearly_excess_25bps':years,'positive_folds_25bps':sum(f['excess_cagr']>0 for f in folds),'positive_years_25bps':sum(y['excess']>0 for y in years),'represented_years':len(years),'decision':'P27_SECTOR_CROSS_SECTIONAL_ML_SUPPORTED_CANDIDATE' if gate else 'P27_SECTOR_CROSS_SECTIONAL_ML_NOT_SUPPORTED','research_only':True,'promotion_authority':False,'allocation_authority':False,'live_trading_change':False}
 
 
 def run_p28():
@@ -152,8 +153,10 @@ def run_p28():
     valid=m.index[(mom12.notna().all(axis=1))]
     weights=weights.reindex(valid)
     next_ret=mr[assets].shift(-1).reindex(valid)
-    gross=(weights*next_ret).sum(axis=1).dropna()
-    weights=weights.reindex(gross.index)
+    valid_next=next_ret.notna().all(axis=1)
+    weights=weights.loc[valid_next]
+    next_ret=next_ret.loc[valid_next]
+    gross=(weights*next_ret).sum(axis=1)
     control=mr[assets].mean(axis=1).shift(-1).reindex(gross.index)
     spy=mr['SPY'].shift(-1).reindex(gross.index); qqq=mr['QQQ'].shift(-1).reindex(gross.index)
     balanced=(0.6*mr['SPY']+0.4*mr['TLT']).shift(-1).reindex(gross.index)
