@@ -1,0 +1,78 @@
+name: P01 AutoTuner HTML Ephemeral Rendezvous
+
+on:
+  pull_request:
+    paths:
+      - 'rendezvous/requests/p01-autotuner-html-*.txt'
+
+permissions:
+  contents: write
+
+env:
+  RESPONSE_ROOT: rendezvous/responses
+  RECIPIENT_ROOT: rendezvous/recipients
+  EXCHANGE_REF: rendezvous-exchange
+
+jobs:
+  consume:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.14.0'
+      - name: Install fixed crypto dependency
+        run: python -m pip install --disable-pip-version-check cryptography
+      - name: Generate one-run recipient
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import base64,hashlib,json,os
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric import x25519
+          private=x25519.X25519PrivateKey.generate()
+          private_raw=private.private_bytes(serialization.Encoding.Raw,serialization.PrivateFormat.Raw,serialization.NoEncryption())
+          public_raw=private.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)
+          Path(os.environ['RUNNER_TEMP'],'p01-autotuner-html-private.b64').write_text(base64.b64encode(private_raw).decode('ascii'))
+          recipient={'schema':'p01-autotuner-html-recipient-v1','run_id':os.environ['GITHUB_RUN_ID'],'recipient_b64':base64.b64encode(public_raw).decode('ascii'),'recipient_key_id':'sha256:'+hashlib.sha256(public_raw).hexdigest(),'harness':'mm_p01_autotuner_operator_review_html_v1','mm_head_sha':'b112f6bab2d3bb5f2353e2a502796c8a861c4c7b','entrypoint':'scripts/operator/autotuner_operator_status_review_html.mjs','snapshot_schema':'mm.autotuner_operator_status_snapshot.v1'}
+          Path(os.environ['RUNNER_TEMP'],'p01-autotuner-html-recipient.json').write_text(json.dumps(recipient,sort_keys=True)+'\n')
+          print('P01_AUTOTUNER_HTML_RUN_ID='+os.environ['GITHUB_RUN_ID'])
+          print('P01_AUTOTUNER_HTML_RECIPIENT_KEY_ID='+recipient['recipient_key_id'])
+          PY
+      - name: Publish public recipient
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}.json"
+          payload="$(base64 -w0 "$RUNNER_TEMP/p01-autotuner-html-recipient.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json,sys
+          print(json.dumps({'message':'rendezvous: publish P01 AutoTuner HTML recipient','content':sys.argv[1],'branch':sys.argv[2]}))
+          PY
+          )"
+          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}" -d "$body" >/dev/null
+      - name: Wait for run-bound encrypted snapshot capsule
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/p01-autotuner-html-envelope.json"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${EXCHANGE_REF}"
+          found=0
+          for _ in $(seq 1 180); do
+            if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/p01-autotuner-html-envelope.json"; then found=1; break; fi
+            sleep 5
+          done
+          test "$found" = 1 || { echo 'run-bound encrypted P01 AutoTuner HTML capsule did not arrive'; exit 42; }
+      - name: Execute fixed operator-review consumer
+        run: python scripts/p01_autotuner_html_consumer_v1.py --envelope "$RUNNER_TEMP/p01-autotuner-html-envelope.json" --private-key "$RUNNER_TEMP/p01-autotuner-html-private.b64" --run-id "$GITHUB_RUN_ID"
+      - name: Remove one-run private material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/p01-autotuner-html-private.b64" "$RUNNER_TEMP/p01-autotuner-html-recipient.json" "$RUNNER_TEMP/p01-autotuner-html-envelope.json"
