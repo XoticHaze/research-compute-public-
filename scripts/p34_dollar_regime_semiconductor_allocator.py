@@ -63,9 +63,9 @@ def main():
     for sym in ("SMH","QQQ","SPY","UUP"):
         prices[sym],src[sym]=yahoo(sym)
     common_last=min(v.index.max() for v in prices.values())
-    containing_month_end=common_last+pd.offsets.MonthEnd(0)
+    containing_month_end=(common_last.normalize()+pd.offsets.MonthEnd(0)).normalize()
     m=pd.concat({k:v.resample("ME").last() for k,v in prices.items()},axis=1).dropna()
-    if common_last.normalize() < containing_month_end.normalize():
+    if common_last.normalize() < containing_month_end:
         m=m.loc[m.index < containing_month_end].copy()
     rets=m.pct_change()
     signal=(m["UUP"].pct_change(3)<0).astype(int).shift(1)
@@ -75,7 +75,7 @@ def main():
     df["gross"]=np.where(df["signal_smh"]==1,df["smh_ret"],df["qqq_ret"])
     df["static_50_50"]=0.5*df["smh_ret"]+0.5*df["qqq_ret"]
     switches=df["signal_smh"].diff().abs().fillna(1.0)
-    result={"schema":"research.p34_dollar_regime_semiconductor_allocator.v1","hypothesis":"Prior 3-month decline in UUP selects SMH for next month; otherwise QQQ.","window":{"start":str(df.index.min().date()),"end":str(df.index.max().date()),"months":int(len(df))},"sources":src,"switches":int(switches.sum()),"controls":{},"cost_cases":{},"evaluation_integrity":{"incomplete_terminal_month_excluded":True,"common_last_daily_observation":str(common_last.date()),"first_run_with_partial_terminal_month_not_authoritative":True}}
+    result={"schema":"research.p34_dollar_regime_semiconductor_allocator.v1","hypothesis":"Prior 3-month decline in UUP selects SMH for next month; otherwise QQQ.","window":{"start":str(df.index.min().date()),"end":str(df.index.max().date()),"months":int(len(df))},"sources":src,"switches":int(switches.sum()),"controls":{},"cost_cases":{},"evaluation_integrity":{"incomplete_terminal_month_excluded":True,"common_last_daily_observation":str(common_last.date()),"first_two_runs_with_partial_terminal_month_not_authoritative":True}}
     for name,col in (("SMH","smh_ret"),("QQQ","qqq_ret"),("SPY","spy_ret"),("STATIC_50_50_SMH_QQQ","static_50_50")):
         result["controls"][name]={"cagr":cagr(df[col]),"max_drawdown":maxdd(df[col]),"ann_vol":annvol(df[col])}
     for bps in COSTS:
