@@ -1,21 +1,38 @@
-import csv, io, json, math, urllib.request, time, hashlib
-from datetime import datetime
+import json, math, urllib.request, urllib.parse, time, hashlib
+from datetime import datetime, timezone
 
-SYMS=['smh.us','qqq.us','spy.us']
+SYMS=['SMH','QQQ','SPY']
 COSTS=[10,25,50]
 LOOKBACK=20
+START=int(datetime(2000,1,1,tzinfo=timezone.utc).timestamp())
+END=int(datetime(2026,9,8,12,0,tzinfo=timezone.utc).timestamp())
 
 def fetch(sym):
-    url=f'https://stooq.com/q/d/l/?s={sym}&d1=20000101&d2=20260908&i=d'
+    encoded=urllib.parse.quote(sym,safe='')
+    url=(f'https://query1.finance.yahoo.com/v8/finance/chart/{encoded}'
+         f'?period1={START}&period2={END}&interval=1d&events=history&includeAdjustedClose=true')
     last=None
     for attempt in range(1,6):
         try:
             req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0'})
             raw=urllib.request.urlopen(req,timeout=45).read()
+            payload=json.loads(raw)
+            result=payload['chart']['result'][0]
+            quote=result['indicators']['quote'][0]
+            adj=((result.get('indicators',{}).get('adjclose') or [{}])[0].get('adjclose')
+                 or quote.get('close'))
             rows=[]
-            for r in csv.DictReader(io.StringIO(raw.decode())):
-                try: rows.append((r['Date'],float(r['Open']),float(r['Close'])))
-                except (KeyError,ValueError): pass
+            for ts,o,c,a in zip(result['timestamp'],quote['open'],quote['close'],adj):
+                if o is None or c is None or a is None or c==0:
+                    continue
+                # Reconstruct split/dividend-adjusted open on the same basis as adjusted close.
+                factor=float(a)/float(c)
+                ao=float(o)*factor
+                ac=float(a)
+                if ao<=0 or ac<=0:
+                    continue
+                d=datetime.fromtimestamp(ts,timezone.utc).date().isoformat()
+                rows.append((d,ao,ac))
             if len(rows)<LOOKBACK+2:
                 raise RuntimeError(f'{sym} parsed only {len(rows)} rows from {len(raw)} bytes')
             return url,raw,rows,attempt
@@ -61,12 +78,12 @@ def bh(series,dates):
 data={}; sources={}
 for s in SYMS:
     u,b,r,attempt=fetch(s)
-    sources[s]={'url':u,'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest(),'parsed_rows':len(r),'successful_attempt':attempt}
+    sources[s]={'provider':'Yahoo Finance chart API v8','url':u,'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest(),'parsed_rows':len(r),'successful_attempt':attempt,'price_basis':'adjusted close; adjusted open reconstructed as raw open * adjusted_close/raw_close'}
     data[s]=r
 maps={s:{r[0]:r for r in data[s]} for s in SYMS}
-dates=sorted(set(maps['smh.us'])&set(maps['qqq.us'])&set(maps['spy.us']))
+dates=sorted(set(maps['SMH'])&set(maps['QQQ'])&set(maps['SPY']))
 if len(dates)<LOOKBACK+22: raise RuntimeError(f'insufficient matched rows: {len(dates)}')
-smh=[maps['smh.us'][d] for d in dates]; qqq=[maps['qqq.us'][d] for d in dates]; spy=[maps['spy.us'][d] for d in dates]
+smh=[maps['SMH'][d] for d in dates]; qqq=[maps['QQQ'][d] for d in dates]; spy=[maps['SPY'][d] for d in dates]
 res={str(c):run(c,dates,smh,qqq) for c in COSTS}
 base={'SMH':bh(smh,dates),'QQQ':bh(qqq,dates),'SPY':bh(spy,dates)}
 a=LOOKBACK+1; years=(datetime.fromisoformat(dates[-1])-datetime.fromisoformat(dates[a])).days/365.25
