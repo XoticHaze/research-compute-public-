@@ -1,0 +1,120 @@
+name: P08 Swing Alpha Homebuilders Ephemeral Rendezvous
+
+on:
+  pull_request:
+    paths:
+      - 'rendezvous/requests/p08-swing-alpha-homebuilders-*.txt'
+
+permissions:
+  contents: write
+
+env:
+  RESPONSE_ROOT: rendezvous/responses
+  RECIPIENT_ROOT: rendezvous/recipients
+  EXCHANGE_REF: rendezvous-exchange
+
+jobs:
+  consume:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install fixed dependencies
+        run: python -m pip install --disable-pip-version-check cryptography numpy==1.26.4 pandas==2.2.3 scikit-learn==1.5.2
+      - name: Compile fixed transport and consumer
+        run: |
+          python -m py_compile scripts/ephemeral_x25519_chunked_v1.py
+          python -m py_compile scripts/p08_swing_alpha_homebuilders_consumer_v1.py
+      - name: Generate one-run recipient
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import base64,hashlib,json,os
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric import x25519
+          private=x25519.X25519PrivateKey.generate()
+          private_raw=private.private_bytes(serialization.Encoding.Raw,serialization.PrivateFormat.Raw,serialization.NoEncryption())
+          public_raw=private.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)
+          Path(os.environ['RUNNER_TEMP'],'p08-swing-alpha-private.b64').write_text(base64.b64encode(private_raw).decode('ascii'))
+          recipient={'schema':'p08-swing-alpha-homebuilders-recipient-v1','run_id':os.environ['GITHUB_RUN_ID'],'recipient_b64':base64.b64encode(public_raw).decode('ascii'),'recipient_key_id':'sha256:'+hashlib.sha256(public_raw).hexdigest()}
+          Path(os.environ['RUNNER_TEMP'],'p08-swing-alpha-recipient.json').write_text(json.dumps(recipient,sort_keys=True)+'\n')
+          print('P08_SWING_ALPHA_RUN_ID='+os.environ['GITHUB_RUN_ID'])
+          print('P08_SWING_ALPHA_RECIPIENT_KEY_ID='+recipient['recipient_key_id'])
+          PY
+      - name: Publish public recipient to exchange branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          recipient_path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}-p08-swing-alpha-homebuilders.json"
+          payload="$(base64 -w0 "$RUNNER_TEMP/p08-swing-alpha-recipient.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json,sys
+          content,branch=sys.argv[1:]
+          print(json.dumps({'message':'rendezvous: publish one-run P08 swing-alpha recipient','content':content,'branch':branch}))
+          PY
+          )"
+          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${recipient_path}" -d "$body" >/dev/null
+          echo "P08_SWING_ALPHA_RECIPIENT_PATH=${recipient_path}"
+      - name: Wait for run-bound chunked envelope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          response_root="${RESPONSE_ROOT}/${GITHUB_RUN_ID}"
+          envelope_path="${response_root}/p08-swing-alpha-homebuilders-envelope.json"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${envelope_path}?ref=${EXCHANGE_REF}"
+          found=0
+          for _ in $(seq 1 240); do
+            if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/p08-swing-alpha-envelope.json"; then found=1; break; fi
+            sleep 5
+          done
+          test "$found" = 1 || { echo 'run-bound P08 swing-alpha envelope did not arrive'; exit 42; }
+          echo "P08_RESPONSE_ROOT=${response_root}" >> "$GITHUB_ENV"
+      - name: Reassemble authenticated ciphertext chunks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64,hashlib,json,os
+          from pathlib import Path
+          from urllib.request import Request,urlopen
+          env=json.loads(Path(os.environ['RUNNER_TEMP'],'p08-swing-alpha-envelope.json').read_text())
+          chunks=env.get('chunks')
+          if not isinstance(chunks,list) or not chunks or len(chunks)>64: raise SystemExit('invalid chunk list')
+          prefix=f"rendezvous/responses/{os.environ['GITHUB_RUN_ID']}/"
+          pieces=[]; seen=set()
+          for node in chunks:
+              if set(node)!={'path','sha256','chars'}: raise SystemExit('invalid chunk descriptor fields')
+              path=str(node['path'])
+              if not path.startswith(prefix) or path in seen or '..' in path.split('/'): raise SystemExit('invalid chunk path')
+              seen.add(path)
+              url=f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/{path}?ref={os.environ['EXCHANGE_REF']}"
+              req=Request(url,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github.raw+json','X-GitHub-Api-Version':'2022-11-28'})
+              raw=urlopen(req,timeout=30).read()
+              if len(raw)!=int(node['chars']) or hashlib.sha256(raw).hexdigest()!=node['sha256']: raise SystemExit('chunk identity mismatch')
+              pieces.append(raw.decode('ascii'))
+          ciphertext=base64.b64decode(''.join(pieces).encode('ascii'),validate=True)
+          if hashlib.sha256(ciphertext).hexdigest()!=env.get('ciphertext_sha256'): raise SystemExit('assembled ciphertext digest mismatch')
+          Path(os.environ['RUNNER_TEMP'],'p08-swing-alpha-ciphertext.bin').write_bytes(ciphertext)
+          PY
+      - name: Decrypt privately and execute frozen P08 economic consumer
+        run: |
+          set -euo pipefail
+          python scripts/p08_swing_alpha_homebuilders_consumer_v1.py --envelope "$RUNNER_TEMP/p08-swing-alpha-envelope.json" --ciphertext "$RUNNER_TEMP/p08-swing-alpha-ciphertext.bin" --private-key "$RUNNER_TEMP/p08-swing-alpha-private.b64" --run-id "$GITHUB_RUN_ID" --response-root "$P08_RESPONSE_ROOT" | tee "$RUNNER_TEMP/p08-swing-alpha-output.log"
+          grep '^P08_SWING_ALPHA_RECEIPT=' "$RUNNER_TEMP/p08-swing-alpha-output.log" > "$RUNNER_TEMP/p08-swing-alpha-receipt.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p08-swing-alpha-homebuilders-receipt-${{ github.run_id }}
+          path: ${{ runner.temp }}/p08-swing-alpha-receipt.txt
+          if-no-files-found: error
+          retention-days: 30
+      - name: Remove one-run private material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/p08-swing-alpha-private.b64" "$RUNNER_TEMP/p08-swing-alpha-recipient.json" "$RUNNER_TEMP/p08-swing-alpha-envelope.json" "$RUNNER_TEMP/p08-swing-alpha-ciphertext.bin" "$RUNNER_TEMP/p08-swing-alpha-output.log"

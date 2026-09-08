@@ -1,0 +1,14 @@
+P08_SWING_ALPHA_HOMEBUILDERS_REQUEST_V1
+route=public_research_compute_current
+source_authority=research-foundry@536fffa30aaadcdd36a401cbaedc6348ec8e352c
+representation=curve_state_swing_20_60_120
+baseline=same_band_return_plus_realized_volatility
+consumer=homebuilder_one_symbol_every_20_sessions
+matched_controls=equal_weight_homebuilders,ITB,SPY,QQQ
+costs_bps=25,50
+private_source_plaintext_public=false
+strategy_spec_write=false
+runtime_activation=false
+capital_allocation_authority=false
+broker_submit=false
+live_trading_change=false
