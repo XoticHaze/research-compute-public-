@@ -1,0 +1,26 @@
+name: P22 dollar-cycle allocator
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p22_dollar_cycle_allocator.py'
+      - '.github/workflows/p22-dollar-cycle.yml'
+  workflow_dispatch:
+jobs:
+  p22:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Execute frozen discriminator
+        run: python scripts/p22_dollar_cycle_allocator.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p22-dollar-cycle-result
+          path: p22_dollar_cycle_result.json
+          if-no-files-found: ignore
+          retention-days: 7
