@@ -1,0 +1,24 @@
+name: P22 copper-gold risk appetite
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p22_copper_gold_risk_appetite.py'
+      - '.github/workflows/p22-copper-gold-risk-appetite.yml'
+  workflow_dispatch:
+jobs:
+  p22:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Execute frozen discriminator
+        run: python scripts/p22_copper_gold_risk_appetite.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p22-copper-gold-risk-appetite-result
+          path: p22_result.json
+          retention-days: 7
