@@ -1,0 +1,20 @@
+name: P25 SMH 200D Trend Regime
+on:
+  pull_request:
+    paths:
+      - 'research/p25_smh_200d_trend_regime.py'
+      - '.github/workflows/p25-smh-200d-trend-regime.yml'
+  workflow_dispatch:
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute frozen P25 discriminator
+        run: python research/p25_smh_200d_trend_regime.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p25-smh-200d-trend-regime-result
+          path: p25_result.json
+          if-no-files-found: error
