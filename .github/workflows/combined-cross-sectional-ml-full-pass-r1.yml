@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'research/combined_cross_sectional_ml_full_pass_r1.py'
+      - 'research/combined_cross_sectional_ml_full_pass_r1_complete_month.py'
       - '.github/workflows/combined-cross-sectional-ml-full-pass-r1.yml'
   workflow_dispatch:
 
@@ -33,9 +34,9 @@ jobs:
           python-version: '3.11'
       - name: Install focused research dependencies
         run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 scikit-learn==1.5.2 yfinance==0.2.65
-      - name: Execute prospectively frozen child
+      - name: Execute prospectively frozen child with completed-month guard
         run: >-
-          python research/combined_cross_sectional_ml_full_pass_r1.py
+          python research/combined_cross_sectional_ml_full_pass_r1_complete_month.py
           --child '${{ matrix.child }}'
           --out 'artifacts/${{ matrix.child }}.json'
       - uses: actions/upload-artifact@v4
