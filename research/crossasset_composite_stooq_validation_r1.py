@@ -11,23 +11,39 @@ import fixed_multifactor_cross_sectional_r1 as base
 import fixed_multifactor_cross_sectional_r1_complete_month as guard
 
 SYMBOLS = ("SPY", "QQQ", "TLT", "GLD", "DBC")
+HOSTS = ("stooq.pl", "stooq.com")
 
 
 def _fetch(symbol: str) -> pd.Series:
-    url = f"https://stooq.com/q/d/l/?s={symbol.lower()}.us&i=d&d1=20050101&d2=20260908"
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 research-validation"})
-    with urllib.request.urlopen(req, timeout=60) as response:
-        raw = response.read()
-    frame = pd.read_csv(io.BytesIO(raw))
-    if frame.empty or "Date" not in frame or "Close" not in frame:
-        raise RuntimeError(f"stooq_invalid_response:{symbol}:{raw[:120]!r}")
-    frame["Date"] = pd.to_datetime(frame["Date"], errors="raise")
-    series = pd.to_numeric(frame["Close"], errors="coerce")
-    series.index = frame["Date"]
-    series = series.dropna().sort_index()
-    if len(series) < 1000:
-        raise RuntimeError(f"stooq_insufficient_rows:{symbol}:{len(series)}")
-    return series.rename(symbol)
+    failures = []
+    for host in HOSTS:
+        url = f"https://{host}/q/d/l/?s={symbol.lower()}.us&i=d&d1=20050101&d2=20260908"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
+                "Accept": "text/csv,text/plain;q=0.9,*/*;q=0.1",
+                "Referer": f"https://{host}/q/d/?s={symbol.lower()}.us",
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=60) as response:
+                raw = response.read()
+            frame = pd.read_csv(io.BytesIO(raw))
+            if frame.empty or "Date" not in frame or "Close" not in frame:
+                failures.append(f"{host}:invalid:{raw[:80]!r}")
+                continue
+            frame["Date"] = pd.to_datetime(frame["Date"], errors="raise")
+            series = pd.to_numeric(frame["Close"], errors="coerce")
+            series.index = frame["Date"]
+            series = series.dropna().sort_index()
+            if len(series) < 1000:
+                failures.append(f"{host}:rows={len(series)}")
+                continue
+            return series.rename(symbol)
+        except Exception as exc:
+            failures.append(f"{host}:{type(exc).__name__}:{str(exc)[:180]}")
+    raise RuntimeError(f"stooq_source_access_exhausted:{symbol}:{failures}")
 
 
 def stooq_load(symbols):
@@ -48,8 +64,9 @@ if __name__ == "__main__":
     result["schema"] = "research.crossasset_composite_stooq_validation_r1"
     result["source"] = {
         "provider": "Stooq direct daily CSV",
+        "hosts_attempted": list(HOSTS),
         "symbols": [f"{s.lower()}.us" for s in SYMBOLS],
-        "source_identity": "https://stooq.com/q/d/l/?s=<symbol>.us&i=d&d1=20050101&d2=20260908",
+        "source_identity": "https://<stooq.pl|stooq.com>/q/d/l/?s=<symbol>.us&i=d&d1=20050101&d2=20260908",
         "canonical_mm_claim": false
     }
     Path("artifacts").mkdir(exist_ok=True)
