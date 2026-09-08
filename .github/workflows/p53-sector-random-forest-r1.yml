@@ -1,0 +1,24 @@
+name: P53 Sector Random Forest R1
+on:
+  pull_request:
+    paths:
+      - 'research/p53_sector_random_forest_r1.py'
+      - '.github/workflows/p53-sector-random-forest-r1.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 scikit-learn==1.5.2 yfinance==0.2.65
+      - run: python research/p53_sector_random_forest_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p53-sector-random-forest-r1
+          path: artifacts/p53_sector_random_forest_r1.json
+          if-no-files-found: error
