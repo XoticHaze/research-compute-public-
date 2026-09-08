@@ -1,0 +1,9 @@
+{
+  "schema": "fund_model_parallel_stack_r1_status",
+  "state": "EXECUTION_REQUESTED_BY_PR_TRIGGER",
+  "branch": "assistant/fund-model-parallel-stack-r1",
+  "pr": 165,
+  "expected_children": ["persistence", "risk_state", "allocation", "diversification"],
+  "terminal_results_consumed": 0,
+  "note": "Do not claim fresh results until exact Actions run/job identities and artifacts are observed."
+}

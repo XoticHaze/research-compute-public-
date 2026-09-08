@@ -1,0 +1,1 @@
+Scope freeze: this branch may only mutate/evaluate the fund-model tree defined by persistence, risk-state, allocation, and diversification until terminal results are consumed. No generic discovery branches or unrelated indicator searches are in scope.

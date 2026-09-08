@@ -1,0 +1,26 @@
+name: P36 C4 capital-risk attribution
+on:
+  pull_request:
+    paths:
+      - 'scripts/p36_risk_p37_sector_momentum.py'
+      - '.github/workflows/p36-c4-capital-risk-attribution.yml'
+  workflow_dispatch:
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install --disable-pip-version-check numpy pandas
+      - name: Execute frozen P36 C4 discriminator
+        env:
+          RESEARCH_MODE: P36
+        run: python scripts/p36_risk_p37_sector_momentum.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p36-c4-capital-risk-attribution
+          path: artifacts/p36_c4_capital_risk_attribution.json
+          if-no-files-found: error
