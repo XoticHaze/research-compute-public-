@@ -1,0 +1,42 @@
+name: P23 VIX term-structure allocator
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p23_vix_term_structure_allocator.py'
+      - '.github/workflows/p23-vix-term-structure.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  p23:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Execute frozen discriminator
+        run: python scripts/p23_vix_term_structure_allocator.py
+      - name: Surface terminal result on the PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo '<!-- P23_VIX_TERM_STRUCTURE_TERMINAL_RESULT -->'
+            echo '```json'
+            cat p23_vix_term_structure_result.json
+            echo '```'
+          } > p23_pr_comment.md
+          gh pr comment "$PR_NUMBER" --body-file p23_pr_comment.md
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p23-vix-term-structure-result
+          path: p23_vix_term_structure_result.json
+          if-no-files-found: ignore
+          retention-days: 7
