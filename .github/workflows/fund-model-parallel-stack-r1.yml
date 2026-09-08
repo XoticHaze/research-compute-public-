@@ -1,0 +1,33 @@
+name: Fund Model Parallel Stack R1
+
+on:
+  pull_request:
+    paths:
+      - 'research/fund_model_parallel_stack_r1.md'
+      - 'research/fund_model_parallel_eval_r1.py'
+      - '.github/workflows/fund-model-parallel-stack-r1.yml'
+  workflow_dispatch:
+
+jobs:
+  evaluate:
+    strategy:
+      fail-fast: false
+      matrix:
+        child:
+          - persistence
+          - risk_state
+          - allocation
+          - diversification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install --disable-pip-version-check numpy pandas yfinance
+      - name: Execute fund-model child
+        run: python research/fund_model_parallel_eval_r1.py --child "${{ matrix.child }}" --out "result-${{ matrix.child }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fund-model-${{ matrix.child }}
+          path: result-${{ matrix.child }}.json
