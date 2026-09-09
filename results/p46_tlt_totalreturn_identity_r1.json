@@ -1,7 +1,7 @@
 {
   "checks": {
     "2023": {
-      "abs_error_pp": 93.9742122080635,
+      "abs_error_pp": 0.000287561743069098,
       "distributions_used": [
         {
           "distribution_per_share": 0.275496,
@@ -76,15 +76,17 @@
           "nav_date": "2023-12-14"
         }
       ],
-      "end_nav_date": "2023-12-31",
+      "end_nav": 98.769045,
+      "end_nav_date": "2023-12-29",
       "issuer_calendar_nav_total_return_pct": 2.96,
-      "pass": false,
-      "reconstructed_nav_total_return_pct": -91.01421220806351,
+      "pass": true,
+      "reconstructed_nav_total_return_pct": 2.960287561743069,
+      "start_nav": 99.264846,
       "start_nav_date": "2022-12-30",
       "tolerance_pp": 0.1
     },
     "2024": {
-      "abs_error_pp": 946.6909866712257,
+      "abs_error_pp": 0.0037147155038521618,
       "distributions_used": [
         {
           "distribution_per_share": 0.310122,
@@ -113,19 +115,19 @@
         {
           "distribution_per_share": 0.308295,
           "ex_date": "2024-06-03",
-          "nav": 32024.0,
+          "nav": 91.52587,
           "nav_date": "2024-06-03"
         },
         {
           "distribution_per_share": 0.291104,
           "ex_date": "2024-07-01",
-          "nav": 12024.0,
+          "nav": 89.915854,
           "nav_date": "2024-07-01"
         },
         {
           "distribution_per_share": 0.314856,
           "ex_date": "2024-08-01",
-          "nav": 12024.0,
+          "nav": 95.342027,
           "nav_date": "2024-08-01"
         },
         {
@@ -137,13 +139,13 @@
         {
           "distribution_per_share": 0.315755,
           "ex_date": "2024-10-01",
-          "nav": 12024.0,
+          "nav": 98.464274,
           "nav_date": "2024-10-01"
         },
         {
           "distribution_per_share": 0.310541,
           "ex_date": "2024-11-01",
-          "nav": 12024.0,
+          "nav": 90.816934,
           "nav_date": "2024-11-01"
         },
         {
@@ -159,15 +161,17 @@
           "nav_date": "2024-12-18"
         }
       ],
+      "end_nav": 87.441428,
       "end_nav_date": "2024-12-31",
       "issuer_calendar_nav_total_return_pct": -7.84,
-      "pass": false,
-      "reconstructed_nav_total_return_pct": 938.8509866712257,
-      "start_nav_date": "2023-12-31",
+      "pass": true,
+      "reconstructed_nav_total_return_pct": -7.836285284496148,
+      "start_nav": 98.769045,
+      "start_nav_date": "2023-12-29",
       "tolerance_pp": 0.1
     },
     "2025": {
-      "abs_error_pp": 2.9271960651450586,
+      "abs_error_pp": 0.0021031418871624297,
       "distributions_used": [
         {
           "distribution_per_share": 0.312282,
@@ -178,37 +182,37 @@
         {
           "distribution_per_share": 0.289817,
           "ex_date": "2025-03-03",
-          "nav": 32025.0,
+          "nav": 92.629196,
           "nav_date": "2025-03-03"
         },
         {
           "distribution_per_share": 0.325582,
           "ex_date": "2025-04-01",
-          "nav": 12025.0,
+          "nav": 91.417576,
           "nav_date": "2025-04-01"
         },
         {
           "distribution_per_share": 0.327612,
           "ex_date": "2025-05-01",
-          "nav": 12025.0,
+          "nav": 88.613274,
           "nav_date": "2025-05-01"
         },
         {
           "distribution_per_share": 0.319532,
           "ex_date": "2025-06-02",
-          "nav": 22025.0,
+          "nav": 85.091541,
           "nav_date": "2025-06-02"
         },
         {
           "distribution_per_share": 0.328301,
           "ex_date": "2025-07-01",
-          "nav": 12025.0,
+          "nav": 88.098724,
           "nav_date": "2025-07-01"
         },
         {
           "distribution_per_share": 0.330802,
           "ex_date": "2025-08-01",
-          "nav": 12025.0,
+          "nav": 87.753866,
           "nav_date": "2025-08-01"
         },
         {
@@ -220,13 +224,13 @@
         {
           "distribution_per_share": 0.310447,
           "ex_date": "2025-10-01",
-          "nav": 12025.0,
+          "nav": 89.226399,
           "nav_date": "2025-10-01"
         },
         {
           "distribution_per_share": 0.325125,
           "ex_date": "2025-11-03",
-          "nav": 32025.0,
+          "nav": 89.688365,
           "nav_date": "2025-11-03"
         },
         {
@@ -242,10 +246,12 @@
           "nav_date": "2025-12-19"
         }
       ],
+      "end_nav": 87.206016,
       "end_nav_date": "2025-12-31",
       "issuer_calendar_nav_total_return_pct": 4.17,
-      "pass": false,
-      "reconstructed_nav_total_return_pct": 1.2428039348549413,
+      "pass": true,
+      "reconstructed_nav_total_return_pct": 4.172103141887162,
+      "start_nav": 87.441428,
       "start_nav_date": "2024-12-31",
       "tolerance_pp": 0.1
     }
@@ -265,7 +271,7 @@
       2025
     ]
   },
-  "decision": "P46_TLT_ISSUER_TOTAL_RETURN_IDENTITY_NOT_VALIDATED",
+  "decision": "P46_TLT_ISSUER_TOTAL_RETURN_IDENTITY_VALIDATED",
   "distribution_rows": 289,
   "nav_materialization": {
     "date_col": 0,
@@ -279,7 +285,160 @@
     "header_row": 71,
     "last": "2026-09-08",
     "nav_col": 1,
-    "rows": 6120
+    "rejected_implausible_samples": [
+      {
+        "date": "2002-08-31",
+        "parsed_nav": 5.21,
+        "raw_nav": "5.21"
+      },
+      {
+        "date": "2002-09-30",
+        "parsed_nav": 4.43,
+        "raw_nav": "4.43"
+      },
+      {
+        "date": "2002-10-31",
+        "parsed_nav": -3.74,
+        "raw_nav": "-3.74"
+      },
+      {
+        "date": "2002-11-30",
+        "parsed_nav": -0.83,
+        "raw_nav": "-0.83"
+      },
+      {
+        "date": "2002-12-31",
+        "parsed_nav": 4.33,
+        "raw_nav": "4.33"
+      },
+      {
+        "date": "2003-01-31",
+        "parsed_nav": -0.31,
+        "raw_nav": "-0.31"
+      },
+      {
+        "date": "2003-02-28",
+        "parsed_nav": 3.15,
+        "raw_nav": "3.15"
+      },
+      {
+        "date": "2003-03-31",
+        "parsed_nav": -1.67,
+        "raw_nav": "-1.67"
+      },
+      {
+        "date": "2003-04-30",
+        "parsed_nav": 1.27,
+        "raw_nav": "1.27"
+      },
+      {
+        "date": "2003-05-31",
+        "parsed_nav": 6.38,
+        "raw_nav": "6.38"
+      },
+      {
+        "date": "2003-06-30",
+        "parsed_nav": -2.03,
+        "raw_nav": "-2.03"
+      },
+      {
+        "date": "2003-07-31",
+        "parsed_nav": -10.31,
+        "raw_nav": "-10.31"
+      },
+      {
+        "date": "2003-08-31",
+        "parsed_nav": 2.14,
+        "raw_nav": "2.14"
+      },
+      {
+        "date": "2003-09-30",
+        "parsed_nav": 5.57,
+        "raw_nav": "5.57"
+      },
+      {
+        "date": "2003-10-31",
+        "parsed_nav": -3.11,
+        "raw_nav": "-3.11"
+      },
+      {
+        "date": "2003-11-30",
+        "parsed_nav": 0.56,
+        "raw_nav": "0.56"
+      },
+      {
+        "date": "2003-12-31",
+        "parsed_nav": 1.2,
+        "raw_nav": "1.2"
+      },
+      {
+        "date": "2004-01-31",
+        "parsed_nav": 1.99,
+        "raw_nav": "1.99"
+      },
+      {
+        "date": "2004-02-29",
+        "parsed_nav": 2.17,
+        "raw_nav": "2.17"
+      },
+      {
+        "date": "2004-03-31",
+        "parsed_nav": 1.53,
+        "raw_nav": "1.53"
+      },
+      {
+        "date": "2004-04-30",
+        "parsed_nav": -6.23,
+        "raw_nav": "-6.23"
+      },
+      {
+        "date": "2004-05-31",
+        "parsed_nav": -0.48,
+        "raw_nav": "-0.48"
+      },
+      {
+        "date": "2004-06-30",
+        "parsed_nav": 1.01,
+        "raw_nav": "1.01"
+      },
+      {
+        "date": "2004-07-31",
+        "parsed_nav": 1.81,
+        "raw_nav": "1.81"
+      },
+      {
+        "date": "2004-08-31",
+        "parsed_nav": 4.13,
+        "raw_nav": "4.13"
+      },
+      {
+        "date": "2004-09-30",
+        "parsed_nav": 1.08,
+        "raw_nav": "1.08"
+      },
+      {
+        "date": "2004-10-31",
+        "parsed_nav": 1.66,
+        "raw_nav": "1.66"
+      },
+      {
+        "date": "2004-11-30",
+        "parsed_nav": -2.46,
+        "raw_nav": "-2.46"
+      },
+      {
+        "date": "2004-12-31",
+        "parsed_nav": 2.76,
+        "raw_nav": "2.76"
+      },
+      {
+        "date": "2005-01-31",
+        "parsed_nav": 3.52,
+        "raw_nav": "3.52"
+      }
+    ],
+    "rows": 6074,
+    "sparse_cell_index_honored": true
   },
   "parent": "P46",
   "schema": "research.p46_tlt_totalreturn_identity_r1"
