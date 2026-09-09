@@ -1,0 +1,30 @@
+name: P46 Source Repeatability R1
+on:
+  pull_request:
+    paths: ['research/p46_source_repeatability_r1.py','.github/workflows/p46-source-repeatability-r1.yml']
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: evaluate
+        run: |
+          python research/p46_source_repeatability_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p46_source_repeatability_r1.json')); vals={'decision':x['decision'],'hashes':x['unique_hashes_within_execution'],'current':x['current_hash'][:12]}
+          with open(os.environ['GITHUB_OUTPUT'],'a') as z:
+            for k,v in vals.items(): z.write(f'{k}={v}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p46-source-repeatability__${{ steps.evaluate.outputs.decision }}__hashes_${{ steps.evaluate.outputs.hashes }}__current_${{ steps.evaluate.outputs.current }}
+          path: |
+            artifacts/p46_source_repeatability_r1.json
+            artifacts/p46_adjusted_close_snapshot.csv
+          if-no-files-found: error
