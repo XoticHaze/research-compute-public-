@@ -1,0 +1,30 @@
+name: P106 Commodity Momentum Random Null R1
+on:
+  pull_request:
+    paths:
+      - 'research/p106_commodity_momentum_random_null_r1.py'
+      - '.github/workflows/p106-commodity-momentum-random-null-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: evaluate
+        run: |
+          python research/p106_commodity_momentum_random_null_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p106_commodity_momentum_random_null_r1.json')); t=x['tests']['2020']; vals={'decision':x['decision'],'excess':f"{100*t['actual_excess_cagr']:.2f}",'pct':f"{100*t['actual_percentile']:.1f}",'p':f"{t['p_null_ge_actual']:.3f}"}
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+              for k,v in vals.items(): f.write(f'{k}={v}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p106-random-null__${{ steps.evaluate.outputs.decision }}__excess_${{ steps.evaluate.outputs.excess }}pp__pct_${{ steps.evaluate.outputs.pct }}__p_${{ steps.evaluate.outputs.p }}
+          path: artifacts/p106_commodity_momentum_random_null_r1.json
+          if-no-files-found: error
