@@ -1,0 +1,31 @@
+name: P46 P36 Causal Temporal Holdout R1
+on:
+  pull_request:
+    paths:
+      - 'research/p46_p36_causal_temporal_holdout_r1.py'
+      - '.github/workflows/p46-p36-causal-temporal-holdout-r1.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: evaluate
+        run: |
+          python research/p46_p36_causal_temporal_holdout_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p46_p36_causal_temporal_holdout_r1.json')); d=x['tests']['50']; vals={'decision':x['decision'],'e15':f"{100*d['2015']['excess_vs_matched_cagr']:.3f}",'e20':f"{100*d['2020']['excess_vs_matched_cagr']:.3f}",'e22':f"{100*d['2022']['excess_vs_matched_cagr']:.3f}",'q22':f"{100*d['2022']['excess_vs_qqq_cagr']:.3f}",'f22':str(d['2022']['positive_folds'])}
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+            for k,v in vals.items(): f.write(f'{k}={v}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: causal-holdout__${{ steps.evaluate.outputs.decision }}__e15_${{ steps.evaluate.outputs.e15 }}pp__e20_${{ steps.evaluate.outputs.e20 }}pp__e22_${{ steps.evaluate.outputs.e22 }}pp__q22_${{ steps.evaluate.outputs.q22 }}pp__f22_${{ steps.evaluate.outputs.f22 }}
+          path: artifacts/p46_p36_causal_temporal_holdout_r1.json
+          if-no-files-found: error
