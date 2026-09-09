@@ -1,0 +1,29 @@
+name: Yahoo Complete Month Panel Stability R1
+on:
+  pull_request:
+    paths:
+      - 'research/yahoo_complete_month_panel_stability_r1.py'
+      - '.github/workflows/yahoo-complete-month-panel-stability-r1.yml'
+permissions: {contents: read}
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check pandas==2.2.3 yfinance==0.2.65
+      - id: run
+        run: |
+          python research/yahoo_complete_month_panel_stability_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/yahoo_complete_month_panel_stability_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write(f"classification={x['classification']}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yahoo-panel-stability__${{ steps.run.outputs.classification }}
+          path: artifacts/yahoo_complete_month_panel_stability_r1.json
+          if-no-files-found: error
