@@ -1,4 +1,4 @@
-name: P36 Causal Entry Delay R1
+name: P36 SMH Causal Entry Delay R2
 on:
   pull_request:
     paths:
@@ -7,14 +7,10 @@ on:
 permissions: {contents: read}
 jobs:
   evaluate:
-    strategy:
-      fail-fast: false
-      matrix:
-        asset: [SOXX, XSD]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
-      P36_ASSET: ${{ matrix.asset }}
+      P36_ASSET: SMH
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -23,6 +19,6 @@ jobs:
       - run: python scripts/p36_causal_entry_delay_r1.py
       - uses: actions/upload-artifact@v4
         with:
-          name: p36-${{ matrix.asset }}-causal-delay-r1
+          name: p36-SMH-causal-delay-r2
           path: artifacts/p36_*_causal_delay_r1.json
           if-no-files-found: error
