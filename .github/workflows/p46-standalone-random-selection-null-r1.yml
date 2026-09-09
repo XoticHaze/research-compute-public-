@@ -1,0 +1,28 @@
+name: P46 Standalone Random Selection Null R1
+on:
+  pull_request:
+    paths: ['research/p46_standalone_random_selection_null_r1.py','.github/workflows/p46-standalone-random-selection-null-r1.yml']
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: evaluate
+        run: |
+          python research/p46_standalone_random_selection_null_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p46_standalone_random_selection_null_r1.json')); r=x['tests']['2022_forward']; vals={'decision':x['decision'],'p':f"{r['p_null_ge_actual']:.4f}",'ex':f"{100*r['actual_excess_vs_equal_weight']:.2f}"}
+          with open(os.environ['GITHUB_OUTPUT'],'a') as z:
+            for k,v in vals.items(): z.write(f'{k}={v}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p46-standalone-random-null__${{ steps.evaluate.outputs.decision }}__recent_p_${{ steps.evaluate.outputs.p }}__recent_ex_${{ steps.evaluate.outputs.ex }}pp
+          path: artifacts/p46_standalone_random_selection_null_r1.json
+          if-no-files-found: error
