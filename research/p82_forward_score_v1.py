@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 import pandas as pd
 import yfinance as yf
 
-START = "2005-01-01"
 COST_BPS = 50
+CROSS_UNIVERSE = ["SPY", "QQQ", "TLT", "GLD", "DBC"]
+INDUSTRY_UNIVERSE = ["SOXX", "XBI", "XHB", "KRE", "ITA", "IGV", "IYT", "XRT", "XOP", "IHI"]
 
 
 def _load(symbols: set[str], start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
@@ -34,6 +36,8 @@ def _load(symbols: set[str], start: pd.Timestamp, end: pd.Timestamp) -> pd.DataF
 
 def _weights(selected: list[str], universe: list[str]) -> dict[str, float]:
     n = len(selected)
+    if n == 0:
+        raise RuntimeError("empty_selection")
     return {s: (1.0 / n if s in selected else 0.0) for s in universe}
 
 
@@ -70,12 +74,10 @@ def _score_pair(previous: dict | None, current: dict, nxt: dict, close: pd.DataF
     if next_dt <= current_dt:
         raise RuntimeError("non_monotonic_prediction_receipts")
 
-    cross_universe = current["economics"].get("crossasset_universe")
-    industry_universe = current["economics"].get("industry_universe")
-    if cross_universe is None:
-        cross_universe = ["SPY", "QQQ", "TLT", "GLD", "DBC"]
-    if industry_universe is None:
-        industry_universe = ["SOXX", "XBI", "XHB", "KRE", "ITA", "IGV", "IYT", "XRT", "XOP", "IHI"]
+    cross_universe = current["economics"].get("crossasset_universe") or CROSS_UNIVERSE
+    industry_universe = current["economics"].get("industry_universe") or INDUSTRY_UNIVERSE
+    if cross_universe != CROSS_UNIVERSE or industry_universe != INDUSTRY_UNIVERSE:
+        raise RuntimeError("forward_universe_contract_drift")
 
     cross_sel = current["candidate"]["p64_crossasset_selected"]
     industry_sel = current["candidate"]["p64_industry_selected"]
@@ -153,13 +155,48 @@ def _score_pair(previous: dict | None, current: dict, nxt: dict, close: pd.DataF
     }
 
 
+def _self_test() -> None:
+    dates = pd.to_datetime(["2026-08-31", "2026-09-01", "2026-09-30", "2026-10-01"])
+    symbols = sorted(set(CROSS_UNIVERSE + INDUSTRY_UNIVERSE))
+    close = pd.DataFrame(index=dates, columns=symbols, dtype=float)
+    close.loc[dates[0], :] = 100.0
+    close.loc[dates[1], :] = 100.0
+    close.loc[dates[2], :] = 110.0
+    close.loc[dates[3], :] = 110.0
+    current = {
+        "selection_month": "2026-08-31",
+        "candidate": {
+            "p64_crossasset_selected": ["SPY", "QQQ"],
+            "p64_industry_selected": ["SOXX", "XBI", "XHB"],
+            "p36_selected": "SOXX",
+        },
+        "economics": {},
+        "contract_sha256": "current",
+        "source_result_event": "synthetic",
+        "maturity": {"outcome_not_used": True},
+    }
+    nxt = {"selection_month": "2026-09-30", "contract_sha256": "next"}
+    score = _score_pair(None, current, nxt, close)
+    assert math.isclose(score["components"]["p64_cross_turnover"], 0.5, abs_tol=1e-12)
+    assert math.isclose(score["components"]["p64_industry_turnover"], 0.5, abs_tol=1e-12)
+    assert math.isclose(score["components"]["p36_turnover"], 1.0, abs_tol=1e-12)
+    assert math.isclose(score["components"]["p64_candidate_return_net_50bps"], 0.0975, abs_tol=1e-12)
+    assert math.isclose(score["components"]["p36_candidate_return_net_50bps"], 0.095, abs_tol=1e-12)
+    assert math.isclose(score["candidate_return_net_50bps"], 0.09625, abs_tol=1e-12)
+    assert math.isclose(score["matched_return"], 0.1, abs_tol=1e-12)
+    assert math.isclose(score["qqq_return"], 0.1, abs_tol=1e-12)
+    assert score["p36_shifted_start"] == "2026-09-01"
+    assert score["p36_shifted_end"] == "2026-10-01"
+    print("P82_FORWARD_SCORE_SELF_TEST=PASS")
+
+
 def score_ledger(ledger_dir: Path, output_dir: Path) -> dict:
     paths = sorted(ledger_dir.glob("*.json"))
     receipts = [json.loads(p.read_text()) for p in paths]
     if len(receipts) < 2:
         return {"schema": "research.p82_forward_score_readiness.v1", "status": "NOT_MATURE", "prediction_receipts": len(receipts), "scored": 0}
 
-    symbols: set[str] = {"SPY", "QQQ", "TLT", "GLD", "DBC", "SOXX", "XBI", "XHB", "KRE", "ITA", "IGV", "IYT", "XRT", "XOP", "IHI"}
+    symbols: set[str] = set(CROSS_UNIVERSE + INDUSTRY_UNIVERSE)
     first = pd.Timestamp(receipts[0]["selection_month"])
     last = pd.Timestamp(receipts[-1]["selection_month"])
     close = _load(symbols, first, last)
@@ -181,7 +218,11 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--ledger-dir", default="research/forward_ledgers/p82/predictions")
     parser.add_argument("--output-dir", default="research/forward_ledgers/p82/scorecards")
+    parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
+    if args.self_test:
+        _self_test()
+        return
     print(json.dumps(score_ledger(Path(args.ledger_dir), Path(args.output_dir)), sort_keys=True))
 
 
