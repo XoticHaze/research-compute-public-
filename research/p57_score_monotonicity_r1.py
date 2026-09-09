@@ -34,7 +34,7 @@ def build():
         if min(a,z)<0 or max(a,z)>=len(idx): continue
         r=close.iloc[z][list(SYMS)]/close.iloc[a][list(SYMS)]-1
         if r.isna().any(): continue
-        rank_ic=float(score.corr(r,method='spearman'))
+        rank_ic=float(score.rank(method='average').corr(r.rank(method='average')))
         chosen=list(score.sort_values(ascending=False).head(2).index)
         rest=[s for s in SYMS if s not in chosen]
         selected=float(r[chosen].mean()); nonselected=float(r[rest].mean()); ew=float(r.mean())
