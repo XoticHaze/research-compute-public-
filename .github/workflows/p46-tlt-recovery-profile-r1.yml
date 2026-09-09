@@ -1,0 +1,22 @@
+name: P46 TLT Recovery Profile R1
+on:
+  pull_request:
+    paths:
+      - 'research/p46_tlt_recovery_profile_r1.py'
+      - '.github/workflows/p46-tlt-recovery-profile-r1.yml'
+permissions: {contents: read}
+jobs:
+  profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check lxml==5.3.0
+      - run: python research/p46_tlt_recovery_profile_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p46-tlt-recovery-profile-r1
+          path: artifacts/p46_tlt_recovery_profile_r1.json
+          if-no-files-found: error
