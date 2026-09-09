@@ -1,0 +1,22 @@
+name: MES ES Trend Causal Delay R6
+on:
+  pull_request:
+    paths:
+      - 'research/mes_es_trend_causal_delay_r6.py'
+      - '.github/workflows/mes-es-trend-causal-delay-r6.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - run: python research/mes_es_trend_causal_delay_r6.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mes-es-trend-causal-delay-r6
+          path: mes_es_trend_causal_delay_r6.json
+          if-no-files-found: error
