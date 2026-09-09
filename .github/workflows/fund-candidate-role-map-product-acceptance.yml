@@ -18,5 +18,5 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
         with:
           node-version: '22'
-      - name: Execute sanitized non-ranking fund role-map contract
-        run: node --test product_contracts/fund_candidate_role_map/product_contract_acceptance.test.mjs
+      - name: Execute sanitized non-ranking fund role-map contracts
+        run: node --test product_contracts/fund_candidate_role_map/*.test.mjs
