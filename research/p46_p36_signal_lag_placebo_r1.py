@@ -12,12 +12,13 @@ def cagr(r):
     r=pd.Series(r,dtype=float).dropna(); return float((1+r).prod()**(12/len(r))-1)
 
 def p46_signals(close):
-    panel,monthly=p46.feature_panel(close[P46_SYMS],p46.FACTORS); out={}
+    cols=list(P46_SYMS)
+    panel,monthly=p46.feature_panel(close[cols],p46.FACTORS); out={}
     for dt in sorted(panel.month.unique()):
         block=panel[panel.month==dt].sort_values(['score','symbol'],ascending=[False,True]);
         if len(block)!=len(P46_SYMS): continue
         chosen=set(block.head(2).symbol.tolist()); out[pd.Timestamp(dt)]={s:(.5 if s in chosen else 0.) for s in P46_SYMS}
-    return monthly[P46_SYMS],out
+    return monthly[cols],out
 
 def p36_signals(close):
     monthly=close[['SMH','QQQ']].resample('ME').last(); mom=monthly.pct_change(6); out={}
