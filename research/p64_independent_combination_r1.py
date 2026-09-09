@@ -1,7 +1,6 @@
 from __future__ import annotations
 import json
 from pathlib import Path
-import numpy as np
 import pandas as pd
 import fixed_multifactor_cross_sectional_r1 as base
 import p57_crossasset_parsimonious_r1 as p57
@@ -18,12 +17,12 @@ def evaluate(cross,ind,close,bps):
     matched=.5*cross.loc[idx].ew+.5*ind.loc[idx].ew
     mm=close.resample("ME").last().pct_change().reindex(idx)
     cm,bm=base.metrics(combo),base.metrics(matched); pos,folds=base.fold_count(combo,matched)
-    return {"months":len(idx),"start":str(idx.min().date()),"end":str(idx.max().date()),"combo":cm,"matched_static_blend":bm,"cross_sleeve":base.metrics(c),"industry_sleeve":base.metrics(i),"spy":base.metrics(mm.SPY),"qqq":base.metrics(mm.QQQ),"excess_cagr_vs_matched":cm["cagr"]-bm["cagr"],"excess_cagr_vs_spy":cm["cagr"]-base.metrics(mm.SPY)["cagr"],"excess_cagr_vs_qqq":cm["cagr"]-base.metrics(mm.QQQ)["cagr"],"positive_folds":pos,"folds":folds,"sleeve_return_correlation":float(c.corr(i))}
+    return {"months":len(idx),"start":str(idx.min().date()),"end":str(idx.max().date()),"combo":cm,"matched_static_blend":bm,"cross_sleeve":base.metrics(c),"industry_sleeve":base.metrics(i),"spy":base.metrics(mm["SPY"]),"qqq":base.metrics(mm["QQQ"]),"excess_cagr_vs_matched":cm["cagr"]-bm["cagr"],"excess_cagr_vs_spy":cm["cagr"]-base.metrics(mm["SPY"])["cagr"],"excess_cagr_vs_qqq":cm["cagr"]-base.metrics(mm["QQQ"])["cagr"],"positive_folds":pos,"folds":folds,"sleeve_return_correlation":float(c.corr(i))}
 
 def main():
     cross,cclose=p57.run(0); ind,iclose=p47.run(IND,FACTORS,0)
-    close=pd.concat([cclose[["SPY","QQQ"]],iclose],axis=1)
-    full_idx=cross.index.intersection(ind.index); tests={}
+    close=cclose[["SPY","QQQ"]]
+    tests={}
     for label,start in (("full",None),("2015_forward","2015-01-01"),("2020_forward","2020-01-01")):
         cc=cross if start is None else cross.loc[pd.Timestamp(start):]
         ii=ind if start is None else ind.loc[pd.Timestamp(start):]
