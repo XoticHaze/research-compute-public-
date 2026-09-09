@@ -45,10 +45,43 @@
     "cadence": "monthly",
     "no_parameter_or_weight_tuning": true
   },
+  "post_freeze_diagnostics": {
+    "weight_invariance": {
+      "event_id": "20260909T094325Z__p82_weight_invariance_r1_consequence",
+      "execution": {
+        "repo": "XoticHaze/research-compute-public-",
+        "workflow": ".github/workflows/p82-weight-invariance-r1.yml",
+        "run_id": 34336266086,
+        "job_id": 102416260350,
+        "head_sha": "624234c631807d09cf23f78be2058e941c7a7e18",
+        "artifact_id": 10097832714,
+        "artifact_digest": "sha256:fdb52fd8762c2cc39738062dafcf5190eeda113082d14f0e8583af4afef3fd08"
+      },
+      "decision_state": "P82_WEIGHT_SENSITIVE",
+      "release_consequence": "Do not select or retune a historical weight from the coarse-weight diagnostic. Preserve the already-frozen 50/50 reference and evaluate it prospectively."
+    },
+    "serial_persistence": {
+      "event_id": "20260909T094507Z__p82_serial_persistence_r1_consequence",
+      "execution": {
+        "repo": "XoticHaze/research-compute-public-",
+        "workflow": ".github/workflows/p82-serial-persistence-r1.yml",
+        "run_id": 34336419392,
+        "job_id": 102416745209,
+        "head_sha": "89ca5aa9ffd815ab33ee914ba9631503e67150cb",
+        "artifact_id": 10097894929,
+        "artifact_digest": "sha256:09578c1856338095e2193bcd12d2b28f3eb05358ec49f0cec031c2c6961dbbbf"
+      },
+      "decision_state": "P82_SERIAL_PERSISTENCE_WEAK",
+      "release_consequence": "Historical aggregate excess is not sufficient persistence evidence. Do not use this observer to rescue or optimize historical P82; only genuinely forward immutable observations may add evidence."
+    },
+    "consumer_rule": "These diagnostics constrain interpretation of the frozen observer without changing its candidate semantics. They confer no promotion, allocation, portfolio-ranking, runtime, broker, or live-trading authority."
+  },
   "observation": {
     "use_latest_completed_common_calendar_month_only": true,
     "freeze_candidate_before_outcome": true,
-    "artifact_only_no_trade_authority": true
+    "artifact_only_no_trade_authority": true,
+    "historical_reoptimization_forbidden": true,
+    "forward_evidence_required_for_reconsideration": true
   },
   "protected_boundaries": {
     "portfolio_ranking": false,
