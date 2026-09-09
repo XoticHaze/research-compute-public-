@@ -1,0 +1,53 @@
+name: P82 Frozen Forward Observer V1
+
+on:
+  pull_request:
+    paths:
+      - 'research/p82_forward_observer_contract_v1.json'
+      - 'research/p82_forward_observer_v1.py'
+      - '.github/workflows/p82-forward-observer-v1.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '20 22 2 * *'
+
+permissions:
+  contents: read
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install frozen dependencies
+        run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - name: Materialize frozen forward observation
+        run: python research/p82_forward_observer_v1.py
+      - name: Verify observer acceptance contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('artifacts/p82_forward_observer_v1.json')
+          x = json.loads(p.read_text())
+          assert x['schema'] == 'research.p82_forward_observer.v1'
+          assert x['source_result_event'] == '20260909T090330Z__p82_component_contribution_consequence'
+          assert abs(sum(x['candidate']['weights'].values()) - 1.0) < 1e-9
+          assert abs(sum(x['controls']['matched_weights'].values()) - 1.0) < 1e-9
+          assert x['controls']['opportunity_control'] == {'QQQ': 1.0}
+          assert x['economics']['component_cost_bps'] == 50
+          assert x['economics']['no_parameter_or_weight_tuning'] is True
+          assert x['maturity']['outcome_not_used'] is True
+          assert x['maturity']['score_after_forward_month_closes'] is True
+          assert not any(x['protected_boundaries'].values())
+          print('P82_FORWARD_OBSERVER_ACCEPTANCE=PASS')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p82-forward-observer-v1-${{ github.run_id }}
+          path: artifacts/p82_forward_observer_v1.json
+          if-no-files-found: error
+          retention-days: 90
