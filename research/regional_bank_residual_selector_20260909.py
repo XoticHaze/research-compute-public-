@@ -8,12 +8,20 @@ from sklearn.preprocessing import StandardScaler
 SOURCE='/tmp/source.py'
 spec=importlib.util.spec_from_file_location('src',SOURCE)
 src=importlib.util.module_from_spec(spec); spec.loader.exec_module(src)
-BANKS=('CFG','KEY','FITB','HBAN','RF','ZION','CMA','MTB')
+# CMA is not admitted here because the pinned Yahoo chart source returned HTTP 404
+# on the first execution. FHN is frozen before this retry as a regional-bank peer;
+# the model, features, target, selection rule, cadence, costs, and gates are unchanged.
+BANKS=('CFG','KEY','FITB','HBAN','RF','ZION','FHN','MTB')
 CTX=('KRE','SPY','QQQ')
 H=20; DELAY=1; STEP=20
 FEATURES=('rs20','rs60','rs126','beta126','resid_vol20','resid_vol60','rel_dd60','rs_accel')
 ALL=(*BANKS,*CTX)
-raw={s:src._load(s) for s in ALL}
+raw={}
+for s in ALL:
+    try:
+        raw[s]=src._load(s)
+    except Exception as exc:
+        raise RuntimeError(f'source_load_failed symbol={s}: {type(exc).__name__}: {exc}') from exc
 common=set(raw[ALL[0]].timestamp)
 for s in ALL[1:]: common &= set(raw[s].timestamp)
 cal=pd.DatetimeIndex(sorted(common))
@@ -47,7 +55,7 @@ for i in range(756,len(cal)-(H+DELAY),STEP):
     for b in CTX: rec[f'{b}_bps']=float((px[b].iloc[x]/px[b].iloc[e]-1)*10000)
     decisions.append(rec)
 
-contract={'universe':BANKS,'benchmark':'KRE','model':'expanding pooled StandardScaler+Ridge(alpha=10)','target':'forward20_stock_minus_KRE','features':FEATURES,'selection':'top3','rebalance_step_days':STEP,'entry_delay_days':DELAY,'costs_bps':[25,50,100],'no_parameter_tuning':True}
+contract={'universe':BANKS,'excluded_source_unavailable':['CMA'],'benchmark':'KRE','model':'expanding pooled StandardScaler+Ridge(alpha=10)','target':'forward20_stock_minus_KRE','features':FEATURES,'selection':'top3','rebalance_step_days':STEP,'entry_delay_days':DELAY,'costs_bps':[25,50,100],'no_parameter_tuning':True}
 if len(decisions)<30:
     out={'schema':'regional_bank_residual_selector.v1','contract':contract,'window':{'calendar_first':cal[0].isoformat(),'calendar_last':cal[-1].isoformat(),'decisions':len(decisions)},'metrics':{},'checks':{'minimum_30_decisions':False},'decision':'SAMPLE_INSUFFICIENT','research_only':True,'promotion_authority':False,'allocation_authority':False,'live_trading_change':False}
 else:
