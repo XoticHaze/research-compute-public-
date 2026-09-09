@@ -99,7 +99,7 @@ def main() -> None:
     }
     for rep, assets in REPRESENTATIONS.items():
         base.ASSETS = assets
-        base.ALL = (*assets, "BIL", "SPY", "QQQ")
+        base.ALL = tuple(dict.fromkeys((*assets, "BIL", "SPY", "QQQ")))
         f, meta = base.build_frame()
         out["results"][rep] = {
             "source": meta,
