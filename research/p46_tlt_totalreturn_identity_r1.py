@@ -17,6 +17,14 @@ def xml_rows(b):
     for row in root.xpath('//*[local-name()="Row"]'):
         vals=[]
         for c in row.xpath('./*[local-name()="Cell"]'):
+            ix=None
+            for k,v in c.attrib.items():
+                if k=='Index' or k.endswith('}Index'):
+                    try: ix=int(v)-1
+                    except ValueError: pass
+                    break
+            if ix is not None:
+                while len(vals)<ix: vals.append(None)
             d=c.xpath('.//*[local-name()="Data"]'); vals.append(d[0].text if d else None)
         out.append(vals)
     return out
@@ -45,13 +53,15 @@ def load_nav():
             cand=(score[0],i,date_ix[0],score[1],row)
             if best is None or cand[0]>best[0]: best=cand
     if best is None: raise RuntimeError('NAV/date header not found')
-    _,hi,di,ni,header=best; nav={}
+    _,hi,di,ni,header=best; nav={}; rejected=[]
     for row in rows[hi+1:]:
         if max(di,ni)>=len(row): continue
         d=parse_date(row[di]); v=parse_float(row[ni])
-        if d and v and v>0: nav[d]=v
+        if d and v is not None:
+            if 20.0 <= v <= 300.0: nav[d]=v
+            elif len(rejected)<30: rejected.append({'date':str(d),'raw_nav':row[ni],'parsed_nav':v})
     if len(nav)<500: raise RuntimeError(f'insufficient NAV rows {len(nav)} header={header!r}')
-    return nav,{'header_row':hi,'date_col':di,'nav_col':ni,'header':header,'rows':len(nav),'first':str(min(nav)),'last':str(max(nav))}
+    return nav,{'header_row':hi,'date_col':di,'nav_col':ni,'header':header,'rows':len(nav),'first':str(min(nav)),'last':str(max(nav)),'rejected_implausible_samples':rejected,'sparse_cell_index_honored':True}
 
 def last_on_or_before(nav,d):
     ks=[k for k in nav if k<=d]
@@ -71,7 +81,7 @@ def main():
         for d,amt in sorted((x for x in dist if x[0].year==y),key=lambda z:z[0]):
             nd,nv=last_on_or_before(nav,d); shares*=1.0+amt/nv; used.append({'ex_date':str(d),'nav_date':str(nd),'nav':nv,'distribution_per_share':amt})
         ret=100*(shares*ev/sv-1); err=abs(ret-target)
-        checks[str(y)]={'start_nav_date':str(sd),'end_nav_date':str(ed),'distributions_used':used,'reconstructed_nav_total_return_pct':ret,'issuer_calendar_nav_total_return_pct':target,'abs_error_pp':err,'tolerance_pp':TOL,'pass':err<=TOL}
+        checks[str(y)]={'start_nav_date':str(sd),'end_nav_date':str(ed),'start_nav':sv,'end_nav':ev,'distributions_used':used,'reconstructed_nav_total_return_pct':ret,'issuer_calendar_nav_total_return_pct':target,'abs_error_pp':err,'tolerance_pp':TOL,'pass':err<=TOL}
     decision='P46_TLT_ISSUER_TOTAL_RETURN_IDENTITY_VALIDATED' if all(v['pass'] for v in checks.values()) else 'P46_TLT_ISSUER_TOTAL_RETURN_IDENTITY_NOT_VALIDATED'
     out={'schema':'research.p46_tlt_totalreturn_identity_r1','parent':'P46','contract':{'years':sorted(TARGETS),'issuer_targets_from_prior_structured_extraction':TARGETS,'reinvest_total_distribution_on_ex_date_at_last_available_issuer_nav':True,'tolerance_pp':TOL,'no_model_parameter_or_cost_changes':True},'nav_materialization':nav_meta,'distribution_rows':len(dist),'checks':checks,'decision':decision}
     Path('results/p46_tlt_totalreturn_identity_r1.json').write_text(json.dumps(out,indent=2,sort_keys=True)); print(json.dumps(out,sort_keys=True))
