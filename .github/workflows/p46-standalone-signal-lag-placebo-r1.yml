@@ -1,0 +1,28 @@
+name: P46 Standalone Signal Lag Placebo R1
+on:
+  pull_request:
+    paths: ['research/p46_standalone_signal_lag_placebo_r1.py','.github/workflows/p46-standalone-signal-lag-placebo-r1.yml']
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: evaluate
+        run: |
+          python research/p46_standalone_signal_lag_placebo_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p46_standalone_signal_lag_placebo_r1.json')); vals={'decision':x['decision'],'aligned':f"{100*x['aligned_recent_excess']:.2f}",'placebo':f"{100*x['best_lagged_recent_excess']:.2f}"}
+          with open(os.environ['GITHUB_OUTPUT'],'a') as z:
+            for k,v in vals.items(): z.write(f'{k}={v}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p46-standalone-lag__${{ steps.evaluate.outputs.decision }}__aligned_${{ steps.evaluate.outputs.aligned }}pp__best_placebo_${{ steps.evaluate.outputs.placebo }}pp
+          path: artifacts/p46_standalone_signal_lag_placebo_r1.json
+          if-no-files-found: error
