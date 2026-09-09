@@ -1,0 +1,33 @@
+name: P46 P36 Signal Embargo R1
+on:
+  pull_request:
+    paths:
+      - 'research/p46_p36_signal_embargo_r1.py'
+      - '.github/workflows/p46-p36-signal-embargo-r1.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: evaluate
+        run: |
+          python research/p46_p36_signal_embargo_r1.py
+          python - <<'PY'
+          import json, os
+          x=json.load(open('artifacts/p46_p36_signal_embargo_r1.json'))
+          vals={'decision':x['decision'],'e1':f"{100*x['tests']['1']['50']['excess_cagr']:.3f}",'e3':f"{100*x['tests']['3']['50']['excess_cagr']:.3f}",'e5':f"{100*x['tests']['5']['50']['excess_cagr']:.3f}",'f1':str(x['tests']['1']['50']['positive_folds'])}
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+            for k,v in vals.items(): f.write(f'{k}={v}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p46-p36-embargo__${{ steps.evaluate.outputs.decision }}__e1_50_${{ steps.evaluate.outputs.e1 }}pp__e3_50_${{ steps.evaluate.outputs.e3 }}pp__e5_50_${{ steps.evaluate.outputs.e5 }}pp__e1folds_${{ steps.evaluate.outputs.f1 }}
+          path: artifacts/p46_p36_signal_embargo_r1.json
+          if-no-files-found: error
