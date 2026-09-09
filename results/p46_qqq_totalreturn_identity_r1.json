@@ -1,0 +1,93 @@
+{
+  "checks": {
+    "y10": {
+      "abs_error_pp": 0.0,
+      "end": {
+        "date": "2026-08-31",
+        "returnPercent": 560.819984,
+        "value": 66081.9984
+      },
+      "label": "Invesco QQQ Trust, Series 1",
+      "pass": true,
+      "points": 121,
+      "rolling_shareclass_pct": 560.819984,
+      "standard_fund_nav_pct": 560.819984,
+      "start": {
+        "date": "2016-08-31",
+        "returnPercent": 0,
+        "value": 10000
+      },
+      "tolerance_pp": 1e-06
+    },
+    "y3": {
+      "abs_error_pp": 0.0,
+      "end": {
+        "date": "2026-08-31",
+        "returnPercent": 92.84072,
+        "value": 19284.072
+      },
+      "label": "Invesco QQQ Trust, Series 1",
+      "pass": true,
+      "points": 37,
+      "rolling_shareclass_pct": 92.84072,
+      "standard_fund_nav_pct": 92.84072,
+      "start": {
+        "date": "2023-08-31",
+        "returnPercent": 0,
+        "value": 10000
+      },
+      "tolerance_pp": 1e-06
+    },
+    "y5": {
+      "abs_error_pp": 0.0,
+      "end": {
+        "date": "2026-08-31",
+        "returnPercent": 94.346168,
+        "value": 19434.6168
+      },
+      "label": "Invesco QQQ Trust, Series 1",
+      "pass": true,
+      "points": 61,
+      "rolling_shareclass_pct": 94.346168,
+      "standard_fund_nav_pct": 94.346168,
+      "start": {
+        "date": "2021-08-31",
+        "returnPercent": 0,
+        "value": 10000
+      },
+      "tolerance_pp": 1e-06
+    }
+  },
+  "contract": {
+    "no_model_parameter_or_cost_changes": true,
+    "predeclared_horizons": [
+      "y3",
+      "y5",
+      "y10"
+    ],
+    "rule": "standard Fund NAV cumulative return must equal rolling growthOf10K Shareclass cumulative return at each horizon; 1y reported diagnostically but excluded because monthly chart start date need not equal standard daily lookback anchor",
+    "tolerance_pp": 1e-06
+  },
+  "decision": "P46_QQQ_ISSUER_TOTAL_RETURN_IDENTITY_VALIDATED",
+  "diagnostic_y1": {
+    "abs_error_pp": 0.040167000000000286,
+    "end": {
+      "date": "2026-08-31",
+      "returnPercent": 26.274089,
+      "value": 12627.408873
+    },
+    "label": "Invesco QQQ Trust, Series 1",
+    "points": 13,
+    "rolling_shareclass_pct": 26.274089,
+    "standard_fund_nav_pct": 26.314256,
+    "start": {
+      "date": "2025-08-31",
+      "returnPercent": 0,
+      "value": 10000
+    }
+  },
+  "effective_date": "2026-08-31",
+  "parent": "P46",
+  "replay_readiness": "ADMITTED_DIRECT_ISSUER_TOTAL_RETURN_MONTHLY_SERIES",
+  "schema": "research.p46_qqq_totalreturn_identity_r1"
+}
