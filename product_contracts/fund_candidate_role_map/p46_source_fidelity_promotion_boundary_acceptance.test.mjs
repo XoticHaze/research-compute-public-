@@ -1,0 +1,8 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+const MM_PRODUCT_HEAD='832be26220e3b6ea2ab972ed8aed40fb104a9558'
+const p={scienceDecision:'KEEP_P46_SUPPORTED_RISK_EFFICIENT_SURVIVOR_NO_PARAMETER_RESCUE',sourceState:'OBSERVED_YAHOO_NUMERIC_DRIFT_OUTPUT_IMMATERIAL_PAIRED_TEST',promotionEvidenceState:'SOURCE_FIDELITY_INCOMPLETE_NOT_ALPHA_FAILURE',authoritativeHistoryState:'PARTIALLY_RESOLVED_DO_NOT_RUN_MIXED_SOURCE_REPLAY',resolved:['SPY','TLT'],unresolved:['QQQ','GLD','DBC'],selectionDifferences:0,economicsInvariant:true,nextGate:'COMPLETE_AUTHORITATIVE_HISTORY_HASH_SEMANTICS_THEN_UNCHANGED_SELECTOR'}
+test('bind exact P46 source-fidelity product head',()=>assert.equal(MM_PRODUCT_HEAD,'832be26220e3b6ea2ab972ed8aed40fb104a9558'))
+test('preserve supported science while promotion source fidelity remains incomplete',()=>{assert.equal(p.scienceDecision,'KEEP_P46_SUPPORTED_RISK_EFFICIENT_SURVIVOR_NO_PARAMETER_RESCUE');assert.equal(p.promotionEvidenceState,'SOURCE_FIDELITY_INCOMPLETE_NOT_ALPHA_FAILURE');assert.equal(p.selectionDifferences,0);assert.equal(p.economicsInvariant,true)})
+test('fail closed on incomplete authoritative history',()=>{assert.equal(p.authoritativeHistoryState,'PARTIALLY_RESOLVED_DO_NOT_RUN_MIXED_SOURCE_REPLAY');assert.deepEqual(p.resolved,['SPY','TLT']);assert.deepEqual(p.unresolved,['QQQ','GLD','DBC']);assert.match(p.nextGate,/UNCHANGED_SELECTOR/)})
+test('no portfolio or trading authority',()=>assert.deepEqual(Object.values({ranking:false,allocation:false,sizing:false,promotion:false,strategySpec:false,runtime:false,data:false,broker:false,live:false}),Array(9).fill(false)))
