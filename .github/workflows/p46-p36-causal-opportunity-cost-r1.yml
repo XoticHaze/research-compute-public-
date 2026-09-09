@@ -1,0 +1,31 @@
+name: P46 P36 Causal Opportunity Cost R1
+on:
+  pull_request:
+    paths:
+      - 'research/p46_p36_causal_opportunity_cost_r1.py'
+      - '.github/workflows/p46-p36-causal-opportunity-cost-r1.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: evaluate
+        run: |
+          python research/p46_p36_causal_opportunity_cost_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p46_p36_causal_opportunity_cost_r1.json')); d=x['tests']['1']['50']; vals={'decision':x['decision'],'m':f"{100*d['excess_vs_matched_cagr']:.3f}",'q':f"{100*d['excess_vs_qqq_cagr']:.3f}",'s':f"{100*d['excess_vs_spy_cagr']:.3f}",'dd':f"{100*d['candidate']['max_drawdown']:.1f}"}
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+            for k,v in vals.items(): f.write(f'{k}={v}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: causal-oppcost__${{ steps.evaluate.outputs.decision }}__matched_${{ steps.evaluate.outputs.m }}pp__qqq_${{ steps.evaluate.outputs.q }}pp__spy_${{ steps.evaluate.outputs.s }}pp__mdd_${{ steps.evaluate.outputs.dd }}pct
+          path: artifacts/p46_p36_causal_opportunity_cost_r1.json
+          if-no-files-found: error
