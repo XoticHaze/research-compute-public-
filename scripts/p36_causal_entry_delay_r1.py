@@ -7,7 +7,7 @@ os.environ.setdefault('P36_CHILD','C2')
 import p36_independent_proxy_validation as base
 
 ASSET=os.environ['P36_ASSET'].strip().upper()
-if ASSET not in {'SOXX','XSD'}: raise SystemExit(f'unsupported asset {ASSET}')
+if ASSET not in {'SMH','SOXX','XSD'}: raise SystemExit(f'unsupported asset {ASSET}')
 COSTS=(25,50,100); DELAYS=(1,3,5)
 
 def cagr(r):
