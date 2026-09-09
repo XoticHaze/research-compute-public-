@@ -69,7 +69,21 @@ def run(contract_path: Path, output_path: Path) -> dict:
     cross_monthly = cross_close.resample("ME").last()
     cross_trend = (cross_close / cross_close.rolling(200, min_periods=160).mean() - 1).resample("ME").last()
     cross_mom = cross_monthly.pct_change(6)
-    selection_month = _latest_completed_month(cross_monthly.index)
+
+    industry_close = base.load(industry_symbols).sort_index()
+    industry_monthly, industry_maps = p47.maps(industry_close)
+
+    p36_close = base.load(("SOXX",)).dropna(subset=["SOXX", "QQQ"]).sort_index()
+    p36_monthly = p36_close.resample("ME").last()
+
+    selection_month = min(
+        _latest_completed_month(cross_monthly.index),
+        _latest_completed_month(industry_monthly.index),
+        _latest_completed_month(p36_monthly.index),
+    )
+    if selection_month not in cross_monthly.index or selection_month not in industry_monthly.index or selection_month not in p36_monthly.index:
+        raise RuntimeError(f"common_selection_month_missing:{selection_month}")
+
     cross_block = pd.DataFrame(
         {
             "mom6": cross_mom.loc[selection_month, list(cross_symbols)],
@@ -79,24 +93,19 @@ def run(contract_path: Path, output_path: Path) -> dict:
     )
     cross_selected = _rank_top(cross_block, int(contract["candidate"]["p64"]["crossasset_top_k"]))
 
-    industry_close = base.load(industry_symbols).sort_index()
-    industry_monthly, industry_maps = p47.maps(industry_close)
-    if selection_month not in industry_monthly.index:
-        selection_month = min(selection_month, _latest_completed_month(industry_monthly.index))
     industry_block = pd.DataFrame(
         {factor: industry_maps[factor].loc[selection_month, list(industry_symbols)] for factor in p66.FACTORS},
         index=list(industry_symbols),
     )
     industry_selected = _rank_top(industry_block, int(contract["candidate"]["p64"]["industry_top_k"]))
 
-    p36_close = base.load(("SOXX",)).dropna(subset=["SOXX", "QQQ"]).sort_index()
-    p36_monthly = p36_close.resample("ME").last()
-    if selection_month not in p36_monthly.index:
-        selection_month = min(selection_month, _latest_completed_month(p36_monthly.index))
-    rel6 = float(
-        p36_monthly.loc[selection_month, "SOXX"] / p36_monthly.loc[p36_monthly.index[p36_monthly.index.get_loc(selection_month) - 6], "SOXX"]
-        - p36_monthly.loc[selection_month, "QQQ"] / p36_monthly.loc[p36_monthly.index[p36_monthly.index.get_loc(selection_month) - 6], "QQQ"]
-    )
+    p36_loc = p36_monthly.index.get_loc(selection_month)
+    if not isinstance(p36_loc, int) or p36_loc < 6:
+        raise RuntimeError("insufficient_p36_lookback")
+    p36_start = p36_monthly.index[p36_loc - 6]
+    soxx_6m = float(p36_monthly.loc[selection_month, "SOXX"] / p36_monthly.loc[p36_start, "SOXX"] - 1.0)
+    qqq_6m = float(p36_monthly.loc[selection_month, "QQQ"] / p36_monthly.loc[p36_start, "QQQ"] - 1.0)
+    rel6 = soxx_6m - qqq_6m
     p36_symbol = "SOXX" if rel6 > 0 else "QQQ"
 
     candidate: dict[str, float] = {}
@@ -131,6 +140,8 @@ def run(contract_path: Path, output_path: Path) -> dict:
             "p64_crossasset_selected": cross_selected,
             "p64_industry_selected": industry_selected,
             "p36_selected": p36_symbol,
+            "p36_soxx_6m_return": soxx_6m,
+            "p36_qqq_6m_return": qqq_6m,
             "p36_relative_6m_soxx_minus_qqq": rel6,
         },
         "controls": {
