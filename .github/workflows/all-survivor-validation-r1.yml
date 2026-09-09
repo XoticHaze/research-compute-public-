@@ -1,0 +1,39 @@
+name: All Survivor Validation R1
+on:
+  pull_request:
+    paths:
+      - 'research/all_survivor_validation_r1.json'
+      - '.github/workflows/all-survivor-validation-r1.yml'
+      - 'research/all_survivor_validation_r1.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate-campaign:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        lane:
+          - P46
+          - P46_P36
+          - P36
+          - P64
+          - P52
+          - ADAPTIVE_DURATION_5_60
+          - SEMICONDUCTOR_CONTINUATION
+          - H24_MAE
+          - P01_MNQ
+          - P29_P13_SEMI_SELECTION
+          - FUTURES_TOURNAMENT
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate frozen lane contract
+        run: python research/all_survivor_validation_r1.py --lane '${{ matrix.lane }}' --contract research/all_survivor_validation_r1.json --out lane-${{ matrix.lane }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: survivor-${{ matrix.lane }}
+          path: lane-${{ matrix.lane }}.json

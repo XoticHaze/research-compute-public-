@@ -1,0 +1,30 @@
+{
+  "schema": "research.all_survivor_validation_r1",
+  "frozen_at_utc": "2026-09-09T07:55:00Z",
+  "objective": "Fairly re-vet every currently live model lane with candidate-specific tests; do not tune to pass and do not stress to fail.",
+  "decision_rule": "A candidate is judged only against tests implied by its own economic claim and data availability. Implementation defects invalidate affected evidence but do not count as scientific failure; corrected frozen science must be rerun.",
+  "common_gates": [
+    "implementation_and_time_alignment_verified",
+    "appropriate_matched_control",
+    "chronological_or_forward_validation",
+    "realistic_cost_and_execution_model",
+    "concentration_and_stability_reported",
+    "independent_confirmation_when_claim_implies_transport",
+    "portfolio_opportunity_cost_reported"
+  ],
+  "lanes": [
+    {"id":"P46","claim":"cross-asset monthly selection adds after-cost value versus same-universe equal weight","next_tests":["standalone random-selection null","static-universe factor residual","non-overlap era residual"],"do_not":"retune factors/weights/top-k"},
+    {"id":"P46_P36","claim":"combined cross-asset plus semiconductor-relative-strength sleeve adds complementary after-cost value","next_tests":["sleeve attribution","independent SOXX representation","rolling/non-overlap residual persistence"],"do_not":"optimize blend weight"},
+    {"id":"P36","claim":"six-month semiconductor-vs-QQQ relative strength transports across semiconductor representations","next_tests":["SMH/SOXX/XSD consistency","recent-era concentration","cost headroom"],"do_not":"change lookback"},
+    {"id":"P64","claim":"diversification sleeve improves matched risk-adjusted portfolio characteristics even if raw QQQ opportunity cost remains","next_tests":["serial persistence","risk-adjusted QQQ attribution","concentration"],"do_not":"misclassify as QQQ replacement"},
+    {"id":"P52","claim":"parsimonious industry momentum/trend selection adds matched-control value","next_tests":["independent representation/source","delayed execution","risk/opportunity-cost context"],"do_not":"rescue thin delayed-cost edge by tuning"},
+    {"id":"ADAPTIVE_DURATION_5_60","claim":"generic fast-vs-durable holding-period model transfers across sectors and improves fixed20","next_tests":["industry-engine selective integration","fresh-panel forward observer","model simplicity comparison"],"do_not":"spawn extra horizon/model families without evidence"},
+    {"id":"SEMICONDUCTOR_CONTINUATION","claim":"frozen continuation effect transports across semiconductor names","next_tests":["survivorship-safe universe treatment","portfolio ranking across passing names","forward observation"],"do_not":"ticker-tune"},
+    {"id":"H24_MAE","claim":"MNQ MAE models have stable relative risk-ranking information","next_tests":["OOS quantile bucket economic consumer","ranking calibration by regime"],"do_not":"use raw prediction as stop/sizing authority"},
+    {"id":"P01_MNQ","claim":"W96 ENTRY -2.52 is a modest CRW challenger","next_tests":["prospectively isolated post-2026-02-19 holdout","same execution/DCA/cost semantics"],"do_not":"promote from development chronology alone"},
+    {"id":"P29_P13_SEMI_SELECTION","claim":"semiconductor stock selection contains cross-sectional value beyond sector beta","next_tests":["point-in-time/survivorship-safe membership","temporal holdout","matched SMH/equal-universe/QQQ"],"do_not":"call clean survivor until bias gate clears"},
+    {"id":"FUTURES_TOURNAMENT","claim":"at least one frozen mechanism transports across multiple futures families after roll/cost handling","markets":["MNQ/NQ","MES/ES","M2K/RTY","MCL/CL","MGC/GC"],"next_tests":["verify provenance-safe continuous history/roll semantics","time-series trend","cross-market relative strength","volatility/risk state","overnight/intraday structure"],"do_not":"infer canonical continuity from generic vendor symbols"}
+  ],
+  "campaign_rule": "Run independent lanes in parallel where data/executables already exist. When a lane is blocked by missing authoritative data or roll semantics, record that exact blocker and continue other lanes in the same pass. Consume terminal results into a single survivor board before choosing next tests.",
+  "safety": {"research_only":true,"strategy_spec_write":false,"runtime_activation":false,"broker_submit":false,"live_trading":false}
+}
