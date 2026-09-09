@@ -13,6 +13,12 @@ def cagr(r):
 def metrics(r):
     r=pd.Series(r,dtype=float).dropna(); e=(1+r).cumprod(); v=float(r.std(ddof=1)*math.sqrt(12)); ann=float(r.mean()*12)
     return {'cagr':cagr(r),'max_drawdown':float((e/e.cummax()-1).min()),'annualized_vol':v,'sharpe_rf0':ann/v if v else float('nan')}
+def json_safe(x):
+    if isinstance(x,dict): return {k:json_safe(v) for k,v in x.items()}
+    if isinstance(x,list): return [json_safe(v) for v in x]
+    if isinstance(x,(float,np.floating)) and not math.isfinite(float(x)): return None
+    if isinstance(x,np.integer): return int(x)
+    return x
 
 def p36_frame():
     close=base.load(('SOXX',)).dropna(subset=['SOXX','QQQ']).sort_index(); idx=close.index
@@ -40,5 +46,6 @@ def main():
         tests[name]={'months':len(q),'candidate':metrics(q.candidate),'matched':metrics(q.matched),'qqq':metrics(q.qqq),'excess_cagr_vs_matched':cagr(q.candidate)-cagr(q.matched),'excess_cagr_vs_qqq':cagr(q.candidate)-cagr(q.qqq),'positive_folds_vs_matched':sum(x['excess_vs_matched']>0 for x in folds),'positive_folds_vs_qqq':sum(x['excess_vs_qqq']>0 for x in folds)}
     recent=tests['2022_forward']; support=recent['excess_cagr_vs_matched']>0 and recent['positive_folds_vs_matched']>=3 and recent['excess_cagr_vs_qqq']>0
     out={'schema':'research.p82_p64_p36_fixed_blend_r1','parent':'P82','hypothesis':'A prospectively fixed 50/50 blend of the P64 fund-selection sleeve and the only P36 implementation-delay survivor (SOXX, 1 trading day) can preserve matched alpha while improving direct QQQ opportunity cost without tuning either component.','scientific_contract':{'sleeve_weights':[0.5,0.5],'component_cost_bps':BP,'p36_entry_delay_trading_days':P36_DELAY,'p36_representation':'SOXX_vs_QQQ','p64':'unchanged fixed 50/50 parsimonious cross-asset + independent-industry blend','matched_control':'same 50/50 blend of P64 matched static universe and P36 static SOXX/QQQ','opportunity_control':'QQQ','windows':WINDOWS,'chronological_folds':5,'no_parameter_or_weight_tuning':True},'source':{'provider':'Yahoo Finance via yfinance; research-only','soxx_qqq_panel_sha256':base.source_hash(close)},'tests':tests,'decision':'P82_FIXED_BLEND_SUPPORTED' if support else 'P82_FIXED_BLEND_NOT_SUPPORTED'}
+    out=json_safe(out)
     Path('artifacts').mkdir(exist_ok=True); Path('artifacts/p82_p64_p36_fixed_blend_r1.json').write_text(json.dumps(out,indent=2,sort_keys=True,allow_nan=False)); print(json.dumps(out,sort_keys=True))
 if __name__=='__main__': main()
