@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import research.p104_p111_crossasset_model_family_tournament_r1 as base
+import p104_p111_crossasset_model_family_tournament_r1 as base
 
 ALT_ASSETS = ("SPY", "EFA", "TLT", "GLD", "DBC")
 ALT_ALL = (*ALT_ASSETS, "BIL", "QQQ")
