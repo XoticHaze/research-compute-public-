@@ -28,6 +28,14 @@ def profile(obj):
         return {'type':'dict','keys':sorted(obj.keys()),'sample':{k:obj[k] for k in list(obj)[:20]}}
     return {'type':type(obj).__name__,'repr':repr(obj)[:500]}
 
+def usable_distribution_payload(p):
+    if not p: return False
+    if p.get('type')=='list': return p.get('length',0)>0
+    if p.get('type')=='dict':
+        keys={str(k).lower() for k in p.get('keys',[])}
+        return bool(keys-{'error','exception','message','parameters','path','status','timestamp','transactionid'})
+    return False
+
 def main():
     out={'schema':'research.p46_qqq_distribution_route_r1','parent':'P46','purpose':'discover official Invesco QQQ dated distribution surface required to reconstruct issuer total return without changing P46','candidates':[]}
     for suffix in CANDIDATES:
@@ -35,9 +43,11 @@ def main():
         if b:
             try: rec['json_profile']=profile(json.loads(b.decode('utf-8')))
             except Exception: rec['text_prefix']=b.decode('utf-8','ignore')[:800]
+        rec['usable_distribution_payload']=status==200 and usable_distribution_payload(rec.get('json_profile'))
         out['candidates'].append(rec)
-    hits=[x for x in out['candidates'] if x['status']==200 and x.get('json_profile')]
+    hits=[x for x in out['candidates'] if x['usable_distribution_payload']]
     out['decision']='OFFICIAL_DISTRIBUTION_ROUTE_FOUND' if hits else 'OFFICIAL_DISTRIBUTION_ROUTE_NOT_FOUND_IN_PREDECLARED_CANDIDATES'
+    out['classifier_guard']='HTTP 200 alone is insufficient; empty scalar JSON and error-envelope dictionaries fail closed.'
     Path('results').mkdir(exist_ok=True); Path('results/p46_qqq_distribution_route_r1.json').write_text(json.dumps(out,indent=2,sort_keys=True))
-    print(json.dumps({'decision':out['decision'],'statuses':[(x['url'],x['status'],x.get('json_profile',{}).get('type')) for x in out['candidates']]},sort_keys=True))
+    print(json.dumps({'decision':out['decision'],'statuses':[(x['url'],x['status'],x['usable_distribution_payload']) for x in out['candidates']]},sort_keys=True))
 if __name__=='__main__': main()
