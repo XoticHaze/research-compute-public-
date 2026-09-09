@@ -47,52 +47,44 @@ def main():
         f['gated_matched'] = f['gate'] * f['matched'] - gate_cost
         f['gated_qqq'] = f['gate'] * f['qqq'] - gate_cost
         t = {
-            'months': int(len(f)),
-            'risk_on_fraction': float(f['gate'].mean()),
-            'gate_transitions': int((gate_turn > 0).sum()),
-            'gated_candidate_cagr': cagr(f['gated_candidate']),
-            'gated_matched_cagr': cagr(f['gated_matched']),
-            'gated_qqq_cagr': cagr(f['gated_qqq']),
-            'all_in_candidate_cagr': cagr(f['candidate']),
-            'all_in_qqq_cagr': cagr(f['qqq']),
+            'months': int(len(f)), 'risk_on_fraction': float(f['gate'].mean()), 'gate_transitions': int((gate_turn > 0).sum()),
+            'gated_candidate_cagr': cagr(f['gated_candidate']), 'gated_matched_cagr': cagr(f['gated_matched']), 'gated_qqq_cagr': cagr(f['gated_qqq']),
+            'all_in_candidate_cagr': cagr(f['candidate']), 'all_in_qqq_cagr': cagr(f['qqq']),
             'excess_vs_gated_matched_cagr': cagr(f['gated_candidate']) - cagr(f['gated_matched']),
             'excess_vs_gated_qqq_cagr': cagr(f['gated_candidate']) - cagr(f['gated_qqq']),
             'excess_vs_all_in_qqq_cagr': cagr(f['gated_candidate']) - cagr(f['qqq']),
-            'gated_candidate_sharpe': sharpe(f['gated_candidate']),
-            'all_in_candidate_sharpe': sharpe(f['candidate']),
-            'gated_candidate_max_drawdown': maxdd(f['gated_candidate']),
-            'all_in_candidate_max_drawdown': maxdd(f['candidate']),
+            'gated_candidate_sharpe': sharpe(f['gated_candidate']), 'all_in_candidate_sharpe': sharpe(f['candidate']),
+            'gated_candidate_max_drawdown': maxdd(f['gated_candidate']), 'all_in_candidate_max_drawdown': maxdd(f['candidate']),
             'positive_folds_vs_gated_matched': folds(f['gated_candidate'], f['gated_matched']),
             'positive_folds_vs_gated_qqq': folds(f['gated_candidate'], f['gated_qqq']),
         }
         tests[str(bp)] = t
     t50 = tests['50']
-    if (t50['excess_vs_gated_matched_cagr'] > 0 and t50['positive_folds_vs_gated_matched'] >= 3 and
-        t50['gated_candidate_max_drawdown'] > t50['all_in_candidate_max_drawdown']):
-        state = 'CAUSAL_RISK_GATE_IMPROVES_CAPITAL_EFFICIENCY_REQUIRES_INDEPENDENT_HOLDOUT'
+    matched_support = t50['excess_vs_gated_matched_cagr'] > 0 and t50['positive_folds_vs_gated_matched'] >= 3
+    risk_improves = t50['gated_candidate_max_drawdown'] > t50['all_in_candidate_max_drawdown']
+    opportunity_support = t50['excess_vs_all_in_qqq_cagr'] > 0 and t50['positive_folds_vs_gated_qqq'] >= 3
+    if matched_support and risk_improves and opportunity_support:
+        state = 'CAUSAL_RISK_GATE_SCARCE_CAPITAL_SUPPORTED_REQUIRES_INDEPENDENT_HOLDOUT'
+    elif matched_support and risk_improves:
+        state = 'CAUSAL_RISK_GATE_MATCHED_RISK_IMPROVES_BUT_QQQ_OPPORTUNITY_FAILS'
     else:
         state = 'CAUSAL_RISK_GATE_NOT_SUPPORTED'
     out = {
-        'schema': 'research.p46_p36_causal_risk_gate_counterfactual_r1',
-        'parents': ['P46', 'P36'],
+        'schema': 'research.p46_p36_causal_risk_gate_counterfactual_r1', 'parents': ['P46', 'P36'],
         'scientific_contract': {
             'base_implementation': 'fixed one-trading-day delayed entry',
             'counterfactual_gate': 'cash when completed signal-month SPY close is below trailing 10-month SMA; otherwise unchanged candidate',
-            'gate_threshold_predeclared_from_prior_regime_attribution': True,
-            'costs_bps': [25, 50, 100],
+            'gate_threshold_predeclared_from_prior_regime_attribution': True, 'costs_bps': [25, 50, 100],
             'comparators': ['same gate applied to exact matched blend', 'same gate applied to QQQ', 'all-in QQQ'],
-            'gate_transition_cost_charged': True,
-            'no_factor_weight_lookback_topk_cadence_or_threshold_tuning': True,
+            'scarce_capital_acceptance_requires_positive_all_in_qqq_opportunity_cost_and_3of5_gated_qqq_folds_at_50bps': True,
+            'gate_transition_cost_charged': True, 'no_factor_weight_lookback_topk_cadence_or_threshold_tuning': True,
             'research_counterfactual_only': True,
         },
-        'source': {'normalized_complete_month_price_panel_sha256': base.source_hash(close)},
-        'tests': tests,
-        'decision': state,
+        'source': {'normalized_complete_month_price_panel_sha256': base.source_hash(close)}, 'tests': tests, 'decision': state,
     }
     Path('artifacts').mkdir(exist_ok=True)
     Path('artifacts/p46_p36_causal_risk_gate_counterfactual_r1.json').write_text(json.dumps(out, indent=2, sort_keys=True, allow_nan=False))
     print(json.dumps(out, sort_keys=True))
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == '__main__': main()
