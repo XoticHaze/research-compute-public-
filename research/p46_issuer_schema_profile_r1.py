@@ -1,5 +1,5 @@
 from __future__ import annotations
-import io,json,re,urllib.request,zipfile
+import io,json,re,traceback,urllib.request
 from pathlib import Path
 import openpyxl
 from xml.etree import ElementTree as ET
@@ -19,7 +19,9 @@ def xlsx_profile(b):
  out={}
  for ws in wb.worksheets:
   rows=[]
-  for row in ws.iter_rows(min_row=1,max_row=min(ws.max_row,40),values_only=True): rows.append([None if v is None else str(v) for v in row[:20]])
+  max_row=ws.max_row if isinstance(ws.max_row,int) else 40
+  for row in ws.iter_rows(min_row=1,max_row=min(max_row,60),values_only=True):
+   rows.append([None if v is None else str(v) for v in row[:24]])
   out[ws.title]={"max_row":ws.max_row,"max_column":ws.max_column,"head":rows}
  return out
 
@@ -29,13 +31,13 @@ def xml_profile(b):
  out={}
  for ws in root.findall('.//ss:Worksheet',ns):
   name=ws.attrib.get('{urn:schemas-microsoft-com:office:spreadsheet}Name','sheet')
-  rows=[]
-  for row in ws.findall('.//ss:Row',ns)[:40]:
+  all_rows=ws.findall('.//ss:Row',ns); rows=[]
+  for row in all_rows[:60]:
    vals=[]
-   for cell in row.findall('ss:Cell',ns)[:20]:
+   for cell in row.findall('ss:Cell',ns)[:24]:
     d=cell.find('ss:Data',ns); vals.append(None if d is None else d.text)
    rows.append(vals)
-  out[name]={"head":rows,"row_count":len(ws.findall('.//ss:Row',ns))}
+  out[name]={"head":rows,"row_count":len(all_rows)}
  return out
 
 def dates_from_text(obj):
@@ -44,13 +46,16 @@ def dates_from_text(obj):
  return {"date_token_count":len(hits),"first_date_token":hits[0] if hits else None,"last_date_token":hits[-1] if hits else None}
 
 def main():
- out={"schema":"research.p46_issuer_schema_profile_r1","parent":"P46","sources":{}}
+ out={"schema":"research.p46_issuer_schema_profile_r1","parent":"P46","sources":{},"failures":{}}
  for ticker,u in URLS.items():
-  b=get(u)
-  kind='xlsx' if b[:2]==b'PK' else 'xml' if b.lstrip().startswith(b'<?xml') else 'other'
-  prof=xlsx_profile(b) if kind=='xlsx' else xml_profile(b) if kind=='xml' else {"preview":b[:500].decode('utf-8','ignore')}
-  out['sources'][ticker]={"kind":kind,"bytes":len(b),"profile":prof,**dates_from_text(prof)}
+  try:
+   b=get(u); kind='xlsx' if b[:2]==b'PK' else 'xml' if b.lstrip().startswith(b'<?xml') else 'other'
+   prof=xlsx_profile(b) if kind=='xlsx' else xml_profile(b) if kind=='xml' else {"preview":b[:1000].decode('utf-8','ignore')}
+   out['sources'][ticker]={"kind":kind,"bytes":len(b),"profile":prof,**dates_from_text(prof)}
+  except Exception as e:
+   out['failures'][ticker]={"error":repr(e),"traceback":traceback.format_exc()}
  Path('artifacts').mkdir(exist_ok=True)
- Path('artifacts/p46_issuer_schema_profile_r1.json').write_text(json.dumps(out,indent=2,sort_keys=True))
- print(json.dumps({k:{"kind":v['kind'],"bytes":v['bytes'],"date_token_count":v['date_token_count'],"first_date_token":v['first_date_token'],"last_date_token":v['last_date_token'],"sheets":list(v['profile'])} for k,v in out['sources'].items()},sort_keys=True))
+ Path('artifacts/p46_issuer_schema_profile_r1.json').write_text(json.dumps(out,indent=2,sort_keys=True,default=str))
+ print(json.dumps({"sources":{k:{"kind":v['kind'],"bytes":v['bytes'],"date_token_count":v['date_token_count'],"first_date_token":v['first_date_token'],"last_date_token":v['last_date_token'],"sheets":list(v['profile'])} for k,v in out['sources'].items()},"failures":out['failures']},sort_keys=True))
+ if out['failures']: raise SystemExit(2)
 if __name__=='__main__':main()
