@@ -1,0 +1,23 @@
+name: Shared evidence legacy adapter acceptance R1
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/shared_evidence_legacy_adapter_acceptance_r1.py'
+      - '.github/workflows/shared-evidence-legacy-adapter-acceptance-r1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Exercise sanitized deterministic legacy adapter
+        run: python scripts/shared_evidence_legacy_adapter_acceptance_r1.py
