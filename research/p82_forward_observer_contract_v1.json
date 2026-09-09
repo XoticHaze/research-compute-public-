@@ -1,0 +1,61 @@
+{
+  "schema": "research.p82_forward_observer_contract.v1",
+  "parent": "P82",
+  "source_result_event": "20260909T090330Z__p82_component_contribution_consequence",
+  "source_execution": {
+    "repo": "XoticHaze/research-compute-public-",
+    "workflow": ".github/workflows/p82-component-contribution-r2.yml",
+    "run_id": 34332450096,
+    "job_id": 102403972407,
+    "head_sha": "d7360d155be7c212c8d6648b0dbb8711ff6cfe06",
+    "artifact_id": 10096319276,
+    "artifact_digest": "sha256:08d43952cd7d43cee4ded42922c280427c792c847fd52d44633e583ca4164712"
+  },
+  "frozen_source_semantics": {
+    "source_ref": "d7360d155be7c212c8d6648b0dbb8711ff6cfe06",
+    "base_blob": "90b8d7140b432e32298e499f62c732dd037bc5ce",
+    "p57_blob": "7235ba5ee13c597bbe282d0a4c543c008fe8e900",
+    "p47_blob": "1601e444d053f1bc3590f8c1ed3ebdeca8b97819",
+    "p66_blob": "b157ba70abea7a550dfecc8c6736a5a4843d66d6",
+    "p82_blob": "2fba9a96137fa4f2d58c2734d73d206d39c8be93"
+  },
+  "candidate": {
+    "p82_weights": {"P64": 0.5, "P36": 0.5},
+    "p64": {
+      "crossasset_weight": 0.5,
+      "industry_weight": 0.5,
+      "crossasset_universe": ["SPY", "QQQ", "TLT", "GLD", "DBC"],
+      "crossasset_factors": ["mom6", "trend200"],
+      "crossasset_top_k": 2,
+      "industry_universe": ["SOXX", "XBI", "XHB", "KRE", "ITA", "IGV", "IYT", "XRT", "XOP", "IHI"],
+      "industry_factors": ["mom6", "trend200"],
+      "industry_top_k": 3
+    },
+    "p36": {
+      "representation": "SOXX_vs_QQQ",
+      "lookback_months": 6,
+      "rule": "SOXX when SOXX 6m return minus QQQ 6m return is positive, otherwise QQQ",
+      "entry_delay_trading_days": 1
+    }
+  },
+  "economics": {
+    "component_cost_bps": 50,
+    "matched_control": "same fixed P82 blend of P64 static-universe matched control and P36 static SOXX/QQQ matched control",
+    "opportunity_control": "QQQ",
+    "cadence": "monthly",
+    "no_parameter_or_weight_tuning": true
+  },
+  "observation": {
+    "use_latest_completed_common_calendar_month_only": true,
+    "freeze_candidate_before_outcome": true,
+    "artifact_only_no_trade_authority": true
+  },
+  "protected_boundaries": {
+    "portfolio_ranking": false,
+    "allocation_authority": false,
+    "strategy_spec_changed": false,
+    "runtime_authority_changed": false,
+    "broker_submission": false,
+    "live_trading_changed": false
+  }
+}
