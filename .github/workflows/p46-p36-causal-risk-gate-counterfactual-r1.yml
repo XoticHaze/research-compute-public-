@@ -1,0 +1,31 @@
+name: P46 P36 Causal Risk Gate Counterfactual R1
+on:
+  pull_request:
+    paths:
+      - 'research/p46_p36_causal_risk_gate_counterfactual_r1.py'
+      - '.github/workflows/p46-p36-causal-risk-gate-counterfactual-r1.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: evaluate
+        run: |
+          python research/p46_p36_causal_risk_gate_counterfactual_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p46_p36_causal_risk_gate_counterfactual_r1.json')); t=x['tests']['50']; vals={'decision':x['decision'],'m':f"{100*t['excess_vs_gated_matched_cagr']:.3f}",'q':f"{100*t['excess_vs_all_in_qqq_cagr']:.3f}",'dd':f"{100*t['gated_candidate_max_drawdown']:.2f}",'cap':f"{100*t['risk_on_fraction']:.1f}"}
+          with open(os.environ['GITHUB_OUTPUT'],'a') as z:
+            for k,v in vals.items(): z.write(f'{k}={v}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: causal-risk-gate__${{ steps.evaluate.outputs.decision }}__matched_${{ steps.evaluate.outputs.m }}pp__allinQQQ_${{ steps.evaluate.outputs.q }}pp__dd_${{ steps.evaluate.outputs.dd }}pct__capital_${{ steps.evaluate.outputs.cap }}pct
+          path: artifacts/p46_p36_causal_risk_gate_counterfactual_r1.json
+          if-no-files-found: error
