@@ -1,0 +1,37 @@
+name: MNQ CME Session Trend R13
+on:
+  pull_request:
+    paths:
+      - 'research/mnq_foundry_trend_r9.py'
+      - 'research/mnq_cme_session_trend_r13.py'
+      - '.github/workflows/mnq-cme-session-trend-r13.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install frozen environment
+        run: python -m pip install --disable-pip-version-check -q numpy==1.26.4 pandas==2.2.3
+      - name: Fetch pinned MNQ individual contracts
+        run: |
+          rm -rf /tmp/mnq-source
+          git clone --filter=blob:none --no-checkout https://github.com/mbytes21/MNQ_DATA.git /tmp/mnq-source
+          cd /tmp/mnq-source
+          git sparse-checkout init --no-cone
+          git sparse-checkout set --no-cone 'plaintext_csv/MNQ */*.Last.csv'
+          git checkout fc5508e2c152938d6d9eb70a36b888ae26107176
+          test -f 'plaintext_csv/MNQ 06-19/20190505.Last.csv'
+      - name: Execute CME-session-normalized fidelity plus trend test
+        run: python research/mnq_cme_session_trend_r13.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mnq-cme-session-trend-r13
+          path: mnq_cme_session_trend_r13.json
+          if-no-files-found: error
+          retention-days: 90
