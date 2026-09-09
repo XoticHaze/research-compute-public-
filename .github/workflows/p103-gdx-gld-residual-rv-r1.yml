@@ -1,0 +1,30 @@
+name: P103 GDX GLD Residual RV R1
+on:
+  pull_request:
+    paths:
+      - 'research/p103_gdx_gld_residual_rv_r1.py'
+      - '.github/workflows/p103-gdx-gld-residual-rv-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: evaluate
+        run: |
+          python research/p103_gdx_gld_residual_rv_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p103_gdx_gld_residual_rv_r1.json')); t=x['tests']['2020']['costs']['10']; vals={'decision':x['decision'],'cagr':f"{100*t['candidate']['cagr']:.2f}",'sharpe':f"{t['candidate']['sharpe_rf0']:.2f}",'folds':str(t['positive_cagr_folds'])}
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+              for k,v in vals.items(): f.write(f'{k}={v}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p103-gdx-gld-rv__${{ steps.evaluate.outputs.decision }}__cagr_${{ steps.evaluate.outputs.cagr }}__sharpe_${{ steps.evaluate.outputs.sharpe }}__folds_${{ steps.evaluate.outputs.folds }}of5
+          path: artifacts/p103_gdx_gld_residual_rv_r1.json
+          if-no-files-found: error
