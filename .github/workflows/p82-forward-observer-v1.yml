@@ -1,0 +1,143 @@
+name: P82 Frozen Forward Observer V1
+
+on:
+  pull_request:
+    paths:
+      - 'research/p82_forward_observer_contract_v1.json'
+      - 'research/p82_forward_observer_v1.py'
+      - 'research/p82_forward_score_v1.py'
+      - '.github/workflows/p82-forward-observer-v1.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '20 22 2 * *'
+
+permissions:
+  contents: write
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LEDGER_BRANCH: research/p82-forward-ledger
+      LEDGER_ROOT: research/forward_ledgers/p82
+    steps:
+      - name: Checkout consumer source
+        uses: actions/checkout@v4
+        with:
+          path: control
+      - name: Checkout immutable forward ledger
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LEDGER_BRANCH }}
+          path: ledger
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check pandas==2.2.3 yfinance==0.2.65
+      - name: Self-test frozen maturity arithmetic
+        run: python control/research/p82_forward_score_v1.py --self-test
+      - name: Materialize target-excluded prediction
+        working-directory: control
+        run: python research/p82_forward_observer_v1.py
+      - name: Verify acceptance contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          x = json.loads(Path('control/artifacts/p82_forward_observer_v1.json').read_text())
+          assert x['schema'] == 'research.p82_forward_observer.v1'
+          assert x['source_result_event'] == '20260909T090330Z__p82_component_contribution_consequence'
+          assert x['source_execution']['run_id'] == 34332450096
+          assert abs(sum(x['candidate']['weights'].values()) - 1.0) < 1e-9
+          assert abs(sum(x['controls']['matched_weights'].values()) - 1.0) < 1e-9
+          assert x['controls']['opportunity_control'] == {'QQQ': 1.0}
+          assert x['economics']['component_cost_bps'] == 50
+          assert x['economics']['no_parameter_or_weight_tuning'] is True
+          assert x['maturity']['outcome_not_used'] is True
+          assert x['maturity']['score_after_forward_month_closes'] is True
+          assert x['candidate']['p36_activation_delay_trading_days'] == 1
+          assert not any(x['protected_boundaries'].values())
+          print('P82_FORWARD_OBSERVER_ACCEPTANCE=PASS')
+          PY
+      - name: Freeze prediction receipt in ledger working tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_path='control/artifacts/p82_forward_observer_v1.json'
+          selection="$(python -c 'import json; print(json.load(open("control/artifacts/p82_forward_observer_v1.json"))["selection_month"])')"
+          mkdir -p "ledger/$LEDGER_ROOT/predictions" "ledger/$LEDGER_ROOT/scorecards"
+          normalized="$(mktemp)"
+          python - "$source_path" "$normalized" <<'PY'
+          import json, sys
+          source, target = sys.argv[1:]
+          payload = json.load(open(source))
+          payload.pop('generated_at', None)
+          with open(target, 'w') as fh:
+              json.dump(payload, fh, indent=2, sort_keys=True)
+              fh.write('\n')
+          PY
+          target="ledger/$LEDGER_ROOT/predictions/${selection}.json"
+          if [ -f "$target" ]; then
+            cmp -s "$normalized" "$target" || {
+              echo "IMMUTABILITY_VIOLATION prediction changed for ${selection}" >&2
+              diff -u "$target" "$normalized" || true
+              exit 1
+            }
+          else
+            cp "$normalized" "$target"
+          fi
+          echo "selection=$selection" >> "$GITHUB_ENV"
+      - name: Verify frozen receipt remains target-excluded
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path('ledger') / os.environ['LEDGER_ROOT'] / 'predictions' / f"{os.environ['selection']}.json"
+          x = json.loads(p.read_text())
+          assert 'generated_at' not in x
+          assert x['maturity']['outcome_not_used'] is True
+          assert not any(x['protected_boundaries'].values())
+          print(f'P82_IMMUTABLE_PREDICTION_ACCEPTANCE=PASS:{p}')
+          PY
+      - name: Score only matured immutable receipts
+        run: |
+          python control/research/p82_forward_score_v1.py \
+            --ledger-dir "ledger/$LEDGER_ROOT/predictions" \
+            --output-dir "ledger/$LEDGER_ROOT/scorecards" \
+            | tee /tmp/p82_score_readiness.json
+      - name: Verify maturity consumer is fail-closed
+        run: |
+          python - <<'PY'
+          import json
+          x = json.load(open('/tmp/p82_score_readiness.json'))
+          assert x['schema'] == 'research.p82_forward_score_readiness.v1'
+          assert x['status'] in {'NOT_MATURE','SCORED'}
+          assert x['scored'] <= max(0, x['prediction_receipts'] - 1)
+          print('P82_FORWARD_SCORE_READINESS=PASS', x)
+          PY
+      - name: Persist immutable ledger
+        if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'
+        working-directory: ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'research-forward-ledger'
+          git config user.email '152584286+XoticHaze@users.noreply.github.com'
+          git add "$LEDGER_ROOT/predictions/${selection}.json" "$LEDGER_ROOT/scorecards"
+          if git diff --cached --quiet; then
+            echo 'ledger already current'
+            exit 0
+          fi
+          git commit -m "research: record P82 forward ${selection}"
+          git push origin "HEAD:$LEDGER_BRANCH"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p82-forward-observer-v1-${{ github.run_id }}
+          path: |
+            control/artifacts/p82_forward_observer_v1.json
+            ledger/research/forward_ledgers/p82/predictions/*.json
+            ledger/research/forward_ledgers/p82/scorecards/*.json
+          if-no-files-found: warn
+          retention-days: 90
