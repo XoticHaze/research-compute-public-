@@ -1,0 +1,31 @@
+name: P46 P36 Causal Block Bootstrap R1
+on:
+  pull_request:
+    paths:
+      - 'research/p46_p36_causal_block_bootstrap_r1.py'
+      - '.github/workflows/p46-p36-causal-block-bootstrap-r1.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: evaluate
+        run: |
+          python research/p46_p36_causal_block_bootstrap_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p46_p36_causal_block_bootstrap_r1.json')); f=x['tests']['full']; r=x['tests']['2022_forward']; vals={'decision':x['decision'],'fm':f"{f['vs_matched']['p_annualized_excess_le_zero']:.3f}",'fq':f"{f['vs_qqq']['p_annualized_excess_le_zero']:.3f}",'rm':f"{r['vs_matched']['p_annualized_excess_le_zero']:.3f}",'rq':f"{r['vs_qqq']['p_annualized_excess_le_zero']:.3f}"}
+          with open(os.environ['GITHUB_OUTPUT'],'a') as z:
+            for k,v in vals.items(): z.write(f'{k}={v}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: causal-bootstrap__${{ steps.evaluate.outputs.decision }}__pFM_${{ steps.evaluate.outputs.fm }}__pFQ_${{ steps.evaluate.outputs.fq }}__pRM_${{ steps.evaluate.outputs.rm }}__pRQ_${{ steps.evaluate.outputs.rq }}
+          path: artifacts/p46_p36_causal_block_bootstrap_r1.json
+          if-no-files-found: error
