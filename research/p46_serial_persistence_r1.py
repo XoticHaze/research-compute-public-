@@ -45,11 +45,14 @@ def bootstrap(candidate, benchmark, reps=5000, block=12):
 
 def main():
     close = base.load(p46.SYMBOLS)
+    current_month_start = pd.Timestamp.now(tz='UTC').tz_localize(None).to_period('M').to_timestamp()
+    close = close.loc[close.index < current_month_start]
     frame = p46.returns(close, p46.FACTORS)
+    monthly = close.resample('ME').last()
     controls = {
         'matched_equal_weight': frame.ew,
-        'SPY': close['SPY'].resample('ME').last().pct_change().reindex(frame.index),
-        'QQQ': close['QQQ'].resample('ME').last().pct_change().reindex(frame.index),
+        'SPY': monthly['SPY'].pct_change().reindex(frame.index),
+        'QQQ': monthly['QQQ'].pct_change().reindex(frame.index),
     }
     tests = {}
     for bps in (25, 50, 100):
@@ -78,11 +81,12 @@ def main():
             'rolling_windows_months': [36, 60],
             'bootstrap': '12m moving block 5000 reps deterministic seed',
             'comparators': ['same-universe equal weight', 'SPY', 'QQQ'],
+            'incomplete_months_excluded': True,
             'no_parameter_tuning': True,
         },
         'source': {
             'provider': 'Yahoo Finance via yfinance',
-            'normalized_price_panel_sha256': base.source_hash(close),
+            'normalized_complete_month_price_panel_sha256': base.source_hash(close),
         },
         'window': {
             'start': str(frame.index.min().date()),
