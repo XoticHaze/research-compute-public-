@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -44,11 +45,19 @@ def _normalized(weights: dict[str, float]) -> dict[str, float]:
     return {k: float(v) for k, v in sorted(weights.items()) if abs(v) > 1e-15}
 
 
+def _verify_frozen_blobs(expected: dict[str, str]) -> None:
+    for path, expected_blob in expected.items():
+        actual = subprocess.check_output(["git", "hash-object", path], text=True).strip()
+        if actual != expected_blob:
+            raise RuntimeError(f"frozen_model_blob_drift:{path}:{actual}:{expected_blob}")
+
+
 def run(contract_path: Path, output_path: Path) -> dict:
     contract_bytes = contract_path.read_bytes()
     contract = json.loads(contract_bytes)
     if contract.get("schema") != "research.p82_forward_observer_contract.v1":
         raise RuntimeError("contract_schema_drift")
+    _verify_frozen_blobs(contract["frozen_model_blobs"])
     if contract["candidate"]["p82_weights"] != {"P64": 0.5, "P36": 0.5}:
         raise RuntimeError("p82_weight_drift")
     if contract["economics"]["component_cost_bps"] != 50:
@@ -133,6 +142,7 @@ def run(contract_path: Path, output_path: Path) -> dict:
         "source_result_event": contract["source_result_event"],
         "source_execution": contract["source_execution"],
         "contract_sha256": hashlib.sha256(contract_bytes).hexdigest(),
+        "frozen_model_blobs": contract["frozen_model_blobs"],
         "selection_month": selection_month.strftime("%Y-%m-%d"),
         "forward_month": forward_month,
         "candidate": {
