@@ -1,0 +1,30 @@
+name: P116 Yield Curve SPY Gate R2
+on:
+  pull_request:
+    paths:
+      - 'research/p116_yieldcurve_spy_gate_r2.py'
+      - '.github/workflows/p116-yieldcurve-spy-gate-r2.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65 requests==2.32.5
+      - id: evaluate
+        run: |
+          python research/p116_yieldcurve_spy_gate_r2.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p116_yieldcurve_spy_gate_r2.json')); t=x['tests']['2020']['costs']['25']; vals={'decision':x['decision'],'matched':f"{100*t['excess_matched']:.2f}",'spy':f"{100*t['excess_spy']:.2f}",'folds':str(t['positive_matched_folds'])}
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+              for k,v in vals.items(): f.write(f'{k}={v}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p116-r2__${{ steps.evaluate.outputs.decision }}__matched_${{ steps.evaluate.outputs.matched }}pp__SPY_${{ steps.evaluate.outputs.spy }}pp__folds_${{ steps.evaluate.outputs.folds }}of5
+          path: artifacts/p116_yieldcurve_spy_gate_r2.json
+          if-no-files-found: error
