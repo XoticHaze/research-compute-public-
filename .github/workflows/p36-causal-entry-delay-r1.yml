@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'scripts/p36_causal_entry_delay_r1.py'
+      - 'scripts/p36_independent_proxy_validation.py'
       - '.github/workflows/p36-causal-entry-delay-r1.yml'
 permissions: {contents: read}
 jobs:
