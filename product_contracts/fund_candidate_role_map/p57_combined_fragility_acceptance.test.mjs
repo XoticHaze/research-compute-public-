@@ -1,0 +1,7 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+const MM_HEAD='42e67309110149b759294d943fb446148656e91d';
+const p57={scoreRun:34349790551,scoreJob:102459954949,nullRun:34350174867,nullJob:102461223583,rankP:0.012,spreadP:0.0825,top3Share:0.5896800934262886,removeTop2:-0.01203246145011283,delay2015:-0.015188426296362856,delay2020:0.011788826046399192,state:'P57_RECENT_SCORE_INFORMATION_SUPPORTED_BUT_ERA_CALENDAR_AND_SELECTION_FRAGILITY_VISIBLE'};
+test('bind exact P57 combined-fragility product head',()=>assert.equal(MM_HEAD,'42e67309110149b759294d943fb446148656e91d'));
+test('recent score information survives while selection specificity and broad robustness fail closed',()=>{assert.equal(p57.scoreRun,34349790551);assert.equal(p57.scoreJob,102459954949);assert.equal(p57.nullRun,34350174867);assert.equal(p57.nullJob,102461223583);assert.ok(p57.rankP<0.05);assert.ok(p57.spreadP>=0.05);assert.ok(p57.top3Share>0.5);assert.ok(p57.removeTop2<0);assert.ok(p57.delay2015<0);assert.ok(p57.delay2020>0);assert.equal(p57.state,'P57_RECENT_SCORE_INFORMATION_SUPPORTED_BUT_ERA_CALENDAR_AND_SELECTION_FRAGILITY_VISIBLE')});
+test('P57 consequence grants no portfolio or trading authority',()=>assert.deepEqual(Object.values({ranking:false,allocation:false,sizing:false,timing:false,promotion:false,strategy:false,runtime:false,data:false,broker:false,live:false}),Array(10).fill(false)));
