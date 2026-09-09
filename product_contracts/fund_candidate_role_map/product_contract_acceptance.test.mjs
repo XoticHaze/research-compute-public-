@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const MM_HEAD = '842a1726eafc4f2ff7162b33ea73bfe7bd2faf87';
+const MM_HEAD = '81a8e42e5171d2e722df546d9e120a96ac3ab32f';
 
 const p64 = Object.freeze({
   product_state: 'DIVERSIFICATION_SLEEVE_SUPPORTED_QQQ200D_TIMING_GATE_REJECTED',
@@ -11,6 +11,8 @@ const p64 = Object.freeze({
 const p82 = Object.freeze({
   bootstrap_state: 'REGIME_TEMPORAL_STATISTICAL_FRAGILITY',
   bootstrap: Object.freeze({ run_id: 34344879240, job_id: 102444008013, artifact_id: 10101270421, from2015_nonpositive_probability_vs_matched: 0.266, from2015_nonpositive_probability_vs_qqq: 0.387 }),
+  chronology_state: 'REGIME_CHRONOLOGY_WEAKNESS_CONFIDENCE_REDUCED_SURVIVOR_PRESERVED',
+  chronology: Object.freeze({ run_id: 34346766915, job_id: 102450095558, artifact_id: 10102018001, aggregate_matched: 0.01264951438606765, aggregate_qqq: 0.011234961662293985, rolling24_matched_positive: 0.4915254237288136, rolling36_matched_positive: 0.4528301886792453, rolling36_qqq_positive: 0.3018867924528302, rolling36_median_matched: -0.0035228049937552353, rolling36_median_qqq: -0.015471324448451562 }),
 });
 const p52 = Object.freeze({ implementation_delay_state: 'IMPLEMENTATION_CAUSALITY_WEAKNESS_NOT_MODEL_FAILURE', delay_5d_excess_vs_matched: 0.0132, delay_5d_positive_folds: 2, fold_count: 5 });
 const parked = Object.freeze({
@@ -18,8 +20,8 @@ const parked = Object.freeze({
   P16: Object.freeze({ state: 'PARK', run_id: 34343594802, job_id: 102439846759, artifact_id: 10100749742, excess_vs_raw_pp: -6.01, positive_folds: 1, fold_count: 5, candidate_max_drawdown: -0.1922, raw_max_drawdown: -0.1496, parameter_rescue: false }),
 });
 
-test('bind exact current private product head under review', () => {
-  assert.equal(MM_HEAD, '842a1726eafc4f2ff7162b33ea73bfe7bd2faf87');
+test('bind exact private P82 chronology product head under review', () => {
+  assert.equal(MM_HEAD, '81a8e42e5171d2e722df546d9e120a96ac3ab32f');
 });
 
 test('P64 keeps the specific timing gate rejected', () => {
@@ -35,6 +37,19 @@ test('P82 keeps serial fragility beside positive recent evidence', () => {
   assert.equal(p82.bootstrap.run_id, 34344879240);
   assert.ok(p82.bootstrap.from2015_nonpositive_probability_vs_matched > 0.25);
   assert.ok(p82.bootstrap.from2015_nonpositive_probability_vs_qqq > 0.38);
+});
+
+test('P82 aggregate delayed edge stays positive while rolling chronology is weak', () => {
+  assert.equal(p82.chronology_state, 'REGIME_CHRONOLOGY_WEAKNESS_CONFIDENCE_REDUCED_SURVIVOR_PRESERVED');
+  assert.equal(p82.chronology.run_id, 34346766915);
+  assert.equal(p82.chronology.job_id, 102450095558);
+  assert.equal(p82.chronology.artifact_id, 10102018001);
+  assert.ok(p82.chronology.aggregate_matched > 0 && p82.chronology.aggregate_qqq > 0);
+  assert.ok(p82.chronology.rolling24_matched_positive < 0.5);
+  assert.ok(p82.chronology.rolling36_matched_positive < 0.5);
+  assert.ok(p82.chronology.rolling36_qqq_positive < 0.4);
+  assert.ok(p82.chronology.rolling36_median_matched < 0);
+  assert.ok(p82.chronology.rolling36_median_qqq < 0);
 });
 
 test('P52 delay weakness remains visible', () => {
