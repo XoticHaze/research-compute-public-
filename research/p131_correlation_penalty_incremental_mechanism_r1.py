@@ -63,7 +63,7 @@ def main() -> None:
     }
     for name, assets in REPRESENTATIONS.items():
         base.ASSETS = assets
-        base.ALL = (*assets, "BIL", "SPY", "QQQ")
+        base.ALL = tuple(dict.fromkeys((*assets, "BIL", "SPY", "QQQ")))
         f, meta = base.build_frame()
         rec = {"source": meta, "holdouts": {}}
         for start in ("2018-01-31", "2022-01-31"):
