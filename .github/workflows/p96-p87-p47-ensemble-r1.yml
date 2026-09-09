@@ -1,0 +1,24 @@
+name: P96 P87 P47 Ensemble R1
+on:
+  pull_request:
+    paths:
+      - 'research/p96_p87_p47_ensemble_r1.py'
+      - '.github/workflows/p96-p87-p47-ensemble-r1.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - run: python research/p96_p87_p47_ensemble_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p96-p87-p47-ensemble-r1
+          path: artifacts/p96_p87_p47_ensemble_r1.json
+          if-no-files-found: error
