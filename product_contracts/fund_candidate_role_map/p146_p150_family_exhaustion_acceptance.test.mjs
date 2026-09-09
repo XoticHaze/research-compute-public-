@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-const MM_PRODUCT_HEAD = '2d6a77667478d58b0b72c7fd9fbbe066643c4cfa'
+const MM_PRODUCT_HEAD = '9563c2016dd9d5bd36beb2d6da5f85b56af4c0c9'
 const family = [
   { id:'P146', run:34407964382, job:102655387255, artifact:10126079621, head:'ee06a77589482312fc3b1e7bf63cc8e23f06e942', matched:0.0009, spy:-0.0071 },
   { id:'P147', run:34408012296, job:102655540369, artifact:10126096145, head:'b73914955a8fe8faefb0d766fdfc6e8785b98660', matched:-0.0173, spy:-0.0310 },
@@ -10,7 +10,7 @@ const family = [
   { id:'P150', run:34408195652, job:102656137715, artifact:10126167551, head:'514171a8b7ebd4a75ea5b0c370a092505710ef1e', matched:-0.0151, spy:-0.0286 },
 ]
 
-test('bind exact P146-P150 MM product head', () => assert.equal(MM_PRODUCT_HEAD, '2d6a77667478d58b0b72c7fd9fbbe066643c4cfa'))
+test('bind exact P146-P150 MM product head', () => assert.equal(MM_PRODUCT_HEAD, '9563c2016dd9d5bd36beb2d6da5f85b56af4c0c9'))
 test('preserve five independent science execution identities', () => assert.deepEqual(family.map(x => [x.id,x.run,x.job,x.artifact,x.head]), [
   ['P146',34407964382,102655387255,10126079621,'ee06a77589482312fc3b1e7bf63cc8e23f06e942'],
   ['P147',34408012296,102655540369,10126096145,'b73914955a8fe8faefb0d766fdfc6e8785b98660'],
