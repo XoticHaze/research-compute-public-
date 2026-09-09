@@ -42,17 +42,19 @@ def actual_stats(q):
 
 
 def shifted_stats(q, shift):
-    p36 = q.p36.shift(shift)
-    p36m = q.p36_matched.shift(shift)
+    # True circular shift. This preserves every P36/P36-matched observation and the
+    # full sample length while breaking only contemporaneous alignment to P64.
+    shift = int(shift) % len(q)
     z = pd.DataFrame(
         {
-            "p64": q.p64,
-            "p64m": q.p64_matched,
-            "p36": p36,
-            "p36m": p36m,
-            "qqq": q.qqq,
-        }
-    ).dropna()
+            "p64": q.p64.to_numpy(),
+            "p64m": q.p64_matched.to_numpy(),
+            "p36": np.roll(q.p36.to_numpy(), shift),
+            "p36m": np.roll(q.p36_matched.to_numpy(), shift),
+            "qqq": q.qqq.to_numpy(),
+        },
+        index=q.index,
+    )
     blend = 0.5 * z.p64 + 0.5 * z.p36
     matched = 0.5 * z.p64m + 0.5 * z.p36m
     p64_ex = z.p64 - z.p64m
@@ -76,7 +78,7 @@ def main():
             "blend_weights": [0.5, 0.5],
             "matched_control": "same fixed component matched controls",
             "opportunity_control": "QQQ",
-            "null": "circularly shift P36 and its matched control together relative to P64; preserve within-sleeve sequence and distribution",
+            "null": "circularly shift P36 and its matched control together relative to P64; preserve within-sleeve sequence, distribution, and sample length",
             "replications": N_REPS,
             "seed": SEED,
             "windows": WINDOWS,
@@ -88,7 +90,6 @@ def main():
     for name, start in WINDOWS.items():
         q = f.loc[f.index >= pd.Timestamp(start)].copy()
         actual = actual_stats(q)
-        # avoid zero shift; sample shifts from 1..n-1 so every null breaks contemporaneous alignment
         shifts = rng.integers(1, len(q), size=N_REPS)
         matched_excess = []
         qqq_excess = []
@@ -101,6 +102,8 @@ def main():
         me = np.asarray(matched_excess, dtype=float)
         qe = np.asarray(qqq_excess, dtype=float)
         co = np.asarray(correlations, dtype=float)
+        if not (np.isfinite(me).all() and np.isfinite(qe).all() and np.isfinite(co).all()):
+            raise RuntimeError(f"non-finite circular-null statistic in {name}")
         out["windows"][name] = {
             "actual": actual,
             "null": {
@@ -134,7 +137,7 @@ def main():
     Path("artifacts/p82_component_alignment_null_r1.json").write_text(
         json.dumps(out, indent=2, sort_keys=True, allow_nan=False)
     )
-    print(json.dumps(out, sort_keys=True))
+    print(json.dumps(out, sort_keys=True, allow_nan=False))
 
 
 if __name__ == "__main__":
