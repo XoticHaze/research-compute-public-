@@ -1,0 +1,25 @@
+name: P135 P109 Cost Capacity Break Even R1
+on:
+  pull_request:
+    paths:
+      - 'research/p104_p111_crossasset_model_family_tournament_r1.py'
+      - 'research/p135_p109_cost_capacity_break_even_r1.py'
+      - '.github/workflows/p135-p109-cost-capacity-break-even-r1.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65 scikit-learn==1.5.2
+      - run: python research/p135_p109_cost_capacity_break_even_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p135-p109-cost-capacity-break-even-r1
+          path: artifacts/p135_p109_cost_capacity_break_even_r1.json
+          if-no-files-found: error

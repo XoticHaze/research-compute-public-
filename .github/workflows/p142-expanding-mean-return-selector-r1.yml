@@ -1,0 +1,24 @@
+name: P142 Expanding Mean Return Selector R1
+on:
+  pull_request:
+    paths:
+      - 'research/p142_expanding_mean_return_selector_r1.py'
+      - '.github/workflows/p142-expanding-mean-return-selector-r1.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65 scikit-learn==1.5.2
+      - run: python research/p142_expanding_mean_return_selector_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p142-expanding-mean-return-selector-r1
+          path: artifacts/p142_expanding_mean_return_selector_r1.json
+          if-no-files-found: error
