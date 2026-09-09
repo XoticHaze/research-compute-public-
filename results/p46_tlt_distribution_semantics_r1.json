@@ -1,0 +1,183 @@
+{
+  "decision": "SEMANTIC_SURFACE_PROFILED",
+  "fund_document": {
+    "bytes": 2532932,
+    "content_type": "application/vnd.ms-excel",
+    "sha256": "d20060c113b881a23612f6a540effd312ba7cfe2e31990a3df553c4766d2bd97",
+    "status": 200,
+    "url": "https://www.blackrock.com/varnish-api/blk-one01-product-data/product-data/api/v1/get-fund-document?appSubType=ISHARES&appType=PRODUCT_PAGE&component=fundDownload&locale=en_US&portfolioId=239454&targetSite=us-ishares&userType=individual"
+  },
+  "page": {
+    "bytes": 1862097,
+    "candidate_hrefs": [
+      "#distributions",
+      "#performance",
+      "/us/capital-gains-distributions",
+      "/us/insights/outcome-etfs-income-strategies",
+      "/us/products/etf-investments#/?productView=etf&dataView=fixedIncomeView&fac=43549|43563|43566|43567|43573|43588|43590|43774|43775|60556|62779",
+      "/us/products/income-etfs",
+      "/us/strategies/find-income-with-ishares",
+      "https://www.ishares.com/_astro/_mode-injectable/distribution-B0M_tePD.css",
+      "https://www.ishares.com/_astro/_mode-injectable/performance-v3-CdWyfZU8.css",
+      "https://www.ishares.com/us/literature/brochure/understanding-ishares-etf-dividend-distributions-en-us.pdf",
+      "https://www.ishares.com/us/literature/shareholder-letters/isharesandblackrocketfsdistributionschedule.pdf"
+    ],
+    "content_type": "text/html;charset=UTF-8",
+    "semantic_snippets": [
+      {
+        "term": "total return",
+        "text": "ropertyValue\",\"name\":\"52 WK:\",\"value\":\"81.35 - 92.05\",\"unitText\":\"USD\"},{\"@type\":\"PropertyValue\",\"name\":\"1 Day NAV Change as of\",\"value\":\"0.00\",\"unitText\":\"USD\",\"valueReference\":{\"@type\":\"PropertyValue\",\"name\":\"As of Dates\",\"value\":\"Sep 08, 2026\"}},{\"@type\":\"PropertyValue\",\"name\":\"percentChange\",\"value\":\"0.00\"},{\"@type\":\"PropertyValue\",\"name\":\"NAV Total Return as of\",\"value\":\"-2.87%\",\"valueReference\":{\"@type\":\"PropertyValue\",\"name\":\"As of Dates\",\"value\":\"Sep 08, 2026\"}},{\"@type\":\"PropertyValue\",\"name\":\"30 Day SEC Yield as of\",\"value\":\"5.19%\",\"valueReference\":{\"@type\":\"PropertyValue\",\"name\":\"As of Dates\",\"value\":\"Sep 08, 2026\"}},{\"@type\":\"PropertyValue\",\"name\":\"12m Trailing Yield as of\",\"value\":\"4.73%\",\"valueReference\":{\"@type\":\"PropertyValue\",\"name\":\"As of Dates\",\"value\":\"Sep 08, 2026\"}},{\"@type\":\"Pro"
+      },
+      {
+        "term": "total return",
+        "text": "ve {0})\",\"ratingsAndAwards.mstarAnalystRating.title\":\"Morningstar Medalist Rating\",\"ratingsAndAwards.mstarRatingOverall.available\":\"{0} stars\",\"ratingsAndAwards.mstarRatingOverall.disclaimer\":\"Overall Morningstar Rating for {0}, as of {2} rated against {3} {4} Funds based on risk adjusted total return.\",\"ratingsAndAwards.mstarRatingOverall.disclaimer.infobubble\":\"Overall Morningstar Rating for {0}, as of {2} rated against {3} {4} Funds based on risk adjusted total return.\",\"ratingsAndAwards.mstarRatingOverall.disclaimer.noShareClass\":\"Overall Morningstar Rating for {0} as of {2} rated against {3} {4} Funds.\",\"ratingsAndAwards.mstarRatingOverall.disclaimer.noShareClass.infobubble\":\"Ov"
+      },
+      {
+        "term": "total return",
+        "text": ";ratingsAndAwards.mstarRatingOverall.disclaimer\":\"Overall Morningstar Rating for {0}, as of {2} rated against {3} {4} Funds based on risk adjusted total return.\",\"ratingsAndAwards.mstarRatingOverall.disclaimer.infobubble\":\"Overall Morningstar Rating for {0}, as of {2} rated against {3} {4} Funds based on risk adjusted total return.\",\"ratingsAndAwards.mstarRatingOverall.disclaimer.noShareClass\":\"Overall Morningstar Rating for {0} as of {2} rated against {3} {4} Funds.\",\"ratingsAndAwards.mstarRatingOverall.disclaimer.noShareClass.infobubble\":\"Overall Morningstar Rating for {0}, as of {2} rated against {3} {4} Funds based on risk adjusted total return.\",\"strategyCharacteristics.header.title\":\"Strategy Characteristic"
+      },
+      {
+        "term": "total return",
+        "text": "quot;,\"ratingsAndAwards.mstarRatingOverall.disclaimer.noShareClass\":\"Overall Morningstar Rating for {0} as of {2} rated against {3} {4} Funds.\",\"ratingsAndAwards.mstarRatingOverall.disclaimer.noShareClass.infobubble\":\"Overall Morningstar Rating for {0}, as of {2} rated against {3} {4} Funds based on risk adjusted total return.\",\"strategyCharacteristics.header.title\":\"Strategy Characteristics\",\"subscriptionAndBuyback.header.title\":\"\",\"topHoldings.subheadline\":\"as of {0}\",\"topHoldings.title\":\"Top Holdings\",\"fundamentalsAndRisk.title\":\"Portfolio Characteristics\",\"allHoldingsTable.holdingPercent.infobubble\":\"\",\"allHoldingsTable.issueName.infob"
+      },
+      {
+        "term": "total return",
+        "text": "nce.returns.afterTaxPostl\":\"After Tax Post-Liq. (%)\",\"performance.returns.afterTaxPrel\":\"After Tax Pre-Liq. (%)\",\"performance.returns.annualIndexPrice\":\"Benchmark (%)\",\"performance.returns.annualMarketPrice\":\"Market Price (%)\",\"performance.returns.annualNav\":\"Total Return (%)\",\"performance.returns.average\":\"Average Annual\",\"performance.returns.average.fiveYearAnnualized\":\"5y\",\"performance.returns.average.missingData\":\"Performance data is not currently available\",\"performance.returns.average.oneYearAnnualized\":\"1y\",\"performance.returns.average.sinceInceptionAnnualized\":\"Incept.\",\"performance.returns.averag"
+      },
+      {
+        "term": "total return",
+        "text": "rmance.returns.discrete.missingData\":\"Missing discrete annual returns data.\",\"performance.returns.discrete.oneYear\":\"{0}\",\"performance.returns.discrete.threeYear\":\"{0}\",\"performance.returns.discrete.twoYear\":\"{0}\",\"performance.returns.fundDiscreteQuarterEnd\":\"Total Return (%)\",\"performance.returns.fundVolatility\":\"Standard Deviation (%)\",\"performance.returns.historical-prefix\":\"\",\"performance.returns.levelCalced\":\"Benchmark (%)\",\"performance.returns.lipperDenominator\":\"Lipper Denominator (%)\",\"performance.returns.lipperMktDnr\":\"Lipper Market DNR (%)\",\"performance.returns.lipperMktNmr\":\"Lipper Ma"
+      },
+      {
+        "term": "total return",
+        "text": "ipperNumerator\":\"Lipper Numerator (%)\",\"performance.returns.lipperRanking\":\"Lipper Ranking\",\"performance.returns.marketPrice\":\"Market Price (%)\",\"performance.returns.missingData\":\"Returns data not available for display.\",\"performance.returns.morningstarPerf\":\"Total Return (%)\",\"performance.returns.morningstarRank\":\"Morningstar Quartile\",\"performance.returns.morningstarStandardYearly\":\"Total Return (%)\",\"performance.returns.navCalced\":\"Total Return (%)\",\"performance.returns.navSourced\":\"Total Return (%)\",\"performance.returns.navSourcedNet\":\"Return w/ Sales Charge (%)\",\"performance.returns.secBenchmarkSourc"
+      },
+      {
+        "term": "total return",
+        "text": "t;:\"Market Price (%)\",\"performance.returns.missingData\":\"Returns data not available for display.\",\"performance.returns.morningstarPerf\":\"Total Return (%)\",\"performance.returns.morningstarRank\":\"Morningstar Quartile\",\"performance.returns.morningstarStandardYearly\":\"Total Return (%)\",\"performance.returns.navCalced\":\"Total Return (%)\",\"performance.returns.navSourced\":\"Total Return (%)\",\"performance.returns.navSourcedNet\":\"Return w/ Sales Charge (%)\",\"performance.returns.secBenchmarkSourced\":\"{0}\",\"performance.returns.secBenchmarkSourced.infobubble\":\"{5} shown for illustrative purposes only to demonstrate how this fund has"
+      },
+      {
+        "term": "dividends",
+        "text": "howToBuy.title\":\"\",\"keyFundFacts.title\":\"Key Facts\",\"discretePerf.from\":\"From\",\"discretePerf.to\":\"To\",\"distributions.distributionSchedule\":\"Distributions Schedule\",\"distributions.title\":\"Distributions\",\"distributions.understandingDividends\":\"Understanding Dividends\",\"distroTable.totalDistribution.infobubble\":\"Current year distributions are not classified as \u201cIncome,\u201d \u201cShort-Term Capital Gains,\u201d \u201cLong-Term Capital Gains,\u201d or \u201cReturn of Capital\u201d until calendar year-end.\",\"performance.calendar.performanceOneYearRule\":\"This chart has been left intentionally blank as there is less than one year&#39;s performance data.\",\"pe"
+      },
+      {
+        "term": "dividends",
+        "text": "uot;keyFundFacts.title\":\"Key Facts\",\"discretePerf.from\":\"From\",\"discretePerf.to\":\"To\",\"distributions.distributionSchedule\":\"Distributions Schedule\",\"distributions.title\":\"Distributions\",\"distributions.understandingDividends\":\"Understanding Dividends\",\"distroTable.totalDistribution.infobubble\":\"Current year distributions are not classified as \u201cIncome,\u201d \u201cShort-Term Capital Gains,\u201d \u201cLong-Term Capital Gains,\u201d or \u201cReturn of Capital\u201d until calendar year-end.\",\"performance.calendar.performanceOneYearRule\":\"This chart has been left intentionally blank as there is less than one year&#39;s performance data.\",\"performance.chart\":\"Growth o"
+      },
+      {
+        "term": "dividends",
+        "text": "ET\",\"performance.chart.fivePm\":\"NAV: 5:00 PM ET\",\"performance.chart.fund.infobubble\":\"\",\"performance.chart.fund.label\":\"Fund\",\"performance.chart.infobubble\":\"The growth of hypothetical $10,000 chart reflects a hypothetical $10,000 investment and assumes reinvestment of dividends and capital gains. Fund expenses, including management fees and other expenses were deducted.\",\"performance.chart.level\":\"Index Level History\",\"performance.chart.liquidity.daily\":\"Daily Liquidity\",\"performance.chart.liquidity.weekly\":\"Weekly Liquidity\",\"performance.chart.missingData\":\"Performance chart data not available for display.\",\"performance.chart.nav"
+      },
+      {
+        "term": "dividends",
+        "text": "pon 90 days\u2019 notice. BlackRock may agree to voluntarily waive certain fees and expenses, which the adviser may discontinue at any time without notice.\"}],\"disclaimer_performance_chart\":[{\"metadata\":null,\"text\":\"The Growth of $10,000 chart reflects a hypothetical $10,000 investment and assumes reinvestment of dividends and capital gains. Fund expenses, including management fees and other expenses were deducted.\"}],\"download.coll-snapshot.disclaimer\":[{\"metadata\":null,\"text\":\"Collateral Holdings shown on this page are provided on days where the fund participating in securities lending had an open loan. The information in the Collateral Holdings table relates to securities obtained in the collateral basket under the securi"
+      },
+      {
+        "term": "dividends",
+        "text": "sing the worst, average, and best performance of the product, which may include input from benchmark(s) / proxy, over the last ten years.\"}],\"performance.chart.disclaimer\":[{\"metadata\":null,\"text\":\"The Hypothetical Growth of $10,000 chart reflects a hypothetical $10,000 investment and assumes reinvestment of dividends and capital gains. Fund expenses, including management fees and other expenses were deducted. <br /><br />The performance quoted represents past performance and does not guarantee future results. Investment return and principal value of an investment will fluctuate so that an investor\u2019s shares, when sold or redeemed, may be worth more or less than the original cost. Current performance may be lower or higher than the performance quot"
+      },
+      {
+        "term": "dividends",
+        "text": "ypothetical.disclaimer\":[{\"metadata\":null,\"text\":\"<p class=\\\"disclaimer-source\\\" style=\\\"font-size: 14px;\\\">Source</p>\\n\\n<p style=\\\"font-family: BLKFortItalic; font-size: 14px; line-height: 17px;\\\">The chart reflects a hypothetical investment and assumes reinvestment of dividends and capital gains. Fund expenses, including management fees and other expenses were deducted.</p>\\n\\n<p style=\\\"font-family: BLKFortItalic; font-size: 14px; line-height: 17px;\\\">The performance quoted represents past performance and does not guarantee future results. Investment return and principal value of an investment will fluctuate so that an investor\u2019s shares, when sold or redeemed, may be worth more or less than the o"
+      },
+      {
+        "term": "dividends",
+        "text": "uot;metadata\":null,\"text\":\"Distribution Yield and 12m Trailing Yield results may have period over period volatility due to factors including tax considerations such as treatment of passive foreign investment companies (PFICs), treatment of defaulted bonds or excise tax requirements; exceptional corporate actions; seasonality of dividends from underlying holdings; significant fluctuations in fund shares outstanding; or fund capital gain distributions.\"},{\"metadata\":null,\"text\":\"The Funds are distributed by BlackRock Investments, LLC (together with its affiliates, \u201cBlackRock\u201d).\"},{\"metadata\":null,\"text\":\"<p class=\\\"disclaimer\\\">Although BlackRock shall obtain data from sources that BlackRock considers reli"
+      },
+      {
+        "term": "dividends",
+        "text": "quot;distributions\":{\"name\":\"distributions\",\"fullName\":\"performance.distributions\",\"visible\":true,\"sortIndex\":-1,\"sortOrder\":null,\"properties\":{\"customColumns\":\"false\",\"showDistributionSchedule\":\"true\",\"showUnderstandingDividends\":\"true\",\"thumbnail\":\"true\"},\"dataPointsByNameMap\":{\"glsParam\":{\"name\":\"glsParam\",\"fullName\":\"performance.glsParam\",\"visible\":true,\"active\":false,\"sortOrder\":null,\"asOfDate\":null,\"formattedAsOfDate\":null,\"formattedValue\":\"-\",\"label\":\"\",\"infoBubble\":\""
+      },
+      {
+        "term": "distributions",
+        "text": "-tools\" class=\"sr-only\"> TOOLS 3 items DOCUMENTS Capital gains distributions <a href=\"/us/library/tax\" role=\"menuitem\" data-link-event=\"/site"
+      },
+      {
+        "term": "distributions",
+        "text": "s\">DOCUMENTS Capital gains distributions <a href=\"/us/library/tax\" role=\"menuitem\" data-link-event=\"/sites/us-ishares/products/overview-v3-ishares-fund-data.page|vi16-Primary-nav|Resources|DOCUMENTS|CTA|Go-to|Tax documents|library/tax\" aria-label=\"Tax documents 2 of 4\" class="
+      },
+      {
+        "term": "distributions",
+        "text": "=\"ds-categorised-links\" role=\"none\" aria-labelledby=\"ds-category-label-documents\"> Capital gains distributions <a href=\"/us/library/tax\" role=\"menuitem\" data-link-event=\"/sites/us-ishares/products/overview-v3-ishares-fund-data.page|vi16-Primary-nav|Resources|DOCUMENTS|CTA|Go-to|Tax documents|library/tax\" aria-label=\"Tax documents 2 of 4\" class=\"ds-body-m ds-link-subdued-s"
+      },
+      {
+        "term": "distributions",
+        "text": "labelledby=\"ds-category-label-documents\"> Capital gains distributions Tax documents <li cla"
+      },
+      {
+        "term": "distributions",
+        "text": "s/capital-gains-distributions\" role=\"menuitem\" data-link-event=\"/sites/us-ishares/products/overview-v3-ishares-fund-data.page|vi16-Primary-nav|Resources|DOCUMENTS|CTA|Go-to|Capital gains distributions|capital-gains-distributions\" aria-label=\"Capital gains distributions 1 of 4\" target=\"_top\" class=\"ds-body-m ds-link-subdued-secondary\">Capital gains distributions Tax documents <a href=\"/us/library/financial-legal-tax\" role=\"menuitem\" da"
+      },
+      {
+        "term": "distributions",
+        "text": "eTable.subhead\":\"on net assets\",\"feeTable.subheadline\":\"as of current prospectus\",\"feeTable.tert\":\"Gross Expense\",\"feeTable.title\":\"Fees\",\"feeTable.wver\":\"Fee Waivers\",\"^ratingsAndAwards\\\\.mstarAnalystRating\\\\.footnote\\\\..*$\":\"\",\"distributions.header.title\":\"Distributions\",\"download.common\":\"Data Download \",\"esgAnalytics.header.title\":\"Sustainability Characteristics\",\"exchange.header.title\":\"\",\"exposureBreakdowns.header.title\":\"\",\"feeTable.header.title\":\"Fees\",\"fund-header.esg.disclaimer.title\":\"SUSTAINABLE SCREENS\",\"fundHeader.addToCompare\":"
+      },
+      {
+        "term": "distributions",
+        "text": "s\",\"feeTable.subheadline\":\"as of current prospectus\",\"feeTable.tert\":\"Gross Expense\",\"feeTable.title\":\"Fees\",\"feeTable.wver\":\"Fee Waivers\",\"^ratingsAndAwards\\\\.mstarAnalystRating\\\\.footnote\\\\..*$\":\"\",\"distributions.header.title\":\"Distributions\",\"download.common\":\"Data Download \",\"esgAnalytics.header.title\":\"Sustainability Characteristics\",\"exchange.header.title\":\"\",\"exposureBreakdowns.header.title\":\"\",\"feeTable.header.title\":\"Fees\",\"fund-header.esg.disclaimer.title\":\"SUSTAINABLE SCREENS\",\"fundHeader.addToCompare\":\"Add to Compare\",\"fundHe"
+      },
+      {
+        "term": "distributions",
+        "text": "cuments.title\":\"Key Documents\",\"keyFundFacts.header.title\":\"Key Facts\",\"label.download\":\"\",\"listings.header.title\":\"\",\"literature.noDocuments\":\"No documents available for this fund\",\"overview.header.title\":\"Overview\",\"performance.distributions\":\"Distributions\",\"performance.header.title\":\"Performance\",\"portfolioManager.header.title\":\"Portfolio Managers\",\"pricing.header.title\":\"\",\"pricingAndExchange.header.title\":\"Pricing\",\"productLiterature.header.title\":\"Documents\",\"productLiteraturePalette.header.title\":\"Documents\",\"productScreener.watchlistUpref"
+      },
+      {
+        "term": "calendar year",
+        "text": "ndHeader.shareClass\":\"\",\"fundHeader.shareClassSelector\":\"Share Class:\",\"fundHeader.tenReasons\":\"Reason to\\nPurchase this fund\",\"fundHeader.title\":\"\",\"fundHeader.yearToDate.infobubble\":\"YTD (year to date) is a period, starting from the beginning of the current calendar year, and continuing up to the prior day&#39;s close.\",\"fundHeader.ytd\":\"YTD: \",\"fundamentalsAndRisk.header.title\":\"Characteristics\",\"holdings.header.title\":\"Holdings\",\"howToBuy.button\":\"Learn More\",\"howToBuy.button.ticker\":\"\",\"howToBuy.modalContent.col-right.buy-button-content\":\"Buy now on Fidelity\",\"howToBuy.modalCon"
+      },
+      {
+        "term": "calendar year",
+        "text": "uot;,\"distributions.title\":\"Distributions\",\"distributions.understandingDividends\":\"Understanding Dividends\",\"distroTable.totalDistribution.infobubble\":\"Current year distributions are not classified as \u201cIncome,\u201d \u201cShort-Term Capital Gains,\u201d \u201cLong-Term Capital Gains,\u201d or \u201cReturn of Capital\u201d until calendar year-end.\",\"performance.calendar.performanceOneYearRule\":\"This chart has been left intentionally blank as there is less than one year&#39;s performance data.\",\"performance.chart\":\"Growth of Hypothetical $10,000\",\"performance.chart.10Y\":\"10Y\",\"performance.chart.1M\":\"1M\",\"performance.chart.1Y\":\"1Y\",\"performance.chart.2Y\":\"2Y\""
+      },
+      {
+        "term": "calendar year",
+        "text": "rns.benchmarkAnnual\":\"Benchmark (%)\",\"performance.returns.benchmarkDiscreteQuarterEnd\":\"Benchmark (%)\",\"performance.returns.benchmarkSourced\":\"Benchmark (%)\",\"performance.returns.benchmarkVolatility\":\"Benchmark Stand. Dev. (%)\",\"performance.returns.calendar\":\"Calendar Year\",\"performance.returns.calendar-chart.hatching-legend\":\"During this period performance was achieved under circumstances that no longer apply\",\"performance.returns.calendar.fiveYear\":\"5y\",\"performance.returns.calendar.fourYear\":\"4y\",\"performance.returns.calendar.missingData\":\"Performance data is not currently available\",\"performance.returns.calendar.oneYear&q"
+      },
+      {
+        "term": "calendar year",
+        "text": "/>Error % (3 Year)\"}],\"label.as_of\":[{\"metadata\":null,\"text\":\"Fact Sheet as of\"}],\"label.average_market_capitalization\":[{\"metadata\":null,\"text\":\"Average Market Capitalization\"}],\"label.calendar_year\":[{\"metadata\":null,\"text\":\"Calendar Year\"}],\"label.country_breakdown.other_includes\":[{\"metadata\":null,\"text\":\"Other Includes\"}],\"label.dealinginformation.dealingdeadline\":[{\"metadata\":null,\"text\":\"Trading Deadline\"}],\"label.distributions.dividend\":[{\"metadata\":null,\"text\":\"Total Distribution\"}],\"label.documentdate\":[{\"metadata\":null,\"tex"
+      },
+      {
+        "term": "calendar year",
+        "text": "on_headers.custom_content\":[{\"metadata\":null,\"text\":\"Strategy and Investment Process\"}],\"section_headers.dealing_information\":[{\"metadata\":null,\"text\":\"DEALING INFORMATION\"}],\"section_headers.discrete_performance\":[{\"metadata\":null,\"text\":\"CALENDAR YEAR PERFORMANCE (% USD)\"}],\"section_headers.distribution_information\":[{\"metadata\":null,\"text\":\"FUND DISTRIBUTIONS\"}],\"section_headers.fund_characteristics\":[{\"metadata\":null,\"text\":\"FUND CHARACTERISTICS\"}],\"section_headers.fund_details\":[{\"metadata\":null,\"text\":\"Key Facts\"}],\"section_headers.fund_performance\":[{&quo"
+      },
+      {
+        "term": "calendar year",
+        "text": "ue,\"sortOrder\":8,\"asOfDate\":20260908,\"formattedAsOfDate\":\"Sep 08, 2026\",\"formattedValue\":\"-2.87%\",\"label\":\"\",\"asOfLabel\":\"NAV Total Return as of\",\"infoBubble\":\"YTD (year to date) is a period, starting from the beginning of the current calendar year, and continuing up to the prior day&#39;s close.\",\"prefix\":null,\"value\":-2.869744,\"returnType\":false,\"associatedReturnType\":false,\"fullName\":\"fundHeader.fundNav.yearToDate\"}},\"hasData\":true,\"subContainersByNameMap\":{},\"default\":true,\"granted\":true},\"fundTicker\":{\"name\":\"fundTicker\",\"fullName\":\""
+      },
+      {
+        "term": "calendar year",
+        "text": "e-648048f8-1b36-4611-89ee-5604f3d0eea2\" class=\"_ws-product-info-bubble _ws-v3design\" aria-haspopup=\"true\" aria-label=\"NAV Total Return as of More Info\" aria-expanded=\"false\" data-id=\"fundHeader-yearToDate-infoBubble\" webqc-datapoint=\"fundHeader-yearToDate-infoBubble\" title=\"YTD (year to date) is a period, starting from the beginning of the current calendar year, and continuing up to the prior day's close.\"> <path id=\"Vector\" d=\"M8 16C10.1217 16 12.1566 15.1571 13.6569 13.6569C15.1571 12.1566 16 10.1217 16 8C16 5.87827 15.1571 3.84344 13.6569 2.34315C12.1566 0.842855 10.1217 0 8 0C5.87827 0 3.84344 0.842855 2.34314 2.34315C0.842853 3.84344 0 5.87827 0 8C0 10.1217 0.842853 12.1566 2.3431"
+      },
+      {
+        "term": "calendar year",
+        "text": "ue,\"sortOrder\":8,\"asOfDate\":20260908,\"formattedAsOfDate\":\"Sep 08, 2026\",\"formattedValue\":\"-2.87%\",\"label\":\"\",\"asOfLabel\":\"NAV Total Return as of\",\"infoBubble\":\"YTD (year to date) is a period, starting from the beginning of the current calendar year, and continuing up to the prior day&#39;s close.\",\"prefix\":null,\"value\":-2.869744,\"returnType\":false,\"associatedReturnType\":false,\"fullName\":\"fundHeader.fundNav.yearToDate\"}},\"hasData\":true,\"subContainersByNameMap\":{},\"default\":true,\"granted\":true},\"fundTicker\":{\"name\":\"fundTicker\",\"fullName\":\""
+      },
+      {
+        "term": "growth of $10,000",
+        "text": "re class has a contractual waiver with an end date of fred.feeWaiverExpirationDate terminable upon 90 days\u2019 notice. BlackRock may agree to voluntarily waive certain fees and expenses, which the adviser may discontinue at any time without notice.\"}],\"disclaimer_performance_chart\":[{\"metadata\":null,\"text\":\"The Growth of $10,000 chart reflects a hypothetical $10,000 investment and assumes reinvestment of dividends and capital gains. Fund expenses, including management fees and other expenses were deducted.\"}],\"download.coll-snapshot.disclaimer\":[{\"metadata\":null,\"text\":\"Collateral Holdings shown on this page are provided on days where the fund participating in securities lending had an open loan. The information in the Collateral"
+      },
+      {
+        "term": "growth of $10,000",
+        "text": "ately predicted. The unfavourable, moderate, and favourable scenarios shown are illustrations using the worst, average, and best performance of the product, which may include input from benchmark(s) / proxy, over the last ten years.\"}],\"performance.chart.disclaimer\":[{\"metadata\":null,\"text\":\"The Hypothetical Growth of $10,000 chart reflects a hypothetical $10,000 investment and assumes reinvestment of dividends and capital gains. Fund expenses, including management fees and other expenses were deducted. <br /><br />The performance quoted represents past performance and does not guarantee future results. Investment return and principal value of an investment will fluctuate so that an investor\u2019s shares, when sold or redeemed, may be worth more or less than"
+      },
+      {
+        "term": "growth of $10,000",
+        "text": ".5H9.25H10V12H9.25H6.75H6V10.5H6.75ZM9 6H7V4H9V6Z\" fill=\"black\"> The Hypothetical Growth of $10,000 chart reflects a hypothetical $10,000 investment and assumes reinvestment of dividends and capital gains. Fund expenses, including management fees and other expenses were deducted. The performance quoted represents past performance and does not guarantee future results. Investment return and principal value of an investment will fluctuate so that an investor\u2019s shares, when sold or redeemed, may be worth more or less than the original"
+      },
+      {
+        "term": "growth of $10,000",
+        "text": "re class has a contractual waiver with an end date of fred.feeWaiverExpirationDate terminable upon 90 days\u2019 notice. BlackRock may agree to voluntarily waive certain fees and expenses, which the adviser may discontinue at any time without notice.\"}],\"disclaimer_performance_chart\":[{\"metadata\":null,\"text\":\"The Growth of $10,000 chart reflects a hypothetical $10,000 investment and assumes reinvestment of dividends and capital gains. Fund expenses, including management fees and other expenses were deducted.\"}],\"download.coll-snapshot.disclaimer\":[{\"metadata\":null,\"text\":\"Collateral Holdings shown on this page are provided on days where the fund participating in securities lending had an open loan. The information in the Collateral"
+      },
+      {
+        "term": "growth of $10,000",
+        "text": "ately predicted. The unfavourable, moderate, and favourable scenarios shown are illustrations using the worst, average, and best performance of the product, which may include input from benchmark(s) / proxy, over the last ten years.\"}],\"performance.chart.disclaimer\":[{\"metadata\":null,\"text\":\"The Hypothetical Growth of $10,000 chart reflects a hypothetical $10,000 investment and assumes reinvestment of dividends and capital gains. Fund expenses, including management fees and other expenses were deducted. <br /><br />The performance quoted represents past performance and does not guarantee future results. Investment return and principal value of an investment will fluctuate so that an investor\u2019s shares, when sold or redeemed, may be worth more or less than"
+      }
+    ],
+    "sha256": "408aabdf8fd046e35d7603fedd992734d0a91c96a80488eccbffd58d7ccf1581",
+    "status": 200,
+    "url": "https://www.ishares.com/us/products/239454/ishares-20-year-treasury-bond-etf"
+  },
+  "parent": "P46",
+  "purpose": "materialize issuer-native TLT distribution/reinvestment semantics and candidate links before reconstruction",
+  "schema": "research.p46_tlt_distribution_semantics_r1"
+}
