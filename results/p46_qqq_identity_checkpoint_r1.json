@@ -1,0 +1,74 @@
+{
+  "decision": "QQQ_ISSUER_IDENTITY_CHECKPOINTS_EXTRACTED",
+  "effective_date": "2026-08-31",
+  "parent": "P46",
+  "rolling_shareclass_endpoints": {
+    "lineChart10YData": {
+      "end": {
+        "date": "2026-08-31",
+        "returnPercent": 560.819984,
+        "value": 66081.9984
+      },
+      "label": "Invesco QQQ Trust, Series 1",
+      "points": 121,
+      "start": {
+        "date": "2016-08-31",
+        "returnPercent": 0,
+        "value": 10000
+      }
+    },
+    "lineChart1YData": {
+      "end": {
+        "date": "2026-08-31",
+        "returnPercent": 26.274089,
+        "value": 12627.408873
+      },
+      "label": "Invesco QQQ Trust, Series 1",
+      "points": 13,
+      "start": {
+        "date": "2025-08-31",
+        "returnPercent": 0,
+        "value": 10000
+      }
+    },
+    "lineChart3YData": {
+      "end": {
+        "date": "2026-08-31",
+        "returnPercent": 92.84072,
+        "value": 19284.072
+      },
+      "label": "Invesco QQQ Trust, Series 1",
+      "points": 37,
+      "start": {
+        "date": "2023-08-31",
+        "returnPercent": 0,
+        "value": 10000
+      }
+    },
+    "lineChart5YData": {
+      "end": {
+        "date": "2026-08-31",
+        "returnPercent": 94.346168,
+        "value": 19434.6168
+      },
+      "label": "Invesco QQQ Trust, Series 1",
+      "points": 61,
+      "start": {
+        "date": "2021-08-31",
+        "returnPercent": 0,
+        "value": 10000
+      }
+    }
+  },
+  "schema": "research.p46_qqq_identity_checkpoint_r1",
+  "standard_candidate_scalars": [
+    {
+      "path": "/effectiveDate",
+      "value": "2026-08-31"
+    },
+    {
+      "path": "/cumulativePerformance/0/displayLabel",
+      "value": "Fund NAV"
+    }
+  ]
+}
