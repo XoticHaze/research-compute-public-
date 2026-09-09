@@ -1,0 +1,17 @@
+{
+  "decision": "DBC_DIRECT_TOTAL_RETURN_NOT_EXPOSED",
+  "effective_date": "2026-08-31",
+  "parent": "P46",
+  "rolling_shareclass_endpoints": {
+    "lineChart10YData": null,
+    "lineChart1YData": null,
+    "lineChart3YData": null,
+    "lineChart5YData": null
+  },
+  "schema": "research.p46_dbc_totalreturn_checkpoint_r1",
+  "standard_profile": {
+    "cumulativePerformance": null,
+    "raw_scalar": "",
+    "type": "str"
+  }
+}
