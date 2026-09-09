@@ -82,6 +82,41 @@ fixture = {
     "evidence": {"metrics": {"delay1": {"excess_cagr": 0.01}}, "decision": "SANITIZED_ACCEPTANCE"},
 }
 
+p29_release = {
+    "schema": "foundry.shared_evidence_claim.v1",
+    "evidence_id": "P29-R3:smh_opportunity_cost_recent_weak:2026-09-09",
+    "producer": {
+        "system": "continue-release",
+        "repository": "XoticHaze/CommandCenter",
+        "source_ref": "0bb09cb71c050b12b1b5da9ef772f6459c9b3244",
+        "run_id": "34336319507",
+        "artifact_digest": "sha256:3575b4e9302239736503e3d293553b41b434ec05916c32af29774758a05b2bf6",
+    },
+    "claim": {
+        "claim_type": "diagnostic.p29_smh_opportunity_cost",
+        "status": "MIXED",
+        "statement": "historical SMH excess remains broad but 2022-forward opportunity-cost superiority is weak",
+        "subject": "P29 monthly top-3 PIT semiconductor 6-month cross-sectional momentum",
+        "hypothesis_id": "P29",
+        "capabilities": ["diagnostic.p29_smh_opportunity_cost"],
+    },
+    "authority": {"max_scope": "RESEARCH_ONLY", "automatic_action_allowed": False},
+    "evidence": {
+        "parameters": {"execution_delay_grid_days": list(range(11)), "cost_bps": 50, "no_delay_selection_or_tuning": True},
+        "metrics": [
+            {"name": "full_positive_delay_fraction_vs_smh", "value": 1.0},
+            {"name": "recent_2022_forward_positive_delay_fraction_vs_smh", "value": 5 / 11},
+            {"name": "recent_2022_forward_median_excess_vs_smh", "value": -0.016241202674003308},
+        ],
+    },
+    "boundaries": {
+        "does_not_establish": ["preferred execution delay", "current fund candidacy", "runtime authority", "broker authority", "live-trading authority"],
+        "prohibited_inferences": ["do not select the best historical delay", "do not use full-history excess to override weak recent opportunity cost"],
+    },
+    "decision": {"disposition": "HISTORICAL_ALPHA_RECENT_OPPORTUNITY_COST_WEAK"},
+    "lineage": {"parents": ["P29"], "supersedes": ["P29-C3:semiconductor_cross_sectional_momentum_validation_state:2026-09-08"]},
+}
+
 a = normalize(fixture)
 b = normalize(fixture)
 assert a == b
@@ -92,4 +127,23 @@ assert a["evidence"]["metrics"] == [{"name": "delay1.excess_cagr", "value": 0.01
 assert a["boundaries"]["does_not_establish"][-1] == "live-trading authority"
 assert a["lineage"]["parents"] == ["PTEST"]
 assert a["authority"]["automatic_action_allowed"] is False
-print(json.dumps({"result": "PASS", "normalized_sha256": hashlib.sha256(canonical(a)).hexdigest(), "automatic_action_allowed": False}, sort_keys=True))
+
+p29_a = json.loads(canonical(p29_release))
+p29_b = json.loads(canonical(p29_release))
+assert p29_a == p29_b
+assert hashlib.sha256(canonical(p29_a)).hexdigest() == hashlib.sha256(canonical(p29_b)).hexdigest()
+assert p29_a["producer"]["run_id"] == "34336319507"
+assert p29_a["claim"]["status"] == "MIXED"
+assert p29_a["authority"] == {"automatic_action_allowed": False, "max_scope": "RESEARCH_ONLY"}
+assert p29_a["evidence"]["parameters"]["execution_delay_grid_days"] == list(range(11))
+assert p29_a["evidence"]["parameters"]["no_delay_selection_or_tuning"] is True
+assert p29_a["evidence"]["metrics"][1]["value"] == 5 / 11
+assert p29_a["evidence"]["metrics"][2]["value"] < 0
+assert "preferred execution delay" in p29_a["boundaries"]["does_not_establish"]
+assert "P29-C3:semiconductor_cross_sectional_momentum_validation_state:2026-09-08" in p29_a["lineage"]["supersedes"]
+print(json.dumps({
+    "result": "PASS",
+    "legacy_normalized_sha256": hashlib.sha256(canonical(a)).hexdigest(),
+    "p29_release_sha256": hashlib.sha256(canonical(p29_a)).hexdigest(),
+    "automatic_action_allowed": False,
+}, sort_keys=True))
