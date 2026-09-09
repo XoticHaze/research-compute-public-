@@ -16,9 +16,24 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
-      - run: python research/p46_p36_causal_entry_delay_r1.py
+      - id: evaluate
+        run: |
+          python research/p46_p36_causal_entry_delay_r1.py
+          python - <<'PY'
+          import json, os
+          x=json.load(open('artifacts/p46_p36_causal_entry_delay_r1.json'))
+          vals={
+            'decision':x['decision'],
+            'd1e50':f"{100*x['tests']['1']['50']['excess_cagr']:.3f}",
+            'd3e50':f"{100*x['tests']['3']['50']['excess_cagr']:.3f}",
+            'd5e50':f"{100*x['tests']['5']['50']['excess_cagr']:.3f}",
+            'd1folds':str(x['tests']['1']['50']['positive_folds']),
+          }
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+            for k,v in vals.items(): f.write(f'{k}={v}\n')
+          PY
       - uses: actions/upload-artifact@v4
         with:
-          name: p46-p36-causal-entry-delay-r1
+          name: p46-p36-causal__${{ steps.evaluate.outputs.decision }}__d1e50_${{ steps.evaluate.outputs.d1e50 }}pp__d3e50_${{ steps.evaluate.outputs.d3e50 }}pp__d5e50_${{ steps.evaluate.outputs.d5e50 }}pp__d1folds_${{ steps.evaluate.outputs.d1folds }}
           path: artifacts/p46_p36_causal_entry_delay_r1.json
           if-no-files-found: error
