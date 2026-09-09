@@ -1,0 +1,94 @@
+{
+  "contract": {
+    "daily_admission_rule": "1D Shareclass 10Y series must materially exceed the 1M point count and contain at least 2000 observations",
+    "frozen_variants": [
+      "1D",
+      "1W",
+      "1M"
+    ],
+    "no_model_parameter_or_cost_changes": true
+  },
+  "daily_10y_points": 0,
+  "decision": "QQQ_DAILY_ISSUER_TOTAL_RETURN_ROUTE_NOT_FOUND",
+  "monthly_10y_points": 121,
+  "parent": "P46",
+  "schema": "research.p46_qqq_daily_totalreturn_route_r1",
+  "variants": {
+    "1D": {
+      "error": "<HTTPError 400: 'Bad Request'>",
+      "profile": null,
+      "status": 400,
+      "url": "https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/QQQ/performance/rolling?idType=ticker&variationType=1D&productType=ETF"
+    },
+    "1M": {
+      "error": null,
+      "profile": {
+        "effectiveDate": "2026-08-31",
+        "lineChart10YData": {
+          "end": {
+            "date": "2026-08-31",
+            "returnPercent": 560.819984,
+            "value": 66081.9984
+          },
+          "label": "Invesco QQQ Trust, Series 1",
+          "points": 121,
+          "start": {
+            "date": "2016-08-31",
+            "returnPercent": 0,
+            "value": 10000
+          }
+        },
+        "lineChart1YData": {
+          "end": {
+            "date": "2026-08-31",
+            "returnPercent": 26.274089,
+            "value": 12627.408873
+          },
+          "label": "Invesco QQQ Trust, Series 1",
+          "points": 13,
+          "start": {
+            "date": "2025-08-31",
+            "returnPercent": 0,
+            "value": 10000
+          }
+        },
+        "lineChart3YData": {
+          "end": {
+            "date": "2026-08-31",
+            "returnPercent": 92.84072,
+            "value": 19284.072
+          },
+          "label": "Invesco QQQ Trust, Series 1",
+          "points": 37,
+          "start": {
+            "date": "2023-08-31",
+            "returnPercent": 0,
+            "value": 10000
+          }
+        },
+        "lineChart5YData": {
+          "end": {
+            "date": "2026-08-31",
+            "returnPercent": 94.346168,
+            "value": 19434.6168
+          },
+          "label": "Invesco QQQ Trust, Series 1",
+          "points": 61,
+          "start": {
+            "date": "2021-08-31",
+            "returnPercent": 0,
+            "value": 10000
+          }
+        }
+      },
+      "status": 200,
+      "url": "https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/QQQ/performance/rolling?idType=ticker&variationType=1M&productType=ETF"
+    },
+    "1W": {
+      "error": "<HTTPError 400: 'Bad Request'>",
+      "profile": null,
+      "status": 400,
+      "url": "https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/QQQ/performance/rolling?idType=ticker&variationType=1W&productType=ETF"
+    }
+  }
+}
