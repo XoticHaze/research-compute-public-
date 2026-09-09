@@ -1,0 +1,30 @@
+name: P115 Cross-Asset Logistic R1
+on:
+  pull_request:
+    paths:
+      - 'research/p115_spy_ief_logistic_allocation_r1.py'
+      - '.github/workflows/p115-crossasset-logistic-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65 scikit-learn==1.5.2
+      - id: evaluate
+        run: |
+          python research/p115_spy_ief_logistic_allocation_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p115_spy_ief_logistic_allocation_r1.json')); t=x['tests']['2020']['costs']['25']; vals={'decision':x['decision'],'balanced':f"{100*t['excess_balanced']:.2f}",'spy':f"{100*t['excess_spy']:.2f}",'folds':str(t['positive_balanced_folds'])}
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+              for k,v in vals.items(): f.write(f'{k}={v}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p115-crossasset__${{ steps.evaluate.outputs.decision }}__balanced_${{ steps.evaluate.outputs.balanced }}pp__SPY_${{ steps.evaluate.outputs.spy }}pp__folds_${{ steps.evaluate.outputs.folds }}of5
+          path: artifacts/p115_spy_ief_logistic_allocation_r1.json
+          if-no-files-found: error
