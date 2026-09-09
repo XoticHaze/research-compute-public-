@@ -1,0 +1,30 @@
+name: P46 Cost Turnover Envelope R2
+on:
+  pull_request:
+    paths:
+      - 'research/p46_cost_turnover_envelope_r2.py'
+      - '.github/workflows/p46-cost-turnover-envelope-r2.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: run
+        run: |
+          python research/p46_cost_turnover_envelope_r2.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p46_cost_turnover_envelope_r2.json')); t=x['tests']['2015']['50']
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+            f.write(f"decision={x['decision']}\n"); f.write(f"ew50={100*t['excess_equal_weight']:.2f}\n"); f.write(f"spy50={100*t['excess_spy']:.2f}\n"); f.write(f"qqq50={100*t['excess_qqq']:.2f}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p46-cost-envelope-r2__${{ steps.run.outputs.decision }}__ew50_${{ steps.run.outputs.ew50 }}__spy50_${{ steps.run.outputs.spy50 }}__qqq50_${{ steps.run.outputs.qqq50 }}
+          path: artifacts/p46_cost_turnover_envelope_r2.json
+          if-no-files-found: error
