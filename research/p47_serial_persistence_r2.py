@@ -1,0 +1,39 @@
+from __future__ import annotations
+import json
+from pathlib import Path
+import numpy as np
+import pandas as pd
+import fixed_multifactor_cross_sectional_r1 as base
+import p47_temporal_factor_discriminators_r1 as p47
+
+def cagr(r):
+    r=pd.Series(r,dtype=float).dropna()
+    return float((1+r).prod()**(12/len(r))-1)
+
+def rolling(candidate, benchmark, window):
+    vals=np.asarray([cagr(candidate.iloc[i-window:i])-cagr(benchmark.iloc[i-window:i]) for i in range(window,len(candidate)+1)])
+    return {'windows':len(vals),'positive_fraction':float((vals>0).mean()),'median_excess_cagr':float(np.median(vals)),'p10_excess_cagr':float(np.quantile(vals,.1)),'p90_excess_cagr':float(np.quantile(vals,.9))}
+
+def bootstrap(candidate, benchmark, reps=5000, block=12):
+    x=(candidate-benchmark).dropna().to_numpy(); n=len(x); rng=np.random.default_rng(20260909); vals=[]
+    for _ in range(reps):
+        chunks=[]
+        while sum(len(z) for z in chunks)<n:
+            s=int(rng.integers(0,max(1,n-block+1))); chunks.append(x[s:s+block])
+        vals.append(float(np.concatenate(chunks)[:n].mean()*12))
+    a=np.asarray(vals)
+    return {'annualized_mean_excess':float(x.mean()*12),'bootstrap_95pct':[float(np.quantile(a,.025)),float(np.quantile(a,.975))],'p_excess_le_zero':float((a<=0).mean()),'block_months':block,'replicates':reps}
+
+def main():
+    close=base.load(p47.SYMBOLS); frame=p47.rets(close,p47.FACTORS); tests={}
+    for bps in (25,50,100):
+        candidate=frame.gross-frame.turnover*bps/10000
+        controls={'matched_equal_weight':frame.ew}
+        for sym in ('SPY','QQQ'):
+            controls[sym]=close[sym].resample('ME').last().pct_change().reindex(frame.index)
+        tests[str(bps)]={name:{'rolling36':rolling(candidate,bm,36),'rolling60':rolling(candidate,bm,60),'bootstrap':bootstrap(candidate,bm)} for name,bm in controls.items()}
+    p25=tests['25']['matched_equal_weight']; p50=tests['50']['matched_equal_weight']
+    supported=p25['rolling60']['positive_fraction']>=.6 and p25['bootstrap']['p_excess_le_zero']<=.2 and p50['bootstrap']['annualized_mean_excess']>0
+    out={'schema':'research.p47_serial_persistence_r2','parent':'P47','scientific_contract':{'economics':'unchanged four-factor industry top-3 monthly composite','costs_bps':[25,50,100],'rolling_windows_months':[36,60],'bootstrap':'12m moving block 5000 reps deterministic seed','comparators':['same-universe equal weight','SPY','QQQ'],'no_parameter_tuning':True},'source':{'provider':'Yahoo Finance via yfinance','normalized_price_panel_sha256':base.source_hash(close)},'window':{'start':str(frame.index.min().date()),'end':str(frame.index.max().date()),'months':len(frame)},'tests':tests,'decision':'P47_SERIAL_PERSISTENCE_SUPPORTED' if supported else 'P47_SERIAL_PERSISTENCE_NOT_SUPPORTED'}
+    Path('artifacts').mkdir(exist_ok=True); Path('artifacts/p47_serial_persistence_r2.json').write_text(json.dumps(out,indent=2,sort_keys=True,allow_nan=False)); print(json.dumps({'decision':out['decision'],'25_matched':p25,'50_matched':p50,'25_QQQ':tests['25']['QQQ'],'window':out['window']},sort_keys=True))
+if __name__=='__main__': main()
