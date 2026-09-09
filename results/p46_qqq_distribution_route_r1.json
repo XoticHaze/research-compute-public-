@@ -1,0 +1,144 @@
+{
+  "candidates": [
+    {
+      "bytes": 349,
+      "content_type": "application/json",
+      "error": "<HTTPError 501: 'Not Implemented'>",
+      "json_profile": {
+        "keys": [
+          "error",
+          "exception",
+          "message",
+          "parameters",
+          "path",
+          "status",
+          "timestamp",
+          "transactionId"
+        ],
+        "sample": {
+          "error": "Not Implemented",
+          "exception": "ReaderException",
+          "message": "Api Not Implemented",
+          "parameters": "idType=ticker&amp;productType=ETF",
+          "path": "/adobe-global/v1/products/en_US/shareclasses/QQQ/distributions",
+          "status": 501,
+          "timestamp": "Wed Sep 09 20:41:18 GMT 2026",
+          "transactionId": "2fedbae7433decf0e40551c24ce0bb253b65a43a391734b205edecc32afbf72a"
+        },
+        "type": "dict"
+      },
+      "sha256": "8169b4a2e7c9167227f7c4945bb85a5c8514f36a718669658166241e8bf2fdb5",
+      "status": 501,
+      "url": "https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/QQQ/distributions?idType=ticker&productType=ETF"
+    },
+    {
+      "bytes": 2,
+      "content_type": "application/json",
+      "error": null,
+      "json_profile": {
+        "repr": "''",
+        "type": "str"
+      },
+      "sha256": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
+      "status": 200,
+      "url": "https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/QQQ/distribution?idType=ticker&productType=ETF"
+    },
+    {
+      "bytes": 345,
+      "content_type": "application/json",
+      "error": "<HTTPError 501: 'Not Implemented'>",
+      "json_profile": {
+        "keys": [
+          "error",
+          "exception",
+          "message",
+          "parameters",
+          "path",
+          "status",
+          "timestamp",
+          "transactionId"
+        ],
+        "sample": {
+          "error": "Not Implemented",
+          "exception": "ReaderException",
+          "message": "Api Not Implemented",
+          "parameters": "idType=ticker&amp;productType=ETF",
+          "path": "/adobe-global/v1/products/en_US/shareclasses/QQQ/dividends",
+          "status": 501,
+          "timestamp": "Wed Sep 09 20:41:18 GMT 2026",
+          "transactionId": "1fb3e6a88531aaa5f16341524eb22533534d33bb53e3ddb569acfdc63aa886df"
+        },
+        "type": "dict"
+      },
+      "sha256": "d9b43a1282424d1d36a2b25de1d976393cf2bf01f19b4c293604bca96c98213e",
+      "status": 501,
+      "url": "https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/QQQ/dividends?idType=ticker&productType=ETF"
+    },
+    {
+      "bytes": 355,
+      "content_type": "application/json",
+      "error": "<HTTPError 501: 'Not Implemented'>",
+      "json_profile": {
+        "keys": [
+          "error",
+          "exception",
+          "message",
+          "parameters",
+          "path",
+          "status",
+          "timestamp",
+          "transactionId"
+        ],
+        "sample": {
+          "error": "Not Implemented",
+          "exception": "ReaderException",
+          "message": "Api Not Implemented",
+          "parameters": "idType=ticker&amp;productType=ETF",
+          "path": "/adobe-global/v1/products/en_US/shareclasses/QQQ/distributionHistory",
+          "status": 501,
+          "timestamp": "Wed Sep 09 20:41:18 GMT 2026",
+          "transactionId": "a713096f0683e848a0f92b5165d06ae4060e2533eaf68424f68109fdfd10b4bc"
+        },
+        "type": "dict"
+      },
+      "sha256": "7750c8b0a874490ff12be6a6b14026f4e5ad4aefca02920b2365cc4cc0fd1d9c",
+      "status": 501,
+      "url": "https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/QQQ/distributionHistory?idType=ticker&productType=ETF"
+    },
+    {
+      "bytes": 356,
+      "content_type": "application/json",
+      "error": "<HTTPError 501: 'Not Implemented'>",
+      "json_profile": {
+        "keys": [
+          "error",
+          "exception",
+          "message",
+          "parameters",
+          "path",
+          "status",
+          "timestamp",
+          "transactionId"
+        ],
+        "sample": {
+          "error": "Not Implemented",
+          "exception": "ReaderException",
+          "message": "Api Not Implemented",
+          "parameters": "idType=ticker&amp;productType=ETF",
+          "path": "/adobe-global/v1/products/en_US/shareclasses/QQQ/income/distributions",
+          "status": 501,
+          "timestamp": "Wed Sep 09 20:41:18 GMT 2026",
+          "transactionId": "4c22441aab3709b7e9cb05d7f6f626285ae69554c76ba7061a7227a956381bfb"
+        },
+        "type": "dict"
+      },
+      "sha256": "ad01e10a4765e143214bd65c566085a92e3cab7ab9028f7de4d017ca16ae077a",
+      "status": 501,
+      "url": "https://dng-api.invesco.com/cache/v1/accounts/en_US/shareclasses/QQQ/income/distributions?idType=ticker&productType=ETF"
+    }
+  ],
+  "decision": "OFFICIAL_DISTRIBUTION_ROUTE_FOUND",
+  "parent": "P46",
+  "purpose": "discover official Invesco QQQ dated distribution surface required to reconstruct issuer total return without changing P46",
+  "schema": "research.p46_qqq_distribution_route_r1"
+}
