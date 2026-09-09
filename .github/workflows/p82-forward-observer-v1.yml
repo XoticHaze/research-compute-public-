@@ -5,6 +5,7 @@ on:
     paths:
       - 'research/p82_forward_observer_contract_v1.json'
       - 'research/p82_forward_observer_v1.py'
+      - 'research/p82_forward_score_v1.py'
       - '.github/workflows/p82-forward-observer-v1.yml'
   workflow_dispatch:
   schedule:
@@ -64,7 +65,7 @@ jobs:
           set -euo pipefail
           source_path='control/artifacts/p82_forward_observer_v1.json'
           selection="$(python -c 'import json; print(json.load(open("control/artifacts/p82_forward_observer_v1.json"))["selection_month"])')"
-          mkdir -p "ledger/$LEDGER_ROOT/predictions"
+          mkdir -p "ledger/$LEDGER_ROOT/predictions" "ledger/$LEDGER_ROOT/scorecards"
           normalized="$(mktemp)"
           python - "$source_path" "$normalized" <<'PY'
           import json, sys
@@ -98,6 +99,22 @@ jobs:
           assert not any(x['protected_boundaries'].values())
           print(f'P82_IMMUTABLE_PREDICTION_ACCEPTANCE=PASS:{p}')
           PY
+      - name: Score only matured immutable receipts
+        run: |
+          python control/research/p82_forward_score_v1.py \
+            --ledger-dir "ledger/$LEDGER_ROOT/predictions" \
+            --output-dir "ledger/$LEDGER_ROOT/scorecards" \
+            | tee /tmp/p82_score_readiness.json
+      - name: Verify maturity consumer is fail-closed
+        run: |
+          python - <<'PY'
+          import json
+          x = json.load(open('/tmp/p82_score_readiness.json'))
+          assert x['schema'] == 'research.p82_forward_score_readiness.v1'
+          assert x['status'] in {'NOT_MATURE','SCORED'}
+          assert x['scored'] <= max(0, x['prediction_receipts'] - 1)
+          print('P82_FORWARD_SCORE_READINESS=PASS', x)
+          PY
       - name: Persist immutable ledger
         if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'
         working-directory: ledger
@@ -106,7 +123,7 @@ jobs:
           set -euo pipefail
           git config user.name 'research-forward-ledger'
           git config user.email '152584286+XoticHaze@users.noreply.github.com'
-          git add "$LEDGER_ROOT/predictions/${selection}.json"
+          git add "$LEDGER_ROOT/predictions/${selection}.json" "$LEDGER_ROOT/scorecards"
           if git diff --cached --quiet; then
             echo 'ledger already current'
             exit 0
@@ -119,5 +136,6 @@ jobs:
           path: |
             control/artifacts/p82_forward_observer_v1.json
             ledger/research/forward_ledgers/p82/predictions/*.json
-          if-no-files-found: error
+            ledger/research/forward_ledgers/p82/scorecards/*.json
+          if-no-files-found: warn
           retention-days: 90
