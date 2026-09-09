@@ -9,6 +9,12 @@
     "job_id": 102403972407,
     "head_sha": "d7360d155be7c212c8d6648b0dbb8711ff6cfe06"
   },
+  "frozen_model_blobs": {
+    "research/fixed_multifactor_cross_sectional_r1.py": "90b8d7140b432e32298e499f62c732dd037bc5ce",
+    "research/p47_deep_robustness_r2.py": "1601e444d053f1bc3590f8c1ed3ebdeca8b97819",
+    "research/p57_crossasset_parsimonious_r1.py": "7235ba5ee13c597bbe282d0a4c543c008fe8e900",
+    "research/p66_combination_serial_persistence_r1.py": "b157ba70abea7a550dfecc8c6736a5a4843d66d6"
+  },
   "candidate": {
     "p82_weights": {"P64": 0.5, "P36": 0.5},
     "p64": {
