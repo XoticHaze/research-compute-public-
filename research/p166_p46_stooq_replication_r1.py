@@ -9,7 +9,11 @@ def load():
  for s in U:
   url=f'https://stooq.com/q/d/l/?s={s.lower()}.us&i=d&d1=20050101&d2=20260909'
   req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 research-validation/1.0','Accept':'text/csv,*/*'})
-  raw=urllib.request.urlopen(req,timeout=30).read(); z=pd.read_csv(io.BytesIO(raw),parse_dates=['Date']).set_index('Date').sort_index()
+  raw=urllib.request.urlopen(req,timeout=30).read(); text=raw.decode('utf-8','replace')
+  first=text.splitlines()[0] if text.splitlines() else ''
+  print(f'STOOQ_SOURCE symbol={s} bytes={len(raw)} first_line={first[:160]!r}')
+  if not first.startswith('Date,'): raise RuntimeError(f'Stooq non-CSV response for {s}: {text[:300]!r}')
+  z=pd.read_csv(io.StringIO(text),parse_dates=['Date']).set_index('Date').sort_index()
   if 'Close' not in z or len(z)<500: raise RuntimeError(f'Stooq invalid panel for {s}: rows={len(z)} columns={list(z.columns)}')
   out[s]=z['Close'].astype(float)
  d=pd.DataFrame(out).dropna(); last=pd.Timestamp(d.index.max()); cut=last.to_period('M').start_time-pd.Timedelta(days=1); return d.loc[d.index<=cut],cut
