@@ -1,0 +1,32 @@
+name: P133 Credit Source Span Probe R1
+on:
+  pull_request:
+    paths:
+      - 'research/p133_credit_source_span_probe_r1.py'
+      - '.github/workflows/p133-credit-source-span-probe-r1.yml'
+permissions: {contents: read}
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check pandas==2.2.3 requests==2.34.2 yfinance==0.2.65
+      - id: run
+        run: |
+          python research/p133_credit_source_span_probe_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p133_credit_source_span_probe_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+            f.write(f"classification={x['classification']}\n")
+            f.write(f"fredrows={x['fred']['rows']}\n")
+            f.write(f"months={x['monthly']['joint_months']}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p133-source-span__${{ steps.run.outputs.classification }}__fred_${{ steps.run.outputs.fredrows }}__months_${{ steps.run.outputs.months }}
+          path: artifacts/p133_credit_source_span_probe_r1.json
+          if-no-files-found: error
