@@ -33,13 +33,16 @@ def evaluate(fr, bps):
     return {'candidate':cm,'matched_equal_weight':bm,'excess_cagr':cm['cagr']-bm['cagr'],'positive_folds':pos,'folds':folds}
 
 def main():
-    close=base.load(FULL); tests={}
+    close=base.load(FULL)
+    current_month_start=pd.Timestamp.now(tz='UTC').tz_localize(None).to_period('M').to_timestamp()
+    close=close.loc[close.index<current_month_start]
+    tests={}
     variants={'full':FULL, **{f'without_{s}':tuple(x for x in FULL if x!=s) for s in FULL}}
     for name,symbols in variants.items():
-        fr=build(close,symbols); tests[name]={'symbols':list(symbols),'25':evaluate(fr,25),'50':evaluate(fr,50)}
+        fr=build(close,symbols); tests[name]={'symbols':list(symbols),'window':{'start':str(fr.index.min().date()),'end':str(fr.index.max().date()),'months':len(fr)},'25':evaluate(fr,25),'50':evaluate(fr,50)}
     loo=[v for k,v in tests.items() if k!='full']
     supported=sum(v['25']['excess_cagr']>0 and v['50']['excess_cagr']>0 and v['25']['positive_folds']>=3 for v in loo)>=4
-    out={'schema':'research.p46_leave_one_asset_out_r1','parent':'P46','scientific_contract':{'economics':'fixed four-factor top-2 monthly cross-asset composite','test':'remove each asset one at a time and recompute ranks/weights on remaining four assets','costs_bps':[25,50],'matched_control':'equal weight of same remaining universe','no_parameter_tuning':True},'source':{'provider':'Yahoo Finance via yfinance','normalized_price_panel_sha256':base.source_hash(close)},'tests':tests,'decision':'P46_UNIVERSE_ROBUSTNESS_SUPPORTED' if supported else 'P46_UNIVERSE_DEPENDENCE_DETECTED'}
+    out={'schema':'research.p46_leave_one_asset_out_r1','parent':'P46','scientific_contract':{'economics':'fixed four-factor top-2 monthly cross-asset composite','test':'remove each asset one at a time and recompute ranks/weights on remaining four assets','costs_bps':[25,50],'matched_control':'equal weight of same remaining universe','incomplete_months_excluded':True,'no_parameter_tuning':True},'source':{'provider':'Yahoo Finance via yfinance','normalized_complete_month_price_panel_sha256':base.source_hash(close)},'tests':tests,'decision':'P46_UNIVERSE_ROBUSTNESS_SUPPORTED' if supported else 'P46_UNIVERSE_DEPENDENCE_DETECTED'}
     Path('artifacts').mkdir(exist_ok=True); Path('artifacts/p46_leave_one_asset_out_r1.json').write_text(json.dumps(out,indent=2,sort_keys=True,allow_nan=False))
-    print(json.dumps({'decision':out['decision'],'summary':{k:{'excess25':v['25']['excess_cagr'],'folds25':v['25']['positive_folds'],'excess50':v['50']['excess_cagr']} for k,v in tests.items()}},sort_keys=True))
+    print(json.dumps({'decision':out['decision'],'summary':{k:{'window':v['window'],'excess25':v['25']['excess_cagr'],'folds25':v['25']['positive_folds'],'excess50':v['50']['excess_cagr']} for k,v in tests.items()}},sort_keys=True))
 if __name__=='__main__': main()
