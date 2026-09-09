@@ -21,9 +21,10 @@ def folds(a,b):
     return out
 
 def build():
-    close=base.load(ALL).sort_index(); m=close.resample('ME').last(); dr=close.pct_change()
+    close=base.load(ALL).sort_index(); last=pd.Timestamp(close.index.max()); last=last.tz_localize(None) if last.tzinfo else last; cutoff=last.to_period('M').start_time-pd.Timedelta(days=1)
+    m=close.resample('ME').last(); m=m.loc[m.index<=cutoff]; dr=close.pct_change()
     mom=m[list(SECTORS)].pct_change(6)
-    vol=(dr[list(SECTORS)].rolling(VW,min_periods=VW-5).std(ddof=1)*math.sqrt(252)).resample('ME').last()
+    vol=(dr[list(SECTORS)].rolling(VW,min_periods=VW-5).std(ddof=1)*math.sqrt(252)).resample('ME').last().reindex(m.index)
     rec=[]; prev_ra={}; prev_raw={}
     for i,dt in enumerate(m.index[:-1]):
         if i<6: continue
@@ -35,7 +36,7 @@ def build():
         tra=.5*sum(abs(wr[s]-prev_ra.get(s,0.)) for s in SECTORS); trw=.5*sum(abs(ww[s]-prev_raw.get(s,0.)) for s in SECTORS)
         row={'date':nxt,'ra_gross':sum(wr[s]*float(ret[s]) for s in SECTORS),'raw_gross':sum(ww[s]*float(ret[s]) for s in SECTORS),'ra_turn':tra,'raw_turn':trw,'equal_sector':float(ret[list(SECTORS)].mean()),'spy':float(ret.SPY),'qqq':float(ret.QQQ)}
         rec.append(row); prev_ra=wr; prev_raw=ww
-    return pd.DataFrame(rec).set_index('date'),close
+    return pd.DataFrame(rec).set_index('date'),close,cutoff
 
 def eval_window(q,bp):
     ra=q.ra_gross-q.ra_turn*bp/10000; raw=q.raw_gross-q.raw_turn*bp/10000
@@ -43,7 +44,7 @@ def eval_window(q,bp):
     return {'months':len(q),'ra_cagr':cagr(ra),'raw_cagr':cagr(raw),'equal_sector_cagr':cagr(q.equal_sector),'spy_cagr':cagr(q.spy),'qqq_cagr':cagr(q.qqq),'ra_mdd':mdd(ra),'raw_mdd':mdd(raw),'equal_sector_mdd':mdd(q.equal_sector),'excess_vs_raw':cagr(ra)-cagr(raw),'excess_vs_equal_sector':cagr(ra)-cagr(q.equal_sector),'excess_vs_spy':cagr(ra)-cagr(q.spy),'excess_vs_qqq':cagr(ra)-cagr(q.qqq),'positive_folds_vs_raw':sum(x['excess_cagr']>0 for x in fr),'positive_folds_vs_equal_sector':sum(x['excess_cagr']>0 for x in fe),'folds_vs_raw':fr,'folds_vs_equal_sector':fe}
 
 def main():
-    f,close=build(); out={'schema':'research.p15_temporal_adjudicator_r1','parent':'P15','hypothesis':'Frozen 126-session momentum divided by prior 63-session realized volatility adds persistent after-cost value over raw sector momentum in later chronology, not merely in the long aggregate sample.','scientific_contract':{'universe':list(SECTORS),'lookback_sessions':LB,'vol_window_sessions':VW,'top_k':TOP,'costs_bps':list(COSTS),'matched_claim_control':'raw positive momentum top-3','other_controls':['equal-sector','SPY','QQQ'],'windows':WINDOWS,'chronological_folds':5,'no_parameter_tuning':True},'tests':{},'source':{'provider':'Yahoo Finance via yfinance; research-only','panel_sha256':base.source_hash(close)}}
+    f,close,cutoff=build(); out={'schema':'research.p15_temporal_adjudicator_r1','parent':'P15','hypothesis':'Frozen 126-session momentum divided by prior 63-session realized volatility adds persistent after-cost value over raw sector momentum in later chronology, not merely in the long aggregate sample.','scientific_contract':{'universe':list(SECTORS),'lookback_sessions':LB,'vol_window_sessions':VW,'top_k':TOP,'costs_bps':list(COSTS),'matched_claim_control':'raw positive momentum top-3','other_controls':['equal-sector','SPY','QQQ'],'windows':WINDOWS,'chronological_folds':5,'complete_months_only':True,'no_parameter_tuning':True},'tests':{},'source':{'provider':'Yahoo Finance via yfinance; research-only','panel_sha256':base.source_hash(close),'last_complete_month_end':str(cutoff.date())}}
     for name,start in WINDOWS.items():
         q=f if start is None else f.loc[pd.Timestamp(start):]
         out['tests'][name]={str(bp):eval_window(q,bp) for bp in COSTS}
