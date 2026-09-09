@@ -1,0 +1,31 @@
+name: P46 P86 Portfolio Block Bootstrap R1
+on:
+  pull_request:
+    paths:
+      - 'research/p46_p86_portfolio_block_bootstrap_r1.py'
+      - '.github/workflows/p46-p86-portfolio-block-bootstrap-r1.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: evaluate
+        run: |
+          python research/p46_p86_portfolio_block_bootstrap_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p46_p86_portfolio_block_bootstrap_r1.json')); t=x['tests']['2020_forward']; b=t['bootstrap']; vals={'decision':x['decision'],'pcagr':f"{b['p_blend_cagr_le_p86']:.3f}",'psharpe':f"{b['p_blend_sharpe_le_p86']:.3f}",'pqqq':f"{b['p_blend_cagr_le_qqq']:.3f}"}
+          with open(os.environ['GITHUB_OUTPUT'],'a') as z:
+            for k,v in vals.items(): z.write(f'{k}={v}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p46-p86-bootstrap__${{ steps.evaluate.outputs.decision }}__pCagrLeP86_${{ steps.evaluate.outputs.pcagr }}__pSharpeLeP86_${{ steps.evaluate.outputs.psharpe }}__pCagrLeQQQ_${{ steps.evaluate.outputs.pqqq }}
+          path: artifacts/p46_p86_portfolio_block_bootstrap_r1.json
+          if-no-files-found: error
