@@ -1,0 +1,8 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+const MM_PRODUCT_HEAD='7c87a5d7ec3d24ca05b2a2db5222dd96867f0d3d'
+const r={run:34387584731,job:102587647937,artifact:10118304904,head:'ae6be0c49620e18a7f5d069b842a034006943bab',decision:'KEEP_P46_SUPPORTED_SCOPE_REDUCE_STANDALONE_CONFIDENCE_REQUIRE_RISK_UTILITY_ADJUDICATOR',turnover:3.34,y2015:{matched25:.0262,matched50:.0169,spy25:-.0056,spy50:-.0149,qqq0:-.0475,maxPositiveMatchedCost:50}}
+test('bind exact P46 product head',()=>assert.equal(MM_PRODUCT_HEAD,'7c87a5d7ec3d24ca05b2a2db5222dd96867f0d3d'))
+test('preserve matched alpha but weak standalone opportunity',()=>{assert.match(r.decision,/REDUCE_STANDALONE_CONFIDENCE/);assert.ok(r.y2015.matched25>0&&r.y2015.matched50>0);assert.ok(r.y2015.spy25<0&&r.y2015.spy50<0&&r.y2015.qqq0<0);assert.equal(r.y2015.maxPositiveMatchedCost,50);assert.equal(r.turnover,3.34)})
+test('preserve exact execution identity',()=>assert.deepEqual([r.run,r.job,r.artifact,r.head],[34387584731,102587647937,10118304904,'ae6be0c49620e18a7f5d069b842a034006943bab']))
+test('no product expansion into portfolio or trading authority',()=>assert.deepEqual(Object.values({ranking:false,allocation:false,sizing:false,promotion:false,strategySpec:false,runtime:false,data:false,broker:false,live:false}),Array(9).fill(false)))
