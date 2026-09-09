@@ -44,11 +44,7 @@ def build_rep(assets: tuple[str, ...]) -> tuple[pd.DataFrame, dict]:
         next_r = monthly.loc[nxt, list(all_symbols)] / monthly.loc[dt, list(all_symbols)] - 1
         if req.isna().any().any() or next_r.isna().any():
             continue
-        scores = {
-            "p105": req.rank(pct=True).mean(axis=1),
-            "m6": req.m6.rank(pct=True),
-            "m12": req.m12.rank(pct=True),
-        }
+        scores = {"p105": req.rank(pct=True).mean(axis=1), "m6": req.m6.rank(pct=True), "m12": req.m12.rank(pct=True)}
         row = {"date": nxt, "equal_weight": float(next_r.loc[list(assets)].mean()), "spy": float(next_r.SPY), "qqq": float(next_r.QQQ)}
         for name, score in scores.items():
             w = top2(score, assets)
@@ -67,17 +63,7 @@ def evaluate(f: pd.DataFrame, start: str, bps: int) -> dict:
     m12 = g.m12_gross - g.m12_turn * bps / 10000
     inc = p105 - m6
     keep = inc.sort_values(ascending=False).index[min(5, len(inc)):]
-    return {
-        "window": {"start": str(g.index.min().date()), "end": str(g.index.max().date()), "months": len(g)},
-        "p105": base.metrics(p105), "m6": base.metrics(m6), "m12": base.metrics(m12), "equal_weight": base.metrics(g.equal_weight),
-        "p105_excess_vs_equal_weight": base.metrics(p105)["cagr"] - base.metrics(g.equal_weight)["cagr"],
-        "p105_incremental_vs_m6": base.metrics(p105)["cagr"] - base.metrics(m6)["cagr"],
-        "p105_incremental_vs_m12": base.metrics(p105)["cagr"] - base.metrics(m12)["cagr"],
-        "positive_folds_vs_m6": folds(p105, m6),
-        "five_strongest_p105_minus_m6_months_removed_cagr": base.metrics(p105.loc[keep])["cagr"] - base.metrics(m6.loc[keep])["cagr"],
-        "p105_annual_turnover": float(g.p105_turn.mean() * 12),
-        "m6_annual_turnover": float(g.m6_turn.mean() * 12),
-    }
+    return {"window": {"start": str(g.index.min().date()), "end": str(g.index.max().date()), "months": len(g)}, "p105": base.metrics(p105), "m6": base.metrics(m6), "m12": base.metrics(m12), "equal_weight": base.metrics(g.equal_weight), "p105_excess_vs_equal_weight": base.metrics(p105)["cagr"] - base.metrics(g.equal_weight)["cagr"], "p105_incremental_vs_m6": base.metrics(p105)["cagr"] - base.metrics(m6)["cagr"], "p105_incremental_vs_m12": base.metrics(p105)["cagr"] - base.metrics(m12)["cagr"], "positive_folds_vs_m6": folds(p105, m6), "five_strongest_p105_minus_m6_months_removed_cagr": base.metrics(p105.loc[keep])["cagr"] - base.metrics(m6.loc[keep])["cagr"], "p105_annual_turnover": float(g.p105_turn.mean() * 12), "m6_annual_turnover": float(g.m6_turn.mean() * 12)}
 
 
 def main() -> None:
