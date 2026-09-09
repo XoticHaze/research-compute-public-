@@ -1,0 +1,277 @@
+{
+  "contract": {
+    "costs_bps": [
+      25,
+      50,
+      100
+    ],
+    "decision_rule": "matched-control support requires positive 50-bps excess in at least three of four fixed windows; opportunity-cost weakness is reported separately rather than converted into a model kill",
+    "fixed_windows": {
+      "2020_forward": "2020-01",
+      "2022_forward": "2022-01",
+      "2024_forward": "2024-01",
+      "full": null
+    },
+    "no_parameter_or_weight_changes": true,
+    "same_rows_and_controls_as_source_replay": true
+  },
+  "decision": "P46_ISSUER_MATCHED_ALPHA_CHRONOLOGY_SUPPORTED",
+  "parent": "P46",
+  "positive_50bps_windows": 4,
+  "schema": "research.p46_issuer_replay_chronology_r1",
+  "source_result_sha": "research.p46_issuer_totalreturn_replay_r1",
+  "windows": {
+    "2020_forward": {
+      "costs": {
+        "100": {
+          "candidate_cagr": 0.14373313594622927,
+          "candidate_max_drawdown": -0.12972137522099936,
+          "folds_vs_matched": {
+            "count": 5,
+            "positive": 3,
+            "values": [
+              0.06226041662847215,
+              0.01497339424672628,
+              -0.05829387328662561,
+              0.07077068856726942,
+              -0.023269819285385962
+            ]
+          },
+          "matched_ew_excess_cagr": 0.012181311732768929,
+          "qqq_excess_cagr": -0.06336810893239875,
+          "spy_excess_cagr": -0.011296146066064328
+        },
+        "25": {
+          "candidate_cagr": 0.1700086030058625,
+          "candidate_max_drawdown": -0.12972137522099925,
+          "folds_vs_matched": {
+            "count": 5,
+            "positive": 4,
+            "values": [
+              0.09009599879608254,
+              0.02927560628182002,
+              -0.02912449512521298,
+              0.09068030688345652,
+              0.01873639965061269
+            ]
+          },
+          "matched_ew_excess_cagr": 0.03845677879240217,
+          "qqq_excess_cagr": -0.03709264187276551,
+          "spy_excess_cagr": 0.014979320993568912
+        },
+        "50": {
+          "candidate_cagr": 0.1611950479563271,
+          "candidate_max_drawdown": -0.12972137522099936,
+          "folds_vs_matched": {
+            "count": 5,
+            "positive": 4,
+            "values": [
+              0.08076060214689007,
+              0.024492037142740175,
+              -0.03892373458041187,
+              0.08401529250965067,
+              0.004596320143886334
+            ]
+          },
+          "matched_ew_excess_cagr": 0.029643223742866764,
+          "qqq_excess_cagr": -0.04590619692230091,
+          "spy_excess_cagr": 0.006165765944033508
+        }
+      },
+      "matched_ew_cagr": 0.13155182421346034,
+      "matched_ew_max_drawdown": -0.1771774832734353,
+      "months": 80,
+      "qqq_cagr": 0.20710124487862802,
+      "spy_cagr": 0.1550292820122936
+    },
+    "2022_forward": {
+      "costs": {
+        "100": {
+          "candidate_cagr": 0.1117702472233022,
+          "candidate_max_drawdown": -0.12972137522099925,
+          "folds_vs_matched": {
+            "count": 5,
+            "positive": 3,
+            "values": [
+              0.04261575232548187,
+              -0.11754206633478415,
+              0.09476831694945576,
+              -0.009571531318118165,
+              0.002115353665246289
+            ]
+          },
+          "matched_ew_excess_cagr": 0.0032695686570551885,
+          "qqq_excess_cagr": -0.02972776105348851,
+          "spy_excess_cagr": -0.011023983865468434
+        },
+        "25": {
+          "candidate_cagr": 0.13847716666909515,
+          "candidate_max_drawdown": -0.12972137522099925,
+          "folds_vs_matched": {
+            "count": 5,
+            "positive": 4,
+            "values": [
+              0.05603058926519844,
+              -0.09188663569513555,
+              0.12032622597058262,
+              0.019754437489651666,
+              0.04685077658873671
+            ]
+          },
+          "matched_ew_excess_cagr": 0.029976488102848142,
+          "qqq_excess_cagr": -0.003020841607695557,
+          "spy_excess_cagr": 0.01568293558032452
+        },
+        "50": {
+          "candidate_cagr": 0.12951602513821814,
+          "candidate_max_drawdown": -0.12972137522099936,
+          "folds_vs_matched": {
+            "count": 5,
+            "positive": 4,
+            "values": [
+              0.05154252863834485,
+              -0.10049785080260798,
+              0.11176526514865404,
+              0.009911617150599739,
+              0.0317776129654157
+            ]
+          },
+          "matched_ew_excess_cagr": 0.021015346571971127,
+          "qqq_excess_cagr": -0.011981983138572572,
+          "spy_excess_cagr": 0.006721794049447505
+        }
+      },
+      "matched_ew_cagr": 0.10850067856624701,
+      "matched_ew_max_drawdown": -0.1771774832734353,
+      "months": 56,
+      "qqq_cagr": 0.1414980082767907,
+      "spy_cagr": 0.12279423108877063
+    },
+    "2024_forward": {
+      "costs": {
+        "100": {
+          "candidate_cagr": 0.2182666779050264,
+          "candidate_max_drawdown": -0.0438072772260133,
+          "folds_vs_matched": {
+            "count": 5,
+            "positive": 4,
+            "values": [
+              0.0484011803020985,
+              0.08904715399535368,
+              -0.09936528471411799,
+              0.04310432799553743,
+              0.042150270097535136
+            ]
+          },
+          "matched_ew_excess_cagr": 0.025668193276620954,
+          "qqq_excess_cagr": -0.02201026606392409,
+          "spy_excess_cagr": 0.008232816658709119
+        },
+        "25": {
+          "candidate_cagr": 0.2489606311324013,
+          "candidate_max_drawdown": -0.04270460795131725,
+          "folds_vs_matched": {
+            "count": 5,
+            "positive": 4,
+            "values": [
+              0.06364137273547987,
+              0.11228567892810792,
+              -0.06682289360992977,
+              0.08561884965979916,
+              0.08656923703836483
+            ]
+          },
+          "matched_ew_excess_cagr": 0.05636214650399585,
+          "qqq_excess_cagr": 0.008683687163450804,
+          "spy_excess_cagr": 0.03892676988608401
+        },
+        "50": {
+          "candidate_cagr": 0.23865696491210708,
+          "candidate_max_drawdown": -0.04270460795131725,
+          "folds_vs_matched": {
+            "count": 5,
+            "positive": 4,
+            "values": [
+              0.0585464500564965,
+              0.10450017012892299,
+              -0.07776551655311525,
+              0.07132473713061671,
+              0.07160038579535133
+            ]
+          },
+          "matched_ew_excess_cagr": 0.04605848028370163,
+          "qqq_excess_cagr": -0.0016199790568434125,
+          "spy_excess_cagr": 0.028623103665789795
+        }
+      },
+      "matched_ew_cagr": 0.19259848462840545,
+      "matched_ew_max_drawdown": -0.04297583414651396,
+      "months": 32,
+      "qqq_cagr": 0.2402769439689505,
+      "spy_cagr": 0.2100338612463173
+    },
+    "full": {
+      "costs": {
+        "100": {
+          "candidate_cagr": 0.13163317705954247,
+          "candidate_max_drawdown": -0.12972137522099936,
+          "folds_vs_matched": {
+            "count": 5,
+            "positive": 3,
+            "values": [
+              0.04928762637429496,
+              -0.07263970114217067,
+              0.07437834485288497,
+              -0.034200310951822965,
+              0.009021922055798992
+            ]
+          },
+          "matched_ew_excess_cagr": 0.007334110493588231,
+          "qqq_excess_cagr": -0.07691287589753615,
+          "spy_excess_cagr": -0.02146682508544373
+        },
+        "25": {
+          "candidate_cagr": 0.1554374914836547,
+          "candidate_max_drawdown": -0.12972137522099936,
+          "folds_vs_matched": {
+            "count": 5,
+            "positive": 3,
+            "values": [
+              0.06641524076821836,
+              -0.050642748019727346,
+              0.0912388277910432,
+              -0.005246573759484008,
+              0.04429944125947305
+            ]
+          },
+          "matched_ew_excess_cagr": 0.03113842491770047,
+          "qqq_excess_cagr": -0.05310856147342391,
+          "spy_excess_cagr": 0.002337489338668508
+        },
+        "50": {
+          "candidate_cagr": 0.14745810328708164,
+          "candidate_max_drawdown": -0.12972137522099925,
+          "folds_vs_matched": {
+            "count": 5,
+            "positive": 3,
+            "values": [
+              0.060683590645446595,
+              -0.05801130241278951,
+              0.0855968113748169,
+              -0.01496489147395308,
+              0.032441206059458993
+            ]
+          },
+          "matched_ew_excess_cagr": 0.023159036721127402,
+          "qqq_excess_cagr": -0.06108794966999698,
+          "spy_excess_cagr": -0.005641898857904559
+        }
+      },
+      "matched_ew_cagr": 0.12429906656595424,
+      "matched_ew_max_drawdown": -0.17717748327343508,
+      "months": 115,
+      "qqq_cagr": 0.20854605295707862,
+      "spy_cagr": 0.1531000021449862
+    }
+  }
+}
