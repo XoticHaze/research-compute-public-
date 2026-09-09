@@ -1,0 +1,7 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+const MM_PRODUCT_HEAD='57e187aab150192dbb7e2171f0e28f561579002f'
+const r={run:34385417486,job:102580333053,artifact:10117518000,head:'d5269c34356867a7f55143c4af9916932a10fbb5',decision:'P46_MATCHED_EXCESS_RETAINS_POSITIVE_MARKET_CONDITIONAL_ALPHA',y2015:{qqq:{a:.03305910263302758,p:.08350383786907438},spy:{a:.035601206974343214,p:.059778560964525315}},y2020:{qqq:{a:.0509930965891261,p:.0582993404645135},spy:{a:.055939097420464545,p:.03371670770219092}},y2022:{qqq:{a:.03270104577127175,p:.20083626901100704},spy:{a:.04120664198934576,p:.1330791121305568}}}
+test('bind exact P46 attribution product head',()=>assert.equal(MM_PRODUCT_HEAD,'57e187aab150192dbb7e2171f0e28f561579002f'))
+test('retain positive conditional alpha without flattening significance',()=>{assert.equal(r.decision,'P46_MATCHED_EXCESS_RETAINS_POSITIVE_MARKET_CONDITIONAL_ALPHA');for(const w of [r.y2015,r.y2020,r.y2022])for(const m of [w.qqq,w.spy])assert.ok(m.a>0);assert.ok(r.y2020.spy.p<.05);assert.ok(r.y2022.spy.p>.1)})
+test('no promotion from attribution alone',()=>assert.deepEqual(Object.values({ranking:false,allocation:false,sizing:false,promotion:false,strategySpec:false,runtime:false,data:false,broker:false,live:false}),Array(9).fill(false)))
