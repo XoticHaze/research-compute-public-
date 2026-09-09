@@ -1,0 +1,26 @@
+name: Futures Crossmarket Screen R1
+on:
+  pull_request:
+    paths:
+      - 'research/futures_crossmarket_screen_r1.py'
+      - '.github/workflows/futures-crossmarket-screen-r1.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install frozen screening dependencies
+        run: python -m pip install --disable-pip-version-check numpy pandas yfinance
+      - name: Execute frozen cross-futures external-proxy screen
+        run: python research/futures_crossmarket_screen_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: futures-crossmarket-screen-r1
+          path: futures_crossmarket_screen_r1.json
