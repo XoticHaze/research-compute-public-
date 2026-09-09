@@ -1,5 +1,6 @@
 from __future__ import annotations
 import hashlib, json, math
+from datetime import datetime, timezone
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -59,14 +60,17 @@ def _score_from_normalized(bars: pd.DataFrame) -> tuple[pd.Timestamp, pd.Series,
 
 def main() -> None:
     OUT.mkdir(exist_ok=True)
+    generated_at = datetime.now(timezone.utc)
     bars = _yahoo_normalized()
     fixture = _ibkr_shape_fixture()
     feature_month, score, chosen, features = _score_from_normalized(bars)
     latest_bar = bars.timestamp.max()
     weights = {s:(0.5 if s in chosen else 0.0) for s in U}
     bar_csv = bars.to_csv(index=False, float_format="%.10g")
+    next_native_boundary = (pd.Timestamp(generated_at.date()).to_period("M").end_time.normalize()).date().isoformat()
     artifact = {
         "schema":"research.model_forward_snapshot.v1",
+        "generated_at":generated_at.isoformat(),
         "model":{
             "id":"P46", "version":"fixed_original_four_factor_top2_r1", "status":"SHADOW_FORWARD",
             "decision_cadence":"monthly", "feature_timeframe":"1 day bars", "holding_period":"next complete month",
@@ -90,6 +94,14 @@ def main() -> None:
             "features":{s:{k:float(v) for k,v in features.loc[s].items()} for s in U},
             "action":"REBALANCE_AT_NEXT_ELIGIBLE_MONTH_BOUNDARY",
         },
+        "forward_evidence":{
+            "state":"HARNESS_SHAKEDOWN",
+            "recorded_after_current_native_period_began":True,
+            "retroactive_pnl_credit_allowed":False,
+            "current_partial_period_use":"operational feed/UI validation only",
+            "next_native_decision_boundary":next_native_boundary,
+            "first_full_scientific_forward_period":"period immediately after next native decision boundary"
+        },
         "boundaries":{
             "research_only":True, "broker_action":False, "runtime_mutation":False, "live_trading_change":False,
             "portfolio_allocation_authority":False,
@@ -98,7 +110,7 @@ def main() -> None:
     payload = json.dumps(artifact, indent=2, sort_keys=True, allow_nan=False)
     (OUT / "p46_forward_shadow_r1.json").write_text(payload)
     (OUT / "normalized_bar_contract_fixture.json").write_text(json.dumps(fixture, indent=2, sort_keys=True))
-    print(json.dumps({"decision":artifact["decision"],"input_contract":artifact["input_contract"],"source":artifact["source"]}, sort_keys=True))
+    print(json.dumps({"decision":artifact["decision"],"forward_evidence":artifact["forward_evidence"],"input_contract":artifact["input_contract"],"source":artifact["source"]}, sort_keys=True))
 
 if __name__ == "__main__":
     main()
