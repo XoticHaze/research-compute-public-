@@ -1,0 +1,286 @@
+{
+  "checks": {
+    "2023": {
+      "abs_error_pp": 93.9742122080635,
+      "distributions_used": [
+        {
+          "distribution_per_share": 0.275496,
+          "ex_date": "2023-02-01",
+          "nav": 108.087612,
+          "nav_date": "2023-02-01"
+        },
+        {
+          "distribution_per_share": 0.249766,
+          "ex_date": "2023-03-01",
+          "nav": 100.277445,
+          "nav_date": "2023-03-01"
+        },
+        {
+          "distribution_per_share": 0.268755,
+          "ex_date": "2023-04-03",
+          "nav": 106.445616,
+          "nav_date": "2023-04-03"
+        },
+        {
+          "distribution_per_share": 0.267995,
+          "ex_date": "2023-05-01",
+          "nav": 103.102015,
+          "nav_date": "2023-05-01"
+        },
+        {
+          "distribution_per_share": 0.273047,
+          "ex_date": "2023-06-01",
+          "nav": 102.921633,
+          "nav_date": "2023-06-01"
+        },
+        {
+          "distribution_per_share": 0.277716,
+          "ex_date": "2023-07-03",
+          "nav": 102.025129,
+          "nav_date": "2023-07-03"
+        },
+        {
+          "distribution_per_share": 0.275282,
+          "ex_date": "2023-08-01",
+          "nav": 98.100875,
+          "nav_date": "2023-08-01"
+        },
+        {
+          "distribution_per_share": 0.288579,
+          "ex_date": "2023-09-01",
+          "nav": 94.80122,
+          "nav_date": "2023-09-01"
+        },
+        {
+          "distribution_per_share": 0.280014,
+          "ex_date": "2023-10-02",
+          "nav": 86.934555,
+          "nav_date": "2023-10-02"
+        },
+        {
+          "distribution_per_share": 0.286291,
+          "ex_date": "2023-11-01",
+          "nav": 85.025126,
+          "nav_date": "2023-11-01"
+        },
+        {
+          "distribution_per_share": 0.28892,
+          "ex_date": "2023-12-01",
+          "nav": 92.83989,
+          "nav_date": "2023-12-01"
+        },
+        {
+          "distribution_per_share": 0.310534,
+          "ex_date": "2023-12-14",
+          "nav": 98.874896,
+          "nav_date": "2023-12-14"
+        }
+      ],
+      "end_nav_date": "2023-12-31",
+      "issuer_calendar_nav_total_return_pct": 2.96,
+      "pass": false,
+      "reconstructed_nav_total_return_pct": -91.01421220806351,
+      "start_nav_date": "2022-12-30",
+      "tolerance_pp": 0.1
+    },
+    "2024": {
+      "abs_error_pp": 946.6909866712257,
+      "distributions_used": [
+        {
+          "distribution_per_share": 0.310122,
+          "ex_date": "2024-02-01",
+          "nav": 98.113805,
+          "nav_date": "2024-02-01"
+        },
+        {
+          "distribution_per_share": 0.295234,
+          "ex_date": "2024-03-01",
+          "nav": 94.382171,
+          "nav_date": "2024-03-01"
+        },
+        {
+          "distribution_per_share": 0.312425,
+          "ex_date": "2024-04-01",
+          "nav": 92.506836,
+          "nav_date": "2024-04-01"
+        },
+        {
+          "distribution_per_share": 0.307743,
+          "ex_date": "2024-05-01",
+          "nav": 88.502153,
+          "nav_date": "2024-05-01"
+        },
+        {
+          "distribution_per_share": 0.308295,
+          "ex_date": "2024-06-03",
+          "nav": 32024.0,
+          "nav_date": "2024-06-03"
+        },
+        {
+          "distribution_per_share": 0.291104,
+          "ex_date": "2024-07-01",
+          "nav": 12024.0,
+          "nav_date": "2024-07-01"
+        },
+        {
+          "distribution_per_share": 0.314856,
+          "ex_date": "2024-08-01",
+          "nav": 12024.0,
+          "nav_date": "2024-08-01"
+        },
+        {
+          "distribution_per_share": 0.312782,
+          "ex_date": "2024-09-03",
+          "nav": 97.729347,
+          "nav_date": "2024-09-03"
+        },
+        {
+          "distribution_per_share": 0.315755,
+          "ex_date": "2024-10-01",
+          "nav": 12024.0,
+          "nav_date": "2024-10-01"
+        },
+        {
+          "distribution_per_share": 0.310541,
+          "ex_date": "2024-11-01",
+          "nav": 12024.0,
+          "nav_date": "2024-11-01"
+        },
+        {
+          "distribution_per_share": 0.325021,
+          "ex_date": "2024-12-02",
+          "nav": 93.840056,
+          "nav_date": "2024-12-02"
+        },
+        {
+          "distribution_per_share": 0.351032,
+          "ex_date": "2024-12-18",
+          "nav": 89.160726,
+          "nav_date": "2024-12-18"
+        }
+      ],
+      "end_nav_date": "2024-12-31",
+      "issuer_calendar_nav_total_return_pct": -7.84,
+      "pass": false,
+      "reconstructed_nav_total_return_pct": 938.8509866712257,
+      "start_nav_date": "2023-12-31",
+      "tolerance_pp": 0.1
+    },
+    "2025": {
+      "abs_error_pp": 2.9271960651450586,
+      "distributions_used": [
+        {
+          "distribution_per_share": 0.312282,
+          "ex_date": "2025-02-03",
+          "nav": 88.133371,
+          "nav_date": "2025-02-03"
+        },
+        {
+          "distribution_per_share": 0.289817,
+          "ex_date": "2025-03-03",
+          "nav": 32025.0,
+          "nav_date": "2025-03-03"
+        },
+        {
+          "distribution_per_share": 0.325582,
+          "ex_date": "2025-04-01",
+          "nav": 12025.0,
+          "nav_date": "2025-04-01"
+        },
+        {
+          "distribution_per_share": 0.327612,
+          "ex_date": "2025-05-01",
+          "nav": 12025.0,
+          "nav_date": "2025-05-01"
+        },
+        {
+          "distribution_per_share": 0.319532,
+          "ex_date": "2025-06-02",
+          "nav": 22025.0,
+          "nav_date": "2025-06-02"
+        },
+        {
+          "distribution_per_share": 0.328301,
+          "ex_date": "2025-07-01",
+          "nav": 12025.0,
+          "nav_date": "2025-07-01"
+        },
+        {
+          "distribution_per_share": 0.330802,
+          "ex_date": "2025-08-01",
+          "nav": 12025.0,
+          "nav_date": "2025-08-01"
+        },
+        {
+          "distribution_per_share": 0.328083,
+          "ex_date": "2025-09-02",
+          "nav": 85.620211,
+          "nav_date": "2025-09-02"
+        },
+        {
+          "distribution_per_share": 0.310447,
+          "ex_date": "2025-10-01",
+          "nav": 12025.0,
+          "nav_date": "2025-10-01"
+        },
+        {
+          "distribution_per_share": 0.325125,
+          "ex_date": "2025-11-03",
+          "nav": 32025.0,
+          "nav_date": "2025-11-03"
+        },
+        {
+          "distribution_per_share": 0.320648,
+          "ex_date": "2025-12-01",
+          "nav": 88.736572,
+          "nav_date": "2025-12-01"
+        },
+        {
+          "distribution_per_share": 0.342437,
+          "ex_date": "2025-12-19",
+          "nav": 87.405719,
+          "nav_date": "2025-12-19"
+        }
+      ],
+      "end_nav_date": "2025-12-31",
+      "issuer_calendar_nav_total_return_pct": 4.17,
+      "pass": false,
+      "reconstructed_nav_total_return_pct": 1.2428039348549413,
+      "start_nav_date": "2024-12-31",
+      "tolerance_pp": 0.1
+    }
+  },
+  "contract": {
+    "issuer_targets_from_prior_structured_extraction": {
+      "2023": 2.96,
+      "2024": -7.84,
+      "2025": 4.17
+    },
+    "no_model_parameter_or_cost_changes": true,
+    "reinvest_total_distribution_on_ex_date_at_last_available_issuer_nav": true,
+    "tolerance_pp": 0.1,
+    "years": [
+      2023,
+      2024,
+      2025
+    ]
+  },
+  "decision": "P46_TLT_ISSUER_TOTAL_RETURN_IDENTITY_NOT_VALIDATED",
+  "distribution_rows": 289,
+  "nav_materialization": {
+    "date_col": 0,
+    "first": "2002-07-22",
+    "header": [
+      "As Of",
+      "NAV per Share",
+      "Ex-Dividends",
+      "Shares Outstanding"
+    ],
+    "header_row": 71,
+    "last": "2026-09-08",
+    "nav_col": 1,
+    "rows": 6120
+  },
+  "parent": "P46",
+  "schema": "research.p46_tlt_totalreturn_identity_r1"
+}
