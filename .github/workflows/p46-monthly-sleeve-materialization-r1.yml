@@ -1,0 +1,33 @@
+name: P46 Monthly Sleeve Materialization R1
+on:
+  pull_request:
+    paths:
+      - 'research/p46_monthly_sleeve_materialization_r1.py'
+      - '.github/workflows/p46-monthly-sleeve-materialization-r1.yml'
+permissions: {contents: read}
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: run
+        run: |
+          python research/p46_monthly_sleeve_materialization_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p46_monthly_sleeve_materialization_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+            f.write(f"rows={x['rows']}\n")
+            f.write(f"ex={100*x['summary']['excess_equal_weight_cagr']:.2f}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p46-monthly-sleeve__rows_${{ steps.run.outputs.rows }}__ew_excess_${{ steps.run.outputs.ex }}pp
+          path: |
+            artifacts/p46_monthly_sleeve_materialization_r1.json
+            artifacts/p46_monthly_sleeve_returns_50bps.csv
+          if-no-files-found: error
