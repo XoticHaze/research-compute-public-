@@ -1,0 +1,31 @@
+name: P46 P36 Causal Recent Concentration R1
+on:
+  pull_request:
+    paths:
+      - 'research/p46_p36_causal_recent_concentration_r1.py'
+      - '.github/workflows/p46-p36-causal-recent-concentration-r1.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: evaluate
+        run: |
+          python research/p46_p36_causal_recent_concentration_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p46_p36_causal_recent_concentration_r1.json')); t=x['tests']; vals={'decision':x['decision'],'full':f"{100*t['full']['excess_vs_matched_cagr']:.3f}",'r3':f"{100*t['remove_top_3']['excess_vs_matched_cagr']:.3f}",'r5':f"{100*t['remove_top_5']['excess_vs_matched_cagr']:.3f}",'q5':f"{100*t['remove_top_5']['excess_vs_qqq_cagr']:.3f}"}
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+            for k,v in vals.items(): f.write(f'{k}={v}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: causal-recent-conc__${{ steps.evaluate.outputs.decision }}__full_${{ steps.evaluate.outputs.full }}pp__r3_${{ steps.evaluate.outputs.r3 }}pp__r5_${{ steps.evaluate.outputs.r5 }}pp__q5_${{ steps.evaluate.outputs.q5 }}pp
+          path: artifacts/p46_p36_causal_recent_concentration_r1.json
+          if-no-files-found: error
