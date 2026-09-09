@@ -1,0 +1,22 @@
+name: P52 Exact Risk Product Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'product_contracts/p52_exact_risk/**'
+      - '.github/workflows/p52-exact-risk-product-acceptance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-product-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: '22'
+      - name: Execute P52 sanitized identity-bound exact-risk product contract
+        run: node --test product_contracts/p52_exact_risk/product_contract_acceptance.test.mjs
