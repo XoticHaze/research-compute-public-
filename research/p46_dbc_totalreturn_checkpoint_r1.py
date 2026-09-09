@@ -22,6 +22,8 @@ def fetch_json(url: str):
 
 
 def shareclass_endpoint(payload, key):
+    if not isinstance(payload, dict):
+        return None
     for series in payload.get(key, []):
         if str(series.get("type", "")).lower() != "shareclass":
             continue
@@ -41,11 +43,16 @@ def main():
     rolling = fetch_json(ROLLING_URL)
     keys = ("lineChart1YData", "lineChart3YData", "lineChart5YData", "lineChart10YData")
     endpoints = {key: shareclass_endpoint(rolling, key) for key in keys}
+    standard_profile = {
+        "type": type(standard).__name__,
+        "cumulativePerformance": standard.get("cumulativePerformance") if isinstance(standard, dict) else None,
+        "raw_scalar": standard if isinstance(standard, (str, int, float, bool)) or standard is None else None,
+    }
     output = {
         "schema": "research.p46_dbc_totalreturn_checkpoint_r1",
         "parent": "P46",
-        "effective_date": rolling.get("effectiveDate"),
-        "standard_cumulative_performance": standard.get("cumulativePerformance"),
+        "effective_date": rolling.get("effectiveDate") if isinstance(rolling, dict) else None,
+        "standard_profile": standard_profile,
         "rolling_shareclass_endpoints": endpoints,
         "decision": (
             "DBC_DIRECT_TOTAL_RETURN_CHECKPOINTS_EXTRACTED"
@@ -54,9 +61,7 @@ def main():
         ),
     }
     Path("results").mkdir(exist_ok=True)
-    Path("results/p46_dbc_totalreturn_checkpoint_r1.json").write_text(
-        json.dumps(output, indent=2, sort_keys=True)
-    )
+    Path("results/p46_dbc_totalreturn_checkpoint_r1.json").write_text(json.dumps(output, indent=2, sort_keys=True))
     print(json.dumps(output, sort_keys=True))
 
 
