@@ -7,8 +7,11 @@ def met(r):
 def load():
  out={}
  for s in U:
-  url=f'https://stooq.com/q/d/l/?s={s.lower()}.us&i=d&d1=20050101'
-  raw=urllib.request.urlopen(url,timeout=30).read(); z=pd.read_csv(io.BytesIO(raw),parse_dates=['Date']).set_index('Date').sort_index(); out[s]=z['Close'].astype(float)
+  url=f'https://stooq.com/q/d/l/?s={s.lower()}.us&i=d&d1=20050101&d2=20260909'
+  req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 research-validation/1.0','Accept':'text/csv,*/*'})
+  raw=urllib.request.urlopen(req,timeout=30).read(); z=pd.read_csv(io.BytesIO(raw),parse_dates=['Date']).set_index('Date').sort_index()
+  if 'Close' not in z or len(z)<500: raise RuntimeError(f'Stooq invalid panel for {s}: rows={len(z)} columns={list(z.columns)}')
+  out[s]=z['Close'].astype(float)
  d=pd.DataFrame(out).dropna(); last=pd.Timestamp(d.index.max()); cut=last.to_period('M').start_time-pd.Timedelta(days=1); return d.loc[d.index<=cut],cut
 def build():
  d,cut=load(); m=d.resample('ME').last(); dr=d.pct_change(fill_method=None); vol=(dr.rolling(126,min_periods=100).std(ddof=0)*math.sqrt(252)).resample('ME').last(); tr=(d/d.rolling(200,min_periods=160).mean()-1).resample('ME').last(); dd=(d/d.rolling(126,min_periods=100).max()-1).resample('ME').last(); mom=m.pct_change(6); prev={s:0 for s in U}; rows=[]
