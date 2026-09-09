@@ -1,0 +1,32 @@
+name: P133 Credit Explicit History Probe R1
+on:
+  pull_request:
+    paths:
+      - 'research/p133_credit_explicit_history_probe_r1.py'
+      - '.github/workflows/p133-credit-explicit-history-probe-r1.yml'
+permissions: {contents: read}
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check pandas==2.2.3 requests==2.34.2
+      - id: run
+        run: |
+          python research/p133_credit_explicit_history_probe_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p133_credit_explicit_history_probe_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+            f.write(f"classification={x['classification']}\n")
+            f.write(f"defaultrows={x['default']['rows']}\n")
+            f.write(f"explicitrows={x['explicit']['rows']}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p133-explicit-history__${{ steps.run.outputs.classification }}__default_${{ steps.run.outputs.defaultrows }}__explicit_${{ steps.run.outputs.explicitrows }}
+          path: artifacts/p133_credit_explicit_history_probe_r1.json
+          if-no-files-found: error
