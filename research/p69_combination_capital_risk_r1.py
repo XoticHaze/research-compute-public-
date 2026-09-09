@@ -19,7 +19,7 @@ def frame():
     return pd.DataFrame({"gross":gross,"turnover":turnover,"matched":matched,"qqq":qqq,"spy":spy}).dropna(),close
 
 def metric(r):
-    m=base.metrics(r); return {"cagr":m["cagr"],"ann_vol":m["ann_vol"],"sharpe":m["sharpe"],"max_drawdown":m["max_drawdown"],"calmar":m["cagr"]/abs(m["max_drawdown"]) if m["max_drawdown"]<0 else None}
+    m=base.metrics(r); return {"cagr":m["cagr"],"ann_vol":m["annualized_vol"],"sharpe":m["sharpe_rf0"],"max_drawdown":m["max_drawdown_monthly"],"calmar":m["calmar"]}
 
 def main():
     fr,close=frame(); tests={}
