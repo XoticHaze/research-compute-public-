@@ -34,10 +34,15 @@ def normalize_frame(rows: pd.DataFrame | Iterable[dict]) -> pd.DataFrame:
         raise ValueError("OHLC contains non-numeric/null values")
     if (df[["open", "high", "low", "close"]] <= 0).any().any():
         raise ValueError("OHLC must be positive")
-    if (df["high"] < df[["open", "close", "low"]].max(axis=1)).any():
-        raise ValueError("high invariant failed")
-    if (df["low"] > df[["open", "close", "high"]].min(axis=1)).any():
-        raise ValueError("low invariant failed")
+
+    # Adjusted-price vendors can introduce machine-epsilon OHLC ordering noise.
+    # Permit only a tiny relative tolerance; never repair or synthesize prices.
+    scale = df[["open", "high", "low", "close"]].abs().max(axis=1).clip(lower=1.0)
+    tol = scale * 1e-7
+    if (df[["open", "close", "low"]].max(axis=1) - df["high"] > tol).any():
+        raise ValueError("high invariant failed beyond floating tolerance")
+    if (df["low"] - df[["open", "close", "high"]].min(axis=1) > tol).any():
+        raise ValueError("low invariant failed beyond floating tolerance")
     if (df["volume"].fillna(0) < 0).any():
         raise ValueError("volume must be nonnegative")
     if df.duplicated(["symbol", "timestamp", "contract_id"]).any():
