@@ -1,0 +1,22 @@
+name: P46 Invesco API Probe R1
+on:
+  pull_request:
+    paths:
+      - 'research/p46_invesco_api_probe_r1.py'
+      - '.github/workflows/p46-invesco-api-probe-r1.yml'
+permissions: {contents: read}
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python research/p46_invesco_api_probe_r1.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p46-invesco-api-probe-r1
+          path: artifacts/p46_invesco_api_probe_r1.json
+          if-no-files-found: error
