@@ -69,9 +69,9 @@ def main() -> None:
         for start in ("2018-01-31", "2022-01-31"):
             rec["holdouts"][start] = {str(bps): eval_window(f, start, bps) for bps in (25, 50)}
         out["results"][name] = rec
-    cells = [out["results"][rep][start][str(bps)]["incremental_cagr_vs_dual_horizon"] for rep in REPRESENTATIONS for start in ("2018-01-31", "2022-01-31") for bps in (25, 50)]
-    folds_ok = [out["results"][rep][start]["25"]["positive_chronological_folds_vs_dual_horizon"] >= 2 for rep in REPRESENTATIONS for start in ("2018-01-31", "2022-01-31")]
-    trims = [out["results"][rep][start]["25"]["five_strongest_incremental_months_removed_cagr_vs_dual_horizon"] for rep in REPRESENTATIONS for start in ("2018-01-31", "2022-01-31")]
+    cells = [out["results"][rep]["holdouts"][start][str(bps)]["incremental_cagr_vs_dual_horizon"] for rep in REPRESENTATIONS for start in ("2018-01-31", "2022-01-31") for bps in (25, 50)]
+    folds_ok = [out["results"][rep]["holdouts"][start]["25"]["positive_chronological_folds_vs_dual_horizon"] >= 2 for rep in REPRESENTATIONS for start in ("2018-01-31", "2022-01-31")]
+    trims = [out["results"][rep]["holdouts"][start]["25"]["five_strongest_incremental_months_removed_cagr_vs_dual_horizon"] for rep in REPRESENTATIONS for start in ("2018-01-31", "2022-01-31")]
     if all(x > 0 for x in cells) and all(folds_ok) and all(x > 0 for x in trims):
         decision = "CORRELATION_PENALTY_INCREMENTAL_MECHANISM_BROADLY_SUPPORTED"
     elif sum(x > 0 for x in cells) >= 8 and sum(folds_ok) >= 4:
@@ -81,7 +81,7 @@ def main() -> None:
     out["decision"] = decision
     Path("artifacts").mkdir(exist_ok=True)
     Path("artifacts/p131_correlation_penalty_incremental_mechanism_r1.json").write_text(json.dumps(out, indent=2, sort_keys=True, allow_nan=False))
-    compact = {rep: {start: {"25_inc": out["results"][rep][start]["25"]["incremental_cagr_vs_dual_horizon"], "25_folds": out["results"][rep][start]["25"]["positive_chronological_folds_vs_dual_horizon"], "25_trim": out["results"][rep][start]["25"]["five_strongest_incremental_months_removed_cagr_vs_dual_horizon"], "50_inc": out["results"][rep][start]["50"]["incremental_cagr_vs_dual_horizon"]} for start in ("2018-01-31", "2022-01-31")} for rep in REPRESENTATIONS}
+    compact = {rep: {start: {"25_inc": out["results"][rep]["holdouts"][start]["25"]["incremental_cagr_vs_dual_horizon"], "25_folds": out["results"][rep]["holdouts"][start]["25"]["positive_chronological_folds_vs_dual_horizon"], "25_trim": out["results"][rep]["holdouts"][start]["25"]["five_strongest_incremental_months_removed_cagr_vs_dual_horizon"], "50_inc": out["results"][rep]["holdouts"][start]["50"]["incremental_cagr_vs_dual_horizon"]} for start in ("2018-01-31", "2022-01-31")} for rep in REPRESENTATIONS}
     print(json.dumps({"decision": decision, "results": compact}, sort_keys=True))
 
 
