@@ -1,17 +1,17 @@
 import json,hashlib
 from pathlib import Path
 import numpy as np,pandas as pd,yfinance as yf
-from p160_fixed_p46_p47_combo_r1 import A,B,U,COST,selection_panel,met
+from p160_fixed_p46_p47_combo_r1 import A,B,U,COST,ranks,met
 W={'2015':'2015-01-01','2020':'2020-01-01','2022':'2022-01-01'}
 
 def build():
- d=yf.download(list(U),start='2005-01-01',auto_adjust=True,progress=False,threads=False)['Close'].dropna(how='all').astype(float); last=pd.Timestamp(d.index.max()); last=last.tz_localize(None) if last.tzinfo else last; cut=last.to_period('M').start_time-pd.Timedelta(days=1); d=d.loc[d.index<=cut]; ra,m=selection_panel(d,A); rb,_=selection_panel(d,B); pa={x:0 for x in A}; pb={x:0 for x in B}; rows=[]
- for sig in ra.index.intersection(rb.index):
+ d=yf.download(list(U),start='2005-01-01',auto_adjust=True,progress=False,threads=False)['Close'].dropna(how='all').astype(float); last=pd.Timestamp(d.index.max()); last=last.tz_localize(None) if last.tzinfo else last; cut=last.to_period('M').start_time-pd.Timedelta(days=1); d=d.loc[d.index<=cut]; m=d.resample('ME').last(); ra=ranks(d,m,A); rb=ranks(d,m,B); pa={x:0 for x in A}; pb={x:0 for x in B}; rows=[]
+ for sig in sorted(set(ra)&set(rb)):
   i=m.index.get_loc(sig)
   if i+2>=len(m): continue
   st,en=m.index[i+1],m.index[i+2]; rr=m.loc[en,list(U)]/m.loc[st,list(U)]-1
   if rr.isna().any(): continue
-  ca=ra.at[sig,'ranking'][:2]; cb=rb.at[sig,'ranking'][:3]; wa={x:(.5 if x in ca else 0) for x in A}; wb={x:(1/3 if x in cb else 0) for x in B}; ta=.5*sum(abs(wa[x]-pa[x]) for x in A); tb=.5*sum(abs(wb[x]-pb[x]) for x in B); rows.append({'date':en,'a':sum(wa[x]*rr[x] for x in A),'b':sum(wb[x]*rr[x] for x in B),'ta':ta,'tb':tb,'ma':rr[list(A)].mean(),'mb':rr[list(B)].mean(),'spy':rr.SPY,'qqq':rr.QQQ}); pa,pb=wa,wb
+  ca=ra[sig][:2]; cb=rb[sig][:3]; wa={x:(.5 if x in ca else 0) for x in A}; wb={x:(1/3 if x in cb else 0) for x in B}; ta=.5*sum(abs(wa[x]-pa[x]) for x in A); tb=.5*sum(abs(wb[x]-pb[x]) for x in B); rows.append({'date':en,'a':sum(wa[x]*rr[x] for x in A),'b':sum(wb[x]*rr[x] for x in B),'ta':ta,'tb':tb,'ma':rr[list(A)].mean(),'mb':rr[list(B)].mean(),'spy':rr.SPY,'qqq':rr.QQQ}); pa,pb=wa,wb
  return pd.DataFrame(rows).set_index('date'),d,cut
 
 def ev(z,c):
