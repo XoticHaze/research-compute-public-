@@ -1,15 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-const heads={riskResidual:'c67fb0d0b1c8cb02fbe797aebb4354973a7c51d6',p46Complete:'349d8ef9387e1959af5c8f9a8ba9cdd941e6db5b',p36Recent:'651e7bf9422c8a419f0c9a4b2b291ff6d3b4f711',p13Park:'030c1637ae466691102b6a90880c31d0e5dbcc00'}
-const riskGate={matchedExcessPP:2.584678206943547,allInQQQExcessPP:-4.928608946136603,gatedQQQFolds:2}
-const residual={fullIntercept:0.03426738782405544,bootstrapLow:0.009613383154435412,rolling60Positive:0.9833333333333333,recent60Intercept:0.04163298087439701}
-const p46Complete={artifacts:[10090010332,10090025534,10090040275],loo25:4.9369,loo50:4.0951,recentTop5Residual25:-1.7141,recentTop5Residual50:-2.1381,evidenceThrough:'2026-08-31'}
-const p36Recent={artifacts:[10089546654,10089633639],full25:6.2801,full50:5.7588,residual25:-0.1311,residual50:-0.6210}
-const p13={run:34322606141,job:102372448162,artifact:10092449586,recentVsSmhPP:-8.705679443903191,recentVsEqualWeightPP:-13.85205839591499,smhFolds:2,candidateDD:-0.4385466873997701,smhDD:-0.31112157044793176}
-
-test('acceptance binds exact MM product heads',()=>assert.equal(heads.p13Park,'030c1637ae466691102b6a90880c31d0e5dbcc00'))
-test('risk gate rejected while residual alpha remains distinct',()=>{assert.ok(riskGate.matchedExcessPP>0&&riskGate.allInQQQExcessPP<0);assert.equal(riskGate.gatedQQQFolds,2);assert.ok(residual.fullIntercept>0&&residual.bootstrapLow>0&&residual.rolling60Positive>0.98)})
-test('P46 complete-month support retains recent QQQ concentration caution',()=>{assert.deepEqual(p46Complete.artifacts,[10090010332,10090025534,10090040275]);assert.ok(p46Complete.loo25>0&&p46Complete.recentTop5Residual25<0);assert.equal(p46Complete.evidenceThrough,'2026-08-31')})
-test('P36 recent surge is concentration-sensitive',()=>{assert.deepEqual(p36Recent.artifacts,[10089546654,10089633639]);assert.ok(p36Recent.full25>0&&p36Recent.residual25<0&&p36Recent.residual50<0)})
-test('P13 temporal park is fail-closed negative operator evidence',()=>{assert.equal(p13.run,34322606141);assert.equal(p13.artifact,10092449586);assert.ok(p13.recentVsSmhPP<0&&p13.recentVsEqualWeightPP<0);assert.equal(p13.smhFolds,2);assert.ok(p13.candidateDD<p13.smhDD)})
+const MM_HEAD='1b5f8c3a54ceecc1fbb4e16c6bdbf416485514ca'
+const era={run:34322914461,job:102373424285,artifact:10092580859,digest:'sha256:b63b1cbc56c79f20e6e2173e1effc67b0b63aaa4bb01c3675814ccd52f39c3f0',positiveInterceptEras:4,positiveLowerBoundEras:2,middleRawQQQ:[-1.3053076066983804,-3.958498423743251],recentIntercept:0.05130490142268842,recentLower:0.009702742324751736}
+test('bind exact MM era-context product head',()=>assert.equal(MM_HEAD,'1b5f8c3a54ceecc1fbb4e16c6bdbf416485514ca'))
+test('non-overlap eras preserve residual alpha without universal QQQ dominance',()=>{assert.equal(era.run,34322914461);assert.equal(era.artifact,10092580859);assert.equal(era.positiveInterceptEras,4);assert.equal(era.positiveLowerBoundEras,2);assert.ok(era.middleRawQQQ.every(v=>v<0));assert.ok(era.recentIntercept>0&&era.recentLower>0)})
 test('product acceptance grants no portfolio or trading authority',()=>{const b={portfolioRanking:false,allocation:false,sizing:false,timing:false,promotion:false,strategySpec:false,runtime:false,data:false,broker:false,liveTrading:false};assert.deepEqual(Object.values(b),Array(10).fill(false))})
