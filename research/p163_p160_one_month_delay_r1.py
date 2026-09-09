@@ -1,7 +1,8 @@
 import json,hashlib
 from pathlib import Path
 import numpy as np,pandas as pd,yfinance as yf
-from p160_fixed_p46_p47_combo_r1 import A,B,U,COST,W,selection_panel,met
+from p160_fixed_p46_p47_combo_r1 import A,B,U,COST,selection_panel,met
+W={'2015':'2015-01-01','2020':'2020-01-01','2022':'2022-01-01'}
 
 def build():
  d=yf.download(list(U),start='2005-01-01',auto_adjust=True,progress=False,threads=False)['Close'].dropna(how='all').astype(float); last=pd.Timestamp(d.index.max()); last=last.tz_localize(None) if last.tzinfo else last; cut=last.to_period('M').start_time-pd.Timedelta(days=1); d=d.loc[d.index<=cut]; ra,m=selection_panel(d,A); rb,_=selection_panel(d,B); pa={x:0 for x in A}; pb={x:0 for x in B}; rows=[]
