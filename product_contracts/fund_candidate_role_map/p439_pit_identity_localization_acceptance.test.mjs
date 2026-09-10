@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-const MM_PRODUCT_HEAD = '936bc2fcdd9875b1ee4bcbadfd30bf9c877863aa'
+const MM_PRODUCT_HEAD = '9e8db67cf349e29e6975a85ff33584c5d324d833'
 const result = Object.freeze({
   state: 'POST2014_ALL_TARGET_IDENTITY_JOIN_NOT_READY__2015_DISAGREEMENT_LOCALIZED',
   snapshots: [
@@ -18,9 +18,11 @@ const result = Object.freeze({
   all_target_identity_join_ready:false,
   alpha_blocked:true,
   pre2014_lineage_ready:false,
+  digest_schema:'mm.strategy_intelligence.fund_model_guardrail_digest.operator.v38',
+  digest_execution_binding:'p429.executions',
 })
 
-test('bind exact P439 product head',()=>assert.equal(MM_PRODUCT_HEAD,'936bc2fcdd9875b1ee4bcbadfd30bf9c877863aa'))
+test('bind exact P439 product head',()=>assert.equal(MM_PRODUCT_HEAD,'9e8db67cf349e29e6975a85ff33584c5d324d833'))
 test('P439 localizes the remaining post-2014 identity failure to 2015',()=>{
   assert.equal(result.snapshots[0][5],'FAIL')
   assert.equal(result.snapshots[0][3],18)
@@ -32,6 +34,10 @@ test('P439 localizes the remaining post-2014 identity failure to 2015',()=>{
 test('exact research identity remains attributable',()=>{
   assert.deepEqual([result.run,result.job,result.artifact],[34524508319,103029980936,10170975866])
   assert.equal(result.artifact_sha,'f6ae9d260751983792f509be8dbceaca55b2675d7472c220005222b95da653ae')
+})
+test('operator digest preserves multi-execution provenance',()=>{
+  assert.equal(result.digest_schema,'mm.strategy_intelligence.fund_model_guardrail_digest.operator.v38')
+  assert.equal(result.digest_execution_binding,'p429.executions')
 })
 test('localized representation failure does not authorize fundamental alpha',()=>{
   assert.equal(result.post2014_source_ready,true)
