@@ -1,0 +1,30 @@
+name: P408 PIT Native CIK Lineage R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p408_pit_native_cik_lineage_r1.py'
+      - '.github/workflows/p408-pit-native-cik-lineage-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --quiet 'git+https://github.com/grahamking/pitindex.git@2df030e5c9be7c83cf4b28c3d8597d74d274757e' pandas
+      - id: eval
+        run: |
+          python research/p408_pit_native_cik_lineage_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/p408_pit_native_cik_lineage_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('tag='+x['decision']+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p408-pit-native-cik-lineage__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/p408_pit_native_cik_lineage_r1.json
+          if-no-files-found: error
