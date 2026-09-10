@@ -1,0 +1,38 @@
+name: CFTC TFF Relative Alpha R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/cftc_tff_relative_alpha_r1.py'
+      - '.github/workflows/cftc-tff-relative-alpha-r1.yml'
+      - 'research/p282_cftc_relative_alpha_r1.py'
+      - '.github/workflows/p282-cftc-relative-alpha-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/cftc_tff_relative_alpha_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/cftc_tff_relative_alpha_r1.json'))
+          assert x['workload_id']=='CFTC_TFF_RELATIVE_ALPHA_R1'
+          assert x['source_workload_id']=='CFTC_TFF_SOURCE_R1'
+          a=x['tests']['all']; r=x['tests']['recent']; bp=lambda v:int(round(v*10000)) if v is not None else 999999
+          ai=(a['arms']['combined']['cagr']-a['arms']['price']['cagr']) if a['arms']['combined']['cagr'] is not None and a['arms']['price']['cagr'] is not None else None
+          ri=(r['arms']['combined']['cagr']-r['arms']['price']['cagr']) if r['arms']['combined']['cagr'] is not None and r['arms']['price']['cagr'] is not None else None
+          tag=f"{x['decision']}__n_{a['arms']['combined']['weeks']}_{r['arms']['combined']['weeks']}__inc_{bp(ai)}_{bp(ri)}__folds_{a['positive_combined_minus_price_folds']}_{r['positive_combined_minus_price_folds']}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cftc-tff-relative-alpha__${{ steps.eval.outputs.tag }}
+          path: artifacts/cftc_tff_relative_alpha_r1.json
+          if-no-files-found: error
