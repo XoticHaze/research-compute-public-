@@ -52,12 +52,17 @@ jobs:
           set -euo pipefail
           path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}.json"
           payload="$(base64 -w0 "$RUNNER_TEMP/mm-survivor-recipient.json")"
-          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}"
+          current_sha="$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "${api}?ref=${EXCHANGE_REF}" 2>/dev/null | python -c 'import json,sys; print(json.load(sys.stdin).get("sha", ""))' || true)"
+          body="$(python - "$payload" "$EXCHANGE_REF" "$current_sha" <<'PY'
           import json,sys
-          print(json.dumps({'message':'rendezvous: publish one-run MM survivor recipient','content':sys.argv[1],'branch':sys.argv[2]}))
+          body={'message':'rendezvous: publish one-run MM survivor recipient','content':sys.argv[1],'branch':sys.argv[2]}
+          if sys.argv[3]:
+              body['sha']=sys.argv[3]
+          print(json.dumps(body))
           PY
           )"
-          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}" -d "$body" >/dev/null
+          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "${api}" -d "$body" >/dev/null
       - name: Wait for run-bound encrypted envelope
         env:
           GH_TOKEN: ${{ github.token }}
