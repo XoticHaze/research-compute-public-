@@ -1,0 +1,29 @@
+name: P245 Small Value Weekly Representation R1
+on:
+  pull_request:
+    paths:
+      - 'research/p245_smallvalue_weekly_representation_r1.py'
+      - '.github/workflows/p245-smallvalue-weekly-representation-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p245_smallvalue_weekly_representation_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p245_smallvalue_weekly_representation_r1.json')); a=x['tests']['2020']; bp=lambda v:int(round(v*10000)); tag=f"{x['decision']}__matched_{bp(a['actual_vs_matched'])}__p_{a['matched_bootstrap']['p_nonpositive']:.3f}__spy_{bp(a['actual_vs_spy'])}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p245-smallvalue-weekly-representation__${{ steps.eval.outputs.tag }}
+          path: artifacts/p245_smallvalue_weekly_representation_r1.json
+          if-no-files-found: error
