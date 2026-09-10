@@ -1,0 +1,17 @@
+import hashlib,json,math
+from pathlib import Path
+import numpy as np,pandas as pd,yfinance as yf
+A=["XLB","XLE","XLF","XLI","XLK","XLP","XLU","XLV","XLY"]; COSTS=(10,25,50); PC=25; WINDOWS={"2005":"2005-01-01","2010":"2010-01-01","2015":"2015-01-01","2020":"2020-01-01"}
+def met(r):
+ r=pd.Series(r).dropna(); e=(1+r).cumprod(); c=float(e.iloc[-1]**(12/len(r))-1); v=float(r.std(ddof=0)*math.sqrt(12)); return {"cagr":c,"sharpe":float(r.mean()*12/v) if v else None,"maxdd":float((e/e.cummax()-1).min())}
+def ev(z,c):
+ n=z.gross-z.turn*c/10000; a=met(n); fs=[]
+ for i,ix in enumerate(np.array_split(np.arange(len(z)),5),1):
+  q=z.iloc[ix]; qn=q.gross-q.turn*c/10000; fs.append({"fold":i,"cash_excess":met(qn)["cagr"]})
+ return {"months":len(z),"candidate":a,"cash_excess":a['cagr'],"positive_cash_folds":sum(x['cash_excess']>0 for x in fs),"mean_turnover":float(z.turn.mean()),"folds":fs}
+raw=yf.download(A,start='1999-01-01',end='2026-09-03',auto_adjust=True,progress=False,group_by='column',threads=False); c=raw['Close'][A] if isinstance(raw.columns,pd.MultiIndex) else raw[A]; c=c.dropna(how='any'); m=c.resample('ME').last(); mom=m.shift(1)/m.shift(12)-1; rows=[]; prev=pd.Series(0.,index=A)
+for i in range(12,len(m)-1):
+ dt,nxt=m.index[i],m.index[i+1]; sc=mom.loc[dt].dropna().sort_values();
+ if len(sc)!=len(A): continue
+ short=list(sc.index[:2]); long=list(sc.index[-2:]); w=pd.Series(0.,index=A); w[long]=0.25; w[short]=-0.25; rr=m.loc[nxt]/m.loc[dt]-1; turn=float((w-prev).abs().sum()/2); rows.append({'date':nxt,'gross':float((w*rr).sum()),'turn':turn}); prev=w
+z=pd.DataFrame(rows).set_index('date'); tests={str(cb):{k:ev(z.loc[pd.Timestamp(st):],cb) for k,st in WINDOWS.items()} for cb in COSTS}; p=tests[str(PC)]['2010']; p15=tests[str(PC)]['2015']; decision='P200_SECTOR_LONGSHORT_MOMENTUM_SURVIVOR' if p['cash_excess']>0 and p15['cash_excess']>0 and p['positive_cash_folds']>=3 and p['candidate']['sharpe']>=0.5 and p['candidate']['maxdd']>=-0.25 and tests['50']['2010']['cash_excess']>0 else 'P200_SECTOR_LONGSHORT_MOMENTUM_REJECT'; out={"schema":"research.p200_sector_longshort_momentum_r1","parent":"P200","hypothesis":"Cross-sectional 12-1 momentum among legacy SPDR sectors creates a market-neutral return premium, long the two strongest and short the two weakest sectors, after explicit turnover costs.","contract":{"assets":A,"signal":"completed-month 12-1 return rank","portfolio":"long top two 25% each, short bottom two 25% each; 100% gross, approximately market neutral","cost_bps_one_way":COSTS,"primary_cost_bps":PC,"matched":"cash zero-return for a market-neutral factor claim","windows":WINDOWS,"folds":5,"gate":"2010+ at 25 bps: positive CAGR, 2015+ positive CAGR, >=3/5 positive 2010 folds, Sharpe >=0.5, max DD >=-25%, and positive 2010 CAGR at 50 bps","no_asset_rank_count_lookback_cost_or_chronology_search":True},"source":{"provider":"Yahoo Finance via yfinance; research-only","rows":len(c),"last":str(c.index[-1]),"panel_sha256":hashlib.sha256(c.to_csv().encode()).hexdigest()},"tests":tests,"decision":decision,"boundaries":{"portfolio_ranking":False,"product_runtime":False,"broker":False,"live_trading":False}}; Path('artifacts').mkdir(exist_ok=True); Path('artifacts/p200_sector_longshort_momentum_r1.json').write_text(json.dumps(out,sort_keys=True,indent=2)); print(json.dumps(out,sort_keys=True))
