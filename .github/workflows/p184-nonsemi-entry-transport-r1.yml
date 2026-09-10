@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'research/p184_nonsemi_entry_transport_r1.py'
+      - 'research/p184_nonsemi_entry_transport_r2.py'
       - '.github/workflows/p184-nonsemi-entry-transport-r1.yml'
 permissions: {contents: read}
 jobs:
@@ -13,17 +14,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
-      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 scikit-learn==1.5.2
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 scikit-learn==1.5.2 yfinance==0.2.65
       - id: eval
         run: |
-          python research/p184_nonsemi_entry_transport_r1.py
+          python research/p184_nonsemi_entry_transport_r2.py
           python - <<'PY'
           import json, os
-          x=json.load(open('artifacts/p184_nonsemi_entry_transport_r1.json'))
+          x=json.load(open('artifacts/p184_nonsemi_entry_transport_r2.json'))
           with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write(f"decision={x['decision']}\n")
           PY
       - uses: actions/upload-artifact@v4
         with:
           name: p184-nonsemi-entry-transport__${{ steps.eval.outputs.decision }}
-          path: artifacts/p184_nonsemi_entry_transport_r1.json
+          path: artifacts/p184_nonsemi_entry_transport_r2.json
           if-no-files-found: error
