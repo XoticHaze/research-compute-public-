@@ -1,0 +1,29 @@
+name: P199 P195 Baseline Correction R1
+on:
+  pull_request:
+    paths:
+      - 'research/p199_p195_baseline_correction_r1.py'
+      - '.github/workflows/p199-p195-baseline-correction-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p199_p195_baseline_correction_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p199_p195_baseline_correction_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write(f"decision={x['decision']}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p199-p195-baseline-correction__${{ steps.eval.outputs.decision }}
+          path: artifacts/p199_p195_baseline_correction_r1.json
+          if-no-files-found: error
