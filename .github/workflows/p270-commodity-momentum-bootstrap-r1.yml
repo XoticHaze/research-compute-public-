@@ -1,0 +1,30 @@
+name: P270 Commodity Momentum Bootstrap R1
+on:
+  pull_request:
+    branches: [assistant/market-research-p269-commodity-momentum-r1]
+    paths:
+      - 'research/p270_commodity_momentum_bootstrap_r1.py'
+      - '.github/workflows/p270-commodity-momentum-bootstrap-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p270_commodity_momentum_bootstrap_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p270_commodity_momentum_bootstrap_r1.json')); a=x['tests']['2008']['bootstrap']; p=int(round(a['probability_excess_le_zero']*1000)); b=int(round(a['p05_annualized_excess']*10000)); tag=f"{x['decision']}__p{p}__p05_{b}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p270-commodity-momentum-bootstrap__${{ steps.eval.outputs.tag }}
+          path: artifacts/p270_commodity_momentum_bootstrap_r1.json
+          if-no-files-found: error
