@@ -1,0 +1,29 @@
+name: P289 SEC AsOf Accession R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p289_sec_asof_accession_r1.py'
+      - '.github/workflows/p289-sec-asof-accession-r1.yml'
+permissions: {contents: read}
+jobs:
+  adjudicate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - id: eval
+        run: |
+          python research/p289_sec_asof_accession_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/p289_sec_asof_accession_r1.json')); s=x['summary']; tag=f"{x['decision']}__u_{int(round(100*s['unique_without_tiebreak_fraction']))}__cov_{s['minimum_family_asof_coverage']}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p289-sec-asof-accession__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/p289_sec_asof_accession_r1.json
+          if-no-files-found: error
