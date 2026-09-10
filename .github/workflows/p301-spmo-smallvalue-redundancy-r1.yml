@@ -1,0 +1,30 @@
+name: P301 SPMO SmallValue Redundancy R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p301_spmo_smallvalue_redundancy_r1.py'
+      - '.github/workflows/p301-spmo-smallvalue-redundancy-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p301_spmo_smallvalue_redundancy_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/p301_spmo_smallvalue_redundancy_r1.json')); s=x['summary']; tag=f"{x['decision']}__corr_{s['2017_plus_excess_corr']:.2f}__blocks_{s['blocks_excess_corr_below_0_4']}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p301-spmo-smallvalue-redundancy__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/p301_spmo_smallvalue_redundancy_r1.json
+          if-no-files-found: error
