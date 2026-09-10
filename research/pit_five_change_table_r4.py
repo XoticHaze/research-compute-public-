@@ -14,8 +14,8 @@ for ti,t in enumerate(tabs):
  flat=' '.join(map(str,t.columns)).lower()
  if not (('added' in flat and 'removed' in flat) or ('date' in flat and ('reason' in flat or 'changes' in flat))): continue
  scanned+=1
- for _,row in t.astype(str).iterrows():
-  raw=' | '.join(row.tolist()); up=raw.upper().replace('.','-')
+ for _,row in t.iterrows():
+  vals=[str(v) for v in row.tolist()]; raw=' | '.join(vals); up=raw.upper().replace('.','-')
   for x in NAMES:
    if re.search(r'(^|\W)'+re.escape(x)+r'(\W|$)',up):
     hits[x].append({'table_index':ti,'columns':[str(c) for c in t.columns],'row':{str(k):str(v) for k,v in row.to_dict().items()}})
