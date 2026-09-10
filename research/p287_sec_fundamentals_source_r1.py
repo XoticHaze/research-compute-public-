@@ -5,7 +5,7 @@ TICKERS=['AAPL','MSFT','NVDA','AMAT','CAT','JPM','XOM','JNJ','PG','HD']
 FACTS=['Revenues','RevenueFromContractWithCustomerExcludingAssessedTax','NetIncomeLoss','StockholdersEquity','Assets','CommonStockSharesOutstanding']
 UA='XoticHaze market-research source-validation contact@example.com'
 def get(url):
- req=urllib.request.Request(url,headers={'User-Agent':UA,'Accept-Encoding':'gzip, deflate'}); return json.loads(urllib.request.urlopen(req,timeout=30).read())
+ req=urllib.request.Request(url,headers={'User-Agent':UA,'Accept':'application/json'}); return json.loads(urllib.request.urlopen(req,timeout=30).read().decode('utf-8'))
 mp=get('https://www.sec.gov/files/company_tickers.json'); cik={v['ticker'].upper():str(v['cik_str']).zfill(10) for v in mp.values()}; rows={}
 for t in TICKERS:
  c=cik.get(t); rec={'cik':c,'facts':{},'pass':False}
