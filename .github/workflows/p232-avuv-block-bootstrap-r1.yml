@@ -1,0 +1,29 @@
+name: P232 AVUV Block Bootstrap R1
+on:
+  pull_request:
+    paths:
+      - 'research/p232_avuv_block_bootstrap_r1.py'
+      - '.github/workflows/p232-avuv-block-bootstrap-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p232_avuv_block_bootstrap_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p232_avuv_block_bootstrap_r1.json')); a=x['tests']['2020']; bp=lambda v:int(round(v*10000)); tag=f"{x['decision']}__ijr_{bp(a['actual_vs_ijr'])}__pnonpos_{a['p_nonpositive_vs_ijr']:.3f}__spy_p_{a['p_nonpositive_vs_spy']:.3f}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p232-avuv-block-bootstrap__${{ steps.eval.outputs.tag }}
+          path: artifacts/p232_avuv_block_bootstrap_r1.json
+          if-no-files-found: error
