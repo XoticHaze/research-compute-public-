@@ -1,0 +1,23 @@
+name: P305 P307 release semantics acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/p305_p307_release_semantics_acceptance.py'
+      - '.github/workflows/p305-p307-release-semantics-acceptance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate supported vs risk-shaping-only release semantics
+        run: python scripts/p305_p307_release_semantics_acceptance.py
