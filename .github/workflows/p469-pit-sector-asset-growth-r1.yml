@@ -1,0 +1,31 @@
+name: P469 PIT Sector Asset Growth R2
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p469_pit_sector_asset_growth_r1.py'
+      - '.github/workflows/p469-pit-sector-asset-growth-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --quiet yfinance pandas numpy requests lxml html5lib beautifulsoup4
+      - id: result
+        run: |
+          python research/p469_pit_sector_asset_growth_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/p469_pit_sector_asset_growth_r2.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('tag='+x['decision']+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p469-pit-sector-asset-growth-r2__${{ steps.result.outputs.tag }}
+          path: research/artifacts/p469_pit_sector_asset_growth_r2.json
+          if-no-files-found: error
+          retention-days: 90
