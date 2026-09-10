@@ -1,0 +1,9 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+const MM_PRODUCT_HEAD='69a41667d2d273f27a29aa9f854584c6ec8e8e3a'
+const p440={state:'CYBERSECURITY_THIRD_INDUSTRY_EVIDENCE_NOT_SUPPORTED',cibr:[-5.675,-3.878,-3.495],hack:[-8.159,-7.099,-3.672],chronology:[-9.220,-5.477,-5.402],run:34524601740,job:103030291905,artifact:10171011457,sha:'289365c0cf2edb60c02eaf5831a23862c9f461c05838e4171d3c974ca4b66c79'}
+const p441={state:'BIOTECH_THIRD_INDUSTRY_EVIDENCE_NOT_SUPPORTED',xbi:[0.962,-1.861,-1.252],ibb:[-0.088,-3.986,-0.873],chronology:[8.620,-5.955,-12.404,8.955],positive:2,total:4,run:34524680653,job:103030554051,artifact:10171042469,sha:'f253411dafbb794a73d861f39ae38c45b135d6b17009016398d4aede0dcbf492'}
+test('bind product head',()=>assert.equal(MM_PRODUCT_HEAD,'69a41667d2d273f27a29aa9f854584c6ec8e8e3a'))
+test('cybersecurity exact formulation closes',()=>{assert.ok(p440.cibr.every(x=>x<0));assert.ok(p440.hack.every(x=>x<0));assert.ok(p440.chronology.every(x=>x<0));assert.deepEqual([p440.run,p440.job,p440.artifact],[34524601740,103030291905,10171011457]);assert.equal(p440.sha,'289365c0cf2edb60c02eaf5831a23862c9f461c05838e4171d3c974ca4b66c79')})
+test('biotech exact formulation closes without hiding mixed block evidence',()=>{assert.equal(p441.positive,2);assert.equal(p441.total,4);assert.deepEqual(p441.chronology,[8.620,-5.955,-12.404,8.955]);assert.deepEqual([p441.run,p441.job,p441.artifact],[34524680653,103030554051,10171042469]);assert.equal(p441.sha,'f253411dafbb794a73d861f39ae38c45b135d6b17009016398d4aede0dcbf492')})
+test('exact failures do not kill broader industry mechanism or grant authority',()=>assert.deepEqual(Object.values({familyKilled:false,scienceAuthority:false,ranking:false,allocation:false,runtime:false,broker:false,live:false}),Array(7).fill(false)))
