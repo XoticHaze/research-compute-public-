@@ -27,7 +27,7 @@ HARNESS = "mm_survivor_forward_backend_acceptance_v1"
 AUTHORITY = "private_mm_source_validation_only"
 INFO = b"mm-survivor-forward-ephemeral-v1"
 EXPECTED_REPO = "XoticHaze/mm-IBKR"
-EXPECTED_HEAD = "2e6042be2168b7db55fc45e76df99650bbe06919"
+EXPECTED_HEAD = "e20976b705674ce81ae5ec276b95a929e3f1b823"
 FILES = {
     "strategy_capital_readiness.py",
     "strategy_forward_intelligence.py",
