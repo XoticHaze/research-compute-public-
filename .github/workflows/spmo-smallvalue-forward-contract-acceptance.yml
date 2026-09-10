@@ -1,0 +1,23 @@
+name: SPMO small-value forward contract acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/spmo_smallvalue_forward_contract_acceptance.py'
+      - '.github/workflows/spmo-smallvalue-forward-contract-acceptance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate pre-boundary fail-close and boundary readiness
+        run: python scripts/spmo_smallvalue_forward_contract_acceptance.py
