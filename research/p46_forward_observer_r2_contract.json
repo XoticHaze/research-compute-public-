@@ -1,0 +1,37 @@
+{
+  "schema": "research.model_forward_observer_contract.v2",
+  "model_id": "P46",
+  "model_version": "fixed_original_four_factor_top2_r1",
+  "purpose": "persistent shadow-forward observation without changing the frozen model",
+  "input_contract": "research.forward_bar.v2",
+  "current_public_adapter": "Yahoo adjusted OHLCV research-only",
+  "future_primary_adapter": "IBKR BarData plus Contract metadata",
+  "decision_cadence": "monthly",
+  "feature_timeframe": "1 day",
+  "public_observation_cadence": [
+    "weekday pre-open after prior completed session",
+    "weekday post-close mark"
+  ],
+  "forward_not_before_feature_month_end": "2026-09-30",
+  "prospective_rule": "public compute emits candidate decisions; only private first-seen admission before outcome exposure may grant prospective credit",
+  "shakedown_anchor": {
+    "date": "2026-09-09",
+    "weights": {"SPY": 0.0, "QQQ": 0.5, "TLT": 0.0, "GLD": 0.0, "DBC": 0.5},
+    "scientific_credit": false
+  },
+  "security_boundary": {
+    "public_compute": true,
+    "real_account_capital_public": false,
+    "broker_state_public": false,
+    "private_foundry_is_authoritative_history": true,
+    "production_private_ingestion_should_seal_sensitive_forward_state": true
+  },
+  "authority": {
+    "research_only": true,
+    "broker_action": false,
+    "runtime_mutation": false,
+    "portfolio_allocation_authority": false,
+    "promotion_authority": false,
+    "live_trading_change": false
+  }
+}

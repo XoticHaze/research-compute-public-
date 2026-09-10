@@ -1,0 +1,38 @@
+name: P46 Forward Observer R2
+
+on:
+  pull_request:
+    paths:
+      - 'research/forward_bar_contract_v2.py'
+      - 'research/p46_forward_observer_r2.py'
+      - 'research/p46_forward_observer_r2_contract.json'
+      - '.github/workflows/p46-forward-observer-r2.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 12 * * 1-5'
+    - cron: '30 21 * * 1-5'
+
+permissions:
+  contents: read
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install focused dependencies
+        run: python -m pip install --disable-pip-version-check numpy pandas yfinance
+      - name: Validate normalized IBKR-shaped contract and observe frozen P46
+        run: python -m research.p46_forward_observer_r2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p46-forward-observation-r2
+          path: |
+            artifacts/p46_forward_observation_v2.json
+            artifacts/ibkr_adapter_fixture_v2.json
+          if-no-files-found: error
+          retention-days: 90
