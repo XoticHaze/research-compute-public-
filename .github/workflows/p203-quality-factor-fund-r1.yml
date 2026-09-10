@@ -1,0 +1,31 @@
+name: P203 Quality Factor Fund R1
+on:
+  pull_request:
+    paths:
+      - 'research/p203_quality_factor_fund_r1.py'
+      - '.github/workflows/p203-quality-factor-fund-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p203_quality_factor_fund_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p203_quality_factor_fund_r1.json')); p=x['tests']['2014']; q=x['tests']['2018']; t=x['tests']['2020']
+          def bp(v): return int(round(v*10000))
+          tag=f"{x['decision']}__s14_{bp(p['excess_spy'])}__g14_{bp(p['excess_iwf'])}__s18_{bp(q['excess_spy'])}__g18_{bp(q['excess_iwf'])}__s20_{bp(t['excess_spy'])}__g20_{bp(t['excess_iwf'])}__fs_{p['positive_spy_folds']}__fg_{p['positive_iwf_folds']}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p203-quality-factor-fund__${{ steps.eval.outputs.tag }}
+          path: artifacts/p203_quality_factor_fund_r1.json
+          if-no-files-found: error
