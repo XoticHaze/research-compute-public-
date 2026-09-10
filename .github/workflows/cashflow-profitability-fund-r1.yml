@@ -1,0 +1,31 @@
+name: Cashflow Profitability Fund R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/cashflow_profitability_fund_r1.py'
+      - '.github/workflows/cashflow-profitability-fund-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/cashflow_profitability_fund_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/cashflow_profitability_fund_r1.json')); z=x['results']['2018']; bp=lambda v:int(round(v*10000))
+          tag=f"{x['decision']}__cowz_{bp(z['COWZ_vs_IWB']['matched_excess_cagr'])}_{z['COWZ_vs_IWB']['positive_matched_folds']}__calf_{bp(z['CALF_vs_IJR']['matched_excess_cagr'])}_{z['CALF_vs_IJR']['positive_matched_folds']}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f'tag={tag}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cashflow-profitability-fund__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/cashflow_profitability_fund_r1.json
+          if-no-files-found: error
