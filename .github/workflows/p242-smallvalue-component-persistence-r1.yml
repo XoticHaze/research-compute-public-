@@ -1,0 +1,29 @@
+name: P242 Small Value Component Persistence R1
+on:
+  pull_request:
+    paths:
+      - 'research/p242_smallvalue_component_persistence_r1.py'
+      - '.github/workflows/p242-smallvalue-component-persistence-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p242_smallvalue_component_persistence_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p242_smallvalue_component_persistence_r1.json')); bp=lambda v:int(round(v*10000)); tag=f"{x['decision']}__matched_{bp(x['full_period']['combo_vs_matched'])}__years_{x['positive_combo_years']}__either_{x['at_least_one_component_positive_years']}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p242-smallvalue-component-persistence__${{ steps.eval.outputs.tag }}
+          path: artifacts/p242_smallvalue_component_persistence_r1.json
+          if-no-files-found: error
