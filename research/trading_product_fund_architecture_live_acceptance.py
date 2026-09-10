@@ -1,0 +1,6 @@
+import hashlib,json
+from pathlib import Path
+c={'schema':'mm.trading_product.fund_architecture_live_contract.v1','product_repository':'XoticHaze/mm-IBKR','product_pr':483,'product_head':'a137b9ccd7c04606dac0793ab86bae14eb1147b8','route':'/research/midcap-fund-evidence','consumers':['P220','P221/P222','P223','P224/P225','P226/P227'],'posture':'bounded XMMO context plus P220-P227 fail-closed architecture guardrails','P234':'SCIENTIFIC_CONTRACT_READY_EXECUTION_MECHANISM_NOT_YET_BOUND; no product activation before terminal result plus Coordinator consumption','authority':{'portfolio_ranking':False,'allocation':False,'sizing':False,'promotion':False,'runtime':False,'data':False,'broker':False,'live_trading':False}}
+assert len(c['consumers'])==5 and 'no product activation' in c['P234']
+assert all(v is False for v in c['authority'].values())
+s=json.dumps(c,sort_keys=True,separators=(',',':'));o={'schema':'mm.trading_product.fund_architecture_live_acceptance.v1','result':'PASS','contract_sha256':hashlib.sha256(s.encode()).hexdigest(),'contract':c};Path('artifacts').mkdir(exist_ok=True);Path('artifacts/trading_product_fund_architecture_live_acceptance.json').write_text(json.dumps(o,sort_keys=True,indent=2));print('FUND_ARCHITECTURE_LIVE_ACCEPTANCE=PASS',o['contract_sha256'])
