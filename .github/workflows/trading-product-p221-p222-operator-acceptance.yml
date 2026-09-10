@@ -1,0 +1,20 @@
+name: Trading Product P221 P222 Public Operator Acceptance
+on:
+  pull_request:
+    paths:
+      - 'research/trading_product_p221_p222_operator_acceptance.py'
+      - '.github/workflows/trading-product-p221-p222-operator-acceptance.yml'
+permissions: {contents: read}
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate P221/P222 operator contract
+        run: python research/trading_product_p221_p222_operator_acceptance.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trading-product-p221-p222-operator-acceptance-${{ github.sha }}
+          path: artifacts/trading_product_p221_p222_operator_acceptance.json
+          if-no-files-found: error
