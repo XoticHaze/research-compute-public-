@@ -1,0 +1,57 @@
+name: Research Python Workload R1
+
+on:
+  workflow_call:
+    inputs:
+      script:
+        description: Checked-in Python workload under research/
+        required: true
+        type: string
+      artifact_path:
+        description: Artifact file or directory emitted by the workload
+        required: true
+        type: string
+      artifact_name:
+        description: Stable artifact name prefix
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate workload path
+        env:
+          WORKLOAD_SCRIPT: ${{ inputs.script }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          raw = os.environ['WORKLOAD_SCRIPT']
+          p = Path(raw)
+          if p.is_absolute() or '..' in p.parts or p.suffix != '.py' or not p.parts or p.parts[0] != 'research':
+              raise SystemExit(f'invalid workload path: {raw}')
+          if not p.is_file():
+              raise SystemExit(f'workload missing from checked-out head: {raw}')
+          print(f'WORKLOAD_PATH_OK={raw}')
+          PY
+      - name: Install pinned common research dependencies
+        run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 scipy==1.14.1 statsmodels==0.14.4 yfinance==0.2.65
+      - name: Execute checked-in workload
+        env:
+          WORKLOAD_SCRIPT: ${{ inputs.script }}
+        run: python "$WORKLOAD_SCRIPT"
+      - name: Upload workload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}__${{ github.sha }}
+          path: ${{ inputs.artifact_path }}
+          if-no-files-found: error
