@@ -1,0 +1,19 @@
+name: Trading Product P46 Standalone Park Acceptance
+on:
+  pull_request:
+    paths:
+      - 'research/trading_product_p46_standalone_park_acceptance.py'
+      - '.github/workflows/trading-product-p46-standalone-park-acceptance.yml'
+permissions: {contents: read}
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: python research/trading_product_p46_standalone_park_acceptance.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trading-product-p46-standalone-park-${{ github.sha }}
+          path: artifacts/trading_product_p46_standalone_park_acceptance.json
+          if-no-files-found: error
