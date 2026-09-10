@@ -1,0 +1,15 @@
+import hashlib,json,math
+from pathlib import Path
+import pandas as pd,yfinance as yf
+A=["XLB","XLE","XLF","XLI","XLK","XLP","XLU","XLV","XLY"]; COST=25; WINDOWS={"2010":"2010-01-01","2015":"2015-01-01","2020":"2020-01-01"}
+def cagr(r):
+ r=pd.Series(r).dropna(); return float((1+r).prod()**(12/len(r))-1)
+def one(m,assets,start):
+ r=m[assets].pct_change().dropna().loc[start:]; n=len(assets); w0=pd.Series(1/n,index=assets); bh=w0.copy(); cr=[]; br=[]; turns=[]
+ for _,row in r.iterrows():
+  rr=float((w0*row).sum()); bb=float((bh*row).sum()); post=bh*(1+row); bh=post/post.sum(); drift=w0*(1+row)/(1+rr); turns.append(float((w0-drift).abs().sum()/2)); cr.append(rr); br.append(bb)
+ net=pd.Series(cr,index=r.index)-pd.Series(turns,index=r.index)*COST/10000; b=pd.Series(br,index=r.index); return {"candidate_cagr":cagr(net),"matched_cagr":cagr(b),"matched_excess":cagr(net)-cagr(b),"mean_turnover":sum(turns)/len(turns)}
+raw=yf.download(A,start="1999-01-01",end="2026-09-03",auto_adjust=True,progress=False,group_by="column",threads=False); c=raw["Close"][A] if isinstance(raw.columns,pd.MultiIndex) else raw[A]; c=c.dropna(how="any"); m=c.resample("ME").last(); variants={}
+for omit in A:
+ assets=[x for x in A if x!=omit]; variants[omit]={w:one(m,assets,s) for w,s in WINDOWS.items()}
+full={w:one(m,A,s) for w,s in WINDOWS.items()}; pos10=sum(v['2010']['matched_excess']>0 for v in variants.values()); pos15=sum(v['2015']['matched_excess']>0 for v in variants.values()); med10=float(pd.Series([v['2010']['matched_excess'] for v in variants.values()]).median()); worst10=float(min(v['2010']['matched_excess'] for v in variants.values())); decision="P197_SECTOR_REBALANCE_JACKKNIFE_PASS" if pos10>=7 and pos15>=7 and med10>0 and worst10>-0.0025 else "P197_SECTOR_REBALANCE_JACKKNIFE_FAIL"; out={"schema":"research.p197_sector_rebalance_jackknife_r1","parent":"P197","related_survivor":"P195","hypothesis":"P195's matched rebalancing premium is not dependent on any single sector sleeve.","contract":{"base_assets":A,"test":"nine leave-one-sector-out universes; unchanged monthly equal-weight rebalance versus identical buy-and-hold matched basket","cost_bps_one_way":COST,"windows":WINDOWS,"gate":"at least 7/9 positive matched excess in both 2010+ and 2015+, positive median 2010+ excess, worst 2010+ omission no worse than -0.25 pp","no_parameter_frequency_or_replacement_search":True},"source":{"provider":"Yahoo Finance via yfinance; research-only","rows":len(c),"last":str(c.index[-1]),"panel_sha256":hashlib.sha256(c.to_csv().encode()).hexdigest()},"full":full,"variants":variants,"summary":{"positive_2010":pos10,"positive_2015":pos15,"median_2010_excess":med10,"worst_2010_excess":worst10},"decision":decision,"boundaries":{"portfolio_ranking":False,"product_runtime":False,"broker":False,"live_trading":False}}; Path('artifacts').mkdir(exist_ok=True); Path('artifacts/p197_sector_rebalance_jackknife_r1.json').write_text(json.dumps(out,sort_keys=True,indent=2)); print(json.dumps(out,sort_keys=True))
