@@ -1,0 +1,17 @@
+from __future__ import annotations
+import json, math
+from pathlib import Path
+import numpy as np, pandas as pd, yfinance as yf
+SYMS=['PUTW','SPY','BIL']; START='2015-01-01'; END='2026-09-10'; COST_BPS=10
+raw=yf.download(SYMS,start=START,end=END,auto_adjust=True,progress=False,threads=False); px=(raw['Close'] if isinstance(raw.columns,pd.MultiIndex) else raw)[SYMS].dropna().resample('ME').last(); r=px.pct_change().dropna()
+# Causal matched benchmark: rolling 36m beta of PUTW excess over BIL to SPY excess over BIL, shifted one month.
+ex_put=r.PUTW-r.BIL; ex_spy=r.SPY-r.BIL; beta=ex_put.rolling(36,min_periods=24).cov(ex_spy)/ex_spy.rolling(36,min_periods=24).var(); beta=beta.shift(1).clip(lower=0,upper=1); matched=beta*r.SPY+(1-beta)*r.BIL
+z=pd.DataFrame({'putw':r.PUTW,'matched':matched,'spy':r.SPY,'beta':beta}).dropna(); z.loc[z.index[0],'putw']-=COST_BPS/10000
+def stats(s):
+ s=s.dropna(); w=(1+s).cumprod(); yrs=len(s)/12; sd=s.std(); return {'months':int(len(s)),'cagr':float(w.iloc[-1]**(1/yrs)-1),'sharpe':float(s.mean()/sd*math.sqrt(12)) if sd>0 else 0.,'max_drawdown':float((w/w.cummax()-1).min())}
+res={}
+for name,start in {'2018_plus':'2018-01-01','2020_plus':'2020-01-01','2022_plus':'2022-01-01'}.items():
+ q=z.loc[start:]; ps,ms,ss=stats(q.putw),stats(q.matched),stats(q.spy); res[name]={'putwrite':ps,'causal_beta_matched_control':ms,'spy_context':ss,'matched_excess_cagr':ps['cagr']-ms['cagr'],'spy_opportunity_gap_cagr':ps['cagr']-ss['cagr'],'mean_lagged_beta':float(q.beta.mean())}
+base=z.loc['2018-01-01':,['putw','matched']]; folds=[stats(f.putw)['cagr']-stats(f.matched)['cagr'] for f in np.array_split(base,5)]; passed=all(v['matched_excess_cagr']>0 for v in res.values()) and sum(x>0 for x in folds)>=3; decision='P325_PUTWRITE_RISK_PREMIUM_SUPPORTED' if passed else 'P325_PUTWRITE_RISK_PREMIUM_NOT_SUPPORTED'
+out={'schema':'research.p325_putwrite_risk_premium_r1','parent':'P325','claim':'Test a materially distinct equity put-write option-premium architecture using PUTW versus a chronologically causal one-month-lagged 36-month rolling-beta SPY/BIL matched control, after 10bp external entry friction, fixed 2018+/2020+/2022+ windows and five chronology folds. Beta is benchmark construction only, clipped [0,1], never used to tune PUTW.','cost_bps':COST_BPS,'results':res,'chronology_fold_matched_excess_cagr':folds,'positive_folds':sum(x>0 for x in folds),'decision_rule':'Support only if PUTW has positive CAGR excess over the causal beta-matched SPY/BIL control in all fixed windows and >=3/5 chronology folds. Failure closes this fixed put-write implementation without strike, tenor, beta-window, product, or timing rescue.','decision':decision,'limitations':['fund-level implementation proxy, not option-chain reconstruction','matched benchmark beta uses only prior observations via one-month shift','SPY opportunity gap is context, not the matched-alpha gate','same adjusted-price provider','no allocation/ranking/runtime/broker/live authority'],'boundaries':{'scientific_authority':True,'portfolio_ranking':False,'allocation_authority':False,'runtime':False,'broker':False,'live_trading':False}}
+Path('research/artifacts').mkdir(parents=True,exist_ok=True); Path('research/artifacts/p325_putwrite_risk_premium_r1.json').write_text(json.dumps(out,indent=2,sort_keys=True,allow_nan=False)); print(json.dumps(out,sort_keys=True))
