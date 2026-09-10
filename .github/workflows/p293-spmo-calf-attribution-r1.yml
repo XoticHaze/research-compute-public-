@@ -1,0 +1,30 @@
+name: P293 SPMO CALF Attribution R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p293_spmo_calf_attribution_r1.py'
+      - '.github/workflows/p293-spmo-calf-attribution-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p293_spmo_calf_attribution_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/p293_spmo_calf_attribution_r1.json')); s=x['summary']; tag=f"{x['decision']}__spmo_{s['positive_blocks_by_component']['SPMO_vs_SPY']}__calf_{s['positive_blocks_by_component']['CALF_vs_IJR']}__both_{s['blocks_both_positive']}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p293-spmo-calf-attribution__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/p293_spmo_calf_attribution_r1.json
+          if-no-files-found: error
