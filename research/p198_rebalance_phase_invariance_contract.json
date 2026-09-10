@@ -1,0 +1,19 @@
+{
+  "schema":"research.p198_rebalance_phase_invariance_contract.v1",
+  "parent":"P198",
+  "related_survivor":"P195",
+  "status":"STAGED_NOT_LAUNCHED",
+  "hypothesis":"P195's matched sector rebalancing premium is invariant to calendar phase rather than being an artifact of month-end execution.",
+  "frozen_inputs":{
+    "assets":["XLB","XLE","XLF","XLI","XLK","XLP","XLU","XLV","XLY"],
+    "candidate":"equal-weight monthly rebalance",
+    "matched":"buy-and-hold identical equal-weight starting basket",
+    "one_way_cost_bps":25,
+    "windows":["2010-01-01","2015-01-01","2020-01-01"],
+    "calendar_phases":["first_trading_day_of_month","first_trading_day_on_or_after_15th","last_trading_day_of_month"]
+  },
+  "predeclared_gate":"At 2010+ and 2015+, all three fixed phases must have positive matched CAGR excess; at least two of three phases must exceed +0.50 pp CAGR matched excess from 2010; no phase may have Sharpe more than 0.10 below its matched control.",
+  "no_search":["assets","phase definitions","rebalance frequency","cost","weights","chronology"],
+  "launch_condition":"Launch only if P197 leave-one-sector-out robustness does not establish thesis-critical fragility that makes calendar-phase adjudication low-value.",
+  "boundaries":{"portfolio_ranking":false,"product_runtime":false,"broker":false,"live_trading":false}
+}
