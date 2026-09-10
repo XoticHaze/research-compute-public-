@@ -1,0 +1,31 @@
+name: SPMO Calendar Stability R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/spmo_calendar_stability_r1.py'
+      - '.github/workflows/spmo-calendar-stability-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/spmo_calendar_stability_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/spmo_calendar_stability_r1.json')); bp=lambda v:int(round(v*10000)); r=x['results']
+          tag=x['decision']+'__'+ '__'.join(f"{k}_{bp(v['excess_vs_SPY_cagr'])}_{bp(v['excess_vs_QQQ_cagr'])}" for k,v in r.items())
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f'tag={tag}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spmo-calendar-stability__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/spmo_calendar_stability_r1.json
+          if-no-files-found: error
