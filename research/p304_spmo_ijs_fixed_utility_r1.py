@@ -1,0 +1,14 @@
+from __future__ import annotations
+import json, math
+from pathlib import Path
+import pandas as pd, numpy as np, yfinance as yf
+SYMS=['SPMO','SPY','IJS','IJR']; START='2015-01-01'; END='2026-09-10'; COST_BPS=25
+raw=yf.download(SYMS,start=START,end=END,auto_adjust=True,progress=False,threads=False); px=(raw['Close'] if isinstance(raw.columns,pd.MultiIndex) else raw)[SYMS].dropna(); monthly=px.resample('ME').last().pct_change().dropna(); gross=.5*monthly.SPMO+.5*monthly.IJS; drift=.5*(1+monthly.SPMO)/(1+gross); turnover=2*(drift-.5).abs(); net=gross-turnover*(COST_BPS/10000); bench=.5*monthly.SPY+.5*monthly.IJR
+
+def stats(s):
+ s=s.dropna(); w=(1+s).cumprod(); yrs=len(s)/12; return {'months':int(len(s)),'cagr':float(w.iloc[-1]**(1/yrs)-1),'sharpe':float(s.mean()/s.std()*math.sqrt(12)),'max_drawdown':float((w/w.cummax()-1).min())}
+def win(a):
+ n=net.loc[net.index>=pd.Timestamp(a)]; b=bench.loc[n.index]; sp=monthly.SPY.loc[n.index]; sn,sb,ss=stats(n),stats(b),stats(sp); return {'combo':sn,'matched':sb,'sp500':ss,'matched_excess_cagr':sn['cagr']-sb['cagr'],'sp500_excess_cagr':sn['cagr']-ss['cagr']}
+res={k:win(v) for k,v in {'2017_plus':'2017-01-01','2020_plus':'2020-01-01','2022_plus':'2022-01-01'}.items()}; z=pd.DataFrame({'n':net,'b':bench}).loc['2017-01-01':].dropna(); folds=[stats(p.n)['cagr']-stats(p.b)['cagr'] for p in np.array_split(z,5)]; passes=(all(res[k]['matched_excess_cagr']>0 for k in res) and sum(x>0 for x in folds)>=3); decision='P304_INDEPENDENT_REPRESENTATION_UTILITY_SUPPORTED' if passes else 'P304_INDEPENDENT_REPRESENTATION_UTILITY_NOT_SUPPORTED'
+out={'schema':'research.p304_spmo_ijs_fixed_utility_r1','parent':'P304','claim':'Independently adjudicate P303 by replacing VBR/VB with the distinct IJS/IJR small-value representation while freezing SPMO, 50/50 weights, 25 bp endpoint cost, windows, and chronology rule.','cost_bps':COST_BPS,'weights':{'SPMO':0.5,'IJS':0.5},'matched_weights':{'SPY':0.5,'IJR':0.5},'results':res,'chronology_fold_matched_excess_cagr':folds,'positive_folds':sum(x>0 for x in folds),'decision_rule':'Support representation transport only if matched excess is positive in 2017+, 2020+, 2022+ and >=3/5 chronology folds, with no parameter/weight/window rescue.','decision':decision,'limitations':['independent ETF representation, same adjusted-price provider','IJS/IJR alone had weak long-history transport, so failure narrows combination transport rather than killing P303','no allocation/ranking/product/runtime/broker/live authority'],'boundaries':{'scientific_authority':True,'portfolio_ranking':False,'allocation_authority':False,'runtime':False,'broker':False,'live_trading':False}}
+Path('research/artifacts').mkdir(parents=True,exist_ok=True); Path('research/artifacts/p304_spmo_ijs_fixed_utility_r1.json').write_text(json.dumps(out,indent=2,sort_keys=True,allow_nan=False)); print(json.dumps(out,sort_keys=True))
