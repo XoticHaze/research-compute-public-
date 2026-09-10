@@ -1,0 +1,31 @@
+name: P442 PIT 2015 Identity Diagnostic R1
+on:
+  pull_request:
+    paths:
+      - 'research/p442_pit_2015_identity_diagnostic_r1.py'
+      - '.github/workflows/p442-pit-2015-identity-diagnostic-r1.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet pandas requests lxml beautifulsoup4 html5lib 'git+https://github.com/arielNacamulli/pitindex@2df030e5c9be7c83cf4b28c3d8597d74d274757e'
+      - id: result
+        run: |
+          python research/p442_pit_2015_identity_diagnostic_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/p442_pit_2015_identity_diagnostic_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('decision='+x['decision']+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p442-pit-2015-identity-diagnostic__${{ steps.result.outputs.decision }}
+          path: research/artifacts/p442_pit_2015_identity_diagnostic_r1.json
+          if-no-files-found: error
