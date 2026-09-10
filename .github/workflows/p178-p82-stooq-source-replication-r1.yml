@@ -1,0 +1,39 @@
+name: P178 P82 Stooq Source Replication R1
+on:
+  pull_request:
+    paths:
+      - 'research/p178_p82_stooq_source_replication_r1.py'
+      - '.github/workflows/p178-p82-stooq-source-replication-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 requests==2.34.2 yfinance==0.2.65
+      - name: Materialize frozen P82 evaluator dependencies
+        run: |
+          set -euo pipefail
+          ref=8d4672a4bbda1af95274d28f38eeafaaecf9f5f8
+          base=https://raw.githubusercontent.com/XoticHaze/research-compute-public-/$ref/research
+          for f in fixed_multifactor_cross_sectional_r1.py p57_crossasset_parsimonious_r1.py p47_deep_robustness_r2.py p66_combination_serial_persistence_r1.py p82_execution_delay_adjudicator_r1.py; do
+            curl --fail --silent --show-error "$base/$f" -o "research/$f"
+          done
+      - id: eval
+        env:
+          PYTHONPATH: research
+        run: |
+          python research/p178_p82_stooq_source_replication_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p178_p82_stooq_source_replication_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write(f"decision={x['decision']}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p178-p82-stooq-source__${{ steps.eval.outputs.decision }}
+          path: artifacts/p178_p82_stooq_source_replication_r1.json
+          if-no-files-found: error
