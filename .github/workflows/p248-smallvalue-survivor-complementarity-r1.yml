@@ -1,0 +1,34 @@
+name: P248 Small Value Survivor Complementarity R1
+on:
+  pull_request:
+    paths:
+      - 'research/p248_smallvalue_survivor_complementarity_r1.py'
+      - '.github/workflows/p248-smallvalue-survivor-complementarity-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p248_smallvalue_survivor_complementarity_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p248_smallvalue_survivor_complementarity_r1.json'))
+          yes=sum(v['complementarity_supported'] for v in x['comparisons'].values())
+          vals=[]
+          for k,v in x['comparisons'].items():
+              t=v['tests']['2020']; vals.append(f"{k}_{int(round(t['blend_excess_cagr']*10000))}_{t['excess_return_corr']:.2f}_{t['positive_matched_folds']}")
+          tag=f"{x['decision']}__n_{yes}__"+'__'.join(vals)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p248-smallvalue-complementarity__${{ steps.eval.outputs.tag }}
+          path: artifacts/p248_smallvalue_survivor_complementarity_r1.json
+          if-no-files-found: error
