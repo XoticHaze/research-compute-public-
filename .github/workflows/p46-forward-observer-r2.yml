@@ -7,6 +7,13 @@ on:
       - 'research/p46_forward_observer_r2.py'
       - 'research/p46_forward_observer_r2_contract.json'
       - '.github/workflows/p46-forward-observer-r2.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'research/forward_bar_contract_v2.py'
+      - 'research/p46_forward_observer_r2.py'
+      - 'research/p46_forward_observer_r2_contract.json'
+      - '.github/workflows/p46-forward-observer-r2.yml'
   workflow_dispatch:
   schedule:
     - cron: '0 12 * * 1-5'
