@@ -9,9 +9,16 @@ tables=pd.read_html(StringIO(resp.text)); current=tables[0].copy()
 def flatten_cols(df):
     x=df.copy()
     if isinstance(x.columns,pd.MultiIndex):
-        x.columns=[' '.join([str(v) for v in c if str(v)!='nan']).strip() for c in x.columns]
+        out=[]
+        for c in x.columns:
+            parts=[]
+            for v in c:
+                s=str(v).strip()
+                if s!='nan' and not s.lower().startswith('unnamed:') and s not in parts: parts.append(s)
+            out.append(' '.join(parts).strip())
+        x.columns=out
     else:
-        x.columns=[str(c) for c in x.columns]
+        x.columns=[str(c).strip() for c in x.columns]
     return x
 flat=[flatten_cols(t) for t in tables]
 changes=None
@@ -19,8 +26,18 @@ for t in flat[1:]:
     names=' | '.join(c.lower() for c in t.columns)
     if 'added' in names and 'removed' in names and len(t.columns)>=4:
         changes=t; break
-if changes is None: raise RuntimeError('no_added_removed_change_table_found')
-cols=list(changes.columns); low=[c.lower() for c in cols]
+if changes is None:
+    # The page's historical-changes table has changed header markup more than once.
+    # Accept only a conservative structural fallback: a non-current table with >=4
+    # columns whose first column is substantially date-like. Column positions are
+    # then used only for the historical membership/corpus sufficiency diagnostic.
+    for t in flat[1:]:
+        if len(t.columns)<4: continue
+        parsed=pd.to_datetime(t.iloc[:,0],errors='coerce')
+        if len(parsed) and float(parsed.notna().mean())>=0.50:
+            changes=t; break
+if changes is None: raise RuntimeError('no_historical_change_table_found_after_keyword_and_date_structure_checks')
+cols=list(changes.columns)
 date_col=next((c for c in cols if 'date' in c.lower()),cols[0])
 added_col=next((c for c in cols if 'added' in c.lower() and ('ticker' in c.lower() or 'symbol' in c.lower())),cols[1])
 removed_col=next((c for c in cols if 'removed' in c.lower() and ('ticker' in c.lower() or 'symbol' in c.lower())),cols[3] if len(cols)>3 else cols[-1])
