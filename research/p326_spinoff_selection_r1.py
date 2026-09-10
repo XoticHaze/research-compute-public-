@@ -1,0 +1,14 @@
+from __future__ import annotations
+import json, math
+from pathlib import Path
+import numpy as np, pandas as pd, yfinance as yf
+SYMS=['CSD','IWB','SPY']; START='2007-01-01'; END='2026-09-10'; COST_BPS=10
+raw=yf.download(SYMS,start=START,end=END,auto_adjust=True,progress=False,threads=False); px=(raw['Close'] if isinstance(raw.columns,pd.MultiIndex) else raw)[SYMS].dropna().resample('ME').last(); r=px.pct_change().dropna(); q=r.CSD.copy(); q.iloc[0]-=COST_BPS/10000
+def stats(s):
+ s=s.dropna(); w=(1+s).cumprod(); yrs=len(s)/12; sd=s.std(); return {'months':int(len(s)),'cagr':float(w.iloc[-1]**(1/yrs)-1),'sharpe':float(s.mean()/sd*math.sqrt(12)) if sd>0 else 0.,'max_drawdown':float((w/w.cummax()-1).min())}
+res={}
+for name,start in {'2010_plus':'2010-01-01','2015_plus':'2015-01-01','2020_plus':'2020-01-01','2022_plus':'2022-01-01'}.items():
+ z=pd.DataFrame({'q':q,'b':r.IWB,'spy':r.SPY}).loc[start:].dropna(); qs,bs,ss=stats(z.q),stats(z.b),stats(z.spy); res[name]={'spinoff':qs,'matched_broad_us':bs,'spy_context':ss,'matched_excess_cagr':qs['cagr']-bs['cagr'],'spy_opportunity_gap_cagr':qs['cagr']-ss['cagr']}
+z=pd.DataFrame({'q':q,'b':r.IWB}).loc['2010-01-01':].dropna(); folds=[stats(f.q)['cagr']-stats(f.b)['cagr'] for f in np.array_split(z,5)]; passed=all(res[k]['matched_excess_cagr']>0 for k in ['2010_plus','2015_plus','2020_plus','2022_plus']) and sum(x>0 for x in folds)>=3; decision='P326_SPINOFF_SELECTION_SUPPORTED' if passed else 'P326_SPINOFF_SELECTION_NOT_SUPPORTED'
+out={'schema':'research.p326_spinoff_selection_r1','parent':'P326','claim':'Test a materially distinct corporate spin-off event-selection architecture using CSD versus broad-US IWB matched control, SPY opportunity context, 10bp external entry friction, fixed 2010+/2015+/2020+/2022+ windows and five chronology folds. No product, event-window, weighting, rebalance, or date search.','cost_bps':COST_BPS,'results':res,'chronology_fold_matched_excess_cagr':folds,'positive_folds':sum(x>0 for x in folds),'decision_rule':'Support only if matched excess CAGR is positive in all fixed windows and >=3/5 chronology folds. Failure closes this fixed investable spin-off implementation without event-window, product, weighting, or rebalance rescue.','decision':decision,'limitations':['fund-level spin-off selection proxy, not issuer-event reconstruction','IWB is broad-US matched opportunity set rather than exact holdings-style clone','same adjusted-price provider','no allocation/ranking/runtime/broker/live authority'],'boundaries':{'scientific_authority':True,'portfolio_ranking':False,'allocation_authority':False,'runtime':False,'broker':False,'live_trading':False}}
+Path('research/artifacts').mkdir(parents=True,exist_ok=True); Path('research/artifacts/p326_spinoff_selection_r1.json').write_text(json.dumps(out,indent=2,sort_keys=True,allow_nan=False)); print(json.dumps(out,sort_keys=True))
