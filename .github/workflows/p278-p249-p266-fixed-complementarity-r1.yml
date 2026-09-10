@@ -1,0 +1,30 @@
+name: P278 P249 P266 Fixed Complementarity R1
+on:
+  pull_request:
+    branches: [assistant/market-research-p266-industry-momentum-r1]
+    paths:
+      - 'research/p278_p249_p266_fixed_complementarity_r1.py'
+      - '.github/workflows/p278-p249-p266-fixed-complementarity-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p278_p249_p266_fixed_complementarity_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/p278_p249_p266_fixed_complementarity_r1.json')); a=x['tests']['2020']['satellite_increment']; b=x['tests']['2022']['satellite_increment']; bp=lambda v:int(round(v*10000)); tag=f"{x['decision']}__c20_{bp(a['cagr_delta'])}__dd20_{bp(a['maxdd_delta'])}__c22_{bp(b['cagr_delta'])}__dd22_{bp(b['maxdd_delta'])}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p278-p249-p266-fixed-complementarity__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/p278_p249_p266_fixed_complementarity_r1.json
+          if-no-files-found: error
