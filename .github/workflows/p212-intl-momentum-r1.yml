@@ -1,0 +1,29 @@
+name: P212 Intl Momentum R1
+on:
+  pull_request:
+    paths:
+      - 'research/p212_intl_momentum_r1.py'
+      - '.github/workflows/p212-intl-momentum-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p212_intl_momentum_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p212_intl_momentum_r1.json')); a=x['tests']['2016']; bp=lambda v:int(round(v*10000)); tag=f"{x['decision']}__efa_{bp(a['imtm_minus_efa'])}__spy_{bp(a['imtm_minus_spy'])}__fe_{a['positive_efa_folds']}__fs_{a['positive_spy_folds']}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p212-intl-momentum__${{ steps.eval.outputs.tag }}
+          path: artifacts/p212_intl_momentum_r1.json
+          if-no-files-found: error
