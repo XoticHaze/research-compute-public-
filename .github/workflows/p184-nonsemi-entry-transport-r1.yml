@@ -15,6 +15,17 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
       - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 scikit-learn==1.5.2 yfinance==0.2.65
+      - name: Repair duplicated mom20 projection without changing research contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('research/p184_nonsemi_entry_transport_r2.py')
+          s=p.read_text()
+          old='["symbol","signal_i","fold",*FEATURES,"enter20_after25_bps","mom20"]'
+          new='["symbol","signal_i","fold",*FEATURES,"enter20_after25_bps"]'
+          if old not in s: raise SystemExit('expected duplicate projection not found')
+          p.write_text(s.replace(old,new,1))
+          PY
       - id: eval
         run: |
           python research/p184_nonsemi_entry_transport_r2.py
