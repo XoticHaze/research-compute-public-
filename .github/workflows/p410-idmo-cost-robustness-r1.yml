@@ -1,0 +1,30 @@
+name: P410 IDMO Cost Robustness R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p410_idmo_cost_robustness_r1.py'
+      - '.github/workflows/p410-idmo-cost-robustness-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --quiet yfinance pandas
+      - id: eval
+        run: |
+          python research/p410_idmo_cost_robustness_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/p410_idmo_cost_robustness_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('tag='+x['decision']+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p410-idmo-cost-robustness__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/p410_idmo_cost_robustness_r1.json
+          if-no-files-found: error
