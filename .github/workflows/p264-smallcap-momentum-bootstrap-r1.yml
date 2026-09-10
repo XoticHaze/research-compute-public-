@@ -1,0 +1,30 @@
+name: P264 Small Cap Momentum Bootstrap R1
+on:
+  pull_request:
+    branches: [assistant/market-research-p263-smallcap-momentum-r1]
+    paths:
+      - 'research/p264_smallcap_momentum_bootstrap_r1.py'
+      - '.github/workflows/p264-smallcap-momentum-bootstrap-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p264_smallcap_momentum_bootstrap_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p264_smallcap_momentum_bootstrap_r1.json')); a=x['tests']['2015']; p=lambda z:int(round(1000*z['probability_excess_le_zero'])); b=lambda z:int(round(10000*z['p05_annualized_excess'])); tag=f"{x['decision']}__ijr_p{p(a['bootstrap_vs_ijr'])}_p05_{b(a['bootstrap_vs_ijr'])}__iwm_p{p(a['bootstrap_vs_iwm'])}_p05_{b(a['bootstrap_vs_iwm'])}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p264-smallcap-momentum-bootstrap__${{ steps.eval.outputs.tag }}
+          path: artifacts/p264_smallcap_momentum_bootstrap_r1.json
+          if-no-files-found: error
