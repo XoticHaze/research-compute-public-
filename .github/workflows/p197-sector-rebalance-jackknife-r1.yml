@@ -1,0 +1,29 @@
+name: P197 Sector Rebalance Jackknife R1
+on:
+  pull_request:
+    paths:
+      - 'research/p197_sector_rebalance_jackknife_r1.py'
+      - '.github/workflows/p197-sector-rebalance-jackknife-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p197_sector_rebalance_jackknife_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p197_sector_rebalance_jackknife_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write(f"decision={x['decision']}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p197-sector-rebalance-jackknife__${{ steps.eval.outputs.decision }}
+          path: artifacts/p197_sector_rebalance_jackknife_r1.json
+          if-no-files-found: error
