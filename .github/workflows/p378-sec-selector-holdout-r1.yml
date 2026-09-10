@@ -1,0 +1,29 @@
+name: P378 SEC Selector Holdout R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p378_sec_selector_holdout_r1.py'
+      - '.github/workflows/p378-sec-selector-holdout-r1.yml'
+permissions: {contents: read}
+jobs:
+  adjudicate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - id: eval
+        run: |
+          python research/p378_sec_selector_holdout_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/p378_sec_selector_holdout_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('tag='+x['decision']+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p378-sec-selector-holdout__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/p378_sec_selector_holdout_r1.json
+          if-no-files-found: error
