@@ -1,0 +1,30 @@
+name: P385 P305 DBMF Chronology R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p385_p305_dbmf_chronology_r1.py'
+      - '.github/workflows/p385-p305-dbmf-chronology-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --quiet yfinance pandas numpy
+      - id: eval
+        run: |
+          python research/p385_p305_dbmf_chronology_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/p385_p305_dbmf_chronology_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('tag='+x['decision']+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p385-p305-dbmf-chronology__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/p385_p305_dbmf_chronology_r1.json
+          if-no-files-found: error
