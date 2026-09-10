@@ -26,8 +26,7 @@ rows=[]
 for a,b in blocks:
  s=with_endpoint_cost(base.loc[a:b]); q=with_endpoint_cost(ctl.loc[a:b])
  rows.append({'start':a,'end':b,'months':int(len(s)),'blend_cagr':cagr(s),'control_cagr':cagr(q),'matched_excess_pp':100*(cagr(s)-cagr(q)),'blend_sharpe':sharpe(s),'control_sharpe':sharpe(q),'blend_max_drawdown':maxdd(s),'control_max_drawdown':maxdd(q),'positive_matched':bool(cagr(s)>cagr(q))})
-# Independent rolling chronology diagnostic. Apply no synthetic endpoint charge inside each overlapping window; both fixed sleeves were already defined as buy/hold endpoint-cost contracts.
-# To avoid cost omission, charge each 12m diagnostic an equal 25 bp at both ends to blend and matched control.
+# Each rolling 12m diagnostic applies the same fixed 25 bp charge at both endpoints to blend and matched control.
 rolling=[]
 for i in range(11,len(base)):
  s=with_endpoint_cost(base.iloc[i-11:i+1]); q=with_endpoint_cost(ctl.iloc[i-11:i+1])
