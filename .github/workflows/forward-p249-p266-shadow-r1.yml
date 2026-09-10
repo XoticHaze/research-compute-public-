@@ -1,0 +1,39 @@
+name: Forward P249 P266 Shadow R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/forward_p249_p266_shadow_r1.py'
+      - '.github/workflows/forward-p249-p266-shadow-r1.yml'
+      - '.github/workflows/p279-p249-p266-forward-shadow-observer-r1.yml'
+  schedule:
+    - cron: '30 22 * * 1-5'
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: observer
+        run: |
+          python research/forward_p249_p266_shadow_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/forward_p249_p266_shadow_r1.json'))
+          assert x['workload_id']=='FORWARD_P249_P266_SHADOW_R1'
+          assert x['parent']=='P249/P266/P278'
+          c=x['forward']['p249_core_net']['cumulative_return']; s=x['forward']['p249_plus_p266_net']['cumulative_return']; d=x['forward']['satellite_increment_cumulative']; n=x['forward']['p249_core_net']['days']
+          bp=lambda v:int(round(v*10000))
+          tag=f"{x['status']}__days_{n}__core_{bp(c)}__sat_{bp(s)}__inc_{bp(d)}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forward-p249-p266-shadow__${{ steps.observer.outputs.tag }}
+          path: artifacts/forward_p249_p266_shadow_r1.json
+          if-no-files-found: error
