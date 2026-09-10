@@ -1,0 +1,96 @@
+{
+  "boundaries": {
+    "allocation_authority": false,
+    "broker": false,
+    "live_trading": false,
+    "portfolio_ranking": false,
+    "runtime": false
+  },
+  "contract": {
+    "comparison": "P249 core versus fixed equal-quarter small-value/P64/P36/P266 construction",
+    "costs": {
+      "P266_bp": 50.0,
+      "P36_bp": 50.0,
+      "P64_bp": 50.0,
+      "small_value_entry_bp": 10.0
+    },
+    "measurement": "close-to-close shadow returns after decision timestamp; monthly frozen holdings formed only from prior completed information",
+    "no_weight_window_topk_universe_threshold_or_parameter_search": true,
+    "p249_core": "fixed equal-third small-value/P64/P36 primitive stack",
+    "p266_satellite": "fixed 12-1 top-3 industry momentum"
+  },
+  "current_holding_month": "2026-09",
+  "current_state": {
+    "p249_core": {
+      "AVDV": 0.16666666666666666,
+      "AVUV": 0.16666666666666666,
+      "DBC": 0.08333333333333333,
+      "IGV": 0.05555555555555555,
+      "QQQ": 0.08333333333333333,
+      "SOXX": 0.38888888888888884,
+      "XBI": 0.05555555555555555
+    },
+    "p249_plus_p266": {
+      "AVDV": 0.125,
+      "AVUV": 0.125,
+      "DBC": 0.0625,
+      "IGV": 0.041666666666666664,
+      "QQQ": 0.0625,
+      "SOXX": 0.2916666666666667,
+      "XBI": 0.125,
+      "XPH": 0.08333333333333333,
+      "XSD": 0.08333333333333333
+    },
+    "p266": {
+      "XBI": 0.3333333333333333,
+      "XPH": 0.3333333333333333,
+      "XSD": 0.3333333333333333
+    },
+    "p36": {
+      "SOXX": 1.0
+    },
+    "p64": {
+      "DBC": 0.25,
+      "IGV": 0.16666666666666666,
+      "QQQ": 0.25,
+      "SOXX": 0.16666666666666666,
+      "XBI": 0.16666666666666666
+    }
+  },
+  "decision_at": "2026-09-10T07:25:00+00:00",
+  "forward": {
+    "first_close": null,
+    "latest_close": null,
+    "observations": [],
+    "p249_core_net": {
+      "annualized_vol": null,
+      "cumulative_return": 0.0,
+      "days": 0,
+      "max_drawdown": 0.0,
+      "sharpe_rf0": null
+    },
+    "p249_plus_p266_net": {
+      "annualized_vol": null,
+      "cumulative_return": 0.0,
+      "days": 0,
+      "max_drawdown": 0.0,
+      "sharpe_rf0": null
+    },
+    "satellite_increment_cumulative": 0.0
+  },
+  "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
+  "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
+  "observed_at": "2026-09-10T07:56:03.607276+00:00",
+  "parent": "P249/P266/P278",
+  "schema": "research.forward_p249_p266_shadow_r1",
+  "source_pins": {
+    "P248_source_commit": "20490f115d901aac3b586c33072c1157ad4d10a6",
+    "P249_result_artifact_id": 10137946389,
+    "P249_result_run_id": 34441059315,
+    "P266_source_commit": "4cca78d08bd6ce21726be9bef9b09b0387e197ce",
+    "P278_result_artifact_id": 10141056125,
+    "P278_result_run_id": 34449749421
+  },
+  "status": "BASELINE_FROZEN_NO_FORWARD_CLOSES",
+  "workload_id": "FORWARD_P249_P266_SHADOW_R1"
+}

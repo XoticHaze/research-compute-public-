@@ -4,8 +4,8 @@ on:
     branches: [main]
     paths:
       - 'research/forward_p249_p266_shadow_r1.py'
+      - 'research/current/forward_p249_p266_shadow_r1.json'
       - '.github/workflows/forward-p249-p266-shadow-r1.yml'
-      - '.github/workflows/p279-p249-p266-forward-shadow-observer-r1.yml'
   schedule:
     - cron: '30 22 * * 1-5'
   workflow_dispatch:
@@ -14,6 +14,8 @@ jobs:
   observe:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
+    outputs:
+      tag: ${{ steps.observer.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -37,3 +39,33 @@ jobs:
           name: forward-p249-p266-shadow__${{ steps.observer.outputs.tag }}
           path: artifacts/forward_p249_p266_shadow_r1.json
           if-no-files-found: error
+  publish-current:
+    if: github.event_name != 'pull_request'
+    needs: observe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {contents: write}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/download-artifact@v4
+        with:
+          name: forward-p249-p266-shadow__${{ needs.observe.outputs.tag }}
+          path: /tmp/forward-p249-p266-shadow
+      - name: Publish stable current snapshot
+        run: |
+          test -f /tmp/forward-p249-p266-shadow/forward_p249_p266_shadow_r1.json
+          git fetch origin main
+          git checkout -B forward-current-publish origin/main
+          mkdir -p research/current
+          cp /tmp/forward-p249-p266-shadow/forward_p249_p266_shadow_r1.json research/current/forward_p249_p266_shadow_r1.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add research/current/forward_p249_p266_shadow_r1.json
+          if git diff --cached --quiet; then
+            echo 'CURRENT_SNAPSHOT_UNCHANGED=true'
+            exit 0
+          fi
+          git commit -m 'Forward: publish current P249/P266 shadow snapshot'
+          git push origin HEAD:main
+          echo 'CURRENT_SNAPSHOT_PUBLISHED=true'
