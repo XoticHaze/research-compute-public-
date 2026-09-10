@@ -1,0 +1,33 @@
+name: P280 SEC Form4 Source Probe R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p280_sec_form4_source_probe_r1.py'
+      - '.github/workflows/p280-sec-form4-source-probe-r1.yml'
+permissions: {contents: read}
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - id: probe
+        run: |
+          python research/p280_sec_form4_source_probe_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p280_sec_form4_source_probe_r1.json'))
+          ok=sum(bool(v.get('source_ok')) for v in x['tests'].values())
+          rows=sum(int(v.get('form4_rows_since_start',0)) for v in x['tests'].values())
+          parsed=sum(int(v.get('parsed_sample_count',0)) for v in x['tests'].values())
+          tag=f"{x['decision']}__ok_{ok}__rows_{rows}__parsed_{parsed}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p280-sec-form4-source__${{ steps.probe.outputs.tag }}
+          path: artifacts/p280_sec_form4_source_probe_r1.json
+          if-no-files-found: error
