@@ -1,0 +1,19 @@
+name: Research Python Workload R1 Smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/research-python-workload-r1.yml'
+      - '.github/workflows/research-python-workload-r1-smoke.yml'
+      - 'research/coordinator_public_runner_smoke_r1.py'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    uses: ./.github/workflows/research-python-workload-r1.yml
+    with:
+      script: research/coordinator_public_runner_smoke_r1.py
+      artifact_path: artifacts/coordinator_public_runner_smoke_r1.json
+      artifact_name: coordinator-public-runner-smoke
