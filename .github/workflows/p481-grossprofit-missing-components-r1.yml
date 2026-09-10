@@ -1,0 +1,25 @@
+name: P481 GrossProfit Missing Components R1
+on:
+  pull_request:
+    paths:
+      - 'research/p481_grossprofit_missing_components_r1.py'
+      - '.github/workflows/p481-grossprofit-missing-components-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --quiet pandas requests lxml html5lib beautifulsoup4
+      - id: result
+        run: |
+          python research/p481_grossprofit_missing_components_r1.py
+          echo 'decision=SOURCE_COMPONENT_DIAGNOSTIC_COMPLETE' >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p481-grossprofit-missing-components
+          path: research/artifacts/p481_grossprofit_missing_components_r1.json
+          if-no-files-found: error
