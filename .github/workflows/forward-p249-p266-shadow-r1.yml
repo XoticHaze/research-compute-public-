@@ -1,5 +1,9 @@
 name: Forward P249 P266 Shadow R1
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/forward-p249-p266-shadow-r1.yml'
   pull_request:
     branches: [main]
     paths:
