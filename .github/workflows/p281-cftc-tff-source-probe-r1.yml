@@ -1,0 +1,32 @@
+name: P281 CFTC TFF Source Probe R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p281_cftc_tff_source_probe_r1.py'
+      - '.github/workflows/p281-cftc-tff-source-probe-r1.yml'
+permissions: {contents: read}
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - id: probe
+        run: |
+          python research/p281_cftc_tff_source_probe_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p281_cftc_tff_source_probe_r1.json'))
+          ok=sum(bool(v.get('source_ok')) for v in x['tests'].values())
+          rows=sum(int(v.get('rows',0)) for v in x['tests'].values())
+          tag=f"{x['decision']}__ok_{ok}__rows_{rows}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p281-cftc-tff-source__${{ steps.probe.outputs.tag }}
+          path: artifacts/p281_cftc_tff_source_probe_r1.json
+          if-no-files-found: error
