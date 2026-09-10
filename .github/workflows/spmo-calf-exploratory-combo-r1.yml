@@ -1,0 +1,31 @@
+name: SPMO CALF Exploratory Combo R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/spmo_calf_exploratory_combo_r1.py'
+      - '.github/workflows/spmo-calf-exploratory-combo-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/spmo_calf_exploratory_combo_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/spmo_calf_exploratory_combo_r1.json')); z=x['results']['2019']; bp=lambda v:int(round(v*10000))
+          tag=f"{x['decision']}__matched_{bp(z['matched_excess_cagr'])}__folds_{z['positive_matched_folds']}__qqq_{bp(z['vs_QQQ_cagr'])}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f'tag={tag}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spmo-calf-exploratory-combo__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/spmo_calf_exploratory_combo_r1.json
+          if-no-files-found: error
