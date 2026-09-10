@@ -1,0 +1,29 @@
+name: P207 Small Value Intersection R1
+on:
+  pull_request:
+    paths:
+      - 'research/p207_smallvalue_intersection_fund_r1.py'
+      - '.github/workflows/p207-smallvalue-intersection-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p207_smallvalue_intersection_fund_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p207_smallvalue_intersection_fund_r1.json')); p=x['tests']['2010']; q=x['tests']['2015']; t=x['tests']['2020']; bp=lambda v:int(round(v*10000)); tag=f"{x['decision']}__s10_{bp(p['vbr_minus_iwm'])}__v10_{bp(p['vbr_minus_iwd'])}__m10_{bp(p['vbr_minus_spy'])}__s15_{bp(q['vbr_minus_iwm'])}__v15_{bp(q['vbr_minus_iwd'])}__s20_{bp(t['vbr_minus_iwm'])}__v20_{bp(t['vbr_minus_iwd'])}__fs_{p['positive_iwm_folds']}__fv_{p['positive_iwd_folds']}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p207-smallvalue-intersection__${{ steps.eval.outputs.tag }}
+          path: artifacts/p207_smallvalue_intersection_fund_r1.json
+          if-no-files-found: error
