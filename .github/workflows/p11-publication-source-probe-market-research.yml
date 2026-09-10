@@ -1,0 +1,31 @@
+name: P11 Publication Source Probe Market Research
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/p11-publication-source-probe-market-research.yml'
+permissions: {contents: read}
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Execute existing current-main publication-authoritative source probe
+        run: python research/p11_publication_authoritative_source_probe.py --output research/results/p11_publication_authoritative_source_probe.json
+      - id: classify
+        run: |
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/results/p11_publication_authoritative_source_probe.json'))
+          rows=sum(int(v.get('total_rows_observed') or 0) for v in x['sector_coverage'].values())
+          tag=f"{x['decision']}__rows_{rows}__history_{int(bool(x['sector_history_pass']))}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p11-publication-source-probe__${{ steps.classify.outputs.tag }}
+          path: research/results/p11_publication_authoritative_source_probe.json
+          if-no-files-found: error
