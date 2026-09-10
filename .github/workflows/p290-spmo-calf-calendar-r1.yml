@@ -1,0 +1,30 @@
+name: P290 SPMO CALF Calendar R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p290_spmo_calf_calendar_r1.py'
+      - '.github/workflows/p290-spmo-calf-calendar-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p290_spmo_calf_calendar_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/p290_spmo_calf_calendar_r1.json')); s=x['summary']; tag=f"{x['decision']}__matched_{s['positive_matched_blocks']}__qqq_{s['positive_QQQ_blocks']}__dd_{s['no_gt5pp_drawdown_penalty_blocks']}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f'tag={tag}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p290-spmo-calf-calendar__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/p290_spmo_calf_calendar_r1.json
+          if-no-files-found: error
