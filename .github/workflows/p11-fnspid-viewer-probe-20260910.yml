@@ -1,0 +1,30 @@
+name: P11 FNSPID Viewer Probe 20260910
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p11_fnspid_viewer_probe_20260910.py'
+      - '.github/workflows/p11-fnspid-viewer-probe-20260910.yml'
+permissions: {contents: read}
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - id: probe
+        run: |
+          python research/p11_fnspid_viewer_probe_20260910.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p11_fnspid_viewer_probe_20260910.json'))
+          tag=x['decision'][:80].replace('/','_')
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p11-fnspid-viewer-probe__${{ steps.probe.outputs.tag }}
+          path: artifacts/p11_fnspid_viewer_probe_20260910.json
+          if-no-files-found: error
