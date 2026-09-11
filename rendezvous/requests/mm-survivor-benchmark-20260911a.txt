@@ -1,0 +1,3 @@
+MM #504 focused benchmark acceptance request.
+Expected private source: mm-IBKR@7525295980af51dcdffe3dd222bf5e89923e9108
+Purpose: validate current benchmark-relative forward-intelligence projection on hardened public/private-input compute.
