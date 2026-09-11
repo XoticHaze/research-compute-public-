@@ -1,0 +1,62 @@
+name: DBMF Concentration Comparator R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/dbmf-concentration-comparator-r1.yml'
+      - 'research/dbmf-concentration-comparator-r1.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Compare identical top-month concentration stress
+        run: |
+          python - <<'PY'
+          import json, urllib.request, datetime as dt
+          from pathlib import Path
+          c=json.loads(Path('research/dbmf-concentration-comparator-r1.json').read_text())
+          start=dt.datetime.fromisoformat(c['start']+'T00:00:00+00:00'); end=dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1)
+          def fetch(sym):
+              u=f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?period1={int(start.timestamp())}&period2={int(end.timestamp())}&interval=1d&events=history&includeAdjustedClose=true"
+              req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+              with urllib.request.urlopen(req,timeout=30) as r:o=json.load(r)['chart']['result'][0]
+              a=o['indicators'].get('adjclose',[{}])[0].get('adjclose') or o['indicators']['quote'][0]['close']
+              return {dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat():float(p) for t,p in zip(o['timestamp'],a) if p is not None}
+          syms=c['symbols']; px={s:fetch(s) for s in syms}; common=sorted(set.intersection(*(set(px[s]) for s in syms))); assert len(common)>=900
+          def rr(s):return {common[i]:px[s][common[i]]/px[s][common[i-1]]-1 for i in range(1,len(common))}
+          r={s:rr(s) for s in syms}; ds=common[1:]
+          months={}
+          for d in ds:months.setdefault(d[:7],[]).append(d)
+          def comp(vals):
+              v=1.0
+              for x in vals:v*=1+x
+              return v-1
+          def cagr(sym,dates):
+              v=1.0
+              for d in dates:v*=1+r[sym][d]
+              yrs=max((dt.date.fromisoformat(dates[-1])-dt.date.fromisoformat(dates[0])).days/365.25,1/365.25)
+              return v**(1/yrs)-1
+          def one(asset):
+              mrows=[]
+              for m,dz in sorted(months.items()):
+                  a=comp(r[asset][d] for d in dz); b=comp(r['BIL'][d] for d in dz)
+                  mrows.append((m,(1+a)/(1+b)-1))
+              ranked=sorted(mrows,key=lambda x:x[1],reverse=True); removed={m for m,_ in ranked[:c['top_months_removed']]}; kept=[d for d in ds if d[:7] not in removed]
+              base=cagr(asset,ds)-cagr('BIL',ds); trim=cagr(asset,kept)-cagr('BIL',kept)
+              return {'base_excess_cagr':base,'trimmed_excess_cagr':trim,'drop_pp':base-trim,'removed_months':sorted(removed),'retained_fraction':(trim/base if base>0 else None)}
+          out={'schema':'dbmf_concentration_comparator_result.v1','common_start':common[0],'common_end':common[-1],'common_rows':len(common),'top_months_removed':c['top_months_removed'],'results':{s:one(s) for s in c['assets']},'research_only':True}
+          d=out['results']; out['dbmf_more_concentrated_than_spy']=d['DBMF']['drop_pp']>d['SPY']['drop_pp']; out['dbmf_more_concentrated_than_kmlm']=d['DBMF']['drop_pp']>d['KMLM']['drop_pp']
+          Path('dbmf-concentration-comparator-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2));print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dbmf-concentration-comparator-r1-result
+          path: dbmf-concentration-comparator-r1-result.json
+          retention-days: 14
