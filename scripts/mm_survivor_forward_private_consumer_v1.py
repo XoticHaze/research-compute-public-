@@ -27,7 +27,7 @@ SCHEMA = "mm-survivor-forward-x25519-v1"
 RECIPIENT_SCHEMA = "mm-survivor-forward-ephemeral-recipient-v1"
 HARNESS = "mm_survivor_forward_private_acceptance_v1"
 INFO = b"commandcenter-mm-survivor-forward-v1"
-EXPECTED_MM_COMMIT = "f0b17db01c941142e235897b37f0329d95a5a80c"
+EXPECTED_MM_COMMIT = "d1c0083b2df0e9024c52e977acffb20e41d6be60"
 EXPECTED_GIT_BLOBS = {
     "strategy_capital_readiness.py": "dddf48c557689413f469058bab2c0034958796e1",
     "strategy_forward_intelligence.py": "45fc244ff109a21c4b9dcd899689cee0d22e1fc3",
@@ -38,11 +38,13 @@ EXPECTED_GIT_BLOBS = {
     "strategy_health_position_context.py": "cb13af73f8cde37d55d8a00e6951e7085b23a753",
     "strategy_health_comparable_context.py": "a27373206c0a2f28f7fea3576cc898074e3b71c5",
     "strategy_health_operator_context.py": "3359375755e19a66cb793dcb8deef69a1985beed",
+    "scripts/operator/verify_survivor_forward_operator_contract_v1.py": "18739954bb61dff5346a295bb7ba7eb20398325a",
     "tests/test_strategy_capital_readiness.py": "73b195b88776bbe2c3f4517d78791f319d8a3a90",
     "tests/test_strategy_capital_readiness_historical_compat.py": "3fd66ca9eba1194db8b48bf5d71c8bf87f2e2f3a",
     "tests/test_strategy_health_canonical_trade_forward_conformance.py": "8e5bf693808a724fee1ce4c5a47674708f491104",
     "tests/test_strategy_forward_intelligence.py": "8d277458394ec25bc30a069ef4762122bd8acaf5",
     "tests/test_strategy_forward_intelligence_json_boundary.py": "9d7c5cf72d920ea2671d976f6b537603c1eb5145",
+    "tests/test_survivor_forward_operator_contract_verifier_v1.py": "3d0bd89d92363c244a37d21ba51c687e7d5f1ef0",
 }
 FILES = set(EXPECTED_GIT_BLOBS)
 TESTS = [
@@ -51,6 +53,7 @@ TESTS = [
     "tests.test_strategy_health_canonical_trade_forward_conformance",
     "tests.test_strategy_forward_intelligence",
     "tests.test_strategy_forward_intelligence_json_boundary",
+    "tests.test_survivor_forward_operator_contract_verifier_v1",
 ]
 
 
@@ -209,6 +212,7 @@ def consume(envelope_path: Path, response_dir: Path, private_key_path: Path, exp
                 "strategy_forward_intelligence.py",
                 "strategy_health_canonical_trade_consumer.py",
                 "strategy_health_preview_binding.py",
+                "scripts/operator/verify_survivor_forward_operator_contract_v1.py",
             ],
             cwd=root,
             stdout=subprocess.DEVNULL,
@@ -223,7 +227,7 @@ def consume(envelope_path: Path, response_dir: Path, private_key_path: Path, exp
 
     passed = compile_rc == 0 and test_rc == 0
     return {
-        "schema": "mm-survivor-forward-backend-acceptance-receipt-v4",
+        "schema": "mm-survivor-forward-backend-acceptance-receipt-v5",
         "authority": "private_mm_source_validation_only",
         "harness": HARNESS,
         "mm_commit": manifest["mm_commit"],
@@ -231,7 +235,8 @@ def consume(envelope_path: Path, response_dir: Path, private_key_path: Path, exp
         "checks": {
             "reviewed_source_blob_identity_verified": True,
             "production_modules_compile": compile_rc == 0,
-            "five_requested_test_modules_pass": test_rc == 0,
+            "six_requested_test_modules_pass": test_rc == 0,
+            "operator_contract_verifier_included": True,
         },
         "reviewed_source_blob_count": len(EXPECTED_GIT_BLOBS),
         "test_modules": TESTS,
