@@ -1,0 +1,22 @@
+name: devexus-fx-hedge-dollar-regime-r1
+on:
+  push:
+    paths: ['.github/workflows/devexus-fx-hedge-dollar-regime-r1.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -q yfinance pandas numpy
+      - name: Falsify HEFA alpha against dollar regime dependence
+        shell: python
+        run: |
+          import json,yfinance as yf,pandas as pd,numpy as np
+          px=yf.download(['HEFA','IEFA','DX-Y.NYB'],start='2014-01-01',auto_adjust=True,progress=False)['Close'].dropna(); m=px.resample('ME').last().pct_change().dropna(); spread=m.HEFA-m.IEFA; dxy=m['DX-Y.NYB']
+          corr=float(spread.corr(dxy)); up=spread[dxy>0]; down=spread[dxy<=0]
+          def ann_mean(z): return float(z.mean()*12)
+          roll=((1+m.HEFA).rolling(36).apply(np.prod,raw=True)-1)-((1+m.IEFA).rolling(36).apply(np.prod,raw=True)-1); roll=roll.dropna()
+          out={'months':len(m),'spread_dxy_corr':corr,'annualized_mean_excess_dxy_up_pp':100*ann_mean(up),'annualized_mean_excess_dxy_down_pp':100*ann_mean(down),'dxy_up_months':len(up),'dxy_down_months':len(down),'positive_36m_windows':int((roll>0).sum()),'rolling_36m_windows':len(roll),'positive_36m_fraction':float((roll>0).mean()),'regime_robust':bool(ann_mean(up)>0 and ann_mean(down)>0 and (roll>0).mean()>=.6)}; print('RESULT_JSON='+json.dumps(out,sort_keys=True))
