@@ -1,0 +1,24 @@
+name: P538 CFTC LM Crowding Contrarian R1
+on:
+  pull_request:
+    branches: [main]
+    paths: ['research/p538_cftc_lm_crowding_contrarian_r1.py','.github/workflows/p538-cftc-lm-crowding-contrarian-r1.yml']
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p538_cftc_lm_crowding_contrarian_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p538_cftc_lm_crowding_contrarian_r1.json'));a=x['tests']['all'];r=x['tests']['recent'];bp=lambda v:int(round(v*10000));tag=f"{x['decision']}__excess_{bp(a['strategy']['matched_excess_cagr'])}_{bp(r['strategy']['matched_excess_cagr'])}__folds_{a['positive_folds']}_{r['positive_folds']}";open(os.environ['GITHUB_OUTPUT'],'a').write(f'tag={tag}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with: {name: 'p538-cftc-lm-crowding__${{ steps.eval.outputs.tag }}', path: artifacts/p538_cftc_lm_crowding_contrarian_r1.json, if-no-files-found: error}
