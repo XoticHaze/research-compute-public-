@@ -1,0 +1,23 @@
+name: P569 TSA FOIA Catalog R2
+on:
+  pull_request:
+    paths:
+      - 'research/p569_tsa_foia_catalog_r2.py'
+      - '.github/workflows/p569-tsa-foia-catalog-r2.yml'
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  catalog:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check requests==2.32.5 beautifulsoup4==4.14.2
+      - run: python research/p569_tsa_foia_catalog_r2.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p569-tsa-foia-catalog-r2
+          path: artifacts/p569_tsa_foia_catalog_r2.json
+          if-no-files-found: error
