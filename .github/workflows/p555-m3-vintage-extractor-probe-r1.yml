@@ -1,0 +1,32 @@
+name: P555 M3 Vintage Extractor Probe R1
+
+on:
+  pull_request:
+    paths:
+      - 'research/p555_m3_vintage_extractor_probe_r1.py'
+      - '.github/workflows/p555-m3-vintage-extractor-probe-r1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check requests==2.32.5 'pypdf>=5,<7'
+      - name: Confirm native PDF text extractor
+        run: |
+          command -v pdftotext
+          pdftotext -v
+      - run: python research/p555_m3_vintage_extractor_probe_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p555-m3-vintage-extractor-probe-r1
+          path: artifacts/p555_m3_vintage_extractor_probe_r1.json
+          if-no-files-found: error
