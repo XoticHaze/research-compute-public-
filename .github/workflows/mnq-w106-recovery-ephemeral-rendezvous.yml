@@ -1,0 +1,81 @@
+name: MNQ W106 Recovery Ephemeral Rendezvous
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'rendezvous/requests/mnq-w106-recovery-*.txt'
+      - 'scripts/mnq_w106_recovery_ephemeral_consumer_v1.py'
+      - '.github/workflows/mnq-w106-recovery-ephemeral-rendezvous.yml'
+
+permissions:
+  contents: write
+
+env:
+  RESPONSE_ROOT: rendezvous/responses
+  RECIPIENT_ROOT: rendezvous/recipients
+  EXCHANGE_REF: rendezvous-exchange
+
+jobs:
+  consume:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - run: python -m pip install --disable-pip-version-check cryptography pandas==2.3.2 numpy==2.3.2
+      - name: Generate one-run recipient
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import base64,hashlib,json,os
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric import x25519
+          private=x25519.X25519PrivateKey.generate()
+          private_raw=private.private_bytes(serialization.Encoding.Raw,serialization.PrivateFormat.Raw,serialization.NoEncryption())
+          public_raw=private.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)
+          Path(os.environ['RUNNER_TEMP'],'mnq-w106-private-key.b64').write_text(base64.b64encode(private_raw).decode())
+          recipient={'schema':'mnq-w106-recovery-recipient-v1','run_id':os.environ['GITHUB_RUN_ID'],'recipient_b64':base64.b64encode(public_raw).decode(),'recipient_key_id':'sha256:'+hashlib.sha256(public_raw).hexdigest()}
+          Path(os.environ['RUNNER_TEMP'],'recipient.json').write_text(json.dumps(recipient,sort_keys=True)+'\n')
+          print('MNQ_W106_RUN_ID='+os.environ['GITHUB_RUN_ID'])
+          print('MNQ_W106_RECIPIENT_KEY_ID='+recipient['recipient_key_id'])
+          PY
+      - name: Publish public recipient
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}-mnq-w106-recovery.json"
+          payload="$(base64 -w0 "$RUNNER_TEMP/recipient.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json,sys
+          content,branch=sys.argv[1:]
+          print(json.dumps({'message':'rendezvous: publish MNQ W106 recipient','content':content,'branch':branch}))
+          PY
+          )"
+          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}" -d "$body" >/dev/null
+          echo "MNQ_W106_RECIPIENT_PATH=${path}"
+      - name: Wait for encrypted source capsule
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/mnq-w106-recovery-envelope.json"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${EXCHANGE_REF}"
+          found=0
+          for _ in $(seq 1 240); do
+            if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/envelope.json"; then found=1; break; fi
+            sleep 5
+          done
+          test "$found" = 1 || { echo 'run-bound MNQ W106 encrypted capsule did not arrive'; exit 42; }
+      - name: Execute frozen W106 recovery science in runner temp
+        run: |
+          set -euo pipefail
+          python scripts/mnq_w106_recovery_ephemeral_consumer_v1.py --envelope "$RUNNER_TEMP/envelope.json" --private-key "$RUNNER_TEMP/mnq-w106-private-key.b64" --run-id "$GITHUB_RUN_ID"
+      - name: Remove one-run private material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/mnq-w106-private-key.b64" "$RUNNER_TEMP/recipient.json" "$RUNNER_TEMP/envelope.json"
