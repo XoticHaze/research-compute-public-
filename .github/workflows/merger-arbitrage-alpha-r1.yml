@@ -21,11 +21,6 @@ jobs:
           px=px.dropna()
           r=px.pct_change().dropna()
           cost_bps=10
-          def cagr(s):
-              n=(s.index[-1]-s.index[0]).days/365.25
-              return (s.iloc[-1]/s.iloc[0])**(1/n)-1
-          def mdd(s):
-              return (s/s.cummax()-1).min()
           def annret(ret): return (1+ret).prod()**(252/len(ret))-1
           out={}
           for fund in ['MNA','ARB']:
@@ -33,9 +28,7 @@ jobs:
               beta=np.cov(rr[fund],rr['SPY'])[0,1]/np.var(rr['SPY'])
               beta=max(0,min(1,float(beta)))
               ctrl=beta*rr['SPY']+(1-beta)*rr['BIL']
-              fund_net=rr[fund].copy()
-              # one-time 10bp implementation haircut annualized conservatively as 10bp/year
-              fund_ann=annret(fund_net)-cost_bps/10000
+              fund_ann=annret(rr[fund])-cost_bps/10000
               ctrl_ann=annret(ctrl)
               years=sorted(set(rr.index.year))
               wins=0; eligible=0
@@ -60,3 +53,4 @@ jobs:
           print('RESULT_JSON='+json.dumps(out,sort_keys=True))
           survivors={k:v for k,v in out.items() if v['excess_cagr_pp']>1.0 and v['calendar_wins']>=max(1,math.ceil(v['calendar_years']*0.6)) and v['recent_2022_plus_excess_pp']>0}
           print('SURVIVORS='+json.dumps(survivors,sort_keys=True))
+          # trigger-r2: workflow now existed on default branch before this push
