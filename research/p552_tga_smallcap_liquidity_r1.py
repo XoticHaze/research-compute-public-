@@ -8,8 +8,7 @@ import pandas as pd
 import requests
 import yfinance as yf
 
-API = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/dts/operating_cash_balance"
-ACCOUNT = "Treasury General Account (TGA) Closing Balance"
+API = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/dts/dts_table_1"
 END = "2026-09-11"
 COST_BPS = 10.0
 FOLDS = [
@@ -17,6 +16,11 @@ FOLDS = [
     ("2019-01-01", "2021-12-31"),
     ("2022-01-01", END),
 ]
+TGA_ACCOUNT_REGIMES = {
+    "Federal Reserve Account": "legacy_close_today",
+    "Treasury General Account (TGA)": "tga_close_today",
+    "Treasury General Account (TGA) Closing Balance": "modern_open_today",
+}
 
 
 def cagr(r: pd.Series) -> float | None:
@@ -41,26 +45,59 @@ def stats(r: pd.Series) -> dict:
     }
 
 
+def _num(v):
+    try:
+        if v is None or str(v).lower() == "null":
+            return None
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def fetch_tga() -> pd.Series:
-    params = {
-        "format": "json",
-        "fields": "record_date,account_type,close_today_bal",
-        "filter": f"account_type:eq:{ACCOUNT}",
-        "sort": "record_date",
-        "page[size]": "10000",
-    }
-    r = requests.get(API, params=params, headers={"User-Agent": "XoticHaze-Research/1.0"}, timeout=(15, 60))
-    r.raise_for_status()
-    j = r.json()
-    d = pd.DataFrame(j.get("data", []))
+    rows = []
+    raw_count = 0
+    regime_counts: dict[str, int] = {}
+    for year in range(2015, 2027):
+        params = {
+            "format": "json",
+            "fields": "record_date,account_type,open_today_bal,close_today_bal",
+            "filter": f"record_date:gte:{year}-01-01,record_date:lte:{year}-12-31",
+            "sort": "record_date",
+            "page[size]": "10000",
+        }
+        r = requests.get(API, params=params, headers={"User-Agent": "XoticHaze-Research/1.0"}, timeout=(15, 60))
+        r.raise_for_status()
+        data = r.json().get("data", [])
+        raw_count += len(data)
+        for row in data:
+            account = row.get("account_type")
+            if account not in TGA_ACCOUNT_REGIMES:
+                continue
+            if account == "Treasury General Account (TGA) Closing Balance":
+                # Modern DTS emits the closing-balance line in open_today_bal.
+                value = _num(row.get("open_today_bal"))
+                if value is None:
+                    value = _num(row.get("close_today_bal"))
+            else:
+                value = _num(row.get("close_today_bal"))
+                if value is None:
+                    value = _num(row.get("open_today_bal"))
+            if value is None:
+                continue
+            rows.append((row.get("record_date"), value, account))
+            regime_counts[account] = regime_counts.get(account, 0) + 1
+    d = pd.DataFrame(rows, columns=["record_date", "balance", "account_type"])
     if d.empty:
-        raise RuntimeError("No TGA closing-balance records returned")
+        s = pd.Series(dtype=float)
+        s.attrs["raw_rows"] = raw_count
+        s.attrs["regime_counts"] = regime_counts
+        return s
     d["record_date"] = pd.to_datetime(d["record_date"], errors="coerce")
-    d["balance"] = pd.to_numeric(d["close_today_bal"], errors="coerce")
-    d = d.dropna(subset=["record_date", "balance"]).sort_values("record_date")
+    d = d.dropna(subset=["record_date", "balance"]).sort_values("record_date").drop_duplicates("record_date", keep="last")
     s = d.set_index("record_date")["balance"].resample("ME").last().dropna()
-    s.attrs["raw_rows"] = int(len(d))
-    s.attrs["api_meta"] = j.get("meta", {})
+    s.attrs["raw_rows"] = raw_count
+    s.attrs["regime_counts"] = regime_counts
     return s
 
 
@@ -80,11 +117,8 @@ def evaluate(d: pd.DataFrame, a: str, b: str) -> dict:
 
 def main() -> None:
     tga = fetch_tga()
-    # Frozen before performance inspection: use the sign of the completed
-    # month-end 3-month TGA balance change. Falling TGA is treated as a
-    # liquidity-release state and selects IWM; otherwise select SPY.
     signal = (tga.pct_change(3) < 0).astype(float).shift(1).dropna().rename("iwm_w")
-    first_signal = signal.index.min()
+    first_signal = signal.index.min() if len(signal) else pd.NaT
     if pd.isna(first_signal) or len(signal) < 36:
         out = {
             "schema": "research.p552_tga_smallcap_liquidity_r1",
@@ -93,8 +127,9 @@ def main() -> None:
             "source_diagnostics": {
                 "raw_rows": tga.attrs.get("raw_rows", 0),
                 "monthly_points": int(len(tga)),
-                "first_month": str(tga.index.min().date()),
-                "last_month": str(tga.index.max().date()),
+                "first_month": None if not len(tga) else str(tga.index.min().date()),
+                "last_month": None if not len(tga) else str(tga.index.max().date()),
+                "regime_counts": tga.attrs.get("regime_counts", {}),
             },
             "boundaries": {"portfolio_ranking": False, "allocation_authority": False, "runtime": False, "broker": False, "live_trading": False},
         }
@@ -123,7 +158,7 @@ def main() -> None:
         "claim": "Completed-month Treasury General Account contraction can causally select small caps over large caps with durable after-cost excess versus a static IWM/SPY mix.",
         "frozen_contract": {
             "source": API,
-            "account_type": ACCOUNT,
+            "source_regime_stitch": "Federal Reserve Account / Treasury General Account legacy close_today_bal plus modern TGA Closing Balance open_today_bal",
             "feature": "completed month-end TGA closing balance 3-month percent change",
             "signal": "negative 3-month TGA change => IWM; otherwise SPY; decision applied the following month",
             "control": "static 50/50 IWM/SPY",
@@ -142,6 +177,7 @@ def main() -> None:
             "monthly_points": int(len(tga)),
             "first_month": str(tga.index.min().date()),
             "last_month": str(tga.index.max().date()),
+            "regime_counts": tga.attrs.get("regime_counts", {}),
         },
         "boundaries": {"portfolio_ranking": False, "allocation_authority": False, "runtime": False, "broker": False, "live_trading": False},
     }
