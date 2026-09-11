@@ -1,3 +1,4 @@
+# Market Research cross-industry Stage-A screen trigger 2026-09-11T17:47Z
 name: Industry Stage-A Batch 3
 
 on:
@@ -64,7 +65,7 @@ jobs:
             'per_symbol':out['per_symbol'],
             'decision':'ADVANCE' if out['family_summary'][family]['development_family_gate_pass'] else 'REJECT_OR_REARCHITECT',
             'research_only':True,
-            'promotion_authority':False,
+            'promotion_authority':False
           }
           path=f'{family}-stagea-receipt.json'
           open(path,'w').write(json.dumps(receipt,sort_keys=True,indent=2)+'\n')
