@@ -1,0 +1,33 @@
+name: P540 CFTC ES NQ Relative Positioning R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p540_cftc_es_nq_relative_positioning_r1.py'
+      - '.github/workflows/p540-cftc-es-nq-relative-positioning-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p540_cftc_es_nq_relative_positioning_r1.py
+          python - <<'PY'
+          import json, os
+          x=json.load(open('artifacts/p540_cftc_es_nq_relative_positioning_r1.json'))
+          assert x['parent']=='P540'
+          bp=lambda v:int(round(v*10000)) if v is not None else 999999
+          tag=f"{x['decision']}__ex_{bp(x['overall']['matched_excess_cagr'])}__folds_{x['positive_fold_count']}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f'tag={tag}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p540-cftc-es-nq-relative-positioning__${{ steps.eval.outputs.tag }}
+          path: artifacts/p540_cftc_es_nq_relative_positioning_r1.json
+          if-no-files-found: error
