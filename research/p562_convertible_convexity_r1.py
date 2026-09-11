@@ -14,7 +14,7 @@ r=c[T].resample('ME').last().pct_change(fill_method=None)
 def alpha(sym,start,end=None):
     q=r.loc[start:end,[sym,'SPY','LQD','BIL']].dropna().copy()
     if len(q)<18:return {'months':int(len(q))}
-    y=(q[sym]-q.BIL).to_numpy(float); y[0]-=EP; y[-1]-=EP
+    y=(q[sym]-q.BIL).to_numpy(float).copy(); y[0]-=EP; y[-1]-=EP
     X=np.column_stack([np.ones(len(q)),(q.SPY-q.BIL).to_numpy(float),(q.LQD-q.BIL).to_numpy(float)])
     b=np.linalg.lstsq(X,y,rcond=None)[0]; resid=y-X@b
     return {'months':int(len(q)),'annualized_alpha_pp':float(1200*b[0]),'beta_spy':float(b[1]),'beta_lqd':float(b[2]),'resid_ann_vol':float(np.std(resid,ddof=1)*np.sqrt(12))}
