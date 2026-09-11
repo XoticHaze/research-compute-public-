@@ -1,0 +1,7 @@
+schema=mm-survivor-forward-private-acceptance-request-v1
+private_repo=XoticHaze/mm-IBKR
+private_head=e20976b705674ce81ae5ec276b95a929e3f1b823
+issue=504
+private_pr=521
+harness=mm_survivor_forward_backend_acceptance_v1
+authority=validation_only
