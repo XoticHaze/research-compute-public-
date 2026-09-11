@@ -57,8 +57,7 @@ jobs:
           body="$(python - "$payload" "$EXCHANGE_REF" "$current_sha" <<'PY'
           import json,sys
           body={'message':'rendezvous: publish one-run MM survivor recipient','content':sys.argv[1],'branch':sys.argv[2]}
-          if sys.argv[3]:
-              body['sha']=sys.argv[3]
+          if sys.argv[3]: body['sha']=sys.argv[3]
           print(json.dumps(body))
           PY
           )"
@@ -68,6 +67,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          response_dir="$RUNNER_TEMP/mm-survivor-response"
+          mkdir -p "$response_dir"
           path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/mm-survivor-forward-envelope.json"
           api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${EXCHANGE_REF}"
           found=0
@@ -76,8 +77,21 @@ jobs:
             sleep 5
           done
           test "$found" = 1 || { echo 'run-bound MM survivor envelope did not arrive'; exit 42; }
+          python - "$RUNNER_TEMP/mm-survivor-envelope.json" > "$RUNNER_TEMP/mm-survivor-chunks.txt" <<'PY'
+          import json,sys
+          env=json.load(open(sys.argv[1],encoding='utf-8'))
+          for item in env.get('chunks') or []:
+              path=str(item.get('path') or '')
+              if not path.startswith('rendezvous/responses/') or not path.endswith('.b64'):
+                  raise SystemExit('unsafe encrypted chunk path')
+              print(path)
+          PY
+          while IFS= read -r chunk_path; do
+            chunk_api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${chunk_path}?ref=${EXCHANGE_REF}"
+            curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$chunk_api" -o "$response_dir/$(basename "$chunk_path")"
+          done < "$RUNNER_TEMP/mm-survivor-chunks.txt"
       - name: Execute fixed private backend acceptance and emit sanitized receipt
-        run: python scripts/mm_survivor_forward_private_consumer_v1.py --envelope "$RUNNER_TEMP/mm-survivor-envelope.json" --private-key "$RUNNER_TEMP/mm-survivor-private.b64" --run-id "$GITHUB_RUN_ID"
+        run: python scripts/mm_survivor_forward_private_consumer_v1.py --envelope "$RUNNER_TEMP/mm-survivor-envelope.json" --response-dir "$RUNNER_TEMP/mm-survivor-response" --private-key "$RUNNER_TEMP/mm-survivor-private.b64" --run-id "$GITHUB_RUN_ID"
       - name: Remove one-run private material
         if: always()
-        run: rm -f "$RUNNER_TEMP/mm-survivor-private.b64" "$RUNNER_TEMP/mm-survivor-recipient.json" "$RUNNER_TEMP/mm-survivor-envelope.json"
+        run: rm -rf "$RUNNER_TEMP/mm-survivor-private.b64" "$RUNNER_TEMP/mm-survivor-recipient.json" "$RUNNER_TEMP/mm-survivor-envelope.json" "$RUNNER_TEMP/mm-survivor-chunks.txt" "$RUNNER_TEMP/mm-survivor-response"
