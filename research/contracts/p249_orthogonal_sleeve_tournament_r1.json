@@ -1,0 +1,34 @@
+{
+  "schema": "research.p249_orthogonal_sleeve_tournament_contract.v1",
+  "workload_id": "P249_ORTHOGONAL_SLEEVE_TOURNAMENT_R1",
+  "incumbent": "P249 core",
+  "candidates": ["P266", "JAAA", "SRLN", "KMLM"],
+  "capital_rule": {"core_weight": 0.75, "candidate_weight": 0.25, "capital_parking_control": "BIL"},
+  "completed_month_cutoff": "2026-08-31",
+  "required_outputs": [
+    "matched_capital_excess_cagr_pp",
+    "core_cagr_delta_pp",
+    "sharpe_delta_vs_core",
+    "maxdd_improvement_vs_core_pp",
+    "sleeve_excess_to_core_corr",
+    "downside_excess_to_core_corr",
+    "positive_windows",
+    "positive_blocks"
+  ],
+  "anti_taint": {
+    "weight_optimization": false,
+    "candidate_specific_capital_normalization": false,
+    "date_rescue": false,
+    "product_rescue": false,
+    "cost_rescue": false,
+    "partial_months": false
+  },
+  "boundaries": {
+    "scientific_authority": true,
+    "portfolio_ranking": false,
+    "allocation_authority": false,
+    "runtime": false,
+    "broker": false,
+    "live_trading": false
+  }
+}
