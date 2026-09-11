@@ -4,6 +4,7 @@ on:
     paths:
       - 'scripts/p09_mnq_multihorizon_external_validation_v1.py'
       - '.github/workflows/p09-mnq-multihorizon-external.yml'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
