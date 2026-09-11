@@ -23,7 +23,7 @@ def rank_frame(symbols,topk):
  return pd.DataFrame(rows,columns=['date','gross','matched','turn']).set_index('date')
 a=rank_frame(CROSS,2);b=rank_frame(IND,3);ix=a.index.intersection(b.index);p64=pd.DataFrame({'x':.5*(a.loc[ix].gross-a.loc[ix].turn*P64BP/10000)+.5*(b.loc[ix].gross-b.loc[ix].turn*P64BP/10000),'ctl':.5*a.loc[ix].matched+.5*b.loc[ix].matched},index=ix);p64.index=p64.index.to_period('M').to_timestamp('M')
 def p36():
- z=c[['SOXX','QQQ']].dropna();idx=z.index;mm=z.resample('ME').last();rel=mm.SOXx.pct_change(6)-mm.QQQ.pct_change(6) if 'SOXx' in mm.columns else mm.SOXx;sig={dt:(1. if rel.loc[dt]>0 else 0.) for dt in mm.index if pd.notna(rel.loc[dt])};labs=list(sig);prev=None;rows=[]
+ z=c[['SOXX','QQQ']].dropna();idx=z.index;mm=z.resample('ME').last();rel=mm['SOXX'].pct_change(6)-mm['QQQ'].pct_change(6);sig={dt:(1. if rel.loc[dt]>0 else 0.) for dt in mm.index if pd.notna(rel.loc[dt])};labs=list(sig);prev=None;rows=[]
  for i in range(len(labs)-1):
   dt,nxt=labs[i],labs[i+1];i0=idx.get_indexer([dt],method='pad')[0]+1;i1=idx.get_indexer([nxt],method='pad')[0]+1
   if i0<0 or i1<0 or i1>=len(idx):continue
@@ -43,7 +43,6 @@ def industry():
 ind=industry();p272=base.join(ind.rename(columns={'x':'ind','ctl':'indctl'})).dropna();p272=pd.DataFrame({'x':(p272.sv+p272.p64+p272.p36+p272.ind)/4,'ctl':(p272.svctl+p272.p64ctl+p272.p36ctl+p272.indctl)/4},index=p272.index)
 gross=.5*r.SPMO+.5*r.IJS;drift=.5*(1+r.SPMO)/(1+gross);turn=2*(drift-.5).abs();p308=pd.DataFrame({'x':gross-turn*P308BP/10000,'ctl':.5*r.SPY+.5*r.IJR},index=r.index)
 q=p249.rename(columns={'x':'p249','ctl':'p249ctl'}).join(p272.rename(columns={'x':'p272','ctl':'p272ctl'})).join(p308.rename(columns={'x':'p308','ctl':'p308ctl'})).join(r.SPY.rename('spy')).dropna().loc['2020-01-01':]
-# Apply only the historical endpoint small-value friction still external to P249/P272; P308 turnover cost is embedded.
 series={'P249':endpoint(q.p249,SVBP/3),'P249_P266':endpoint(q.p272,SVBP/4),'P308':q.p308,'SPY':endpoint(q.spy,25)};ctls={'P249':endpoint(q.p249ctl,SVBP/3),'P249_P266':endpoint(q.p272ctl,SVBP/4),'P308':q.p308ctl}
 def evaluate(z):
  out={}
@@ -52,7 +51,6 @@ def evaluate(z):
  ret=pd.DataFrame({k:series[k].reindex(z) for k in ['P249','P249_P266','P308']}).dropna();out['correlation']=ret.corr().to_dict();neg=ret<0;out['all_three_negative_fraction']=float(neg.all(axis=1).mean());return out
 full=evaluate(q.index);sizes=[len(q)//3,len(q)//3,len(q)-2*(len(q)//3)];chrono={};off=0
 for i,n in enumerate(sizes,1):chrono[f'block_{i}']=evaluate(q.index[off:off+n]);off+=n
-# Scientific evidence rule only: robust leader must rank first in matched excess and Sharpe, not have >2pp worse maxDD than best, beat SPY, and be first in matched excess in >=2/3 blocks.
 keys=['P249','P249_P266','P308'];bestdd=max(full[k]['max_drawdown'] for k in keys);leader=None
 for k in keys:
  wins=sum(full[k]['matched_excess_cagr']>=full[j]['matched_excess_cagr'] for j in keys);swins=sum(full[k]['sharpe']>=full[j]['sharpe'] for j in keys);blocks=sum(chrono[b][k]['matched_excess_cagr']>=max(chrono[b][j]['matched_excess_cagr'] for j in keys) for b in chrono)
