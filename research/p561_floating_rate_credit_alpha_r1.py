@@ -14,7 +14,7 @@ r=c[T].resample('ME').last().pct_change(fill_method=None)
 def alpha(sym,start,end=None):
     q=r.loc[start:end,[sym,'HYG','SHV','BIL']].dropna().copy()
     if len(q)<18:return {'months':int(len(q))}
-    y=(q[sym]-q.BIL).to_numpy(float)
+    y=(q[sym]-q.BIL).to_numpy(float).copy()
     y[0]-=EP; y[-1]-=EP
     X=np.column_stack([np.ones(len(q)),(q.HYG-q.BIL).to_numpy(float),(q.SHV-q.BIL).to_numpy(float)])
     b=np.linalg.lstsq(X,y,rcond=None)[0]
