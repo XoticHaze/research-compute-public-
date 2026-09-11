@@ -1,0 +1,31 @@
+name: P500 PIT Accrual Larger Sample R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p500_pit_accrual_larger_sample_r1.py'
+      - '.github/workflows/p500-pit-accrual-larger-sample-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --quiet yfinance pandas numpy requests lxml html5lib beautifulsoup4
+      - id: result
+        run: |
+          python research/p500_pit_accrual_larger_sample_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/p500_pit_accrual_larger_sample_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('decision='+x['decision']+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p500-pit-accrual-larger-sample__${{ steps.result.outputs.decision }}
+          path: research/artifacts/p500_pit_accrual_larger_sample_r1.json
+          if-no-files-found: error
+          retention-days: 90
