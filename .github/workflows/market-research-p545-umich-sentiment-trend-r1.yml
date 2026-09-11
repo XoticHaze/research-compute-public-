@@ -19,7 +19,7 @@ jobs:
           s=requests.get('https://fred.stlouisfed.org/graph/fredgraph.csv?id=UMCSENT',timeout=90); s.raise_for_status()
           y=requests.get('https://query1.finance.yahoo.com/v8/finance/chart/SPY?period1=946684800&period2=1789084800&interval=1mo&events=history&includeAdjustedClose=true',headers={'User-Agent':'Mozilla/5.0'},timeout=90); y.raise_for_status(); j=y.json()['chart']['result'][0]
           sent=pd.read_csv(io.StringIO(s.text)); sent.columns=['date','sent']; sent.date=pd.to_datetime(sent.date); sent.sent=pd.to_numeric(sent.sent,errors='coerce'); sent=sent.dropna().set_index('date').resample('ME').last()
-          px=pd.Series(j['indicators']['adjclose'][0]['adjclose'],index=pd.to_datetime(j['timestamp'],unit='s',utc=True).tz_convert(None)).dropna(); px.index=px.index.to_period('M').to_timestamp('M'); r=px.pct_change().rename('spy')
+          px=pd.Series(j['indicators']['adjclose'][0]['adjclose'],index=pd.to_datetime(j['timestamp'],unit='s',utc=True).tz_convert(None)).dropna(); px.index=px.index.to_period('M').to_timestamp('M'); px=px.groupby(level=0).last(); r=px.pct_change().rename('spy')
           d=pd.concat([r,sent.sent],axis=1).dropna(); d['chg3']=d.sent-d.sent.shift(3); d['pos']=(d.chg3.shift(1)>0).astype(float); d=d.dropna(); d['turn']=d.pos.diff().abs().fillna(d.pos); d['strat']=d.pos*d.spy-d['turn']*.001; beta=d.pos.mean(); d['matched']=beta*d.spy
           def cagr(z): return float(np.prod(1+z)**(12/len(z))-1) if len(z) else None
           folds=[('2000-2007','2000','2007-12-31'),('2008-2013','2008','2013-12-31'),('2014-2018','2014','2018-12-31'),('2019-2022','2019','2022-12-31'),('2023+','2023','2099')]
