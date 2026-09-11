@@ -1,0 +1,3 @@
+MM survivor benchmark finite-only acceptance
+private_product_commit=6a3f1d0ea9dee58348bd83ff1205db280e374521
+consumer_binding=f6d7f2d6b9a4fd87db222947bee4e4caf0f155e8
