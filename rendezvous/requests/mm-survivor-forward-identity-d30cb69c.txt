@@ -1,0 +1,3 @@
+MM_PRIVATE_HEAD=d30cb69cd42beb6eee605dd500971f5e70ddc131
+HARNESS=mm_survivor_forward_identity_private_acceptance_v1
+PURPOSE=Validate fail-closed survivor forward identity evidence and Strategy Health binding for MM issue 504.
