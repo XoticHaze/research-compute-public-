@@ -26,8 +26,8 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 SCHEMA = "mm-ui-react-build-x25519-v1"
 HARNESS = "mm_ui_react_private_build_v1"
 INFO = b"commandcenter-mm-ui-react-build-v1"
-EXPECTED_MM_COMMIT = "db329d96dff13add6f344bfcd61a30fcefc6e608"
-EXPECTED_UI_TREE = "4a82dcfee1c84884dff3621c9ff65cc0c47284d4"
+EXPECTED_MM_COMMIT = "5cb13e0db8a1924b9082bc41b2df8dde10f4800c"
+EXPECTED_UI_TREE = "a1224ffc86c737d0cc12640c814d14a4df845865"
 
 
 def sha256_bytes(raw: bytes) -> str:
