@@ -1,0 +1,34 @@
+name: P558 Sector Downside Risk R1
+on:
+  push:
+    branches: [research/p558-sector-downside-risk-r1]
+    paths:
+      - research/p558_sector_downside_risk_r1.py
+      - .github/workflows/p558-sector-downside-risk-r1.yml
+  workflow_dispatch:
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p558_sector_downside_risk_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p558_sector_downside_risk_r1.json'));bp=lambda v:int(round(v*10000)) if v is not None else 999999
+          tag=f"{x['decision']}__eq_{bp(x['overall']['matched_excess_cagr'])}__spy_{bp(x['overall']['spy_excess_cagr'])}__folds_{x['positive_fold_count_vs_equal_sector']}_{x['positive_fold_count_vs_spy']}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f'tag={tag}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p558-sector-downside-risk__${{ steps.eval.outputs.tag }}
+          path: artifacts/p558_sector_downside_risk_r1.json
+          if-no-files-found: error
