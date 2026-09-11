@@ -1,0 +1,45 @@
+name: DBMF First Party Calendar Parity R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/dbmf-firstparty-calendar-parity-r1.yml'
+      - 'research/dbmf-firstparty-calendar-parity-r1.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Compare public adjusted-close calendar returns to frozen first-party published returns
+        run: |
+          python - <<'PY'
+          import json, urllib.request, datetime as dt
+          from pathlib import Path
+          c=json.loads(Path('research/dbmf-firstparty-calendar-parity-r1.json').read_text())
+          start=dt.datetime(2021,12,15,tzinfo=dt.timezone.utc); end=dt.datetime(2025,1,15,tzinfo=dt.timezone.utc)
+          u=f"https://query1.finance.yahoo.com/v8/finance/chart/DBMF?period1={int(start.timestamp())}&period2={int(end.timestamp())}&interval=1d&events=history&includeAdjustedClose=true"
+          req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+          with urllib.request.urlopen(req,timeout=30) as r:o=json.load(r)['chart']['result'][0]
+          a=o['indicators'].get('adjclose',[{}])[0].get('adjclose') or o['indicators']['quote'][0]['close']
+          px={dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat():float(p) for t,p in zip(o['timestamp'],a) if p is not None}
+          rows=[]
+          for y,official in c['official_market_price_calendar_returns'].items():
+              ds=sorted(d for d in px if d.startswith(y+'-'))
+              assert len(ds)>200
+              r=px[ds[-1]]/px[ds[0]]-1
+              diff=r-official
+              rows.append({'year':y,'public_adjusted_close_return':r,'official_market_price_return':official,'difference':diff,'abs_difference':abs(diff),'pass':abs(diff)<=c['max_abs_difference']})
+          out={'schema':'dbmf_firstparty_calendar_parity_result.v1','source_url':c['source_url'],'rows':rows,'max_abs_difference':c['max_abs_difference'],'all_years_pass':all(x['pass'] for x in rows),'research_only':True}
+          Path('dbmf-firstparty-calendar-parity-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2));print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dbmf-firstparty-calendar-parity-r1-result
+          path: dbmf-firstparty-calendar-parity-r1-result.json
+          retention-days: 14
