@@ -1,0 +1,52 @@
+name: P555 M3 Machinery Demand Gate R1
+
+on:
+  pull_request:
+    paths:
+      - 'research/p555_m3_machinery_demand_gate_r1.py'
+      - 'research/p555_m3_vintage_materialize_r1.py'
+      - 'research/contracts/p555_m3_industrial_machinery_demand_gate_r1.json'
+      - '.github/workflows/p555-m3-machinery-demand-gate-r1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check requests==2.32.5 pandas==2.2.3 yfinance==0.2.65
+      - name: Install native PDF text extractor
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends poppler-utils
+      - name: Reconstruct causal Census vintages
+        run: python research/p555_m3_vintage_materialize_r1.py
+      - name: Execute frozen scientific contract
+        run: python research/p555_m3_machinery_demand_gate_r1.py
+      - name: Set result tag
+        id: result
+        run: |
+          python - <<'PY'
+          import json, os
+          x=json.load(open('artifacts/p555_m3_machinery_demand_gate_r1.json'))
+          bp=lambda v:int(round(v*10000)) if v is not None else 999999
+          if 'overall' in x:
+              tag=f"{x['decision']}__matched_{bp(x['overall']['matched_excess_cagr'])}__xli_{bp(x['overall']['xli_excess_cagr'])}__folds_{x['positive_fold_count']}"
+          else:
+              tag=x['decision']
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f'tag={tag}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p555-m3-machinery-demand-gate__${{ steps.result.outputs.tag }}
+          path: |
+            artifacts/p555_m3_vintage_materialize_r1.json
+            artifacts/p555_m3_machinery_demand_gate_r1.json
+          if-no-files-found: error
