@@ -1,0 +1,31 @@
+name: P554 Census M3 Vintage Manifest R1
+
+on:
+  pull_request:
+    paths:
+      - 'research/p554_census_m3_vintage_manifest_r1.py'
+      - '.github/workflows/p554-census-m3-vintage-manifest-r1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  manifest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check requests==2.32.5 pypdf==5.9.0
+      - run: python research/p554_census_m3_vintage_manifest_r1.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p554-census-m3-vintage-manifest-r1
+          path: |
+            artifacts/p554_census_m3_vintage_manifest_r1.csv
+            artifacts/p554_census_m3_vintage_manifest_r1_summary.json
+          if-no-files-found: error
