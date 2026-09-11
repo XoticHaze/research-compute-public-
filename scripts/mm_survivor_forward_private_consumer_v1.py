@@ -26,7 +26,7 @@ SCHEMA = "mm-survivor-forward-x25519-v1"
 RECIPIENT_SCHEMA = "mm-survivor-forward-ephemeral-recipient-v1"
 HARNESS = "mm_survivor_forward_private_acceptance_v1"
 INFO = b"commandcenter-mm-survivor-forward-v1"
-EXPECTED_MM_COMMIT = "1c8c676b278d071927927b334d67fccf175710e3"
+EXPECTED_MM_COMMIT = "6a3f1d0ea9dee58348bd83ff1205db280e374521"
 FILES = {
     "strategy_capital_readiness.py",
     "strategy_forward_intelligence.py",
