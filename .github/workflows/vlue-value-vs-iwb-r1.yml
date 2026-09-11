@@ -1,0 +1,44 @@
+name: VLUE Value vs IWB R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/vlue-value-vs-iwb-r1.yml'
+      - 'research/vlue-value-vs-iwb-r1.json'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.11.16'}
+      - name: Evaluate frozen value architecture
+        run: |
+          python - <<'PY'
+          import json,urllib.request,datetime as dt
+          from pathlib import Path
+          c=json.loads(Path('research/vlue-value-vs-iwb-r1.json').read_text()); start=dt.datetime.fromisoformat(c['start']+'T00:00:00+00:00'); end=dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1)
+          def fetch(s):
+              u=f"https://query1.finance.yahoo.com/v8/finance/chart/{s}?period1={int(start.timestamp())}&period2={int(end.timestamp())}&interval=1d&events=history&includeAdjustedClose=true"; req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+              with urllib.request.urlopen(req,timeout=30) as q:o=json.load(q)['chart']['result'][0]
+              a=o['indicators'].get('adjclose',[{}])[0].get('adjclose') or o['indicators']['quote'][0]['close']; return {dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat():float(p) for t,p in zip(o['timestamp'],a) if p is not None}
+          px={s:fetch(s) for s in c['symbols']}; common=sorted(set.intersection(*(set(px[s]) for s in c['symbols']))); assert len(common)>2500
+          r={s:{common[i]:px[s][common[i]]/px[s][common[i-1]]-1 for i in range(1,len(common))} for s in c['symbols']}; ds=common[1:]
+          def cg(s,z):
+              v=1
+              for d in z:v*=1+r[s][d]
+              return v**(1/max((dt.date.fromisoformat(z[-1])-dt.date.fromisoformat(z[0])).days/365.25,1/365.25))-1
+          def ex(z):return cg('VLUE',z)-cg('IWB',z)
+          periods={k:ex([d for d in ds if d>=cut]) for k,cut in c['period_starts'].items()}; years=[]
+          for y in sorted({d[:4] for d in ds}):
+              z=[d for d in ds if d.startswith(y+'-')]
+              if len(z)>=200: e=ex(z); years.append({'year':y,'excess':e,'positive':e>0})
+          w=c['rolling_days']; rolls=[ex(ds[i-w+1:i+1]) for i in range(w-1,len(ds))]; recent=[x for x in years if x['year']>='2020']; g=c['gates']
+          out={'schema':'vlue_value_vs_iwb_result.v1','common_start':common[0],'common_end':common[-1],'period_excess_vs_iwb':periods,'yearly':years,'recent_positive_years':sum(x['positive'] for x in recent),'recent_year_count':len(recent),'rolling_positive_share':sum(x>0 for x in rolls)/len(rolls),'rolling_median_excess_cagr':sorted(rolls)[len(rolls)//2],'gates':g}
+          out['value_edge_supported']=periods['full']>=g['min_full_excess'] and periods['post2020']>=g['min_post2020_excess'] and out['recent_positive_years']>=g['min_recent_positive_years'] and out['rolling_positive_share']>=g['min_rolling_positive_share']; out['research_only']=True
+          Path('vlue-value-vs-iwb-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2)); print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with: {name: vlue-value-vs-iwb-r1-result, path: vlue-value-vs-iwb-r1-result.json, retention-days: 14}
