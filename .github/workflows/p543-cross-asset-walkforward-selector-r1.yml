@@ -1,0 +1,32 @@
+name: P543 Cross Asset Walkforward Selector R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p543_cross_asset_walkforward_selector_r1.py'
+      - '.github/workflows/p543-cross-asset-walkforward-selector-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65 scikit-learn==1.5.2
+      - id: eval
+        run: |
+          python research/p543_cross_asset_walkforward_selector_r1.py
+          python - <<'PY'
+          import json, os
+          x=json.load(open('artifacts/p543_cross_asset_walkforward_selector_r1.json'))
+          bp=lambda v:int(round(v*10000)) if v is not None else 999999
+          tag=f"{x['decision']}__ex_{bp(x['overall']['matched_excess_cagr'])}__folds_{x['positive_fold_count']}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f'tag={tag}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p543-cross-asset-walkforward-selector__${{ steps.eval.outputs.tag }}
+          path: artifacts/p543_cross_asset_walkforward_selector_r1.json
+          if-no-files-found: error
