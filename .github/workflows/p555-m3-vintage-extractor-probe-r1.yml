@@ -20,8 +20,10 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install --disable-pip-version-check requests==2.32.5 'pypdf>=5,<7'
-      - name: Confirm native PDF text extractor
+      - name: Install native PDF text extractor
         run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends poppler-utils
           command -v pdftotext
           pdftotext -v
       - run: python research/p555_m3_vintage_extractor_probe_r1.py
