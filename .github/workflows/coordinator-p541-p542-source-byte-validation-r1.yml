@@ -22,6 +22,7 @@ jobs:
           import hashlib
           import io
           import json
+          import re
           import time
           import urllib.request
           from pathlib import Path
@@ -54,10 +55,12 @@ jobs:
                   "sha256": hashlib.sha256(payload).hexdigest(),
                   "content_type": content_type,
               }
+          print("FETCHED_SOURCE_METADATA=" + json.dumps(result["sources"], sort_keys=True))
 
           p541_text = downloaded["P541_UMICH"].decode("utf-8-sig", errors="strict")
-          p541_required = ["77.2", "74.0", "71.7", "52.2", "52.9", "56.4", "53.3", "49.8"]
-          p541_hits = {value: (value in p541_text) for value in p541_required}
+          p541_numbers = [float(x) for x in re.findall(r"(?<![0-9.])-?\d+(?:\.\d+)?", p541_text)]
+          p541_required = [77.2, 74.0, 71.7, 52.2, 52.9, 56.4, 53.3, 49.8]
+          p541_hits = {str(value): any(abs(n - value) < 1e-9 for n in p541_numbers) for value in p541_required}
           if not all(p541_hits.values()):
               raise SystemExit(f"P541_SENTINEL_FAIL {p541_hits}")
           result["sources"]["P541_UMICH"]["sentinel_hits"] = p541_hits
@@ -85,7 +88,7 @@ jobs:
 
           result["status"] = "PASS"
           Path("source-byte-validation.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-          print(json.dumps(result, sort_keys=True))
+          print("VALIDATION_RESULT=" + json.dumps(result, sort_keys=True))
 
       - name: Upload validation receipt
         uses: actions/upload-artifact@v4
