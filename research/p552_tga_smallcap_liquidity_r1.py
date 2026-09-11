@@ -8,7 +8,7 @@ import pandas as pd
 import requests
 import yfinance as yf
 
-API = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/dts/dts_table_1"
+API = "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/dts/operating_cash_balance"
 END = "2026-09-11"
 COST_BPS = 10.0
 FOLDS = [
@@ -75,7 +75,6 @@ def fetch_tga() -> pd.Series:
             if account not in TGA_ACCOUNT_REGIMES:
                 continue
             if account == "Treasury General Account (TGA) Closing Balance":
-                # Modern DTS emits the closing-balance line in open_today_bal.
                 value = _num(row.get("open_today_bal"))
                 if value is None:
                     value = _num(row.get("close_today_bal"))
