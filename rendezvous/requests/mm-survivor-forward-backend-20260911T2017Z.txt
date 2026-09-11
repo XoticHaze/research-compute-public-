@@ -1,0 +1,4 @@
+MM survivor forward encrypted acceptance request after fulfillment-lifecycle repair.
+Authority: XoticHaze/mm-IBKR@11baa28c82458b1d22a6ed4ef5d5be54166ae745
+Consumer contract: public main 206263736cbd58df01e09f1464695a0d325cb4d4
+Purpose: execute the repaired one-run recipient -> ciphertext fulfillment -> deterministic backend acceptance chain.
