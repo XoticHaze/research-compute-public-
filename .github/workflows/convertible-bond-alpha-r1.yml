@@ -1,0 +1,29 @@
+name: convertible-bond-alpha-r1
+on:
+  push:
+    paths: ['.github/workflows/convertible-bond-alpha-r1.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -q yfinance pandas numpy scipy
+      - name: Evaluate convertible bonds versus exposure-matched equity-bond-cash control
+        shell: python
+        run: |
+          import json,math,yfinance as yf,pandas as pd,numpy as np
+          from scipy.optimize import nnls
+          px=yf.download(['CWB','SPY','AGG','BIL'],start='2010-01-01',auto_adjust=True,progress=False)['Close'].dropna(); r=px.pct_change().dropna(); cost=.001
+          y=r.CWB.values; X=r[['SPY','AGG']].values; w,_=nnls(X,y)
+          if w.sum()>1: w=w/w.sum()
+          cash=max(0,1-w.sum()); ctrl=w[0]*r.SPY+w[1]*r.AGG+cash*r.BIL
+          def ann(z): return float(np.prod(1+z)**(252/len(z))-1)
+          wins=eligible=0
+          for yr in sorted(set(r.index.year)):
+            f=r.loc[r.index.year==yr,'CWB']; c=ctrl.loc[ctrl.index.year==yr]
+            if len(f)>100: eligible+=1; wins += ((1+f).prod()-1-cost > (1+c).prod()-1)
+          recent=r.loc[r.index>='2022-01-01']; rc=ctrl.loc[ctrl.index>='2022-01-01']; wealth=(1+r.CWB).cumprod()
+          out={'fund':'CWB','control_weights':{'SPY':float(w[0]),'AGG':float(w[1]),'BIL':float(cash)},'after_cost_cagr':ann(r.CWB)-cost,'matched_control_cagr':ann(ctrl),'excess_cagr_pp':100*(ann(r.CWB)-cost-ann(ctrl)),'calendar_wins':int(wins),'calendar_years':int(eligible),'recent_2022_plus_excess_pp':100*(ann(recent.CWB)-cost-ann(rc)),'max_drawdown':float((wealth/wealth.cummax()-1).min())}; out['pass']=bool(out['excess_cagr_pp']>1 and wins>=math.ceil(.6*eligible) and out['recent_2022_plus_excess_pp']>0); print('RESULT_JSON='+json.dumps(out,sort_keys=True))
