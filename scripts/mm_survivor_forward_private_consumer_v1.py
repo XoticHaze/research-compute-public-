@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-"""Fixed encrypted acceptance consumer for MM survivor-forward backend evidence.
+"""Fixed encrypted acceptance consumer for the MM #504 survivor-forward backend.
 
-The public plane receives only a one-run encrypted tarball containing an exact,
-allow-listed private MM source/test set. Plaintext exists only in runner temp,
-no arbitrary command is accepted from the payload, and output is sanitized to
-PASS/FAIL plus exact input identity.
+The public runner receives only a one-run encrypted tarball produced by the
+released MM transport packager. Plaintext exists only in runner temp. The
+payload file set, MM commit, harness, per-file digests, and AEAD associated data
+are fixed here; no arbitrary command arrives in the payload.
 """
 
 import argparse
@@ -22,22 +22,21 @@ from cryptography.hazmat.primitives.asymmetric import x25519
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
-SCHEMA = "mm-survivor-forward-ephemeral-x25519-v1"
-HARNESS = "mm_survivor_forward_backend_acceptance_v1"
-AUTHORITY = "private_mm_source_validation_only"
-INFO = b"mm-survivor-forward-ephemeral-v1"
-EXPECTED_REPO = "XoticHaze/mm-IBKR"
-EXPECTED_HEAD = "e20976b705674ce81ae5ec276b95a929e3f1b823"
+SCHEMA = "mm-survivor-forward-x25519-v1"
+RECIPIENT_SCHEMA = "mm-survivor-forward-ephemeral-recipient-v1"
+HARNESS = "mm_survivor_forward_private_acceptance_v1"
+INFO = b"commandcenter-mm-survivor-forward-v1"
+EXPECTED_MM_COMMIT = "1c8c676b278d071927927b334d67fccf175710e3"
 FILES = {
     "strategy_capital_readiness.py",
     "strategy_forward_intelligence.py",
+    "survivor_capital_readiness_policy.py",
     "strategy_health_canonical_trade_consumer.py",
+    "strategy_health_preview_binding.py",
     "strategy_health_evidence_pipeline.py",
-    "strategy_health_historical_expectations.py",
     "strategy_health_position_context.py",
-    "strategy_health_preview_attribution.py",
-    "strategy_health_rolling_evidence.py",
-    "tests/__init__.py",
+    "strategy_health_comparable_context.py",
+    "strategy_health_operator_context.py",
     "tests/test_strategy_capital_readiness.py",
     "tests/test_strategy_capital_readiness_historical_compat.py",
     "tests/test_strategy_health_canonical_trade_forward_conformance.py",
@@ -68,19 +67,25 @@ def b64d(value: str) -> bytes:
 
 
 def aad(run_id: str, recipient_key_id: str) -> bytes:
-    return json.dumps({
-        "schema": SCHEMA,
-        "run_id": str(run_id),
-        "authority": AUTHORITY,
-        "harness": HARNESS,
-        "recipient_key_id": recipient_key_id,
-    }, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return json.dumps(
+        {
+            "schema": SCHEMA,
+            "run_id": str(run_id),
+            "harness": HARNESS,
+            "mm_commit": EXPECTED_MM_COMMIT,
+            "recipient_key_id": recipient_key_id,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
 
 
 def derive(shared: bytes, associated: bytes) -> bytes:
     return HKDF(
-        algorithm=hashes.SHA256(), length=32,
-        salt=hashlib.sha256(associated).digest(), info=INFO,
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=hashlib.sha256(associated).digest(),
+        info=INFO,
     ).derive(shared)
 
 
@@ -88,7 +93,7 @@ def extract_and_verify(payload: bytes, root: Path) -> dict:
     archive = root / "payload.tar.gz"
     archive.write_bytes(payload)
     with tarfile.open(archive, "r:gz") as tf:
-        expected = FILES | {"payload-manifest.json"}
+        expected = FILES | {"payload_manifest.json"}
         if set(tf.getnames()) != expected:
             raise RuntimeError("private payload file set mismatch")
         root_resolved = root.resolve()
@@ -99,13 +104,13 @@ def extract_and_verify(payload: bytes, root: Path) -> dict:
         tf.extractall(root)
     archive.unlink(missing_ok=True)
 
-    manifest = json.loads((root / "payload-manifest.json").read_text(encoding="utf-8"))
-    if manifest.get("schema") != "mm-survivor-forward-backend-payload-v1":
+    manifest = json.loads((root / "payload_manifest.json").read_text(encoding="utf-8"))
+    if manifest.get("schema") != "mm.survivor_forward_acceptance_payload.v1":
         raise RuntimeError("private payload schema mismatch")
     if manifest.get("harness") != HARNESS:
         raise RuntimeError("private payload harness mismatch")
-    if manifest.get("private_repo") != EXPECTED_REPO or manifest.get("private_head") != EXPECTED_HEAD:
-        raise RuntimeError("private payload repo/head mismatch")
+    if manifest.get("mm_commit") != EXPECTED_MM_COMMIT:
+        raise RuntimeError("private payload MM commit mismatch")
     digests = manifest.get("files") or {}
     if set(digests) != FILES:
         raise RuntimeError("private payload manifest file set mismatch")
@@ -115,29 +120,68 @@ def extract_and_verify(payload: bytes, root: Path) -> dict:
     return manifest
 
 
-def consume(envelope_path: Path, private_key_path: Path, expected_run_id: str) -> dict:
+def load_ciphertext(env: dict, response_dir: Path) -> bytes:
+    chunks = env.get("chunks")
+    if not isinstance(chunks, list) or not chunks:
+        raise RuntimeError("encrypted envelope has no chunks")
+    encoded_parts: list[str] = []
+    for item in chunks:
+        if not isinstance(item, dict):
+            raise RuntimeError("encrypted chunk entry malformed")
+        remote = str(item.get("path") or "")
+        local = response_dir / Path(remote).name
+        raw = local.read_bytes()
+        if sha256_bytes(raw) != str(item.get("sha256") or ""):
+            raise RuntimeError(f"encrypted chunk digest mismatch: {local.name}")
+        text = raw.decode("ascii")
+        if len(text) != int(item.get("chars") or -1):
+            raise RuntimeError(f"encrypted chunk length mismatch: {local.name}")
+        encoded_parts.append(text)
+    ciphertext = b64d("".join(encoded_parts))
+    if sha256_bytes(ciphertext) != str(env.get("ciphertext_sha256") or ""):
+        raise RuntimeError("encrypted ciphertext digest mismatch")
+    return ciphertext
+
+
+def consume(envelope_path: Path, response_dir: Path, private_key_path: Path, expected_run_id: str) -> dict:
     env = json.loads(envelope_path.read_text(encoding="utf-8"))
-    required = {"schema","run_id","authority","harness","recipient_key_id","sender_public_b64","nonce_b64","ciphertext_b64","plaintext_sha256"}
+    required = {
+        "schema",
+        "run_id",
+        "harness",
+        "mm_commit",
+        "recipient_key_id",
+        "sender_public_b64",
+        "nonce_b64",
+        "ciphertext_sha256",
+        "plaintext_sha256",
+        "chunks",
+    }
     if set(env) != required:
         raise RuntimeError("envelope field set mismatch")
     if env["schema"] != SCHEMA or str(env["run_id"]) != str(expected_run_id):
         raise RuntimeError("envelope run/schema mismatch")
-    if env["authority"] != AUTHORITY or env["harness"] != HARNESS:
-        raise RuntimeError("envelope authority/harness mismatch")
+    if env["harness"] != HARNESS or env["mm_commit"] != EXPECTED_MM_COMMIT:
+        raise RuntimeError("envelope harness/MM commit mismatch")
 
     private_raw = b64d(private_key_path.read_text(encoding="ascii").strip())
     private = x25519.X25519PrivateKey.from_private_bytes(private_raw)
-    recipient_raw = private.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    recipient_raw = private.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
     key_id = "sha256:" + hashlib.sha256(recipient_raw).hexdigest()
     if env["recipient_key_id"] != key_id:
         raise RuntimeError("recipient fingerprint mismatch")
+
     sender_raw = b64d(env["sender_public_b64"])
     nonce = b64d(env["nonce_b64"])
     if len(sender_raw) != 32 or len(nonce) != 12:
         raise RuntimeError("sender key/nonce length invalid")
     associated = aad(str(expected_run_id), key_id)
     shared = private.exchange(x25519.X25519PublicKey.from_public_bytes(sender_raw))
-    plaintext = ChaCha20Poly1305(derive(shared, associated)).decrypt(nonce, b64d(env["ciphertext_b64"]), associated)
+    plaintext = ChaCha20Poly1305(derive(shared, associated)).decrypt(
+        nonce, load_ciphertext(env, response_dir), associated
+    )
     if sha256_bytes(plaintext) != env["plaintext_sha256"]:
         raise RuntimeError("decrypted payload digest mismatch")
 
@@ -145,25 +189,37 @@ def consume(envelope_path: Path, private_key_path: Path, expected_run_id: str) -
         root = Path(td)
         manifest = extract_and_verify(plaintext, root)
         compile_rc = subprocess.run(
-            ["python", "-m", "py_compile",
-             "strategy_capital_readiness.py", "strategy_forward_intelligence.py",
-             "strategy_health_canonical_trade_consumer.py"],
-            cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            [
+                "python",
+                "-m",
+                "py_compile",
+                "strategy_capital_readiness.py",
+                "strategy_forward_intelligence.py",
+                "strategy_health_canonical_trade_consumer.py",
+                "strategy_health_preview_binding.py",
+            ],
+            cwd=root,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         ).returncode
         test_rc = subprocess.run(
             ["python", "-m", "unittest", "-v", *TESTS],
-            cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            cwd=root,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         ).returncode
 
     passed = compile_rc == 0 and test_rc == 0
     return {
-        "schema": "mm-survivor-forward-backend-acceptance-receipt-v1",
-        "authority": AUTHORITY,
+        "schema": "mm-survivor-forward-backend-acceptance-receipt-v2",
+        "authority": "private_mm_source_validation_only",
         "harness": HARNESS,
-        "private_repo": manifest["private_repo"],
-        "private_head": manifest["private_head"],
+        "mm_commit": manifest["mm_commit"],
         "status": "PASS" if passed else "FAIL",
-        "checks": {"production_modules_compile": compile_rc == 0, "four_requested_test_modules_pass": test_rc == 0},
+        "checks": {
+            "production_modules_compile": compile_rc == 0,
+            "four_requested_test_modules_pass": test_rc == 0,
+        },
         "test_modules": TESTS,
         "payload_sha256": sha256_bytes(plaintext),
         "private_plaintext_emitted": False,
@@ -177,10 +233,13 @@ def consume(envelope_path: Path, private_key_path: Path, expected_run_id: str) -
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--envelope", required=True)
+    parser.add_argument("--response-dir", required=True)
     parser.add_argument("--private-key", required=True)
     parser.add_argument("--run-id", required=True)
     args = parser.parse_args()
-    receipt = consume(Path(args.envelope), Path(args.private_key), args.run_id)
+    receipt = consume(
+        Path(args.envelope), Path(args.response_dir), Path(args.private_key), args.run_id
+    )
     print("MM_SURVIVOR_FORWARD_BACKEND_RECEIPT=" + json.dumps(receipt, sort_keys=True))
     raise SystemExit(0 if receipt["status"] == "PASS" else 1)
 
