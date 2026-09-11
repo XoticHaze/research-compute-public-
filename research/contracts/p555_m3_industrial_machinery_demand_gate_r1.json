@@ -1,0 +1,52 @@
+{
+  "schema": "research.p555_m3_industrial_machinery_demand_gate_contract.v1",
+  "parent": "P555",
+  "frozen_before_vintage_series_consumption": true,
+  "claim": "Point-in-time Census M3 Industrial Machinery backlog intensity can identify industry-demand states that improve the fixed fresh Industrial Machinery cohort versus XLI after costs.",
+  "source": {
+    "authority": "U.S. Census Bureau M3 original monthly full-report PDFs",
+    "industry": "Industrial machinery (33E)",
+    "shipments": "Table 1 current report-month seasonally adjusted preliminary value",
+    "unfilled_orders": "Table 3 current report-month seasonally adjusted preliminary value",
+    "feature": "unfilled_orders / shipments",
+    "point_in_time_requirement": "use only values contained in the original release PDF and never later revised current-archive history"
+  },
+  "signal": {
+    "warmup_releases": 12,
+    "rule": "current backlog_ratio > arithmetic mean of previous 12 released backlog_ratio observations",
+    "on_state": "fresh_industrial_machinery_cohort",
+    "off_state": "XLI",
+    "availability": "state change effective on the first trading day strictly after the Census PDF release date",
+    "hold": "retain state until the next causally available release"
+  },
+  "fresh_industrial_machinery_cohort": ["DOV", "SWK", "GWW", "FAST", "IEX", "XYL", "PNR", "GNRC"],
+  "cohort_return_definition": "equal-weight arithmetic mean of adjusted daily returns of the fixed eight-name cohort; this is a frozen synthetic cohort index and does not claim historical constituent-selection purity",
+  "costs": {
+    "full_regime_switch_bps": 25.0,
+    "apply_on_each_XLI_to_cohort_or_cohort_to_XLI_transition": true
+  },
+  "controls": {
+    "matched_static": "static mix of cohort index and XLI using the strategy's full-sample mean ON exposure",
+    "opportunity": ["always fresh cohort index", "XLI", "SPY"]
+  },
+  "evaluation": {
+    "start_after_warmup": true,
+    "chronology_folds": [
+      ["2013-01-01", "2016-12-31"],
+      ["2017-01-01", "2021-12-31"],
+      ["2022-01-01", "2026-09-11"]
+    ],
+    "pass_gate": "full matched_excess_cagr > 0 AND full xli_excess_cagr > 0 AND at least 2 of 3 folds have matched_excess_cagr > 0",
+    "no_parameter_rescue": true,
+    "forbidden_rescue": ["change 12-release lookback", "change threshold", "change release lag", "change cohort membership", "substitute revised M3 history", "choose subperiod after observing performance"]
+  },
+  "boundaries": {
+    "scientific_research_only": true,
+    "portfolio_ranking_authority": false,
+    "portfolio_allocation_authority": false,
+    "promotion_authority": false,
+    "runtime_mutation": false,
+    "broker_authority": false,
+    "live_trading_authority": false
+  }
+}
