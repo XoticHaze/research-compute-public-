@@ -1,0 +1,97 @@
+name: Coordinator P541 P542 source byte validation r1
+
+on:
+  push:
+    branches:
+      - coordinator/p541-p542-source-byte-validation-r1
+    paths:
+      - .github/workflows/coordinator-p541-p542-source-byte-validation-r1.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate-public-source-bytes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch and validate public source bytes
+        shell: python
+        run: |
+          import csv
+          import hashlib
+          import io
+          import json
+          import time
+          import urllib.request
+          from pathlib import Path
+
+          sources = {
+              "P541_UMICH": "https://www.sca.isr.umich.edu/files/tbmics.csv",
+              "P542_DRTSCILM": "https://eco3min.fr/dataset/us-bank-lending-standards.csv",
+          }
+
+          def fetch(url):
+              last = None
+              for attempt in range(4):
+                  try:
+                      req = urllib.request.Request(url, headers={"User-Agent": "CommandCenter-source-validation/1"})
+                      with urllib.request.urlopen(req, timeout=90) as r:
+                          return r.read(), r.headers.get("content-type")
+                  except Exception as exc:
+                      last = repr(exc)
+                      time.sleep(2 ** attempt)
+              raise RuntimeError(f"fetch_failed url={url} last={last}")
+
+          result = {"schema": "commandcenter.public_source_byte_validation.v1", "sources": {}}
+          downloaded = {}
+          for key, url in sources.items():
+              payload, content_type = fetch(url)
+              downloaded[key] = payload
+              result["sources"][key] = {
+                  "url": url,
+                  "bytes": len(payload),
+                  "sha256": hashlib.sha256(payload).hexdigest(),
+                  "content_type": content_type,
+              }
+
+          # P541: official-origin Michigan CSV must contain multiple authoritative UMCSENT sentinels.
+          p541_text = downloaded["P541_UMICH"].decode("utf-8-sig", errors="strict")
+          p541_required = ["77.2", "74.0", "71.7", "52.2", "52.9", "56.4", "53.3", "49.8"]
+          p541_hits = {value: (value in p541_text) for value in p541_required}
+          if not all(p541_hits.values()):
+              raise SystemExit(f"P541_SENTINEL_FAIL {p541_hits}")
+          result["sources"]["P541_UMICH"]["sentinel_hits"] = p541_hits
+          result["sources"]["P541_UMICH"]["line_count"] = len(p541_text.splitlines())
+
+          # P542: mirror must have the documented exact schema and authoritative DRTSCILM sentinels.
+          p542_text = downloaded["P542_DRTSCILM"].decode("utf-8-sig", errors="strict")
+          rows = list(csv.DictReader(io.StringIO(p542_text)))
+          required_cols = {"date", "net_pct_tightening"}
+          if not rows or not required_cols.issubset(rows[0].keys()):
+              raise SystemExit(f"P542_SCHEMA_FAIL columns={list(rows[0].keys()) if rows else []}")
+          values = {row["date"]: row["net_pct_tightening"] for row in rows}
+          sentinels = {
+              "2008-10-01": "83.6",
+              "2021-07-01": "-32.4",
+              "2026-07-01": "0.0",
+          }
+          normalized = lambda x: f"{float(x):.1f}"
+          p542_hits = {date: (date in values and normalized(values[date]) == normalized(expected)) for date, expected in sentinels.items()}
+          if not all(p542_hits.values()):
+              raise SystemExit(f"P542_SENTINEL_FAIL hits={p542_hits} observed={{k: values.get(k) for k in sentinels}}")
+          result["sources"]["P542_DRTSCILM"]["sentinel_hits"] = p542_hits
+          result["sources"]["P542_DRTSCILM"]["row_count"] = len(rows)
+          result["sources"]["P542_DRTSCILM"]["first_date"] = rows[0]["date"]
+          result["sources"]["P542_DRTSCILM"]["last_date"] = rows[-1]["date"]
+
+          result["status"] = "PASS"
+          Path("source-byte-validation.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(json.dumps(result, sort_keys=True))
+
+      - name: Upload validation receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: p541-p542-source-byte-validation
+          path: source-byte-validation.json
+          if-no-files-found: error
