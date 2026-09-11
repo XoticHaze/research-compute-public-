@@ -23,7 +23,7 @@ jobs:
       - run: python -m pip install --disable-pip-version-check yfinance==0.2.65 pandas==2.3.2 numpy==2.3.2
       - id: result
         run: |
-          python research/p558_current_core_opportunity_cost_r1.py
+          python -m research.p558_current_core_opportunity_cost_r1
           python - <<'PY'
           import json, os
           x=json.load(open('research/artifacts/p558_current_core_opportunity_cost_r1.json'))
