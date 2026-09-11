@@ -1,0 +1,30 @@
+name: P562 Semiconductor Ticker Momentum R1
+on:
+  push:
+    branches: [research/p562-semi-ticker-momentum-r1]
+    paths: [research/p562_semi_ticker_momentum_r1.py,.github/workflows/p562-semi-ticker-momentum-r1.yml]
+  workflow_dispatch:
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions: {contents: read}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check pandas==2.2.3 yfinance==0.2.65
+      - id: eval
+        run: |
+          python research/p562_semi_ticker_momentum_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/p562_semi_ticker_momentum_r1.json'));bp=lambda v:int(round(v*10000))
+          tag=f"{x['decision']}__eq_{bp(x['overall']['matched_excess_cagr'])}__smh_{bp(x['overall']['smh_excess_cagr'])}__folds_{x['positive_fold_count_vs_equal_universe']}_{x['positive_fold_count_vs_smh']}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f'tag={tag}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p562-semi-ticker-momentum__${{ steps.eval.outputs.tag }}
+          path: artifacts/p562_semi_ticker_momentum_r1.json
+          if-no-files-found: error
