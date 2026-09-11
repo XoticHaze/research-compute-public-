@@ -1,0 +1,63 @@
+name: DBMF Regime Role Falsifier R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/dbmf-regime-role-falsifier-r1.yml'
+      - 'research/dbmf-regime-role-falsifier-r1.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Evaluate frozen DBMF regime-role discriminator
+        run: |
+          python - <<'PY'
+          import json, urllib.request, datetime as dt
+          from pathlib import Path
+          c=json.loads(Path('research/dbmf-regime-role-falsifier-r1.json').read_text())
+          start=dt.datetime.fromisoformat(c['start']+'T00:00:00+00:00'); end=dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1)
+          def fetch(sym):
+              u=f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?period1={int(start.timestamp())}&period2={int(end.timestamp())}&interval=1d&events=history&includeAdjustedClose=true"
+              req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+              with urllib.request.urlopen(req,timeout=30) as r: o=json.load(r)['chart']['result'][0]
+              a=o['indicators'].get('adjclose',[{}])[0].get('adjclose') or o['indicators']['quote'][0]['close']
+              return {dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat():float(p) for t,p in zip(o['timestamp'],a) if p is not None}
+          syms=c['symbols']; px={s:fetch(s) for s in syms}; common=sorted(set.intersection(*(set(px[s]) for s in syms)))
+          assert len(common)>=900
+          def rets(s): return {common[i]:px[s][common[i]]/px[s][common[i-1]]-1 for i in range(1,len(common))}
+          r={s:rets(s) for s in syms}; ds=common[1:]
+          months={}
+          for d in ds: months.setdefault(d[:7],[]).append(d)
+          def comp(vals):
+              x=1.0
+              for v in vals:x*=1+v
+              return x-1
+          rows=[]
+          for m,dz in sorted(months.items()):
+              z={s:comp(r[s][d] for d in dz) for s in syms}; z['month']=m; z['excess']=(1+z['DBMF'])/(1+z['BIL'])-1; rows.append(z)
+          crisis=[x for x in rows if x['SPY']<=c['spy_crisis_month_threshold']]
+          normal=[x for x in rows if x['SPY']>c['spy_crisis_month_threshold']]
+          def stats(arr):
+              ex=[x['excess'] for x in arr]
+              return {'months':len(arr),'mean_excess':sum(ex)/len(ex),'median_excess':sorted(ex)[len(ex)//2], 'positive_share':sum(x>0 for x in ex)/len(ex), 'sum_excess':sum(ex)}
+          cs,ns=stats(crisis),stats(normal)
+          total_abs=sum(abs(x['excess']) for x in rows)
+          crisis_abs=sum(abs(x['excess']) for x in crisis)
+          out={'schema':'dbmf_regime_role_falsifier_result.v1','common_start':common[0],'common_end':common[-1],'common_rows':len(common),'crisis':cs,'normal':ns,'crisis_abs_excess_share':crisis_abs/total_abs,'threshold':c['spy_crisis_month_threshold'],'gates':c['gates']}
+          out['broad_alpha_supported']=(ns['mean_excess']>=c['gates']['normal_month_mean_excess_min'] and ns['positive_share']>=c['gates']['normal_month_positive_share_min'])
+          out['crisis_role_supported']=(cs['mean_excess']>=c['gates']['crisis_month_mean_excess_min'] and cs['positive_share']>=c['gates']['crisis_month_positive_share_min'])
+          out['research_only']=True
+          Path('dbmf-regime-role-falsifier-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2)); print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dbmf-regime-role-falsifier-r1-result
+          path: dbmf-regime-role-falsifier-r1-result.json
+          retention-days: 14

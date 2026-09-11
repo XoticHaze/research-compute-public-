@@ -1,0 +1,20 @@
+{
+  "schema":"dbmf_regime_role_falsifier_contract.v1",
+  "claim_tested":"After concentration weakness, determine whether DBMF retains broadly distributed cash-relative alpha or instead a narrower equity-crisis diversification role.",
+  "symbols":["DBMF","BIL","SPY"],
+  "start":"2021-05-01",
+  "spy_crisis_month_threshold":-0.05,
+  "gates":{
+    "normal_month_mean_excess_min":0.001,
+    "normal_month_positive_share_min":0.50,
+    "crisis_month_mean_excess_min":0.01,
+    "crisis_month_positive_share_min":0.60
+  },
+  "frozen_inheritance":{
+    "prior_concentration_result":"DBMF fails top-5-relative-month deletion while surviving exclusion of 2022",
+    "matched_control":"BIL",
+    "regime_reference":"SPY monthly total return",
+    "no_parameter_rescue":true
+  },
+  "research_only":true
+}
