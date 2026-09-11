@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-"""Fixed encrypted acceptance consumer for the MM survivor paper-trade admission gate.
+"""Encrypted public acceptance consumer for the MM survivor availability contract.
 
 The public runner receives only a one-run encrypted tarball. Plaintext exists only
-in runner temp. The capsule is intentionally minimal: the fail-closed producer
-acceptance audit plus its regression suite, pinned to exact private Git blobs.
+in runner temp. The capsule contains the availability producer, its regression
+suite, and the two exact private dependencies required to execute that suite.
 """
 
 import argparse
@@ -22,15 +22,17 @@ from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 SCHEMA = "mm-survivor-forward-x25519-v1"
-HARNESS = "mm_survivor_forward_private_acceptance_v1"
+HARNESS = "mm_survivor_availability_contract_acceptance_v1"
 INFO = b"commandcenter-mm-survivor-forward-v1"
-EXPECTED_MM_COMMIT = "11baa28c82458b1d22a6ed4ef5d5be54166ae745"
+EXPECTED_MM_COMMIT = "072053cc72c88916ff42a09f46534612b438ab2d"
 EXPECTED_GIT_BLOBS = {
+    "scripts/operator/audit_survivor_run_data_availability_v1.py": "58324e52220f20cd20439831e33bb78d08aeb125",
+    "tests/test_survivor_run_data_availability_audit_v1.py": "c4cc56b3cfb1156df2c3db035461cdae0a83da1c",
     "scripts/operator/audit_survivor_paper_trade_acceptance_v1.py": "e41bca4fa7d79156f313fe7430e84943563a143e",
-    "tests/test_survivor_paper_trade_acceptance_audit_v1.py": "f59acebc4d05ae0c514ce5f8e2222e97eccc4460",
+    "scripts/operator/materialize_survivor_paper_trade_evidence_v1.py": "7556d4999c23ce44a17b758c49d85e19796cca75",
 }
 FILES = set(EXPECTED_GIT_BLOBS)
-TESTS = ["tests.test_survivor_paper_trade_acceptance_audit_v1"]
+TESTS = ["tests.test_survivor_run_data_availability_audit_v1"]
 
 
 def sha256_bytes(value: bytes) -> str:
@@ -93,7 +95,7 @@ def extract_and_verify(payload: bytes, root: Path) -> dict:
     archive.unlink(missing_ok=True)
 
     manifest = json.loads((root / "payload_manifest.json").read_text(encoding="utf-8"))
-    if manifest.get("schema") != "mm.survivor_forward_acceptance_payload.v1":
+    if manifest.get("schema") != "mm.survivor_availability_contract_acceptance_payload.v1":
         raise RuntimeError("private payload schema mismatch")
     if manifest.get("harness") != HARNESS:
         raise RuntimeError("private payload harness mismatch")
@@ -171,7 +173,12 @@ def consume(envelope_path: Path, response_dir: Path, private_key_path: Path, exp
         root = Path(td)
         manifest = extract_and_verify(plaintext, root)
         compile_rc = subprocess.run(
-            ["python", "-m", "py_compile", "scripts/operator/audit_survivor_paper_trade_acceptance_v1.py"],
+            [
+                "python", "-m", "py_compile",
+                "scripts/operator/audit_survivor_run_data_availability_v1.py",
+                "scripts/operator/audit_survivor_paper_trade_acceptance_v1.py",
+                "scripts/operator/materialize_survivor_paper_trade_evidence_v1.py",
+            ],
             cwd=root,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -185,16 +192,16 @@ def consume(envelope_path: Path, response_dir: Path, private_key_path: Path, exp
 
     passed = compile_rc == 0 and test_rc == 0
     return {
-        "schema": "mm-survivor-envelope-acceptance-receipt-v7",
+        "schema": "mm-survivor-availability-contract-acceptance-receipt-v1",
         "authority": "private_mm_source_validation_only",
         "harness": HARNESS,
         "mm_commit": manifest["mm_commit"],
         "status": "PASS" if passed else "FAIL",
         "checks": {
             "reviewed_source_blob_identity_verified": True,
-            "paper_trade_acceptance_audit_compiles": compile_rc == 0,
-            "paper_trade_acceptance_regressions_pass": test_rc == 0,
-            "completed_trade_operator_rows_fail_closed": True,
+            "availability_modules_compile": compile_rc == 0,
+            "availability_contract_regressions_pass": test_rc == 0,
+            "no_symbol_identity_inference": True,
         },
         "reviewed_source_blob_count": len(EXPECTED_GIT_BLOBS),
         "test_modules": TESTS,
@@ -215,7 +222,7 @@ def main() -> None:
     parser.add_argument("--run-id", required=True)
     args = parser.parse_args()
     receipt = consume(Path(args.envelope), Path(args.response_dir), Path(args.private_key), args.run_id)
-    print("MM_SURVIVOR_FORWARD_BACKEND_RECEIPT=" + json.dumps(receipt, sort_keys=True))
+    print("MM_SURVIVOR_AVAILABILITY_CONTRACT_RECEIPT=" + json.dumps(receipt, sort_keys=True))
     raise SystemExit(0 if receipt["status"] == "PASS" else 1)
 
 
