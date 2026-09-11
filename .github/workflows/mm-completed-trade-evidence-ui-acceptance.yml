@@ -1,0 +1,82 @@
+name: MM Completed Trade Evidence UI Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/mm_survivor_forward_private_consumer_v1.py'
+      - '.github/workflows/mm-completed-trade-evidence-ui-acceptance.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  backend-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install fixed crypto dependency
+        run: python -m pip install --disable-pip-version-check cryptography
+      - name: Generate and publish one-run public recipient
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import base64,hashlib,json,os
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric import x25519
+          private=x25519.X25519PrivateKey.generate()
+          private_raw=private.private_bytes(serialization.Encoding.Raw,serialization.PrivateFormat.Raw,serialization.NoEncryption())
+          public_raw=private.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)
+          temp=Path(os.environ['RUNNER_TEMP'])
+          temp.joinpath('mm-ui-private.b64').write_text(base64.b64encode(private_raw).decode('ascii'))
+          run_id=os.environ['GITHUB_RUN_ID']
+          recipient={'schema':'mm-survivor-forward-ephemeral-recipient-v1','run_id':run_id,'recipient_b64':base64.b64encode(public_raw).decode('ascii'),'recipient_key_id':'sha256:'+hashlib.sha256(public_raw).hexdigest()}
+          out=Path('rendezvous/recipients')/f'{run_id}.json'
+          out.parent.mkdir(parents=True,exist_ok=True)
+          out.write_text(json.dumps(recipient,sort_keys=True)+'\n')
+          print('MM_UI_ACCEPTANCE_RUN_ID='+run_id)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add rendezvous/recipients/${GITHUB_RUN_ID}.json
+          git commit -m "rendezvous: publish MM completed-trade UI recipient ${GITHUB_RUN_ID}"
+          git push origin HEAD:${GITHUB_HEAD_REF}
+      - name: Wait for current-key ciphertext envelope
+        run: |
+          set -euo pipefail
+          response_dir="$RUNNER_TEMP/mm-ui-response"
+          mkdir -p "$response_dir"
+          recipient="rendezvous/recipients/${GITHUB_RUN_ID}.json"
+          current_key_id="$(python -c "import json;print(json.load(open('$recipient'))['recipient_key_id'])")"
+          base="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_HEAD_REF}"
+          envelope="$RUNNER_TEMP/mm-ui-envelope.json"
+          found=0
+          for _ in $(seq 1 180); do
+            if curl -fsSL "${base}/rendezvous/responses/${GITHUB_RUN_ID}/mm-survivor-forward-envelope.json" -o "$RUNNER_TEMP/mm-ui-envelope-candidate.json"; then
+              if python - "$RUNNER_TEMP/mm-ui-envelope-candidate.json" "$current_key_id" <<'PY'
+          import json,sys
+          env=json.load(open(sys.argv[1])); raise SystemExit(0 if env.get('recipient_key_id')==sys.argv[2] else 1)
+          PY
+              then mv "$RUNNER_TEMP/mm-ui-envelope-candidate.json" "$envelope"; found=1; break; fi
+              rm -f "$RUNNER_TEMP/mm-ui-envelope-candidate.json"
+            fi
+            sleep 5
+          done
+          test "$found" = 1 || { echo 'current-key MM UI envelope did not arrive'; exit 42; }
+          python - "$envelope" > "$RUNNER_TEMP/mm-ui-chunks.txt" <<'PY'
+          import json,sys
+          for item in json.load(open(sys.argv[1])).get('chunks') or []: print(item['path'])
+          PY
+          while IFS= read -r chunk_path; do curl -fsSL "${base}/${chunk_path}" -o "$response_dir/$(basename "$chunk_path")"; done < "$RUNNER_TEMP/mm-ui-chunks.txt"
+      - name: Execute fixed private UI acceptance and emit sanitized receipt
+        run: python scripts/mm_survivor_forward_private_consumer_v1.py --envelope "$RUNNER_TEMP/mm-ui-envelope.json" --response-dir "$RUNNER_TEMP/mm-ui-response" --private-key "$RUNNER_TEMP/mm-ui-private.b64" --run-id "$GITHUB_RUN_ID"
+      - name: Remove one-run private material
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/mm-ui-private.b64" "$RUNNER_TEMP/mm-ui-envelope.json" "$RUNNER_TEMP/mm-ui-envelope-candidate.json" "$RUNNER_TEMP/mm-ui-chunks.txt" "$RUNNER_TEMP/mm-ui-response"
