@@ -28,13 +28,15 @@ jobs:
           with urllib.request.urlopen(req,timeout=30) as r:o=json.load(r)['chart']['result'][0]
           a=o['indicators'].get('adjclose',[{}])[0].get('adjclose') or o['indicators']['quote'][0]['close']
           px={dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat():float(p) for t,p in zip(o['timestamp'],a) if p is not None}
+          all_dates=sorted(px)
           rows=[]
           for y,official in c['official_market_price_calendar_returns'].items():
-              ds=sorted(d for d in px if d.startswith(y+'-'))
-              assert len(ds)>200
-              r=px[ds[-1]]/px[ds[0]]-1
+              ds=[d for d in all_dates if d.startswith(y+'-')]
+              prev=[d for d in all_dates if d < y+'-01-01']
+              assert len(ds)>200 and prev
+              r=px[ds[-1]]/px[prev[-1]]-1
               diff=r-official
-              rows.append({'year':y,'public_adjusted_close_return':r,'official_market_price_return':official,'difference':diff,'abs_difference':abs(diff),'pass':abs(diff)<=c['max_abs_difference']})
+              rows.append({'year':y,'prior_close_date':prev[-1],'year_end_date':ds[-1],'public_adjusted_close_return':r,'official_market_price_return':official,'difference':diff,'abs_difference':abs(diff),'pass':abs(diff)<=c['max_abs_difference']})
           out={'schema':'dbmf_firstparty_calendar_parity_result.v1','source_url':c['source_url'],'rows':rows,'max_abs_difference':c['max_abs_difference'],'all_years_pass':all(x['pass'] for x in rows),'research_only':True}
           Path('dbmf-firstparty-calendar-parity-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2));print(json.dumps(out,sort_keys=True))
           PY
