@@ -28,7 +28,7 @@ jobs:
 
           sources = {
               "P541_UMICH": "https://www.sca.isr.umich.edu/files/tbmics.csv",
-              "P542_DRTSCILM": "https://eco3min.fr/dataset/us-bank-lending-standards.csv",
+              "P542_DRTSCILM": "https://eco3min.fr/dataset/bank-lending-standards.csv",
           }
 
           def fetch(url):
@@ -55,7 +55,6 @@ jobs:
                   "content_type": content_type,
               }
 
-          # P541: official-origin Michigan CSV must contain multiple authoritative UMCSENT sentinels.
           p541_text = downloaded["P541_UMICH"].decode("utf-8-sig", errors="strict")
           p541_required = ["77.2", "74.0", "71.7", "52.2", "52.9", "56.4", "53.3", "49.8"]
           p541_hits = {value: (value in p541_text) for value in p541_required}
@@ -64,7 +63,6 @@ jobs:
           result["sources"]["P541_UMICH"]["sentinel_hits"] = p541_hits
           result["sources"]["P541_UMICH"]["line_count"] = len(p541_text.splitlines())
 
-          # P542: mirror must have the documented exact schema and authoritative DRTSCILM sentinels.
           p542_text = downloaded["P542_DRTSCILM"].decode("utf-8-sig", errors="strict")
           rows = list(csv.DictReader(io.StringIO(p542_text)))
           required_cols = {"date", "net_pct_tightening"}
@@ -79,7 +77,7 @@ jobs:
           normalized = lambda x: f"{float(x):.1f}"
           p542_hits = {date: (date in values and normalized(values[date]) == normalized(expected)) for date, expected in sentinels.items()}
           if not all(p542_hits.values()):
-              raise SystemExit(f"P542_SENTINEL_FAIL hits={p542_hits} observed={{k: values.get(k) for k in sentinels}}")
+              raise SystemExit(f"P542_SENTINEL_FAIL hits={p542_hits}")
           result["sources"]["P542_DRTSCILM"]["sentinel_hits"] = p542_hits
           result["sources"]["P542_DRTSCILM"]["row_count"] = len(rows)
           result["sources"]["P542_DRTSCILM"]["first_date"] = rows[0]["date"]
