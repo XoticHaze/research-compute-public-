@@ -14,9 +14,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
-      - run: python research/mnq_source_coverage_audit_r1.py | tee /tmp/mnq-source-coverage.log
-      - uses: actions/upload-artifact@v4
-        with:
-          name: mnq-source-coverage-audit-r1
-          path: research/artifacts/mnq_source_coverage_audit_r1.json
-          if-no-files-found: error
+      - name: Execute pinned source coverage audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/mnq_source_coverage_audit_r1.py | tee /tmp/mnq-source-coverage.log
+          grep '^MNQ_SOURCE_COVERAGE_RECEIPT=' /tmp/mnq-source-coverage.log
