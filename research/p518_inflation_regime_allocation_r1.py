@@ -12,7 +12,8 @@ BLOCKS={'2010_2013':('2010-01-04','2013-12-31'),'2014_2017':('2014-01-02','2017-
 px=yf.download(['SPY','DBC'],start='2008-01-01',end='2026-09-11',auto_adjust=True,progress=False,threads=False)
 close=(px['Close'] if isinstance(px.columns,pd.MultiIndex) else px)[['SPY','DBC']].resample('ME').last().dropna()
 cpi=pd.read_csv('https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPIAUCSL')
-cpi['DATE']=pd.to_datetime(cpi['DATE']); cpi['CPIAUCSL']=pd.to_numeric(cpi['CPIAUCSL'],errors='coerce'); cpi=cpi.dropna().set_index('DATE')['CPIAUCSL'].resample('ME').last()
+date_col='DATE' if 'DATE' in cpi.columns else ('observation_date' if 'observation_date' in cpi.columns else cpi.columns[0])
+cpi[date_col]=pd.to_datetime(cpi[date_col]); cpi['CPIAUCSL']=pd.to_numeric(cpi['CPIAUCSL'],errors='coerce'); cpi=cpi.dropna().set_index(date_col)['CPIAUCSL'].resample('ME').last()
 # Signal definition is prospectively fixed: 6m CPI growth exceeds the preceding 6m growth = inflation acceleration.
 # Two-month lag approximates publication availability conservatively before allocating the following month.
 g6=cpi.pct_change(6); accel=(g6>g6.shift(6)).astype(float).shift(2)
