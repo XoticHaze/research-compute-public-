@@ -1,3 +1,4 @@
+# Market Research cross-industry Stage-A screen trigger 2026-09-11T17:52Z
 name: Industry Stage-A Batch 7
 
 on:
@@ -50,8 +51,7 @@ jobs:
           family=os.environ['FAMILY']; benchmark=os.environ['BENCHMARK']; symbols=os.environ['SYMBOLS'].split(',')
           path=f'{family}-stagea-batch7-receipt.json'
           required=[*r.TRAIN,*symbols,'QQQ',benchmark]
-          source={}
-          frames={}
+          source={}; frames={}
           for symbol in required:
               try:
                   f=r._load(symbol); frames[symbol]=f
@@ -60,35 +60,17 @@ jobs:
                   source[symbol]={'status':'ERROR','error':f'{type(exc).__name__}: {exc}'}
           errors={k:v for k,v in source.items() if v['status']!='OK'}
           try:
-              if errors:
-                  raise RuntimeError('source load failures: '+json.dumps(errors,sort_keys=True))
+              if errors: raise RuntimeError('source load failures: '+json.dumps(errors,sort_keys=True))
               common=set(frames[required[0]].timestamp)
               for symbol in required[1:]: common &= set(frames[symbol].timestamp)
-              if len(common) < 1500:
-                  raise RuntimeError(f'insufficient common source calendar={len(common)}')
+              if len(common) < 1500: raise RuntimeError(f'insufficient common source calendar={len(common)}')
               cutoff=max(common).isoformat()
               contract={family:{'primary_industry_etf':benchmark,'development_universe':symbols}}
-              out=r._evaluate_matrix(contract,cutoff)
-              s=out['family_summary'][family]
-              receipt={
-                'schema':'industry_stagea_batch7.v1','family':family,'benchmark':benchmark,
-                'development_universe':symbols,'cutoff':cutoff,'source_support':'SUFFICIENT','source':source,
-                'external_holdouts_loaded':False,'family_summary':s,'per_symbol':out['per_symbol'],
-                'decision':'ADVANCE' if s['development_family_gate_pass'] else 'REJECT_OR_REARCHITECT',
-                'research_only':True,'promotion_authority':False,'allocation_authority':False,
-                'runtime_mutation':False,'live_trading_change':False
-              }
+              out=r._evaluate_matrix(contract,cutoff); s=out['family_summary'][family]
+              receipt={'schema':'industry_stagea_batch7.v1','family':family,'benchmark':benchmark,'development_universe':symbols,'cutoff':cutoff,'source_support':'SUFFICIENT','source':source,'external_holdouts_loaded':False,'family_summary':s,'per_symbol':out['per_symbol'],'decision':'ADVANCE' if s['development_family_gate_pass'] else 'REJECT_OR_REARCHITECT','research_only':True,'promotion_authority':False,'allocation_authority':False,'runtime_mutation':False,'live_trading_change':False}
           except Exception as exc:
-              receipt={
-                'schema':'industry_stagea_batch7.v1','family':family,'benchmark':benchmark,
-                'development_universe':symbols,'source_support':'INSUFFICIENT','source':source,
-                'model_result_available':False,'source_error':f'{type(exc).__name__}: {exc}',
-                'external_holdouts_loaded':False,'decision':'UNSCORED_SOURCE_FAILURE_NO_SYMBOL_SUBSTITUTION',
-                'research_only':True,'promotion_authority':False,'allocation_authority':False,
-                'runtime_mutation':False,'live_trading_change':False
-              }
-          open(path,'w').write(json.dumps(receipt,sort_keys=True,indent=2)+'\n')
-          print('INDUSTRY_STAGEA_BATCH7='+json.dumps(receipt,sort_keys=True))
+              receipt={'schema':'industry_stagea_batch7.v1','family':family,'benchmark':benchmark,'development_universe':symbols,'source_support':'INSUFFICIENT','source':source,'model_result_available':False,'source_error':f'{type(exc).__name__}: {exc}','external_holdouts_loaded':False,'decision':'UNSCORED_SOURCE_FAILURE_NO_SYMBOL_SUBSTITUTION','research_only':True,'promotion_authority':False,'allocation_authority':False,'runtime_mutation':False,'live_trading_change':False}
+          open(path,'w').write(json.dumps(receipt,sort_keys=True,indent=2)+'\n'); print('INDUSTRY_STAGEA_BATCH7='+json.dumps(receipt,sort_keys=True))
           PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
