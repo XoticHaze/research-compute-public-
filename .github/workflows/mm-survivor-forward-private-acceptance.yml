@@ -1,21 +1,17 @@
-name: MM Survivor Forward Private Acceptance
+name: MM Strategy Health Preview Availability Acceptance
 
 on:
   pull_request:
     paths:
-      - 'rendezvous/requests/mm-survivor-forward-backend-*.txt'
       - 'scripts/mm_survivor_forward_private_consumer_v1.py'
       - '.github/workflows/mm-survivor-forward-private-acceptance.yml'
-
 permissions:
   contents: write
-
 env:
   RESPONSE_ROOT: rendezvous/responses
   RECIPIENT_ROOT: rendezvous/recipients
   PRODUCER_REQUEST_ROOT: rendezvous/producer-requests
   EXCHANGE_REF: rendezvous-exchange
-
 jobs:
   backend-acceptance:
     runs-on: ubuntu-24.04
@@ -23,8 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: '3.11.16'
+        with: {python-version: '3.11.16'}
       - name: Install fixed crypto dependency
         run: python -m pip install --disable-pip-version-check cryptography
       - name: Generate one-run recipient and producer request
@@ -36,105 +31,49 @@ jobs:
           from pathlib import Path
           from cryptography.hazmat.primitives import serialization
           from cryptography.hazmat.primitives.asymmetric import x25519
-          private=x25519.X25519PrivateKey.generate()
-          private_raw=private.private_bytes(serialization.Encoding.Raw,serialization.PrivateFormat.Raw,serialization.NoEncryption())
-          public_raw=private.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)
+          private=x25519.X25519PrivateKey.generate(); private_raw=private.private_bytes(serialization.Encoding.Raw,serialization.PrivateFormat.Raw,serialization.NoEncryption()); public_raw=private.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)
           Path(os.environ['RUNNER_TEMP'],'mm-survivor-private.b64').write_text(base64.b64encode(private_raw).decode('ascii'))
-          key_id='sha256:'+hashlib.sha256(public_raw).hexdigest()
-          run_id=os.environ['GITHUB_RUN_ID']
+          key_id='sha256:'+hashlib.sha256(public_raw).hexdigest(); run_id=os.environ['GITHUB_RUN_ID']
           public={'schema':'mm-survivor-forward-ephemeral-recipient-v1','run_id':run_id,'recipient_b64':base64.b64encode(public_raw).decode('ascii'),'recipient_key_id':key_id}
-          request={
-              'schema':'mm-survivor-forward-producer-request-v3',
-              'run_id':run_id,
-              'run_attempt':os.environ.get('GITHUB_RUN_ATTEMPT','1'),
-              'recipient_key_id':key_id,
-              'authority':'private_mm_source_validation_only',
-              'fulfillment_mode':'fleet_connector_private_materialization_v1',
-              'private_actions_required':False,
-              'private_authority':'XoticHaze/mm-IBKR',
-              'private_ref':'11baa28c82458b1d22a6ed4ef5d5be54166ae745',
-              'private_files':{
-                  'scripts/operator/audit_survivor_paper_trade_acceptance_v1.py':'e41bca4fa7d79156f313fe7430e84943563a143e',
-                  'tests/test_survivor_paper_trade_acceptance_audit_v1.py':'f59acebc4d05ae0c514ce5f8e2222e97eccc4460',
-              },
-              'packager_contract':'scripts/operator/package_survivor_forward_acceptance_ephemeral_v1.py',
-              'private_actions_helper':'.github/workflows/survivor-forward-public-producer-r1.yml',
-              'harness':'mm_survivor_forward_private_acceptance_v1',
-              'recipient_path':f'rendezvous/recipients/{run_id}.json',
-              'envelope_path':f'rendezvous/responses/{run_id}/mm-survivor-forward-envelope.json',
-              'fulfillment_rule':'materialize only the exact private Git blobs through connected private authority; verify blob identities; seal to this one-run recipient using the packager contract; publish ciphertext chunks first and envelope last; never publish private plaintext',
-          }
-          Path(os.environ['RUNNER_TEMP'],'mm-survivor-recipient.json').write_text(json.dumps(public,sort_keys=True)+'\n')
-          Path(os.environ['RUNNER_TEMP'],'mm-survivor-producer-request.json').write_text(json.dumps(request,sort_keys=True)+'\n')
-          print('MM_SURVIVOR_FORWARD_RUN_ID='+run_id)
-          print('MM_SURVIVOR_FORWARD_RECIPIENT_KEY_ID='+key_id)
+          request={'schema':'mm-survivor-forward-producer-request-v3','run_id':run_id,'run_attempt':os.environ.get('GITHUB_RUN_ATTEMPT','1'),'recipient_key_id':key_id,'authority':'private_mm_source_validation_only','fulfillment_mode':'fleet_connector_private_materialization_v1','private_actions_required':False,'private_authority':'XoticHaze/mm-IBKR','private_ref':'0dc5e18c2a0a0620147988a7de9239d4d53d874c','private_files':{'strategy_health_preview_binding.py':'8cb6f6f813db1e1d1e62935c2c6f7e6090a6e039'},'packager_contract':'fleet_connector_private_materialization_v1','private_actions_helper':None,'harness':'mm_strategy_health_preview_availability_acceptance_v1','recipient_path':f'rendezvous/recipients/{run_id}.json','envelope_path':f'rendezvous/responses/{run_id}/mm-survivor-forward-envelope.json','fulfillment_rule':'materialize only the exact private Git blob through connected private authority; verify blob identity; seal to this one-run recipient; publish ciphertext chunks first and envelope last; never publish private plaintext'}
+          Path(os.environ['RUNNER_TEMP'],'mm-survivor-recipient.json').write_text(json.dumps(public,sort_keys=True)+'\n'); Path(os.environ['RUNNER_TEMP'],'mm-survivor-producer-request.json').write_text(json.dumps(request,sort_keys=True)+'\n')
+          print('MM_SURVIVOR_FORWARD_RUN_ID='+run_id); print('MM_SURVIVOR_FORWARD_RECIPIENT_KEY_ID='+key_id)
           PY
       - name: Publish recipient and producer request to isolated exchange
-        env:
-          GH_TOKEN: ${{ github.token }}
+        env: {GH_TOKEN: '${{ github.token }}'}
         run: |
           set -euo pipefail
-          publish_file() {
-            local source="$1"
-            local path="$2"
-            local message="$3"
-            local api current_sha payload body
-            api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}"
-            current_sha="$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "${api}?ref=${EXCHANGE_REF}" 2>/dev/null | python -c 'import json,sys; print(json.load(sys.stdin).get("sha", ""))' 2>/dev/null || true)"
-            payload="$(base64 -w0 "$source")"
-            body="$(python - "$payload" "$EXCHANGE_REF" "$current_sha" "$message" <<'PY'
+          publish_file() { local source="$1"; local path="$2"; local message="$3"; local api current_sha payload body; api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}"; current_sha="$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' "${api}?ref=${EXCHANGE_REF}" 2>/dev/null | python -c 'import json,sys; print(json.load(sys.stdin).get("sha", ""))' 2>/dev/null || true)"; payload="$(base64 -w0 "$source")"; body="$(python - "$payload" "$EXCHANGE_REF" "$current_sha" "$message" <<'PY'
           import json,sys
           body={'message':sys.argv[4],'content':sys.argv[1],'branch':sys.argv[2]}
           if sys.argv[3]: body['sha']=sys.argv[3]
           print(json.dumps(body))
           PY
-          )"
-            curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -d "$body" >/dev/null
-          }
-          publish_file "$RUNNER_TEMP/mm-survivor-recipient.json" "${RECIPIENT_ROOT}/${GITHUB_RUN_ID}.json" 'rendezvous: publish one-run MM survivor recipient'
-          publish_file "$RUNNER_TEMP/mm-survivor-producer-request.json" "${PRODUCER_REQUEST_ROOT}/${GITHUB_RUN_ID}.json" 'rendezvous: publish one-run MM survivor producer request'
+          )"; curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' "$api" -d "$body" >/dev/null; }
+          publish_file "$RUNNER_TEMP/mm-survivor-recipient.json" "${RECIPIENT_ROOT}/${GITHUB_RUN_ID}.json" 'rendezvous: publish one-run MM Strategy Health recipient'
+          publish_file "$RUNNER_TEMP/mm-survivor-producer-request.json" "${PRODUCER_REQUEST_ROOT}/${GITHUB_RUN_ID}.json" 'rendezvous: publish one-run MM Strategy Health producer request'
       - name: Wait for current-key encrypted envelope
-        env:
-          GH_TOKEN: ${{ github.token }}
+        env: {GH_TOKEN: '${{ github.token }}'}
         run: |
           set -euo pipefail
-          response_dir="$RUNNER_TEMP/mm-survivor-response"
-          mkdir -p "$response_dir"
-          path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/mm-survivor-forward-envelope.json"
-          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${EXCHANGE_REF}"
-          current_key_id="$(python -c "import json;print(json.load(open('$RUNNER_TEMP/mm-survivor-recipient.json'))['recipient_key_id'])")"
-          found=0
+          response_dir="$RUNNER_TEMP/mm-survivor-response"; mkdir -p "$response_dir"; path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/mm-survivor-forward-envelope.json"; api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${EXCHANGE_REF}"; current_key_id="$(python -c "import json;print(json.load(open('$RUNNER_TEMP/mm-survivor-recipient.json'))['recipient_key_id'])")"; found=0
           for _ in $(seq 1 180); do
             if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/mm-survivor-envelope-candidate.json"; then
               if python - "$RUNNER_TEMP/mm-survivor-envelope-candidate.json" "$current_key_id" <<'PY'
           import json,sys
-          env=json.load(open(sys.argv[1],encoding='utf-8'))
-          raise SystemExit(0 if env.get('recipient_key_id') == sys.argv[2] else 1)
+          env=json.load(open(sys.argv[1])); raise SystemExit(0 if env.get('recipient_key_id')==sys.argv[2] else 1)
           PY
-              then
-                mv "$RUNNER_TEMP/mm-survivor-envelope-candidate.json" "$RUNNER_TEMP/mm-survivor-envelope.json"
-                found=1
-                break
-              fi
-              echo 'stale envelope key observed; continuing to wait for current run key'
+              then mv "$RUNNER_TEMP/mm-survivor-envelope-candidate.json" "$RUNNER_TEMP/mm-survivor-envelope.json"; found=1; break; fi
               rm -f "$RUNNER_TEMP/mm-survivor-envelope-candidate.json"
             fi
             sleep 5
           done
-          test "$found" = 1 || { echo 'current-key MM survivor envelope did not arrive'; exit 42; }
+          test "$found" = 1 || { echo 'current-key envelope did not arrive'; exit 42; }
           python - "$RUNNER_TEMP/mm-survivor-envelope.json" > "$RUNNER_TEMP/mm-survivor-chunks.txt" <<'PY'
           import json,sys
-          env=json.load(open(sys.argv[1],encoding='utf-8'))
-          for item in env.get('chunks') or []:
-              path=str(item.get('path') or '')
-              if not path.startswith('rendezvous/responses/') or not path.endswith('.b64'):
-                  raise SystemExit('unsafe encrypted chunk path')
-              print(path)
+          for item in json.load(open(sys.argv[1])).get('chunks') or []: print(item['path'])
           PY
-          while IFS= read -r chunk_path; do
-            chunk_api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${chunk_path}?ref=${EXCHANGE_REF}"
-            curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$chunk_api" -o "$response_dir/$(basename "$chunk_path")"
-          done < "$RUNNER_TEMP/mm-survivor-chunks.txt"
+          while IFS= read -r chunk_path; do curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${chunk_path}?ref=${EXCHANGE_REF}" -o "$response_dir/$(basename "$chunk_path")"; done < "$RUNNER_TEMP/mm-survivor-chunks.txt"
       - name: Execute fixed private backend acceptance and emit sanitized receipt
         run: python scripts/mm_survivor_forward_private_consumer_v1.py --envelope "$RUNNER_TEMP/mm-survivor-envelope.json" --response-dir "$RUNNER_TEMP/mm-survivor-response" --private-key "$RUNNER_TEMP/mm-survivor-private.b64" --run-id "$GITHUB_RUN_ID"
       - name: Remove one-run private material
