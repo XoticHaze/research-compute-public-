@@ -44,21 +44,25 @@ jobs:
           run_id=os.environ['GITHUB_RUN_ID']
           public={'schema':'mm-survivor-forward-ephemeral-recipient-v1','run_id':run_id,'recipient_b64':base64.b64encode(public_raw).decode('ascii'),'recipient_key_id':key_id}
           request={
-              'schema':'mm-survivor-forward-producer-request-v2',
+              'schema':'mm-survivor-forward-producer-request-v3',
               'run_id':run_id,
               'run_attempt':os.environ.get('GITHUB_RUN_ATTEMPT','1'),
               'recipient_key_id':key_id,
               'authority':'private_mm_source_validation_only',
+              'fulfillment_mode':'fleet_connector_private_materialization_v1',
+              'private_actions_required':False,
               'private_authority':'XoticHaze/mm-IBKR',
               'private_ref':'11baa28c82458b1d22a6ed4ef5d5be54166ae745',
-              'packager':'scripts/operator/package_survivor_forward_acceptance_ephemeral_v1.py',
-              'private_producer_workflow':'.github/workflows/survivor-forward-public-producer-r1.yml',
-              'fulfillment_branch_pattern':'fulfillment/mm-survivor-forward-*',
-              'private_bundle_root':f'research_exchange_out/{run_id}',
+              'private_files':{
+                  'scripts/operator/audit_survivor_paper_trade_acceptance_v1.py':'e41bca4fa7d79156f313fe7430e84943563a143e',
+                  'tests/test_survivor_paper_trade_acceptance_audit_v1.py':'f59acebc4d05ae0c514ce5f8e2222e97eccc4460',
+              },
+              'packager_contract':'scripts/operator/package_survivor_forward_acceptance_ephemeral_v1.py',
+              'private_actions_helper':'.github/workflows/survivor-forward-public-producer-r1.yml',
               'harness':'mm_survivor_forward_private_acceptance_v1',
               'recipient_path':f'rendezvous/recipients/{run_id}.json',
               'envelope_path':f'rendezvous/responses/{run_id}/mm-survivor-forward-envelope.json',
-              'fulfillment_rule':'copy ciphertext-only bundle from the private fulfillment branch into the exact public response paths; never publish private plaintext',
+              'fulfillment_rule':'materialize only the exact private Git blobs through connected private authority; verify blob identities; seal to this one-run recipient using the packager contract; publish ciphertext chunks first and envelope last; never publish private plaintext',
           }
           Path(os.environ['RUNNER_TEMP'],'mm-survivor-recipient.json').write_text(json.dumps(public,sort_keys=True)+'\n')
           Path(os.environ['RUNNER_TEMP'],'mm-survivor-producer-request.json').write_text(json.dumps(request,sort_keys=True)+'\n')
@@ -76,7 +80,7 @@ jobs:
             local message="$3"
             local api current_sha payload body
             api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}"
-            current_sha="$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "${api}?ref=${EXCHANGE_REF}" 2>/dev/null | python -c 'import json,sys; print(json.load(sys.stdin).get("sha", ""))' || true)"
+            current_sha="$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "${api}?ref=${EXCHANGE_REF}" 2>/dev/null | python -c 'import json,sys; print(json.load(sys.stdin).get("sha", ""))' 2>/dev/null || true)"
             payload="$(base64 -w0 "$source")"
             body="$(python - "$payload" "$EXCHANGE_REF" "$current_sha" "$message" <<'PY'
           import json,sys
