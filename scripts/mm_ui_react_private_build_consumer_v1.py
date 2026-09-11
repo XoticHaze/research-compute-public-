@@ -26,7 +26,7 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 SCHEMA = "mm-ui-react-build-x25519-v1"
 HARNESS = "mm_ui_react_private_build_v1"
 INFO = b"commandcenter-mm-ui-react-build-v1"
-EXPECTED_MM_COMMIT = "fd638e4d31f60fce7984bd9afa900d46ebf323ba"
+EXPECTED_MM_COMMIT = "ea0f33db39578ea6c9ed5e4a54be2b737a06743f"
 EXPECTED_UI_TREE = "7c0be9f7bc06cb4851ec1a6e30457e8fed412b86"
 
 
