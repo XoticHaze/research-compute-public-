@@ -1,0 +1,26 @@
+name: putwrite-alpha-r1
+on:
+  push:
+    paths: ['.github/workflows/putwrite-alpha-r1.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -q yfinance pandas numpy
+      - name: Evaluate put-write ETF versus beta-matched equity-cash control
+        shell: python
+        run: |
+          import json,math,yfinance as yf,pandas as pd,numpy as np
+          px=yf.download(['PUTW','SPY','BIL'],start='2016-03-01',auto_adjust=True,progress=False)['Close'].dropna(); r=px.pct_change().dropna(); cost=.001
+          beta=float(np.cov(r.PUTW,r.SPY)[0,1]/np.var(r.SPY)); beta=max(0,min(1,beta)); ctrl=beta*r.SPY+(1-beta)*r.BIL
+          def ann(z): return float(np.prod(1+z)**(252/len(z))-1)
+          wins=eligible=0
+          for y in sorted(set(r.index.year)):
+            f=r.loc[r.index.year==y,'PUTW']; c=ctrl.loc[ctrl.index.year==y]
+            if len(f)>100: eligible+=1; wins += ((1+f).prod()-1-cost > (1+c).prod()-1)
+          recent=r.loc[r.index>='2022-01-01']; rc=beta*recent.SPY+(1-beta)*recent.BIL; w=(1+r.PUTW).cumprod()
+          out={'fund':'PUTW','beta_spy':beta,'after_cost_cagr':ann(r.PUTW)-cost,'matched_control_cagr':ann(ctrl),'excess_cagr_pp':100*(ann(r.PUTW)-cost-ann(ctrl)),'calendar_wins':int(wins),'calendar_years':int(eligible),'recent_2022_plus_excess_pp':100*(ann(recent.PUTW)-cost-ann(rc)),'max_drawdown':float((w/w.cummax()-1).min())}; out['pass']=bool(out['excess_cagr_pp']>1 and wins>=math.ceil(.6*eligible) and out['recent_2022_plus_excess_pp']>0); print('RESULT_JSON='+json.dumps(out,sort_keys=True))
