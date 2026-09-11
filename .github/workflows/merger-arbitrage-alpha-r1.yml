@@ -1,58 +1,39 @@
 name: merger-arbitrage-alpha-r1
 on:
   push:
-    paths:
-      - '.github/workflows/merger-arbitrage-alpha-r1.yml'
-  pull_request:
-    paths:
-      - '.github/workflows/merger-arbitrage-alpha-r1.yml'
+    paths: ['.github/workflows/merger-arbitrage-alpha-r1.yml']
   workflow_dispatch:
-
+permissions: {contents: read}
 jobs:
   evaluate:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -q pandas numpy requests
       - name: Evaluate merger arbitrage funds versus matched controls
         shell: python
         run: |
-          import json, math, subprocess, sys
-          subprocess.check_call([sys.executable,'-m','pip','install','-q','yfinance','pandas','numpy'])
-          import yfinance as yf, pandas as pd, numpy as np
-          symbols=['MNA','ARB','BIL','SPY']
-          px=yf.download(symbols,start='2011-01-01',auto_adjust=True,progress=False)['Close'].dropna(how='all')
-          if isinstance(px,pd.Series): px=px.to_frame()
-          px=px.dropna()
-          r=px.pct_change().dropna()
-          cost_bps=10
-          def annret(ret): return (1+ret).prod()**(252/len(ret))-1
+          import json, math, requests, pandas as pd, numpy as np
+          H={'User-Agent':'Mozilla/5.0'}
+          def hist(sym):
+            u=f'https://query1.finance.yahoo.com/v8/finance/chart/{sym}?period1=1293840000&period2=1789171200&interval=1d&events=history&includeAdjustedClose=true'
+            z=requests.get(u,headers=H,timeout=90); z.raise_for_status(); j=z.json()['chart']['result'][0]
+            vals=j['indicators'].get('adjclose',[{}])[0].get('adjclose') or j['indicators']['quote'][0]['close']
+            return pd.Series(vals,index=pd.to_datetime(j['timestamp'],unit='s',utc=True).tz_convert(None),name=sym).dropna()
+          px=pd.concat([hist(s) for s in ['MNA','ARB','BIL','SPY']],axis=1).dropna()
+          r=px.pct_change().dropna(); cost=.001
+          def ann(z): return float(np.prod(1+z)**(252/len(z))-1)
           out={}
           for fund in ['MNA','ARB']:
-              rr=r[[fund,'BIL','SPY']].dropna()
-              beta=np.cov(rr[fund],rr['SPY'])[0,1]/np.var(rr['SPY'])
-              beta=max(0,min(1,float(beta)))
-              ctrl=beta*rr['SPY']+(1-beta)*rr['BIL']
-              fund_ann=annret(rr[fund])-cost_bps/10000
-              ctrl_ann=annret(ctrl)
-              wins=0; eligible=0
-              for y in sorted(set(rr.index.year)):
-                  fy=rr.loc[rr.index.year==y,fund]
-                  cy=ctrl.loc[ctrl.index.year==y]
-                  if len(fy)>100:
-                      eligible+=1
-                      if (1+fy).prod()-1-cost_bps/10000 > (1+cy).prod()-1: wins+=1
-              recent=rr.loc[rr.index>='2022-01-01']
-              recent_ctrl=beta*recent['SPY']+(1-beta)*recent['BIL']
-              out[fund]={
-                'beta_spy':beta,
-                'after_cost_cagr':fund_ann,
-                'matched_control_cagr':ctrl_ann,
-                'excess_cagr_pp':100*(fund_ann-ctrl_ann),
-                'calendar_wins':wins,
-                'calendar_years':eligible,
-                'recent_2022_plus_excess_pp':100*((1+recent[fund]).prod()**(252/len(recent))-1-cost_bps/10000-((1+recent_ctrl).prod()**(252/len(recent_ctrl))-1)),
-                'max_drawdown':float(((1+rr[fund]).cumprod()/((1+rr[fund]).cumprod().cummax())-1).min())
-              }
-          print('RESULT_JSON='+json.dumps(out,sort_keys=True))
-          survivors={k:v for k,v in out.items() if v['excess_cagr_pp']>1.0 and v['calendar_wins']>=max(1,math.ceil(v['calendar_years']*0.6)) and v['recent_2022_plus_excess_pp']>0}
-          print('SURVIVORS='+json.dumps(survivors,sort_keys=True))
-          # synchronize-r3
+            rr=r[[fund,'BIL','SPY']].dropna(); beta=float(np.cov(rr[fund],rr['SPY'])[0,1]/np.var(rr['SPY'])); beta=max(0,min(1,beta)); ctrl=beta*rr.SPY+(1-beta)*rr.BIL
+            wins=eligible=0
+            for y in sorted(set(rr.index.year)):
+              f=rr.loc[rr.index.year==y,fund]; c=ctrl.loc[ctrl.index.year==y]
+              if len(f)>100:
+                eligible+=1; wins += ((1+f).prod()-1-cost > (1+c).prod()-1)
+            recent=rr.loc[rr.index>='2022-01-01']; rc=beta*recent.SPY+(1-beta)*recent.BIL
+            wealth=(1+rr[fund]).cumprod()
+            out[fund]={'beta_spy':beta,'after_cost_cagr':ann(rr[fund])-cost,'matched_control_cagr':ann(ctrl),'excess_cagr_pp':100*(ann(rr[fund])-cost-ann(ctrl)),'calendar_wins':int(wins),'calendar_years':int(eligible),'recent_2022_plus_excess_pp':100*(ann(recent[fund])-cost-ann(rc)),'max_drawdown':float((wealth/wealth.cummax()-1).min())}
+          survivors={k:v for k,v in out.items() if v['excess_cagr_pp']>1 and v['calendar_wins']>=math.ceil(.6*v['calendar_years']) and v['recent_2022_plus_excess_pp']>0}
+          print('RESULT_JSON='+json.dumps(out,sort_keys=True)); print('SURVIVORS='+json.dumps(survivors,sort_keys=True))
