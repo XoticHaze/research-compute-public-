@@ -1,0 +1,32 @@
+name: P553 SEC FTD Smallcap Stress R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p553_sec_ftd_smallcap_stress_r1.py'
+      - '.github/workflows/p553-sec-ftd-smallcap-stress-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check pandas==2.2.3 yfinance==0.2.65 requests==2.32.5
+      - id: eval
+        run: |
+          python research/p553_sec_ftd_smallcap_stress_r1.py
+          python - <<'PY'
+          import json, os
+          x=json.load(open('artifacts/p553_sec_ftd_smallcap_stress_r1.json'))
+          bp=lambda v:int(round(v*10000)) if v is not None else 999999
+          tag=f"{x['decision']}__ex_{bp(x['overall']['matched_excess_cagr'])}__folds_{x['positive_fold_count']}" if 'overall' in x else x['decision']
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f'tag={tag}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p553-sec-ftd-smallcap-stress__${{ steps.eval.outputs.tag }}
+          path: artifacts/p553_sec_ftd_smallcap_stress_r1.json
+          if-no-files-found: error
