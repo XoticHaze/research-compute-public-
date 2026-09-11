@@ -1,0 +1,11 @@
+{
+  "schema":"dbmf_firstparty_calendar_parity_contract.v1",
+  "claim_tested":"Public adjusted-close DBMF history used by current scientific discriminators reproduces independent first-party published DBMF market-price calendar returns within a frozen 50 bp annual tolerance.",
+  "source_owner":"iM Global Partner / Dynamic Beta investments",
+  "source_url":"https://imgpfunds.com/wp-content/uploads/pdfs/holdings/iMGP-DBi-Managed-Futures-Strategy-ETF-Deck.pdf",
+  "source_as_of":"2024-12-31",
+  "official_market_price_calendar_returns":{"2022":0.2153,"2023":-0.0894,"2024":0.0725},
+  "max_abs_difference":0.005,
+  "frozen_inheritance":{"ticker":"DBMF","public_series":"Yahoo Finance adjusted close","no_parameter_rescue":true},
+  "research_only":true
+}
