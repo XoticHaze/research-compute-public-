@@ -3,6 +3,9 @@ on:
   push:
     paths:
       - '.github/workflows/merger-arbitrage-alpha-r1.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/merger-arbitrage-alpha-r1.yml'
   workflow_dispatch:
 
 jobs:
@@ -30,9 +33,8 @@ jobs:
               ctrl=beta*rr['SPY']+(1-beta)*rr['BIL']
               fund_ann=annret(rr[fund])-cost_bps/10000
               ctrl_ann=annret(ctrl)
-              years=sorted(set(rr.index.year))
               wins=0; eligible=0
-              for y in years:
+              for y in sorted(set(rr.index.year)):
                   fy=rr.loc[rr.index.year==y,fund]
                   cy=ctrl.loc[ctrl.index.year==y]
                   if len(fy)>100:
@@ -53,4 +55,4 @@ jobs:
           print('RESULT_JSON='+json.dumps(out,sort_keys=True))
           survivors={k:v for k,v in out.items() if v['excess_cagr_pp']>1.0 and v['calendar_wins']>=max(1,math.ceil(v['calendar_years']*0.6)) and v['recent_2022_plus_excess_pp']>0}
           print('SURVIVORS='+json.dumps(survivors,sort_keys=True))
-          # trigger-r2: workflow now existed on default branch before this push
+          # synchronize-r3
