@@ -1,0 +1,74 @@
+name: Forward Senior CLO Current Core Shadow R1
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/forward-senior-clo-current-core-shadow-r1.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/forward_senior_clo_current_core_shadow_r1.py'
+      - '.github/workflows/forward-senior-clo-current-core-shadow-r1.yml'
+  schedule:
+    - cron: '50 22 * * 1-5'
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    outputs:
+      tag: ${{ steps.observer.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 yfinance==0.2.65
+      - id: observer
+        run: |
+          python research/forward_senior_clo_current_core_shadow_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('artifacts/forward_senior_clo_current_core_shadow_r1.json'))
+          assert x['workload_id']=='FORWARD_SENIOR_CLO_CURRENT_CORE_SHADOW_R1'
+          n=x['forward']['challenger_if_flattened_now']['days']
+          cm=x['forward']['challenger_minus_matched_cumulative']
+          ci=x['forward']['challenger_minus_incumbent_cumulative']
+          bp=lambda v:int(round(v*10000))
+          tag=f"{x['status']}__days_{n}__matched_{bp(cm)}__incumbent_{bp(ci)}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forward-senior-clo-current-core-shadow__${{ steps.observer.outputs.tag }}
+          path: artifacts/forward_senior_clo_current_core_shadow_r1.json
+          if-no-files-found: error
+  publish-current:
+    if: github.event_name != 'pull_request'
+    needs: observe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {contents: write}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/download-artifact@v4
+        with:
+          name: forward-senior-clo-current-core-shadow__${{ needs.observe.outputs.tag }}
+          path: /tmp/forward-senior-clo-current-core-shadow
+      - name: Publish stable current snapshot
+        run: |
+          test -f /tmp/forward-senior-clo-current-core-shadow/forward_senior_clo_current_core_shadow_r1.json
+          git fetch origin main
+          git checkout -B forward-senior-clo-current-publish origin/main
+          mkdir -p research/current
+          cp /tmp/forward-senior-clo-current-core-shadow/forward_senior_clo_current_core_shadow_r1.json research/current/forward_senior_clo_current_core_shadow_r1.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add research/current/forward_senior_clo_current_core_shadow_r1.json
+          if git diff --cached --quiet; then
+            echo 'CURRENT_SNAPSHOT_UNCHANGED=true'
+            exit 0
+          fi
+          git commit -m 'Forward: publish current senior-CLO current-core shadow snapshot'
+          git push origin HEAD:main
