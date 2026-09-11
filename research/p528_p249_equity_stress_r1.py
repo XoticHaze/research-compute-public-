@@ -27,7 +27,7 @@ def p36():
         w=sig[dt]; ar=float(z.iloc[i1].SOXX/z.iloc[i0].SOXX-1); qr=float(z.iloc[i1].QQQ/z.iloc[i0].QQQ-1); to=1. if prev is None else abs(w-prev); rows.append((idx[i1],w*ar+(1-w)*qr-to*50/10000,.5*(ar+qr))); prev=w
     q=pd.DataFrame(rows,columns=['date','ret','ctl']).set_index('date'); q.index=q.index.to_period('M').to_timestamp('M'); return q
 p36x=p36(); svr=m[['AVUV','AVDV','IJR','VSS']].pct_change(fill_method=None); sv=pd.DataFrame({'ret':.5*(svr.AVUV+svr.AVDV),'ctl':.5*(svr.IJR+svr.VSS)})
-q=sv.rename(columns={'ret':'sv','ctl':'svctl'}).join(p64.rename(columns={'ret':'p64','ctl':'p64ctl'})).join(p36x.rename(columns={'ret':'p36','ctl':'p36ctl'})).join(m.SP Y.pct_change(fill_method=None).rename('spy') if False else m['SPY'].pct_change(fill_method=None).rename('spy')).dropna().loc[:'2026-08-31']
+q=sv.rename(columns={'ret':'sv','ctl':'svctl'}).join(p64.rename(columns={'ret':'p64','ctl':'p64ctl'})).join(p36x.rename(columns={'ret':'p36','ctl':'p36ctl'})).join(m['SPY'].pct_change(fill_method=None).rename('spy')).dropna().loc[:'2026-08-31']
 q['p249']=(q.sv+q.p64+q.p36)/3; q['ctl']=(q.svctl+q.p64ctl+q.p36ctl)/3; q['excess']=q.p249-q.ctl
 stress=q[q.spy<=-.05]; normal=q[q.spy>-.05]
 def met(z):
