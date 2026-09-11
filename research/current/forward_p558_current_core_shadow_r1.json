@@ -1,0 +1,96 @@
+{
+  "boundaries": {
+    "allocation_authority": false,
+    "broker": false,
+    "live_trading": false,
+    "runtime": false
+  },
+  "contract": {
+    "challenger": "50% unchanged P249+P266 + 50% KMLM",
+    "entry_and_mark_to_market_exit_cost_bps_each": 25,
+    "fixed_weight": 0.5,
+    "incumbent": "unchanged P249+P266 from canonical forward observer",
+    "matched_control": "50% unchanged P249+P266 + 50% BIL",
+    "monthly_rebalance_traded_notional_cost_bps": 10,
+    "no_weight_date_cost_window_or_identity_search": true
+  },
+  "current_positions": {
+    "challenger": {
+      "AVDV": 0.0625,
+      "AVUV": 0.0625,
+      "DBC": 0.03125,
+      "IGV": 0.020833333333333332,
+      "KMLM": 0.5,
+      "QQQ": 0.03125,
+      "SOXX": 0.14583333333333334,
+      "XBI": 0.0625,
+      "XPH": 0.041666666666666664,
+      "XSD": 0.041666666666666664
+    },
+    "incumbent": {
+      "AVDV": 0.125,
+      "AVUV": 0.125,
+      "DBC": 0.0625,
+      "IGV": 0.041666666666666664,
+      "QQQ": 0.0625,
+      "SOXX": 0.2916666666666667,
+      "XBI": 0.125,
+      "XPH": 0.08333333333333333,
+      "XSD": 0.08333333333333333
+    },
+    "matched_control": {
+      "AVDV": 0.0625,
+      "AVUV": 0.0625,
+      "BIL": 0.5,
+      "DBC": 0.03125,
+      "IGV": 0.020833333333333332,
+      "QQQ": 0.03125,
+      "SOXX": 0.14583333333333334,
+      "XBI": 0.0625,
+      "XPH": 0.041666666666666664,
+      "XSD": 0.041666666666666664
+    }
+  },
+  "decision_at": "2026-09-11T10:10:57+00:00",
+  "forward": {
+    "challenger_if_flattened_now": {
+      "annualized_vol": null,
+      "cumulative_return": 0.0,
+      "days": 0,
+      "max_drawdown": 0.0,
+      "sharpe_rf0": null
+    },
+    "challenger_minus_incumbent_cumulative": 0.0,
+    "challenger_minus_matched_cumulative": 0.0,
+    "challenger_observations": [],
+    "first_close": null,
+    "incumbent": {
+      "annualized_vol": null,
+      "cumulative_return": 0.0,
+      "days": 0,
+      "max_drawdown": 0.0,
+      "sharpe_rf0": null
+    },
+    "latest_close": null,
+    "matched_control_if_flattened_now": {
+      "annualized_vol": null,
+      "cumulative_return": 0.0,
+      "days": 0,
+      "max_drawdown": 0.0,
+      "sharpe_rf0": null
+    },
+    "matched_control_observations": []
+  },
+  "observed_at": "2026-09-11T10:15:56.737118+00:00",
+  "operator_note": "Research shadow only. Always display diversification deltas together with capital opportunity cost versus the unchanged incumbent. No allocation, runtime, broker, or live-trading authority.",
+  "parent": "P558 / P249+P266",
+  "schema": "research.forward_p558_current_core_shadow_r1",
+  "source_pins": {
+    "incumbent_observer": "research/p279_p249_p266_forward_shadow_observer_r1.py",
+    "p558_result_artifact_id": 10194372650,
+    "p558_result_run_id": 34587903433,
+    "p558_scientific_merge": "eff2c63cc240df3636437a3d3c6aeba1985c13c0"
+  },
+  "status": "BASELINE_FROZEN_NO_FORWARD_CLOSES",
+  "workload_id": "FORWARD_P558_CURRENT_CORE_SHADOW_R1"
+}
