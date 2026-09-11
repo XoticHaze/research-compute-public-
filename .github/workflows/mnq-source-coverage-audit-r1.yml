@@ -1,0 +1,22 @@
+name: MNQ Source Coverage Audit R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/mnq_source_coverage_audit_r1.py'
+      - '.github/workflows/mnq-source-coverage-audit-r1.yml'
+permissions: {contents: read}
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python research/mnq_source_coverage_audit_r1.py | tee /tmp/mnq-source-coverage.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mnq-source-coverage-audit-r1
+          path: research/artifacts/mnq_source_coverage_audit_r1.json
+          if-no-files-found: error
