@@ -1,0 +1,129 @@
+name: DBMF Concentration Falsifier R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/dbmf-concentration-falsifier-r1.yml'
+      - 'research/dbmf-concentration-falsifier-r1.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Evaluate frozen DBMF crisis/concentration falsifier
+        run: |
+          python - <<'PY'
+          import json, math, urllib.request, datetime as dt
+          from pathlib import Path
+
+          contract=json.loads(Path('research/dbmf-concentration-falsifier-r1.json').read_text())
+          symbols=contract['symbols']
+          start=dt.datetime.fromisoformat(contract['start']+'T00:00:00+00:00')
+          end=dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1)
+
+          def fetch(sym):
+              u=(f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?period1={int(start.timestamp())}"
+                 f"&period2={int(end.timestamp())}&interval=1d&events=history&includeAdjustedClose=true")
+              req=urllib.request.Request(u, headers={'User-Agent':'Mozilla/5.0'})
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  obj=json.load(r)['chart']['result'][0]
+              ts=obj['timestamp']
+              adj=obj['indicators'].get('adjclose',[{}])[0].get('adjclose')
+              if not adj:
+                  adj=obj['indicators']['quote'][0]['close']
+              out={}
+              for t,p in zip(ts,adj):
+                  if p is not None:
+                      out[dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat()]=float(p)
+              return out
+
+          px={s:fetch(s) for s in symbols}
+          common=sorted(set.intersection(*(set(v) for v in px.values())))
+          assert len(common)>=900, f'insufficient common history {len(common)}'
+          px={s:{d:px[s][d] for d in common} for s in symbols}
+
+          def returns(series):
+              ds=common
+              return {ds[i]: series[ds[i]]/series[ds[i-1]]-1 for i in range(1,len(ds))}
+          rets={s:returns(px[s]) for s in symbols}
+          dates=common[1:]
+
+          # Monthly compounded relative returns for DBMF vs BIL and KMLM vs BIL.
+          def month_key(d): return d[:7]
+          months={}
+          for d in dates:
+              m=month_key(d); months.setdefault(m,[]).append(d)
+          def comp(seq):
+              v=1.0
+              for x in seq: v*=1+x
+              return v-1
+          monthly=[]
+          for m,ds in sorted(months.items()):
+              row={'month':m}
+              for s in symbols:
+                  row[s]=comp(rets[s][d] for d in ds)
+              row['dbmf_minus_bil']=(1+row['DBMF'])/(1+row['BIL'])-1
+              row['kmlm_minus_bil']=(1+row['KMLM'])/(1+row['BIL'])-1
+              monthly.append(row)
+
+          years=(dt.date.fromisoformat(common[-1])-dt.date.fromisoformat(common[0])).days/365.25
+          def cagr_from_daily(sym, chosen_dates):
+              v=1.0
+              first=dt.date.fromisoformat(chosen_dates[0]); last=dt.date.fromisoformat(chosen_dates[-1])
+              yrs=max((last-first).days/365.25,1/365.25)
+              for d in chosen_dates: v*=1+rets[sym][d]
+              return v**(1/yrs)-1
+          def rel_cagr(a,b,chosen_dates):
+              ca=cagr_from_daily(a,chosen_dates); cb=cagr_from_daily(b,chosen_dates)
+              return ca-cb,ca,cb
+
+          base_excess,dbmf_cagr,bil_cagr=rel_cagr('DBMF','BIL',dates)
+          no2022=[d for d in dates if not d.startswith('2022-')]
+          ex_no2022,dbmf_no2022,bil_no2022=rel_cagr('DBMF','BIL',no2022)
+
+          ranked=sorted(monthly,key=lambda x:x['dbmf_minus_bil'],reverse=True)
+          top_n=contract['top_months_removed']
+          removed={r['month'] for r in ranked[:top_n]}
+          kept=[d for d in dates if month_key(d) not in removed]
+          ex_trim,dbmf_trim,bil_trim=rel_cagr('DBMF','BIL',kept)
+
+          yearly=[]
+          for y in sorted({d[:4] for d in dates}):
+              ds=[d for d in dates if d.startswith(y+'-')]
+              if len(ds)<contract['min_days_per_year']: continue
+              ex,ca,cb=rel_cagr('DBMF','BIL',ds)
+              yearly.append({'year':y,'dbmf_minus_bil_cagr':ex,'dbmf_cagr':ca,'bil_cagr':cb,'positive':ex>0})
+
+          k_ex,k_cagr,_=rel_cagr('KMLM','BIL',dates)
+          promotion=(base_excess>=contract['gates']['base_min_excess_cagr'] and
+                     ex_no2022>=contract['gates']['exclude_2022_min_excess_cagr'] and
+                     ex_trim>=contract['gates']['trim_top_months_min_excess_cagr'] and
+                     sum(r['positive'] for r in yearly)>=contract['gates']['min_positive_years'])
+          out={
+            'schema':'dbmf_concentration_falsifier_result.v1',
+            'input_source':'Yahoo Finance chart API public adjusted closes',
+            'common_start':common[0],'common_end':common[-1],'common_rows':len(common),
+            'base':{'dbmf_cagr':dbmf_cagr,'bil_cagr':bil_cagr,'excess_cagr':base_excess},
+            'exclude_2022':{'dbmf_cagr':dbmf_no2022,'bil_cagr':bil_no2022,'excess_cagr':ex_no2022},
+            'remove_top_relative_months':{'n':top_n,'removed_months':sorted(removed),'dbmf_cagr':dbmf_trim,'bil_cagr':bil_trim,'excess_cagr':ex_trim},
+            'yearly':yearly,
+            'positive_year_count':sum(r['positive'] for r in yearly),
+            'kmlm_reference':{'cagr':k_cagr,'excess_cagr_vs_bil':k_ex},
+            'frozen_gates':contract['gates'],
+            'survives_concentration_falsifier':promotion,
+            'research_only':True
+          }
+          Path('dbmf-concentration-falsifier-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2))
+          print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dbmf-concentration-falsifier-r1-result
+          path: dbmf-concentration-falsifier-r1-result.json
+          retention-days: 14
