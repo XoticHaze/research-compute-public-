@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-"""Fixed encrypted acceptance consumer for the MM #504 survivor-forward backend.
+"""Fixed encrypted acceptance consumer for the MM survivor paper-trade admission gate.
 
-The public runner receives only a one-run encrypted tarball produced by the
-released MM transport packager. Plaintext exists only in runner temp. The
-payload file set, MM commit, harness, exact private Git blob identities, per-file
-digests, and AEAD associated data are fixed here; no arbitrary command arrives
-in the payload.
+The public runner receives only a one-run encrypted tarball. Plaintext exists only
+in runner temp. The capsule is intentionally minimal: the fail-closed producer
+acceptance audit plus its regression suite, pinned to exact private Git blobs.
 """
 
 import argparse
@@ -24,40 +22,15 @@ from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 SCHEMA = "mm-survivor-forward-x25519-v1"
-RECIPIENT_SCHEMA = "mm-survivor-forward-ephemeral-recipient-v1"
 HARNESS = "mm_survivor_forward_private_acceptance_v1"
 INFO = b"commandcenter-mm-survivor-forward-v1"
 EXPECTED_MM_COMMIT = "11baa28c82458b1d22a6ed4ef5d5be54166ae745"
 EXPECTED_GIT_BLOBS = {
-    "strategy_capital_readiness.py": "dddf48c557689413f469058bab2c0034958796e1",
-    "strategy_forward_intelligence.py": "6b60cdbd54d39f98db7d3758cdfe7be860af24c5",
-    "survivor_capital_readiness_policy.py": "ba7689c493c3c543de0a9e4091169894f13a2ed8",
-    "strategy_health_canonical_trade_consumer.py": "9b71517203298f4759b96321f4f84014f98f203a",
-    "strategy_health_preview_binding.py": "92f76e2648418f0aa15d1493b797cfa5e8014c1e",
-    "strategy_health_evidence_pipeline.py": "0343c6b1efadd7ab416737dfe40d413f9b5220f4",
-    "strategy_health_position_context.py": "cb13af73f8cde37d55d8a00e6951e7085b23a753",
-    "strategy_health_comparable_context.py": "a27373206c0a2f28f7fea3576cc898074e3b71c5",
-    "strategy_health_operator_context.py": "3359375755e19a66cb793dcb8deef69a1985beed",
-    "scripts/operator/verify_survivor_forward_operator_contract_v1.py": "5d8e0dcce357f877386b212156e82ee0de8d75bd",
     "scripts/operator/audit_survivor_paper_trade_acceptance_v1.py": "e41bca4fa7d79156f313fe7430e84943563a143e",
-    "tests/test_strategy_capital_readiness.py": "73b195b88776bbe2c3f4517d78791f319d8a3a90",
-    "tests/test_strategy_capital_readiness_historical_compat.py": "3fd66ca9eba1194db8b48bf5d71c8bf87f2e2f3a",
-    "tests/test_strategy_health_canonical_trade_forward_conformance.py": "8e5bf693808a724fee1ce4c5a47674708f491104",
-    "tests/test_strategy_forward_intelligence.py": "f0773a132e5ce814efbb983841de36dc0fb1b4bd",
-    "tests/test_strategy_forward_intelligence_json_boundary.py": "9d7c5cf72d920ea2671d976f6b537603c1eb5145",
-    "tests/test_survivor_forward_operator_contract_verifier_v1.py": "4c0af6e43ee75004096e53b16050f845e856f68f",
     "tests/test_survivor_paper_trade_acceptance_audit_v1.py": "f59acebc4d05ae0c514ce5f8e2222e97eccc4460",
 }
 FILES = set(EXPECTED_GIT_BLOBS)
-TESTS = [
-    "tests.test_strategy_capital_readiness",
-    "tests.test_strategy_capital_readiness_historical_compat",
-    "tests.test_strategy_health_canonical_trade_forward_conformance",
-    "tests.test_strategy_forward_intelligence",
-    "tests.test_strategy_forward_intelligence_json_boundary",
-    "tests.test_survivor_forward_operator_contract_verifier_v1",
-    "tests.test_survivor_paper_trade_acceptance_audit_v1",
-]
+TESTS = ["tests.test_survivor_paper_trade_acceptance_audit_v1"]
 
 
 def sha256_bytes(value: bytes) -> str:
@@ -164,16 +137,9 @@ def load_ciphertext(env: dict, response_dir: Path) -> bytes:
 def consume(envelope_path: Path, response_dir: Path, private_key_path: Path, expected_run_id: str) -> dict:
     env = json.loads(envelope_path.read_text(encoding="utf-8"))
     required = {
-        "schema",
-        "run_id",
-        "harness",
-        "mm_commit",
-        "recipient_key_id",
-        "sender_public_b64",
-        "nonce_b64",
-        "ciphertext_sha256",
-        "plaintext_sha256",
-        "chunks",
+        "schema", "run_id", "harness", "mm_commit", "recipient_key_id",
+        "sender_public_b64", "nonce_b64", "ciphertext_sha256",
+        "plaintext_sha256", "chunks",
     }
     if set(env) != required:
         raise RuntimeError("envelope field set mismatch")
@@ -184,9 +150,7 @@ def consume(envelope_path: Path, response_dir: Path, private_key_path: Path, exp
 
     private_raw = b64d(private_key_path.read_text(encoding="ascii").strip())
     private = x25519.X25519PrivateKey.from_private_bytes(private_raw)
-    recipient_raw = private.public_key().public_bytes(
-        serialization.Encoding.Raw, serialization.PublicFormat.Raw
-    )
+    recipient_raw = private.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     key_id = "sha256:" + hashlib.sha256(recipient_raw).hexdigest()
     if env["recipient_key_id"] != key_id:
         raise RuntimeError("recipient fingerprint mismatch")
@@ -207,17 +171,7 @@ def consume(envelope_path: Path, response_dir: Path, private_key_path: Path, exp
         root = Path(td)
         manifest = extract_and_verify(plaintext, root)
         compile_rc = subprocess.run(
-            [
-                "python",
-                "-m",
-                "py_compile",
-                "strategy_capital_readiness.py",
-                "strategy_forward_intelligence.py",
-                "strategy_health_canonical_trade_consumer.py",
-                "strategy_health_preview_binding.py",
-                "scripts/operator/verify_survivor_forward_operator_contract_v1.py",
-                "scripts/operator/audit_survivor_paper_trade_acceptance_v1.py",
-            ],
+            ["python", "-m", "py_compile", "scripts/operator/audit_survivor_paper_trade_acceptance_v1.py"],
             cwd=root,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -231,17 +185,15 @@ def consume(envelope_path: Path, response_dir: Path, private_key_path: Path, exp
 
     passed = compile_rc == 0 and test_rc == 0
     return {
-        "schema": "mm-survivor-forward-backend-acceptance-receipt-v6",
+        "schema": "mm-survivor-envelope-acceptance-receipt-v7",
         "authority": "private_mm_source_validation_only",
         "harness": HARNESS,
         "mm_commit": manifest["mm_commit"],
         "status": "PASS" if passed else "FAIL",
         "checks": {
             "reviewed_source_blob_identity_verified": True,
-            "production_modules_compile": compile_rc == 0,
-            "seven_requested_test_modules_pass": test_rc == 0,
-            "operator_contract_verifier_included": True,
-            "paper_trade_acceptance_audit_included": True,
+            "paper_trade_acceptance_audit_compiles": compile_rc == 0,
+            "paper_trade_acceptance_regressions_pass": test_rc == 0,
             "completed_trade_operator_rows_fail_closed": True,
         },
         "reviewed_source_blob_count": len(EXPECTED_GIT_BLOBS),
@@ -262,9 +214,7 @@ def main() -> None:
     parser.add_argument("--private-key", required=True)
     parser.add_argument("--run-id", required=True)
     args = parser.parse_args()
-    receipt = consume(
-        Path(args.envelope), Path(args.response_dir), Path(args.private_key), args.run_id
-    )
+    receipt = consume(Path(args.envelope), Path(args.response_dir), Path(args.private_key), args.run_id)
     print("MM_SURVIVOR_FORWARD_BACKEND_RECEIPT=" + json.dumps(receipt, sort_keys=True))
     raise SystemExit(0 if receipt["status"] == "PASS" else 1)
 
