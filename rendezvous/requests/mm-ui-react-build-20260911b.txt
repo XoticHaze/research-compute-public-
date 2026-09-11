@@ -1,0 +1,4 @@
+MM #504 private ui-react production build acceptance request
+expected_private_mm_commit=9233d5a0c8ab7827775208c602e00d0f7fac758a
+expected_ui_tree=5c80832732ed0299f29faf15dcf5d237c097ad3d
+purpose=validate current Strategy Intelligence excursion inspection through the hardened encrypted Vite build route
