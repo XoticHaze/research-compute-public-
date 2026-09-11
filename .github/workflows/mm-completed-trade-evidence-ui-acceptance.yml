@@ -55,11 +55,12 @@ jobs:
           mkdir -p "$response_dir"
           recipient="rendezvous/recipients/${GITHUB_RUN_ID}.json"
           current_key_id="$(python -c "import json;print(json.load(open('$recipient'))['recipient_key_id'])")"
-          base="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_HEAD_REF}"
           envelope="$RUNNER_TEMP/mm-ui-envelope.json"
           found=0
           for _ in $(seq 1 180); do
-            if curl -fsSL "${base}/rendezvous/responses/${GITHUB_RUN_ID}/mm-survivor-forward-envelope.json" -o "$RUNNER_TEMP/mm-ui-envelope-candidate.json"; then
+            git fetch --quiet origin "${GITHUB_HEAD_REF}:refs/remotes/origin/${GITHUB_HEAD_REF}" || true
+            candidate="rendezvous/responses/${GITHUB_RUN_ID}/mm-survivor-forward-envelope.json"
+            if git show "origin/${GITHUB_HEAD_REF}:${candidate}" > "$RUNNER_TEMP/mm-ui-envelope-candidate.json" 2>/dev/null; then
               if python - "$RUNNER_TEMP/mm-ui-envelope-candidate.json" "$current_key_id" <<'PY'
           import json,sys
           env=json.load(open(sys.argv[1])); raise SystemExit(0 if env.get('recipient_key_id')==sys.argv[2] else 1)
@@ -74,7 +75,7 @@ jobs:
           import json,sys
           for item in json.load(open(sys.argv[1])).get('chunks') or []: print(item['path'])
           PY
-          while IFS= read -r chunk_path; do curl -fsSL "${base}/${chunk_path}" -o "$response_dir/$(basename "$chunk_path")"; done < "$RUNNER_TEMP/mm-ui-chunks.txt"
+          while IFS= read -r chunk_path; do git show "origin/${GITHUB_HEAD_REF}:${chunk_path}" > "$response_dir/$(basename "$chunk_path")"; done < "$RUNNER_TEMP/mm-ui-chunks.txt"
       - name: Execute fixed private UI acceptance and emit sanitized receipt
         run: python scripts/mm_survivor_forward_private_consumer_v1.py --envelope "$RUNNER_TEMP/mm-ui-envelope.json" --response-dir "$RUNNER_TEMP/mm-ui-response" --private-key "$RUNNER_TEMP/mm-ui-private.b64" --run-id "$GITHUB_RUN_ID"
       - name: Remove one-run private material
