@@ -23,7 +23,6 @@ def frame(start,end=None): return {'CWB':alpha('CWB',start,end),'ICVT':alpha('IC
 windows={'2016+':frame('2016-01-01'),'2020+':frame('2020-01-01'),'2022+':frame('2022-01-01')}
 blocks={'2016_2019':frame('2016-01-01','2019-12-31'),'2020_2022':frame('2020-01-01','2022-12-31'),'2023_plus':frame('2023-01-01')}
 def count(sym,src): return sum(v[sym].get('months',0)>=18 and v[sym].get('annualized_alpha_pp',-999)>0 for v in src.values())
-cw,c b=0,0
 cw=count('CWB',windows); cb=count('CWB',blocks); iw=count('ICVT',windows); ib=count('ICVT',blocks)
 coverage=all(v[s]['months']>=18 for v in blocks.values() for s in ['CWB','ICVT'])
 passed=coverage and cw>=2 and cb>=2 and iw>=2 and ib>=2 and windows['2022+']['CWB']['annualized_alpha_pp']>0 and windows['2022+']['ICVT']['annualized_alpha_pp']>0
