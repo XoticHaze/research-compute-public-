@@ -1,0 +1,22 @@
+{
+  "schema": "dbmf_concentration_falsifier_contract.v1",
+  "hypothesis": "DBMF implementation-level excess over cash is not solely dependent on 2022 or a handful of extreme relative-return months.",
+  "symbols": ["DBMF", "KMLM", "BIL"],
+  "start": "2021-05-01",
+  "top_months_removed": 5,
+  "min_days_per_year": 120,
+  "gates": {
+    "base_min_excess_cagr": 0.02,
+    "exclude_2022_min_excess_cagr": 0.01,
+    "trim_top_months_min_excess_cagr": 0.00,
+    "min_positive_years": 3
+  },
+  "frozen_inheritance": {
+    "prior_family_conclusion": "generic managed-futures family unsupported because KMLM failed persistence/correlation criteria",
+    "prior_survivor": "DBMF implementation-specific survivor",
+    "matched_control": "BIL cash proxy",
+    "no_parameter_rescue": true
+  },
+  "scientific_role": "orthogonal crisis/concentration falsifier; not portfolio allocation authority",
+  "research_only": true
+}
