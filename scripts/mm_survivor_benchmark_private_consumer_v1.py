@@ -19,11 +19,11 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 SCHEMA = "mm-survivor-benchmark-x25519-v1"
 HARNESS = "mm_survivor_benchmark_private_acceptance_v1"
 INFO = b"commandcenter-mm-survivor-benchmark-v1"
-EXPECTED_MM_COMMIT = "6a3f1d0ea9dee58348bd83ff1205db280e374521"
+EXPECTED_MM_COMMIT = "7525295980af51dcdffe3dd222bf5e89923e9108"
 EXPECTED_GIT_BLOBS = {
     "strategy_capital_readiness.py": "dddf48c557689413f469058bab2c0034958796e1",
-    "strategy_forward_intelligence.py": "939dd6c0101a8c874ea21d5d55626fc905e4d4f1",
-    "tests/test_strategy_forward_intelligence.py": "b959b2434f94e8ba475f8f8d8d24d06e0a7b1f76",
+    "strategy_forward_intelligence.py": "b0cd989166b4cefc94fbe80313de2728ba59ef78",
+    "tests/test_strategy_forward_intelligence.py": "9cd355414783e1cf2e761d5ac2a177002ed94b51",
 }
 FILES = set(EXPECTED_GIT_BLOBS)
 
