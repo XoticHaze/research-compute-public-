@@ -3,7 +3,7 @@ name: MM Survivor Forward Private Acceptance
 on:
   pull_request:
     paths:
-      - 'rendezvous/requests/mm-survivor-forward-*.txt'
+      - 'rendezvous/requests/mm-survivor-forward-backend-*.txt'
       - 'scripts/mm_survivor_forward_private_consumer_v1.py'
       - '.github/workflows/mm-survivor-forward-private-acceptance.yml'
 
