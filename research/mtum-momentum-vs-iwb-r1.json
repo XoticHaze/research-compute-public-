@@ -1,0 +1,12 @@
+{
+  "schema":"mtum_momentum_vs_iwb_contract.v1",
+  "claim_tested":"Large/mid-cap momentum via MTUM should produce durable realized excess over a broad investable large-cap control after ETF-level costs, with recent and rolling persistence and without materially worse drawdown.",
+  "symbols":["MTUM","IWB","SPY"],
+  "start":"2013-04-15",
+  "period_starts":{"full":"2013-04-15","post2020":"2020-01-01"},
+  "min_full_year_days":200,
+  "rolling_days":756,
+  "gates":{"min_full_excess_vs_iwb":0.01,"min_post2020_excess_vs_iwb":0.0,"min_rolling_positive_share":0.55,"min_recent_positive_years":4,"max_allowed_extra_drawdown":0.05},
+  "frozen_inheritance":{"primary_matched_control":"IWB broad US large/mid-cap ETF","secondary_opportunity_cost":"SPY","returns":"realized adjusted-close market returns with fund expenses/distributions embedded","no_parameter_rescue":true},
+  "research_only":true
+}
