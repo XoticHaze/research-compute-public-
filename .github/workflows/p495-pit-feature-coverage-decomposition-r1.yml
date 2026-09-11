@@ -1,0 +1,30 @@
+name: P495 PIT Feature Coverage Decomposition R1
+on:
+  pull_request:
+    paths:
+      - 'research/p495_pit_feature_coverage_decomposition_r1.py'
+      - '.github/workflows/p495-pit-feature-coverage-decomposition-r1.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --quiet pandas requests lxml
+      - id: result
+        run: |
+          python research/p495_pit_feature_coverage_decomposition_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/p495_pit_feature_coverage_decomposition_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('decision='+x['decision']+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p495-pit-feature-coverage__${{ steps.result.outputs.decision }}
+          path: research/artifacts/p495_pit_feature_coverage_decomposition_r1.json
+          if-no-files-found: error
