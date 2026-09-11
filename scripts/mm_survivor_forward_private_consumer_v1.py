@@ -4,8 +4,9 @@ from __future__ import annotations
 
 The public runner receives only a one-run encrypted tarball produced by the
 released MM transport packager. Plaintext exists only in runner temp. The
-payload file set, MM commit, harness, per-file digests, and AEAD associated data
-are fixed here; no arbitrary command arrives in the payload.
+payload file set, MM commit, harness, exact private Git blob identities, per-file
+digests, and AEAD associated data are fixed here; no arbitrary command arrives
+in the payload.
 """
 
 import argparse
@@ -27,21 +28,22 @@ RECIPIENT_SCHEMA = "mm-survivor-forward-ephemeral-recipient-v1"
 HARNESS = "mm_survivor_forward_private_acceptance_v1"
 INFO = b"commandcenter-mm-survivor-forward-v1"
 EXPECTED_MM_COMMIT = "6a3f1d0ea9dee58348bd83ff1205db280e374521"
-FILES = {
-    "strategy_capital_readiness.py",
-    "strategy_forward_intelligence.py",
-    "survivor_capital_readiness_policy.py",
-    "strategy_health_canonical_trade_consumer.py",
-    "strategy_health_preview_binding.py",
-    "strategy_health_evidence_pipeline.py",
-    "strategy_health_position_context.py",
-    "strategy_health_comparable_context.py",
-    "strategy_health_operator_context.py",
-    "tests/test_strategy_capital_readiness.py",
-    "tests/test_strategy_capital_readiness_historical_compat.py",
-    "tests/test_strategy_health_canonical_trade_forward_conformance.py",
-    "tests/test_strategy_forward_intelligence.py",
+EXPECTED_GIT_BLOBS = {
+    "strategy_capital_readiness.py": "dddf48c557689413f469058bab2c0034958796e1",
+    "strategy_forward_intelligence.py": "939dd6c0101a8c874ea21d5d55626fc905e4d4f1",
+    "survivor_capital_readiness_policy.py": "ba7689c493c3c543de0a9e4091169894f13a2ed8",
+    "strategy_health_canonical_trade_consumer.py": "4221da3aab5924df71c166338dd362b074e64ccd",
+    "strategy_health_preview_binding.py": "92f76e2648418f0aa15d1493b797cfa5e8014c1e",
+    "strategy_health_evidence_pipeline.py": "0343c6b1efadd7ab416737dfe40d413f9b5220f4",
+    "strategy_health_position_context.py": "cb13af73f8cde37d55d8a00e6951e7085b23a753",
+    "strategy_health_comparable_context.py": "a27373206c0a2f28f7fea3576cc898074e3b71c5",
+    "strategy_health_operator_context.py": "3359375755e19a66cb793dcb8deef69a1985beed",
+    "tests/test_strategy_capital_readiness.py": "73b195b88776bbe2c3f4517d78791f319d8a3a90",
+    "tests/test_strategy_capital_readiness_historical_compat.py": "3fd66ca9eba1194db8b48bf5d71c8bf87f2e2f3a",
+    "tests/test_strategy_health_canonical_trade_forward_conformance.py": "8e5bf693808a724fee1ce4c5a47674708f491104",
+    "tests/test_strategy_forward_intelligence.py": "b959b2434f94e8ba475f8f8d8d24d06e0a7b1f76",
 }
+FILES = set(EXPECTED_GIT_BLOBS)
 TESTS = [
     "tests.test_strategy_capital_readiness",
     "tests.test_strategy_capital_readiness_historical_compat",
@@ -60,6 +62,11 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def git_blob_sha1(path: Path) -> str:
+    raw = path.read_bytes()
+    return hashlib.sha1(f"blob {len(raw)}\0".encode("ascii") + raw).hexdigest()
 
 
 def b64d(value: str) -> bytes:
@@ -115,8 +122,11 @@ def extract_and_verify(payload: bytes, root: Path) -> dict:
     if set(digests) != FILES:
         raise RuntimeError("private payload manifest file set mismatch")
     for rel, digest in digests.items():
-        if sha256(root / rel) != digest:
+        path = root / rel
+        if sha256(path) != digest:
             raise RuntimeError(f"private payload inner digest mismatch: {rel}")
+        if git_blob_sha1(path) != EXPECTED_GIT_BLOBS[rel]:
+            raise RuntimeError(f"private payload reviewed-source blob mismatch: {rel}")
     return manifest
 
 
@@ -211,15 +221,17 @@ def consume(envelope_path: Path, response_dir: Path, private_key_path: Path, exp
 
     passed = compile_rc == 0 and test_rc == 0
     return {
-        "schema": "mm-survivor-forward-backend-acceptance-receipt-v2",
+        "schema": "mm-survivor-forward-backend-acceptance-receipt-v3",
         "authority": "private_mm_source_validation_only",
         "harness": HARNESS,
         "mm_commit": manifest["mm_commit"],
         "status": "PASS" if passed else "FAIL",
         "checks": {
+            "reviewed_source_blob_identity_verified": True,
             "production_modules_compile": compile_rc == 0,
             "four_requested_test_modules_pass": test_rc == 0,
         },
+        "reviewed_source_blob_count": len(EXPECTED_GIT_BLOBS),
         "test_modules": TESTS,
         "payload_sha256": sha256_bytes(plaintext),
         "private_plaintext_emitted": False,
