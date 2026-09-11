@@ -1,0 +1,2 @@
+Exercise the repaired MM survivor encrypted-envelope lifecycle against the exact two-blob private admission capsule at mm-IBKR@11baa28c82458b1d22a6ed4ef5d5be54166ae745.
+Acceptance only. No StrategySpec, runtime, sizing, allocation, broker, or live-trading authority.
