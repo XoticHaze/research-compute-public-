@@ -1,45 +1,33 @@
 name: market-research-p545-umich-sentiment-trend-r1
 on:
   push:
-    paths:
-      - '.github/workflows/market-research-p545-umich-sentiment-trend-r1.yml'
+    paths: ['.github/workflows/market-research-p545-umich-sentiment-trend-r1.yml']
   workflow_dispatch:
-permissions:
-  contents: read
+permissions: {contents: read}
 jobs:
   p545:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+        with: {python-version: '3.11'}
       - run: pip install pandas numpy requests
       - name: Run frozen causal discriminator
         shell: python
         run: |
-          import io, json, math, requests, pandas as pd, numpy as np
-          # P545 predeclared before performance inspection:
-          # monthly UMCSENT 3-month change; positive => SPY, else cash; signal lagged one month.
-          # 10 bps round-trip cost per position transition. Compare with exposure-matched SPY.
-          fred='https://fred.stlouisfed.org/graph/fredgraph.csv?id=UMCSENT'
-          stooq='https://stooq.com/q/d/l/?s=spy.us&i=d&d1=19930101&d2=20260911'
-          s=requests.get(fred,timeout=90); s.raise_for_status()
-          p=requests.get(stooq,timeout=90); p.raise_for_status()
-          sent=pd.read_csv(io.StringIO(s.text)); sent.columns=['date','sent']; sent['date']=pd.to_datetime(sent.date); sent['sent']=pd.to_numeric(sent.sent,errors='coerce'); sent=sent.dropna().set_index('date').resample('ME').last()
-          px=pd.read_csv(io.StringIO(p.text)); px['Date']=pd.to_datetime(px.Date); px=px.set_index('Date')['Close'].sort_index().resample('ME').last().dropna(); r=px.pct_change()
-          df=pd.concat([r.rename('spy'),sent['sent']],axis=1).dropna(); df['chg3']=df.sent-df.sent.shift(3); df['pos']=(df.chg3.shift(1)>0).astype(float); df=df.dropna(); df['turn']=df.pos.diff().abs().fillna(df.pos); df['strat']=df.pos*df.spy-df['turn']*0.001; beta=df.pos.mean(); df['matched']=beta*df.spy; df['excess']=df.strat-df.matched
-          def cagr(x):
-            n=len(x); return float(np.prod(1+x)**(12/n)-1) if n else None
-          folds=[('2000-2007','2000-01-01','2007-12-31'),('2008-2013','2008-01-01','2013-12-31'),('2014-2018','2014-01-01','2018-12-31'),('2019-2022','2019-01-01','2022-12-31'),('2023+','2023-01-01','2099-01-01')]
-          out={'hypothesis':'UMCSENT 3m change positive, lag1 month, SPY/cash','cost_per_transition':0.001,'months':len(df),'exposure':beta,'strategy_cagr':cagr(df.strat),'matched_cagr':cagr(df.matched),'excess_cagr_pp':100*(cagr(df.strat)-cagr(df.matched)),'folds':[]}
-          for name,a,b in folds:
-            z=df.loc[a:b];
-            if len(z): out['folds'].append({'fold':name,'months':len(z),'excess_cagr_pp':100*(cagr(z.strat)-cagr(z.matched))})
-          out['positive_folds']=sum(x['excess_cagr_pp']>0 for x in out['folds']); out['fold_count']=len(out['folds']); out['pass']=bool(out['excess_cagr_pp']>0 and out['positive_folds']>=4)
-          print(json.dumps(out,indent=2))
-          open('p545_result.json','w').write(json.dumps(out,indent=2))
+          import io,json,requests,pandas as pd,numpy as np
+          s=requests.get('https://fred.stlouisfed.org/graph/fredgraph.csv?id=UMCSENT',timeout=90); s.raise_for_status()
+          y=requests.get('https://query1.finance.yahoo.com/v8/finance/chart/SPY?period1=946684800&period2=1789084800&interval=1mo&events=history&includeAdjustedClose=true',headers={'User-Agent':'Mozilla/5.0'},timeout=90); y.raise_for_status(); j=y.json()['chart']['result'][0]
+          sent=pd.read_csv(io.StringIO(s.text)); sent.columns=['date','sent']; sent.date=pd.to_datetime(sent.date); sent.sent=pd.to_numeric(sent.sent,errors='coerce'); sent=sent.dropna().set_index('date').resample('ME').last()
+          px=pd.Series(j['indicators']['adjclose'][0]['adjclose'],index=pd.to_datetime(j['timestamp'],unit='s',utc=True).tz_convert(None)).dropna(); px.index=px.index.to_period('M').to_timestamp('M'); r=px.pct_change().rename('spy')
+          d=pd.concat([r,sent.sent],axis=1).dropna(); d['chg3']=d.sent-d.sent.shift(3); d['pos']=(d.chg3.shift(1)>0).astype(float); d=d.dropna(); d['turn']=d.pos.diff().abs().fillna(d.pos); d['strat']=d.pos*d.spy-d['turn']*.001; beta=d.pos.mean(); d['matched']=beta*d.spy
+          def cagr(z): return float(np.prod(1+z)**(12/len(z))-1) if len(z) else None
+          folds=[('2000-2007','2000','2007-12-31'),('2008-2013','2008','2013-12-31'),('2014-2018','2014','2018-12-31'),('2019-2022','2019','2022-12-31'),('2023+','2023','2099')]
+          out={'hypothesis':'UMCSENT 3m change positive, lag1 month, SPY/cash','cost_per_transition':.001,'months':len(d),'exposure':beta,'strategy_cagr':cagr(d.strat),'matched_cagr':cagr(d.matched)}; out['excess_cagr_pp']=100*(out['strategy_cagr']-out['matched_cagr']); out['folds']=[]
+          for n,a,b in folds:
+            z=d.loc[a:b]
+            if len(z): out['folds'].append({'fold':n,'months':len(z),'excess_cagr_pp':100*(cagr(z.strat)-cagr(z.matched))})
+          out['positive_folds']=sum(v['excess_cagr_pp']>0 for v in out['folds']); out['fold_count']=len(out['folds']); out['pass']=bool(out['excess_cagr_pp']>0 and out['positive_folds']>=4)
+          print(json.dumps(out,indent=2)); open('p545_result.json','w').write(json.dumps(out,indent=2))
       - uses: actions/upload-artifact@v4
-        with:
-          name: p545-umich-sentiment-trend-r1
-          path: p545_result.json
+        with: {name: p545-umich-sentiment-trend-r1, path: p545_result.json}
