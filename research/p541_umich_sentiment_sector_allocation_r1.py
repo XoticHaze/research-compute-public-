@@ -1,7 +1,7 @@
 from __future__ import annotations
-import io, json, math
+import io, json, math, time
 from pathlib import Path
-from urllib.request import Request, urlopen
+import requests
 import pandas as pd
 import yfinance as yf
 
@@ -10,8 +10,17 @@ START='2005-01-01'; COST_BPS=10.0
 FOLDS=[('2005-01-01','2009-12-31'),('2010-01-01','2014-12-31'),('2015-01-01','2019-12-31'),('2020-01-01','2026-12-31')]
 
 def get_sent():
- req=Request(FRED_URL,headers={'User-Agent':'XoticHaze-Research/1.0'})
- with urlopen(req,timeout=30) as r: raw=r.read()
+ raw=None; last=None
+ for attempt in range(3):
+  try:
+   r=requests.get(FRED_URL,headers={'User-Agent':'XoticHaze-Research/1.0'},timeout=(15,90))
+   r.raise_for_status(); raw=r.content
+   if len(raw)>1000: break
+  except Exception as exc:
+   last=exc
+   if attempt<2: time.sleep(2**attempt)
+ if raw is None or len(raw)<=1000:
+  raise RuntimeError(f'FRED UMCSENT source fetch failed after bounded retries: {last!r}')
  x=pd.read_csv(io.BytesIO(raw)); x.columns=['date','sent']; x['date']=pd.to_datetime(x['date']); x['sent']=pd.to_numeric(x['sent'],errors='coerce'); x=x.dropna().set_index('date')
  # conservative monthly availability: use each observation only from next month-end onward
  x['yoy']=x['sent'].pct_change(12); x['signal']=(x['yoy']>0).astype(float)
