@@ -27,10 +27,10 @@ SCHEMA = "mm-survivor-forward-x25519-v1"
 RECIPIENT_SCHEMA = "mm-survivor-forward-ephemeral-recipient-v1"
 HARNESS = "mm_survivor_forward_private_acceptance_v1"
 INFO = b"commandcenter-mm-survivor-forward-v1"
-EXPECTED_MM_COMMIT = "6a3f1d0ea9dee58348bd83ff1205db280e374521"
+EXPECTED_MM_COMMIT = "f0b17db01c941142e235897b37f0329d95a5a80c"
 EXPECTED_GIT_BLOBS = {
     "strategy_capital_readiness.py": "dddf48c557689413f469058bab2c0034958796e1",
-    "strategy_forward_intelligence.py": "939dd6c0101a8c874ea21d5d55626fc905e4d4f1",
+    "strategy_forward_intelligence.py": "45fc244ff109a21c4b9dcd899689cee0d22e1fc3",
     "survivor_capital_readiness_policy.py": "ba7689c493c3c543de0a9e4091169894f13a2ed8",
     "strategy_health_canonical_trade_consumer.py": "4221da3aab5924df71c166338dd362b074e64ccd",
     "strategy_health_preview_binding.py": "92f76e2648418f0aa15d1493b797cfa5e8014c1e",
@@ -41,7 +41,8 @@ EXPECTED_GIT_BLOBS = {
     "tests/test_strategy_capital_readiness.py": "73b195b88776bbe2c3f4517d78791f319d8a3a90",
     "tests/test_strategy_capital_readiness_historical_compat.py": "3fd66ca9eba1194db8b48bf5d71c8bf87f2e2f3a",
     "tests/test_strategy_health_canonical_trade_forward_conformance.py": "8e5bf693808a724fee1ce4c5a47674708f491104",
-    "tests/test_strategy_forward_intelligence.py": "b959b2434f94e8ba475f8f8d8d24d06e0a7b1f76",
+    "tests/test_strategy_forward_intelligence.py": "8d277458394ec25bc30a069ef4762122bd8acaf5",
+    "tests/test_strategy_forward_intelligence_json_boundary.py": "9d7c5cf72d920ea2671d976f6b537603c1eb5145",
 }
 FILES = set(EXPECTED_GIT_BLOBS)
 TESTS = [
@@ -49,6 +50,7 @@ TESTS = [
     "tests.test_strategy_capital_readiness_historical_compat",
     "tests.test_strategy_health_canonical_trade_forward_conformance",
     "tests.test_strategy_forward_intelligence",
+    "tests.test_strategy_forward_intelligence_json_boundary",
 ]
 
 
@@ -221,7 +223,7 @@ def consume(envelope_path: Path, response_dir: Path, private_key_path: Path, exp
 
     passed = compile_rc == 0 and test_rc == 0
     return {
-        "schema": "mm-survivor-forward-backend-acceptance-receipt-v3",
+        "schema": "mm-survivor-forward-backend-acceptance-receipt-v4",
         "authority": "private_mm_source_validation_only",
         "harness": HARNESS,
         "mm_commit": manifest["mm_commit"],
@@ -229,7 +231,7 @@ def consume(envelope_path: Path, response_dir: Path, private_key_path: Path, exp
         "checks": {
             "reviewed_source_blob_identity_verified": True,
             "production_modules_compile": compile_rc == 0,
-            "four_requested_test_modules_pass": test_rc == 0,
+            "five_requested_test_modules_pass": test_rc == 0,
         },
         "reviewed_source_blob_count": len(EXPECTED_GIT_BLOBS),
         "test_modules": TESTS,
