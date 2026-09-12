@@ -1,0 +1,178 @@
+{
+  "authority": "paper_manual_portfolio_expression_only",
+  "boundaries": {
+    "broker_action": false,
+    "live_trading_change": false,
+    "native_model_science_mutated": false,
+    "prediction_magnitude_used_as_unbounded_size": false,
+    "research_paper_only": true
+  },
+  "budgets": {
+    "cash_floor": 0.05,
+    "gross_cap": 1.0,
+    "new_tactical_cohort_cap": 0.05,
+    "non_core_family_cap": 0.1,
+    "sector_cap": 0.35,
+    "single_name_cap": 0.05,
+    "strategic_core": 0.8,
+    "tactical_models": 0.15
+  },
+  "cash_weight": 0.2,
+  "constraints_applied": [
+    {
+      "result": "P249_P266 scaled pro-rata to 80% NAV",
+      "rule": "strategic_core_budget",
+      "value": 0.8
+    }
+  ],
+  "controls_for_learned_allocator": [
+    "CC770_DETERMINISTIC_ALLOCATOR_V0",
+    "equal_supported",
+    "sticky_equal",
+    "P249_P266_core_only",
+    "cash_or_BIL_opportunity_cost"
+  ],
+  "final_target_weights": {
+    "AVDV": 0.1,
+    "AVUV": 0.1,
+    "CASH": 0.2,
+    "DBC": 0.05,
+    "IGV": 0.0333333333,
+    "QQQ": 0.05,
+    "SOXX": 0.2333333333,
+    "XBI": 0.1,
+    "XPH": 0.0666666667,
+    "XSD": 0.0666666667
+  },
+  "generated_at": "2026-09-12T19:55:25.832096+00:00",
+  "learned_allocator_role": "shadow_challenger_must_beat_this_baseline_after_costs_and_opportunity_cost",
+  "policy_id": "CC770_DETERMINISTIC_ALLOCATOR_V0",
+  "position_actions_vs_prior_allocator_target": [
+    {
+      "action": "ADD",
+      "delta_weight": 0.1,
+      "prior_weight": 0.0,
+      "symbol": "AVDV",
+      "target_weight": 0.1
+    },
+    {
+      "action": "ADD",
+      "delta_weight": 0.1,
+      "prior_weight": 0.0,
+      "symbol": "AVUV",
+      "target_weight": 0.1
+    },
+    {
+      "action": "ADD",
+      "delta_weight": 0.2,
+      "prior_weight": 0.0,
+      "symbol": "CASH",
+      "target_weight": 0.2
+    },
+    {
+      "action": "ADD",
+      "delta_weight": 0.05,
+      "prior_weight": 0.0,
+      "symbol": "DBC",
+      "target_weight": 0.05
+    },
+    {
+      "action": "ADD",
+      "delta_weight": 0.0333333333,
+      "prior_weight": 0.0,
+      "symbol": "IGV",
+      "target_weight": 0.0333333333
+    },
+    {
+      "action": "ADD",
+      "delta_weight": 0.05,
+      "prior_weight": 0.0,
+      "symbol": "QQQ",
+      "target_weight": 0.05
+    },
+    {
+      "action": "ADD",
+      "delta_weight": 0.2333333333,
+      "prior_weight": 0.0,
+      "symbol": "SOXX",
+      "target_weight": 0.2333333333
+    },
+    {
+      "action": "ADD",
+      "delta_weight": 0.1,
+      "prior_weight": 0.0,
+      "symbol": "XBI",
+      "target_weight": 0.1
+    },
+    {
+      "action": "ADD",
+      "delta_weight": 0.0666666667,
+      "prior_weight": 0.0,
+      "symbol": "XPH",
+      "target_weight": 0.0666666667
+    },
+    {
+      "action": "ADD",
+      "delta_weight": 0.0666666667,
+      "prior_weight": 0.0,
+      "symbol": "XSD",
+      "target_weight": 0.0666666667
+    }
+  ],
+  "prior_allocator_target_available": false,
+  "schema": "research.forward_deterministic_allocator_r1",
+  "sector_exposure": {
+    "biotechnology": 0.1,
+    "commodities": 0.05,
+    "pharmaceuticals": 0.0666666667,
+    "semiconductor": 0.3,
+    "software": 0.0333333333
+  },
+  "sleeve_actions": [
+    {
+      "action": "HOLD",
+      "reason": "frozen strategic core; daily score refresh is not a rebalance signal",
+      "sleeve": "P249_P266_CORE",
+      "target_weight": 0.8
+    },
+    {
+      "action": "WAIT",
+      "reason": "no current prospectively eligible native semiconductor result",
+      "sleeve": "SEMICONDUCTOR_SHARED_RIDGE_INDUSTRY_BOOK"
+    },
+    {
+      "action": "WAIT",
+      "reason": "no currently admitted native homebuilder opportunity",
+      "sleeve": "HOMEBUILDERS"
+    },
+    {
+      "action": "NO_ACTION",
+      "positive_corroboration": [],
+      "reason": "corroboration-only; no standalone sizing authority",
+      "sleeve": "GENERALIZED_LARGECAP_RIDGE",
+      "target_weight": 0.0
+    },
+    {
+      "action": "NO_ACTION",
+      "reason": "context-only while prospective scientific credit remains shakedown",
+      "sleeve": "P46",
+      "target_weight": 0.0
+    },
+    {
+      "action": "NO_ACTION",
+      "reason": "challenger has not earned substitution authority versus incumbent and BIL control",
+      "sleeve": "P558_KMLM_SUBSTITUTION",
+      "target_weight": 0.0
+    },
+    {
+      "action": "NO_ACTION",
+      "reason": "challenger has not earned substitution authority versus incumbent and BIL control",
+      "sleeve": "SENIOR_CLO_JAAA_SUBSTITUTION",
+      "target_weight": 0.0
+    }
+  ],
+  "source_scoreboard_generated_at": "2026-09-12T19:55:25.775789+00:00",
+  "source_scoreboard_schema": "research.forward_market_scoreboard_r1",
+  "tactical_used": 0.0,
+  "unused_tactical_budget": 0.15
+}
