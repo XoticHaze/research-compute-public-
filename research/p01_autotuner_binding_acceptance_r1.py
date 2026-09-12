@@ -4,105 +4,116 @@ import json
 from pathlib import Path
 
 OWNING_REPO = "XoticHaze/mm-IBKR"
-OWNING_HEAD = "4d4205ea068be4a663a4266be3b92a6a4162d161"
-SNAPSHOT_BLOB = "99e66078afdbc072a842967ec49265e407c63690"
-PANEL_BLOB = "9d35600414591651e01a9d04ea8a0b1fe70fa54d"
+OWNING_HEAD = "19823e0e8d4e2c181585085fb643295690a331cc"
+READINESS_BLOB = "87a65f47e938960ce248f2d51c892214a1cfa257"
+VIEW_MODEL_BLOB = "945b505bc5af3219b86a3600f273b69b237f21e1"
 SNAPSHOT_SCHEMA = "mm.autotuner_operator_status_snapshot.v1"
 PRODUCT_ROUTE = "/operator/autotuner-review/current.json"
-PRODUCT_PATH = "ui-react/public/operator/autotuner-review/current.json"
+REQUIRED = ("baseline", "excess_return", "cost_model", "data_coverage", "capital_context")
 
 
-def materialize(worker: dict) -> dict:
-    runtime_id = str(worker.get("runtime_id") or "").strip()
-    if not runtime_id:
-        raise ValueError("runtime_id required")
-    safety = worker.get("safety") if isinstance(worker.get("safety"), dict) else {}
-    forbidden = (
-        "automatic_promotion",
-        "automatic_strategy_spec_write",
-        "runtime_activation",
-        "broker_submit",
-        "live_unlock",
-    )
-    if any(bool(safety.get(key)) for key in forbidden):
-        raise ValueError("research-only safety violation")
+def present(value):
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, dict)):
+        return bool(value)
+    return True
+
+
+def readiness(runtime: dict) -> dict:
+    evidence = runtime.get("decision_evidence") or {}
+    missing = [field for field in REQUIRED if not present(evidence.get(field))]
+    if not present(runtime.get("best_seen")):
+        missing.append("best_seen")
+    if not present(runtime.get("robust_bands")):
+        missing.append("robust_bands")
+    return {"ready": not missing, "missing": missing, "authority": "OPERATOR_REVIEW_ONLY"}
+
+
+def summarize(runtimes: list[dict]) -> dict:
+    complete = 0
+    missing_counts: dict[str, int] = {}
+    incomplete = []
+    for runtime in runtimes:
+        state = readiness(runtime)
+        if state["ready"]:
+            complete += 1
+            continue
+        row = {"runtime_id": str(runtime.get("runtime_id") or "UNKNOWN_RUNTIME"), "missing": state["missing"]}
+        incomplete.append(row)
+        for field in state["missing"]:
+            missing_counts[field] = missing_counts.get(field, 0) + 1
     return {
-        "schema": SNAPSHOT_SCHEMA,
-        "runtime_count": 1,
-        "runtimes": [{"runtime_id": runtime_id, "strategy_spec_digest": worker.get("strategy_spec_digest")}],
-        "promotion_authority": "NONE_OPERATOR_REVIEW_REQUIRED",
-        "safety": {
-            "research_only": True,
-            "automatic_promotion": False,
-            "automatic_strategy_spec_write": False,
-            "runtime_activation": False,
-            "broker_submit": False,
-            "live_unlock": False,
+        "runtime_count": len(runtimes),
+        "complete_count": complete,
+        "incomplete_count": len(runtimes) - complete,
+        "missing_counts": dict(sorted(missing_counts.items())),
+        "incomplete_runtimes": incomplete,
+        "authority": "OPERATOR_REVIEW_ONLY",
+    }
+
+
+def operator_message(summary: dict) -> str:
+    if not summary["runtime_count"]:
+        return "No AutoTuner worker status artifacts are currently available."
+    if not summary["incomplete_count"]:
+        return f"Comparison evidence complete for {summary['complete_count']}/{summary['runtime_count']} runtimes. Research evidence only; operator review remains required before any strategy decision."
+    missing = ", ".join(f"{field} ({count})" for field, count in summary["missing_counts"].items())
+    affected = " | ".join(f"{row['runtime_id']}: {', '.join(row['missing'])}" for row in summary["incomplete_runtimes"])
+    return f"Comparison evidence complete for {summary['complete_count']}/{summary['runtime_count']} runtimes. Missing evidence: {missing}. Incomplete runtimes: {affected}. No runtime is selected or promoted by this summary."
+
+
+def complete_runtime(runtime_id: str) -> dict:
+    return {
+        "runtime_id": runtime_id,
+        "best_seen": {"parameters": {"window": 96}},
+        "robust_bands": {"window": [88, 104]},
+        "decision_evidence": {
+            "baseline": {"cagr": 0.10},
+            "excess_return": {"cagr": 0.03},
+            "cost_model": {"round_trip_bps": 10},
+            "data_coverage": {"matched_window": "2024-01-01..2025-12-31"},
+            "capital_context": {"max_notional": 25000},
         },
     }
 
 
-def consume(snapshot: dict, requested_route: str) -> dict:
-    if requested_route != PRODUCT_ROUTE:
-        raise ValueError("noncanonical route")
-    if snapshot.get("schema") != SNAPSHOT_SCHEMA:
-        raise ValueError("snapshot schema mismatch")
-    safety = snapshot.get("safety") or {}
-    if any(bool(safety.get(key)) for key in ("automatic_promotion", "automatic_strategy_spec_write", "runtime_activation", "broker_submit", "live_unlock")):
-        raise ValueError("unsafe snapshot")
-    return {
-        "state": "CANONICAL_PRODUCT_SNAPSHOT_ACCEPTED",
-        "runtime_count": int(snapshot.get("runtime_count") or 0),
-        "promotion_authority": snapshot.get("promotion_authority"),
-        "route": requested_route,
-    }
-
-
-worker = {
-    "runtime_id": "MNQ-crw-12Min",
-    "strategy_spec_digest": "a" * 64,
-    "safety": {
-        "automatic_promotion": False,
-        "automatic_strategy_spec_write": False,
-        "runtime_activation": False,
-        "broker_submit": False,
-        "live_unlock": False,
-    },
-}
-snapshot = materialize(worker)
-projection = consume(snapshot, PRODUCT_ROUTE)
-
-unsafe_rejected = False
-try:
-    materialize({**worker, "safety": {"runtime_activation": True}})
-except ValueError:
-    unsafe_rejected = True
+runtimes = [complete_runtime("AMAT-15Min"), complete_runtime("APH-15Min")]
+mnq = complete_runtime("MNQ-12Min")
+mnq["robust_bands"] = None
+mnq["decision_evidence"]["excess_return"] = None
+mnq["decision_evidence"]["data_coverage"] = {}
+runtimes.append(mnq)
+summary = summarize(runtimes)
+message = operator_message(summary)
 
 checks = {
     "owning_head_bound": len(OWNING_HEAD) == 40,
-    "exact_snapshot_blob_bound": len(SNAPSHOT_BLOB) == 40,
-    "exact_panel_blob_bound": len(PANEL_BLOB) == 40,
-    "canonical_path_route_agree": PRODUCT_PATH.endswith(PRODUCT_ROUTE.lstrip("/")),
-    "one_worker_materializes": snapshot["runtime_count"] == 1 and snapshot["runtimes"][0]["runtime_id"] == worker["runtime_id"],
-    "consumer_accepts_canonical_snapshot": projection["state"] == "CANONICAL_PRODUCT_SNAPSHOT_ACCEPTED",
-    "consumer_sees_one_worker": projection["runtime_count"] == 1,
-    "operator_review_only": projection["promotion_authority"] == "NONE_OPERATOR_REVIEW_REQUIRED",
-    "unsafe_worker_fails_closed": unsafe_rejected,
-    "no_automatic_promotion": snapshot["safety"]["automatic_promotion"] is False,
-    "no_strategy_spec_write": snapshot["safety"]["automatic_strategy_spec_write"] is False,
-    "no_runtime_activation": snapshot["safety"]["runtime_activation"] is False,
-    "no_broker_submit": snapshot["safety"]["broker_submit"] is False,
-    "no_live_unlock": snapshot["safety"]["live_unlock"] is False,
+    "exact_readiness_blob_bound": len(READINESS_BLOB) == 40,
+    "exact_view_model_blob_bound": len(VIEW_MODEL_BLOB) == 40,
+    "two_runtimes_complete": summary["complete_count"] == 2,
+    "one_runtime_incomplete": summary["incomplete_count"] == 1,
+    "exact_missing_counts": summary["missing_counts"] == {"data_coverage": 1, "excess_return": 1, "robust_bands": 1},
+    "exact_incomplete_runtime": summary["incomplete_runtimes"] == [{"runtime_id": "MNQ-12Min", "missing": ["excess_return", "data_coverage", "robust_bands"]}],
+    "operator_review_only": summary["authority"] == "OPERATOR_REVIEW_ONLY",
+    "message_surfaces_completeness": "2/3 runtimes" in message,
+    "message_surfaces_missing_fields": all(field in message for field in ("excess_return", "data_coverage", "robust_bands")),
+    "message_surfaces_affected_runtime": "MNQ-12Min" in message,
+    "message_refuses_selection": "No runtime is selected or promoted" in message,
+    "empty_snapshot_not_ready": summarize([])["complete_count"] == 0 and summarize([])["runtime_count"] == 0,
+    "no_strategy_or_broker_authority": all(key not in summary for key in ("selected_runtime_id", "strategy_spec", "broker_submit", "live_unlock")),
 }
 passed = all(checks.values())
 result = {
-    "schema": "cc.p01_autotuner_product_binding_acceptance.v1",
+    "schema": "cc.p01_autotuner_operator_comparison_readiness_acceptance.v1",
     "owning_repo": OWNING_REPO,
     "owning_head": OWNING_HEAD,
-    "source_identity": {"snapshot_blob": SNAPSHOT_BLOB, "panel_blob": PANEL_BLOB},
-    "product_path": PRODUCT_PATH,
+    "source_identity": {"readiness_blob": READINESS_BLOB, "view_model_blob": VIEW_MODEL_BLOB},
     "product_route": PRODUCT_ROUTE,
-    "worker_response": projection,
+    "comparison_readiness": summary,
+    "operator_message": message,
     "checks": checks,
     "conclusion": "PASS" if passed else "FAIL",
 }
