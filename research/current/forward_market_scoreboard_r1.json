@@ -6,7 +6,6 @@
       "GENERALIZED_LARGECAP_RIDGE"
     ],
     "native_result_gaps": [
-      "SEMICONDUCTOR_SHARED_RIDGE",
       "HOMEBUILDERS"
     ],
     "scored_now": [
@@ -14,6 +13,7 @@
       "P249_P266",
       "P558",
       "SENIOR_CLO",
+      "SEMICONDUCTOR_SHARED_RIDGE",
       "GENERALIZED_LARGECAP_RIDGE"
     ]
   },
@@ -71,8 +71,8 @@
         "horizons": {}
       },
       "semiconductor": {
-        "action": null,
-        "positive_breadth": null
+        "action": "PAPER_COHORT_READY",
+        "positive_breadth": 1.0
       }
     },
     "tickers": {
@@ -86,10 +86,24 @@
         "COST",
         "MSFT"
       ],
-      "semiconductor_positive": []
+      "semiconductor_positive": [
+        "AMAT",
+        "APH",
+        "KLAC",
+        "LRCX",
+        "TXN",
+        "NXPI",
+        "ADI",
+        "NVDA",
+        "AMD",
+        "MU",
+        "AVGO",
+        "MRVL",
+        "MCHP"
+      ]
     }
   },
-  "generated_at": "2026-09-12T20:48:18.029792+00:00",
+  "generated_at": "2026-09-12T20:57:33.152279+00:00",
   "interpretation": {
     "broker_or_live_authority": false,
     "daily_score_does_not_imply_daily_turnover": true,
@@ -281,10 +295,151 @@
       "validation_grade": "INSUFFICIENT_SAMPLE"
     },
     {
-      "decision_use": "Adapter contract exists; current sanitized native result has not been supplied to this report run.",
+      "action_text": "Daily +1/fixed20 cohort. Positive breadth 100.0%; paper action status PAPER_COHORT_READY.",
+      "benchmarks": [
+        "cash",
+        "SMH",
+        "QQQ",
+        "equal_weight_13_name_semiconductor_universe"
+      ],
+      "boundaries": {
+        "allocation_authority": false,
+        "broker_action": false,
+        "live_trading_change": false,
+        "native": {
+          "broker_authority": false,
+          "live_trading_authority": false,
+          "promotion_authority": false,
+          "runtime_mutation": false,
+          "sizing_authority": false
+        },
+        "promotion_authority": false,
+        "research_only": true,
+        "runtime_mutation": false
+      },
+      "decision_use": "Use as semiconductor entry/timing evidence. Positive forecasts authorize only the frozen paper cohort rules; prediction magnitude is not ranking or sizing authority. Prefer sector-level corroboration unless prospective stock-selection excess versus SMH is established.",
+      "kind": "daily_entry_value_with_three_book_expression",
+      "paper_action": {
+        "industry_book": {
+          "cohort_cash_fraction_nav": 0.0,
+          "cohort_target_weight_nav": 0.05,
+          "instrument": "SMH",
+          "mapping": "daily_cohort_nav_fraction * positive_breadth",
+          "positive_breadth": 1.0,
+          "status": "PAPER_COHORT_READY"
+        },
+        "options_book": {
+          "eligible_underlyings": [
+            "AMAT",
+            "APH",
+            "KLAC",
+            "LRCX",
+            "TXN",
+            "NXPI",
+            "ADI",
+            "NVDA",
+            "AMD",
+            "MU",
+            "AVGO",
+            "MRVL",
+            "MCHP"
+          ],
+          "reason": "missing_point_in_time_chain_and_conditional_return_distribution",
+          "status": "FAIL_CLOSED",
+          "trade_authorized": false
+        },
+        "status": "PAPER_COHORT_READY",
+        "ticker_book": {
+          "cohort_cash_fraction_nav": -6.938893903907228e-18,
+          "cohort_gross_exposure": 0.05000000000000001,
+          "cohort_target_weights_nav": {
+            "ADI": 0.005285593434404398,
+            "AMAT": 0.0033885335044109306,
+            "AMD": 0.002935201115960396,
+            "APH": 0.003848561678194563,
+            "AVGO": 0.0041090961466667564,
+            "KLAC": 0.0034056973841639915,
+            "LRCX": 0.002993338593988929,
+            "MCHP": 0.005002891073853976,
+            "MRVL": 0.0018897036313963095,
+            "MU": 0.0028561728032907197,
+            "NVDA": 0.0034639490298195804,
+            "NXPI": 0.0057971021177724074,
+            "TXN": 0.005024159486077044
+          },
+          "prediction_magnitude_used_for_sizing": false,
+          "realized_vol20_annualized": {
+            "ADI": 0.28447032063701694,
+            "AMAT": 0.4437301437582564,
+            "AMD": 0.5122628397986131,
+            "APH": 0.3906899732336619,
+            "AVGO": 0.36591853910783423,
+            "KLAC": 0.4414938526345385,
+            "LRCX": 0.5023135244577318,
+            "MCHP": 0.30054511218523033,
+            "MRVL": 0.7956773930369804,
+            "MU": 0.526436795879288,
+            "NVDA": 0.43406945255203283,
+            "NXPI": 0.25937001427528783,
+            "TXN": 0.299272836224386
+          },
+          "status": "PAPER_COHORT_READY",
+          "weighting": "inverse trailing 20-session realized volatility using only prices available on signal date"
+        }
+      },
       "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
-      "status": "ADAPTER_RESULT_NOT_PRESENT",
-      "validation_grade": "NO_CURRENT_NATIVE_RESULT"
+      "scorecard": null,
+      "signal": {
+        "positive_breadth": 1.0,
+        "positive_count": 13,
+        "positive_symbols": [
+          "AMAT",
+          "APH",
+          "KLAC",
+          "LRCX",
+          "TXN",
+          "NXPI",
+          "ADI",
+          "NVDA",
+          "AMD",
+          "MU",
+          "AVGO",
+          "MRVL",
+          "MCHP"
+        ],
+        "predicted_fixed20_net_value_bps": {
+          "ADI": 218.77104353915175,
+          "AMAT": 818.9846080097676,
+          "AMD": 777.8135296533924,
+          "APH": 222.7882890439323,
+          "AVGO": 459.3369995461853,
+          "KLAC": 699.963189765575,
+          "LRCX": 720.9858048249403,
+          "MCHP": 374.14896443764127,
+          "MRVL": 821.3564577322178,
+          "MU": 1058.369846656083,
+          "NVDA": 65.48382868127038,
+          "NXPI": 377.802871441368,
+          "TXN": 364.0531406251399
+        },
+        "universe_count": 13
+      },
+      "signal_date": "2026-09-11",
+      "timing": {
+        "cohort_nav_fraction": 0.05,
+        "decision_cadence": "daily close observation",
+        "entry_rule": "signal at close D; execute cohort on next common market session D+1",
+        "execution_delay_sessions": 1,
+        "exit_rule": "expire cohort exactly 20 common sessions after execution",
+        "holding_horizon_sessions": 20,
+        "max_concurrent_cohorts": 20
+      },
+      "validation": {
+        "prospective_start_signal_date": "2026-09-10",
+        "scientific_forward_credit": true,
+        "state": "PROSPECTIVE_ELIGIBLE"
+      },
+      "validation_grade": "PROSPECTIVE_SIGNAL_READY"
     },
     {
       "decision_use": "Adapter contract exists; current sanitized native result has not been supplied to this report run.",
@@ -385,6 +540,46 @@
         "XBI": 0.125,
         "XPH": 0.08333333333333333,
         "XSD": 0.08333333333333333
+      }
+    },
+    {
+      "authority": "research_only_native_semantics",
+      "intel": "daily_entry_value_with_three_book_expression",
+      "source": "SEMICONDUCTOR_SHARED_RIDGE",
+      "state": {
+        "positive_breadth": 1.0,
+        "positive_count": 13,
+        "positive_symbols": [
+          "AMAT",
+          "APH",
+          "KLAC",
+          "LRCX",
+          "TXN",
+          "NXPI",
+          "ADI",
+          "NVDA",
+          "AMD",
+          "MU",
+          "AVGO",
+          "MRVL",
+          "MCHP"
+        ],
+        "predicted_fixed20_net_value_bps": {
+          "ADI": 218.77104353915175,
+          "AMAT": 818.9846080097676,
+          "AMD": 777.8135296533924,
+          "APH": 222.7882890439323,
+          "AVGO": 459.3369995461853,
+          "KLAC": 699.963189765575,
+          "LRCX": 720.9858048249403,
+          "MCHP": 374.14896443764127,
+          "MRVL": 821.3564577322178,
+          "MU": 1058.369846656083,
+          "NVDA": 65.48382868127038,
+          "NXPI": 377.802871441368,
+          "TXN": 364.0531406251399
+        },
+        "universe_count": 13
       }
     },
     {

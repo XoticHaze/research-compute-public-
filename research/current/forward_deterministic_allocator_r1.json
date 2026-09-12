@@ -17,12 +17,19 @@
     "strategic_core": 0.8,
     "tactical_models": 0.15
   },
-  "cash_weight": 0.2,
+  "cash_weight": 0.15,
   "constraints_applied": [
     {
       "result": "P249_P266 scaled pro-rata to 80% NAV",
       "rule": "strategic_core_budget",
       "value": 0.8
+    },
+    {
+      "admitted_overlay": 0.05,
+      "cap": 0.35,
+      "pre_overlay_exposure": 0.3,
+      "raw_overlay": 0.05,
+      "rule": "semiconductor_sector_cap"
     }
   ],
   "controls_for_learned_allocator": [
@@ -35,16 +42,17 @@
   "final_target_weights": {
     "AVDV": 0.1,
     "AVUV": 0.1,
-    "CASH": 0.2,
+    "CASH": 0.15,
     "DBC": 0.05,
     "IGV": 0.0333333333,
     "QQQ": 0.05,
+    "SMH": 0.05,
     "SOXX": 0.2333333333,
     "XBI": 0.1,
     "XPH": 0.0666666667,
     "XSD": 0.0666666667
   },
-  "generated_at": "2026-09-12T20:48:18.081499+00:00",
+  "generated_at": "2026-09-12T20:57:33.195737+00:00",
   "learned_allocator_role": "shadow_challenger_must_beat_this_baseline_after_costs_and_opportunity_cost",
   "policy_id": "CC770_DETERMINISTIC_ALLOCATOR_V0",
   "position_actions_vs_prior_allocator_target": [
@@ -63,11 +71,11 @@
       "target_weight": 0.1
     },
     {
-      "action": "HOLD",
-      "delta_weight": 0.0,
+      "action": "REDUCE",
+      "delta_weight": -0.05,
       "prior_weight": 0.2,
       "symbol": "CASH",
-      "target_weight": 0.2
+      "target_weight": 0.15
     },
     {
       "action": "HOLD",
@@ -88,6 +96,13 @@
       "delta_weight": 0.0,
       "prior_weight": 0.05,
       "symbol": "QQQ",
+      "target_weight": 0.05
+    },
+    {
+      "action": "ADD",
+      "delta_weight": 0.05,
+      "prior_weight": 0.0,
+      "symbol": "SMH",
       "target_weight": 0.05
     },
     {
@@ -125,7 +140,7 @@
     "biotechnology": 0.1,
     "commodities": 0.05,
     "pharmaceuticals": 0.0666666667,
-    "semiconductor": 0.3,
+    "semiconductor": 0.35,
     "software": 0.0333333333
   },
   "sleeve_actions": [
@@ -136,9 +151,12 @@
       "target_weight": 0.8
     },
     {
-      "action": "WAIT",
-      "reason": "no current prospectively eligible native semiconductor result",
-      "sleeve": "SEMICONDUCTOR_SHARED_RIDGE_INDUSTRY_BOOK"
+      "action": "ADD",
+      "instrument": "SMH",
+      "native_horizon": "+1 session execution / fixed20 hold",
+      "reason": "breadth-sized paper expression: 5% * 1.0000",
+      "sleeve": "SEMICONDUCTOR_SHARED_RIDGE_INDUSTRY_BOOK",
+      "target_new_cohort_weight": 0.05
     },
     {
       "action": "WAIT",
@@ -177,8 +195,8 @@
       "target_weight": 0.0
     }
   ],
-  "source_scoreboard_generated_at": "2026-09-12T20:48:18.029792+00:00",
+  "source_scoreboard_generated_at": "2026-09-12T20:57:33.152279+00:00",
   "source_scoreboard_schema": "research.forward_market_scoreboard_r1",
-  "tactical_used": 0.0,
-  "unused_tactical_budget": 0.15
+  "tactical_used": 0.05,
+  "unused_tactical_budget": 0.1
 }
