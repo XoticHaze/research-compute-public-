@@ -17,7 +17,7 @@ from pathlib import Path
 import pandas as pd
 
 ROOTS = ("6E", "ES", "NG", "NQ", "ZS")
-PROVIDER_ROOT_ALIASES = {"6E": ("6E", "EC"), "ES": ("ES",), "NG": ("NG",), "NQ": ("NQ",), "ZS": ("ZS",)}
+PROVIDER_ROOT_ALIASES = {"6E": ("6E", "EC"), "ES": ("ES",), "NG": ("NG",), "NQ": ("NQ",), "ZS": ("ZS", "S")}
 MONTH_CODE = {"F":"01","G":"02","H":"03","J":"04","K":"05","M":"06","N":"07","Q":"08","U":"09","V":"10","X":"11","Z":"12"}
 REQUIRED_PROVIDER_COLUMNS = ["Date", "Open", "High", "Low", "Close", "Volume", "Open Interest"]
 CACHE_REQUIRED_COLUMNS = ["timestamp", "open", "high", "low", "close", "volume"]
