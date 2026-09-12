@@ -1,0 +1,29 @@
+name: P309 SEC Economic Comparability R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p309_sec_economic_comparability_r1.py'
+      - '.github/workflows/p309-sec-economic-comparability-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - id: eval
+        run: |
+          python research/p309_sec_economic_comparability_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/p309_sec_economic_comparability_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={x['decision']}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p309-sec-economic-comparability__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/p309_sec_economic_comparability_r1.json
+          if-no-files-found: error
