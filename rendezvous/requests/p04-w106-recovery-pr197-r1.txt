@@ -1,0 +1,6 @@
+request=p04-w106-recovery-pr197-r1
+authority=research_only
+private_authority=XoticHaze/mm-IBKR
+private_ref=assistant/w106-recovery-quota-independent-r1@1d04ab9744981eb8947a62a1d74cecaa82c42563
+producer_ref=76aa7e9bb64a1aca36865076df1fa4b25f1b06a9
+harness=mm_ibkr_p04_w106_regime1_recovery_v1
