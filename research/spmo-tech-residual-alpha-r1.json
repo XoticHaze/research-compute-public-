@@ -1,0 +1,10 @@
+{
+  "schema":"spmo_tech_residual_alpha_contract.v1",
+  "claim_tested":"SPMO's surviving momentum alpha remains positive after jointly controlling broad-market and Nasdaq/technology exposure rather than reducing to a tech-growth tilt.",
+  "start":"2015-09-15",
+  "periods":{"full":["2015-10",null],"pre2020":["2015-10","2020-01"],"post2020":["2020-01",null]},
+  "gates":{"min_full_alpha":0.01,"min_pre2020_alpha":0.0,"min_post2020_alpha":0.0,"min_full_tstat":1.0},
+  "regression":"OLS SPMO monthly return = alpha + beta_spy*SPY + beta_qqq*QQQ",
+  "no_parameter_date_factor_or_threshold_rescue":true,
+  "research_only":true
+}
