@@ -24,11 +24,12 @@ def ret(px,a,b):
 def text(node,path):
  x=node.find(path); return None if x is None else x.text
 def sales(cik):
- s=get_json(f'https://data.sec.gov/submissions/CIK{cik}.json')['filings']['recent']; out=[]
+ s=get_json(f'https://data.sec.gov/submissions/CIK{cik}.json')['filings']['recent']; out=[]; parsed=0; fetch_errors=0
  for form,acc,filed,doc in zip(s['form'],s['accessionNumber'],s['filingDate'],s['primaryDocument']):
   if form!='4' or filed<'2010-01-01': continue
-  try: root=ET.fromstring(req(f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc.replace('-','')}/{doc}"))
-  except Exception: continue
+  raw_doc=doc.rsplit('/',1)[-1]
+  try: root=ET.fromstring(req(f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc.replace('-','')}/{raw_doc}")); parsed+=1
+  except Exception: fetch_errors+=1; continue
   for tr in root.findall('.//nonDerivativeTransaction'):
    if text(tr,'transactionCoding/transactionCode')!='S': continue
    if text(tr,'transactionAmounts/transactionAcquiredDisposedCode/value')!='D': continue
@@ -38,16 +39,17 @@ def sales(cik):
    if shares<=0 or price<=0: continue
    out.append({'filed':filed,'transaction_date':text(tr,'transactionDate/value'),'shares':shares,'price':price,'value':shares*price})
   time.sleep(.03)
- return out
+ return out,parsed,fetch_errors
 def mean(x): return statistics.fmean(x) if x else None
 def med(x): return statistics.median(x) if x else None
 
 def main():
  mp=get_json('https://www.sec.gov/files/company_tickers.json'); ciks={v['ticker'].upper():str(v['cik_str']).zfill(10) for v in mp.values()}
  syms=sorted(set(TICKER_TO_SECTOR)|set(TICKER_TO_SECTOR.values())|{SPY}); px={s:prices(s) for s in syms}
- events=[]
+ events=[]; source={'parsed_form4_documents':0,'fetch_errors':0}
  for t,sector in TICKER_TO_SECTOR.items():
-  for p in sales(ciks[t]):
+  ps,parsed,errs=sales(ciks[t]); source['parsed_form4_documents']+=parsed; source['fetch_errors']+=errs
+  for p in ps:
    w=event_window(px[t],p['filed'])
    if not w: continue
    a,p0,b,p1=w; sr=ret(px[sector],a,b); br=ret(px[SPY],a,b)
@@ -60,8 +62,10 @@ def main():
   xs=[e['sector_excess'] for e in events if e['filed'].startswith(y)]
   if len(xs)>=2: years.append({'year':int(y),'n':len(xs),'mean_sector_excess':mean(xs),'negative':mean(xs)<0})
  recent=[e['sector_excess'] for e in events if e['filed']>='2022-01-01']
- gates={'n_at_least_50':len(events)>=50,'mean_sector_negative':bool(sec and mean(sec)<0),'median_sector_negative':bool(sec and med(sec)<0),'mean_spy_negative':bool(spy and mean(spy)<0),'event_underperform_rate_55pct':bool(sec and mean([x<0 for x in sec])>=.55),'negative_year_share_60pct':bool(years and mean([x['negative'] for x in years])>=.60),'recent_negative':bool(recent and mean(recent)<0)}
- result={'events':len(events),'mean_after_cost_sector_excess':mean(sec),'median_after_cost_sector_excess':med(sec),'mean_after_cost_spy_excess':mean(spy),'negative_sector_excess_share':mean([x<0 for x in sec]) if sec else None,'negative_year_share':mean([x['negative'] for x in years]) if years else None,'recent_since_2022_sector_excess':mean(recent),'year_holdouts':years,'gates':gates,'decision':'SUPPORTS_DIRECTIONAL_SALES_SIGNAL' if all(gates.values()) else 'REJECT_DIRECTIONAL_SALES_SIGNAL'}
- out={'schema':'research.pit_insider_open_market_sale_control_r1','experiment_id':EXPERIMENT_ID,'inherited_learning_ids':INHERITED_LEARNING,'uncertainty_resolved':'Whether insider transaction direction contains information or generic Form 4 activity/issuer selection could explain any purchase result.','claim_tested':'SEC Form 4 open-market sale code S known at filing time predicts negative 63-session after-cost stock excess versus matched-sector ETF and SPY.','frozen_specification':{'signal':'Form 4 non-derivative transactionCode=S and disposed=D with positive shares and price','information_time':'SEC Form 4 filing date; next trading session','holding_sessions':HOLD,'round_trip_cost':COST,'ticker_to_sector':TICKER_TO_SECTOR,'broad_market':SPY,'sources':['SEC submissions + Form 4 ownership XML','Yahoo adjusted daily history']},'result':result,'events_detail':events,'limitations':['Fixed current-ticker panel is a mechanism screen, not historical membership authority.','Form 4 issuer submissions recent arrays can omit older filings moved to oldfiles; this screen uses filings exposed in current SEC submissions recent history.','Failure forbids value threshold, role/title filter, horizon, cost, ticker, sector, or year rescue.','This is a signed-control sibling; final purchase-vs-sale interpretation requires consuming the purchase experiment separately.'],'boundaries':{'portfolio_ranking':False,'allocation':False,'runtime':False,'broker':False,'live_trading':False}}
+ source_ok=source['parsed_form4_documents']>0
+ gates={'source_documents_parsed':source_ok,'n_at_least_50':len(events)>=50,'mean_sector_negative':bool(sec and mean(sec)<0),'median_sector_negative':bool(sec and med(sec)<0),'mean_spy_negative':bool(spy and mean(spy)<0),'event_underperform_rate_55pct':bool(sec and mean([x<0 for x in sec])>=.55),'negative_year_share_60pct':bool(years and mean([x['negative'] for x in years])>=.60),'recent_negative':bool(recent and mean(recent)<0)}
+ decision='SOURCE_COVERAGE_FAILURE' if not source_ok else ('SUPPORTS_DIRECTIONAL_SALES_SIGNAL' if all(gates.values()) else 'REJECT_DIRECTIONAL_SALES_SIGNAL')
+ result={'events':len(events),'source':source,'mean_after_cost_sector_excess':mean(sec),'median_after_cost_sector_excess':med(sec),'mean_after_cost_spy_excess':mean(spy),'negative_sector_excess_share':mean([x<0 for x in sec]) if sec else None,'negative_year_share':mean([x['negative'] for x in years]) if years else None,'recent_since_2022_sector_excess':mean(recent),'year_holdouts':years,'gates':gates,'decision':decision}
+ out={'schema':'research.pit_insider_open_market_sale_control_r1','experiment_id':EXPERIMENT_ID,'inherited_learning_ids':INHERITED_LEARNING,'uncertainty_resolved':'Whether insider transaction direction contains information or generic Form 4 activity/issuer selection could explain any purchase result.','claim_tested':'SEC Form 4 open-market sale code S known at filing time predicts negative 63-session after-cost stock excess versus matched-sector ETF and SPY.','frozen_specification':{'signal':'Form 4 non-derivative transactionCode=S and disposed=D with positive shares and price','information_time':'SEC Form 4 filing date; next trading session','holding_sessions':HOLD,'round_trip_cost':COST,'ticker_to_sector':TICKER_TO_SECTOR,'broad_market':SPY,'sources':['SEC submissions + raw Form 4 ownership XML basename','Yahoo adjusted daily history']},'result':result,'events_detail':events,'limitations':['Fixed current-ticker panel is a mechanism screen, not historical membership authority.','Form 4 issuer submissions recent arrays can omit older filings moved to oldfiles; this screen uses filings exposed in current SEC submissions recent history.','SOURCE_COVERAGE_FAILURE is not a scientific rejection.','Failure with parsed source documents forbids value threshold, role/title filter, horizon, cost, ticker, sector, or year rescue.','This is a signed-control sibling; final purchase-vs-sale interpretation requires consuming the purchase experiment separately.'],'boundaries':{'portfolio_ranking':False,'allocation':False,'runtime':False,'broker':False,'live_trading':False}}
  Path('research/artifacts').mkdir(exist_ok=True); Path('research/artifacts/pit_insider_open_market_sale_control_r1.json').write_text(json.dumps(out,indent=2,sort_keys=True,allow_nan=False)); print(json.dumps(result,sort_keys=True))
 if __name__=='__main__': main()
