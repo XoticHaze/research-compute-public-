@@ -1,0 +1,45 @@
+name: SPMO Rolling24 MTUM R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/spmo-rolling24-mtum-r1.yml'
+      - 'research/spmo-rolling24-mtum-r1.json'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.11.16'}
+      - name: Evaluate frozen rolling 24m chronology
+        run: |
+          python - <<'PY'
+          import json,urllib.request,datetime as dt,statistics
+          from pathlib import Path
+          c=json.loads(Path('research/spmo-rolling24-mtum-r1.json').read_text());st=dt.datetime.fromisoformat(c['start']+'T00:00:00+00:00');en=dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1)
+          def f(s):
+              u=f"https://query1.finance.yahoo.com/v8/finance/chart/{s}?period1={int(st.timestamp())}&period2={int(en.timestamp())}&interval=1d&events=history&includeAdjustedClose=true";req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+              with urllib.request.urlopen(req,timeout=30) as q:o=json.load(q)['chart']['result'][0]
+              a=o['indicators'].get('adjclose',[{}])[0].get('adjclose') or o['indicators']['quote'][0]['close'];return {dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat():float(p) for t,p in zip(o['timestamp'],a) if p is not None}
+          px={s:f(s) for s in ['SPMO','MTUM']};ds=sorted(set(px['SPMO'])&set(px['MTUM']));m={}
+          for d in ds:m.setdefault(d[:7],[]).append(d)
+          rows=[]
+          for k,z in sorted(m.items()):
+              if len(z)<10:continue
+              rows.append({'month':k,'spmo':px['SPMO'][z[-1]]/px['SPMO'][z[0]]-1,'mtum':px['MTUM'][z[-1]]/px['MTUM'][z[0]]-1})
+          def cg(z,k):
+              v=1.0
+              for r in z:v*=1+r[k]
+              return v**(12/max(len(z),1))-1
+          vals=[]
+          for i in range(23,len(rows)):
+              z=rows[i-23:i+1];vals.append(cg(z,'spmo')-cg(z,'mtum')-c['cost_bps_annual']/10000)
+          if len(vals)<60:raise RuntimeError(f'INSUFFICIENT_24M_WINDOWS:{len(vals)}')
+          share=sum(v>0 for v in vals)/len(vals);med=statistics.median(vals);worst=min(vals);g=c['gates'];ok=share>=g['positive_24m_window_share_min'] and med>=g['median_annualized_excess_min'] and worst>=g['worst_24m_annualized_excess_min']
+          out={'schema':'spmo_rolling24_mtum_result.v1','rolling_24m_windows':len(vals),'positive_24m_window_share':share,'median_annualized_excess_vs_mtum':med,'worst_24m_annualized_excess_vs_mtum':worst,'best_24m_annualized_excess_vs_mtum':max(vals),'survives_rolling_chronology':ok,'gates':g,'research_only':True};Path('spmo-rolling24-mtum-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2));print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with: {name: spmo-rolling24-mtum-r1-result, path: spmo-rolling24-mtum-r1-result.json, retention-days: 14}
