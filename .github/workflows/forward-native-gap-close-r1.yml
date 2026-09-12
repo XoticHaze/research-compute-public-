@@ -67,21 +67,34 @@ jobs:
           PY
           )"
           curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -d "$body" >/dev/null
-      - name: Wait for encrypted private source capsule
+      - name: Wait for chunked encrypted private source capsule
         env:
           GH_TOKEN: '${{ github.token }}'
           HARNESS: '${{ matrix.harness }}'
         run: |
           set -euo pipefail
           rendezvous_key="${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
-          path="${RESPONSE_ROOT}/${rendezvous_key}/${HARNESS}-input.json"
-          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${EXCHANGE_REF}"
+          root="${RESPONSE_ROOT}/${rendezvous_key}"
+          manifest_path="${root}/${HARNESS}-input-manifest.json"
+          manifest_api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${manifest_path}?ref=${EXCHANGE_REF}"
           found=0
           for _ in $(seq 1 240); do
-            if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -o "$RUNNER_TEMP/forward-native-${HARNESS}-input.json"; then found=1; break; fi
+            if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$manifest_api" -o "$RUNNER_TEMP/forward-native-${HARNESS}-manifest.json"; then found=1; break; fi
             sleep 5
           done
-          test "$found" = 1 || { echo "FORWARD_NATIVE_CAPSULE_NOT_RECEIVED harness=${HARNESS}"; exit 42; }
+          test "$found" = 1 || { echo "FORWARD_NATIVE_CAPSULE_MANIFEST_NOT_RECEIVED harness=${HARNESS}"; exit 42; }
+          chunks="$(python -c 'import json,sys; print(int(json.load(open(sys.argv[1]))["chunks"]))' "$RUNNER_TEMP/forward-native-${HARNESS}-manifest.json")"
+          expected="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["sha256"])' "$RUNNER_TEMP/forward-native-${HARNESS}-manifest.json")"
+          : > "$RUNNER_TEMP/forward-native-${HARNESS}-input.json"
+          for i in $(seq 0 $((chunks-1))); do
+            part="$(printf '%03d' "$i")"
+            path="${root}/${HARNESS}-input-part-${part}.txt"
+            api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${EXCHANGE_REF}"
+            curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" >> "$RUNNER_TEMP/forward-native-${HARNESS}-input.json"
+          done
+          actual="$(sha256sum "$RUNNER_TEMP/forward-native-${HARNESS}-input.json" | awk '{print $1}')"
+          test "$actual" = "$expected" || { echo "FORWARD_NATIVE_CHUNK_SHA_MISMATCH expected=${expected} actual=${actual}"; exit 45; }
+          echo "FORWARD_NATIVE_CHUNK_REASSEMBLY=PASS chunks=${chunks} sha256=${actual}"
       - name: Execute encrypted native source and encrypt private result
         env: {HARNESS: '${{ matrix.harness }}'}
         run: |
@@ -119,4 +132,4 @@ jobs:
       - name: Remove one-run private material
         if: always()
         env: {HARNESS: '${{ matrix.harness }}'}
-        run: rm -f "$RUNNER_TEMP/forward-native-${HARNESS}-private.b64" "$RUNNER_TEMP/forward-native-${HARNESS}-recipient.json" "$RUNNER_TEMP/forward-native-${HARNESS}-input.json" "$RUNNER_TEMP/forward-native-${HARNESS}-return.json"
+        run: rm -f "$RUNNER_TEMP/forward-native-${HARNESS}-private.b64" "$RUNNER_TEMP/forward-native-${HARNESS}-recipient.json" "$RUNNER_TEMP/forward-native-${HARNESS}-manifest.json" "$RUNNER_TEMP/forward-native-${HARNESS}-input.json" "$RUNNER_TEMP/forward-native-${HARNESS}-return.json"
