@@ -1,0 +1,11 @@
+{
+  "schema":"cape_sector_value_crossfit_contract.v1",
+  "experiment_id":"CC-RF-CAPE-SECTOR-VALUE-CROSSFIT-001",
+  "claim":"CAPE sector-valuation rotation adds durable after-cost excess beyond broad, value, and equal-weight equity exposures.",
+  "symbols":["CAPE","SPY","VTV","RSP"],
+  "start":"2013-01-01","evaluation_start":"2015-01-01","recent_start":"2021-01-01",
+  "incremental_cost_bps_per_year":10,"heldout_unit":"calendar_year",
+  "gates":{"min_full_residual":0.01,"min_recent_residual":0.005,"min_positive_year_fraction":0.60,"min_worst_year":-0.05,"min_full_excess_vs_spy":0.01},
+  "frozen_rule":"No symbols, dates, factor set, held-out unit, cost, or gates may change after result. Failure rejects this CAPE implementation claim without rescue.",
+  "research_only":true
+}
