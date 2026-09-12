@@ -1,0 +1,31 @@
+name: PIT Earnings Reaction Continuation R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/pit_earnings_reaction_continuation_r1.py'
+      - '.github/workflows/pit-earnings-reaction-continuation-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - id: eval
+        run: |
+          python research/pit_earnings_reaction_continuation_r1.py
+          python - <<'PY'
+          import json,os
+          r=json.load(open('research/artifacts/pit_earnings_reaction_continuation_r1.json'))['result']
+          b=lambda v:'na' if v is None else str(round(10000*v))
+          tag=f"{r['decision']}__n_{r['positive_reaction_events']}__sectorbps_{b(r['mean_after_cost_sector_excess'])}__contrastbps_{b(r['positive_minus_nonpositive_sector_excess'])}__recentbps_{b(r['recent_since_2022_sector_excess'])}"
+          open(os.environ['GITHUB_OUTPUT'],'a').write(f'tag={tag}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pit-earnings-reaction-continuation-r1__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/pit_earnings_reaction_continuation_r1.json
+          if-no-files-found: error
