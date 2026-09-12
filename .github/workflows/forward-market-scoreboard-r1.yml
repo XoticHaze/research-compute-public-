@@ -1,0 +1,167 @@
+name: Forward Market Scoreboard R1
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 23 * * 1-5'
+  push:
+    branches:
+      - main
+      - 'assistant/**'
+    paths:
+      - 'research/forward_market_scoreboard_r1.py'
+      - 'research/forward_native_program_adapter_r1.py'
+      - '.github/workflows/forward-market-scoreboard-r1.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/forward_market_scoreboard_r1.py'
+      - 'research/forward_native_program_adapter_r1.py'
+      - '.github/workflows/forward-market-scoreboard-r1.yml'
+      - 'research/forward_p249_p266_shadow_r1.py'
+      - 'research/forward_p558_current_core_shadow_r1.py'
+      - 'research/forward_senior_clo_current_core_shadow_r1.py'
+      - 'research/p46_forward_observer_r2.py'
+      - 'research/forward_bar_contract_v2.py'
+
+permissions:
+  contents: read
+
+jobs:
+  self-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python research/forward_native_program_adapter_r1.py --self-test
+      - run: python research/forward_market_scoreboard_r1.py --self-test
+
+  p46:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy pandas yfinance
+      - run: python -m research.p46_forward_observer_r2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forward-score-input-p46
+          path: artifacts/p46_forward_observation_v2.json
+          if-no-files-found: error
+          retention-days: 90
+
+  p249-p266:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - run: python research/forward_p249_p266_shadow_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forward-score-input-p249-p266
+          path: artifacts/forward_p249_p266_shadow_r1.json
+          if-no-files-found: error
+          retention-days: 90
+
+  p558:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 yfinance==0.2.65
+      - run: python research/forward_p558_current_core_shadow_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forward-score-input-p558
+          path: artifacts/forward_p558_current_core_shadow_r1.json
+          if-no-files-found: error
+          retention-days: 90
+
+  senior-clo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 yfinance==0.2.65
+      - run: python research/forward_senior_clo_current_core_shadow_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forward-score-input-senior-clo
+          path: artifacts/forward_senior_clo_current_core_shadow_r1.json
+          if-no-files-found: error
+          retention-days: 90
+
+  report:
+    needs: [self-test, p46, p249-p266, p558, senior-clo]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: forward-*
+          path: score-inputs
+      - run: python research/forward_market_scoreboard_r1.py --input-root score-inputs --output artifacts/forward_market_scoreboard_r1.json
+      - name: Print compact decision report
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('artifacts/forward_market_scoreboard_r1.json'))
+          for lane in x['lanes']:
+              print(lane['program_id'], lane.get('validation_grade', lane.get('status')), lane.get('action_text', ''))
+              if lane.get('timing'):
+                  print('  timing=', json.dumps(lane['timing'], sort_keys=True))
+              if lane.get('scorecard'):
+                  print('  scorecard=', json.dumps(lane['scorecard'], sort_keys=True))
+          print('native_result_gaps=', ','.join(x['coverage']['native_result_gaps']))
+          print('decision_chain=', json.dumps(x['decision_chain'], sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forward-market-scoreboard-r1
+          path: artifacts/forward_market_scoreboard_r1.json
+          if-no-files-found: error
+          retention-days: 90
+
+  publish-current:
+    if: github.event_name != 'pull_request'
+    needs: report
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {contents: write}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/download-artifact@v4
+        with:
+          name: forward-market-scoreboard-r1
+          path: /tmp/forward-market-scoreboard
+      - name: Publish stable current scoreboard
+        run: |
+          test -f /tmp/forward-market-scoreboard/forward_market_scoreboard_r1.json
+          git fetch origin main
+          git checkout -B forward-market-scoreboard-publish origin/main
+          mkdir -p research/current
+          cp /tmp/forward-market-scoreboard/forward_market_scoreboard_r1.json research/current/forward_market_scoreboard_r1.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add research/current/forward_market_scoreboard_r1.json
+          if git diff --cached --quiet; then
+            echo 'CURRENT_SCOREBOARD_UNCHANGED=true'
+            exit 0
+          fi
+          git commit -m 'Forward: publish current market scoreboard'
+          git push origin HEAD:main
