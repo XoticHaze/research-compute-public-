@@ -1,6 +1,6 @@
 {
   "schema": "research_compute_public.foundry_terminal_claim_acceptance.v1",
-  "acceptance_revision": "20260912-r4",
+  "acceptance_revision": "20260912-r5",
   "claims": [
     {
       "workload_id": "MR_PKW_BUYBACK_ALPHA_20260912_R1",
@@ -60,6 +60,16 @@
       "artifact_id": 10302716707,
       "artifact_sha256": "30c39633f3fc3108b343f0d9cc9038c480f91efeb8e45262219ff92d81d7a7a2",
       "foundry_commit": "ca6b3bf0983d6914168d330e2fa9130ceb9b8d4d",
+      "semantic_state": "REJECT_NO_PARAMETER_RESCUE"
+    },
+    {
+      "workload_id": "YAHOO_EPS_SURPRISE_SIGN_R1",
+      "source_run_id": 34715163104,
+      "source_job_id": 103610995590,
+      "source_head_sha": "f723a03a5ee5a2389282a3014d34c123bcc35774",
+      "artifact_id": 10304567891,
+      "artifact_sha256": "5d553f677c11a5ea6f6ec956d37e1e670c27ddd57f92b873ae2b36326e949906",
+      "foundry_commit": "dadfc99101d8994a8d0ba127ed33ce0a7a145c9c",
       "semantic_state": "REJECT_NO_PARAMETER_RESCUE"
     }
   ],
