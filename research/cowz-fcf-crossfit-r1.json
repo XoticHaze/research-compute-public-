@@ -1,0 +1,21 @@
+{
+  "schema": "cowz_fcf_crossfit_contract.v1",
+  "experiment_id": "CC-RF-COWZ-FCF-CROSSFIT-001",
+  "claim": "COWZ free-cash-flow-yield selection adds durable after-cost excess beyond broad-market, value, and quality exposures rather than merely repackaging those factors.",
+  "symbols": ["COWZ", "SPY", "VTV", "QUAL"],
+  "start": "2017-01-01",
+  "evaluation_start": "2018-01-01",
+  "recent_start": "2022-01-01",
+  "incremental_cowz_cost_bps_per_year": 10,
+  "heldout_unit": "calendar_year",
+  "factor_model": ["SPY", "VTV", "QUAL"],
+  "gates": {
+    "min_full_crossfit_residual_annualized": 0.0100,
+    "min_recent_crossfit_residual_annualized": 0.0050,
+    "min_positive_heldout_year_fraction": 0.60,
+    "min_worst_heldout_year_residual": -0.05,
+    "min_full_after_cost_excess_vs_spy": 0.0100
+  },
+  "frozen_rule": "No symbol, dates, factor set, held-out unit, cost, or gate changes after result. Failure rejects this COWZ implementation claim without parameter rescue.",
+  "research_only": true
+}
