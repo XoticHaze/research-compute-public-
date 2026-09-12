@@ -1,0 +1,31 @@
+name: PIT ROA Filing Event Alpha R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/pit_roa_filing_event_alpha_r1.py'
+      - '.github/workflows/pit-roa-filing-event-alpha-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - id: eval
+        run: |
+          python research/pit_roa_filing_event_alpha_r1.py
+          python - <<'PY'
+          import json, os
+          x=json.load(open('research/artifacts/pit_roa_filing_event_alpha_r1.json'))
+          r=x['result']
+          tag=f"{r['decision']}__events_{x['event_count']}__improving_{r['improving_event_count']}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pit-roa-filing-event-alpha-r1__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/pit_roa_filing_event_alpha_r1.json
+          if-no-files-found: error
