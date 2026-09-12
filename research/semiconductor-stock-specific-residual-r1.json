@@ -1,0 +1,27 @@
+{
+  "schema": "semiconductor_stock_specific_residual_contract.v1",
+  "experiment_id": "CC-RF-SEMICONDUCTOR-STOCK-RESIDUAL-001",
+  "inherited_parent": "P13",
+  "inherited_learning": "P13_SEMICONDUCTOR_RESIDUAL_MOMENTUM_20260906",
+  "uncertainty_resolved": "Whether a stock-specific prior-data beta/residual transform that can actually change cross-sectional ordering improves scarce-capital semiconductor selection over raw momentum.",
+  "universe": ["NVDA", "AMD", "AVGO", "QCOM", "TXN", "AMAT", "LRCX", "KLAC", "MU", "ADI"],
+  "benchmark_symbol": "SMH",
+  "broad_market_symbol": "QQQ",
+  "lookback_sessions": 126,
+  "min_beta_observations": 100,
+  "top_n": 3,
+  "rebalance": "monthly; signal month-end close; execute next trading-day close",
+  "ranking": "126-session stock cumulative log return minus stock-specific OLS beta estimated from prior 126 daily log returns times SMH 126-session cumulative log return",
+  "cost_scenarios_bps_per_turnover": [10, 25, 50],
+  "primary_cost_bps_per_turnover": 25,
+  "gates": {
+    "min_residual_minus_raw_cagr_pp": 0.5,
+    "min_residual_minus_smh_cagr_pp": 1.0,
+    "min_positive_smh_excess_year_fraction": 0.60,
+    "min_50bps_residual_minus_smh_cagr_pp": 0.0,
+    "max_drawdown_worsening_vs_raw_pp": 5.0
+  },
+  "promotion_limit": "Passing this discriminator does not promote the model because the frozen universe is static current-name and carries survivorship/constituent-history risk. Point-in-time constituent evidence is a separate mandatory gate.",
+  "frozen_rule": "No universe, lookback, beta estimator, top_n, timing, costs, controls, or gates may change after observing the result. Failure parks this stock-specific residual child without parameter rescue.",
+  "research_only": true
+}
