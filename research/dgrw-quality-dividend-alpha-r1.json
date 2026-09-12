@@ -1,0 +1,11 @@
+{
+  "schema":"dgrw_quality_dividend_alpha_contract.v1",
+  "claim_tested":"DGRW's quality-weighted dividend-growth implementation creates durable after-cost excess beyond both a conventional dividend-growth peer and broad-market opportunity cost.",
+  "symbols":["DGRW","VIG","SPY"],
+  "start":"2013-06-01",
+  "recent_start":"2020-01-01",
+  "cost_bps":10,
+  "gates":{"min_full_excess_vs_vig":0.01,"min_recent_excess_vs_vig":0.005,"min_full_excess_vs_spy":0.0,"min_positive_years_vs_vig":8,"min_positive_years_vs_spy":6},
+  "no_parameter_date_product_control_or_cost_rescue":true,
+  "research_only":true
+}
