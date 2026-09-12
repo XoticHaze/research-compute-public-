@@ -1,0 +1,47 @@
+name: Forward P249 P266 Friday Repull R1
+
+on:
+  push:
+    branches:
+      - 'assistant/p249-friday-repull-r1'
+    paths:
+      - '.github/workflows/forward-p249-p266-friday-repull-r1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install frozen observer dependencies
+        run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - name: Re-run frozen P249/P266 observer after Friday close
+        run: |
+          python research/forward_p249_p266_shadow_r1.py
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('artifacts/forward_p249_p266_shadow_r1.json')
+          x=json.loads(p.read_text())
+          assert x['workload_id']=='FORWARD_P249_P266_SHADOW_R1'
+          assert x['decision_at']=='2026-09-10T07:25:00+00:00'
+          print(json.dumps({
+            'latest_close':x['forward']['latest_close'],
+            'days':x['forward']['p249_core_net']['days'],
+            'core_net':x['forward']['p249_core_net']['cumulative_return'],
+            'plus_p266_net':x['forward']['p249_plus_p266_net']['cumulative_return'],
+            'satellite_increment':x['forward']['satellite_increment_cumulative'],
+          },sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forward-p249-p266-friday-repull-${{ github.run_id }}
+          path: artifacts/forward_p249_p266_shadow_r1.json
+          if-no-files-found: error
+          retention-days: 14
