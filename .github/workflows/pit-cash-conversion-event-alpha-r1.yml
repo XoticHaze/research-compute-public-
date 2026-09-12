@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'research/pit_cash_conversion_event_alpha_r1.py'
+      - 'research/pit_cash_conversion_event_alpha_r1_transport.py'
+      - 'research/public_price_history_yahoo_r1.py'
       - '.github/workflows/pit-cash-conversion-event-alpha-r1.yml'
 permissions: {contents: read}
 jobs:
@@ -16,7 +18,7 @@ jobs:
         with: {python-version: '3.11'}
       - id: eval
         run: |
-          python research/pit_cash_conversion_event_alpha_r1.py
+          python research/pit_cash_conversion_event_alpha_r1_transport.py
           python - <<'PY'
           import json, os
           x=json.load(open('research/artifacts/pit_cash_conversion_event_alpha_r1.json'))
