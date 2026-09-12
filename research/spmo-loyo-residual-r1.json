@@ -1,0 +1,19 @@
+{
+  "schema": "spmo_loyo_residual_contract.v1",
+  "experiment_id": "CC-RF-SPMO-LOYO-RESIDUAL-001",
+  "parent": "CC-RF-MOMENTUM-CAUSAL-002",
+  "claim": "SPMO implementation-specific excess remains economically material when SPY, QQQ, and MTUM exposures are estimated without using the held-out calendar year.",
+  "start": "2013-03-01",
+  "factors": ["SPY", "QQQ", "MTUM"],
+  "held_out_unit": "calendar_year",
+  "incremental_implementation_cost_bps_per_year": 10,
+  "recent_start_year": 2023,
+  "gates": {
+    "min_full_after_cost_annualized_residual": 0.01,
+    "min_recent_after_cost_annualized_residual": 0.01,
+    "min_positive_year_fraction": 0.60,
+    "min_worst_year_after_cost_residual": -0.05
+  },
+  "frozen_rule": "No date, factor, cost, held-out unit, or threshold change after observing the result. A failure parks this LOYO residual claim; no parameter rescue.",
+  "research_only": true
+}
