@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 START='2019-01-01'
 END='2026-09-13'
-SYMS=('DHI','LEN','PHM','NVR','TOL','MTH','KBH','LGIH','TMHC','GRBK','CVCO','SKY','TPH','DFH','UHG','MDC','ITB','QQQ')
+SYMS=('DHI','LEN','PHM','NVR','TOL','MTH','KBH','LGIH','TMHC','GRBK','CVCO','SKY','TPH','DFH','UHG','MDC','LEGH','SDHC','NOBH','ITB','QQQ')
 
 def epoch(s): return int(datetime.fromisoformat(s).replace(tzinfo=timezone.utc).timestamp())
 def fetch(symbol):
@@ -32,5 +32,5 @@ for s in SYMS:
     if s in sets: rows[s]['overlap_dhi']=len(base & sets[s])
 valid_sets=[sets[s] for s in SYMS if s in sets]
 common=set.intersection(*valid_sets) if valid_sets else set()
-fresh=('TPH','DFH','UHG','MDC')
+fresh=('DFH','LEGH','SDHC','NOBH','TPH','UHG','MDC')
 print('SOURCE_CALENDAR_PROBE='+json.dumps({'rows':rows,'fresh_candidates':{s:rows[s] for s in fresh},'common_dates_all_source_valid':len(common),'common_head':sorted(common)[:5],'common_tail':sorted(common)[-5:]},sort_keys=True))
