@@ -1,0 +1,9 @@
+{
+  "schema":"spmo_dbmf_complement_contract.v1",
+  "hypothesis":"A fixed 50/50 SPMO+DBMF research blend preserves after-cost excess versus a fixed 50/50 SPY+BIL matched control while materially improving drawdown and risk-adjusted return versus SPMO alone.",
+  "candidate_weights":{"SPMO":0.5,"DBMF":0.5},
+  "matched_control_weights":{"SPY":0.5,"BIL":0.5},
+  "start":"2020-01-01","recent_start":"2023-01-01","cost_bps_annual":20,
+  "gates":{"full_after_cost_excess_vs_control_min":0.02,"recent_after_cost_excess_vs_control_min":0.01,"min_positive_calendar_years_vs_control":4,"max_drawdown_improvement_vs_spmo_min":0.05,"sharpe_improvement_vs_spmo_min":0.10},
+  "frozen_before_execution":true,"no_parameter_rescue":true,"research_only":true,"allocation_authority":false
+}

@@ -1,0 +1,54 @@
+name: SPMO DBMF Complement R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/spmo-dbmf-complement-r1.yml'
+      - 'research/spmo-dbmf-complement-r1.json'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.11.16'}
+      - name: Evaluate frozen SPMO DBMF complement
+        run: |
+          python - <<'PY'
+          import json,urllib.request,datetime as dt,math,statistics
+          from pathlib import Path
+          c=json.loads(Path('research/spmo-dbmf-complement-r1.json').read_text());st=dt.datetime.fromisoformat(c['start']+'T00:00:00+00:00');en=dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1)
+          def f(s):
+              u=f"https://query1.finance.yahoo.com/v8/finance/chart/{s}?period1={int(st.timestamp())}&period2={int(en.timestamp())}&interval=1d&events=history&includeAdjustedClose=true";req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+              with urllib.request.urlopen(req,timeout=30) as q:o=json.load(q)['chart']['result'][0]
+              a=o['indicators'].get('adjclose',[{}])[0].get('adjclose') or o['indicators']['quote'][0]['close'];return {dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat():float(p) for t,p in zip(o['timestamp'],a) if p is not None}
+          sy=['SPMO','DBMF','SPY','BIL'];px={s:f(s) for s in sy};ds=sorted(set.intersection(*(set(px[s]) for s in sy)));m={}
+          for d in ds:m.setdefault(d[:7],[]).append(d)
+          rows=[]
+          for k,z in sorted(m.items()):
+              if len(z)<10:continue
+              r={'month':k}
+              for s in sy:r[s.lower()]=px[s][z[-1]]/px[s][z[0]]-1
+              r['blend']=0.5*r['spmo']+0.5*r['dbmf'];r['control']=0.5*r['spy']+0.5*r['bil'];rows.append(r)
+          if len(rows)<60:raise RuntimeError(f'INSUFFICIENT_COMMON_MONTHS:{len(rows)}')
+          def cagr(z,k):
+              v=1.0
+              for r in z:v*=1+r[k]
+              return v**(12/max(len(z),1))-1
+          def mdd(z,k):
+              v=1.0;peak=1.0;dd=0.0
+              for r in z:v*=1+r[k];peak=max(peak,v);dd=min(dd,v/peak-1)
+              return dd
+          def sharpe(z,k):
+              a=[r[k] for r in z];sd=statistics.stdev(a);return (statistics.mean(a)/sd)*math.sqrt(12) if sd>0 else None
+          recent=[r for r in rows if r['month']>=c['recent_start'][:7]];cost=c['cost_bps_annual']/10000;full=cagr(rows,'blend')-cagr(rows,'control')-cost;rec=cagr(recent,'blend')-cagr(recent,'control')-cost;yr=[]
+          for y in sorted({r['month'][:4] for r in rows}):
+              z=[r for r in rows if r['month'].startswith(y)]
+              if len(z)>=10:yr.append({'year':y,'excess_vs_control':cagr(z,'blend')-cagr(z,'control')-cost,'positive':cagr(z,'blend')-cagr(z,'control')-cost>0})
+          pos=sum(x['positive'] for x in yr);bdd=mdd(rows,'blend');sdd=mdd(rows,'spmo');ddi=bdd-sdd;bsh=sharpe(rows,'blend');ssh=sharpe(rows,'spmo');shi=bsh-ssh;g=c['gates'];ok=full>=g['full_after_cost_excess_vs_control_min'] and rec>=g['recent_after_cost_excess_vs_control_min'] and pos>=g['min_positive_calendar_years_vs_control'] and ddi>=g['max_drawdown_improvement_vs_spmo_min'] and shi>=g['sharpe_improvement_vs_spmo_min']
+          out={'schema':'spmo_dbmf_complement_result.v1','months':len(rows),'recent_months':len(recent),'blend_cagr':cagr(rows,'blend'),'control_cagr':cagr(rows,'control'),'spmo_cagr':cagr(rows,'spmo'),'full_after_cost_excess_vs_control':full,'recent_after_cost_excess_vs_control':rec,'positive_calendar_years_vs_control':pos,'blend_max_drawdown':bdd,'spmo_max_drawdown':sdd,'max_drawdown_improvement_vs_spmo':ddi,'blend_sharpe':bsh,'spmo_sharpe':ssh,'sharpe_improvement_vs_spmo':shi,'supports_complement':ok,'yearly':yr,'gates':g,'research_only':True,'allocation_authority':False};Path('spmo-dbmf-complement-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2));print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with: {name: spmo-dbmf-complement-r1-result, path: spmo-dbmf-complement-r1-result.json, retention-days: 14}
