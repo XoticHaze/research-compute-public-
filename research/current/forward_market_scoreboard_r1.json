@@ -5,15 +5,14 @@
       "HOMEBUILDERS",
       "GENERALIZED_LARGECAP_RIDGE"
     ],
-    "native_result_gaps": [
-      "HOMEBUILDERS"
-    ],
+    "native_result_gaps": [],
     "scored_now": [
       "P46",
       "P249_P266",
       "P558",
       "SENIOR_CLO",
       "SEMICONDUCTOR_SHARED_RIDGE",
+      "HOMEBUILDERS",
       "GENERALIZED_LARGECAP_RIDGE"
     ]
   },
@@ -103,7 +102,7 @@
       ]
     }
   },
-  "generated_at": "2026-09-12T20:59:20.739435+00:00",
+  "generated_at": "2026-09-12T21:29:14.435085+00:00",
   "interpretation": {
     "broker_or_live_authority": false,
     "daily_score_does_not_imply_daily_turnover": true,
@@ -442,10 +441,51 @@
       "validation_grade": "PROSPECTIVE_SIGNAL_READY"
     },
     {
-      "decision_use": "Adapter contract exists; current sanitized native result has not been supplied to this report run.",
+      "action_text": "Admitted none; next-session accounting with frozen 5/60-session horizons {}.",
+      "benchmarks": [
+        "ITB",
+        "QQQ"
+      ],
+      "boundaries": {
+        "allocation_authority": false,
+        "broker_action": false,
+        "live_trading_change": false,
+        "promotion_authority": false,
+        "research_only": true,
+        "runtime_mutation": false
+      },
+      "decision_use": "Stale prospective Homebuilder evidence only. Raw Sep 2 predictions remain inspectable under stale_signal, but current allocation inputs are intentionally empty until a signal aligned with the current market reference date is admitted.",
+      "kind": "entry_admission_plus_adaptive_duration",
+      "paper_action": {
+        "admitted_symbols": [],
+        "holding_horizon_sessions_by_symbol": {},
+        "instruction": "NO_ACTION_WHILE_STALE",
+        "status": "STALE_NO_ACTION"
+      },
       "program_id": "HOMEBUILDERS",
-      "status": "ADAPTER_RESULT_NOT_PRESENT",
-      "validation_grade": "NO_CURRENT_NATIVE_RESULT"
+      "scorecard": null,
+      "signal": {
+        "admitted_symbols": [],
+        "duration_horizon_sessions_by_symbol": {},
+        "predicted_after25_bps_per_session": {},
+        "predicted_fixed20_net25_bps": {}
+      },
+      "signal_date": "2026-09-02",
+      "timing": {
+        "candidate_holding_horizons_sessions": [
+          5,
+          60
+        ],
+        "decision_cadence": "daily observer when fresh close exists",
+        "execution_delay_sessions": 1
+      },
+      "validation": {
+        "historical_adaptive_matched_itb_excess_bps": 18.319766025087446,
+        "historical_fixed20_matched_itb_excess_bps": -0.7287825877623646,
+        "historical_gate_pass": false,
+        "state": "STALE_NATIVE_SIGNAL_NO_CURRENT_ALLOCATION"
+      },
+      "validation_grade": "PROSPECTIVE_DIAGNOSTIC"
     },
     {
       "action_text": "Corroborate/watch positives CAT, JPM, UNH, COST, MSFT; negatives XOM; no frozen allocation book.",
@@ -580,6 +620,17 @@
           "TXN": 364.0531406251399
         },
         "universe_count": 13
+      }
+    },
+    {
+      "authority": "research_only_native_semantics",
+      "intel": "entry_admission_plus_adaptive_duration",
+      "source": "HOMEBUILDERS",
+      "state": {
+        "admitted_symbols": [],
+        "duration_horizon_sessions_by_symbol": {},
+        "predicted_after25_bps_per_session": {},
+        "predicted_fixed20_net25_bps": {}
       }
     },
     {
