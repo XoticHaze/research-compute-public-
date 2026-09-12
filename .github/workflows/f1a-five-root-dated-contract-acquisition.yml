@@ -1,0 +1,82 @@
+name: F1a Five-Root Dated-Contract Acquisition
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/f1a_kaggle_dated_contract_acquisition_v1.py'
+      - '.github/workflows/f1a-five-root-dated-contract-acquisition.yml'
+      - 'data_requests/f1a-five-root-*.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  acquire:
+    strategy:
+      fail-fast: false
+      matrix:
+        root: [ES, NQ, NG, ZS, 6E]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install pinned acquisition environment
+        run: python -m pip install --disable-pip-version-check -q kagglehub==1.0.2 pandas numpy
+      - name: Compile fixed acquisition utility
+        run: python -m py_compile scripts/f1a_kaggle_dated_contract_acquisition_v1.py
+      - name: Acquire and QA root
+        run: python scripts/f1a_kaggle_dated_contract_acquisition_v1.py --root '${{ matrix.root }}' --output-root "$RUNNER_TEMP/f1a"
+      - name: Upload root QA/provenance
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: f1a-qa-${{ matrix.root }}
+          path: ${{ runner.temp }}/f1a/metadata/${{ matrix.root }}
+          retention-days: 30
+          if-no-files-found: error
+      - name: Upload root raw dated-contract corpus
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: f1a-raw-${{ matrix.root }}
+          path: ${{ runner.temp }}/f1a/raw/${{ matrix.root }}
+          retention-days: 30
+          if-no-files-found: warn
+
+  summarize:
+    if: always()
+    needs: acquire
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: f1a-qa-*
+          path: qa
+          merge-multiple: false
+      - name: Build deterministic cross-root receipt
+        run: |
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          nodes=[]
+          for p in sorted(Path("qa").rglob("acquisition_receipt.json")):
+              nodes.append(json.loads(p.read_text()))
+          acquired=[n["root"] for n in nodes if n.get("download_state")=="ACQUIRED" and n.get("success_bytes_present")]
+          states={n["root"]:n.get("download_state") for n in nodes}
+          out={"schema":"public_research.f1a_five_root_acquisition_summary.v1","roots_seen":sorted(n["root"] for n in nodes),"acquired_roots":sorted(acquired),"states":states,"success":bool(acquired),"target_all_five":len(acquired)==5,"continuous_series_constructed":False,"open_interest_shift_applied":False,"oi_semantics":"provider states Open Interest is reported for the previous trading day; raw values are preserved without forward shifting"}
+          raw=(json.dumps(out,sort_keys=True,indent=2)+"\n").encode()
+          Path("f1a_summary.json").write_bytes(raw)
+          print("F1A_SUMMARY_SHA256="+hashlib.sha256(raw).hexdigest())
+          print("F1A_SUMMARY="+json.dumps(out,sort_keys=True))
+          if not acquired: raise SystemExit("F1a success gate failed: no root produced real bytes")
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: f1a-five-root-summary
+          path: f1a_summary.json
+          retention-days: 30
+          if-no-files-found: error
