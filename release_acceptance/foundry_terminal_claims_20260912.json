@@ -1,5 +1,6 @@
 {
   "schema": "research_compute_public.foundry_terminal_claim_acceptance.v1",
+  "acceptance_revision": "20260912-r2",
   "claims": [
     {
       "workload_id": "MR_PKW_BUYBACK_ALPHA_20260912_R1",
@@ -20,6 +21,16 @@
       "artifact_sha256": "380a97c2369c1d2fe4ac160e380a95c23dd7c9e0c46989386f60865a4ae53b2d",
       "foundry_commit": "1c8e8aaadfaaf133fce1e7c98b1782a45f43371e",
       "semantic_state": "REJECTED_RESIDUAL_ALPHA_MAGNITUDE_AND_PERSISTENCE_FAILED_NO_RESCUE"
+    },
+    {
+      "workload_id": "MR_IPO_EVENT_ALPHA_20260912_R1",
+      "source_run_id": 34703282438,
+      "source_job_id": 103578699052,
+      "source_head_sha": "b88a098f486b0e8758f1e02ad1cca45cf7069d9d",
+      "artifact_id": 10301685192,
+      "artifact_sha256": "c59983bc31dcaca9cba33e6531bae49b40790a15e60e022f45cfb4cb8959d35a",
+      "foundry_commit": "daee1e01d47c4ba43cb86abe16dfe77b69049f65",
+      "semantic_state": "REJECTED_RESIDUAL_ALPHA_ALL_FROZEN_GATES_FAILED_NO_RESCUE"
     }
   ],
   "required_authority": {
