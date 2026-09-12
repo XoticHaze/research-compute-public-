@@ -1,0 +1,51 @@
+{
+  "schema": "public_research.f1a_five_root_acquisition_release_receipt.v1",
+  "issue": "XoticHaze/research-compute-public-#1322",
+  "execution": {
+    "repository": "XoticHaze/research-compute-public-",
+    "workflow": ".github/workflows/f1a-five-root-dated-contract-acquisition.yml",
+    "run_id": 34684071280,
+    "started_at": "2026-09-12T08:45:10Z",
+    "head_sha": "c4cb05ad9744ee3b971d17b574fd9f5613bec4d0",
+    "conclusion": "success",
+    "jobs": {
+      "ES": 103527852270,
+      "NQ": 103527852371,
+      "NG": 103527852377,
+      "6E": 103527852378,
+      "ZS": 103527852468,
+      "summarize": 103527908624
+    }
+  },
+  "summary": {
+    "artifact_id": 10294778323,
+    "artifact_sha256": "199d4657f355a97cfa9611769aca3ecc650f140d8a1dc0cec12ca367de863151",
+    "content_sha256": "a9e7c074eb9fc55481cd62470c06974969551b3d6fcf099a1d8bcb4ec75a3896",
+    "acquired_roots": ["6E", "ES", "NG", "NQ", "ZS"],
+    "target_all_five": true,
+    "continuous_series_constructed": false,
+    "open_interest_shift_applied": false,
+    "open_interest_semantics": "provider states Open Interest is reported for the previous trading day; raw values are preserved without forward shifting"
+  },
+  "raw_artifacts": {
+    "ES": {"artifact_id": 10295321272, "artifact_sha256": "2d152bd41c9af1b6f476d1d9e927d2d4655261a36a463eae003a6df9809a528c", "archive_bytes": 371375},
+    "NQ": {"artifact_id": 10294722102, "artifact_sha256": "f91620b43b58e5f6e7a1986e433fca5ab1f9da50fa678c1b22fb8342f9416fcd", "archive_bytes": 344017},
+    "NG": {"artifact_id": 10295022830, "artifact_sha256": "8b89dee30113d07421b5c330c4c670c11b79fac664c9b059973e002a76e7f263", "archive_bytes": 4336873},
+    "ZS": {"artifact_id": 10294518710, "artifact_sha256": "9587498fba5c35f797b10e66992d8fd8d1049b0b7fa47c9ee354a339ba78fe02", "archive_bytes": 1210205},
+    "6E": {"artifact_id": 10294309080, "artifact_sha256": "aa922cc1a2dc664725e95f0786711254489b2c01ea1b6474fb546628720231fa", "archive_bytes": 662956}
+  },
+  "qa_artifacts": {
+    "ES": {"artifact_id": 10295036838, "artifact_sha256": "7660d91cd277e573d663975ec019725dc2de14be97f528d3f881848fcaba3371"},
+    "NQ": {"artifact_id": 10295376036, "artifact_sha256": "926424de09968f4bf581f84acea0f9d1450b1a25769ca2f58fbe002afd106b5f"},
+    "NG": {"artifact_id": 10294264174, "artifact_sha256": "f6518e4d5a271478468198c439fbe05d465e3b251c6dcac4d96f7fb10754421f"},
+    "ZS": {"artifact_id": 10294508666, "artifact_sha256": "c8d99bd81e20521796305f98ff1eefb688fa6b60ae74481e63c51e444aaec2f3"},
+    "6E": {"artifact_id": 10294778314, "artifact_sha256": "2e5c0eb433e80c09fc167c7a5588b5f0500d7c855e2575e054a22f32995ca16c"}
+  },
+  "release_consequence": "F1a raw dated-contract byte acquisition is complete for all five frozen roots. These artifacts are raw research inputs only. Continuous-series construction and canonical roll admission remain a separate MM-IBKR/FuturesManager child.",
+  "scientific_result": false,
+  "model_training": false,
+  "strategy_spec_write": false,
+  "runtime_authority": false,
+  "broker_authority": false,
+  "live_trading_change": false
+}
