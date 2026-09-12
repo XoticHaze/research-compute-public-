@@ -1,0 +1,7 @@
+{
+  "schema":"xsmo_smallcap_transport_contract.v1",
+  "hypothesis":"The momentum implementation edge transports into small caps: XSMO earns durable after-cost excess over matched S&P SmallCap 600 control IJR and positive residual alpha after jointly controlling SPY and IJR.",
+  "candidate":"XSMO","matched_underlying_control":"IJR","broad_control":"SPY","start":"2018-01-01","recent_start":"2021-01-01","cost_bps":10,
+  "gates":{"full_after_cost_excess_vs_ijr_min":0.01,"recent_after_cost_excess_vs_ijr_min":0.005,"min_positive_calendar_years_vs_ijr":4,"full_residual_alpha_spy_ijr_min":0.01,"recent_residual_alpha_spy_ijr_min":0.005},
+  "frozen_before_execution":true,"no_parameter_rescue":true,"research_only":true
+}
