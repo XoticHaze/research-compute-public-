@@ -1,0 +1,120 @@
+name: Forward Native Gap Close R1
+
+on:
+  push:
+    branches: ['assistant/forward-native-gap-close-r1']
+    paths: ['.github/workflows/forward-native-gap-close-r1.yml']
+
+permissions:
+  contents: write
+
+env:
+  EXCHANGE_REF: rendezvous-exchange
+  RECIPIENT_ROOT: rendezvous/recipients
+  RESPONSE_ROOT: rendezvous/responses
+
+jobs:
+  consume:
+    strategy:
+      fail-fast: false
+      matrix:
+        harness:
+          - semiconductor_shared_ridge_three_book_v1
+          - homebuilders_adaptive_duration_v1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install fixed dependencies
+        run: python -m pip install --disable-pip-version-check cryptography numpy==1.26.4 pandas==2.2.3 scikit-learn==1.5.2 yfinance==0.2.65
+      - name: Self-test frozen consumer and adapter
+        run: |
+          python scripts/forward_native_ephemeral_consumer_v1.py --self-test
+          python research/forward_native_program_adapter_r1.py --self-test
+      - name: Generate one-run compute recipient
+        env: {HARNESS: '${{ matrix.harness }}'}
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import base64,hashlib,json,os
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric import x25519
+          private=x25519.X25519PrivateKey.generate()
+          private_raw=private.private_bytes(serialization.Encoding.Raw,serialization.PrivateFormat.Raw,serialization.NoEncryption())
+          public_raw=private.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)
+          h=os.environ['HARNESS']
+          Path(os.environ['RUNNER_TEMP'],f'forward-native-{h}-private.b64').write_text(base64.b64encode(private_raw).decode('ascii'))
+          record={'schema':'forward-native-ephemeral-recipient-v1','run_id':os.environ['GITHUB_RUN_ID'],'harness':h,'recipient_b64':base64.b64encode(public_raw).decode('ascii'),'recipient_key_id':'sha256:'+hashlib.sha256(public_raw).hexdigest()}
+          Path(os.environ['RUNNER_TEMP'],f'forward-native-{h}-recipient.json').write_text(json.dumps(record,sort_keys=True)+'\n')
+          PY
+      - name: Publish one-run recipient
+        env:
+          GH_TOKEN: '${{ github.token }}'
+          HARNESS: '${{ matrix.harness }}'
+        run: |
+          set -euo pipefail
+          path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}-${HARNESS}-forward-native.json"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}"
+          payload="$(base64 -w0 "$RUNNER_TEMP/forward-native-${HARNESS}-recipient.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json,sys
+          content,branch=sys.argv[1:]
+          print(json.dumps({'message':'rendezvous: publish native gap-close recipient','content':content,'branch':branch}))
+          PY
+          )"
+          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -d "$body" >/dev/null
+      - name: Wait for encrypted private source capsule
+        env:
+          GH_TOKEN: '${{ github.token }}'
+          HARNESS: '${{ matrix.harness }}'
+        run: |
+          set -euo pipefail
+          path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/${HARNESS}-input.json"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${EXCHANGE_REF}"
+          found=0
+          for _ in $(seq 1 240); do
+            if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -o "$RUNNER_TEMP/forward-native-${HARNESS}-input.json"; then found=1; break; fi
+            sleep 5
+          done
+          test "$found" = 1 || { echo "FORWARD_NATIVE_CAPSULE_NOT_RECEIVED harness=${HARNESS}"; exit 42; }
+      - name: Execute encrypted native source and encrypt private result
+        env: {HARNESS: '${{ matrix.harness }}'}
+        run: |
+          python scripts/forward_native_ephemeral_consumer_v1.py \
+            --envelope "$RUNNER_TEMP/forward-native-${HARNESS}-input.json" \
+            --private-key "$RUNNER_TEMP/forward-native-${HARNESS}-private.b64" \
+            --run-id "$GITHUB_RUN_ID" \
+            --harness "$HARNESS" \
+            --adapter-script "$GITHUB_WORKSPACE/research/forward_native_program_adapter_r1.py" \
+            --return-envelope "$RUNNER_TEMP/forward-native-${HARNESS}-return.json"
+      - name: Publish encrypted return only
+        env:
+          GH_TOKEN: '${{ github.token }}'
+          HARNESS: '${{ matrix.harness }}'
+        run: |
+          set -euo pipefail
+          path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/${HARNESS}-return.json"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}"
+          payload="$(base64 -w0 "$RUNNER_TEMP/forward-native-${HARNESS}-return.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json,sys
+          content,branch=sys.argv[1:]
+          print(json.dumps({'message':'rendezvous: publish encrypted native gap-close return','content':content,'branch':branch}))
+          PY
+          )"
+          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -d "$body" >/dev/null
+      - name: Upload encrypted return artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: forward-native-gap-close-${{ matrix.harness }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/forward-native-${{ matrix.harness }}-return.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove one-run private material
+        if: always()
+        env: {HARNESS: '${{ matrix.harness }}'}
+        run: rm -f "$RUNNER_TEMP/forward-native-${HARNESS}-private.b64" "$RUNNER_TEMP/forward-native-${HARNESS}-recipient.json" "$RUNNER_TEMP/forward-native-${HARNESS}-input.json" "$RUNNER_TEMP/forward-native-${HARNESS}-return.json"
