@@ -1,0 +1,30 @@
+name: F1b dated-contract acceptance
+
+on:
+  push:
+    branches:
+      - acceptance/f1b-dated-contract-e1df1d5f
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout public acceptance harness
+        uses: actions/checkout@v4
+      - name: Record execution identity
+        run: |
+          echo "public_head=${GITHUB_SHA}"
+          echo "private_product_head=e1df1d5fba0aee83421069c398ac003fd6d6483d"
+          echo "private_product_pr=594"
+      - name: Execute sanitized deterministic acceptance
+        run: python acceptance/f1b_dated_contract_acceptance.py
+      - name: Upload deterministic receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: f1b-dated-contract-receipt
+          path: f1b-dated-contract-receipt.json
+          if-no-files-found: error
