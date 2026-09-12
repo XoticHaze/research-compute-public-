@@ -1,0 +1,22 @@
+{
+  "schema":"ptlc_beta_matched_contract.v1",
+  "experiment_id":"CC-RF-PTLC-BETA-MATCHED-001",
+  "claim":"PTLC trend-managed equity implementation adds durable after-cost excess beyond a causal SPY/BIL control matched to its trailing realized equity beta.",
+  "symbols":["PTLC","SPY","BIL"],
+  "start":"2015-06-01",
+  "beta_lookback_months":36,
+  "beta_clip":[0.0,1.0],
+  "evaluation_start":"2018-07-01",
+  "recent_start":"2022-01-01",
+  "incremental_ptlc_cost_bps_per_year":10,
+  "rolling_months":36,
+  "gates":{
+    "min_full_after_cost_annualized_excess":0.0075,
+    "min_recent_after_cost_annualized_excess":0.005,
+    "min_positive_year_fraction":0.60,
+    "min_rolling_positive_fraction":0.60,
+    "min_worst_year_after_cost_excess":-0.07
+  },
+  "frozen_rule":"No symbol, beta lookback, clipping, dates, costs, horizon, or gate changes after result. Failure rejects this PTLC implementation claim without rescue.",
+  "research_only":true
+}
