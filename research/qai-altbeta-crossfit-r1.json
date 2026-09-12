@@ -1,0 +1,20 @@
+{
+  "schema": "qai_altbeta_crossfit_contract.v1",
+  "experiment_id": "CC-RF-QAI-ALTBETA-CROSSFIT-001",
+  "claim": "QAI hedge-fund-replication implementation adds durable after-cost excess beyond causal public equity/bond beta rather than merely delivering a low-beta blend.",
+  "symbols": ["QAI", "SPY", "AGG"],
+  "start": "2010-01-01",
+  "evaluation_start": "2012-01-01",
+  "recent_start": "2021-01-01",
+  "incremental_qai_cost_bps_per_year": 10,
+  "heldout_unit": "calendar_year",
+  "factor_model": ["SPY", "AGG"],
+  "gates": {
+    "min_full_crossfit_residual_annualized": 0.0100,
+    "min_recent_crossfit_residual_annualized": 0.0050,
+    "min_positive_heldout_year_fraction": 0.60,
+    "min_worst_heldout_year_residual": -0.05
+  },
+  "frozen_rule": "No symbols, dates, factor set, held-out unit, cost, or gates may change after result. Failure rejects this QAI implementation-alpha claim without parameter rescue.",
+  "research_only": true
+}
