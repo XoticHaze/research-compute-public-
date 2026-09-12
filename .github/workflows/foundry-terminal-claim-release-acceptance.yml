@@ -7,6 +7,11 @@ on:
       - 'release_acceptance/foundry_terminal_claims_20260912.json'
       - 'scripts/accept_foundry_terminal_claims.py'
       - '.github/workflows/foundry-terminal-claim-release-acceptance.yml'
+  pull_request:
+    paths:
+      - 'release_acceptance/foundry_terminal_claims_20260912.json'
+      - 'scripts/accept_foundry_terminal_claims.py'
+      - '.github/workflows/foundry-terminal-claim-release-acceptance.yml'
 
 permissions:
   contents: read
