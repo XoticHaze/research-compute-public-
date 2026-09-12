@@ -13,11 +13,12 @@ def main() -> None:
     payload = json.loads(BINDING.read_text(encoding="utf-8"))
     assert payload["schema"] == "research_compute_public.foundry_terminal_claim_acceptance.v1"
     claims = payload["claims"]
-    assert len(claims) == 2
+    assert len(claims) == 3
     ids = {claim["workload_id"] for claim in claims}
     assert ids == {
         "MR_PKW_BUYBACK_ALPHA_20260912_R1",
         "MR_PRWCX_ACTIVE_BALANCED_ALPHA_20260912_R1",
+        "MR_IPO_EVENT_ALPHA_20260912_R1",
     }
     for claim in claims:
         assert isinstance(claim["source_run_id"], int) and claim["source_run_id"] > 0
