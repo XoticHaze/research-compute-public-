@@ -1,0 +1,55 @@
+name: Industry ETF Relative Strength R1
+on:
+  push:
+    paths:
+      - '.github/workflows/industry-etf-relative-strength-r1.yml'
+  workflow_dispatch:
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install --quiet yfinance pandas numpy
+      - name: Execute frozen discriminator
+        run: |
+          cat > /tmp/run.py <<'PY'
+          import json, hashlib
+          import numpy as np, pandas as pd, yfinance as yf
+          T=['SMH','XSD','KIE','XBI','ITB','XRT','IYT','XME','TAN','ICLN','SPY']
+          raw=yf.download(T,start='2011-01-01',auto_adjust=True,progress=False,threads=False)['Close']
+          if isinstance(raw,pd.Series): raw=raw.to_frame()
+          px=raw.dropna()
+          assets=T[:-1]
+          lb,hold,topn,cost=126,21,3,0.002
+          rows=[]
+          for i in range(lb,len(px)-hold,hold):
+            sig=(px[assets].iloc[i]/px[assets].iloc[i-lb]-1).sort_values(ascending=False)
+            sel=list(sig.index[:topn])
+            gross=float((px[sel].iloc[i+hold]/px[sel].iloc[i]-1).mean())
+            strat=gross-cost
+            ew=float((px[assets].iloc[i+hold]/px[assets].iloc[i]-1).mean())
+            spy=float(px['SPY'].iloc[i+hold]/px['SPY'].iloc[i]-1)
+            rows.append({'date':str(px.index[i].date()),'strategy':strat,'ew':ew,'spy':spy,'sel':sel})
+          r=pd.DataFrame(rows)
+          def cagr(x):
+            years=len(x)*hold/252
+            return float(np.prod(1+x)**(1/years)-1)
+          def mdd(x):
+            e=np.cumprod(1+x); return float(np.min(e/np.maximum.accumulate(e)-1))
+          folds=np.array_split(np.arange(len(r)),5)
+          pos_ew=sum(float(r.iloc[f].strategy.mean()-r.iloc[f].ew.mean())>0 for f in folds)
+          pos_spy=sum(float(r.iloc[f].strategy.mean()-r.iloc[f].spy.mean())>0 for f in folds)
+          out={'experiment_id':'CC-RF-INDUSTRY-ETF-RELATIVE-STRENGTH-001','claim':'Fixed 6-month relative-strength rotation across ten dissimilar industry/theme ETFs creates after-cost excess over equal-weight industries and SPY.','universe':assets,'lookback_sessions':lb,'hold_sessions':hold,'top_n':topn,'round_trip_cost_bps':20.0,'common_start':str(px.index[0].date()),'common_end':str(px.index[-1].date()),'periods':len(r),'strategy_after_cost_cagr_pct':100*cagr(r.strategy),'equal_weight_cagr_pct':100*cagr(r.ew),'spy_cagr_pct':100*cagr(r.spy),'excess_vs_equal_weight_cagr_pp':100*(cagr(r.strategy)-cagr(r.ew)),'excess_vs_spy_cagr_pp':100*(cagr(r.strategy)-cagr(r.spy)),'strategy_max_drawdown_pct':100*mdd(r.strategy),'equal_weight_max_drawdown_pct':100*mdd(r.ew),'positive_ew_excess_folds':int(pos_ew),'positive_spy_excess_folds':int(pos_spy)}
+          out['gate_pass']=bool(out['excess_vs_equal_weight_cagr_pp']>1.0 and out['excess_vs_spy_cagr_pp']>0 and pos_ew>=4 and pos_spy>=3)
+          blob=json.dumps(out,sort_keys=True,indent=2); open('industry_etf_relative_strength_r1.json','w').write(blob+'\n')
+          print(blob); print('RESULT_SHA256='+hashlib.sha256((blob+'\n').encode()).hexdigest())
+          PY
+          python /tmp/run.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: industry-etf-relative-strength-r1
+          path: industry_etf_relative_strength_r1.json
+          retention-days: 30
