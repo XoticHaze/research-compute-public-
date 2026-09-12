@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - 'research/sec_ftd_fund_stress_gate_r1.py'
+      - 'research/sec_ftd_fund_stress_gate_r1_sec_index_fix.py'
       - '.github/workflows/sec-ftd-fund-stress-gate-r1.yml'
   pull_request:
     paths:
       - 'research/sec_ftd_fund_stress_gate_r1.py'
+      - 'research/sec_ftd_fund_stress_gate_r1_sec_index_fix.py'
       - '.github/workflows/sec-ftd-fund-stress-gate-r1.yml'
   workflow_dispatch:
 
@@ -24,9 +26,9 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install dependencies
-        run: python -m pip install --disable-pip-version-check requests
+        run: python -m pip install --disable-pip-version-check requests brotli
       - name: Execute frozen SEC FTD fund stress discriminator
-        run: python research/sec_ftd_fund_stress_gate_r1.py
+        run: python research/sec_ftd_fund_stress_gate_r1_sec_index_fix.py
       - name: Upload deterministic scientific result
         if: always()
         uses: actions/upload-artifact@v4
