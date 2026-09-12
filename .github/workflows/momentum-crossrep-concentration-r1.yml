@@ -1,0 +1,33 @@
+name: Momentum CrossRep Concentration R1
+on:
+  pull_request:
+    paths:
+      - 'research/momentum_crossrep_concentration_r1.py'
+      - '.github/workflows/momentum-crossrep-concentration-r1.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check yfinance==0.2.65 pandas==2.3.2 numpy==2.3.2
+      - id: result
+        run: |
+          python -m research.momentum_crossrep_concentration_r1
+          python - <<'PY'
+          import json, os
+          x=json.load(open('research/artifacts/momentum_crossrep_concentration_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write('decision='+x['decision']+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: momentum-crossrep-concentration__${{ steps.result.outputs.decision }}
+          path: research/artifacts/momentum_crossrep_concentration_r1.json
+          if-no-files-found: error
