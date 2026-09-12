@@ -1,6 +1,11 @@
 {
   "coverage": {
-    "adapter_gaps": [
+    "adapter_contracts_ready": [
+      "SEMICONDUCTOR_SHARED_RIDGE",
+      "HOMEBUILDERS",
+      "GENERALIZED_LARGECAP_RIDGE"
+    ],
+    "native_result_gaps": [
       "SEMICONDUCTOR_SHARED_RIDGE",
       "HOMEBUILDERS",
       "GENERALIZED_LARGECAP_RIDGE"
@@ -12,9 +17,74 @@
       "SENIOR_CLO"
     ]
   },
-  "generated_at": "2026-09-12T08:56:54.020440+00:00",
+  "decision_chain": {
+    "diversification": {
+      "JAAA": {
+        "annualized_vol": null,
+        "challenger_cumulative_bps": -4.32,
+        "excess_vs_incumbent_bps": -62.77,
+        "excess_vs_matched_cash_control_bps": 2.31,
+        "max_drawdown": 0.0
+      },
+      "KMLM": {
+        "annualized_vol": null,
+        "challenger_cumulative_bps": -24.35,
+        "excess_vs_incumbent_bps": -82.8,
+        "excess_vs_matched_cash_control_bps": -17.71,
+        "max_drawdown": 0.0
+      }
+    },
+    "portfolio": {
+      "source": "P249_P266",
+      "target_weights": {
+        "AVDV": 0.125,
+        "AVUV": 0.125,
+        "DBC": 0.0625,
+        "IGV": 0.041666666666666664,
+        "QQQ": 0.0625,
+        "SOXX": 0.2916666666666667,
+        "XBI": 0.125,
+        "XPH": 0.08333333333333333,
+        "XSD": 0.08333333333333333
+      },
+      "validation_grade": "INSUFFICIENT_SAMPLE"
+    },
+    "realized_excess": {
+      "JAAA_vs_cash_control_bps": 2.31,
+      "JAAA_vs_incumbent_bps": -62.77,
+      "KMLM_vs_cash_control_bps": -17.71,
+      "KMLM_vs_incumbent_bps": -82.8,
+      "p266_increment_bps": -14.49
+    },
+    "regime": {
+      "authority": "context_only",
+      "selected": [
+        "DBC",
+        "QQQ"
+      ],
+      "source": "P46"
+    },
+    "resulting_market_decision_rule": "Use P249/P266 as the frozen base research portfolio; treat P46 as regime context; add only native prospectively authorized cohorts such as Semiconductor three-book cohorts; use Homebuilders and generalized large-cap transport as decision evidence until a frozen sizing book exists; do not promote KMLM/JAAA substitutions until excess evidence is sufficient.",
+    "sectors": {
+      "homebuilders": {
+        "admitted": [],
+        "horizons": {}
+      },
+      "semiconductor": {
+        "action": null,
+        "positive_breadth": null
+      }
+    },
+    "tickers": {
+      "largecap_negative_corroboration": [],
+      "largecap_positive_corroboration": [],
+      "semiconductor_positive": []
+    }
+  },
+  "generated_at": "2026-09-12T09:44:08.128797+00:00",
   "interpretation": {
     "broker_or_live_authority": false,
+    "daily_score_does_not_imply_daily_turnover": true,
     "forward_score_requires_matched_benchmark_or_control": true,
     "positive_model_score_is_not_position_size": true,
     "small_samples_are_not_promotion_evidence": true,
@@ -56,6 +126,11 @@
           "DBC",
           "QQQ"
         ]
+      },
+      "timing": {
+        "decision_cadence": "monthly",
+        "entry_rule": "rebalance only at the frozen monthly decision/admission boundary; a daily rerun is not a new trade",
+        "holding_rule": "hold target weights for the frozen holding month until the next valid monthly rebalance"
       },
       "validation_grade": "SHAKEDOWN_ONLY"
     },
@@ -106,6 +181,11 @@
           "XSD": 0.3333333333333333
         }
       },
+      "timing": {
+        "decision_cadence": "frozen monthly portfolio decision",
+        "entry_rule": "rebalance the research book at the declared portfolio decision boundary, not every daily score run",
+        "holding_rule": "keep frozen weights through the decision period; daily closes update forward PnL and excess only"
+      },
       "validation_grade": "INSUFFICIENT_SAMPLE"
     },
     {
@@ -142,6 +222,11 @@
       "signal": {
         "alternative": "KMLM",
         "fixed_weight": 0.5
+      },
+      "timing": {
+        "decision_cadence": "frozen challenger start plus monthly rebalance",
+        "entry_rule": "establish the fixed challenger mix at its declared decision boundary",
+        "holding_rule": "mark daily and rebalance only under the frozen monthly rule; do not chase one-day results"
       },
       "validation_grade": "INSUFFICIENT_SAMPLE"
     },
@@ -180,25 +265,30 @@
         "alternative": "JAAA",
         "fixed_weight": 0.5
       },
+      "timing": {
+        "decision_cadence": "frozen challenger start plus monthly rebalance",
+        "entry_rule": "establish the fixed challenger mix at its declared decision boundary",
+        "holding_rule": "mark daily and rebalance only under the frozen monthly rule; do not chase one-day results"
+      },
       "validation_grade": "INSUFFICIENT_SAMPLE"
     },
     {
-      "decision_use": "Preserve native observer output; do not infer a common score until its registered adapter is wired.",
+      "decision_use": "Adapter contract exists; current sanitized native result has not been supplied to this report run.",
       "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
-      "status": "ADAPTER_NOT_CONNECTED_TO_THIS_REPORT",
-      "validation_grade": "NO_COMMON_SCORE"
+      "status": "ADAPTER_RESULT_NOT_PRESENT",
+      "validation_grade": "NO_CURRENT_NATIVE_RESULT"
     },
     {
-      "decision_use": "Preserve native observer output; do not infer a common score until its registered adapter is wired.",
+      "decision_use": "Adapter contract exists; current sanitized native result has not been supplied to this report run.",
       "program_id": "HOMEBUILDERS",
-      "status": "ADAPTER_NOT_CONNECTED_TO_THIS_REPORT",
-      "validation_grade": "NO_COMMON_SCORE"
+      "status": "ADAPTER_RESULT_NOT_PRESENT",
+      "validation_grade": "NO_CURRENT_NATIVE_RESULT"
     },
     {
-      "decision_use": "Preserve native observer output; do not infer a common score until its registered adapter is wired.",
+      "decision_use": "Adapter contract exists; current sanitized native result has not been supplied to this report run.",
       "program_id": "GENERALIZED_LARGECAP_RIDGE",
-      "status": "ADAPTER_NOT_CONNECTED_TO_THIS_REPORT",
-      "validation_grade": "NO_COMMON_SCORE"
+      "status": "ADAPTER_RESULT_NOT_PRESENT",
+      "validation_grade": "NO_CURRENT_NATIVE_RESULT"
     }
   ],
   "market_decision_context": [
