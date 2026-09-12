@@ -1,4 +1,4 @@
-name: Homebuilder Peer Relative Alpha R1
+name: Homebuilder Peer Relative Alpha R2
 
 on:
   push:
@@ -6,10 +6,12 @@ on:
       - research/homebuilder-peer-relative-alpha-r1
     paths:
       - "scripts/homebuilder_peer_relative_alpha_r1.py"
+      - "scripts/homebuilder_peer_relative_alpha_r2.py"
       - ".github/workflows/homebuilder-peer-relative-alpha-r1.yml"
   pull_request:
     paths:
       - "scripts/homebuilder_peer_relative_alpha_r1.py"
+      - "scripts/homebuilder_peer_relative_alpha_r2.py"
       - ".github/workflows/homebuilder-peer-relative-alpha-r1.yml"
   workflow_dispatch:
 
@@ -28,9 +30,9 @@ jobs:
       - name: Install fixed dependencies
         run: python -m pip install --disable-pip-version-check numpy pandas scikit-learn
       - name: Compile frozen study
-        run: python -m py_compile scripts/homebuilder_peer_relative_alpha_r1.py
-      - name: Execute frozen Homebuilder peer-relative study
-        run: python scripts/homebuilder_peer_relative_alpha_r1.py
+        run: python -m py_compile scripts/homebuilder_peer_relative_alpha_r1.py scripts/homebuilder_peer_relative_alpha_r2.py
+      - name: Execute source-admissible Homebuilder peer-relative study
+        run: python scripts/homebuilder_peer_relative_alpha_r2.py
       - name: Preserve terminal receipt in job summary
         if: always()
         run: |
@@ -40,7 +42,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: homebuilder-peer-relative-alpha-r1
+          name: homebuilder-peer-relative-alpha-r2
           path: research/results/homebuilder_peer_relative_alpha_r1.json
           if-no-files-found: ignore
           retention-days: 30
