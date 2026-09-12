@@ -1,0 +1,16 @@
+{
+  "schema":"semiconductor_raw_momentum_loo_contract.v1",
+  "experiment_id":"CC-RF-SEMICONDUCTOR-RAW-MOMENTUM-LOO-001",
+  "inherited_parent":"P13",
+  "uncertainty_resolved":"Whether the surviving raw 126-session top-3 semiconductor momentum economics depend on any single current-name constituent.",
+  "universe":["NVDA","AMD","AVGO","QCOM","TXN","AMAT","LRCX","KLAC","MU","ADI"],
+  "benchmark":"SMH",
+  "lookback_sessions":126,
+  "top_n":3,
+  "cost_bps_per_turnover":25,
+  "stress_cost_bps_per_turnover":50,
+  "gates":{"min_positive_loo_fraction":0.8,"min_median_excess_cagr_pp":1.0,"min_worst_excess_cagr_pp":-2.0,"min_stress_positive_loo_fraction":0.6},
+  "promotion_limit":"Passing does not resolve point-in-time constituent survivorship risk.",
+  "frozen_rule":"No symbol, lookback, top_n, costs, benchmark, or gates change after result; failure parks concentration-robust raw-momentum claim without rescue.",
+  "research_only":true
+}
