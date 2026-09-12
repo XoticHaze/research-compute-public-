@@ -1,0 +1,49 @@
+name: SPMO Concentration Falsifier R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/spmo-concentration-falsifier-r1.yml'
+      - 'research/spmo-concentration-falsifier-r1.json'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.11.16'}
+      - name: Evaluate frozen SPMO concentration falsifier
+        run: |
+          python - <<'PY'
+          import json,urllib.request,datetime as dt
+          from pathlib import Path
+          c=json.loads(Path('research/spmo-concentration-falsifier-r1.json').read_text()); st=dt.datetime.fromisoformat(c['start']+'T00:00:00+00:00'); en=dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1)
+          def fetch(s):
+              u=f"https://query1.finance.yahoo.com/v8/finance/chart/{s}?period1={int(st.timestamp())}&period2={int(en.timestamp())}&interval=1d&events=history&includeAdjustedClose=true"; req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+              with urllib.request.urlopen(req,timeout=30) as q:o=json.load(q)['chart']['result'][0]
+              a=o['indicators'].get('adjclose',[{}])[0].get('adjclose') or o['indicators']['quote'][0]['close']; return {dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat():float(p) for t,p in zip(o['timestamp'],a) if p is not None}
+          px={s:fetch(s) for s in ['SPMO','SPY']}; ds=sorted(set(px['SPMO'])&set(px['SPY'])); months={}
+          for d in ds: months.setdefault(d[:7],[]).append(d)
+          rows=[]
+          for m,z in sorted(months.items()):
+              if len(z)<10: continue
+              a=px['SPMO'][z[-1]]/px['SPMO'][z[0]]-1; b=px['SPY'][z[-1]]/px['SPY'][z[0]]-1; rows.append({'month':m,'spmo':a,'spy':b,'rel':(1+a)/(1+b)-1})
+          def cagr(rows,sym):
+              v=1.0
+              for r in rows:v*=1+r[sym]
+              yrs=max(len(rows)/12,1/12); return v**(1/yrs)-1
+          def excess(rows): return cagr(rows,'spmo')-cagr(rows,'spy')
+          cost=c['cost_bps']/10000; base=excess(rows)-2*cost/(len(rows)/12)
+          removed={r['month'] for r in sorted(rows,key=lambda r:r['rel'],reverse=True)[:c['top_relative_months_removed']]}; kept=[r for r in rows if r['month'] not in removed]; recent=[r for r in kept if r['month']>=c['frozen_inheritance']['recent_start'][:7]]
+          yearly=[]
+          for y in sorted({r['month'][:4] for r in rows}):
+              z=[r for r in rows if r['month'].startswith(y)];
+              if len(z)>=10: yearly.append({'year':y,'excess_cagr':excess(z),'positive':excess(z)>0})
+          trim=excess(kept)-2*cost/(len(kept)/12); rtrim=excess(recent)-2*cost/(len(recent)/12); g=c['gates']; pos=sum(x['positive'] for x in yearly)
+          out={'schema':'spmo_concentration_falsifier_result.v1','months':len(rows),'base_after_cost_excess_cagr':base,'removed_months':sorted(removed),'trimmed_after_cost_excess_cagr':trim,'recent_trimmed_after_cost_excess_cagr':rtrim,'positive_calendar_years':pos,'yearly':yearly,'gates':g,'survives_concentration_falsifier':base>=g['base_min_excess_cagr'] and trim>=g['trimmed_min_excess_cagr'] and rtrim>=g['recent_trimmed_min_excess_cagr'] and pos>=g['min_positive_calendar_years'],'research_only':True}
+          Path('spmo-concentration-falsifier-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2)); print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with: {name: spmo-concentration-falsifier-r1-result, path: spmo-concentration-falsifier-r1-result.json, retention-days: 14}
