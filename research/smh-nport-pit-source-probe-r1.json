@@ -1,0 +1,17 @@
+{
+  "schema":"smh_nport_pit_source_probe_contract.v1",
+  "experiment_id":"CC-RF-SMH-NPORT-PIT-SOURCE-001",
+  "inherited_learning_ids":["CC-RF-SEMICONDUCTOR-RAW-MOMENTUM-LOO-001"],
+  "uncertainty_resolved":"Whether official SEC N-PORT filings provide dated SMH holdings with stable security identity sufficient to construct a point-in-time semiconductor membership corpus.",
+  "series_id":"S000034411",
+  "class_id":"C000105869",
+  "cik":"0001137360",
+  "known_accessions":[
+    "000175272423042837","000175272423177922","000175272424034417","000175272424123260",
+    "000175272425041038","000141036825028395","000141036826020340","000141036826054882"
+  ],
+  "required_identity_fields_any":["ticker","cusip","name"],
+  "gates":{"min_successful_snapshots":6,"min_distinct_report_dates":6,"min_holdings_per_snapshot":10,"require_series_identity":true,"require_security_identity":true},
+  "frozen_rule":"Do not substitute a vendor holdings history after observing this probe. Source success/failure is judged only on these official SEC filings and frozen identity/coverage gates.",
+  "research_only":true
+}
