@@ -1,0 +1,71 @@
+{
+  "schema": "market_research_firing_receipt.v1",
+  "role": "Market Research",
+  "firing_contract": "2026-09-08-r3",
+  "receipt_timestamp_utc": "2026-09-12T02:08:00Z",
+  "route": {
+    "selected_execution_surface": "public_research_compute_current",
+    "repository": "XoticHaze/research-compute-public-",
+    "private_input_exposed": false,
+    "live_trading_changed": false
+  },
+  "fresh_executions": [
+    {
+      "scientific_child": "MTUM momentum transport",
+      "same_firing_initiation": {"pull_request": 1278, "opened_at": "2026-09-12T02:04:57Z"},
+      "mechanism": "pull_request_workflow",
+      "head_sha": "f96b8bfd5db96c54767485004976b564fc79d035",
+      "run_id": 34666666590,
+      "job_id": 103479819829,
+      "observed_start": "2026-09-12T02:05:04Z",
+      "terminal_conclusion": "success",
+      "artifact_id": 10288957522,
+      "artifact_sha256": "0505c402937ccd579df179578d74ae66d6a6943beee211d5f9d007ae3306a5b5",
+      "scientific_consequence": "REJECT_NO_RESCUE: full after-cost SPY excess +1.217 pp, but recent -0.055 pp, five-extreme-month-trimmed -1.314 pp, full SPY+QQQ residual alpha +0.658%, recent residual alpha -0.385%, and only 6 positive calendar years versus frozen minimum 7."
+    },
+    {
+      "scientific_child": "PDP momentum transport",
+      "same_firing_initiation": {"pull_request": 1279, "opened_at": "2026-09-12T02:05:42Z"},
+      "mechanism": "pull_request_workflow",
+      "head_sha": "93e8af8074ffaab1ca4e0de90197c4930b90d769",
+      "run_id": 34666703479,
+      "job_id": 103479927731,
+      "observed_start": "2026-09-12T02:05:48Z",
+      "terminal_conclusion": "success",
+      "artifact_id": 10289347535,
+      "artifact_sha256": "4d5a02938afa50aefdaa4de1372e817c400fbb7b7b3ea20889965fe9d6460feb",
+      "scientific_consequence": "REJECT_NO_RESCUE: full after-cost SPY excess -0.310 pp, recent -2.396 pp, five-extreme-month-trimmed -1.984 pp, full SPY+QQQ residual alpha -1.322%, recent residual alpha -2.772%; 10 positive calendar years did not overcome negative matched economics."
+    }
+  ],
+  "returning_evidence_consumed": [
+    {
+      "scientific_child": "SPMO+DBMF ex-2022 concentration falsifier",
+      "run_id": 34666282648,
+      "job_id": 103478697077,
+      "artifact_id": 10289092414,
+      "artifact_sha256": "b68cf9eea71b13663c48aa675a20bfaa02f95bcd61aad92d4614d1dc78fdf381",
+      "consequence": "REJECT_FIXED_BLEND_NO_RESCUE: +4.122 pp matched-control excess and +8.809 pp drawdown improvement survived ex-2022, but Sharpe improvement was only +0.017 versus frozen +0.05 gate."
+    },
+    {
+      "scientific_child": "SPMO rolling 24m versus MTUM chronology",
+      "run_id": 34666370254,
+      "job_id": 103478950943,
+      "artifact_id": 10289541656,
+      "artifact_sha256": "2e14a976ec8cd0f6245a432a1d0c571c6aec0a3b1f418a180357fcb930205229",
+      "consequence": "SURVIVES: 108 overlapping 24-month windows, 65.741% positive, median annualized excess +4.103 pp, worst -4.896 pp versus frozen -5.0 pp floor. Returning evidence only, not fresh execution credit for this firing."
+    }
+  ],
+  "durable_current_main_before_receipt": "77b9a8fde7e3380facf148379e84563c2ab4053d",
+  "final_frontier": [
+    "SPMO remains the strongest momentum implementation evidence and now survives rolling 24-month MTUM chronology, while MTUM and PDP fail independent implementation transport. Treat momentum evidence as implementation-specific, not a generic ETF-family premium.",
+    "Do not rescue the rejected fixed SPMO+DBMF 50/50 blend; its ex-2022 Sharpe-improvement gate failed despite positive excess and drawdown improvement.",
+    "Prefer the next orthogonal discriminator on SPMO itself or a genuinely different alpha architecture rather than further generic momentum-wrapper screening."
+  ],
+  "authority_limits": {
+    "portfolio_ranking_changed": false,
+    "scheduler_or_control_plane_changed": false,
+    "product_authority_changed": false,
+    "live_trading_changed": false
+  },
+  "receipt_execution_credit": 0
+}
