@@ -54,7 +54,7 @@ def main() -> int:
     receipt_path, receipt = load_receipt(Path("input/receipt"))
     if receipt.get("acceptance") != "MM_LOCAL_DATED_CACHE_COMPATIBLE_STAGING_WITH_SOURCE_QUARANTINE":
         raise RuntimeError("unexpected F1a acceptance state")
-    if receipt.get("source_run_id") != F1A_SOURCE_RUN_ID:
+    if str(receipt.get("source_run_id")) != str(F1A_SOURCE_RUN_ID):
         raise RuntimeError("source run identity mismatch")
     if receipt.get("continuous_series_constructed") is not False or receipt.get("roll_cutoff_selected") is not False:
         raise RuntimeError("released staging exceeded dated-cache authority")
