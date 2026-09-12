@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: forward-native-full-roundtrip-proof-r1
+  group: forward-native-full-roundtrip-proof-r1-${{ github.run_id }}
   cancel-in-progress: false
 
 env:
