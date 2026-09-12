@@ -23,6 +23,7 @@ jobs:
   consume:
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         harness:
           - semiconductor_shared_ridge_three_book_v1
