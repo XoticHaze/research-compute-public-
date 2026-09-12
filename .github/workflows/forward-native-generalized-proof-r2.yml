@@ -110,6 +110,13 @@ jobs:
           PY
           )"
           curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -d "$body" >/dev/null
+      - name: Upload encrypted return artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: forward-native-generalized-encrypted-return-${{ github.run_id }}
+          path: ${{ runner.temp }}/forward-native-generalized_largecap_ridge_v1-return.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Remove one-run private material
         if: always()
         run: rm -f "$RUNNER_TEMP/forward-native-${HARNESS}-private.b64" "$RUNNER_TEMP/forward-native-${HARNESS}-recipient.json" "$RUNNER_TEMP/forward-native-${HARNESS}-input.json" "$RUNNER_TEMP/forward-native-${HARNESS}-return.json"
