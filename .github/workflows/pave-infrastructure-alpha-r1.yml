@@ -1,0 +1,57 @@
+name: PAVE Infrastructure Alpha R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/pave-infrastructure-alpha-r1.yml'
+      - 'research/pave-infrastructure-alpha-r1.json'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.11.16'}
+      - name: Evaluate frozen PAVE infrastructure alpha
+        run: |
+          python - <<'PY'
+          import json,urllib.request,datetime as dt,math
+          from pathlib import Path
+          c=json.loads(Path('research/pave-infrastructure-alpha-r1.json').read_text());st=dt.datetime.fromisoformat(c['start']+'T00:00:00+00:00');en=dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1)
+          def f(s):
+              u=f"https://query1.finance.yahoo.com/v8/finance/chart/{s}?period1={int(st.timestamp())}&period2={int(en.timestamp())}&interval=1d&events=history&includeAdjustedClose=true";req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+              with urllib.request.urlopen(req,timeout=30) as q:o=json.load(q)['chart']['result'][0]
+              a=o['indicators'].get('adjclose',[{}])[0].get('adjclose') or o['indicators']['quote'][0]['close'];return {dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat():float(p) for t,p in zip(o['timestamp'],a) if p is not None}
+          sy=['PAVE','XLI','SPY'];px={s:f(s) for s in sy};ds=sorted(set.intersection(*(set(px[s]) for s in sy)));m={}
+          for d in ds:m.setdefault(d[:7],[]).append(d)
+          rows=[]
+          for k,z in sorted(m.items()):
+              if len(z)<10:continue
+              r={'month':k}
+              for s in sy:r[s.lower()]=px[s][z[-1]]/px[s][z[0]]-1
+              rows.append(r)
+          def cg(z,k):
+              v=1.0
+              for r in z:v*=1+r[k]
+              return v**(12/max(len(z),1))-1
+          def ex(z):return cg(z,'pave')-cg(z,'xli')
+          def reg(z):
+              y=[r['pave'] for r in z];x1=[r['spy'] for r in z];x2=[r['xli'] for r in z];n=len(z);my=sum(y)/n;m1=sum(x1)/n;m2=sum(x2)/n;s11=sum((a-m1)**2 for a in x1);s22=sum((b-m2)**2 for b in x2);s12=sum((a-m1)*(b-m2) for a,b in zip(x1,x2));sy1=sum((yy-my)*(a-m1) for yy,a in zip(y,x1));sy2=sum((yy-my)*(b-m2) for yy,b in zip(y,x2));det=s11*s22-s12*s12
+              if abs(det)<1e-18:raise RuntimeError('singular')
+              b1=(sy1*s22-sy2*s12)/det;b2=(sy2*s11-sy1*s12)/det;a=my-b1*m1-b2*m2;res=[yy-(a+b1*p+b2*q) for yy,p,q in zip(y,x1,x2)];s2=sum(e*e for e in res)/max(n-3,1);inv00=1/n+(m1*m1*s22-2*m1*m2*s12+m2*m2*s11)/det;se=math.sqrt(max(s2*inv00,0));return {'alpha_ann':a*12,'alpha_tstat':a/se if se>0 else None,'beta_spy':b1,'beta_xli':b2,'months':n}
+          def mdd(sym):
+              peak=None;dd=0.0
+              for d in ds:
+                  v=px[sym][d];peak=v if peak is None or v>peak else peak;dd=min(dd,v/peak-1)
+              return dd
+          recent=[r for r in rows if r['month']>=c['recent_start'][:7]];yr=[]
+          for y in sorted({r['month'][:4] for r in rows}):
+              z=[r for r in rows if r['month'].startswith(y)]
+              if len(z)>=10:yr.append({'year':y,'excess_vs_xli':ex(z),'positive':ex(z)>0})
+          cost=2*c['cost_bps']/10000;full=ex(rows)-cost;rec=ex(recent)-cost;fr=reg(rows);rr=reg(recent);pos=sum(x['positive'] for x in yr);pdd=mdd('PAVE');xdd=mdd('XLI');pen=pdd-xdd;g=c['gates'];ok=full>=g['full_after_cost_excess_vs_xli_min'] and rec>=g['recent_after_cost_excess_vs_xli_min'] and pos>=g['min_positive_calendar_years_vs_xli'] and fr['alpha_ann']>=g['full_residual_alpha_spy_xli_min'] and rr['alpha_ann']>=g['recent_residual_alpha_spy_xli_min'] and pen>=g['max_drawdown_penalty_vs_xli_min']
+          out={'schema':'pave_infrastructure_alpha_result.v1','months':len(rows),'recent_months':len(recent),'full_after_cost_excess_vs_xli_cagr':full,'recent_after_cost_excess_vs_xli_cagr':rec,'positive_calendar_years_vs_xli':pos,'full_spy_xli_residual':fr,'recent_spy_xli_residual':rr,'pave_max_drawdown':pdd,'xli_max_drawdown':xdd,'max_drawdown_penalty_vs_xli':pen,'supports_infrastructure_alpha':ok,'yearly':yr,'gates':g,'research_only':True};Path('pave-infrastructure-alpha-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2));print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with: {name: pave-infrastructure-alpha-r1-result, path: pave-infrastructure-alpha-r1-result.json, retention-days: 14}
