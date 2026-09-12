@@ -1,0 +1,24 @@
+name: Homebuilder Source Calendar Probe R1
+
+on:
+  push:
+    branches:
+      - research/homebuilder-peer-relative-alpha-r1
+    paths:
+      - "scripts/homebuilder_source_calendar_probe_r1.py"
+      - ".github/workflows/homebuilder-source-calendar-probe-r1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11.16"
+      - run: python scripts/homebuilder_source_calendar_probe_r1.py
