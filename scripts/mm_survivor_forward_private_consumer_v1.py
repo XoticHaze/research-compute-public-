@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-"""Fixed encrypted acceptance consumer for the MM survivor paper-trade admission gate.
+"""Fixed encrypted acceptance consumer for MM completed-trade UI semantics.
 
 The public runner receives only a one-run encrypted tarball. Plaintext exists only
-in runner temp. The capsule is intentionally minimal: the fail-closed producer
-acceptance audit plus its regression suite, pinned to exact private Git blobs.
+in runner temp. The capsule is intentionally minimal: the Strategy Health UI
+component plus its deterministic source-contract regression suite, pinned to exact
+private Git blobs.
 """
 
 import argparse
@@ -24,13 +25,13 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 SCHEMA = "mm-survivor-forward-x25519-v1"
 HARNESS = "mm_survivor_forward_private_acceptance_v1"
 INFO = b"commandcenter-mm-survivor-forward-v1"
-EXPECTED_MM_COMMIT = "11baa28c82458b1d22a6ed4ef5d5be54166ae745"
+EXPECTED_MM_COMMIT = "4381c75706bd03fd0ad18afb7e8c155eae5085ec"
 EXPECTED_GIT_BLOBS = {
-    "scripts/operator/audit_survivor_paper_trade_acceptance_v1.py": "e41bca4fa7d79156f313fe7430e84943563a143e",
-    "tests/test_survivor_paper_trade_acceptance_audit_v1.py": "f59acebc4d05ae0c514ce5f8e2222e97eccc4460",
+    "ui-react/src/components/CapitalReadinessPanel.jsx": "4801ef5578be24cacdfbfdde452e97558b7c506d",
+    "tests/test_capital_readiness_panel_completed_trade_evidence_contract.py": "7c6bebc4a90169407ac2d2005c195b355b6a7b4e",
 }
 FILES = set(EXPECTED_GIT_BLOBS)
-TESTS = ["tests.test_survivor_paper_trade_acceptance_audit_v1"]
+TESTS = ["tests.test_capital_readiness_panel_completed_trade_evidence_contract"]
 
 
 def sha256_bytes(value: bytes) -> str:
@@ -170,31 +171,38 @@ def consume(envelope_path: Path, response_dir: Path, private_key_path: Path, exp
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         manifest = extract_and_verify(plaintext, root)
-        compile_rc = subprocess.run(
-            ["python", "-m", "py_compile", "scripts/operator/audit_survivor_paper_trade_acceptance_v1.py"],
-            cwd=root,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        ).returncode
         test_rc = subprocess.run(
             ["python", "-m", "unittest", "-v", *TESTS],
             cwd=root,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         ).returncode
+        ui = (root / "ui-react/src/components/CapitalReadinessPanel.jsx").read_text(encoding="utf-8")
+        tone_block = ui.split("function tone(state) {", 1)[1].split("}\n\nfunction QualityMetric", 1)[0]
+        summary_block = ui.split("function CompletedTradeEvidenceSummary", 1)[1].split("function BenchmarkEvidenceSummary", 1)[0]
+        availability_visible = all(token in summary_block for token in (
+            "Completed-trade input availability:", "bridge-ready", "intent-only", "ledger-only",
+            "Input availability only.",
+        ))
+        bridge_ready_non_authoritative = (
+            "state === 'BRIDGE_READY'" not in tone_block
+            and "const statusClass = 'status-warning'" in summary_block
+            and "state === 'BRIDGE_READY' ? 'status-good'" not in summary_block
+            and "does not grant trade attribution, Strategy Health readiness, capital authority, or live-trading authority." in summary_block
+        )
 
-    passed = compile_rc == 0 and test_rc == 0
+    passed = test_rc == 0 and availability_visible and bridge_ready_non_authoritative
     return {
-        "schema": "mm-survivor-envelope-acceptance-receipt-v7",
+        "schema": "mm-survivor-envelope-acceptance-receipt-v8",
         "authority": "private_mm_source_validation_only",
         "harness": HARNESS,
         "mm_commit": manifest["mm_commit"],
         "status": "PASS" if passed else "FAIL",
         "checks": {
             "reviewed_source_blob_identity_verified": True,
-            "paper_trade_acceptance_audit_compiles": compile_rc == 0,
-            "paper_trade_acceptance_regressions_pass": test_rc == 0,
-            "completed_trade_operator_rows_fail_closed": True,
+            "completed_trade_ui_contract_regressions_pass": test_rc == 0,
+            "completed_trade_availability_operator_visible": availability_visible,
+            "bridge_ready_visually_non_authoritative": bridge_ready_non_authoritative,
         },
         "reviewed_source_blob_count": len(EXPECTED_GIT_BLOBS),
         "test_modules": TESTS,
