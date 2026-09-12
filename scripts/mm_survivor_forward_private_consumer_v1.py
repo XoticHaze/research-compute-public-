@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-"""Fixed encrypted acceptance consumer for the MM survivor paper-trade admission gate.
+"""One-run encrypted acceptance for the MM completed-trade operator summary contract.
 
-The public runner receives only a one-run encrypted tarball. Plaintext exists only
-in runner temp. The capsule is intentionally minimal: the fail-closed producer
-acceptance audit plus its regression suite, pinned to exact private Git blobs.
+Private MM source is decrypted only into public-runner temp, pinned to exact private
+Git blobs, tested, reduced to a sanitized receipt, and then removed by the workflow.
 """
 
 import argparse
 import base64
 import hashlib
 import json
+import runpy
 import subprocess
+import sys
 import tarfile
 import tempfile
 from pathlib import Path
@@ -22,36 +23,26 @@ from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 SCHEMA = "mm-survivor-forward-x25519-v1"
-HARNESS = "mm_survivor_forward_private_acceptance_v1"
+HARNESS = "mm_completed_trade_summary_contract_acceptance_v1"
 INFO = b"commandcenter-mm-survivor-forward-v1"
-EXPECTED_MM_COMMIT = "11baa28c82458b1d22a6ed4ef5d5be54166ae745"
+EXPECTED_MM_COMMIT = "22e2aa068ac356eed6da9390f1c80afa58a8ac0e"
 EXPECTED_GIT_BLOBS = {
-    "scripts/operator/audit_survivor_paper_trade_acceptance_v1.py": "e41bca4fa7d79156f313fe7430e84943563a143e",
-    "tests/test_survivor_paper_trade_acceptance_audit_v1.py": "f59acebc4d05ae0c514ce5f8e2222e97eccc4460",
+    "scripts/operator/survivor_completed_trade_operator_summary_v1.py": "30c4ab9d45e9cfc4679177d5c2cb63c8d91d5bbb",
+    "tests/test_survivor_completed_trade_operator_summary_v1.py": "f61d7a16e907ccc93745b1e84792f402391b6279",
 }
 FILES = set(EXPECTED_GIT_BLOBS)
-TESTS = ["tests.test_survivor_paper_trade_acceptance_audit_v1"]
 
 
-def sha256_bytes(value: bytes) -> str:
+def h(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
-
-
-def sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def git_blob_sha1(path: Path) -> str:
-    raw = path.read_bytes()
-    return hashlib.sha1(f"blob {len(raw)}\0".encode("ascii") + raw).hexdigest()
 
 
 def b64d(value: str) -> bytes:
     return base64.b64decode(value.encode("ascii"), validate=True)
+
+
+def git_blob(raw: bytes) -> str:
+    return hashlib.sha1(f"blob {len(raw)}\0".encode("ascii") + raw).hexdigest()
 
 
 def aad(run_id: str, recipient_key_id: str) -> bytes:
@@ -70,135 +61,119 @@ def aad(run_id: str, recipient_key_id: str) -> bytes:
 
 def derive(shared: bytes, associated: bytes) -> bytes:
     return HKDF(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=hashlib.sha256(associated).digest(),
-        info=INFO,
+        algorithm=hashes.SHA256(), length=32,
+        salt=hashlib.sha256(associated).digest(), info=INFO,
     ).derive(shared)
 
 
-def extract_and_verify(payload: bytes, root: Path) -> dict:
-    archive = root / "payload.tar.gz"
-    archive.write_bytes(payload)
-    with tarfile.open(archive, "r:gz") as tf:
-        expected = FILES | {"payload_manifest.json"}
-        if set(tf.getnames()) != expected:
-            raise RuntimeError("private payload file set mismatch")
-        root_resolved = root.resolve()
-        for member in tf.getmembers():
-            target = (root / member.name).resolve()
-            if root_resolved not in target.parents or not member.isfile():
-                raise RuntimeError("unsafe private archive member")
-        tf.extractall(root)
-    archive.unlink(missing_ok=True)
-
-    manifest = json.loads((root / "payload_manifest.json").read_text(encoding="utf-8"))
-    if manifest.get("schema") != "mm.survivor_forward_acceptance_payload.v1":
-        raise RuntimeError("private payload schema mismatch")
-    if manifest.get("harness") != HARNESS:
-        raise RuntimeError("private payload harness mismatch")
-    if manifest.get("mm_commit") != EXPECTED_MM_COMMIT:
-        raise RuntimeError("private payload MM commit mismatch")
-    digests = manifest.get("files") or {}
-    if set(digests) != FILES:
-        raise RuntimeError("private payload manifest file set mismatch")
-    for rel, digest in digests.items():
-        path = root / rel
-        if sha256(path) != digest:
-            raise RuntimeError(f"private payload inner digest mismatch: {rel}")
-        if git_blob_sha1(path) != EXPECTED_GIT_BLOBS[rel]:
-            raise RuntimeError(f"private payload reviewed-source blob mismatch: {rel}")
-    return manifest
-
-
-def load_ciphertext(env: dict, response_dir: Path) -> bytes:
-    chunks = env.get("chunks")
-    if not isinstance(chunks, list) or not chunks:
-        raise RuntimeError("encrypted envelope has no chunks")
-    encoded_parts: list[str] = []
-    for item in chunks:
-        if not isinstance(item, dict):
-            raise RuntimeError("encrypted chunk entry malformed")
-        remote = str(item.get("path") or "")
-        local = response_dir / Path(remote).name
-        raw = local.read_bytes()
-        if sha256_bytes(raw) != str(item.get("sha256") or ""):
-            raise RuntimeError(f"encrypted chunk digest mismatch: {local.name}")
-        text = raw.decode("ascii")
-        if len(text) != int(item.get("chars") or -1):
-            raise RuntimeError(f"encrypted chunk length mismatch: {local.name}")
-        encoded_parts.append(text)
-    ciphertext = b64d("".join(encoded_parts))
-    if sha256_bytes(ciphertext) != str(env.get("ciphertext_sha256") or ""):
-        raise RuntimeError("encrypted ciphertext digest mismatch")
-    return ciphertext
-
-
-def consume(envelope_path: Path, response_dir: Path, private_key_path: Path, expected_run_id: str) -> dict:
+def consume(envelope_path: Path, response_dir: Path, private_key_path: Path, run_id: str) -> dict:
     env = json.loads(envelope_path.read_text(encoding="utf-8"))
-    required = {
-        "schema", "run_id", "harness", "mm_commit", "recipient_key_id",
-        "sender_public_b64", "nonce_b64", "ciphertext_sha256",
-        "plaintext_sha256", "chunks",
-    }
-    if set(env) != required:
-        raise RuntimeError("envelope field set mismatch")
-    if env["schema"] != SCHEMA or str(env["run_id"]) != str(expected_run_id):
-        raise RuntimeError("envelope run/schema mismatch")
-    if env["harness"] != HARNESS or env["mm_commit"] != EXPECTED_MM_COMMIT:
-        raise RuntimeError("envelope harness/MM commit mismatch")
-
-    private_raw = b64d(private_key_path.read_text(encoding="ascii").strip())
-    private = x25519.X25519PrivateKey.from_private_bytes(private_raw)
+    private = x25519.X25519PrivateKey.from_private_bytes(b64d(private_key_path.read_text().strip()))
     recipient_raw = private.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
-    key_id = "sha256:" + hashlib.sha256(recipient_raw).hexdigest()
-    if env["recipient_key_id"] != key_id:
-        raise RuntimeError("recipient fingerprint mismatch")
+    recipient_key_id = "sha256:" + hashlib.sha256(recipient_raw).hexdigest()
+    if env.get("schema") != SCHEMA or str(env.get("run_id")) != str(run_id):
+        raise RuntimeError("envelope run/schema mismatch")
+    if env.get("harness") != HARNESS or env.get("mm_commit") != EXPECTED_MM_COMMIT:
+        raise RuntimeError("envelope harness/MM commit mismatch")
+    if env.get("recipient_key_id") != recipient_key_id:
+        raise RuntimeError("recipient mismatch")
 
-    sender_raw = b64d(env["sender_public_b64"])
-    nonce = b64d(env["nonce_b64"])
-    if len(sender_raw) != 32 or len(nonce) != 12:
-        raise RuntimeError("sender key/nonce length invalid")
-    associated = aad(str(expected_run_id), key_id)
-    shared = private.exchange(x25519.X25519PublicKey.from_public_bytes(sender_raw))
-    plaintext = ChaCha20Poly1305(derive(shared, associated)).decrypt(
-        nonce, load_ciphertext(env, response_dir), associated
+    encoded = []
+    for item in env.get("chunks") or []:
+        raw = (response_dir / Path(item["path"]).name).read_bytes()
+        if h(raw) != item["sha256"] or len(raw.decode("ascii")) != int(item["chars"]):
+            raise RuntimeError("chunk mismatch")
+        encoded.append(raw.decode("ascii"))
+    cipher = b64d("".join(encoded))
+    if h(cipher) != env.get("ciphertext_sha256"):
+        raise RuntimeError("cipher mismatch")
+
+    associated = aad(run_id, recipient_key_id)
+    sender = x25519.X25519PublicKey.from_public_bytes(b64d(env["sender_public_b64"]))
+    plain = ChaCha20Poly1305(derive(private.exchange(sender), associated)).decrypt(
+        b64d(env["nonce_b64"]), cipher, associated
     )
-    if sha256_bytes(plaintext) != env["plaintext_sha256"]:
-        raise RuntimeError("decrypted payload digest mismatch")
+    if h(plain) != env.get("plaintext_sha256"):
+        raise RuntimeError("plaintext mismatch")
 
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
-        manifest = extract_and_verify(plaintext, root)
+        archive = root / "payload.tgz"
+        archive.write_bytes(plain)
+        with tarfile.open(archive, "r:gz") as tf:
+            names = set(tf.getnames())
+            if names != FILES | {"payload_manifest.json"}:
+                raise RuntimeError("private payload file set mismatch")
+            for member in tf.getmembers():
+                if not member.isfile() or root.resolve() not in (root / member.name).resolve().parents:
+                    raise RuntimeError("unsafe archive member")
+            tf.extractall(root)
+        archive.unlink()
+
+        manifest = json.loads((root / "payload_manifest.json").read_text(encoding="utf-8"))
+        if manifest.get("schema") != "mm.survivor_forward_acceptance_payload.v1" or manifest.get("harness") != HARNESS or manifest.get("mm_commit") != EXPECTED_MM_COMMIT:
+            raise RuntimeError("manifest identity mismatch")
+        if set(manifest.get("files") or {}) != FILES:
+            raise RuntimeError("manifest file set mismatch")
+        identity = True
+        for rel, expected_blob in EXPECTED_GIT_BLOBS.items():
+            raw = (root / rel).read_bytes()
+            identity = identity and manifest["files"].get(rel) == h(raw) and git_blob(raw) == expected_blob
+
         compile_rc = subprocess.run(
-            ["python", "-m", "py_compile", "scripts/operator/audit_survivor_paper_trade_acceptance_v1.py"],
-            cwd=root,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        ).returncode
-        test_rc = subprocess.run(
-            ["python", "-m", "unittest", "-v", *TESTS],
-            cwd=root,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            [sys.executable, "-m", "py_compile", "scripts/operator/survivor_completed_trade_operator_summary_v1.py", "tests/test_survivor_completed_trade_operator_summary_v1.py"],
+            cwd=root, capture_output=True, text=True,
         ).returncode
 
-    passed = compile_rc == 0 and test_rc == 0
+        tests_ok = True
+        tests_run = 0
+        sys.path.insert(0, str(root))
+        try:
+            namespace = runpy.run_path(str(root / "tests/test_survivor_completed_trade_operator_summary_v1.py"))
+            for name, fn in sorted(namespace.items()):
+                if name.startswith("test_") and callable(fn):
+                    tests_run += 1
+                    fn()
+        except Exception:
+            tests_ok = False
+        finally:
+            sys.path.pop(0)
+
+        operator = runpy.run_path(str(root / "scripts/operator/survivor_completed_trade_operator_summary_v1.py"))
+        canonical = {
+            "schema": "mm.survivor_run_data_availability_audit.v1",
+            "symbols": {
+                "AMAT": {"bridge_ready_runs": 1, "evidence_incomplete_runs": 0, "intent_only_runs": 0, "ledger_only_runs": 0, "missing_evidence": []},
+                "APH": {"bridge_ready_runs": 0, "evidence_incomplete_runs": 1, "intent_only_runs": 1, "ledger_only_runs": 0, "missing_evidence": ["paper_pnl_ledger.csv"]},
+                "MNQ": {"bridge_ready_runs": 1, "evidence_incomplete_runs": 1, "intent_only_runs": 1, "ledger_only_runs": 0, "missing_evidence": ["paper_pnl_ledger.csv"]},
+            },
+        }
+        projected = operator["project"](canonical)
+        wire_ok = (
+            projected.get("state") == "COHERENT"
+            and [row.get("symbol") for row in projected.get("rows", [])] == ["AMAT", "APH", "MNQ"]
+            and projected["rows"][1].get("state") == "INSUFFICIENT_EVIDENCE"
+            and projected["rows"][2].get("state") == "BRIDGE_READY"
+            and all(row.get("source_ref") == "mm.survivor_run_data_availability_audit.v1" for row in projected["rows"])
+        )
+
+    passed = identity and compile_rc == 0 and tests_ok and tests_run >= 6 and wire_ok
     return {
-        "schema": "mm-survivor-envelope-acceptance-receipt-v7",
+        "schema": "mm-completed-trade-summary-contract-acceptance-receipt-v1",
         "authority": "private_mm_source_validation_only",
         "harness": HARNESS,
-        "mm_commit": manifest["mm_commit"],
+        "mm_commit": EXPECTED_MM_COMMIT,
         "status": "PASS" if passed else "FAIL",
         "checks": {
-            "reviewed_source_blob_identity_verified": True,
-            "paper_trade_acceptance_audit_compiles": compile_rc == 0,
-            "paper_trade_acceptance_regressions_pass": test_rc == 0,
-            "completed_trade_operator_rows_fail_closed": True,
+            "reviewed_source_blob_identity_verified": bool(identity),
+            "private_sources_compile": compile_rc == 0,
+            "contract_regressions_pass": tests_ok and tests_run >= 6,
+            "canonical_symbols_wire_shape_projects": bool(wire_ok),
+            "bridge_ready_remains_input_availability_only": bool(wire_ok),
         },
-        "reviewed_source_blob_count": len(EXPECTED_GIT_BLOBS),
-        "test_modules": TESTS,
-        "payload_sha256": sha256_bytes(plaintext),
+        "tests_run": tests_run,
+        "reviewed_source_blob_count": 2,
+        "payload_sha256": h(plain),
         "private_plaintext_emitted": False,
         "strategy_spec_mutation": False,
         "runtime_authority_change": False,
@@ -208,15 +183,15 @@ def consume(envelope_path: Path, response_dir: Path, private_key_path: Path, exp
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--envelope", required=True)
-    parser.add_argument("--response-dir", required=True)
-    parser.add_argument("--private-key", required=True)
-    parser.add_argument("--run-id", required=True)
-    args = parser.parse_args()
-    receipt = consume(Path(args.envelope), Path(args.response_dir), Path(args.private_key), args.run_id)
-    print("MM_SURVIVOR_FORWARD_BACKEND_RECEIPT=" + json.dumps(receipt, sort_keys=True))
-    raise SystemExit(0 if receipt["status"] == "PASS" else 1)
+    p = argparse.ArgumentParser()
+    p.add_argument("--envelope", required=True)
+    p.add_argument("--response-dir", required=True)
+    p.add_argument("--private-key", required=True)
+    p.add_argument("--run-id", required=True)
+    a = p.parse_args()
+    result = consume(Path(a.envelope), Path(a.response_dir), Path(a.private_key), a.run_id)
+    print("MM_COMPLETED_TRADE_SUMMARY_RECEIPT=" + json.dumps(result, sort_keys=True))
+    raise SystemExit(0 if result["status"] == "PASS" else 1)
 
 
 if __name__ == "__main__":
