@@ -36,6 +36,8 @@ REQUIRED = {
     "producer/scripts/research/mnq_crw_lifecycle_replay_20260901.py",
     "producer/config/selected_runtime_universe_14tu.json",
     "producer/strategy_builder_condition_contract_14th31kn.py",
+    "producer/feature_contract.py",
+    "producer/indicators_registry.py",
 }
 
 
