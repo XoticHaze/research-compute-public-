@@ -1,0 +1,5 @@
+workload=mnq_w106_regime1_recovery_v1
+scientific_contract=frozen
+producer_source_commit=76aa7e9bb64a1aca36865076df1fa4b25f1b06a9
+execution_plane=public_encrypted_compute_only
+request_reason=fresh_run_for_connector_side_private_source_encryption
