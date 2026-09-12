@@ -10,12 +10,14 @@ on:
       - 'assistant/**'
     paths:
       - 'research/forward_market_scoreboard_r1.py'
+      - 'research/forward_deterministic_allocator_r1.py'
       - 'research/forward_native_program_adapter_r1.py'
       - '.github/workflows/forward-market-scoreboard-r1.yml'
   pull_request:
     branches: [main]
     paths:
       - 'research/forward_market_scoreboard_r1.py'
+      - 'research/forward_deterministic_allocator_r1.py'
       - 'research/forward_native_program_adapter_r1.py'
       - '.github/workflows/forward-market-scoreboard-r1.yml'
       - 'research/forward_p249_p266_shadow_r1.py'
@@ -37,6 +39,7 @@ jobs:
         with: {python-version: '3.11'}
       - run: python research/forward_native_program_adapter_r1.py --self-test
       - run: python research/forward_market_scoreboard_r1.py --self-test
+      - run: python research/forward_deterministic_allocator_r1.py --self-test
 
   p46:
     runs-on: ubuntu-24.04
@@ -115,11 +118,19 @@ jobs:
           pattern: forward-*
           path: score-inputs
       - run: python research/forward_market_scoreboard_r1.py --input-root score-inputs --output artifacts/forward_market_scoreboard_r1.json
+      - name: Build governed deterministic paper allocation
+        run: |
+          args=(--scoreboard artifacts/forward_market_scoreboard_r1.json --output artifacts/forward_deterministic_allocator_r1.json)
+          if test -f research/current/forward_deterministic_allocator_r1.json; then
+            args+=(--prior research/current/forward_deterministic_allocator_r1.json)
+          fi
+          python research/forward_deterministic_allocator_r1.py "${args[@]}"
       - name: Print compact decision report
         run: |
           python - <<'PY'
           import json
           x=json.load(open('artifacts/forward_market_scoreboard_r1.json'))
+          a=json.load(open('artifacts/forward_deterministic_allocator_r1.json'))
           for lane in x['lanes']:
               print(lane['program_id'], lane.get('validation_grade', lane.get('status')), lane.get('action_text', ''))
               if lane.get('timing'):
@@ -128,11 +139,16 @@ jobs:
                   print('  scorecard=', json.dumps(lane['scorecard'], sort_keys=True))
           print('native_result_gaps=', ','.join(x['coverage']['native_result_gaps']))
           print('decision_chain=', json.dumps(x['decision_chain'], sort_keys=True))
+          print('allocator_policy=', a['policy_id'])
+          print('allocator_targets=', json.dumps(a['final_target_weights'], sort_keys=True))
+          print('allocator_sleeve_actions=', json.dumps(a['sleeve_actions'], sort_keys=True))
           PY
       - uses: actions/upload-artifact@v4
         with:
           name: forward-market-scoreboard-r1
-          path: artifacts/forward_market_scoreboard_r1.json
+          path: |
+            artifacts/forward_market_scoreboard_r1.json
+            artifacts/forward_deterministic_allocator_r1.json
           if-no-files-found: error
           retention-days: 90
 
@@ -149,19 +165,21 @@ jobs:
         with:
           name: forward-market-scoreboard-r1
           path: /tmp/forward-market-scoreboard
-      - name: Publish stable current scoreboard
+      - name: Publish stable current scoreboard and deterministic allocation
         run: |
           test -f /tmp/forward-market-scoreboard/forward_market_scoreboard_r1.json
+          test -f /tmp/forward-market-scoreboard/forward_deterministic_allocator_r1.json
           git fetch origin main
           git checkout -B forward-market-scoreboard-publish origin/main
           mkdir -p research/current
           cp /tmp/forward-market-scoreboard/forward_market_scoreboard_r1.json research/current/forward_market_scoreboard_r1.json
+          cp /tmp/forward-market-scoreboard/forward_deterministic_allocator_r1.json research/current/forward_deterministic_allocator_r1.json
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add research/current/forward_market_scoreboard_r1.json
+          git add research/current/forward_market_scoreboard_r1.json research/current/forward_deterministic_allocator_r1.json
           if git diff --cached --quiet; then
-            echo 'CURRENT_SCOREBOARD_UNCHANGED=true'
+            echo 'CURRENT_FORWARD_REPORT_UNCHANGED=true'
             exit 0
           fi
-          git commit -m 'Forward: publish current market scoreboard'
+          git commit -m 'Forward: publish current scoreboard and deterministic allocation'
           git push origin HEAD:main
