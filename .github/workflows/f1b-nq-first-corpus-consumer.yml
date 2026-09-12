@@ -1,0 +1,43 @@
+name: F1b NQ first corpus consumer
+
+on:
+  push:
+    branches:
+      - continue-release/f1b-nq-first-corpus-20260912
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  consume:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record execution identity
+        run: |
+          echo "public_head=${GITHUB_SHA}"
+          echo "mm_product_head=b03162cfcdfb6e82d0297a435e318f2ca5ff7647"
+          echo "f1a_source_run=34684071280"
+          echo "f1a_acceptance_run=34684564957"
+          echo "staging_artifact=10294324888"
+          echo "receipt_artifact=10294544510"
+      - name: Download released F1a staging and acceptance receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p input/staging input/receipt
+          gh api /repos/${GITHUB_REPOSITORY}/actions/artifacts/10294324888/zip > /tmp/staging.zip
+          gh api /repos/${GITHUB_REPOSITORY}/actions/artifacts/10294544510/zip > /tmp/receipt.zip
+          unzip -q /tmp/staging.zip -d input/staging
+          unzip -q /tmp/receipt.zip -d input/receipt
+          find input -type f -maxdepth 6 | sort
+      - name: Consume exact released NQ bytes
+        run: python acceptance/f1b_nq_first_corpus_consumer.py
+      - name: Upload deterministic first-consumer receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: f1b-nq-first-corpus-consumer-receipt
+          path: f1b-nq-first-corpus-consumer-receipt.json
+          if-no-files-found: error
