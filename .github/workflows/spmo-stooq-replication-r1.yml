@@ -1,0 +1,56 @@
+name: SPMO Stooq Replication R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/spmo-stooq-replication-r1.yml'
+      - 'research/spmo-stooq-replication-r1.json'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.11.16'}
+      - name: Replicate frozen SPMO result from Stooq
+        run: |
+          python - <<'PY'
+          import csv,io,json,urllib.request,datetime as dt
+          from pathlib import Path
+          c=json.loads(Path('research/spmo-stooq-replication-r1.json').read_text())
+          def fetch(sym):
+              d1=c['start'].replace('-',''); d2=(dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1)).date().isoformat().replace('-','')
+              u=f'https://stooq.com/q/d/l/?s={sym}&d1={d1}&d2={d2}&i=d'
+              req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+              with urllib.request.urlopen(req,timeout=30) as r: raw=r.read().decode('utf-8-sig').strip()
+              if not raw or raw.lower().startswith('get your') or 'date,open' not in raw.lower(): raise RuntimeError(f'NO_STOOQ_ROWS:{sym}:{raw[:120]}')
+              out={}
+              for row in csv.DictReader(io.StringIO(raw)):
+                  if row.get('Date') and row.get('Close'): out[row['Date']]=float(row['Close'])
+              if len(out)<100: raise RuntimeError(f'INSUFFICIENT_STOOQ_ROWS:{sym}:{len(out)}')
+              return out
+          sm=c['symbols']; px={k:fetch(v) for k,v in sm.items()}; ds=sorted(set.intersection(*(set(v) for v in px.values())))
+          months={}
+          for d in ds: months.setdefault(d[:7],[]).append(d)
+          rows=[]
+          for m,z in sorted(months.items()):
+              if len(z)<10: continue
+              rows.append({'month':m,'spmo':px['candidate'][z[-1]]/px['candidate'][z[0]]-1,'mtum':px['matched_momentum_control'][z[-1]]/px['matched_momentum_control'][z[0]]-1,'spy':px['broad_control'][z[-1]]/px['broad_control'][z[0]]-1})
+          if len(rows)<60: raise RuntimeError(f'INSUFFICIENT_COMMON_MONTHS:{len(rows)}')
+          def cagr(z,k):
+              v=1.0
+              for r in z:v*=1+r[k]
+              return v**(12/max(len(z),1))-1
+          def excess(z): return cagr(z,'spmo')-cagr(z,'mtum')
+          recent=[r for r in rows if r['month']>=c['recent_start'][:7]]; yearly=[]
+          for y in sorted({r['month'][:4] for r in rows}):
+              z=[r for r in rows if r['month'].startswith(y)]
+              if len(z)>=10: yearly.append({'year':y,'excess_vs_mtum':excess(z),'positive':excess(z)>0})
+          cost=2*c['cost_bps']/10000; full=excess(rows)-cost; rec=excess(recent)-cost; pos=sum(x['positive'] for x in yearly); g=c['gates']; ok=full>=g['full_after_cost_excess_vs_mtum_min'] and rec>=g['recent_after_cost_excess_vs_mtum_min'] and pos>=g['min_positive_calendar_years_vs_mtum']
+          out={'schema':'spmo_stooq_replication_result.v1','source':'stooq','common_months':len(rows),'recent_months':len(recent),'full_after_cost_excess_vs_mtum_cagr':full,'recent_after_cost_excess_vs_mtum_cagr':rec,'positive_calendar_years_vs_mtum':pos,'yearly':yearly,'supports_independent_source_replication':ok,'gates':g,'research_only':True}
+          Path('spmo-stooq-replication-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2)); print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with: {name: spmo-stooq-replication-r1-result, path: spmo-stooq-replication-r1-result.json, retention-days: 14}
