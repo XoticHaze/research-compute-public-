@@ -1,0 +1,3 @@
+MNQ DCA reserve-release R3 P09 risk-gate execution request R3.
+
+The compact private payload has been reconstructed from the pinned lifecycle and replay artifacts and parity-checked against the terminal R2 economics before this trigger. Scientific contract remains unchanged: frozen R2 CC75 opportunity selector plus the inherited P09 top-20% adverse-risk gate; 4-contract budget, K=8, 5/8 profitability, >=50% capture, <=70% added-drawdown ratio, >=2/3 positive chronology. Research only; no StrategySpec/runtime/broker/live authority.
