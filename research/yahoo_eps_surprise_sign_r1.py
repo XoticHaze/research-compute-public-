@@ -24,8 +24,10 @@ def range_ret(px,a,b):
  return None if i>=len(px) or j>=len(px) else px[j][1]/px[i][1]-1
 
 def earnings(ticker):
- df=yf.Ticker(ticker).get_earnings_dates(limit=60)
- if df is None or df.empty: return []
+ try: df=yf.Ticker(ticker).get_earnings_dates(limit=60)
+ except Exception as exc: return [],f'{type(exc).__name__}:{exc}'[:240]
+ if df is None or df.empty: return [],'empty'
+ if 'Event Type' in df.columns: df=df[df['Event Type'].astype(str).str.lower().eq('earnings')]
  out=[]
  for idx,row in df.iterrows():
   try: est=float(row['EPS Estimate']); rep=float(row['Reported EPS'])
@@ -33,13 +35,16 @@ def earnings(ticker):
   if est!=est or rep!=rep: continue
   d=idx.date().isoformat() if hasattr(idx,'date') else str(idx)[:10]
   out.append({'event_date':d,'eps_estimate':est,'reported_eps':rep,'surprise_raw':rep-est,'positive_surprise':rep>est})
- return out
+ return out,None
 
 def main():
  syms=sorted(set(TICKER_TO_SECTOR)|set(TICKER_TO_SECTOR.values())|{SPY}); px={s:prices(s) for s in syms}
- pos=[]; nonpos=[]
+ pos=[]; nonpos=[]; failures={}; covered=[]
  for t,sector in TICKER_TO_SECTOR.items():
-  for e in earnings(t):
+  es,err=earnings(t)
+  if err: failures[t]=err; continue
+  covered.append(t)
+  for e in es:
    w=fwd(px[t],e['event_date'])
    if not w: continue
    a,p0,b,p1=w; sr=range_ret(px[sector],a,b); br=range_ret(px[SPY],a,b)
@@ -53,8 +58,10 @@ def main():
   xs=[e['sector_excess'] for e in pos if e['event_date'].startswith(y)]
   if len(xs)>=2: years.append({'year':int(y),'n':len(xs),'mean_sector_excess':mean(xs),'positive':mean(xs)>0})
  recent=[e['sector_excess'] for e in pos if e['event_date']>='2022-01-01']; contrast=None if not sec or not neg else mean(sec)-mean(neg)
- gates={'n_at_least_75':len(pos)>=75,'mean_sector_positive':bool(sec and mean(sec)>0),'median_sector_positive':bool(sec and med(sec)>0),'mean_spy_positive':bool(spy and mean(spy)>0),'event_hit_rate_55pct':bool(sec and mean([x>0 for x in sec])>=.55),'positive_year_share_60pct':bool(years and mean([x['positive'] for x in years])>=.60),'recent_positive':bool(recent and mean(recent)>0),'positive_surprise_beats_nonpositive':bool(contrast is not None and contrast>0)}
- result={'positive_surprise_events':len(pos),'nonpositive_surprise_events':len(nonpos),'mean_after_cost_sector_excess':mean(sec),'median_after_cost_sector_excess':med(sec),'mean_after_cost_spy_excess':mean(spy),'positive_sector_excess_share':mean([x>0 for x in sec]) if sec else None,'positive_year_share':mean([x['positive'] for x in years]) if years else None,'recent_since_2022_sector_excess':mean(recent),'positive_minus_nonpositive_sector_excess':contrast,'year_holdouts':years,'gates':gates,'decision':'SURVIVES_SCREEN_REQUIRES_SOURCE_PARITY_AND_DISJOINT_PIT_TEST' if all(gates.values()) else 'REJECT_NO_PARAMETER_RESCUE'}
- out={'schema':'research.yahoo_eps_surprise_sign_r1','experiment_id':EXPERIMENT_ID,'inherited_learning_ids':INHERITED_LEARNING,'uncertainty_resolved':'Whether true reported-EPS versus historical consensus estimate sign contains forward information after realized-EPS acceleration and price-reaction proxies failed.','claim_tested':'Positive reported EPS minus historical analyst EPS estimate predicts positive next-21-session after-cost excess versus matched sector ETF and SPY.','frozen_specification':{'signal':'Reported EPS > EPS Estimate from Yahoo/yfinance historical earnings_dates','information_time':'earnings event calendar date; enter first trading session strictly after event date','holding_sessions':HOLD,'round_trip_cost':COST,'ticker_to_sector':TICKER_TO_SECTOR,'broad_market':SPY,'source_role':'public screening source only; survivor requires independent chronology/source parity validation'},'result':result,'positive_events':pos,'nonpositive_events':nonpos,'limitations':['Yahoo/yfinance historical estimate provenance is not canonical point-in-time authority; a survivor must pass independent source-parity validation before scientific promotion.','Fixed current-ticker panel is a mechanism screen, not historical membership authority.','Failure forbids surprise-magnitude threshold, horizon, cost, ticker, sector, or year rescue.','Pass only permits source-parity and disjoint point-in-time validation.'],'boundaries':{'portfolio_ranking':False,'allocation':False,'runtime':False,'broker':False,'live_trading':False}}
+ source_ok=len(covered)>=15 and len(pos)>=75
+ gates={'source_coverage_ok':source_ok,'covered_tickers_at_least_15':len(covered)>=15,'n_at_least_75':len(pos)>=75,'mean_sector_positive':bool(sec and mean(sec)>0),'median_sector_positive':bool(sec and med(sec)>0),'mean_spy_positive':bool(spy and mean(spy)>0),'event_hit_rate_55pct':bool(sec and mean([x>0 for x in sec])>=.55),'positive_year_share_60pct':bool(years and mean([x['positive'] for x in years])>=.60),'recent_positive':bool(recent and mean(recent)>0),'positive_surprise_beats_nonpositive':bool(contrast is not None and contrast>0)}
+ decision='SOURCE_COVERAGE_FAILURE' if not source_ok else ('SURVIVES_SCREEN_REQUIRES_SOURCE_PARITY_AND_DISJOINT_PIT_TEST' if all(gates.values()) else 'REJECT_NO_PARAMETER_RESCUE')
+ result={'covered_tickers':covered,'source_failures':failures,'positive_surprise_events':len(pos),'nonpositive_surprise_events':len(nonpos),'mean_after_cost_sector_excess':mean(sec),'median_after_cost_sector_excess':med(sec),'mean_after_cost_spy_excess':mean(spy),'positive_sector_excess_share':mean([x>0 for x in sec]) if sec else None,'positive_year_share':mean([x['positive'] for x in years]) if years else None,'recent_since_2022_sector_excess':mean(recent),'positive_minus_nonpositive_sector_excess':contrast,'year_holdouts':years,'gates':gates,'decision':decision}
+ out={'schema':'research.yahoo_eps_surprise_sign_r1','experiment_id':EXPERIMENT_ID,'inherited_learning_ids':INHERITED_LEARNING,'uncertainty_resolved':'Whether true reported-EPS versus historical consensus estimate sign contains forward information after realized-EPS acceleration and price-reaction proxies failed.','claim_tested':'Positive reported EPS minus historical analyst EPS estimate predicts positive next-21-session after-cost excess versus matched sector ETF and SPY.','frozen_specification':{'signal':'Reported EPS > EPS Estimate from Yahoo/yfinance historical earnings_dates','event_type_filter':'Earnings only when source exposes Event Type','information_time':'earnings event calendar date; enter first trading session strictly after event date','holding_sessions':HOLD,'round_trip_cost':COST,'ticker_to_sector':TICKER_TO_SECTOR,'broad_market':SPY,'source_role':'public screening source only; survivor requires independent chronology/source parity validation','source_gate':'at least 15/20 tickers and 75 positive-surprise events'},'result':result,'positive_events':pos,'nonpositive_events':nonpos,'limitations':['Yahoo/yfinance historical estimate provenance is not canonical point-in-time authority; a survivor must pass independent source-parity validation before scientific promotion.','Fixed current-ticker panel is a mechanism screen, not historical membership authority.','SOURCE_COVERAGE_FAILURE is not scientific rejection.','Failure with adequate coverage forbids surprise-magnitude threshold, horizon, cost, ticker, sector, or year rescue.'],'boundaries':{'portfolio_ranking':False,'allocation':False,'runtime':False,'broker':False,'live_trading':False}}
  Path('research/artifacts').mkdir(exist_ok=True); Path('research/artifacts/yahoo_eps_surprise_sign_r1.json').write_text(json.dumps(out,indent=2,sort_keys=True,allow_nan=False)); print(json.dumps(result,sort_keys=True))
 if __name__=='__main__': main()
