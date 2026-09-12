@@ -1,4 +1,4 @@
-name: Forward Native Proof Chunk Assembler R1
+name: Forward Native Homebuilders Ciphertext Assembler R2
 
 on:
   push:
@@ -16,10 +16,10 @@ jobs:
     timeout-minutes: 10
     env:
       EXCHANGE_REF: rendezvous-exchange
-      RUN_ID: '34718621166'
+      RUN_ID: '34719643268'
       HARNESS: homebuilders_adaptive_duration_v1
-      PART_ROOT: rendezvous/proof-chunks/34718621166/homebuilders_adaptive_duration_v1
-      RESPONSE_PATH: rendezvous/responses/34718621166/homebuilders_adaptive_duration_v1-input.json
+      PART_ROOT: rendezvous/proof-chunks/34719643268/homebuilders_adaptive_duration_v1
+      RESPONSE_PATH: rendezvous/responses/34719643268/homebuilders_adaptive_duration_v1-input.json
     steps:
       - uses: actions/checkout@v4
       - name: Wait for encrypted envelope parts and assemble
@@ -28,15 +28,12 @@ jobs:
         run: |
           set -euo pipefail
           : > "$RUNNER_TEMP/envelope.json"
-          for n in 01 02 03 04 05 06 07; do
+          for n in 01 02 03 04 05 06; do
             path="${PART_ROOT}/part-${n}.txt"
             api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${EXCHANGE_REF}"
             found=0
             for _ in $(seq 1 180); do
-              if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -o "$RUNNER_TEMP/part-${n}.txt"; then
-                found=1
-                break
-              fi
+              if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -o "$RUNNER_TEMP/part-${n}.txt"; then found=1; break; fi
               sleep 2
             done
             test "$found" = 1 || { echo "MISSING_PART=${n}"; exit 42; }
@@ -53,7 +50,7 @@ jobs:
           print('ENCRYPTED_HOME_BUILDERS_ENVELOPE_ASSEMBLY=PASS')
           print('plaintext_sha256='+x['plaintext_sha256'])
           PY
-      - name: Publish assembled encrypted source capsule
+      - name: Publish assembled encrypted source capsule with retry
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -63,8 +60,17 @@ jobs:
           body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
           import json,sys
           content,branch=sys.argv[1:]
-          print(json.dumps({'message':'rendezvous: assemble encrypted Homebuilders proof capsule','content':content,'branch':branch}))
+          print(json.dumps({'message':'rendezvous: assemble encrypted Homebuilders recovery capsule','content':content,'branch':branch}))
           PY
           )"
-          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -d "$body" >/dev/null
+          response="$RUNNER_TEMP/put.json"
+          status=''
+          for attempt in $(seq 1 12); do
+            status="$(curl -sS -o "$response" -w '%{http_code}' -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -d "$body" || true)"
+            if [ "$status" = '200' ] || [ "$status" = '201' ]; then break; fi
+            if [ "$status" != '409' ]; then cat "$response" >&2 || true; exit 22; fi
+            echo "HOME_BUILDERS_ASSEMBLER_EXCHANGE_RETRY attempt=${attempt}" >&2
+            sleep $(( attempt * 2 ))
+          done
+          test "$status" = '200' -o "$status" = '201'
           echo 'ENCRYPTED_HOME_BUILDERS_CAPSULE_PUBLISHED=true'
