@@ -1,0 +1,30 @@
+name: MR PAVE Attribution 20260911 R2
+on:
+  pull_request:
+    paths:
+      - 'research/mr_pave_attribution_20260911_r2.py'
+      - '.github/workflows/mr-pave-attribution-20260911-r2.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet yfinance pandas numpy
+      - id: eval
+        run: |
+          python research/mr_pave_attribution_20260911_r2.py
+          python - <<'PY'
+          import json, os
+          x=json.load(open('research/artifacts/mr_pave_attribution_20260911_r2.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write('decision='+x['decision']+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mr-pave-attribution__${{ steps.eval.outputs.decision }}
+          path: research/artifacts/mr_pave_attribution_20260911_r2.json
+          if-no-files-found: error
