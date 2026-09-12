@@ -1,0 +1,68 @@
+name: MTUM Momentum vs IWB R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/mtum-momentum-vs-iwb-r1.yml'
+      - 'research/mtum-momentum-vs-iwb-r1.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Evaluate frozen momentum architecture
+        run: |
+          python - <<'PY'
+          import json, urllib.request, datetime as dt
+          from pathlib import Path
+          c=json.loads(Path('research/mtum-momentum-vs-iwb-r1.json').read_text())
+          start=dt.datetime.fromisoformat(c['start']+'T00:00:00+00:00'); end=dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1)
+          def fetch(sym):
+              u=f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?period1={int(start.timestamp())}&period2={int(end.timestamp())}&interval=1d&events=history&includeAdjustedClose=true"
+              req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+              with urllib.request.urlopen(req,timeout=30) as r:o=json.load(r)['chart']['result'][0]
+              a=o['indicators'].get('adjclose',[{}])[0].get('adjclose') or o['indicators']['quote'][0]['close']
+              return {dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat():float(p) for t,p in zip(o['timestamp'],a) if p is not None}
+          syms=c['symbols']; px={s:fetch(s) for s in syms}; common=sorted(set.intersection(*(set(px[s]) for s in syms))); assert len(common)>2500
+          def retmap(s):return {common[i]:px[s][common[i]]/px[s][common[i-1]]-1 for i in range(1,len(common))}
+          r={s:retmap(s) for s in syms}; ds=common[1:]
+          def cagr(s,dates):
+              v=1.0
+              for d in dates:v*=1+r[s][d]
+              yrs=max((dt.date.fromisoformat(dates[-1])-dt.date.fromisoformat(dates[0])).days/365.25,1/365.25)
+              return v**(1/yrs)-1
+          def maxdd(s,dates):
+              v=1.0; peak=1.0; dd=0.0
+              for d in dates:
+                  v*=1+r[s][d]; peak=max(peak,v); dd=min(dd,v/peak-1)
+              return dd
+          def ex(base,dates):return cagr('MTUM',dates)-cagr(base,dates)
+          periods={}
+          for name,cut in c['period_starts'].items():
+              z=[d for d in ds if d>=cut]
+              periods[name]={'mtum_cagr':cagr('MTUM',z),'iwb_cagr':cagr('IWB',z),'spy_cagr':cagr('SPY',z),'excess_vs_iwb':ex('IWB',z),'excess_vs_spy':ex('SPY',z),'mtum_max_drawdown':maxdd('MTUM',z),'iwb_max_drawdown':maxdd('IWB',z)}
+          yearly=[]
+          for y in sorted({d[:4] for d in ds}):
+              z=[d for d in ds if d.startswith(y+'-')]
+              if len(z)>=c['min_full_year_days']:
+                  e=ex('IWB',z); yearly.append({'year':y,'excess_vs_iwb':e,'positive':e>0})
+          w=c['rolling_days']; rolls=[]
+          for i in range(w-1,len(ds)):
+              z=ds[i-w+1:i+1]; rolls.append(ex('IWB',z))
+          recent=[x for x in yearly if x['year']>='2020']
+          out={'schema':'mtum_momentum_vs_iwb_result.v1','common_start':common[0],'common_end':common[-1],'common_rows':len(common),'periods':periods,'yearly':yearly,'positive_year_share':sum(x['positive'] for x in yearly)/len(yearly),'recent_positive_years':sum(x['positive'] for x in recent),'recent_year_count':len(recent),'rolling_days':w,'rolling_window_count':len(rolls),'rolling_positive_share':sum(x>0 for x in rolls)/len(rolls),'rolling_median_excess_cagr':sorted(rolls)[len(rolls)//2],'gates':c['gates']}
+          g=c['gates']; out['momentum_edge_supported']=(periods['full']['excess_vs_iwb']>=g['min_full_excess_vs_iwb'] and periods['post2020']['excess_vs_iwb']>=g['min_post2020_excess_vs_iwb'] and out['rolling_positive_share']>=g['min_rolling_positive_share'] and out['recent_positive_years']>=g['min_recent_positive_years'] and periods['full']['mtum_max_drawdown']>=periods['full']['iwb_max_drawdown']-g['max_allowed_extra_drawdown'])
+          out['research_only']=True
+          Path('mtum-momentum-vs-iwb-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2));print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mtum-momentum-vs-iwb-r1-result
+          path: mtum-momentum-vs-iwb-r1-result.json
+          retention-days: 14
