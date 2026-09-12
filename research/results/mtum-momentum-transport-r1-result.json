@@ -1,0 +1,33 @@
+{
+  "schema": "mtum_momentum_transport_result.v1",
+  "execution": {
+    "surface": "public_research_compute_current",
+    "repository": "XoticHaze/research-compute-public-",
+    "mechanism": "pull_request_workflow",
+    "pull_request": 1278,
+    "head_sha": "f96b8bfd5db96c54767485004976b564fc79d035",
+    "run_id": 34666666590,
+    "job_id": 103479819829,
+    "observed_start": "2026-09-12T02:05:04Z",
+    "terminal_conclusion": "success",
+    "artifact_id": 10288957522,
+    "artifact_sha256": "0505c402937ccd579df179578d74ae66d6a6943beee211d5f9d007ae3306a5b5"
+  },
+  "months": 160,
+  "recent_months": 80,
+  "full_after_cost_excess_vs_spy": 0.012171545897820659,
+  "recent_after_cost_excess_vs_spy": -0.0005533159982673546,
+  "positive_calendar_years_vs_spy": 6,
+  "trimmed_after_cost_excess_vs_spy": -0.013141252439846872,
+  "full_residual_alpha_vs_spy_qqq": 0.006576392167949587,
+  "recent_residual_alpha_vs_spy_qqq": -0.0038544966518011987,
+  "full_beta_spy": 0.6312138292649112,
+  "full_beta_qqq": 0.3084403089466722,
+  "recent_beta_spy": 0.7330547994193728,
+  "recent_beta_qqq": 0.2488603482955295,
+  "dropped_extreme_months": ["2020-01", "2024-01", "2026-04", "2026-05", "2026-06"],
+  "survives_transport": false,
+  "scientific_consequence": "Reject MTUM momentum transport without parameter rescue. Full-sample raw SPY excess is not recent, concentration-robust, or SPY+QQQ-residual alpha.",
+  "research_only": true,
+  "allocation_authority": false
+}
