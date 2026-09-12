@@ -1,0 +1,57 @@
+{
+  "benchmarks": ["ITB", "QQQ"],
+  "boundaries": {
+    "allocation_authority": false,
+    "broker_action": false,
+    "live_trading_change": false,
+    "promotion_authority": false,
+    "research_only": true,
+    "runtime_mutation": false
+  },
+  "decision_use": "Stale prospective Homebuilder evidence only. Raw Sep 2 predictions remain inspectable under stale_signal, but current allocation inputs are intentionally empty until a signal aligned with the current market reference date is admitted.",
+  "freshness": {
+    "actionable": false,
+    "reference_market_date": "2026-09-11",
+    "signal_date": "2026-09-02",
+    "stale_by_calendar_days": 9,
+    "state": "STALE_SIGNAL_DATE"
+  },
+  "kind": "entry_admission_plus_adaptive_duration",
+  "paper_action": {
+    "admitted_symbols": [],
+    "holding_horizon_sessions_by_symbol": {},
+    "instruction": "NO_ACTION_WHILE_STALE",
+    "status": "STALE_NO_ACTION"
+  },
+  "program_id": "HOMEBUILDERS",
+  "schema": "foundry.forward_program_adapter.v1",
+  "signal": {
+    "admitted_symbols": [],
+    "duration_horizon_sessions_by_symbol": {},
+    "predicted_after25_bps_per_session": {},
+    "predicted_fixed20_net25_bps": {}
+  },
+  "signal_date": "2026-09-02",
+  "stale_signal": {
+    "admitted_symbols": ["CCS", "MHO", "HOV", "BZH"],
+    "duration_horizon_sessions_by_symbol": {"BZH": 5, "CCS": 5, "HOV": 5, "MHO": 5},
+    "predicted_after25_bps_per_session": {
+      "BZH": {"5": 4.321584840385766, "60": 3.9510824898060894},
+      "CCS": {"5": 34.260718936412545, "60": 15.093414190613135},
+      "HOV": {"5": 44.47443775347758, "60": 25.297845263022047},
+      "MHO": {"5": 23.13875632331403, "60": 13.614310830152935}
+    },
+    "predicted_fixed20_net25_bps": {"BZH": 223.3722674421719, "CCS": 655.4801441154048, "HOV": 838.6071092267955, "MHO": 398.40624670081866}
+  },
+  "timing": {
+    "candidate_holding_horizons_sessions": [5, 60],
+    "decision_cadence": "daily observer when fresh close exists",
+    "execution_delay_sessions": 1
+  },
+  "validation": {
+    "historical_adaptive_matched_itb_excess_bps": 18.319766025087446,
+    "historical_fixed20_matched_itb_excess_bps": -0.7287825877623646,
+    "historical_gate_pass": false,
+    "state": "STALE_NATIVE_SIGNAL_NO_CURRENT_ALLOCATION"
+  }
+}
