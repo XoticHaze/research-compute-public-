@@ -1,0 +1,31 @@
+name: Sector ETF Momentum Rotation R1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/sector_etf_momentum_rotation_r1.py"
+      - ".github/workflows/sector-etf-momentum-rotation-r1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  experiment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --disable-pip-version-check numpy pandas
+      - name: Run frozen legacy-sector ETF momentum rotation
+        run: python scripts/sector_etf_momentum_rotation_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sector-etf-momentum-rotation-r1-${{ github.sha }}
+          path: results/sector_etf_momentum_rotation_r1.json
+          if-no-files-found: error
+          retention-days: 90
