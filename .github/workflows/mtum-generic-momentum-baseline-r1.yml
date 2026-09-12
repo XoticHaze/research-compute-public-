@@ -1,0 +1,54 @@
+name: MTUM Generic Momentum Baseline R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/mtum-generic-momentum-baseline-r1.yml'
+      - 'research/mtum-generic-momentum-baseline-r1.json'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.11.16'}
+      - name: Evaluate frozen MTUM generic momentum baseline
+        run: |
+          python - <<'PY'
+          import json,urllib.request,datetime as dt
+          from pathlib import Path
+          c=json.loads(Path('research/mtum-generic-momentum-baseline-r1.json').read_text());st=dt.datetime.fromisoformat(c['start']+'T00:00:00+00:00');en=dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1)
+          def f(s):
+              u=f"https://query1.finance.yahoo.com/v8/finance/chart/{s}?period1={int(st.timestamp())}&period2={int(en.timestamp())}&interval=1d&events=history&includeAdjustedClose=true";req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+              with urllib.request.urlopen(req,timeout=30) as q:o=json.load(q)['chart']['result'][0]
+              a=o['indicators'].get('adjclose',[{}])[0].get('adjclose') or o['indicators']['quote'][0]['close'];return [(dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat(),float(p)) for t,p in zip(o['timestamp'],a) if p is not None]
+          raw={s:f(s) for s in ['MTUM','SPY']};px={s:dict(raw[s]) for s in raw};ds=sorted(set(px['MTUM'])&set(px['SPY']));months={}
+          for d in ds:months.setdefault(d[:7],[]).append(d)
+          rows=[]
+          for m,z in sorted(months.items()):
+              if len(z)<10:continue
+              rows.append({'month':m,'mtum':px['MTUM'][z[-1]]/px['MTUM'][z[0]]-1,'spy':px['SPY'][z[-1]]/px['SPY'][z[0]]-1})
+          def cagr(z,k):
+              v=1.0
+              for r in z:v*=1+r[k]
+              return v**(12/max(len(z),1))-1
+          def ex(z):return cagr(z,'mtum')-cagr(z,'spy')
+          recent=[r for r in rows if r['month']>=c['recent_start'][:7]];yr=[]
+          for y in sorted({r['month'][:4] for r in rows}):
+              z=[r for r in rows if r['month'].startswith(y)]
+              if len(z)>=10:yr.append({'year':y,'excess_vs_spy':ex(z),'positive':ex(z)>0})
+          roll=[]
+          for i in range(11,len(rows)):
+              z=rows[i-11:i+1];roll.append(ex(z)>0)
+          def maxdd(sym):
+              peak=None;mdd=0.0
+              for d in ds:
+                  v=px[sym][d];peak=v if peak is None or v>peak else peak;mdd=min(mdd,v/peak-1)
+              return mdd
+          cost=2*c['cost_bps']/10000;full=ex(rows)-cost;rec=ex(recent)-cost;pos=sum(x['positive'] for x in yr);share=sum(roll)/len(roll);m1=maxdd('MTUM');m2=maxdd('SPY');pen=m1-m2;g=c['gates'];ok=full>=g['full_after_cost_excess_vs_spy_min'] and rec>=g['recent_after_cost_excess_vs_spy_min'] and pos>=g['min_positive_calendar_years_vs_spy'] and share>=g['rolling_12m_positive_share_min'] and pen>=g['max_drawdown_penalty_vs_spy_min']
+          out={'schema':'mtum_generic_momentum_baseline_result.v1','months':len(rows),'recent_months':len(recent),'full_after_cost_excess_vs_spy_cagr':full,'recent_after_cost_excess_vs_spy_cagr':rec,'positive_calendar_years_vs_spy':pos,'rolling_12m_positive_share':share,'mtum_max_drawdown':m1,'spy_max_drawdown':m2,'max_drawdown_penalty_vs_spy':pen,'supports_generic_momentum_alpha':ok,'yearly':yr,'gates':g,'research_only':True};Path('mtum-generic-momentum-baseline-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2));print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with: {name: mtum-generic-momentum-baseline-r1-result, path: mtum-generic-momentum-baseline-r1-result.json, retention-days: 14}
