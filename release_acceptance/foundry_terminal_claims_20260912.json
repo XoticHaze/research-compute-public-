@@ -1,5 +1,6 @@
 {
   "schema": "research_compute_public.foundry_terminal_claim_acceptance.v1",
+  "acceptance_revision": "20260912-r1",
   "claims": [
     {
       "workload_id": "MR_PKW_BUYBACK_ALPHA_20260912_R1",
