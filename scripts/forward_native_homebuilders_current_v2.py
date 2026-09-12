@@ -16,7 +16,7 @@ from pathlib import Path
 import forward_native_ephemeral_consumer_v1 as base
 
 HARNESS = "homebuilders_adaptive_duration_current_v2"
-SOURCE_REF = "1dffd4a4a889925e795ab214fabc4a764791bdab"
+SOURCE_REF = "100e356239b2399c054c1a41a18e4e9a5d07d33a"
 FILES = {
     "research/run_homebuilders_adaptive_duration_forward_current_20260912.py",
     "research/run_homebuilders_adaptive_duration_forward_20260905.py",
