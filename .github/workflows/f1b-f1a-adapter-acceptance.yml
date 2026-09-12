@@ -1,0 +1,30 @@
+name: F1b F1a staging adapter acceptance
+
+on:
+  push:
+    branches:
+      - acceptance/f1b-f1a-adapter-37ac6f66
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record execution identity
+        run: |
+          echo "public_head=${GITHUB_SHA}"
+          echo "private_product_head=37ac6f66b8354108a3e319d0dff3134073bb2015"
+          echo "f1a_source_run=34684071280"
+          echo "f1a_acceptance_run=34684564957"
+      - name: Execute sanitized deterministic acceptance
+        run: python acceptance/f1b_f1a_adapter_acceptance.py
+      - name: Upload deterministic receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: f1b-f1a-adapter-receipt
+          path: f1b-f1a-adapter-receipt.json
+          if-no-files-found: error
