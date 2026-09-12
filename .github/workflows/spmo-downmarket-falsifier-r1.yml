@@ -1,0 +1,47 @@
+name: SPMO Down-Market Falsifier R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/spmo-downmarket-falsifier-r1.yml'
+      - 'research/spmo-downmarket-falsifier-r1.json'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.11.16'}
+      - name: Evaluate frozen SPMO down-market falsifier
+        run: |
+          python - <<'PY'
+          import json,urllib.request,datetime as dt,statistics
+          from pathlib import Path
+          c=json.loads(Path('research/spmo-downmarket-falsifier-r1.json').read_text()); st=dt.datetime.fromisoformat(c['start']+'T00:00:00+00:00'); en=dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1)
+          def fetch(s):
+              u=f"https://query1.finance.yahoo.com/v8/finance/chart/{s}?period1={int(st.timestamp())}&period2={int(en.timestamp())}&interval=1d&events=history&includeAdjustedClose=true"; req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+              with urllib.request.urlopen(req,timeout=30) as q:o=json.load(q)['chart']['result'][0]
+              a=o['indicators'].get('adjclose',[{}])[0].get('adjclose') or o['indicators']['quote'][0]['close']; return {dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat():float(p) for t,p in zip(o['timestamp'],a) if p is not None}
+          syms=['SPMO','MTUM','SPY']; px={s:fetch(s) for s in syms}; ds=sorted(set.intersection(*(set(px[s]) for s in syms))); months={}
+          for d in ds: months.setdefault(d[:7],[]).append(d)
+          rows=[]
+          for m,z in sorted(months.items()):
+              if len(z)<10: continue
+              r={'month':m}
+              for s in syms:r[s.lower()]=px[s][z[-1]]/px[s][z[0]]-1
+              r['rel']=(1+r['spmo'])/(1+r['mtum'])-1; rows.append(r)
+          down=[r for r in rows if r['spy']<0]
+          if len(down)<20: raise RuntimeError(f'INSUFFICIENT_DOWN_MONTHS:{len(down)}')
+          mean=sum(r['rel'] for r in down)/len(down); med=statistics.median(r['rel'] for r in down); share=sum(r['rel']>0 for r in down)/len(down)
+          v=1.0
+          for r in down:v*=1+r['rel']
+          years=max(len(down)/12,1/12); cagr=v**(1/years)-1-2*c['cost_bps']/10000
+          worst=sorted(down,key=lambda r:r['spy'])[:max(1,len(down)//5)]; worst_mean=sum(r['rel'] for r in worst)/len(worst)
+          g=c['gates']; ok=mean>=g['down_spy_mean_monthly_excess_min'] and med>=g['down_spy_median_monthly_excess_min'] and share>=g['down_spy_positive_month_share_min'] and cagr>=g['down_spy_compounded_relative_cagr_min']
+          out={'schema':'spmo_downmarket_falsifier_result.v1','down_spy_months':len(down),'mean_monthly_excess_vs_mtum':mean,'median_monthly_excess_vs_mtum':med,'positive_month_share_vs_mtum':share,'down_spy_compounded_after_cost_relative_cagr':cagr,'worst_spy_quintile_mean_monthly_excess_vs_mtum':worst_mean,'gates':g,'survives_downmarket_falsifier':ok,'research_only':True}
+          Path('spmo-downmarket-falsifier-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2)); print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with: {name: spmo-downmarket-falsifier-r1-result, path: spmo-downmarket-falsifier-r1-result.json, retention-days: 14}
