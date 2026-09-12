@@ -1,0 +1,84 @@
+name: Homebuilders Current V2 Ciphertext Assembler
+
+on:
+  push:
+    branches:
+      - 'assistant/homebuilders-currentized-forward-v2'
+    paths:
+      - '.github/workflows/homebuilders-current-v2-chunk-assembler.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  assemble:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXCHANGE_REF: rendezvous-exchange
+      RUN_ID: '34720275712'
+      HARNESS: homebuilders_adaptive_duration_current_v2
+      PART_ROOT: rendezvous/proof-chunks/34720275712/homebuilders_adaptive_duration_current_v2
+      RESPONSE_PATH: rendezvous/responses/34720275712/homebuilders_adaptive_duration_current_v2-input.json
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for ciphertext chunks and assemble
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          : > "$RUNNER_TEMP/envelope.json"
+          for n in 01 02 03 04 05 06 07; do
+            path="${PART_ROOT}/part-${n}.txt"
+            api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${EXCHANGE_REF}"
+            found=0
+            for _ in $(seq 1 180); do
+              if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -o "$RUNNER_TEMP/part-${n}.txt"; then
+                found=1
+                break
+              fi
+              sleep 2
+            done
+            test "$found" = 1 || { echo "MISSING_PART=${n}"; exit 42; }
+            cat "$RUNNER_TEMP/part-${n}.txt" >> "$RUNNER_TEMP/envelope.json"
+          done
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          x=json.loads(Path(os.environ['RUNNER_TEMP'],'envelope.json').read_text())
+          assert x['schema']=='forward-native-ephemeral-x25519-v1'
+          assert str(x['run_id'])==os.environ['RUN_ID']
+          assert x['harness']==os.environ['HARNESS']
+          assert x['authority']=='research_only'
+          assert x['plaintext_sha256']=='ae4ee954a5dbaceb3f0d119c5c234fde192200841478231bc46e7c4627015ea0'
+          print('HOMEBUILDERS_CURRENT_V2_ENVELOPE_ASSEMBLY=PASS')
+          print('plaintext_sha256='+x['plaintext_sha256'])
+          PY
+      - name: Publish encrypted input with retry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${RESPONSE_PATH}"
+          payload="$(base64 -w0 "$RUNNER_TEMP/envelope.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json,sys
+          content,branch=sys.argv[1:]
+          print(json.dumps({'message':'rendezvous: assemble encrypted Homebuilders current v2 capsule','content':content,'branch':branch}))
+          PY
+          )"
+          status=''
+          for attempt in $(seq 1 12); do
+            status="$(curl -sS -o "$RUNNER_TEMP/put.json" -w '%{http_code}' -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -d "$body" || true)"
+            if [ "$status" = '200' ] || [ "$status" = '201' ]; then
+              echo 'HOMEBUILDERS_CURRENT_V2_CAPSULE_PUBLISHED=true'
+              exit 0
+            fi
+            if [ "$status" != '409' ]; then
+              cat "$RUNNER_TEMP/put.json" >&2 || true
+              exit 22
+            fi
+            echo "HOMEBUILDERS_CURRENT_V2_EXCHANGE_RETRY attempt=${attempt}" >&2
+            sleep $(( attempt * 2 ))
+          done
+          exit 23
