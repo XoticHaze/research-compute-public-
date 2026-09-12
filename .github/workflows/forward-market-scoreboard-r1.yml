@@ -188,21 +188,61 @@ jobs:
         with:
           name: forward-market-scoreboard-r1
           path: /tmp/forward-market-scoreboard
-      - name: Publish stable current scoreboard and deterministic allocation
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: forward-score-input-*
+          path: /tmp/forward-score-inputs
+          merge-multiple: true
+      - name: Publish one coherent current forward bundle
         run: |
-          test -f /tmp/forward-market-scoreboard/forward_market_scoreboard_r1.json
-          test -f /tmp/forward-market-scoreboard/forward_deterministic_allocator_r1.json
+          set -euo pipefail
+          scoreboard=/tmp/forward-market-scoreboard/forward_market_scoreboard_r1.json
+          allocator=/tmp/forward-market-scoreboard/forward_deterministic_allocator_r1.json
+          p249=/tmp/forward-score-inputs/forward_p249_p266_shadow_r1.json
+          p558=/tmp/forward-score-inputs/forward_p558_current_core_shadow_r1.json
+          clo=/tmp/forward-score-inputs/forward_senior_clo_current_core_shadow_r1.json
+          test -f "$scoreboard"
+          test -f "$allocator"
+          test -f "$p249"
+          test -f "$p558"
+          test -f "$clo"
+          python - "$scoreboard" "$p249" "$p558" "$clo" <<'PY'
+          import json,sys
+          score,p249,p558,clo=(json.load(open(p)) for p in sys.argv[1:])
+          lanes={row['program_id']:row for row in score['lanes']}
+          def bp(value): return round(float(value)*10000.0,2)
+          p=lanes['P249_P266']; f=p249['forward']
+          assert p['forward_days']==f['p249_plus_p266_net']['days']
+          assert p['scorecard']['p249_core_net_cumulative_bps']==bp(f['p249_core_net']['cumulative_return'])
+          assert p['scorecard']['p249_plus_p266_net_cumulative_bps']==bp(f['p249_plus_p266_net']['cumulative_return'])
+          assert p['scorecard']['p266_increment_cumulative_bps']==bp(f['satellite_increment_cumulative'])
+          for program,raw in [('P558',p558),('SENIOR_CLO',clo)]:
+              lane=lanes[program]
+              assert lane['forward_days']==raw['forward']['challenger_if_flattened_now']['days']
+              assert lane['scorecard']['challenger_cumulative_bps']==bp(raw['forward']['challenger_if_flattened_now']['cumulative_return'])
+              assert lane['scorecard']['excess_vs_incumbent_bps']==bp(raw['forward']['challenger_minus_incumbent_cumulative'])
+              assert lane['scorecard']['excess_vs_matched_cash_control_bps']==bp(raw['forward']['challenger_minus_matched_cumulative'])
+          print('FORWARD_CURRENT_BUNDLE_COHERENCE=PASS')
+          PY
           git fetch origin main
           git checkout -B forward-market-scoreboard-publish origin/main
           mkdir -p research/current
-          cp /tmp/forward-market-scoreboard/forward_market_scoreboard_r1.json research/current/forward_market_scoreboard_r1.json
-          cp /tmp/forward-market-scoreboard/forward_deterministic_allocator_r1.json research/current/forward_deterministic_allocator_r1.json
+          cp "$scoreboard" research/current/forward_market_scoreboard_r1.json
+          cp "$allocator" research/current/forward_deterministic_allocator_r1.json
+          cp "$p249" research/current/forward_p249_p266_shadow_r1.json
+          cp "$p558" research/current/forward_p558_current_core_shadow_r1.json
+          cp "$clo" research/current/forward_senior_clo_current_core_shadow_r1.json
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add research/current/forward_market_scoreboard_r1.json research/current/forward_deterministic_allocator_r1.json
+          git add \
+            research/current/forward_market_scoreboard_r1.json \
+            research/current/forward_deterministic_allocator_r1.json \
+            research/current/forward_p249_p266_shadow_r1.json \
+            research/current/forward_p558_current_core_shadow_r1.json \
+            research/current/forward_senior_clo_current_core_shadow_r1.json
           if git diff --cached --quiet; then
-            echo 'CURRENT_FORWARD_REPORT_UNCHANGED=true'
+            echo 'CURRENT_FORWARD_BUNDLE_UNCHANGED=true'
             exit 0
           fi
-          git commit -m 'Forward: publish current scoreboard and deterministic allocation'
+          git commit -m 'Forward: publish coherent current observer bundle'
           git push origin HEAD:main
