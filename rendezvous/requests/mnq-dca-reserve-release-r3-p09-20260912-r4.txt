@@ -1,0 +1,3 @@
+MNQ DCA reserve-release R3 P09 risk-gate execution request R4.
+
+Retry is transport-only after run 34683034100 reached public compute and rejected malformed ciphertext chunk 01 at the authenticated chunk-identity gate. Local compact payload remains parity-proven against terminal R2 (+4985.25 / +6133.25, 81.282354% capture, 91.153424% added-DD ratio). Scientific contract is unchanged. Use smaller encrypted chunk boundaries only; no parameter, threshold, feature, budget, or economic-gate change.

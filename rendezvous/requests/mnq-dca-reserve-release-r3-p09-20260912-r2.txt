@@ -1,0 +1,5 @@
+MNQ DCA reserve-release R3 P09 risk-gate execution request R2.
+
+Purpose: trigger a fresh one-run recipient for the already-frozen R3 consumer after the prior run correctly reached public compute but timed out waiting for its encrypted private-input envelope.
+
+Scientific contract is unchanged: R2 CC75 same-step/same-regime opportunity selector plus the frozen P09 multihorizon adverse-risk gate. No threshold, K, capital, feature, or outcome-conditioned tuning. Research only; no StrategySpec/runtime/broker/live-trading authority.
