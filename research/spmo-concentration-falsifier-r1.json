@@ -1,0 +1,10 @@
+{
+  "schema":"spmo_concentration_falsifier_contract.v1",
+  "claim_tested":"SPMO's transported momentum excess over SPY is not concentrated in a handful of extreme relative-return months and remains economically positive after removing them.",
+  "start":"2015-09-15",
+  "top_relative_months_removed":5,
+  "cost_bps":10,
+  "gates":{"base_min_excess_cagr":0.01,"trimmed_min_excess_cagr":0.00,"recent_trimmed_min_excess_cagr":0.00,"min_positive_calendar_years":6},
+  "frozen_inheritance":{"parent":"SLP-20260911-SPMO-MOMENTUM-TRANSPORT-R1","primary_control":"SPY","recent_start":"2020-01-01","no_parameter_rescue":true},
+  "research_only":true
+}
