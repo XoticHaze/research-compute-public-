@@ -4,6 +4,13 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '15 23 * * 1-5'
+  push:
+    branches:
+      - main
+      - 'assistant/**'
+    paths:
+      - 'research/forward_market_scoreboard_r1.py'
+      - '.github/workflows/forward-market-scoreboard-r1.yml'
   pull_request:
     branches: [main]
     paths:
@@ -144,7 +151,7 @@ jobs:
           mkdir -p research/current
           cp /tmp/forward-market-scoreboard/forward_market_scoreboard_r1.json research/current/forward_market_scoreboard_r1.json
           git config user.name 'github-actions[bot]'
-          git config user.email '41898233+github-actions[bot]@users.noreply.github.com'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add research/current/forward_market_scoreboard_r1.json
           if git diff --cached --quiet; then
             echo 'CURRENT_SCOREBOARD_UNCHANGED=true'
