@@ -1,0 +1,66 @@
+{
+  "benchmarks": [
+    "SPY",
+    "QQQ",
+    "appropriate_sector_or_industry_benchmark"
+  ],
+  "boundaries": {
+    "allocation_authority": false,
+    "broker_action": false,
+    "live_trading_change": false,
+    "native": {},
+    "promotion_authority": false,
+    "research_only": true,
+    "runtime_mutation": false
+  },
+  "decision_use": "Use as cross-sector corroboration/discovery. It is the semiconductor-trained Ridge transported to target-excluded large caps, not an independently trained stock-selection model.",
+  "kind": "target_excluded_transport_corroboration",
+  "paper_action": {
+    "avoid_or_falsify": [
+      "XOM"
+    ],
+    "instruction": "Do not allocate from this transport alone; require independent evidence or a prospectively frozen book rule.",
+    "status": "CORROBORATION_ONLY_NO_FROZEN_BOOK",
+    "watch_positive": [
+      "CAT",
+      "JPM",
+      "UNH",
+      "COST",
+      "MSFT"
+    ]
+  },
+  "program_id": "GENERALIZED_LARGECAP_RIDGE",
+  "schema": "foundry.forward_program_adapter.v1",
+  "signal": {
+    "negative_symbols": [
+      "XOM"
+    ],
+    "positive_symbols": [
+      "CAT",
+      "JPM",
+      "UNH",
+      "COST",
+      "MSFT"
+    ],
+    "predicted_fixed20_net_value_bps": {
+      "CAT": 400.4089115261089,
+      "COST": 95.47113971495742,
+      "JPM": 155.94274481533955,
+      "MSFT": 54.27303591733332,
+      "UNH": 289.1618559995551,
+      "XOM": -44.401266950254296
+    }
+  },
+  "signal_date": "2026-09-11",
+  "timing": {
+    "decision_cadence": "daily close observation",
+    "entry_rule": "signal at close D corresponds to next-session D+1 fixed20 observation window",
+    "execution_delay_sessions": 1,
+    "exit_rule": "resolve after 20 sessions from D+1 entry",
+    "holding_horizon_sessions": 20
+  },
+  "validation": {
+    "external_target_history_used_in_training": false,
+    "state": "TRANSPORT_FORWARD_OBSERVATION"
+  }
+}

@@ -12,6 +12,7 @@ on:
       - 'research/forward_market_scoreboard_r1.py'
       - 'research/forward_deterministic_allocator_r1.py'
       - 'research/forward_native_program_adapter_r1.py'
+      - 'research/current/native_adapters/*.json'
       - '.github/workflows/forward-market-scoreboard-r1.yml'
   pull_request:
     branches: [main]
@@ -19,6 +20,7 @@ on:
       - 'research/forward_market_scoreboard_r1.py'
       - 'research/forward_deterministic_allocator_r1.py'
       - 'research/forward_native_program_adapter_r1.py'
+      - 'research/current/native_adapters/*.json'
       - '.github/workflows/forward-market-scoreboard-r1.yml'
       - 'research/forward_p249_p266_shadow_r1.py'
       - 'research/forward_p558_current_core_shadow_r1.py'
@@ -117,6 +119,27 @@ jobs:
         with:
           pattern: forward-*
           path: score-inputs
+      - name: Add privately admitted sanitized native adapters
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p score-inputs/native-current
+          shopt -s nullglob
+          adapters=(research/current/native_adapters/*.json)
+          for src in "${adapters[@]}"; do
+            python - "$src" <<'PY'
+          import json,sys
+          x=json.load(open(sys.argv[1]))
+          assert x['schema']=='foundry.forward_program_adapter.v1'
+          b=x.get('boundaries') or {}
+          assert b.get('broker_action') is False
+          assert b.get('live_trading_change') is False
+          assert b.get('runtime_mutation') is False
+          assert b.get('promotion_authority') is False
+          print('ADMITTED_NATIVE_ADAPTER',x['program_id'],x.get('signal_date'))
+          PY
+            cp "$src" score-inputs/native-current/
+          done
       - run: python research/forward_market_scoreboard_r1.py --input-root score-inputs --output artifacts/forward_market_scoreboard_r1.json
       - name: Build governed deterministic paper allocation
         run: |
