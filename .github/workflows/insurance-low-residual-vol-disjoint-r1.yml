@@ -1,0 +1,28 @@
+name: Insurance Low Residual Vol Disjoint R1
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/insurance_low_residual_vol_disjoint_r1.py"
+      - ".github/workflows/insurance-low-residual-vol-disjoint-r1.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  experiment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --disable-pip-version-check numpy pandas
+      - name: Run frozen disjoint insurance low residual-vol confirmation
+        run: python scripts/insurance_low_residual_vol_disjoint_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: insurance-low-residual-vol-disjoint-r1-${{ github.sha }}
+          path: results/insurance_low_residual_vol_disjoint_r1.json
+          if-no-files-found: error
+          retention-days: 90
