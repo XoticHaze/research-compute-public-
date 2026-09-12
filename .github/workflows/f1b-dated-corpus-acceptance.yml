@@ -1,0 +1,30 @@
+name: F1b dated-corpus acceptance
+
+on:
+  push:
+    branches:
+      - acceptance/f1b-dated-corpus-b7c8b88b
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout public acceptance harness
+        uses: actions/checkout@v4
+      - name: Record execution identity
+        run: |
+          echo "public_head=${GITHUB_SHA}"
+          echo "private_product_head=b7c8b88b2ec9b73647627785622bbe5e3400d00b"
+          echo "private_product_pr=595"
+      - name: Execute sanitized deterministic acceptance
+        run: python acceptance/f1b_dated_corpus_acceptance.py
+      - name: Upload deterministic receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: f1b-dated-corpus-receipt
+          path: f1b-dated-corpus-receipt.json
+          if-no-files-found: error
