@@ -1,0 +1,8 @@
+P04_R3_H24_CONCORDANCE_LONGWAIT_R1
+scientific_contract=P04_MNQ_RESERVE_RELEASE_R3_RISK_CONTEXT_MATCH_20260912
+route=public_research_compute_current
+transport=ephemeral_x25519_chacha20poly1305
+reason=preserve one-run recipient across hourly continuation cadence
+scientific_authority_unchanged=true
+runtime_mutation=false
+live_trading_change=false
