@@ -59,28 +59,45 @@
   },
   "decision_at": "2026-09-10T07:25:00+00:00",
   "forward": {
-    "first_close": null,
-    "latest_close": null,
-    "observations": [],
+    "first_close": "2026-09-10",
+    "latest_close": "2026-09-10",
+    "observations": [
+      {
+        "cost_detail": {
+          "p249_core_cost_bp": 36.666666666666664,
+          "p249_plus_p266_cost_bp": 40.0,
+          "p266_one_way_turnover": 1.0,
+          "p36_one_way_turnover": 1.0,
+          "p64_one_way_turnover": 1.0
+        },
+        "date": "2026-09-10",
+        "holding_month": "2026-09",
+        "p249_core_gross": -0.01313912454185903,
+        "p249_core_net": -0.016805791208525697,
+        "p249_plus_p266_gross": -0.013638590372584598,
+        "p249_plus_p266_net": -0.017638590372584598,
+        "satellite_increment_net": -0.0008327991640589005
+      }
+    ],
     "p249_core_net": {
       "annualized_vol": null,
-      "cumulative_return": 0.0,
-      "days": 0,
+      "cumulative_return": -0.016805791208525656,
+      "days": 1,
       "max_drawdown": 0.0,
       "sharpe_rf0": null
     },
     "p249_plus_p266_net": {
       "annualized_vol": null,
-      "cumulative_return": 0.0,
-      "days": 0,
+      "cumulative_return": -0.01763859037258464,
+      "days": 1,
       "max_drawdown": 0.0,
       "sharpe_rf0": null
     },
-    "satellite_increment_cumulative": 0.0
+    "satellite_increment_cumulative": -0.0008327991640588728
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-09-11T00:22:12.157613+00:00",
+  "observed_at": "2026-09-12T00:27:51.105270+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_pins": {
@@ -91,6 +108,6 @@
     "P278_result_artifact_id": 10141056125,
     "P278_result_run_id": 34449749421
   },
-  "status": "BASELINE_FROZEN_NO_FORWARD_CLOSES",
+  "status": "FORWARD_OBSERVING",
   "workload_id": "FORWARD_P249_P266_SHADOW_R1"
 }
