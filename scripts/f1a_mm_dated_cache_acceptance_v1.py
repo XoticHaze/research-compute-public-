@@ -19,6 +19,7 @@ from pathlib import Path
 import pandas as pd
 
 ROOTS = ("6E", "ES", "NG", "NQ", "ZS")
+PROVIDER_ROOT_ALIASES = {"6E": ("6E", "EC"), "ES": ("ES",), "NG": ("NG",), "NQ": ("NQ",), "ZS": ("ZS",)}
 MONTH_CODE = {
     "F": "01", "G": "02", "H": "03", "J": "04", "K": "05", "M": "06",
     "N": "07", "Q": "08", "U": "09", "V": "10", "X": "11", "Z": "12",
@@ -36,12 +37,14 @@ def sha256_file(path: Path) -> str:
 
 
 def parse_contract(path: Path) -> tuple[str, str]:
-    name = path.stem.upper()
-    # Provider files are exchange-prefixed, e.g. CME_ESH2022, NYMEX_NGF2021.
-    m = re.search(r"_(6E|ES|NG|NQ|ZS)([FGHJKMNQUVXZ])(\d{4})$", name)
+    root = next((part.upper() for part in path.parts if part.upper() in ROOTS), None)
+    if root is None:
+        raise RuntimeError(f"root directory identity missing for {path}")
+    aliases = "|".join(re.escape(v) for v in PROVIDER_ROOT_ALIASES[root])
+    m = re.search(rf"_(?:{aliases})([FGHJKMNQUVXZ])(\d{{4}})$", path.stem.upper())
     if not m:
-        raise RuntimeError(f"unrecognized dated-contract filename: {path.name}")
-    root, code, year = m.groups()
+        raise RuntimeError(f"unrecognized {root} dated-contract filename: {path.name}")
+    code, year = m.groups()
     return root, year + MONTH_CODE[code]
 
 
@@ -54,8 +57,6 @@ def transform_one(source: Path, output_root: Path) -> dict:
     parsed = pd.to_datetime(df["Date"], errors="coerce", utc=False)
     if parsed.isna().any():
         raise RuntimeError(f"unparseable Date values in {source.name}: {int(parsed.isna().sum())}")
-    # Preserve provider session-date semantics as a naive YYYY-MM-DD timestamp.
-    # MM's existing local-cache reader owns timezone localization and normalization.
     out["timestamp"] = parsed.dt.strftime("%Y-%m-%d")
     for src, dst in (("Open", "open"), ("High", "high"), ("Low", "low"), ("Close", "close"), ("Volume", "volume")):
         out[dst] = pd.to_numeric(df[src], errors="coerce")
@@ -115,6 +116,7 @@ def main() -> int:
         "cache_contract": "MM-IBKR FuturesManager local dated-contract cache data/futures/<ROOT>-<YYYYMM>/1Day.csv",
         "required_cache_columns": CACHE_REQUIRED_COLUMNS,
         "provider_session_date_preserved_as_naive_timestamp": True,
+        "provider_root_aliases": PROVIDER_ROOT_ALIASES,
         "open_interest_preserved": True,
         "continuous_series_constructed": False,
         "roll_cutoff_selected": False,
