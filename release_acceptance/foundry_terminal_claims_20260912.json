@@ -1,6 +1,6 @@
 {
   "schema": "research_compute_public.foundry_terminal_claim_acceptance.v1",
-  "acceptance_revision": "20260912-r2",
+  "acceptance_revision": "20260912-r3",
   "claims": [
     {
       "workload_id": "MR_PKW_BUYBACK_ALPHA_20260912_R1",
@@ -31,6 +31,26 @@
       "artifact_sha256": "c59983bc31dcaca9cba33e6531bae49b40790a15e60e022f45cfb4cb8959d35a",
       "foundry_commit": "daee1e01d47c4ba43cb86abe16dfe77b69049f65",
       "semantic_state": "REJECTED_RESIDUAL_ALPHA_ALL_FROZEN_GATES_FAILED_NO_RESCUE"
+    },
+    {
+      "workload_id": "PIT_FUNDAMENTAL_EVENT_ROA_R1",
+      "source_run_id": 34706035378,
+      "source_job_id": 103586132239,
+      "source_head_sha": "8e0e5b6053437d8e56be748a3592d3d93866a79e",
+      "artifact_id": 10301885387,
+      "artifact_sha256": "d185615f02e4878a1938b54f32b869fafeedb6079af3e5226a7cb1c541d11bc7",
+      "foundry_commit": "e8cc1a3fd34a3c53d21c277734b30623c0ef0b3c",
+      "semantic_state": "REJECT_NO_FORWARD_ROA_SIGN_SIGNAL_NO_PARAMETER_RESCUE"
+    },
+    {
+      "workload_id": "PIT_FUNDAMENTAL_EVENT_CASH_CONVERSION_R1",
+      "source_run_id": 34706035418,
+      "source_job_id": 103586132242,
+      "source_head_sha": "8e0e5b6053437d8e56be748a3592d3d93866a79e",
+      "artifact_id": 10300873931,
+      "artifact_sha256": "113b0c69151eddf28a5ba161596291da6a0c9260ef409267b8956891171f0fc0",
+      "foundry_commit": "374a6895f5eab044d0a09cb89163fde601d30507",
+      "semantic_state": "REJECT_NO_FORWARD_CASH_CONVERSION_BROAD_SIGNAL_NO_PARAMETER_RESCUE"
     }
   ],
   "required_authority": {
