@@ -1,0 +1,7 @@
+{
+  "schema":"pave_infrastructure_alpha_contract.v1",
+  "hypothesis":"PAVE's U.S. infrastructure-development implementation earns durable after-cost excess beyond broad industrial exposure represented by XLI, with positive residual alpha after jointly controlling SPY and XLI.",
+  "candidate":"PAVE","matched_sector_control":"XLI","broad_control":"SPY","start":"2018-01-01","recent_start":"2021-01-01","cost_bps":10,
+  "gates":{"full_after_cost_excess_vs_xli_min":0.01,"recent_after_cost_excess_vs_xli_min":0.005,"min_positive_calendar_years_vs_xli":5,"full_residual_alpha_spy_xli_min":0.01,"recent_residual_alpha_spy_xli_min":0.005,"max_drawdown_penalty_vs_xli_min":-0.05},
+  "frozen_before_execution":true,"no_parameter_rescue":true,"research_only":true
+}
