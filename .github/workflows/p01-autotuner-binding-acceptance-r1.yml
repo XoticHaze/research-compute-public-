@@ -4,6 +4,12 @@ on:
     paths:
       - '.github/workflows/p01-autotuner-binding-acceptance-r1.yml'
       - 'research/p01_autotuner_binding_acceptance_r1.py'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/p01-autotuner-binding-acceptance-r1.yml'
+      - 'research/p01_autotuner_binding_acceptance_r1.py'
 permissions:
   contents: read
 jobs:
