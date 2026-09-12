@@ -8,19 +8,20 @@ BINDING = ROOT / "release_acceptance" / "foundry_terminal_claims_20260912.json"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 
+EXPECTED_STATE_BY_ID = {
+    "MR_PKW_BUYBACK_ALPHA_20260912_R1": "REJECTED_RESIDUAL_ALPHA_ALL_FROZEN_GATES_FAILED_NO_RESCUE",
+    "MR_PRWCX_ACTIVE_BALANCED_ALPHA_20260912_R1": "REJECTED_RESIDUAL_ALPHA_MAGNITUDE_AND_PERSISTENCE_FAILED_NO_RESCUE",
+    "MR_IPO_EVENT_ALPHA_20260912_R1": "REJECTED_RESIDUAL_ALPHA_ALL_FROZEN_GATES_FAILED_NO_RESCUE",
+    "PIT_FUNDAMENTAL_EVENT_ROA_R1": "REJECT_NO_FORWARD_ROA_SIGN_SIGNAL_NO_PARAMETER_RESCUE",
+    "PIT_FUNDAMENTAL_EVENT_CASH_CONVERSION_R1": "REJECT_NO_FORWARD_CASH_CONVERSION_BROAD_SIGNAL_NO_PARAMETER_RESCUE",
+}
 EXPECTED_BY_REVISION = {
     "20260912-r2": {
         "MR_PKW_BUYBACK_ALPHA_20260912_R1",
         "MR_PRWCX_ACTIVE_BALANCED_ALPHA_20260912_R1",
         "MR_IPO_EVENT_ALPHA_20260912_R1",
     },
-    "20260912-r3": {
-        "MR_PKW_BUYBACK_ALPHA_20260912_R1",
-        "MR_PRWCX_ACTIVE_BALANCED_ALPHA_20260912_R1",
-        "MR_IPO_EVENT_ALPHA_20260912_R1",
-        "PIT_FUNDAMENTAL_EVENT_ROA_R1",
-        "PIT_FUNDAMENTAL_EVENT_CASH_CONVERSION_R1",
-    },
+    "20260912-r3": set(EXPECTED_STATE_BY_ID),
 }
 
 
@@ -34,14 +35,14 @@ def main() -> None:
     assert len(claims) == len(ids)
     assert ids == EXPECTED_BY_REVISION[revision]
     for claim in claims:
+        workload_id = claim["workload_id"]
         assert isinstance(claim["source_run_id"], int) and claim["source_run_id"] > 0
         assert isinstance(claim["source_job_id"], int) and claim["source_job_id"] > 0
         assert isinstance(claim["artifact_id"], int) and claim["artifact_id"] > 0
         assert HEX40.fullmatch(claim["source_head_sha"])
         assert HEX40.fullmatch(claim["foundry_commit"])
         assert HEX64.fullmatch(claim["artifact_sha256"])
-        assert claim["semantic_state"].startswith("REJECT")
-        assert claim["semantic_state"].endswith("NO_RESCUE")
+        assert claim["semantic_state"] == EXPECTED_STATE_BY_ID[workload_id]
 
     authority = payload["required_authority"]
     assert authority["authority"] == "RESEARCH_ONLY"
