@@ -8,6 +8,7 @@ from urllib.request import Request, urlopen
 import numpy as np
 import pandas as pd
 
+# Market Research execution trigger 2026-09-12T14:38Z; frozen experiment semantics unchanged.
 PANELS={
 "industrial_machinery":(("CAT","DE","ETN","PH","ITW","EMR","ROK","DOV"),"XLI"),
 "software":(("MSFT","ORCL","ADBE","CRM","INTU","NOW"),"IGV"),
