@@ -1,0 +1,13 @@
+{
+  "schema":"smh_nport_relay_transport_contract.v1",
+  "experiment_id":"CC-RF-SMH-NPORT-RELAY-TRANSPORT-002",
+  "inherited_learning_ids":["CC-RF-SMH-NPORT-PIT-SOURCE-001"],
+  "uncertainty_resolved":"Whether a public text relay can transport the exact official SEC N-PORT accession content when direct archive requests from public compute return 403.",
+  "scientific_authority":"SEC N-PORT",
+  "relay":"https://r.jina.ai/https://www.sec.gov/Archives/edgar/data/1137360/{accession}/primary_doc.xml",
+  "series_id":"S000034411",
+  "known_accessions":["000175272423042837","000175272423177922","000175272424034417","000175272424123260","000175272425041038","000141036825028395","000141036826020340","000141036826054882"],
+  "gates":{"min_successful_snapshots":6,"min_series_matches":6,"min_snapshots_with_10_security_ids":6},
+  "frozen_rule":"Relay is transport only. Do not substitute another holdings dataset, remove accessions, or relax identity gates after observing result.",
+  "research_only":true
+}
