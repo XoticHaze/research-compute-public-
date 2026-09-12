@@ -1,0 +1,16 @@
+{
+  "schema":"research.labor_claims_smallcap_relative_contract.v1",
+  "identity":"LABOR_CLAIMS_SMALLCAP_RELATIVE_R1",
+  "class":"materially_orthogonal_return_alpha_discovery",
+  "status":"FROZEN_BEFORE_PERFORMANCE",
+  "claim":"A causally lagged deterioration in actual initial unemployment claims should identify periods when small caps underperform large caps after switching costs.",
+  "source":{"series":"ICNSA","publisher_path":"U.S. Department of Labor ETA via FRED public CSV","measure":"not-seasonally-adjusted initial unemployment claims","causal_lag":"signal observation becomes eligible only on first U.S. trading session strictly after observation_date + 5 calendar days; this is more conservative than the Thursday 8:30 ET release and avoids same-release-day execution","revision_guard":"use a 2-observation additional lag inside the signal so the weekly prior-value revision is known before use"},
+  "signal":{"measure":"4-week sum of ICNSA divided by the 4-week sum 52 observations earlier","deterioration":"ratio > 1.0","deterioration_asset":"SPY","non_deterioration_asset":"IWM","hold":"until next causally eligible weekly state"},
+  "costs":{"full_switch_bps":25.0},
+  "controls":{"matched_static":"IWM/SPY static mix at full-sample mean IWM exposure","opportunity":["IWM","SPY"]},
+  "chronology":[["2010-01-01","2014-12-31"],["2015-01-01","2019-12-31"],["2020-01-01","2022-12-31"],["2023-01-01","2026-09-11"]],
+  "pass_gate":"full matched_excess_cagr > 0 AND full spy_excess_cagr > 0 AND at least 3 of 4 chronology folds have matched_excess_cagr > 0",
+  "no_parameter_rescue":true,
+  "forbidden_rescue":["change YoY threshold","change 4-week aggregation","change 52-week seasonal comparison","change causal lag","swap IWM/SPY mapping","change costs","choose favorable subperiod"],
+  "boundaries":{"portfolio_ranking":false,"allocation_authority":false,"promotion_authority":false,"runtime":false,"broker":false,"live_trading":false}
+}
