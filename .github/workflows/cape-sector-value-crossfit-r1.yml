@@ -1,0 +1,24 @@
+name: CAPE Sector Value Crossfit R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/cape-sector-value-crossfit-r1.yml'
+      - 'research/cape-sector-value-crossfit-r1.json'
+      - 'research/cape_sector_value_crossfit_r1.py'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.11.16'}
+      - name: Evaluate frozen CAPE sector-value crossfit discriminator
+        run: python research/cape_sector_value_crossfit_r1.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cape-sector-value-crossfit-r1-result
+          path: cape-sector-value-crossfit-r1-result.json
+          retention-days: 14
