@@ -1,0 +1,29 @@
+name: F1b NQ operator evidence acceptance
+
+on:
+  push:
+    branches:
+      - acceptance/f1b-nq-operator-evidence-104dbe50
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record execution identity
+        run: |
+          echo "public_head=${GITHUB_SHA}"
+          echo "private_product_head=104dbe50ca4a9fd1ad472068e06e052e61533fce"
+          echo "private_product_pr=599"
+      - name: Execute sanitized deterministic acceptance
+        run: python acceptance/f1b_nq_operator_evidence_acceptance.py
+      - name: Upload deterministic receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: f1b-nq-operator-evidence-receipt
+          path: f1b-nq-operator-evidence-receipt.json
+          if-no-files-found: error
