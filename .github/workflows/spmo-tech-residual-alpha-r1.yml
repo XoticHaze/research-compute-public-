@@ -1,0 +1,41 @@
+name: SPMO Tech Residual Alpha R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/spmo-tech-residual-alpha-r1.yml'
+      - 'research/spmo-tech-residual-alpha-r1.json'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.11.16'}
+      - name: Evaluate frozen SPMO tech residual alpha
+        run: |
+          python - <<'PY'
+          import json,urllib.request,datetime as dt,math
+          from pathlib import Path
+          c=json.loads(Path('research/spmo-tech-residual-alpha-r1.json').read_text()); st=dt.datetime.fromisoformat(c['start']+'T00:00:00+00:00'); en=dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1)
+          def fetch(s):
+              u=f"https://query1.finance.yahoo.com/v8/finance/chart/{s}?period1={int(st.timestamp())}&period2={int(en.timestamp())}&interval=1d&events=history&includeAdjustedClose=true"; req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+              with urllib.request.urlopen(req,timeout=30) as q:o=json.load(q)['chart']['result'][0]
+              a=o['indicators'].get('adjclose',[{}])[0].get('adjclose') or o['indicators']['quote'][0]['close']; return {dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat():float(p) for t,p in zip(o['timestamp'],a) if p is not None}
+          px={s:fetch(s) for s in ['SPMO','SPY','QQQ']}; ds=sorted(set.intersection(*(set(px[s]) for s in px))); months={}
+          for d in ds:months.setdefault(d[:7],[]).append(d)
+          rows=[]
+          for m,z in sorted(months.items()):
+              if len(z)<10:continue
+              rows.append((m,*[px[s][z[-1]]/px[s][z[0]]-1 for s in ['SPMO','SPY','QQQ']]))
+          def inv3(a):
+              d=a[0][0]*(a[1][1]*a[2][2]-a[1][2]*a[2][1])-a[0][1]*(a[1][0]*a[2][2]-a[1][2]*a[2][0])+a[0][2]*(a[1][0]*a[2][1]-a[1][1]*a[2][0]); return [[(a[(j+1)%3][(i+1)%3]*a[(j+2)%3][(i+2)%3]-a[(j+1)%3][(i+2)%3]*a[(j+2)%3][(i+1)%3])/d for j in range(3)] for i in range(3)]
+          def ols(z):
+              X=[[1,r[2],r[3]] for r in z]; y=[r[1] for r in z]; xtx=[[sum(x[i]*x[j] for x in X) for j in range(3)] for i in range(3)]; xty=[sum(x[i]*yy for x,yy in zip(X,y)) for i in range(3)]; iv=inv3(xtx); b=[sum(iv[i][j]*xty[j] for j in range(3)) for i in range(3)]; res=[yy-sum(bb*xx for bb,xx in zip(b,x)) for x,yy in zip(X,y)]; s2=sum(e*e for e in res)/(len(z)-3); se0=math.sqrt(s2*iv[0][0]); return {'months':len(z),'alpha_annualized':b[0]*12,'beta_spy':b[1],'beta_qqq':b[2],'alpha_tstat':b[0]/se0}
+          p={k:ols([r for r in rows if r[0]>=lo and (hi is None or r[0]<hi)]) for k,(lo,hi) in c['periods'].items()}; g=c['gates']; out={'schema':'spmo_tech_residual_alpha_result.v1','periods':p,'gates':g}; out['supported']=p['full']['alpha_annualized']>=g['min_full_alpha'] and p['pre2020']['alpha_annualized']>=g['min_pre2020_alpha'] and p['post2020']['alpha_annualized']>=g['min_post2020_alpha'] and p['full']['alpha_tstat']>=g['min_full_tstat']; out['research_only']=True
+          Path('spmo-tech-residual-alpha-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2));print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with: {name: spmo-tech-residual-alpha-r1-result, path: spmo-tech-residual-alpha-r1-result.json, retention-days: 14}
