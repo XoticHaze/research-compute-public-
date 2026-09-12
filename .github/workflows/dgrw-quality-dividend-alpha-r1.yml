@@ -1,0 +1,41 @@
+name: DGRW Quality Dividend Alpha R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/dgrw-quality-dividend-alpha-r1.yml'
+      - 'research/dgrw-quality-dividend-alpha-r1.json'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.11.16'}
+      - name: Evaluate frozen DGRW quality-dividend alpha
+        run: |
+          python - <<'PY'
+          import json,urllib.request,datetime as dt
+          from pathlib import Path
+          c=json.loads(Path('research/dgrw-quality-dividend-alpha-r1.json').read_text()); st=dt.datetime.fromisoformat(c['start']+'T00:00:00+00:00'); en=dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1)
+          def fetch(s):
+              u=f"https://query1.finance.yahoo.com/v8/finance/chart/{s}?period1={int(st.timestamp())}&period2={int(en.timestamp())}&interval=1d&events=history&includeAdjustedClose=true"; req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+              with urllib.request.urlopen(req,timeout=30) as q:o=json.load(q)['chart']['result'][0]
+              a=o['indicators'].get('adjclose',[{}])[0].get('adjclose') or o['indicators']['quote'][0]['close']; return {dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat():float(p) for t,p in zip(o['timestamp'],a) if p is not None}
+          px={s:fetch(s) for s in c['symbols']}; ds=sorted(set.intersection(*(set(px[s]) for s in c['symbols'])))
+          def cagr(sym,z):
+              yrs=(dt.date.fromisoformat(z[-1])-dt.date.fromisoformat(z[0])).days/365.25; return (px[sym][z[-1]]/px[sym][z[0]])**(1/yrs)-1
+          cost=2*c['cost_bps']/10000
+          def ex(a,b,z): return cagr(a,z)-cagr(b,z)-cost/max((dt.date.fromisoformat(z[-1])-dt.date.fromisoformat(z[0])).days/365.25,1/365.25)
+          recent=[d for d in ds if d>=c['recent_start']]; years=[]
+          for y in sorted({d[:4] for d in ds}):
+              z=[d for d in ds if d.startswith(y)];
+              if len(z)>=200: years.append({'year':y,'dgrw_minus_vig':ex('DGRW','VIG',z),'dgrw_minus_spy':ex('DGRW','SPY',z)})
+          out={'schema':'dgrw_quality_dividend_alpha_result.v1','common_start':ds[0],'common_end':ds[-1],'full_excess_vs_vig':ex('DGRW','VIG',ds),'recent_excess_vs_vig':ex('DGRW','VIG',recent),'full_excess_vs_spy':ex('DGRW','SPY',ds),'recent_excess_vs_spy':ex('DGRW','SPY',recent),'positive_years_vs_vig':sum(r['dgrw_minus_vig']>0 for r in years),'positive_years_vs_spy':sum(r['dgrw_minus_spy']>0 for r in years),'yearly':years,'gates':c['gates']}
+          g=c['gates']; out['supported']=out['full_excess_vs_vig']>=g['min_full_excess_vs_vig'] and out['recent_excess_vs_vig']>=g['min_recent_excess_vs_vig'] and out['full_excess_vs_spy']>=g['min_full_excess_vs_spy'] and out['positive_years_vs_vig']>=g['min_positive_years_vs_vig'] and out['positive_years_vs_spy']>=g['min_positive_years_vs_spy']; out['research_only']=True
+          Path('dgrw-quality-dividend-alpha-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2)); print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with: {name: dgrw-quality-dividend-alpha-r1-result, path: dgrw-quality-dividend-alpha-r1-result.json, retention-days: 14}
