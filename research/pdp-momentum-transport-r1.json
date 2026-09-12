@@ -1,0 +1,22 @@
+{
+  "schema": "pdp_momentum_transport_contract.v1",
+  "hypothesis": "A durable momentum premium should transport to PDP over its longer implementation history rather than being unique to SPMO; PDP must retain after-cost excess versus SPY in both long and recent chronology, survive extreme-month trimming, and retain residual alpha after SPY+QQQ attribution.",
+  "candidate": "PDP",
+  "controls": ["SPY", "QQQ"],
+  "start": "2007-03-01",
+  "recent_start": "2020-01-01",
+  "annual_cost_bps": 20,
+  "trim_extreme_relative_months": 5,
+  "gates": {
+    "full_after_cost_excess_vs_spy_min": 0.01,
+    "recent_after_cost_excess_vs_spy_min": 0.01,
+    "min_positive_calendar_years_vs_spy": 10,
+    "trimmed_after_cost_excess_vs_spy_min": 0.005,
+    "full_residual_alpha_vs_spy_qqq_min": 0.01,
+    "recent_residual_alpha_vs_spy_qqq_min": 0.01
+  },
+  "frozen_before_execution": true,
+  "no_parameter_rescue": true,
+  "research_only": true,
+  "allocation_authority": false
+}
