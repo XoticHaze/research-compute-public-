@@ -1,0 +1,7 @@
+{
+  "schema":"xmmo_midcap_transport_contract.v1",
+  "hypothesis":"The momentum implementation edge transports beyond SPMO large caps: XMMO earns durable after-cost excess over matched mid-cap underlying IJH and positive residual alpha after jointly controlling SPY and IJH.",
+  "candidate":"XMMO","matched_underlying_control":"IJH","broad_control":"SPY","start":"2015-10-09","recent_start":"2021-01-01","cost_bps":10,
+  "gates":{"full_after_cost_excess_vs_ijh_min":0.01,"recent_after_cost_excess_vs_ijh_min":0.005,"min_positive_calendar_years_vs_ijh":6,"full_residual_alpha_spy_ijh_min":0.01,"recent_residual_alpha_spy_ijh_min":0.005},
+  "frozen_before_execution":true,"no_parameter_rescue":true,"research_only":true
+}
