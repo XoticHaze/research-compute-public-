@@ -128,7 +128,27 @@ jobs:
           print(json.dumps({'message':'rendezvous: publish forward native recipient','content':content,'branch':branch}))
           PY
           )"
-          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -d "$body" >/dev/null
+          response="$RUNNER_TEMP/forward-native-put-recipient.json"
+          status=''
+          for attempt in $(seq 1 12); do
+            status="$(curl -sS -o "$response" -w '%{http_code}' -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -d "$body" || true)"
+            if [ "$status" = '200' ] || [ "$status" = '201' ]; then
+              break
+            fi
+            if [ "$status" != '409' ]; then
+              cat "$response" >&2 || true
+              echo "FORWARD_NATIVE_RECIPIENT_PUBLISH_FAILED status=${status} attempt=${attempt}" >&2
+              exit 22
+            fi
+            echo "FORWARD_NATIVE_EXCHANGE_RETRY kind=recipient status=409 attempt=${attempt}" >&2
+            sleep $(( attempt * 2 ))
+          done
+          if [ "$status" != '200' ] && [ "$status" != '201' ]; then
+            cat "$response" >&2 || true
+            echo "FORWARD_NATIVE_RECIPIENT_PUBLISH_EXHAUSTED status=${status}" >&2
+            exit 23
+          fi
+          rm -f "$response"
           echo "FORWARD_NATIVE_RECIPIENT_PATH=${path}"
       - name: Wait for encrypted source capsule
         if: steps.filter.outputs.run == 'true'
@@ -177,7 +197,27 @@ jobs:
           print(json.dumps({'message':'rendezvous: publish encrypted forward native return','content':content,'branch':branch}))
           PY
           )"
-          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -d "$body" >/dev/null
+          response="$RUNNER_TEMP/forward-native-put-return.json"
+          status=''
+          for attempt in $(seq 1 12); do
+            status="$(curl -sS -o "$response" -w '%{http_code}' -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -d "$body" || true)"
+            if [ "$status" = '200' ] || [ "$status" = '201' ]; then
+              break
+            fi
+            if [ "$status" != '409' ]; then
+              cat "$response" >&2 || true
+              echo "FORWARD_NATIVE_RETURN_PUBLISH_FAILED status=${status} attempt=${attempt}" >&2
+              exit 22
+            fi
+            echo "FORWARD_NATIVE_EXCHANGE_RETRY kind=return status=409 attempt=${attempt}" >&2
+            sleep $(( attempt * 2 ))
+          done
+          if [ "$status" != '200' ] && [ "$status" != '201' ]; then
+            cat "$response" >&2 || true
+            echo "FORWARD_NATIVE_RETURN_PUBLISH_EXHAUSTED status=${status}" >&2
+            exit 23
+          fi
+          rm -f "$response"
           echo "FORWARD_NATIVE_RETURN_PATH=${path}"
       - name: Remove one-run private material
         if: always() && steps.filter.outputs.run == 'true'
