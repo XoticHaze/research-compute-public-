@@ -1,0 +1,32 @@
+name: Semiconductor Nasdaq Independent Confirmation R1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/semiconductor_nasdaq_independent_confirmation_r1.py"
+      - ".github/workflows/semiconductor-nasdaq-independent-confirmation-r1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  experiment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check numpy pandas scikit-learn
+      - name: Run frozen Nasdaq semiconductor confirmation
+        run: python scripts/semiconductor_nasdaq_independent_confirmation_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: semiconductor-nasdaq-independent-confirmation-r1-${{ github.sha }}
+          path: results/semiconductor_nasdaq_independent_confirmation_r1.json
+          if-no-files-found: error
+          retention-days: 90
