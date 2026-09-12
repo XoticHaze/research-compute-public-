@@ -13,7 +13,7 @@ import json
 import sys
 from pathlib import Path
 
-import scripts.forward_native_ephemeral_consumer_v1 as base
+import forward_native_ephemeral_consumer_v1 as base
 
 HARNESS = "homebuilders_adaptive_duration_current_v2"
 SOURCE_REF = "1dffd4a4a889925e795ab214fabc4a764791bdab"
