@@ -1,0 +1,73 @@
+name: MTUM Momentum Transport R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/mtum-momentum-transport-r1.yml'
+      - 'research/mtum-momentum-transport-r1.json'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.11.16'}
+      - name: Evaluate frozen MTUM momentum transport discriminator
+        run: |
+          python - <<'PY'
+          import json, urllib.request, datetime as dt, statistics, math
+          from pathlib import Path
+          c=json.loads(Path('research/mtum-momentum-transport-r1.json').read_text())
+          st=dt.datetime.fromisoformat(c['start']+'T00:00:00+00:00'); en=dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1)
+          def fetch(s):
+              u=f"https://query1.finance.yahoo.com/v8/finance/chart/{s}?period1={int(st.timestamp())}&period2={int(en.timestamp())}&interval=1d&events=history&includeAdjustedClose=true"
+              req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+              with urllib.request.urlopen(req,timeout=30) as q:o=json.load(q)['chart']['result'][0]
+              a=o['indicators'].get('adjclose',[{}])[0].get('adjclose') or o['indicators']['quote'][0]['close']
+              return {dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat():float(p) for t,p in zip(o['timestamp'],a) if p is not None}
+          sy=['MTUM','SPY','QQQ']; px={s:fetch(s) for s in sy}; ds=sorted(set.intersection(*(set(px[s]) for s in sy)))
+          months={}
+          for d in ds: months.setdefault(d[:7],[]).append(d)
+          rows=[]
+          for m,z in sorted(months.items()):
+              if len(z)<10: continue
+              r={'month':m}
+              for s in sy:r[s.lower()]=px[s][z[-1]]/px[s][z[0]]-1
+              rows.append(r)
+          cost=c['annual_cost_bps']/10000
+          def cagr(z,k):
+              v=1.0
+              for r in z:v*=1+r[k]
+              return v**(12/len(z))-1
+          def excess(z,a,b): return cagr(z,a)-cagr(z,b)-cost
+          def alpha(z):
+              y=[r['mtum'] for r in z]; x1=[r['spy'] for r in z]; x2=[r['qqq'] for r in z]; n=len(y)
+              s00=n; s01=sum(x1); s02=sum(x2); s11=sum(v*v for v in x1); s12=sum(a*b for a,b in zip(x1,x2)); s22=sum(v*v for v in x2)
+              b0=sum(y); b1=sum(a*b for a,b in zip(x1,y)); b2=sum(a*b for a,b in zip(x2,y))
+              A=[[s00,s01,s02,b0],[s01,s11,s12,b1],[s02,s12,s22,b2]]
+              for i in range(3):
+                  p=max(range(i,3),key=lambda j:abs(A[j][i]));A[i],A[p]=A[p],A[i];q=A[i][i]
+                  for k in range(i,4):A[i][k]/=q
+                  for j in range(3):
+                      if j==i:continue
+                      q=A[j][i]
+                      for k in range(i,4):A[j][k]-=q*A[i][k]
+              return A[0][3]*12, A[1][3], A[2][3]
+          recent=[r for r in rows if r['month']>=c['recent_start'][:7]]
+          yearly=[]
+          for y in sorted({r['month'][:4] for r in rows}):
+              z=[r for r in rows if r['month'].startswith(y)]
+              if len(z)>=10:
+                  e=excess(z,'mtum','spy');yearly.append({'year':y,'excess_vs_spy':e,'positive':e>0})
+          ranked=sorted(rows,key=lambda r:r['mtum']-r['spy'],reverse=True)
+          drop={r['month'] for r in ranked[:c['trim_extreme_relative_months']]}; trimmed=[r for r in rows if r['month'] not in drop]
+          af,bspy,bqqq=alpha(rows); ar,rbspy,rbqqq=alpha(recent); g=c['gates']; pos=sum(r['positive'] for r in yearly)
+          vals={'full_after_cost_excess_vs_spy':excess(rows,'mtum','spy'),'recent_after_cost_excess_vs_spy':excess(recent,'mtum','spy'),'positive_calendar_years_vs_spy':pos,'trimmed_after_cost_excess_vs_spy':excess(trimmed,'mtum','spy'),'full_residual_alpha_vs_spy_qqq':af-cost,'recent_residual_alpha_vs_spy_qqq':ar-cost}
+          ok=vals['full_after_cost_excess_vs_spy']>=g['full_after_cost_excess_vs_spy_min'] and vals['recent_after_cost_excess_vs_spy']>=g['recent_after_cost_excess_vs_spy_min'] and pos>=g['min_positive_calendar_years_vs_spy'] and vals['trimmed_after_cost_excess_vs_spy']>=g['trimmed_after_cost_excess_vs_spy_min'] and vals['full_residual_alpha_vs_spy_qqq']>=g['full_residual_alpha_vs_spy_qqq_min'] and vals['recent_residual_alpha_vs_spy_qqq']>=g['recent_residual_alpha_vs_spy_qqq_min']
+          out={'schema':'mtum_momentum_transport_result.v1','months':len(rows),'recent_months':len(recent),**vals,'full_beta_spy':bspy,'full_beta_qqq':bqqq,'recent_beta_spy':rbspy,'recent_beta_qqq':rbqqq,'dropped_extreme_months':sorted(drop),'yearly':yearly,'gates':g,'survives_transport':ok,'research_only':True}
+          Path('mtum-momentum-transport-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2));print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with: {name: mtum-momentum-transport-r1-result, path: mtum-momentum-transport-r1-result.json, retention-days: 14}
