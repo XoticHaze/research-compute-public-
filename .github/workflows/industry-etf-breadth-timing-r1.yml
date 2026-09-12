@@ -1,0 +1,49 @@
+name: Industry ETF Breadth Timing R1
+on:
+  push:
+    paths:
+      - '.github/workflows/industry-etf-breadth-timing-r1.yml'
+  workflow_dispatch:
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install --quiet yfinance pandas numpy
+      - name: Execute frozen discriminator
+        run: |
+          cat > /tmp/run.py <<'PY'
+          import json, hashlib
+          import numpy as np, pandas as pd, yfinance as yf
+          assets=['SMH','XSD','KIE','XBI','ITB','XRT','IYT','XME','TAN','ICLN']; T=assets+['SPY']
+          px=yf.download(T,start='2011-01-01',auto_adjust=True,progress=False,threads=False)['Close'].dropna()
+          lb,hold,cost=126,21,0.001
+          rows=[]
+          for i in range(lb,len(px)-hold,hold):
+            breadth=float((px[assets].iloc[i] > px[assets].iloc[i-lb]).mean())
+            ew=float((px[assets].iloc[i+hold]/px[assets].iloc[i]-1).mean())
+            spy=float(px['SPY'].iloc[i+hold]/px['SPY'].iloc[i]-1)
+            active=breadth>=0.6
+            strat=(ew-cost) if active else 0.0
+            rows.append({'date':str(px.index[i].date()),'breadth':breadth,'active':active,'strategy':strat,'ew':ew,'spy':spy})
+          r=pd.DataFrame(rows)
+          def cagr(x):
+            years=len(x)*hold/252; return float(np.prod(1+x)**(1/years)-1)
+          def mdd(x):
+            e=np.cumprod(1+x); return float(np.min(e/np.maximum.accumulate(e)-1))
+          folds=np.array_split(np.arange(len(r)),5)
+          pos_ew=sum(float(r.iloc[f].strategy.mean()-r.iloc[f].ew.mean())>0 for f in folds)
+          pos_spy=sum(float(r.iloc[f].strategy.mean()-r.iloc[f].spy.mean())>0 for f in folds)
+          out={'experiment_id':'CC-RF-INDUSTRY-ETF-BREADTH-TIMING-001','claim':'A fixed 60% six-month industry breadth gate on equal-weight industry exposure creates after-cost excess versus always-invested equal-weight industries and SPY.','universe':assets,'lookback_sessions':lb,'hold_sessions':hold,'breadth_gate':0.6,'entry_cost_bps':10.0,'common_start':str(px.index[0].date()),'common_end':str(px.index[-1].date()),'periods':len(r),'active_fraction':float(r.active.mean()),'strategy_after_cost_cagr_pct':100*cagr(r.strategy),'equal_weight_cagr_pct':100*cagr(r.ew),'spy_cagr_pct':100*cagr(r.spy),'excess_vs_equal_weight_cagr_pp':100*(cagr(r.strategy)-cagr(r.ew)),'excess_vs_spy_cagr_pp':100*(cagr(r.strategy)-cagr(r.spy)),'strategy_max_drawdown_pct':100*mdd(r.strategy),'equal_weight_max_drawdown_pct':100*mdd(r.ew),'positive_ew_excess_folds':int(pos_ew),'positive_spy_excess_folds':int(pos_spy)}
+          out['gate_pass']=bool(out['excess_vs_equal_weight_cagr_pp']>0.5 and out['excess_vs_spy_cagr_pp']>=0 and pos_ew>=4 and pos_spy>=3 and out['strategy_max_drawdown_pct']>=out['equal_weight_max_drawdown_pct'])
+          blob=json.dumps(out,sort_keys=True,indent=2); open('industry_etf_breadth_timing_r1.json','w').write(blob+'\n'); print(blob); print('RESULT_SHA256='+hashlib.sha256((blob+'\n').encode()).hexdigest())
+          PY
+          python /tmp/run.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: industry-etf-breadth-timing-r1
+          path: industry_etf_breadth_timing_r1.json
+          retention-days: 30
