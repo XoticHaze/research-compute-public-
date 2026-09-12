@@ -1,0 +1,76 @@
+{
+  "schema":"research.p554_census_m3_industry_security_causal_contract.r1",
+  "parent_id":"P554",
+  "status":"FROZEN_PREPERFORMANCE_CONTRACT",
+  "purpose":"Test whether causally available Census M3 manufacturing operating-state information improves industry/security selection or creates an orthogonal portfolio role relative to the incumbent P249+P266 return core.",
+  "source_authority":{
+    "publisher":"U.S. Census Bureau",
+    "dataset":"Manufacturers' Shipments, Inventories, and Orders (M3)",
+    "admitted_source_shape_run_id":34583595916,
+    "admitted_source_shape_job_id":103212572383,
+    "admitted_source_sha256":"ac16b6c83d7d26b42885dbfc137d6b501fda1769379ebfb8e3c620a78b95f3d2",
+    "required_members":["M3-mf.csv","/README"]
+  },
+  "causality":{
+    "signal_observation_rule":"A monthly M3 observation may affect a portfolio decision only after its official publication is observable. Never use the observation month-end as availability time.",
+    "release_availability_lag":"Use the first investable session strictly after the official M3 publication timestamp/date for that release. If only publication date is available, trade no earlier than the next full U.S. session.",
+    "vintage_revision_rule":"For promotion-quality evidence use point-in-time vintage values when an authoritative vintage history is available. If only the latest revised history is available, classify the run REPRESENTATION_NOT_PROMOTION_SAFE and do not treat performance as promotion-quality alpha evidence.",
+    "missing_release_rule":"Carry the last causally available published state until the next release; never backfill future releases into prior dates."
+  },
+  "frozen_industry_state_inputs":{
+    "categories":[
+      {"census_category":"Machinery","investable_proxy":"XLI","security_universe_hint":["CAT","DE","ETN","PH","ROK"]},
+      {"census_category":"Computer and Electronic Products","investable_proxy":"SOXX","security_universe_hint":["AMAT","LRCX","KLAC","ADI","TXN"]},
+      {"census_category":"Transportation Equipment","investable_proxy":"XLI","security_universe_hint":["GE","RTX","HON","BA","GD"]},
+      {"census_category":"Electrical Equipment, Appliances, and Components","investable_proxy":"XLI","security_universe_hint":["ETN","EMR","AME","ROK","HUBB"]}
+    ],
+    "measures":["New Orders","Unfilled Orders","Shipments","Inventories"],
+    "derived_features":[
+      "12m_zscore_new_orders_yoy",
+      "12m_zscore_unfilled_orders_yoy",
+      "12m_zscore_shipments_yoy",
+      "12m_zscore_inventory_to_shipments_change"
+    ],
+    "feature_rule":"All transformations are trailing-only and computed from causally available released observations. No post-result category, measure, lag, window, threshold, or security substitution."
+  },
+  "industry_score":{
+    "construction":"Equal-weight the four standardized derived features after orienting inventory-to-shipments change negatively; require at least three finite components.",
+    "selection":"At each release, rank the four frozen categories by industry_score. Long only the top category proxy/security basket when its score is positive; otherwise hold benchmark-neutral cash for the challenger sleeve.",
+    "no_threshold_search":true
+  },
+  "security_selection":{
+    "primary_test":"Within the winning category, equal-weight the frozen security_universe_hint members that have complete causal price history and pass the fixed liquidity gate.",
+    "liquidity_gate":"Median trailing 60-session dollar volume >= 20,000,000 USD using only information available before rebalance.",
+    "survivorship_rule":"Promotion-quality stock-level evidence requires point-in-time constituent/security eligibility. If unavailable, report proxy-level results as causal and stock-level results as exploratory only.",
+    "rebalance":"First full U.S. session after each causally available M3 release; hold until next eligible release."
+  },
+  "controls_and_costs":{
+    "matched_controls":["SPY","QQQ","SOXX","XLI"],
+    "incumbent_portfolio":"P249+P266 unchanged common-sample consumer",
+    "transaction_cost_bps_per_side":10,
+    "stress_cost_bps_per_side":[25,50],
+    "cash_return":"0 for challenger-isolation test; common-sample portfolio consumer may apply its canonical cash convention without changing the challenger signal."
+  },
+  "validation":{
+    "chronology":"Strict release-time chronology; no same-release lookahead.",
+    "oos":"Use expanding-window chronological evaluation with at least 5 contiguous folds when sample length permits; report fold-level matched excess.",
+    "promotion_gates":[
+      "positive after-cost CAGR excess versus the best matched simple control on the exact common sample",
+      "positive excess in at least 3/5 chronological folds when five folds are feasible",
+      "does not rely on a single category for more than 70% of total excess contribution",
+      "survives 25 bps/side stress without losing all matched excess",
+      "point-in-time/vintage safety is satisfied for any promotion-quality claim"
+    ],
+    "failure_semantics":{
+      "latest_revised_source_only":"REPRESENTATION_NOT_PROMOTION_SAFE",
+      "point_in_time_universe_missing_stock_level":"PROXY_LEVEL_ONLY__STOCK_LEVEL_EXPLORATORY",
+      "negative_or_nonpersistent_alpha":"P554_INDUSTRY_LAYER_NOT_SUPPORTED"
+    }
+  },
+  "downstream":{
+    "if_supported":"Run unchanged common-sample opportunity-cost consumer against P249+P266; do not replace incumbent on standalone return alone.",
+    "if_risk_only":"Route to risk-shaping tournament, not return-alpha capital.",
+    "if_not_supported":"Park the scientific child; no category/measure/lag/mapping/window/ticker rescue."
+  },
+  "protected_boundaries":{"live_trading_change":false,"broker_submission":false,"runtime_activation":false}
+}
