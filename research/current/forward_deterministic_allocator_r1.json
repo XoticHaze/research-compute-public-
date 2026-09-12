@@ -44,7 +44,7 @@
     "XPH": 0.0666666667,
     "XSD": 0.0666666667
   },
-  "generated_at": "2026-09-12T20:02:32.547954+00:00",
+  "generated_at": "2026-09-12T20:04:16.584242+00:00",
   "learned_allocator_role": "shadow_challenger_must_beat_this_baseline_after_costs_and_opportunity_cost",
   "policy_id": "CC770_DETERMINISTIC_ALLOCATOR_V0",
   "position_actions_vs_prior_allocator_target": [
@@ -177,7 +177,7 @@
       "target_weight": 0.0
     }
   ],
-  "source_scoreboard_generated_at": "2026-09-12T20:02:32.505859+00:00",
+  "source_scoreboard_generated_at": "2026-09-12T20:04:16.524550+00:00",
   "source_scoreboard_schema": "research.forward_market_scoreboard_r1",
   "tactical_used": 0.0,
   "unused_tactical_budget": 0.15
