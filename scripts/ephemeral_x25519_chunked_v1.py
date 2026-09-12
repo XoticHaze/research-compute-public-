@@ -32,6 +32,7 @@ ENVELOPE_FIELDS = {
     "chunks",
 }
 CHUNK_FIELDS = {"path", "sha256", "chars"}
+DEFAULT_CHUNK_CHARS = 8000
 
 
 def _b64d(value: str) -> bytes:
@@ -40,6 +41,52 @@ def _b64d(value: str) -> bytes:
 
 def sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def build_text_chunk_manifest(
+    payload_b64: str,
+    *,
+    response_root: str,
+    stem: str,
+    chunk_chars: int = DEFAULT_CHUNK_CHARS,
+) -> tuple[list[tuple[str, str]], list[dict[str, object]]]:
+    """Split base64 ciphertext into immutable, uniquely named exact chunks.
+
+    Returns ``(files, manifest)`` where files contains ``(path, text)`` pairs
+    ready for publication and manifest contains the matching envelope chunk
+    descriptors. Publication must write every returned file before publishing
+    the envelope. Reusing one path for sequential pieces is intentionally
+    impossible through this helper.
+    """
+    if not isinstance(payload_b64, str) or not payload_b64:
+        raise ValueError("payload_b64 must be a non-empty string")
+    try:
+        base64.b64decode(payload_b64.encode("ascii"), validate=True)
+    except Exception as exc:  # pragma: no cover - exact decoder type is irrelevant
+        raise ValueError("payload_b64 must be valid base64") from exc
+    if int(chunk_chars) <= 0:
+        raise ValueError("chunk_chars must be positive")
+    root = response_root.rstrip("/")
+    if not root or "/../" in f"/{root}/":
+        raise ValueError("response_root invalid")
+    if not stem or "/" in stem or stem in {".", ".."}:
+        raise ValueError("stem invalid")
+
+    files: list[tuple[str, str]] = []
+    manifest: list[dict[str, object]] = []
+    for index, start in enumerate(range(0, len(payload_b64), int(chunk_chars))):
+        text = payload_b64[start : start + int(chunk_chars)]
+        path = f"{root}/{stem}-{index:03d}.txt"
+        raw = text.encode("ascii")
+        files.append((path, text))
+        manifest.append(
+            {
+                "path": path,
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "chars": len(raw),
+            }
+        )
+    return files, manifest
 
 
 def aad_bytes(*, schema: str, run_id: str, harness: str, recipient_key_id: str) -> bytes:
