@@ -1,0 +1,233 @@
+{
+  "coverage": {
+    "adapter_gaps": [
+      "SEMICONDUCTOR_SHARED_RIDGE",
+      "HOMEBUILDERS",
+      "GENERALIZED_LARGECAP_RIDGE"
+    ],
+    "scored_now": [
+      "P46",
+      "P249_P266",
+      "P558",
+      "SENIOR_CLO"
+    ]
+  },
+  "generated_at": "2026-09-12T08:56:54.020440+00:00",
+  "interpretation": {
+    "broker_or_live_authority": false,
+    "forward_score_requires_matched_benchmark_or_control": true,
+    "positive_model_score_is_not_position_size": true,
+    "small_samples_are_not_promotion_evidence": true,
+    "weight_is_not_forecast": true
+  },
+  "lanes": [
+    {
+      "action_text": "Hold DBC 50.0%, QQQ 50.0% for the frozen holding month.",
+      "boundaries": {
+        "broker_action": false,
+        "live_trading_change": false,
+        "portfolio_allocation_authority": false,
+        "private_admission_required_for_authoritative_forward_history": true,
+        "research_only": true,
+        "runtime_mutation": false
+      },
+      "decision_use": "Cross-asset regime/context signal only until prospective credit is active. Selection indicates relative preference, not a return forecast.",
+      "forward_days": null,
+      "kind": "cross_asset_selector",
+      "paper_action": {
+        "DBC": 0.5,
+        "GLD": 0.0,
+        "QQQ": 0.5,
+        "SPY": 0.0,
+        "TLT": 0.0
+      },
+      "program_id": "P46",
+      "scientific_forward_credit": false,
+      "signal": {
+        "holding_month": "2026-09",
+        "scores": {
+          "DBC": 0.85,
+          "GLD": 0.25,
+          "QQQ": 0.7000000000000001,
+          "SPY": 0.7,
+          "TLT": 0.5
+        },
+        "selected": [
+          "DBC",
+          "QQQ"
+        ]
+      },
+      "validation_grade": "SHAKEDOWN_ONLY"
+    },
+    {
+      "action_text": "Frozen combined portfolio: SOXX 29.2%, AVDV 12.5%, AVUV 12.5%, XBI 12.5%, XPH 8.3%, XSD 8.3%, DBC 6.2%, QQQ 6.2%, IGV 4.2%.",
+      "boundaries": {
+        "allocation_authority": false,
+        "broker": false,
+        "live_trading": false,
+        "portfolio_ranking": false,
+        "runtime": false
+      },
+      "decision_use": "This is not a price target. Weights are the frozen portfolio expression. Use prospective return, drawdown and the P266 incremental result to decide whether the construction adds value.",
+      "forward_days": 2,
+      "kind": "portfolio_construction_plus_industry_momentum_satellite",
+      "paper_action": {
+        "AVDV": 0.125,
+        "AVUV": 0.125,
+        "DBC": 0.0625,
+        "IGV": 0.041666666666666664,
+        "QQQ": 0.0625,
+        "SOXX": 0.2916666666666667,
+        "XBI": 0.125,
+        "XPH": 0.08333333333333333,
+        "XSD": 0.08333333333333333
+      },
+      "program_id": "P249_P266",
+      "scorecard": {
+        "p249_core_annualized_vol": 0.28923880615922465,
+        "p249_core_net_cumulative_bps": -79.95,
+        "p249_plus_p266_annualized_vol": 0.2916614794006348,
+        "p249_plus_p266_net_cumulative_bps": -94.41,
+        "p266_increment_cumulative_bps": -14.49
+      },
+      "signal": {
+        "p249_core_weights": {
+          "AVDV": 0.16666666666666666,
+          "AVUV": 0.16666666666666666,
+          "DBC": 0.08333333333333333,
+          "IGV": 0.05555555555555555,
+          "QQQ": 0.08333333333333333,
+          "SOXX": 0.38888888888888884,
+          "XBI": 0.05555555555555555
+        },
+        "p266_industry_weights": {
+          "XBI": 0.3333333333333333,
+          "XPH": 0.3333333333333333,
+          "XSD": 0.3333333333333333
+        }
+      },
+      "validation_grade": "INSUFFICIENT_SAMPLE"
+    },
+    {
+      "action_text": "Shadow KMLM 50.0%, SOXX 14.6%, AVDV 6.2%, AVUV 6.2%, XBI 6.2%, XPH 4.2%, XSD 4.2%, DBC 3.1%, QQQ 3.1%, IGV 2.1%.",
+      "boundaries": {
+        "allocation_authority": false,
+        "broker": false,
+        "live_trading": false,
+        "runtime": false
+      },
+      "decision_use": "Tests whether allocating half the incumbent portfolio to KMLM improves capital efficiency and diversification. A market decision requires positive excess versus both the unchanged incumbent and matched BIL control with enough forward observations.",
+      "forward_days": 1,
+      "kind": "portfolio_diversification_challenger",
+      "paper_action": {
+        "AVDV": 0.0625,
+        "AVUV": 0.0625,
+        "DBC": 0.03125,
+        "IGV": 0.020833333333333332,
+        "KMLM": 0.5,
+        "QQQ": 0.03125,
+        "SOXX": 0.14583333333333334,
+        "XBI": 0.0625,
+        "XPH": 0.041666666666666664,
+        "XSD": 0.041666666666666664
+      },
+      "program_id": "P558",
+      "scorecard": {
+        "annualized_vol": null,
+        "challenger_cumulative_bps": -24.35,
+        "excess_vs_incumbent_bps": -82.8,
+        "excess_vs_matched_cash_control_bps": -17.71,
+        "max_drawdown": 0.0
+      },
+      "signal": {
+        "alternative": "KMLM",
+        "fixed_weight": 0.5
+      },
+      "validation_grade": "INSUFFICIENT_SAMPLE"
+    },
+    {
+      "action_text": "Shadow JAAA 50.0%, SOXX 14.6%, AVDV 6.2%, AVUV 6.2%, XBI 6.2%, XPH 4.2%, XSD 4.2%, DBC 3.1%, QQQ 3.1%, IGV 2.1%.",
+      "boundaries": {
+        "allocation_authority": false,
+        "broker": false,
+        "live_trading": false,
+        "runtime": false
+      },
+      "decision_use": "Tests whether allocating half the incumbent portfolio to JAAA improves capital efficiency and diversification. A market decision requires positive excess versus both the unchanged incumbent and matched BIL control with enough forward observations.",
+      "forward_days": 1,
+      "kind": "portfolio_diversification_challenger",
+      "paper_action": {
+        "AVDV": 0.0625,
+        "AVUV": 0.0625,
+        "DBC": 0.03125,
+        "IGV": 0.020833333333333332,
+        "JAAA": 0.5,
+        "QQQ": 0.03125,
+        "SOXX": 0.14583333333333334,
+        "XBI": 0.0625,
+        "XPH": 0.041666666666666664,
+        "XSD": 0.041666666666666664
+      },
+      "program_id": "SENIOR_CLO",
+      "scorecard": {
+        "annualized_vol": null,
+        "challenger_cumulative_bps": -4.32,
+        "excess_vs_incumbent_bps": -62.77,
+        "excess_vs_matched_cash_control_bps": 2.31,
+        "max_drawdown": 0.0
+      },
+      "signal": {
+        "alternative": "JAAA",
+        "fixed_weight": 0.5
+      },
+      "validation_grade": "INSUFFICIENT_SAMPLE"
+    },
+    {
+      "decision_use": "Preserve native observer output; do not infer a common score until its registered adapter is wired.",
+      "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+      "status": "ADAPTER_NOT_CONNECTED_TO_THIS_REPORT",
+      "validation_grade": "NO_COMMON_SCORE"
+    },
+    {
+      "decision_use": "Preserve native observer output; do not infer a common score until its registered adapter is wired.",
+      "program_id": "HOMEBUILDERS",
+      "status": "ADAPTER_NOT_CONNECTED_TO_THIS_REPORT",
+      "validation_grade": "NO_COMMON_SCORE"
+    },
+    {
+      "decision_use": "Preserve native observer output; do not infer a common score until its registered adapter is wired.",
+      "program_id": "GENERALIZED_LARGECAP_RIDGE",
+      "status": "ADAPTER_NOT_CONNECTED_TO_THIS_REPORT",
+      "validation_grade": "NO_COMMON_SCORE"
+    }
+  ],
+  "market_decision_context": [
+    {
+      "authority": "context_only",
+      "intel": "Cross-asset relative preference",
+      "source": "P46",
+      "state": [
+        "DBC",
+        "QQQ"
+      ]
+    },
+    {
+      "authority": "research_shadow_only",
+      "intel": "Current frozen portfolio expression",
+      "source": "P249_P266",
+      "state": {
+        "AVDV": 0.125,
+        "AVUV": 0.125,
+        "DBC": 0.0625,
+        "IGV": 0.041666666666666664,
+        "QQQ": 0.0625,
+        "SOXX": 0.2916666666666667,
+        "XBI": 0.125,
+        "XPH": 0.08333333333333333,
+        "XSD": 0.08333333333333333
+      }
+    }
+  ],
+  "purpose": "Daily/on-demand forward validation and market-decision reporting across frozen research survivors.",
+  "schema": "research.forward_market_scoreboard_r1"
+}
