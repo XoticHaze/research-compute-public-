@@ -1,0 +1,53 @@
+name: SPMO DBMF Ex2022 Falsifier R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/spmo-dbmf-ex2022-falsifier-r1.yml'
+      - 'research/spmo-dbmf-ex2022-falsifier-r1.json'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.11.16'}
+      - name: Evaluate frozen ex-2022 concentration falsifier
+        run: |
+          python - <<'PY'
+          import json,urllib.request,datetime as dt,statistics,math
+          from pathlib import Path
+          c=json.loads(Path('research/spmo-dbmf-ex2022-falsifier-r1.json').read_text());st=dt.datetime.fromisoformat(c['start']+'T00:00:00+00:00');en=dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1)
+          def f(s):
+              u=f"https://query1.finance.yahoo.com/v8/finance/chart/{s}?period1={int(st.timestamp())}&period2={int(en.timestamp())}&interval=1d&events=history&includeAdjustedClose=true";req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+              with urllib.request.urlopen(req,timeout=30) as q:o=json.load(q)['chart']['result'][0]
+              a=o['indicators'].get('adjclose',[{}])[0].get('adjclose') or o['indicators']['quote'][0]['close'];return {dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat():float(p) for t,p in zip(o['timestamp'],a) if p is not None}
+          sy=['SPMO','DBMF','SPY','BIL'];px={s:f(s) for s in sy};ds=sorted(set.intersection(*(set(px[s]) for s in sy)));m={}
+          for d in ds:m.setdefault(d[:7],[]).append(d)
+          rows=[]
+          for k,z in sorted(m.items()):
+              if len(z)<10 or k.startswith(c['excluded_calendar_year']):continue
+              r={'month':k}
+              for s in sy:r[s.lower()]=px[s][z[-1]]/px[s][z[0]]-1
+              r['blend']=.5*r['spmo']+.5*r['dbmf'];r['control']=.5*r['spy']+.5*r['bil'];rows.append(r)
+          def cg(z,k):
+              v=1.0
+              for r in z:v*=1+r[k]
+              return v**(12/max(len(z),1))-1
+          def dd(z,k):
+              v=peak=1.0;m=0.0
+              for r in z:v*=1+r[k];peak=max(peak,v);m=min(m,v/peak-1)
+              return m
+          def sh(z,k):
+              a=[r[k] for r in z];sd=statistics.stdev(a);return statistics.mean(a)/sd*math.sqrt(12)
+          cost=c['cost_bps_annual']/10000;exc=cg(rows,'blend')-cg(rows,'control')-cost;yr=[]
+          for y in sorted({r['month'][:4] for r in rows}):
+              z=[r for r in rows if r['month'].startswith(y)]
+              if len(z)>=10:yr.append({'year':y,'excess_vs_control':cg(z,'blend')-cg(z,'control')-cost,'positive':cg(z,'blend')-cg(z,'control')-cost>0})
+          pos=sum(x['positive'] for x in yr);ddi=dd(rows,'blend')-dd(rows,'spmo');shi=sh(rows,'blend')-sh(rows,'spmo');g=c['gates'];ok=exc>=g['ex2022_after_cost_excess_vs_control_min'] and pos>=g['min_positive_calendar_years_vs_control_ex2022'] and ddi>=g['max_drawdown_improvement_vs_spmo_min'] and shi>=g['sharpe_improvement_vs_spmo_min']
+          out={'schema':'spmo_dbmf_ex2022_falsifier_result.v1','months':len(rows),'ex2022_after_cost_excess_vs_control':exc,'positive_calendar_years_vs_control_ex2022':pos,'blend_max_drawdown_ex2022':dd(rows,'blend'),'spmo_max_drawdown_ex2022':dd(rows,'spmo'),'max_drawdown_improvement_vs_spmo':ddi,'blend_sharpe_ex2022':sh(rows,'blend'),'spmo_sharpe_ex2022':sh(rows,'spmo'),'sharpe_improvement_vs_spmo':shi,'survives_ex2022_falsifier':ok,'yearly':yr,'gates':g,'research_only':True};Path('spmo-dbmf-ex2022-falsifier-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2));print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with: {name: spmo-dbmf-ex2022-falsifier-r1-result, path: spmo-dbmf-ex2022-falsifier-r1-result.json, retention-days: 14}
