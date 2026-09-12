@@ -19,7 +19,6 @@ jobs:
       fail-fast: false
       matrix:
         harness:
-          - semiconductor_shared_ridge_three_book_v1
           - homebuilders_adaptive_duration_v1
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -57,7 +56,8 @@ jobs:
           HARNESS: '${{ matrix.harness }}'
         run: |
           set -euo pipefail
-          path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}-${HARNESS}-forward-native.json"
+          rendezvous_key="${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          path="${RECIPIENT_ROOT}/${rendezvous_key}-${HARNESS}-forward-native.json"
           api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}"
           payload="$(base64 -w0 "$RUNNER_TEMP/forward-native-${HARNESS}-recipient.json")"
           body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
@@ -73,7 +73,8 @@ jobs:
           HARNESS: '${{ matrix.harness }}'
         run: |
           set -euo pipefail
-          path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/${HARNESS}-input.json"
+          rendezvous_key="${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          path="${RESPONSE_ROOT}/${rendezvous_key}/${HARNESS}-input.json"
           api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${EXCHANGE_REF}"
           found=0
           for _ in $(seq 1 240); do
@@ -97,7 +98,8 @@ jobs:
           HARNESS: '${{ matrix.harness }}'
         run: |
           set -euo pipefail
-          path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/${HARNESS}-return.json"
+          rendezvous_key="${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          path="${RESPONSE_ROOT}/${rendezvous_key}/${HARNESS}-return.json"
           api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}"
           payload="$(base64 -w0 "$RUNNER_TEMP/forward-native-${HARNESS}-return.json")"
           body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
@@ -110,7 +112,7 @@ jobs:
       - name: Upload encrypted return artifact
         uses: actions/upload-artifact@v4
         with:
-          name: forward-native-gap-close-${{ matrix.harness }}-${{ github.run_id }}
+          name: forward-native-gap-close-${{ matrix.harness }}-${{ github.run_id }}-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/forward-native-${{ matrix.harness }}-return.json
           if-no-files-found: error
           retention-days: 14
