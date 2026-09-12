@@ -99,7 +99,7 @@ def load(symbol: str) -> pd.Series:
     result = (payload.get("chart", {}).get("result") or [None])[0]
     if not result:
         raise RuntimeError(f"{symbol}: no chart result")
-    timestamps = pd.to_datetime(result.get("timestamp") or [], unit="s", utc=True)
+    timestamps = pd.to_datetime(result.get("timestamp") or [], unit="s", utc=True).normalize()
     indicators = result.get("indicators", {})
     adjusted = (indicators.get("adjclose") or [{}])[0].get("adjclose")
     close = adjusted or (indicators.get("quote") or [{}])[0].get("close")
