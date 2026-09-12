@@ -1,0 +1,33 @@
+{
+  "schema": "pdp_momentum_transport_result.v1",
+  "execution": {
+    "surface": "public_research_compute_current",
+    "repository": "XoticHaze/research-compute-public-",
+    "mechanism": "pull_request_workflow",
+    "pull_request": 1279,
+    "head_sha": "93e8af8074ffaab1ca4e0de90197c4930b90d769",
+    "run_id": 34666703479,
+    "job_id": 103479927731,
+    "observed_start": "2026-09-12T02:05:48Z",
+    "terminal_conclusion": "success",
+    "artifact_id": 10289347535,
+    "artifact_sha256": "4d5a02938afa50aefdaa4de1372e817c400fbb7b7b3ea20889965fe9d6460feb"
+  },
+  "months": 234,
+  "recent_months": 80,
+  "full_after_cost_excess_vs_spy": -0.0030995702488851844,
+  "recent_after_cost_excess_vs_spy": -0.02396131029592863,
+  "positive_calendar_years_vs_spy": 10,
+  "trimmed_after_cost_excess_vs_spy": -0.01983985100041874,
+  "full_residual_alpha_vs_spy_qqq": -0.01321538952755832,
+  "recent_residual_alpha_vs_spy_qqq": -0.027722063124337948,
+  "full_beta_spy": 0.7651988013912823,
+  "full_beta_qqq": 0.25791836599163886,
+  "recent_beta_spy": 0.833086394354237,
+  "recent_beta_qqq": 0.1915566091321055,
+  "dropped_extreme_months": ["2008-12", "2020-05", "2024-11", "2026-02", "2026-06"],
+  "survives_transport": false,
+  "scientific_consequence": "Reject PDP momentum transport without parameter rescue. Long and recent matched SPY economics are negative, extreme-month trimming worsens the result, and SPY+QQQ residual alpha is negative.",
+  "research_only": true,
+  "allocation_authority": false
+}
