@@ -1,0 +1,32 @@
+name: PIT ROA Filing Event Alpha R1 Transport Hardened
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/pit_roa_filing_event_alpha_r1_transport.py'
+      - '.github/workflows/pit-roa-filing-event-alpha-r1-transport.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - id: eval
+        run: |
+          python research/pit_roa_filing_event_alpha_r1_transport.py
+          python - <<'PY'
+          import json, os
+          x=json.load(open('research/artifacts/pit_roa_filing_event_alpha_r1.json'))
+          r=x['result']
+          b=lambda v: 'na' if v is None else str(round(10000*v))
+          tag=f"{r['decision']}__n_{r['improving_event_count']}__sectorbps_{b(r['mean_after_cost_sector_excess'])}__spybps_{b(r['mean_after_cost_spy_excess'])}__recentbps_{b(r['recent_since_2022_mean_sector_excess'])}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pit-roa-filing-event-alpha-r1__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/pit_roa_filing_event_alpha_r1.json
+          if-no-files-found: error
