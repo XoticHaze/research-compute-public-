@@ -1,0 +1,13 @@
+{
+  "schema":"spmo_downmarket_falsifier_contract.v1",
+  "hypothesis":"SPMO's matched momentum edge over MTUM is not confined to positive broad-equity months and remains non-negative in negative-SPY months.",
+  "candidate":"SPMO",
+  "matched_momentum_control":"MTUM",
+  "regime_control":"SPY",
+  "start":"2015-10-09",
+  "cost_bps":10,
+  "gates":{"down_spy_mean_monthly_excess_min":0.0,"down_spy_median_monthly_excess_min":0.0,"down_spy_positive_month_share_min":0.5,"down_spy_compounded_relative_cagr_min":0.0},
+  "frozen_before_execution":true,
+  "no_parameter_rescue":true,
+  "research_only":true
+}
