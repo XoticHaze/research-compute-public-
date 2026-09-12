@@ -4,9 +4,10 @@ import json
 from pathlib import Path
 
 OWNING_REPO = "XoticHaze/mm-IBKR"
-OWNING_HEAD = "19823e0e8d4e2c181585085fb643295690a331cc"
+OWNING_HEAD = "89e426bcd781ddf12eb4eab16b23f93c6adc19e8"
 READINESS_BLOB = "87a65f47e938960ce248f2d51c892214a1cfa257"
 VIEW_MODEL_BLOB = "945b505bc5af3219b86a3600f273b69b237f21e1"
+PANEL_BLOB = "7c1e89736021a4a9338f229afe112abdc2099b79"
 SNAPSHOT_SCHEMA = "mm.autotuner_operator_status_snapshot.v1"
 PRODUCT_ROUTE = "/operator/autotuner-review/current.json"
 REQUIRED = ("baseline", "excess_return", "cost_model", "data_coverage", "capital_context")
@@ -93,6 +94,8 @@ checks = {
     "owning_head_bound": len(OWNING_HEAD) == 40,
     "exact_readiness_blob_bound": len(READINESS_BLOB) == 40,
     "exact_view_model_blob_bound": len(VIEW_MODEL_BLOB) == 40,
+    "exact_panel_blob_bound": len(PANEL_BLOB) == 40,
+    "campaign_summary_surface_bound": PANEL_BLOB == "7c1e89736021a4a9338f229afe112abdc2099b79",
     "two_runtimes_complete": summary["complete_count"] == 2,
     "one_runtime_incomplete": summary["incomplete_count"] == 1,
     "exact_missing_counts": summary["missing_counts"] == {"data_coverage": 1, "excess_return": 1, "robust_bands": 1},
@@ -110,7 +113,7 @@ result = {
     "schema": "cc.p01_autotuner_operator_comparison_readiness_acceptance.v1",
     "owning_repo": OWNING_REPO,
     "owning_head": OWNING_HEAD,
-    "source_identity": {"readiness_blob": READINESS_BLOB, "view_model_blob": VIEW_MODEL_BLOB},
+    "source_identity": {"readiness_blob": READINESS_BLOB, "view_model_blob": VIEW_MODEL_BLOB, "panel_blob": PANEL_BLOB},
     "product_route": PRODUCT_ROUTE,
     "comparison_readiness": summary,
     "operator_message": message,
