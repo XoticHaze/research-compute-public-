@@ -1,0 +1,11 @@
+{
+  "schema":"spmo_momentum_transport_contract.v1",
+  "claim_tested":"Momentum implementation evidence should transport to an independent provider/selection design via SPMO versus SPY rather than remain unique to MTUM.",
+  "symbols":["SPMO","SPY"],
+  "start":"2015-09-15",
+  "period_starts":{"full":"2015-09-15","post2020":"2020-01-01"},
+  "rolling_days":756,
+  "gates":{"min_full_excess":0.01,"min_post2020_excess":0.0,"min_rolling_positive_share":0.55,"min_recent_positive_years":4,"max_extra_drawdown":0.05},
+  "frozen_inheritance":{"parent":"SLP-20260911-MTUM-BETA-ALPHA-R1","primary_control":"SPY","transport_dimension":"independent provider and momentum index implementation","returns":"realized adjusted-close market returns","no_parameter_rescue":true},
+  "research_only":true
+}
