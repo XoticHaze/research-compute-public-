@@ -1,0 +1,13 @@
+{
+  "schema":"spmo_stooq_replication_contract.v1",
+  "hypothesis":"The frozen SPMO-vs-MTUM matched-control result is not a Yahoo-specific price-history artifact and reproduces directionally from independent Stooq daily closes.",
+  "source":"stooq",
+  "symbols":{"candidate":"spmo.us","matched_momentum_control":"mtum.us","broad_control":"spy.us"},
+  "start":"2015-10-09",
+  "recent_start":"2021-01-01",
+  "cost_bps":10,
+  "gates":{"full_after_cost_excess_vs_mtum_min":0.01,"recent_after_cost_excess_vs_mtum_min":0.005,"min_positive_calendar_years_vs_mtum":6},
+  "frozen_before_execution":true,
+  "no_parameter_rescue":true,
+  "research_only":true
+}
