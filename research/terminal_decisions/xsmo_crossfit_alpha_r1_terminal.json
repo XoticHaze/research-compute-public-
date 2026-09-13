@@ -1,0 +1,64 @@
+{
+  "schema": "research.terminal_decision.v1",
+  "workload_id": "XSMO_CROSSFIT_ALPHA_R1",
+  "claim": "XSMO retains durable implementation alpha beyond small-cap beta and generic momentum exposure",
+  "decision": "REJECT_NO_RESCUE",
+  "frozen_contract": {
+    "target": "XSMO",
+    "factors": ["IJR", "MTUM"],
+    "leave_one_calendar_year_out": true,
+    "annual_cost": 0.001,
+    "gates": {
+      "full_residual_alpha_pct": 1.0,
+      "recent_2022_residual_alpha_pct": 1.0,
+      "positive_year_fraction": 0.6,
+      "worst_year_residual_pct": -8.0
+    },
+    "parameter_rescue": false
+  },
+  "result": {
+    "months": 104,
+    "years": 9,
+    "full_residual_alpha_pct": -0.2564392739175661,
+    "recent_2022_residual_alpha_pct": -0.3942866521830847,
+    "positive_year_fraction": 0.6666666666666666,
+    "positive_years": 6,
+    "worst_year_residual_pct": -7.36099345088636,
+    "passes": {
+      "full_residual_alpha_pct": false,
+      "recent_2022_residual_alpha_pct": false,
+      "positive_year_fraction": true,
+      "worst_year_residual_pct": true
+    },
+    "year_residual_alpha_pct": {
+      "2018": 4.583383562748131,
+      "2019": 1.2238790621736402,
+      "2020": 1.5860673467776785,
+      "2021": -7.36099345088636,
+      "2022": 0.512858300458998,
+      "2023": 4.054447270778035,
+      "2024": 0.6464718754200377,
+      "2025": -2.3536157786618825,
+      "2026": -6.310697687819788
+    }
+  },
+  "evidence_binding": {
+    "source_head_sha": "8604c28ca942e4d7e755a8f70cdf6c82935e00e0",
+    "merged_scientific_commit": "0a276cad754038549f70acb3a79e3225d9411ef9",
+    "workflow_run_id": 34743519231,
+    "artifact_id": 10313318182,
+    "artifact_archive_sha256": "3d0470c77b3814c3cac2337a5bccbff09135541a10aeae414e237770c60bb103",
+    "result_file_sha256": "213b7c08bb96741105dde97d6ad73aacb67c766952a66a4fdf14fe39886efca0"
+  },
+  "scientific_consequence": "Do not promote or parameter-rescue XSMO as independent implementation alpha. Positive-year breadth and downside gate passes do not rescue the negative full-history and recent residual-alpha results.",
+  "boundaries": {
+    "research_only": true,
+    "automatic_action": false,
+    "portfolio_ranking_authority": false,
+    "allocation_authority": false,
+    "promotion_authority": false,
+    "runtime_authority": false,
+    "broker_authority": false,
+    "live_trading": false
+  }
+}
