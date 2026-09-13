@@ -1,0 +1,31 @@
+name: PIT Net Share Contraction R1
+on:
+  push:
+    branches: [market-research/pit-net-share-contraction-r1-20260913]
+    paths:
+      - 'research/pit_net_share_contraction_r1.py'
+      - '.github/workflows/pit-net-share-contraction-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.11.16'}
+      - name: Frozen provenance
+        run: |
+          echo "public_head=${GITHUB_SHA}"
+          echo "experiment_id=PIT_NET_SHARE_CONTRACTION_R1_20260913"
+          echo "prereg=CommandCenter@3af69ba26b436289d7f2fc38ebdd63ea88332dbe"
+      - name: Compile evaluator
+        run: python -m py_compile research/pit_net_share_contraction_r1.py
+      - name: Execute frozen capital-allocation discriminator
+        run: python research/pit_net_share_contraction_r1.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pit-net-share-contraction-r1-result
+          path: research/results/pit_net_share_contraction_r1.json
+          retention-days: 30
+          if-no-files-found: error
