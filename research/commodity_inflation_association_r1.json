@@ -1,0 +1,20 @@
+{
+  "schema": "commodity_inflation_association_contract.v1",
+  "experiment_id": "CC-RF-COMMODITY-INFLATION-ASSOCIATION-001",
+  "inherits_learning_ids": ["SLP-20260913-COMT-COMMODITY-IMPLEMENTATION-R1"],
+  "uncertainty_resolved": "Whether the recent commodity implementation dispersion coincides with a chronology-safe inflation state rather than unconditional product alpha.",
+  "symbols": ["COMT", "DBC", "BCI"],
+  "evaluation_start": "2018-01-01",
+  "inflation_series": "CPIAUCSL",
+  "inflation_threshold_yoy": 0.03,
+  "signal_lag_months": 1,
+  "comparisons": ["COMT_minus_DBC", "COMT_minus_BCI"],
+  "gates": {
+    "min_high_inflation_mean_relative_monthly": 0.001,
+    "min_high_minus_low_relative_monthly": 0.001,
+    "min_positive_high_inflation_fraction": 0.55,
+    "min_positive_calendar_year_fraction": 0.6
+  },
+  "forbidden_rescue": ["change 3% threshold", "change one-month information lag", "move evaluation date", "exclude weak years", "change product controls after observing result"],
+  "research_only": true
+}
