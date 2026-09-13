@@ -1,0 +1,77 @@
+{
+  "boundaries": {
+    "allocation_authority": false,
+    "broker_action": false,
+    "hedge_ratio_search": false,
+    "live_trading_change": false,
+    "product_search": false,
+    "promotion_authority": false,
+    "regime_rescue": false,
+    "research_only": true,
+    "runtime_authority": false
+  },
+  "contract": {
+    "cost_bps_each_endpoint": 25.0,
+    "implementations": {
+      "DBEF": {
+        "matched_control": "EFA"
+      },
+      "HEFA": {
+        "matched_control": "IEFA"
+      }
+    },
+    "mechanism_summary": "equal mean of HEFA-vs-IEFA and DBEF-vs-EFA matched excess",
+    "opportunity_control": "SPY",
+    "regime_context": "prior completed 12-month UUP return",
+    "regime_is_not_timing_gate": true
+  },
+  "decision_use": "Prospective replication monitor for the developed-ex-US currency-hedge mechanism. Judge HEFA and DBEF against their own unhedged controls; report SPY only as opportunity cost.",
+  "entry": {
+    "date": null,
+    "rule": "first common market-session close after registration"
+  },
+  "frozen_sources": {
+    "P426_HEFA": {
+      "blob": "8e783a07b78f4f6efee8963c1d05f07792c12bff",
+      "path": "research/p426_hefa_currency_hedge_r1.py",
+      "ref": "95a5c966f64f2f680b0c4d22f73b00938e726c7a"
+    },
+    "P428_DBEF": {
+      "blob": "f9b0551df904a6234fd6f929eb5b53b7835605fd",
+      "path": "research/p428_dbef_currency_hedge_replication_r1.py",
+      "ref": "deddf9d0d8507169eeeb063a14747527e3a4d14e"
+    },
+    "P436_REGIME": {
+      "blob": "5876281376a298e4738734c98cc4153648085ecb",
+      "path": "research/p436_currency_hedge_regime_r1.py",
+      "ref": "fe674e9b9cff72e9cf758c8bc6548124c6f8cf53"
+    }
+  },
+  "generated_at": "2026-09-13T06:39:17.223662+00:00",
+  "market_data_asof": "2026-09-13",
+  "program_id": "DEVELOPED_EXUS_CURRENCY_HEDGE",
+  "regime_context": {
+    "prior_completed_12m_uup_return": 0.0624905772,
+    "prior_completed_month_end": "2026-08-31",
+    "rule": "strong_dollar iff prior completed 12-month UUP return > 0; otherwise weak_dollar",
+    "state": "strong_dollar",
+    "timing_authority": false
+  },
+  "registered_at_date": "2026-09-13",
+  "schema": "research.currency_hedge_mechanism_forward_r1",
+  "scientific_forward_credit": true,
+  "scorecard": null,
+  "source": {
+    "panel_sha256": "fd00ad3a2ce8b89847b27b1df703ef58394472829c2f2b26f075d8dd4e8d4217",
+    "provider": "Yahoo Finance via yfinance; research-only public data",
+    "symbols": [
+      "HEFA",
+      "IEFA",
+      "DBEF",
+      "EFA",
+      "SPY",
+      "UUP"
+    ]
+  },
+  "state": "AWAITING_ENTRY_SESSION"
+}
