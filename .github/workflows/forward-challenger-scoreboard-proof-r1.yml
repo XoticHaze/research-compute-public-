@@ -44,7 +44,7 @@ jobs:
           assert by_id['DEVELOPED_EXUS_CURRENCY_HEDGE']['validation_grade']=='AWAITING_ENTRY_SESSION'
           assert by_id['DEVELOPED_EXUS_CURRENCY_HEDGE']['signal']['regime_context']['timing_authority'] is False
           assert after['final_target_weights']==prior['final_target_weights']
-          assert after['usage']==prior['usage']
+          assert after['policy_id']==prior['policy_id']
           assert enriched['interpretation']['challenger_observers_do_not_grant_allocator_authority'] is True
           print('FORWARD_CHALLENGER_ALLOCATOR_NONINTERFERENCE=PASS')
           print('P160_STATE='+by_id['P160_FIXED_P46_P47_COMBINATION']['validation_grade'])
