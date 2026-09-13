@@ -3,7 +3,7 @@ name: F1b NQ operator evidence acceptance
 on:
   push:
     branches:
-      - acceptance/f1b-nq-operator-evidence-104dbe50
+      - acceptance/f1b-nq-operator-evidence-1f793c2c-clean
   workflow_dispatch:
 
 permissions:
@@ -17,8 +17,9 @@ jobs:
       - name: Record execution identity
         run: |
           echo "public_head=${GITHUB_SHA}"
-          echo "private_product_head=104dbe50ca4a9fd1ad472068e06e052e61533fce"
-          echo "private_product_pr=599"
+          echo "private_product_head=1f793c2cd112a96f2844e4649e402da501fcec0e"
+          echo "private_product_pr=600"
+          echo "consumed_provenance_run=34736425305"
       - name: Execute sanitized deterministic acceptance
         run: python acceptance/f1b_nq_operator_evidence_acceptance.py
       - name: Upload deterministic receipt
