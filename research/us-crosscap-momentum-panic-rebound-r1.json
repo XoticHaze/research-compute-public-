@@ -1,0 +1,26 @@
+{
+  "schema": "us_crosscap_momentum_panic_rebound_contract.v1",
+  "scientific_id": "US-CROSSCAP-MOMENTUM-PANIC-REBOUND-R1-20260913",
+  "inherited_scientific_ids": ["US-CROSSCAP-MOMENTUM-FACTOR-R1-20260913", "US-CROSSCAP-MOMENTUM-CAP-ABLATION-R1-20260913"],
+  "uncertainty_resolved": "whether the surviving cross-cap matched-excess momentum proxy is materially impaired in the exact previously frozen chronology-safe panic-rebound state",
+  "candidate_sleeves": ["MTUM", "XMMO", "XSMO"],
+  "matched_control_sleeves": ["SPY", "IJH", "IJR"],
+  "market_state_symbol": "IWB",
+  "start": "2018-01-01",
+  "candidate_annual_cost_drag_bps": 20,
+  "panic_rebound_definition_inherited_unchanged": [
+    "prior 12m IWB compounded return < 0",
+    "prior 12m annualized IWB monthly volatility > expanding historical median",
+    "current IWB monthly return > 0"
+  ],
+  "gates": {
+    "panic_mean_after_cost_matched_excess_gt": 0.0,
+    "panic_negative_excess_share_max": 0.5,
+    "nonpanic_mean_after_cost_matched_excess_gt": 0.0
+  },
+  "frozen_before_execution": true,
+  "no_parameter_rescue": true,
+  "forbidden_rescue": ["change panic definition","change lookback","change volatility comparator","change rebound threshold","drop panic months","reweight sleeves","drop capitalization segment","change controls","change cost drag","change gates after outcome"],
+  "research_only": true,
+  "live_trading_change": false
+}
