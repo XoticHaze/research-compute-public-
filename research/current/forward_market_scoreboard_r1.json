@@ -1,10 +1,51 @@
 {
+  "actionable_context": [
+    {
+      "authority": "descriptive_prestart",
+      "intel": "Frozen cross-asset + industry combination challenger",
+      "source": "P160_FIXED_P46_P47_COMBINATION",
+      "state": {
+        "DBC": 0.25,
+        "IGV": 0.16666666666666666,
+        "IWM": 0.16666666666666666,
+        "QQQ": 0.25,
+        "XBI": 0.16666666666666666
+      }
+    },
+    {
+      "authority": "prospective_validation_only",
+      "intel": "Replicated currency-hedge mechanism challenger",
+      "source": "DEVELOPED_EXUS_CURRENCY_HEDGE",
+      "state": {
+        "forward_state": "AWAITING_ENTRY_SESSION",
+        "regime_context": {
+          "prior_completed_12m_uup_return": 0.0624905772,
+          "prior_completed_month_end": "2026-08-31",
+          "rule": "strong_dollar iff prior completed 12-month UUP return > 0; otherwise weak_dollar",
+          "state": "strong_dollar",
+          "timing_authority": false
+        }
+      }
+    }
+  ],
   "coverage": {
     "adapter_contracts_ready": [
       "SEMICONDUCTOR_SHARED_RIDGE",
       "HOMEBUILDERS",
       "GENERALIZED_LARGECAP_RIDGE"
     ],
+    "challenger_observers": {
+      "DEVELOPED_EXUS_CURRENCY_HEDGE": {
+        "present": true,
+        "scientific_forward_credit": true,
+        "state": "AWAITING_ENTRY_SESSION"
+      },
+      "P160_FIXED_P46_P47_COMBINATION": {
+        "present": true,
+        "scientific_forward_credit": false,
+        "state": "PRESTART_DESCRIPTIVE_SHADOW"
+      }
+    },
     "native_result_gaps": [],
     "prospective_ledger": {
       "market_data_asof": "2026-09-13",
@@ -25,7 +66,33 @@
     ]
   },
   "decision_chain": {
+    "construction_challengers": {
+      "P160": {
+        "role": "independent_validation_not_allocation",
+        "scientific_forward_credit": false,
+        "state": "PRESTART_DESCRIPTIVE_SHADOW",
+        "target_weights": {
+          "DBC": 0.25,
+          "IGV": 0.16666666666666666,
+          "IWM": 0.16666666666666666,
+          "QQQ": 0.25,
+          "XBI": 0.16666666666666666
+        }
+      }
+    },
     "diversification": {
+      "CURRENCY_HEDGE": {
+        "regime_context": {
+          "prior_completed_12m_uup_return": 0.0624905772,
+          "prior_completed_month_end": "2026-08-31",
+          "rule": "strong_dollar iff prior completed 12-month UUP return > 0; otherwise weak_dollar",
+          "state": "strong_dollar",
+          "timing_authority": false
+        },
+        "role": "matched-control_mechanism_challenger",
+        "scorecard": null,
+        "state": "AWAITING_ENTRY_SESSION"
+      },
       "JAAA": {
         "annualized_vol": null,
         "challenger_cumulative_bps": -4.32,
@@ -61,6 +128,8 @@
       "JAAA_vs_incumbent_bps": -62.77,
       "KMLM_vs_cash_control_bps": -17.71,
       "KMLM_vs_incumbent_bps": -82.8,
+      "currency_hedge_mean_matched_excess_bps": null,
+      "currency_hedge_opportunity_excess_vs_spy_bps": null,
       "homebuilders_mean_excess_vs_itb_bps": null,
       "p266_increment_bps": -14.49,
       "semiconductor_mean_ticker_book_excess_vs_smh_bps": null
@@ -157,11 +226,14 @@
       ]
     }
   },
-  "generated_at": "2026-09-13T06:28:29.972889+00:00",
+  "generated_at": "2026-09-13T07:12:25.045860+00:00",
   "interpretation": {
     "broker_or_live_authority": false,
+    "challenger_observers_do_not_grant_allocator_authority": true,
+    "currency_regime_context_is_not_timing_authority": true,
     "daily_score_does_not_imply_daily_turnover": true,
     "forward_score_requires_matched_benchmark_or_control": true,
+    "p160_prestart_shadow_is_not_forward_credit": true,
     "positive_model_score_is_not_position_size": true,
     "prospective_evidence_does_not_grant_allocation_authority": true,
     "small_samples_are_not_promotion_evidence": true,
@@ -666,6 +738,139 @@
         "state": "TRANSPORT_FORWARD_OBSERVATION"
       },
       "validation_grade": "CORROBORATION_ONLY"
+    },
+    {
+      "action_text": "Shadow frozen P160 only: {'DBC': 0.25, 'IGV': 0.16666666666666666, 'IWM': 0.16666666666666666, 'QQQ': 0.25, 'XBI': 0.16666666666666666}. No scientific credit before the declared boundary and no allocator authority.",
+      "benchmarks": {
+        "matched": "50/50 same-universe equal-weight controls",
+        "opportunity": [
+          "SPY",
+          "QQQ"
+        ],
+        "primary_cost_bps": 50.0
+      },
+      "boundaries": {
+        "allocation_authority": false,
+        "broker_action": false,
+        "descriptive_prestart_not_forward_credit": true,
+        "live_trading_change": false,
+        "p47_standalone_reactivated": false,
+        "parameter_rescue": false,
+        "promotion_authority": false,
+        "research_only": true,
+        "runtime_authority": false
+      },
+      "decision_use": "Independent-validation challenger for the frozen P160 combination. P47 remains parked as a standalone sleeve; this observer does not reactivate it or grant allocation authority.",
+      "kind": "fixed_cross_asset_industry_combination_challenger",
+      "paper_action": {
+        "matched_control_weights": {
+          "DBC": 0.1,
+          "GLD": 0.1,
+          "IGV": 0.0625,
+          "ITA": 0.0625,
+          "ITB": 0.0625,
+          "IWM": 0.0625,
+          "KRE": 0.0625,
+          "QQQ": 0.1,
+          "SMH": 0.0625,
+          "SPY": 0.1,
+          "TLT": 0.1,
+          "XBI": 0.0625,
+          "XRT": 0.0625
+        },
+        "portfolio_authority": false,
+        "status": "DESCRIPTIVE_SHADOW_ONLY",
+        "target_weights": {
+          "DBC": 0.25,
+          "IGV": 0.16666666666666666,
+          "IWM": 0.16666666666666666,
+          "QQQ": 0.25,
+          "XBI": 0.16666666666666666
+        }
+      },
+      "program_id": "P160_FIXED_P46_P47_COMBINATION",
+      "scientific_forward_credit": false,
+      "scorecard": null,
+      "signal": {
+        "p46_cross_asset_top2": [
+          "DBC",
+          "QQQ"
+        ],
+        "p47_industry_top3": [
+          "IWM",
+          "XBI",
+          "IGV"
+        ]
+      },
+      "signal_date": "2026-08-31",
+      "timing": {
+        "decision_cadence": "monthly",
+        "execution_delay_sessions": 1,
+        "execution_rule": "execute only on the next common market session after the signal close",
+        "first_scientific_signal_boundary": "2026-09-30",
+        "holding_rule": "hold until the next monthly decision boundary, then execute the next target on the following common session",
+        "same_close_execution_prohibited": true,
+        "signal_rule": "rank from the last complete month-end close"
+      },
+      "validation_grade": "PRESTART_DESCRIPTIVE_SHADOW"
+    },
+    {
+      "action_text": "Track HEFA vs IEFA and DBEF vs EFA prospectively; SPY is opportunity cost only. Lagged UUP regime is explanatory context, not a trade gate.",
+      "benchmarks": {
+        "cost_bps_each_endpoint": 25.0,
+        "matched": {
+          "DBEF": "EFA",
+          "HEFA": "IEFA"
+        },
+        "opportunity": "SPY"
+      },
+      "boundaries": {
+        "allocation_authority": false,
+        "broker_action": false,
+        "hedge_ratio_search": false,
+        "live_trading_change": false,
+        "product_search": false,
+        "promotion_authority": false,
+        "regime_rescue": false,
+        "research_only": true,
+        "runtime_authority": false
+      },
+      "decision_use": "Prospective replication monitor for the developed-ex-US currency-hedge mechanism. Judge HEFA and DBEF against their own unhedged controls; report SPY only as opportunity cost.",
+      "kind": "developed_exus_currency_hedge_mechanism_challenger",
+      "paper_action": {
+        "portfolio_authority": false,
+        "status": "OBSERVE_ONLY"
+      },
+      "program_id": "DEVELOPED_EXUS_CURRENCY_HEDGE",
+      "scientific_forward_credit": true,
+      "scorecard": null,
+      "signal": {
+        "implementations": {
+          "DBEF": {
+            "matched_control": "EFA"
+          },
+          "HEFA": {
+            "matched_control": "IEFA"
+          }
+        },
+        "regime_context": {
+          "prior_completed_12m_uup_return": 0.0624905772,
+          "prior_completed_month_end": "2026-08-31",
+          "rule": "strong_dollar iff prior completed 12-month UUP return > 0; otherwise weak_dollar",
+          "state": "strong_dollar",
+          "timing_authority": false
+        }
+      },
+      "signal_date": "2026-09-13",
+      "timing": {
+        "entry": {
+          "date": null,
+          "rule": "first common market-session close after registration"
+        },
+        "forward_sessions": 0,
+        "regime_is_not_timing_gate": true
+      },
+      "validation_grade": "AWAITING_ENTRY_SESSION"
     }
   ],
   "market_decision_context": [
