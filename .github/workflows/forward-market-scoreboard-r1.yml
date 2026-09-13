@@ -17,6 +17,7 @@ on:
       - 'research/current/forward_prospective_cohort_ledger_r1.json'
       - 'research/current/p160_forward_observation_r1.json'
       - 'research/current/currency_hedge_mechanism_forward_r1.json'
+      - 'research/current/currency_hedge_allocator_overlay_forward_r1.json'
       - '.github/workflows/forward-market-scoreboard-r1.yml'
   pull_request:
     branches: [main]
@@ -29,6 +30,7 @@ on:
       - 'research/current/forward_prospective_cohort_ledger_r1.json'
       - 'research/current/p160_forward_observation_r1.json'
       - 'research/current/currency_hedge_mechanism_forward_r1.json'
+      - 'research/current/currency_hedge_allocator_overlay_forward_r1.json'
       - '.github/workflows/forward-market-scoreboard-r1.yml'
       - 'research/forward_p249_p266_shadow_r1.py'
       - 'research/forward_p558_current_core_shadow_r1.py'
@@ -159,10 +161,12 @@ jobs:
           set -euo pipefail
           test -f research/current/p160_forward_observation_r1.json
           test -f research/current/currency_hedge_mechanism_forward_r1.json
+          test -f research/current/currency_hedge_allocator_overlay_forward_r1.json
           python research/forward_challenger_scoreboard_enrichment_r1.py \
             --scoreboard artifacts/forward_market_scoreboard_r1.json \
             --p160 research/current/p160_forward_observation_r1.json \
             --currency research/current/currency_hedge_mechanism_forward_r1.json \
+            --currency-overlay research/current/currency_hedge_allocator_overlay_forward_r1.json \
             --output artifacts/forward_market_scoreboard_r1.json
       - name: Build governed deterministic paper allocation
         run: |
@@ -171,6 +175,24 @@ jobs:
             args+=(--prior research/current/forward_deterministic_allocator_r1.json)
           fi
           python research/forward_deterministic_allocator_r1.py "${args[@]}"
+      - name: Prove challenger observer noninterference
+        run: |
+          python - <<'PY'
+          import json
+          score=json.load(open('artifacts/forward_market_scoreboard_r1.json'))
+          after=json.load(open('artifacts/forward_deterministic_allocator_r1.json'))
+          lanes={x['program_id']:x for x in score['lanes']}
+          for program in ('P160_FIXED_P46_P47_COMBINATION','DEVELOPED_EXUS_CURRENCY_HEDGE','CURRENCY_HEDGE_ALLOCATOR_OVERLAY'):
+              assert lanes[program]['boundaries']['allocation_authority'] is False
+          overlay=lanes['CURRENCY_HEDGE_ALLOCATOR_OVERLAY']
+          assert overlay['boundaries']['allocator_mutation'] is False
+          assert overlay['signal']['funding_source']=='CASH_ONLY'
+          if __import__('pathlib').Path('research/current/forward_deterministic_allocator_r1.json').exists():
+              prior=json.load(open('research/current/forward_deterministic_allocator_r1.json'))
+              assert after['final_target_weights']==prior['final_target_weights']
+          print('FORWARD_CHALLENGER_ALLOCATOR_NONINTERFERENCE=PASS')
+          print('ALLOCATOR_TARGETS='+json.dumps(after['final_target_weights'],sort_keys=True))
+          PY
       - name: Print compact decision report
         run: |
           python - <<'PY'
@@ -250,8 +272,10 @@ jobs:
               assert lane['scorecard']['challenger_cumulative_bps']==bp(raw['forward']['challenger_if_flattened_now']['cumulative_return'])
               assert lane['scorecard']['excess_vs_incumbent_bps']==bp(raw['forward']['challenger_minus_incumbent_cumulative'])
               assert lane['scorecard']['excess_vs_matched_cash_control_bps']==bp(raw['forward']['challenger_minus_matched_cumulative'])
-          assert lanes['P160_FIXED_P46_P47_COMBINATION']['boundaries']['allocation_authority'] is False
-          assert lanes['DEVELOPED_EXUS_CURRENCY_HEDGE']['boundaries']['allocation_authority'] is False
+          for program in ('P160_FIXED_P46_P47_COMBINATION','DEVELOPED_EXUS_CURRENCY_HEDGE','CURRENCY_HEDGE_ALLOCATOR_OVERLAY'):
+              assert lanes[program]['boundaries']['allocation_authority'] is False
+          assert lanes['CURRENCY_HEDGE_ALLOCATOR_OVERLAY']['boundaries']['allocator_mutation'] is False
+          assert lanes['CURRENCY_HEDGE_ALLOCATOR_OVERLAY']['signal']['funding_source']=='CASH_ONLY'
           print('FORWARD_CURRENT_BUNDLE_COHERENCE=PASS')
           PY
           git fetch origin main
