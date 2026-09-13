@@ -28,14 +28,14 @@ def summ(e):
 def main():
  files=sorted(Path('input/staging').glob('**/6E-*/1Day.csv'))
  if not files:raise RuntimeError('no released 6E dated-contract files found')
- all=[]; pc={}
+ all_events=[]; pc={}
  for p in files:
   e=events(p)
-  if e:pc[month(p)]=summ(e);all+=e
- recent=[e for e in all if e['contract_year']>=RECENT_YEAR]; pos=sum(v['mean_excess_return_pct']>0 for v in pc.values())/len(pc)
- loo={}; years=sorted(set(e['contract_year'] for e in all))
- for y in years:loo[str(y)]=summ([e for e in all if e['contract_year']!=y]).get('mean_excess_return_pct')
- full=summ(all); rec=summ(recent); vals=list(loo.values()); gates={'full_mean_excess_positive':full.get('mean_excess_return_pct',-999)>0,'recent_mean_excess_positive':rec.get('mean_excess_return_pct',-999)>0,'majority_contracts_positive':pos>0.5,'all_leave_one_year_out_positive':bool(vals) and min(vals)>0,'minimum_event_count':len(all)>=250}; survives=all(gates.values())
+  if e:pc[month(p)]=summ(e);all_events+=e
+ recent=[e for e in all_events if e['contract_year']>=RECENT_YEAR]; pos=sum(v['mean_excess_return_pct']>0 for v in pc.values())/len(pc)
+ loo={}; years=sorted(set(e['contract_year'] for e in all_events))
+ for y in years:loo[str(y)]=summ([e for e in all_events if e['contract_year']!=y]).get('mean_excess_return_pct')
+ full=summ(all_events); rec=summ(recent); vals=list(loo.values()); gates={'full_mean_excess_positive':full.get('mean_excess_return_pct',-999)>0,'recent_mean_excess_positive':rec.get('mean_excess_return_pct',-999)>0,'majority_contracts_positive':pos>0.5,'all_leave_one_year_out_positive':bool(vals) and min(vals)>0,'minimum_event_count':len(all_events)>=250}; survives=all(gates.values())
  result={'schema':'public.e6_dated_trend_transport_r1.v1','experiment_id':EXPERIMENT_ID,'inherited_learning_ids':PARENTS,'uncertainty_resolved':'whether the simple dated-contract trend rejection in NQ and ES extends to a liquid non-equity futures root','claim_tested':'The identical frozen 20-active-session trend sign predicts the next 5 active sessions across released 6E dated contracts and beats an always-long matched opportunity after a 10 bp normalized round-trip cost without constructing a continuous series.','source_artifact_id':SOURCE_ARTIFACT_ID,'root':ROOT,'design':{'lookback_active_sessions':LOOKBACK,'hold_active_sessions':HOLD,'normalized_round_trip_cost_bps':COST_BPS,'active_row_filter':'volume>0 and open_interest>0','sampling':'non-overlapping within each dated contract','continuous_series_constructed':False,'roll_cutoff_selected':False,'back_adjustment':False,'matched_control':'always-long same contract/same decision windows/same normalized cost','recent_contract_year_gte':RECENT_YEAR},'contract_files_seen':len(files),'contracts_with_events':len(pc),'full':full,'recent':rec,'positive_contract_fraction':pos,'leave_one_contract_year_out_mean_excess_pct':loo,'gates':gates,'survives_transport':survives,'decision':'SURVIVES_TRANSPORT' if survives else 'REJECT_NO_PARAMETER_RESCUE','forbidden_parameter_rescue':['lookback change','holding-period change','cost reduction','exclude bad contract years','volume/open-interest threshold tuning','select only favorable contract months'],'authority':'SCIENTIFIC_EVIDENCE_ONLY','portfolio_allocation_authority':False,'strategy_spec_mutation':False,'runtime_authority_change':False,'broker_submission':False,'live_trading_change':False}
  Path('6e-dated-trend-transport-r1-result.json').write_text(json.dumps(result,indent=2,sort_keys=True)+'\n');print(json.dumps(result,indent=2,sort_keys=True))
 if __name__=='__main__':main()
