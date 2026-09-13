@@ -13,6 +13,7 @@ on:
       - 'research/forward_deterministic_allocator_r1.py'
       - 'research/forward_native_program_adapter_r1.py'
       - 'research/current/native_adapters/*.json'
+      - 'research/current/forward_prospective_cohort_ledger_r1.json'
       - '.github/workflows/forward-market-scoreboard-r1.yml'
   pull_request:
     branches: [main]
@@ -21,6 +22,7 @@ on:
       - 'research/forward_deterministic_allocator_r1.py'
       - 'research/forward_native_program_adapter_r1.py'
       - 'research/current/native_adapters/*.json'
+      - 'research/current/forward_prospective_cohort_ledger_r1.json'
       - '.github/workflows/forward-market-scoreboard-r1.yml'
       - 'research/forward_p249_p266_shadow_r1.py'
       - 'research/forward_p558_current_core_shadow_r1.py'
@@ -140,6 +142,10 @@ jobs:
           PY
             cp "$src" score-inputs/native-current/
           done
+          if test -f research/current/forward_prospective_cohort_ledger_r1.json; then
+            mkdir -p score-inputs/prospective-current
+            cp research/current/forward_prospective_cohort_ledger_r1.json score-inputs/prospective-current/
+          fi
       - run: python research/forward_market_scoreboard_r1.py --input-root score-inputs --output artifacts/forward_market_scoreboard_r1.json
       - name: Build governed deterministic paper allocation
         run: |
@@ -160,7 +166,11 @@ jobs:
                   print('  timing=', json.dumps(lane['timing'], sort_keys=True))
               if lane.get('scorecard'):
                   print('  scorecard=', json.dumps(lane['scorecard'], sort_keys=True))
+              if lane.get('prospective_evidence'):
+                  print('  prospective_evidence=', json.dumps(lane['prospective_evidence'], sort_keys=True))
+                  print('  evidence_grade=', lane.get('evidence_grade'))
           print('native_result_gaps=', ','.join(x['coverage']['native_result_gaps']))
+          print('prospective_ledger=', json.dumps(x['coverage']['prospective_ledger'], sort_keys=True))
           print('decision_chain=', json.dumps(x['decision_chain'], sort_keys=True))
           print('allocator_policy=', a['policy_id'])
           print('allocator_targets=', json.dumps(a['final_target_weights'], sort_keys=True))
