@@ -1,0 +1,59 @@
+name: Forward Challenger Scoreboard Proof R1
+
+on:
+  push:
+    branches:
+      - 'assistant/forward-challenger-scoreboard-r1'
+    paths:
+      - 'research/forward_challenger_scoreboard_enrichment_r1.py'
+      - '.github/workflows/forward-challenger-scoreboard-proof-r1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Self-test enrichment contract
+        run: python research/forward_challenger_scoreboard_enrichment_r1.py --self-test
+      - name: Enrich current scoreboard with live challenger records
+        run: |
+          python research/forward_challenger_scoreboard_enrichment_r1.py \
+            --scoreboard research/current/forward_market_scoreboard_r1.json \
+            --p160 research/current/p160_forward_observation_r1.json \
+            --currency research/current/currency_hedge_mechanism_forward_r1.json \
+            --output /tmp/forward_market_scoreboard_r1.json
+      - name: Prove allocator remains unchanged
+        run: |
+          python research/forward_deterministic_allocator_r1.py \
+            --scoreboard /tmp/forward_market_scoreboard_r1.json \
+            --prior research/current/forward_deterministic_allocator_r1.json \
+            --output /tmp/forward_deterministic_allocator_r1.json
+          python - <<'PY'
+          import json
+          enriched=json.load(open('/tmp/forward_market_scoreboard_r1.json'))
+          prior=json.load(open('research/current/forward_deterministic_allocator_r1.json'))
+          after=json.load(open('/tmp/forward_deterministic_allocator_r1.json'))
+          by_id={x['program_id']:x for x in enriched['lanes']}
+          assert by_id['P160_FIXED_P46_P47_COMBINATION']['validation_grade']=='PRESTART_DESCRIPTIVE_SHADOW'
+          assert by_id['DEVELOPED_EXUS_CURRENCY_HEDGE']['validation_grade']=='AWAITING_ENTRY_SESSION'
+          assert by_id['DEVELOPED_EXUS_CURRENCY_HEDGE']['signal']['regime_context']['timing_authority'] is False
+          assert after['final_target_weights']==prior['final_target_weights']
+          assert after['usage']==prior['usage']
+          assert enriched['interpretation']['challenger_observers_do_not_grant_allocator_authority'] is True
+          print('FORWARD_CHALLENGER_ALLOCATOR_NONINTERFERENCE=PASS')
+          print('P160_STATE='+by_id['P160_FIXED_P46_P47_COMBINATION']['validation_grade'])
+          print('CURRENCY_STATE='+by_id['DEVELOPED_EXUS_CURRENCY_HEDGE']['validation_grade'])
+          print('ALLOCATOR_TARGETS='+json.dumps(after['final_target_weights'],sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: challenger-enriched-scoreboard-r1
+          path: /tmp/forward_market_scoreboard_r1.json
+          if-no-files-found: error
+          retention-days: 30
