@@ -5,3 +5,4 @@
   "gates":{"full_after_cost_excess_vs_ijr_min":0.01,"recent_after_cost_excess_vs_ijr_min":0.005,"min_positive_calendar_years_vs_ijr":4,"full_residual_alpha_spy_ijr_min":0.01,"recent_residual_alpha_spy_ijr_min":0.005},
   "frozen_before_execution":true,"no_parameter_rescue":true,"research_only":true
 }
+
