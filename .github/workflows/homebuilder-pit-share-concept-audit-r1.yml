@@ -1,0 +1,32 @@
+name: Homebuilder PIT Share Concept Audit R1
+on:
+  push:
+    branches: ['market-research/homebuilder-pit-valuation-source-r1-20260913']
+    paths:
+      - 'research/homebuilder_pit_share_concept_audit_r1.py'
+      - '.github/workflows/homebuilder-pit-share-concept-audit-r1.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Provenance
+        run: |
+          echo "public_head=${GITHUB_SHA}"
+          echo "experiment_id=HOMEBUILDER-PIT-SHARE-CONCEPT-AUDIT-R1"
+          echo "economic_outcomes_examined=false"
+      - name: Execute source audit
+        run: python research/homebuilder_pit_share_concept_audit_r1.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: homebuilder-pit-share-concept-audit-r1-result
+          path: research/results/homebuilder_pit_share_concept_audit_r1.json
+          if-no-files-found: error
+          retention-days: 30
