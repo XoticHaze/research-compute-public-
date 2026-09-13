@@ -1,0 +1,32 @@
+name: One-shot forward native current bundle dispatch 20260913
+
+on:
+  push:
+    branches:
+      - assistant/forward-native-current-bundle-exec-20260913-r1
+    paths:
+      - .github/workflows/one-shot-forward-native-current-bundle-dispatch-20260913.yml
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch canonical public rendezvous on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          body='{"ref":"main","inputs":{"harness":"all"}}'
+          status="$(curl -sS -o "$RUNNER_TEMP/dispatch.json" -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/forward-native-ephemeral-rendezvous-r1.yml/dispatches" \
+            -d "$body")"
+          test "$status" = '204' || { cat "$RUNNER_TEMP/dispatch.json" >&2 || true; echo "DISPATCH_STATUS=$status" >&2; exit 1; }
+          echo 'FORWARD_NATIVE_PUBLIC_DISPATCH=PASS'
