@@ -1,0 +1,33 @@
+name: 6E trend cash sufficiency R1
+on:
+  push:
+    branches: [market-research/6e-trend-cash-sufficiency-r1-20260913]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record provenance
+        run: |
+          echo "public_head=${GITHUB_SHA}"
+          echo "source_artifact_id=10294324888"
+          echo "experiment_id=6E-DATED-TREND-CASH-SUFFICIENCY-R1"
+      - name: Download released dated-contract corpus
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p input/staging
+          gh api /repos/${GITHUB_REPOSITORY}/actions/artifacts/10294324888/zip > /tmp/staging.zip
+          unzip -q /tmp/staging.zip -d input/staging
+      - name: Execute frozen cash-sufficiency falsifier
+        run: python research/e6_trend_cash_sufficiency_r1.py
+      - name: Upload scientific result
+        uses: actions/upload-artifact@v4
+        with:
+          name: 6e-trend-cash-sufficiency-r1-result
+          path: 6e-trend-cash-sufficiency-r1-result.json
+          if-no-files-found: error
