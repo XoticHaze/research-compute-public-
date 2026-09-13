@@ -1,0 +1,30 @@
+name: SEC FTD Source Route Probe R1
+
+on:
+  push:
+    paths:
+      - 'research/sec_ftd_source_route_probe_r1.py'
+      - '.github/workflows/sec-ftd-source-route-probe-r1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check requests
+      - name: Probe official SEC FTD archive routes
+        run: python research/sec_ftd_source_route_probe_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sec-ftd-source-route-probe-r1
+          path: artifacts/sec_ftd_source_route_probe_r1.json
+          if-no-files-found: error
+          retention-days: 30
