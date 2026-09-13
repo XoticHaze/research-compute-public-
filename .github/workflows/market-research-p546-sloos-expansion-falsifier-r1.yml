@@ -1,0 +1,53 @@
+name: market-research-p546-sloos-expansion-falsifier-r1
+on:
+  push:
+    paths: ['.github/workflows/market-research-p546-sloos-expansion-falsifier-r1.yml']
+  pull_request:
+    paths: ['.github/workflows/market-research-p546-sloos-expansion-falsifier-r1.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  p546-expansion-falsifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install pandas numpy requests
+      - name: Run frozen SLOOS expansion-regime falsifier
+        shell: python
+        run: |
+          import io,json,requests,pandas as pd,numpy as np
+          LEARNING_PARENT='2026-09-11T073945Z_market-research_p546_sloos_credit_standards_survivor'
+          CLAIM='Frozen lag-1m SLOOS rule should retain positive exposure-matched excess in NBER expansion months rather than deriving its apparent edge only from recession/crisis avoidance.'
+          COST=.001
+          def fred(series):
+            r=requests.get(f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}',timeout=90); r.raise_for_status()
+            x=pd.read_csv(io.StringIO(r.text)); x.columns=['date',series]; x.date=pd.to_datetime(x.date); x[series]=pd.to_numeric(x[series],errors='coerce'); return x.dropna().set_index('date')[series]
+          s=fred('DRTSCILM').resample('ME').ffill()
+          rec=fred('USREC').resample('ME').last().ffill()
+          y=requests.get('https://query1.finance.yahoo.com/v8/finance/chart/SPY?period1=946684800&period2=1789084800&interval=1mo&events=history&includeAdjustedClose=true',headers={'User-Agent':'Mozilla/5.0'},timeout=90); y.raise_for_status(); j=y.json()['chart']['result'][0]
+          px=pd.Series(j['indicators']['adjclose'][0]['adjclose'],index=pd.to_datetime(j['timestamp'],unit='s',utc=True).tz_convert(None)).dropna(); px.index=px.index.to_period('M').to_timestamp('M'); px=px.groupby(level=0).last(); r=px.pct_change().rename('spy')
+          d=pd.concat([r,s.rename('sloos'),rec.rename('usrec')],axis=1).dropna(); d['pos']=(d.sloos.shift(1)<=0).astype(float); d=d.dropna(); d['turn']=d.pos.diff().abs().fillna(d.pos); d['strat']=d.pos*d.spy-d['turn']*COST; beta=d.pos.mean(); d['matched']=beta*d.spy
+          def cagr(z):
+            z=pd.Series(z).dropna(); return float(np.prod(1+z)**(12/len(z))-1) if len(z) else None
+          def ex(z): return 100*(cagr(z.strat)-cagr(z.matched)) if len(z) else None
+          folds=[('2000-2007','2000','2007-12-31'),('2008-2013','2008','2013-12-31'),('2014-2019','2014','2019-12-31'),('2020+','2020','2099')]
+          expansions=d[d.usrec<0.5]; recessions=d[d.usrec>=0.5]
+          ef=[]
+          for n,a,b in folds:
+            z=expansions.loc[a:b]
+            if len(z): ef.append({'fold':n,'months':len(z),'excess_cagr_pp':ex(z)})
+          all_ex=ex(d); exp_ex=ex(expansions); rec_ex=ex(recessions); pos_exp=sum(v['excess_cagr_pp']>0 for v in ef)
+          # Promotion falsifier is intentionally strict and frozen prospectively: a durable general-cycle claim survives only if expansion excess is positive and at least 3/4 chronology folds are positive.
+          survives=bool(exp_ex is not None and exp_ex>0 and pos_exp>=3)
+          out={'semantic_id':'P546_SLOOS_EXPANSION_REGIME_FALSIFIER_R1','inherits':[LEARNING_PARENT],'claim_tested':CLAIM,'frozen_inheritance':{'series':'FRED DRTSCILM','signal':'<=0 => SPY; >0 => cash','lag_months':1,'transition_cost':COST,'instrument':'SPY','matched_control':'full-sample mean exposure * SPY'},'diagnostic_only_regime_label':'FRED USREC; never used to trade or retune the signal','months':len(d),'mean_exposure':beta,'all_month_excess_cagr_pp':all_ex,'expansion_months':len(expansions),'expansion_excess_cagr_pp':exp_ex,'recession_months':len(recessions),'recession_excess_cagr_pp':rec_ex,'expansion_folds':ef,'positive_expansion_folds':pos_exp,'fold_count':len(ef),'falsifier_rule':'survive only if expansion excess CAGR > 0 and >=3/4 expansion chronology folds positive','survives_falsifier':survives,'terminal_classification':'SURVIVES_ORTHOGONAL_FALSIFIER' if survives else 'REJECT_DURABLE_GENERAL_CYCLE_CLAIM__CRISIS_CONCENTRATION_OR_NONPERSISTENCE','forbidden_parameter_rescue':['change SLOOS threshold','change lag','change transition cost','change instrument','change folds','exclude recent years','use USREC as a trading signal']}
+          print(json.dumps(out,indent=2)); open('p546_sloos_expansion_falsifier_r1.json','w').write(json.dumps(out,indent=2))
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p546-sloos-expansion-falsifier-r1-${{ github.run_id }}
+          path: p546_sloos_expansion_falsifier_r1.json
+          if-no-files-found: error
+          retention-days: 14
