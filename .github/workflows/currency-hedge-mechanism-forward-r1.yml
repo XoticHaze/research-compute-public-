@@ -1,0 +1,101 @@
+name: Currency Hedge Mechanism Forward R1
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '50 23 * * 1-5'
+  push:
+    branches:
+      - main
+      - 'assistant/currency-hedge-mechanism-forward-r1'
+    paths:
+      - 'research/currency_hedge_mechanism_forward_r1.py'
+      - '.github/workflows/currency-hedge-mechanism-forward-r1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Verify frozen mechanism source identities
+        run: |
+          set -euo pipefail
+          check_blob() {
+            ref="$1"; path="$2"; expected="$3"
+            git cat-file -e "${ref}^{commit}" 2>/dev/null || git fetch --no-tags origin "$ref"
+            actual="$(git rev-parse "${ref}:${path}")"
+            test "$actual" = "$expected"
+            echo "CURRENCY_HEDGE_FROZEN_SOURCE=PASS ref=${ref} path=${path} blob=${actual}"
+          }
+          check_blob 95a5c966f64f2f680b0c4d22f73b00938e726c7a research/p426_hefa_currency_hedge_r1.py 8e783a07b78f4f6efee8963c1d05f07792c12bff
+          check_blob deddf9d0d8507169eeeb063a14747527e3a4d14e research/p428_dbef_currency_hedge_replication_r1.py f9b0551df904a6234fd6f929eb5b53b7835605fd
+          check_blob fe674e9b9cff72e9cf758c8bc6548124c6f8cf53 research/p436_currency_hedge_regime_r1.py 5876281376a298e4738734c98cc4153648085ecb
+      - name: Install fixed dependencies
+        run: python -m pip install --disable-pip-version-check pandas==2.2.3 yfinance==0.2.65
+      - name: Prove frozen contract
+        run: python research/currency_hedge_mechanism_forward_r1.py --self-test
+      - name: Build current mechanism observation
+        run: python research/currency_hedge_mechanism_forward_r1.py --output artifacts/currency_hedge_mechanism_forward_r1.json
+      - name: Assert prospective boundaries
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('artifacts/currency_hedge_mechanism_forward_r1.json'))
+          assert x['schema']=='research.currency_hedge_mechanism_forward_r1'
+          assert x['contract']['regime_is_not_timing_gate'] is True
+          assert x['boundaries']['allocation_authority'] is False
+          assert x['boundaries']['regime_rescue'] is False
+          assert x['scientific_forward_credit'] is True
+          if x['state']=='AWAITING_ENTRY_SESSION':
+              assert x['entry']['date'] is None
+              assert x['scorecard'] is None
+          elif x['state']=='PROSPECTIVE_OPEN':
+              assert x['entry']['date'] > x['registered_at_date']
+              assert x['scorecard']['cost_interpretation']['reported_net_is_if_flattened_now'] is True
+          else:
+              raise AssertionError(x['state'])
+          print('CURRENCY_HEDGE_FORWARD_BOUNDARIES=PASS state='+x['state'])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: currency-hedge-mechanism-forward-r1
+          path: artifacts/currency_hedge_mechanism_forward_r1.json
+          if-no-files-found: error
+          retention-days: 90
+
+  publish-current:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: observe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {contents: write}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/download-artifact@v4
+        with:
+          name: currency-hedge-mechanism-forward-r1
+          path: /tmp/currency-hedge-forward
+      - name: Publish current mechanism observation
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout -B currency-hedge-forward-publish origin/main
+          mkdir -p research/current
+          cp /tmp/currency-hedge-forward/currency_hedge_mechanism_forward_r1.json research/current/currency_hedge_mechanism_forward_r1.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add research/current/currency_hedge_mechanism_forward_r1.json
+          if git diff --cached --quiet; then
+            echo 'CURRENCY_HEDGE_CURRENT_UNCHANGED=true'
+            exit 0
+          fi
+          git commit -m 'Forward: publish current currency-hedge mechanism observation'
+          git push origin HEAD:main
