@@ -1,5 +1,6 @@
 name: Homebuilder PIT Valuation Source Probe R1
 
+# Explicit branch-push trigger after workflow admission.
 on:
   push:
     branches:
