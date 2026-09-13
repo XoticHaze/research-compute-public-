@@ -1,3 +1,4 @@
+# Fresh current-data execution trigger only; frozen scientific contract and executable semantics unchanged.
 import datetime as dt
 import json
 import math
