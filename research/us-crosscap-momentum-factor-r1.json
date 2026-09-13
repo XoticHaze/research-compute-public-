@@ -1,0 +1,32 @@
+{
+  "schema": "us_crosscap_momentum_factor_contract.v1",
+  "scientific_id": "US-CROSSCAP-MOMENTUM-FACTOR-R1-20260913",
+  "hypothesis": "A diversified U.S. momentum factor expressed equally across large-, mid-, and small-cap momentum implementations earns durable after-cost excess over equally weighted matched non-momentum opportunity controls, rather than the surviving evidence being confined to one product or capitalization segment.",
+  "inherited_learning": [
+    "XMMO standalone product-specific residual alpha rejected but matched IJH excess survived",
+    "XSMO standalone product-specific residual alpha rejected but matched IJR excess survived",
+    "MTUM generic implementation failed its prior standalone family gate"
+  ],
+  "candidate_sleeves": ["MTUM", "XMMO", "XSMO"],
+  "matched_control_sleeves": ["SPY", "IJH", "IJR"],
+  "capitalization_mapping": {"MTUM":"large","XMMO":"mid","XSMO":"small"},
+  "start": "2018-01-01",
+  "recent_start": "2021-01-01",
+  "monthly_equal_weight_factor_proxy": true,
+  "candidate_annual_cost_drag_bps": 20,
+  "control_cost_drag_bps": 0,
+  "gates": {
+    "full_after_cost_excess_min": 0.01,
+    "recent_after_cost_excess_min": 0.005,
+    "min_positive_calendar_years": 5,
+    "rolling_12m_positive_share_min": 0.50,
+    "max_drawdown_penalty_min": -0.05,
+    "min_positive_segments_full": 2,
+    "min_positive_segments_recent": 2
+  },
+  "frozen_before_execution": true,
+  "no_parameter_rescue": true,
+  "forbidden_rescue": ["change sleeve weights","drop a capitalization segment after outcome","change start/recent window","change cost drag","substitute benchmark after outcome","change gates after outcome"],
+  "research_only": true,
+  "live_trading_change": false
+}
