@@ -1,0 +1,6 @@
+P04 R3 producer ready before recipient mint.
+private_payload_sha256=19bddbccc304fee8179a413fd8da228ca24af766849ab7f07b8c33df974ceab4
+packager_parity=56_trades,42_dca_events,56_exact_gross,55_mtm_within_0.25
+h24_status=38_exact,3_missing_prior_cutpoints,1_missing_join
+h24_bucket_distribution=5:27,4:10,3:1
+Use frozen R3 H24 concordance contract only. No threshold/K/feature/budget/chronology rescue.
