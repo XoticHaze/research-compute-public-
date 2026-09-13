@@ -5,8 +5,10 @@ on:
     branches: [main]
     paths:
       - 'scripts/mnq_dca_reserve_release_r3_h24_concordance_consumer_v1.py'
+      - 'scripts/check_p04_r3_request_trigger_partition.py'
       - '.github/workflows/mnq-dca-reserve-release-r3-h24-concordance-20260912.yml'
       - 'rendezvous/requests/mnq-dca-reserve-release-r3-h24-concordance-*.txt'
+      - '!rendezvous/requests/mnq-dca-reserve-release-r3-h24-concordance-longwait-*.txt'
 
 permissions:
   contents: write
@@ -27,8 +29,10 @@ jobs:
           python-version: '3.11.16'
       - name: Install fixed environment
         run: python -m pip install --disable-pip-version-check -q cryptography numpy==2.4.6 pandas==3.0.5
-      - name: Compile fixed R3 H24 concordance consumer
-        run: python -m py_compile scripts/ephemeral_x25519_chunked_v1.py scripts/mnq_dca_reserve_release_r3_h24_concordance_consumer_v1.py
+      - name: Compile fixed R3 H24 concordance consumer and prove trigger partition
+        run: |
+          python -m py_compile scripts/ephemeral_x25519_chunked_v1.py scripts/mnq_dca_reserve_release_r3_h24_concordance_consumer_v1.py scripts/check_p04_r3_request_trigger_partition.py
+          python scripts/check_p04_r3_request_trigger_partition.py
       - name: Generate one-run R3 recipient
         run: |
           set -euo pipefail
