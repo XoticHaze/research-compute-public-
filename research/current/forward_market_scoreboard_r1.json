@@ -6,6 +6,14 @@
       "GENERALIZED_LARGECAP_RIDGE"
     ],
     "native_result_gaps": [],
+    "prospective_ledger": {
+      "market_data_asof": "2026-09-13",
+      "present": true,
+      "programs": [
+        "HOMEBUILDERS",
+        "SEMICONDUCTOR_SHARED_RIDGE"
+      ]
+    },
     "scored_now": [
       "P46",
       "P249_P266",
@@ -53,7 +61,9 @@
       "JAAA_vs_incumbent_bps": -62.77,
       "KMLM_vs_cash_control_bps": -17.71,
       "KMLM_vs_incumbent_bps": -82.8,
-      "p266_increment_bps": -14.49
+      "homebuilders_mean_excess_vs_itb_bps": null,
+      "p266_increment_bps": -14.49,
+      "semiconductor_mean_ticker_book_excess_vs_smh_bps": null
     },
     "regime": {
       "authority": "context_only",
@@ -72,16 +82,51 @@
           "HOV",
           "BZH"
         ],
+        "evidence_grade": "PROSPECTIVE_AWAITING_ENTRY_SESSION",
         "horizons": {
           "BZH": 5,
           "CCS": 5,
           "HOV": 5,
           "MHO": 5
+        },
+        "prospective_evidence": {
+          "current_cohort_id": "HOMEBUILDERS:2026-09-11:00435d369ddcc3a3",
+          "current_cohort_status": "AWAITING_ENTRY_SESSION",
+          "current_signal_date": "2026-09-11",
+          "late_registration_rejections": 0,
+          "ledger_status": "PRESENT",
+          "market_data_asof": "2026-09-13",
+          "mean_excess_vs_itb_bps": null,
+          "minimum_resolved_for_promotion": null,
+          "open_cohorts": 1,
+          "positive_hit_rate": null,
+          "program_id": "HOMEBUILDERS",
+          "promotion_authority": false,
+          "registered_cohorts": 1,
+          "resolved_cohorts": 0,
+          "resolved_observations": 0
         }
       },
       "semiconductor": {
         "action": "PAPER_COHORT_READY",
-        "positive_breadth": 1.0
+        "evidence_grade": "PROSPECTIVE_AWAITING_ENTRY_SESSION",
+        "positive_breadth": 1.0,
+        "prospective_evidence": {
+          "current_cohort_id": "SEMICONDUCTOR_SHARED_RIDGE:2026-09-11:aed8eb43d888d3c4",
+          "current_cohort_status": "AWAITING_ENTRY_SESSION",
+          "current_signal_date": "2026-09-11",
+          "late_registration_rejections": 0,
+          "ledger_status": "PRESENT",
+          "market_data_asof": "2026-09-13",
+          "mean_ticker_book_excess_vs_smh_bps": null,
+          "mean_ticker_positive_hit_rate": null,
+          "minimum_resolved_for_promotion": 20,
+          "open_cohorts": 1,
+          "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+          "promotion_authority": false,
+          "registered_cohorts": 1,
+          "resolved_cohorts": 0
+        }
       }
     },
     "tickers": {
@@ -112,12 +157,13 @@
       ]
     }
   },
-  "generated_at": "2026-09-13T04:57:41.067895+00:00",
+  "generated_at": "2026-09-13T06:26:20.162861+00:00",
   "interpretation": {
     "broker_or_live_authority": false,
     "daily_score_does_not_imply_daily_turnover": true,
     "forward_score_requires_matched_benchmark_or_control": true,
     "positive_model_score_is_not_position_size": true,
+    "prospective_evidence_does_not_grant_allocation_authority": true,
     "small_samples_are_not_promotion_evidence": true,
     "weight_is_not_forecast": true
   },
@@ -327,6 +373,7 @@
         "runtime_mutation": false
       },
       "decision_use": "Use as semiconductor entry/timing evidence. Positive forecasts authorize only the frozen paper cohort rules; prediction magnitude is not ranking or sizing authority. Prefer sector-level corroboration unless prospective stock-selection excess versus SMH is established.",
+      "evidence_grade": "PROSPECTIVE_AWAITING_ENTRY_SESSION",
       "kind": "daily_entry_value_with_three_book_expression",
       "paper_action": {
         "industry_book": {
@@ -397,6 +444,22 @@
         }
       },
       "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+      "prospective_evidence": {
+        "current_cohort_id": "SEMICONDUCTOR_SHARED_RIDGE:2026-09-11:aed8eb43d888d3c4",
+        "current_cohort_status": "AWAITING_ENTRY_SESSION",
+        "current_signal_date": "2026-09-11",
+        "late_registration_rejections": 0,
+        "ledger_status": "PRESENT",
+        "market_data_asof": "2026-09-13",
+        "mean_ticker_book_excess_vs_smh_bps": null,
+        "mean_ticker_positive_hit_rate": null,
+        "minimum_resolved_for_promotion": 20,
+        "open_cohorts": 1,
+        "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+        "promotion_authority": false,
+        "registered_cohorts": 1,
+        "resolved_cohorts": 0
+      },
       "scorecard": null,
       "signal": {
         "positive_breadth": 1.0,
@@ -465,9 +528,27 @@
         "runtime_mutation": false
       },
       "decision_use": null,
+      "evidence_grade": "PROSPECTIVE_AWAITING_ENTRY_SESSION",
       "kind": "entry_admission_plus_adaptive_duration",
       "paper_action": {},
       "program_id": "HOMEBUILDERS",
+      "prospective_evidence": {
+        "current_cohort_id": "HOMEBUILDERS:2026-09-11:00435d369ddcc3a3",
+        "current_cohort_status": "AWAITING_ENTRY_SESSION",
+        "current_signal_date": "2026-09-11",
+        "late_registration_rejections": 0,
+        "ledger_status": "PRESENT",
+        "market_data_asof": "2026-09-13",
+        "mean_excess_vs_itb_bps": null,
+        "minimum_resolved_for_promotion": null,
+        "open_cohorts": 1,
+        "positive_hit_rate": null,
+        "program_id": "HOMEBUILDERS",
+        "promotion_authority": false,
+        "registered_cohorts": 1,
+        "resolved_cohorts": 0,
+        "resolved_observations": 0
+      },
       "scorecard": null,
       "signal": {
         "admitted_symbols": [
@@ -523,6 +604,7 @@
         "runtime_mutation": false
       },
       "decision_use": "Use as cross-sector corroboration/discovery. It is the semiconductor-trained Ridge transported to target-excluded large caps, not an independently trained stock-selection model.",
+      "evidence_grade": "NO_REGISTERED_PROSPECTIVE_COHORT",
       "kind": "target_excluded_transport_corroboration",
       "paper_action": {
         "avoid_or_falsify": [
@@ -539,6 +621,17 @@
         ]
       },
       "program_id": "GENERALIZED_LARGECAP_RIDGE",
+      "prospective_evidence": {
+        "late_registration_rejections": 0,
+        "ledger_status": "PRESENT",
+        "market_data_asof": "2026-09-13",
+        "minimum_resolved_for_promotion": null,
+        "open_cohorts": 0,
+        "program_id": "GENERALIZED_LARGECAP_RIDGE",
+        "promotion_authority": false,
+        "registered_cohorts": 0,
+        "resolved_cohorts": 0
+      },
       "scorecard": null,
       "signal": {
         "negative_symbols": [
