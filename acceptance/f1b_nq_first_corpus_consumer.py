@@ -7,10 +7,13 @@ from pathlib import Path
 from typing import Any
 
 MM_PRODUCT_HEAD = "b03162cfcdfb6e82d0297a435e318f2ca5ff7647"
+SEMANTIC_BOUNDARY_HEAD = "581f98ae4c412939fa9ec4bfd7ca7f39c73a84b6"
 F1A_SOURCE_RUN_ID = 34684071280
 F1A_ACCEPTANCE_RUN_ID = 34684564957
 STAGING_ARTIFACT_ID = 10294324888
 RECEIPT_ARTIFACT_ID = 10294544510
+EXPECTED_ACCEPTANCE_RECEIPT_SHA256 = "825859889a101341e4c685d6aed3247c070255fe5a603673340e3f22aabae276"
+EXPECTED_MANIFEST_PROJECTION_SHA256 = "83f1ed26d165539cc516872f1ed83d343c55b0d8172a84d3f5517568de1a4496"
 ROOT = "NQ"
 MONTHS = ["200003", "200006"]
 
@@ -52,6 +55,11 @@ def resolve_staged(root: Path, rel: str) -> Path:
 
 def main() -> int:
     receipt_path, receipt = load_receipt(Path("input/receipt"))
+    receipt_sha256 = sha256(receipt_path)
+    if receipt_sha256 != EXPECTED_ACCEPTANCE_RECEIPT_SHA256:
+        raise RuntimeError(
+            f"acceptance receipt provenance mismatch: {receipt_sha256} != {EXPECTED_ACCEPTANCE_RECEIPT_SHA256}"
+        )
     if receipt.get("acceptance") != "MM_LOCAL_DATED_CACHE_COMPATIBLE_STAGING_WITH_SOURCE_QUARANTINE":
         raise RuntimeError("unexpected F1a acceptance state")
     if str(receipt.get("source_run_id")) != str(F1A_SOURCE_RUN_ID):
@@ -95,20 +103,29 @@ def main() -> int:
             "expected_source_sha256": x["expected_source_sha256"],
         } for x in contracts],
     }
+    manifest_projection_sha256 = canon(manifest_projection)
+    if manifest_projection_sha256 != EXPECTED_MANIFEST_PROJECTION_SHA256:
+        raise RuntimeError(
+            f"manifest provenance mismatch: {manifest_projection_sha256} != {EXPECTED_MANIFEST_PROJECTION_SHA256}"
+        )
+
     receipt_out = {
         "schema": "public.mm_f1b_nq_first_corpus_consumer_receipt.v1",
         "status": "PASS",
         "authority": "RELEASE_FIRST_CONSUMER_ONLY",
         "mm_product_head": MM_PRODUCT_HEAD,
+        "semantic_boundary_head": SEMANTIC_BOUNDARY_HEAD,
+        "verification_scope": "PROVENANCE_ADMISSION_SEMANTICS",
+        "provenance_semantics_verified_with_released_bytes": True,
         "f1a_source_run_id": F1A_SOURCE_RUN_ID,
         "f1a_acceptance_run_id": F1A_ACCEPTANCE_RUN_ID,
         "staging_artifact_id": STAGING_ARTIFACT_ID,
         "acceptance_receipt_artifact_id": RECEIPT_ARTIFACT_ID,
-        "acceptance_receipt_sha256": sha256(receipt_path),
+        "acceptance_receipt_sha256": receipt_sha256,
         "root": ROOT,
         "contract_count": len(contracts),
         "contracts": contracts,
-        "manifest_projection_sha256": canon(manifest_projection),
+        "manifest_projection_sha256": manifest_projection_sha256,
         "actual_released_bytes_verified": True,
         "continuous_series_constructed": False,
         "roll_cutoff_selected": False,
