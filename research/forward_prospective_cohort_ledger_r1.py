@@ -6,7 +6,8 @@ The ledger is deliberately downstream of frozen model/admission authority. It ne
 changes a signal, horizon, sizing rule, or promotion gate. It records a cohort when a
 sanitized adapter first appears, resolves only after its exact +1 execution / frozen
 holding horizon is observable, and rejects a newly discovered cohort if its designated
-outcome was already knowable at first registration.
+outcome was already knowable at first registration. Synthetic chronology proofs are
+cutoff-aware so the late-registration guard is exercised without future leakage.
 """
 
 import argparse
