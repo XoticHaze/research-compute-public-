@@ -1,0 +1,31 @@
+{
+  "schema": "us_crosscap_momentum_factor_contract.v2",
+  "scientific_id": "US-CROSSCAP-MOMENTUM-FACTOR-R2-20260913",
+  "inherits_scientific_id": "US-CROSSCAP-MOMENTUM-FACTOR-R1-20260913",
+  "uncertainty_resolved": "whether the R1 survivor persists after correcting calendar-month return construction that omitted month-boundary gaps",
+  "hypothesis": "A diversified U.S. momentum factor expressed equally across large-, mid-, and small-cap momentum implementations earns durable after-cost excess over equally weighted matched non-momentum opportunity controls.",
+  "candidate_sleeves": ["MTUM", "XMMO", "XSMO"],
+  "matched_control_sleeves": ["SPY", "IJH", "IJR"],
+  "capitalization_mapping": {"MTUM":"large","XMMO":"mid","XSMO":"small"},
+  "evaluation_start_month": "2018-01",
+  "recent_start_month": "2021-01",
+  "return_construction": "adjusted close at completed calendar month end divided by prior completed calendar month end minus one; warmup price month may precede evaluation start and is not scored",
+  "completed_months_only": true,
+  "monthly_equal_weight_factor_proxy": true,
+  "candidate_annual_cost_drag_bps": 20,
+  "control_cost_drag_bps": 0,
+  "gates": {
+    "full_after_cost_excess_min": 0.01,
+    "recent_after_cost_excess_min": 0.005,
+    "min_positive_calendar_years": 5,
+    "rolling_12m_positive_share_min": 0.50,
+    "max_drawdown_penalty_min": -0.05,
+    "min_positive_segments_full": 2,
+    "min_positive_segments_recent": 2
+  },
+  "frozen_before_corrected_execution": true,
+  "no_parameter_rescue": true,
+  "forbidden_rescue": ["change sleeve weights","drop a capitalization segment after outcome","change evaluation or recent window","change cost drag","substitute benchmark after outcome","change gates after outcome"],
+  "research_only": true,
+  "live_trading_change": false
+}
