@@ -1,0 +1,34 @@
+name: XMMO Midcap LOCO Year R1
+on:
+  push:
+    branches:
+      - market-research/us-crosscap-momentum-factor-r1-20260913
+    paths:
+      - 'research/xmmo-midcap-loco-year-r1.json'
+      - 'research/xmmo_midcap_loco_year_r1.py'
+      - '.github/workflows/xmmo-midcap-loco-year-r1.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Frozen provenance
+        run: |
+          echo "public_head=${GITHUB_SHA}"
+          echo "scientific_id=XMMO-MIDCAP-LOCO-YEAR-R1-20260913"
+      - name: Compile evaluator
+        run: python -m py_compile research/us_crosscap_momentum_factor_r2.py research/xmmo_midcap_loco_year_r1.py
+      - name: Execute frozen XMMO leave-one-year-out falsifier
+        run: python research/xmmo_midcap_loco_year_r1.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: xmmo-midcap-loco-year-r1-result
+          path: research/results/xmmo_midcap_loco_year_r1.json
+          retention-days: 30
