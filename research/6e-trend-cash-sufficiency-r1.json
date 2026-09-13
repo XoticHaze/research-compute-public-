@@ -1,0 +1,10 @@
+{
+  "schema":"public.research_experiment_contract.v1",
+  "experiment_id":"6E-DATED-TREND-CASH-SUFFICIENCY-R1",
+  "inherits_learning_ids":["SLP-20260913-6E-DATED-TREND-RELATIVE-TRANSPORT-R1"],
+  "uncertainty_resolved":"whether the 6E relative trend survivor beats cash rather than merely a worse always-long baseline",
+  "frozen_design":{"root":"6E","lookback_active_sessions":20,"hold_active_sessions":5,"normalized_round_trip_cost_bps":10,"active_row_filter":"volume>0 and open_interest>0","sampling":"non-overlapping within each dated contract","cash_baseline_return":0,"recent_contract_year_gte":2015,"continuous_series_constructed":false,"roll_cutoff_selected":false,"back_adjustment":false},
+  "promotion_gates":["full mean strategy return > 0","recent mean strategy return > 0","majority contract years positive","every leave-one-contract-year-out mean strategy return > 0","at least 250 events"],
+  "forbidden_parameter_rescue":true,
+  "authority":"SCIENTIFIC_EVIDENCE_ONLY"
+}
