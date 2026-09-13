@@ -1,0 +1,18 @@
+{
+  "schema": "xmmo_midcap_loco_year_contract.v1",
+  "scientific_id": "XMMO-MIDCAP-LOCO-YEAR-R1-20260913",
+  "inherits_scientific_ids": ["US-CROSSCAP-MOMENTUM-CAP-ABLATION-R2-20260913", "XMMO-MIDCAP-PANIC-REBOUND-R1-20260913"],
+  "uncertainty_resolved": "whether XMMO's corrected matched excess versus IJH is dependent on any single calendar year in the full or recent sample",
+  "candidate": "XMMO",
+  "matched_control": "IJH",
+  "evaluation_start_month": "2018-01",
+  "recent_start_month": "2021-01",
+  "return_construction": "completed month-end adjusted close divided by prior completed month-end adjusted close minus one",
+  "candidate_annual_cost_drag_bps": 20,
+  "gates": {"all_full_leave_one_year_out_excess_gt":0.0,"all_recent_leave_one_year_out_excess_gt":0.0},
+  "frozen_before_execution": true,
+  "no_parameter_rescue": true,
+  "forbidden_rescue": ["drop failing omitted year", "change evaluation or recent window", "change IJH control", "change cost drag", "change return construction", "change gates after outcome"],
+  "research_only": true,
+  "live_trading_change": false
+}
