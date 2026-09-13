@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-"""Transport-only primitives for run-bound encrypted research capsules.
+"""Transport-only primitives for run-bound encrypted capsules.
 
-This module decrypts authenticated ciphertext but deliberately owns no workload
-execution authority. Fixed consumers must separately validate the plaintext file
-set, provenance and scientific contract before executing or emitting a receipt.
+The original research consumers use ``authority=research_only``.  Broker/runtime
+consumers may supply a different *expected* authority while retaining the same
+run-bound X25519 + HKDF-SHA256 + ChaCha20-Poly1305 transport.  The default stays
+research_only so every existing caller is byte-for-byte compatible at the AAD
+contract level.
 """
 
 import base64
@@ -50,19 +52,11 @@ def build_text_chunk_manifest(
     stem: str,
     chunk_chars: int = DEFAULT_CHUNK_CHARS,
 ) -> tuple[list[tuple[str, str]], list[dict[str, object]]]:
-    """Split base64 ciphertext into immutable, uniquely named exact chunks.
-
-    Returns ``(files, manifest)`` where files contains ``(path, text)`` pairs
-    ready for publication and manifest contains the matching envelope chunk
-    descriptors. Publication must write every returned file before publishing
-    the envelope. Reusing one path for sequential pieces is intentionally
-    impossible through this helper.
-    """
     if not isinstance(payload_b64, str) or not payload_b64:
         raise ValueError("payload_b64 must be a non-empty string")
     try:
         base64.b64decode(payload_b64.encode("ascii"), validate=True)
-    except Exception as exc:  # pragma: no cover - exact decoder type is irrelevant
+    except Exception as exc:
         raise ValueError("payload_b64 must be valid base64") from exc
     if int(chunk_chars) <= 0:
         raise ValueError("chunk_chars must be positive")
@@ -79,22 +73,23 @@ def build_text_chunk_manifest(
         path = f"{root}/{stem}-{index:03d}.txt"
         raw = text.encode("ascii")
         files.append((path, text))
-        manifest.append(
-            {
-                "path": path,
-                "sha256": hashlib.sha256(raw).hexdigest(),
-                "chars": len(raw),
-            }
-        )
+        manifest.append({"path": path, "sha256": hashlib.sha256(raw).hexdigest(), "chars": len(raw)})
     return files, manifest
 
 
-def aad_bytes(*, schema: str, run_id: str, harness: str, recipient_key_id: str) -> bytes:
+def aad_bytes(
+    *,
+    schema: str,
+    run_id: str,
+    harness: str,
+    recipient_key_id: str,
+    authority: str = AUTHORITY,
+) -> bytes:
     return json.dumps(
         {
             "schema": schema,
             "run_id": str(run_id),
-            "authority": AUTHORITY,
+            "authority": str(authority),
             "harness": harness,
             "recipient_key_id": recipient_key_id,
         },
@@ -119,12 +114,13 @@ def validate_envelope(
     expected_run_id: str,
     expected_harness: str,
     response_root: str,
+    expected_authority: str = AUTHORITY,
 ) -> None:
     if not isinstance(envelope, dict) or set(envelope) != ENVELOPE_FIELDS:
         raise RuntimeError("chunked envelope field set mismatch")
     if envelope["schema"] != expected_schema or str(envelope["run_id"]) != str(expected_run_id):
         raise RuntimeError("chunked envelope run/schema mismatch")
-    if envelope["authority"] != AUTHORITY or envelope["harness"] != expected_harness:
+    if envelope["authority"] != expected_authority or envelope["harness"] != expected_harness:
         raise RuntimeError("chunked envelope authority/harness mismatch")
     if not str(envelope["recipient_key_id"]).startswith("sha256:"):
         raise RuntimeError("recipient key fingerprint invalid")
@@ -156,6 +152,7 @@ def decrypt_assembled_ciphertext(
     expected_run_id: str,
     expected_harness: str,
     response_root: str,
+    expected_authority: str = AUTHORITY,
 ) -> bytes:
     validate_envelope(
         envelope,
@@ -163,6 +160,7 @@ def decrypt_assembled_ciphertext(
         expected_run_id=expected_run_id,
         expected_harness=expected_harness,
         response_root=response_root,
+        expected_authority=expected_authority,
     )
     if sha256_bytes(ciphertext) != envelope["ciphertext_sha256"]:
         raise RuntimeError("assembled ciphertext digest mismatch")
@@ -188,6 +186,7 @@ def decrypt_assembled_ciphertext(
         run_id=str(expected_run_id),
         harness=expected_harness,
         recipient_key_id=recipient_key_id,
+        authority=expected_authority,
     )
     shared = private.exchange(x25519.X25519PublicKey.from_public_bytes(sender_raw))
     plaintext = ChaCha20Poly1305(derive_key(shared, aad)).decrypt(nonce, ciphertext, aad)

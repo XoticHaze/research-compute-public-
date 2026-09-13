@@ -1,0 +1,269 @@
+name: MM-IBKR Remote Paper Runtime R1
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  EXCHANGE_REF: rendezvous-exchange
+  RECIPIENT_ROOT: rendezvous/recipients
+  RESPONSE_ROOT: rendezvous/responses
+  RECEIPT_ROOT: rendezvous/receipts
+
+jobs:
+  session-reconcile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Install fixed crypto/test dependencies
+        run: python -m pip install --disable-pip-version-check cryptography pytest
+
+      - name: Validate fixed consumer before private input arrives
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/ephemeral_x25519_chunked_v1.py
+          python -m py_compile scripts/ibkr_remote_paper_capsule_v1.py
+          python -m py_compile scripts/ibkr_remote_paper_session_v1.py
+          pytest -q tests/test_ibkr_remote_paper_capsule_v1.py tests/test_ibkr_remote_paper_session_v1.py
+
+      - name: Generate one-run paper-runtime recipient
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import base64,hashlib,json,os
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric import x25519
+          private=x25519.X25519PrivateKey.generate()
+          private_raw=private.private_bytes(serialization.Encoding.Raw,serialization.PrivateFormat.Raw,serialization.NoEncryption())
+          public_raw=private.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)
+          Path(os.environ['RUNNER_TEMP'],'ibkr-remote-private.b64').write_text(base64.b64encode(private_raw).decode('ascii'))
+          recipient={
+              'schema':'ibkr-remote-paper-recipient-v1',
+              'run_id':os.environ['GITHUB_RUN_ID'],
+              'recipient_b64':base64.b64encode(public_raw).decode('ascii'),
+              'recipient_key_id':'sha256:'+hashlib.sha256(public_raw).hexdigest(),
+              'authority':'mm_ibkr_paper_runtime',
+              'harness':'mm_ibkr_remote_paper_runtime_v1',
+          }
+          Path(os.environ['RUNNER_TEMP'],'ibkr-remote-recipient.json').write_text(json.dumps(recipient,sort_keys=True)+'\n')
+          print('IBKR_REMOTE_RECIPIENT_KEY_ID='+recipient['recipient_key_id'])
+          PY
+
+      - name: Publish one-run recipient to exchange branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          recipient_path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}-ibkr-remote-paper.json"
+          payload="$(base64 -w0 "$RUNNER_TEMP/ibkr-remote-recipient.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json,sys
+          content,branch=sys.argv[1:]
+          print(json.dumps({'message':'rendezvous: publish one-run IBKR paper recipient','content':content,'branch':branch}))
+          PY
+          )"
+          curl -fsSL -X PUT \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${recipient_path}" \
+            -d "$body" >/dev/null
+          echo "IBKR_REMOTE_RECIPIENT_PATH=${recipient_path}"
+
+      - name: Wait for run-bound encrypted capsule
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          response_root="${RESPONSE_ROOT}/${GITHUB_RUN_ID}"
+          envelope_path="${response_root}/ibkr-remote-paper-envelope.json"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${envelope_path}?ref=${EXCHANGE_REF}"
+          found=0
+          for _ in $(seq 1 180); do
+            if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -o "$RUNNER_TEMP/ibkr-remote-envelope.json" 2>/dev/null; then
+              found=1
+              break
+            fi
+            sleep 5
+          done
+          test "$found" = 1 || { echo 'run-bound IBKR remote paper envelope did not arrive'; exit 42; }
+          echo "IBKR_REMOTE_RESPONSE_ROOT=${response_root}" >> "$GITHUB_ENV"
+
+      - name: Reassemble authenticated ciphertext chunks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64,hashlib,json,os
+          from pathlib import Path
+          from urllib.request import Request,urlopen
+          env=json.loads(Path(os.environ['RUNNER_TEMP'],'ibkr-remote-envelope.json').read_text())
+          chunks=env.get('chunks')
+          if not isinstance(chunks,list) or not chunks or len(chunks)>64:
+              raise SystemExit('invalid IBKR capsule chunk list')
+          expected_prefix=f"rendezvous/responses/{os.environ['GITHUB_RUN_ID']}/"
+          pieces=[]
+          seen=set()
+          for node in chunks:
+              if set(node)!={'path','sha256','chars'}:
+                  raise SystemExit('invalid IBKR chunk descriptor fields')
+              path=str(node['path'])
+              if not path.startswith(expected_prefix) or path in seen or '..' in path.split('/'):
+                  raise SystemExit('invalid IBKR chunk path')
+              seen.add(path)
+              url=f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/{path}?ref={os.environ['EXCHANGE_REF']}"
+              req=Request(url,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github.raw+json','X-GitHub-Api-Version':'2022-11-28'})
+              raw=urlopen(req,timeout=30).read()
+              if len(raw)!=int(node['chars']) or hashlib.sha256(raw).hexdigest()!=node['sha256']:
+                  raise SystemExit('IBKR chunk identity mismatch')
+              pieces.append(raw.decode('ascii'))
+          ciphertext=base64.b64decode(''.join(pieces).encode('ascii'),validate=True)
+          if hashlib.sha256(ciphertext).hexdigest()!=env.get('ciphertext_sha256'):
+              raise SystemExit('IBKR assembled ciphertext digest mismatch')
+          Path(os.environ['RUNNER_TEMP'],'ibkr-remote-ciphertext.bin').write_bytes(ciphertext)
+          print('IBKR_REMOTE_CIPHERTEXT_BYTES='+str(len(ciphertext)))
+          print('IBKR_REMOTE_CHUNKS='+str(len(chunks)))
+          PY
+
+      - name: Decrypt capsule and materialize private runtime
+        run: |
+          set -euo pipefail
+          umask 077
+          python scripts/ibkr_remote_paper_capsule_v1.py \
+            --envelope "$RUNNER_TEMP/ibkr-remote-envelope.json" \
+            --ciphertext "$RUNNER_TEMP/ibkr-remote-ciphertext.bin" \
+            --private-key "$RUNNER_TEMP/ibkr-remote-private.b64" \
+            --run-id "$GITHUB_RUN_ID" \
+            --response-root "$IBKR_REMOTE_RESPONSE_ROOT" \
+            --runner-temp "$RUNNER_TEMP"
+          mode="$(python - <<'PY'
+          import json,os
+          from pathlib import Path
+          print(json.loads(Path(os.environ['RUNNER_TEMP'],'ibkr-runtime.json').read_text())['mode'])
+          PY
+          )"
+          test "$mode" = "session_reconcile" || { echo 'R1 admits session_reconcile only; paper submit stays fail-closed until the cleanup driver is promoted'; exit 44; }
+
+      - name: Start ephemeral IB Gateway in read-only paper mode
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/gnzsnz/ib-gateway:10.49.1c >/dev/null
+          docker run -d --name ibkr-remote-gateway \
+            --env-file "$RUNNER_TEMP/ibkr-gateway.env" \
+            -e TWS_MAJOR_VRSN=10.49.1c \
+            -e TWS_ACCEPT_INCOMING=accept \
+            -e ENABLE_VNC=false \
+            -p 127.0.0.1:8001:8001 \
+            ghcr.io/gnzsnz/ib-gateway:10.49.1c >/dev/null
+          ready=0
+          for _ in $(seq 1 120); do
+            if docker exec ibkr-remote-gateway bash -lc "timeout 2 bash -c 'echo > /dev/tcp/127.0.0.1/4002'" >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 5
+          done
+          test "$ready" = 1 || { echo 'IB Gateway paper API did not become ready'; exit 45; }
+
+      - name: Build exact private MM-IBKR head
+        run: |
+          set -euo pipefail
+          source_root="$(python - <<'PY'
+          import json,os
+          from pathlib import Path
+          print(json.loads(Path(os.environ['RUNNER_TEMP'],'ibkr-runtime.json').read_text())['source_root'])
+          PY
+          )"
+          docker build --target bot -t "mmibkr-remote:${GITHUB_RUN_ID}" "$source_root" >/dev/null
+
+      - name: Start canonical MM-IBKR runtime against gateway
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/mmibkr-data"
+          docker run -d --name mmibkr-remote-bot \
+            --network container:ibkr-remote-gateway \
+            -e IB_HOST=127.0.0.1 \
+            -e IB_PORT=4002 \
+            -e CLIENT_ID=34 \
+            -e ENABLE_LIVE_TRADING=0 \
+            -e CONTROL_API_ENABLED=true \
+            -e CONTROL_API_HOST=0.0.0.0 \
+            -e CONTROL_API_PORT=8001 \
+            -e CONTROL_RUNTIME_PORT=8001 \
+            -e BOT_SELECTED_RUNTIME_NATURAL_CANDIDATE_14TH31BV_ENABLED=0 \
+            -e FUTURES_AUTO_ENABLED=0 \
+            -e STRATEGY_IBKR_PAPER_CANCEL_ENABLED_13Z37=0 \
+            -e STRATEGY_IBKR_PAPER_GLOBAL_CANCEL_ENABLED_13Z37D=0 \
+            -v "$RUNNER_TEMP/mmibkr-data:/app/data" \
+            "mmibkr-remote:${GITHUB_RUN_ID}" >/dev/null
+          ready=0
+          for _ in $(seq 1 60); do
+            if curl -fsS --max-time 4 http://127.0.0.1:8001/healthz >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 3
+          done
+          test "$ready" = 1 || { echo 'MM-IBKR canonical control runtime did not become healthy'; exit 46; }
+
+      - name: Reconcile paper broker truth through canonical MM-IBKR surfaces
+        run: |
+          set -euo pipefail
+          python scripts/ibkr_remote_paper_session_v1.py \
+            --base-url http://127.0.0.1:8001 \
+            --runtime "$RUNNER_TEMP/ibkr-runtime.json" \
+            --receipt "$RUNNER_TEMP/ibkr-remote-paper-receipt.json" \
+            --run-id "$GITHUB_RUN_ID" \
+            --job session-reconcile \
+            --public-head "$GITHUB_SHA"
+
+      - name: Publish sanitized deterministic receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          receipt_path="${RECEIPT_ROOT}/${GITHUB_RUN_ID}-ibkr-remote-paper.json"
+          payload="$(base64 -w0 "$RUNNER_TEMP/ibkr-remote-paper-receipt.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json,sys
+          content,branch=sys.argv[1:]
+          print(json.dumps({'message':'rendezvous: publish sanitized IBKR remote paper receipt','content':content,'branch':branch}))
+          PY
+          )"
+          curl -fsSL -X PUT \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${receipt_path}" \
+            -d "$body" >/dev/null
+          echo "IBKR_REMOTE_RECEIPT_PATH=${receipt_path}"
+
+      - name: Destroy private runtime material
+        if: always()
+        run: |
+          set +e
+          docker rm -f mmibkr-remote-bot ibkr-remote-gateway >/dev/null 2>&1
+          docker image rm "mmibkr-remote:${GITHUB_RUN_ID}" >/dev/null 2>&1
+          rm -rf \
+            "$RUNNER_TEMP/mm-ibkr-source" \
+            "$RUNNER_TEMP/mmibkr-data" \
+            "$RUNNER_TEMP/mm-ibkr-source.tar.gz" \
+            "$RUNNER_TEMP/ibkr-gateway.env" \
+            "$RUNNER_TEMP/ibkr-submit-request.json" \
+            "$RUNNER_TEMP/ibkr-runtime.json" \
+            "$RUNNER_TEMP/ibkr-remote-private.b64" \
+            "$RUNNER_TEMP/ibkr-remote-recipient.json" \
+            "$RUNNER_TEMP/ibkr-remote-envelope.json" \
+            "$RUNNER_TEMP/ibkr-remote-ciphertext.bin" \
+            "$RUNNER_TEMP/ibkr-remote-paper-receipt.json"
