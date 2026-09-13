@@ -1,4 +1,4 @@
-name: One-shot forward native current bundle dispatch 20260913
+name: One-shot Homebuilder v2 forward-native dispatch 20260913
 
 on:
   push:
@@ -16,12 +16,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Dispatch canonical public rendezvous on main
+      - name: Dispatch canonical Homebuilder v2 rendezvous on main
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          body='{"ref":"main","inputs":{"harness":"all"}}'
+          body='{"ref":"main","inputs":{"harness":"homebuilders_adaptive_duration_current_v2"}}'
           status="$(curl -sS -o "$RUNNER_TEMP/dispatch.json" -w '%{http_code}' -X POST \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H 'Accept: application/vnd.github+json' \
@@ -29,4 +29,4 @@ jobs:
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/forward-native-ephemeral-rendezvous-r1.yml/dispatches" \
             -d "$body")"
           test "$status" = '204' || { cat "$RUNNER_TEMP/dispatch.json" >&2 || true; echo "DISPATCH_STATUS=$status" >&2; exit 1; }
-          echo 'FORWARD_NATIVE_PUBLIC_DISPATCH=PASS'
+          echo 'FORWARD_NATIVE_HOMEBUILDER_V2_DISPATCH=PASS'
