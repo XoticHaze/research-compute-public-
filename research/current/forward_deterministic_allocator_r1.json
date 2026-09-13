@@ -56,7 +56,7 @@
     "XPH": 0.0666666667,
     "XSD": 0.0666666667
   },
-  "generated_at": "2026-09-13T04:45:44.172729+00:00",
+  "generated_at": "2026-09-13T04:57:41.112884+00:00",
   "learned_allocator_role": "shadow_challenger_must_beat_this_baseline_after_costs_and_opportunity_cost",
   "policy_id": "CC770_DETERMINISTIC_ALLOCATOR_V0",
   "position_actions_vs_prior_allocator_target": [
@@ -75,23 +75,23 @@
       "target_weight": 0.1
     },
     {
-      "action": "ADD",
-      "delta_weight": 0.0125,
-      "prior_weight": 0.0,
+      "action": "HOLD",
+      "delta_weight": 0.0,
+      "prior_weight": 0.0125,
       "symbol": "BZH",
       "target_weight": 0.0125
     },
     {
-      "action": "REDUCE",
-      "delta_weight": -0.05,
-      "prior_weight": 0.15,
+      "action": "HOLD",
+      "delta_weight": 0.0,
+      "prior_weight": 0.1,
       "symbol": "CASH",
       "target_weight": 0.1
     },
     {
-      "action": "ADD",
-      "delta_weight": 0.0125,
-      "prior_weight": 0.0,
+      "action": "HOLD",
+      "delta_weight": 0.0,
+      "prior_weight": 0.0125,
       "symbol": "CCS",
       "target_weight": 0.0125
     },
@@ -103,9 +103,9 @@
       "target_weight": 0.05
     },
     {
-      "action": "ADD",
-      "delta_weight": 0.0125,
-      "prior_weight": 0.0,
+      "action": "HOLD",
+      "delta_weight": 0.0,
+      "prior_weight": 0.0125,
       "symbol": "HOV",
       "target_weight": 0.0125
     },
@@ -117,9 +117,9 @@
       "target_weight": 0.0333333333
     },
     {
-      "action": "ADD",
-      "delta_weight": 0.0125,
-      "prior_weight": 0.0,
+      "action": "HOLD",
+      "delta_weight": 0.0,
+      "prior_weight": 0.0125,
       "symbol": "MHO",
       "target_weight": 0.0125
     },
@@ -241,7 +241,7 @@
       "target_weight": 0.0
     }
   ],
-  "source_scoreboard_generated_at": "2026-09-13T04:45:44.116544+00:00",
+  "source_scoreboard_generated_at": "2026-09-13T04:57:41.067895+00:00",
   "source_scoreboard_schema": "research.forward_market_scoreboard_r1",
   "tactical_used": 0.1,
   "unused_tactical_budget": 0.05
