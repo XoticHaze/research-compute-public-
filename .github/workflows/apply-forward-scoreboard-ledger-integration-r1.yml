@@ -26,11 +26,17 @@ jobs:
           python research/forward_market_scoreboard_r1.py --self-test
           python research/forward_deterministic_allocator_r1.py --self-test
           git diff --check
-      - name: Commit integration
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tested-forward-market-scoreboard-workflow
+          path: .github/workflows/forward-market-scoreboard-r1.yml
+          if-no-files-found: error
+          retention-days: 7
+      - name: Commit tested scoreboard code only
         run: |
           set -euo pipefail
           git config user.name 'forward-release-bot'
           git config user.email 'forward-release-bot@users.noreply.github.com'
-          git add research/forward_market_scoreboard_r1.py .github/workflows/forward-market-scoreboard-r1.yml
+          git add research/forward_market_scoreboard_r1.py
           git commit -m 'forward: surface prospective maturity evidence in scoreboard'
           git push origin HEAD:assistant/forward-scoreboard-ledger-integration-r1
