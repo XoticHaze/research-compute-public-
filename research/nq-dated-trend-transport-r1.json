@@ -1,0 +1,28 @@
+{
+  "schema": "public.research_experiment_contract.v1",
+  "experiment_id": "NQ-DATED-TREND-TRANSPORT-R1",
+  "parent": "F1B-NQ-DATED-CORPUS-RELEASE",
+  "root": "NQ",
+  "claim": "Fixed 20-active-session trend sign transports across released NQ dated contracts and beats the same-contract always-long opportunity over the next 5 active sessions after a 10 bp normalized round-trip cost.",
+  "frozen_design": {
+    "lookback_active_sessions": 20,
+    "hold_active_sessions": 5,
+    "normalized_round_trip_cost_bps": 10,
+    "active_row_filter": "volume>0 and open_interest>0",
+    "sampling": "non-overlapping within each dated contract",
+    "recent_contract_year_gte": 2015,
+    "matched_control": "always-long same contract/same decision windows/same normalized cost",
+    "continuous_series_constructed": false,
+    "roll_cutoff_selected": false,
+    "back_adjustment": false
+  },
+  "promotion_gates": [
+    "full mean excess > 0",
+    "recent mean excess > 0",
+    "positive excess in >50% of contracts",
+    "every leave-one-contract-year-out mean excess > 0",
+    "at least 250 events"
+  ],
+  "forbidden_parameter_rescue": true,
+  "authority": "SCIENTIFIC_EVIDENCE_ONLY"
+}
