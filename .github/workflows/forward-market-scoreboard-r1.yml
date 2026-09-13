@@ -12,8 +12,11 @@ on:
       - 'research/forward_market_scoreboard_r1.py'
       - 'research/forward_deterministic_allocator_r1.py'
       - 'research/forward_native_program_adapter_r1.py'
+      - 'research/forward_challenger_scoreboard_enrichment_r1.py'
       - 'research/current/native_adapters/*.json'
       - 'research/current/forward_prospective_cohort_ledger_r1.json'
+      - 'research/current/p160_forward_observation_r1.json'
+      - 'research/current/currency_hedge_mechanism_forward_r1.json'
       - '.github/workflows/forward-market-scoreboard-r1.yml'
   pull_request:
     branches: [main]
@@ -21,8 +24,11 @@ on:
       - 'research/forward_market_scoreboard_r1.py'
       - 'research/forward_deterministic_allocator_r1.py'
       - 'research/forward_native_program_adapter_r1.py'
+      - 'research/forward_challenger_scoreboard_enrichment_r1.py'
       - 'research/current/native_adapters/*.json'
       - 'research/current/forward_prospective_cohort_ledger_r1.json'
+      - 'research/current/p160_forward_observation_r1.json'
+      - 'research/current/currency_hedge_mechanism_forward_r1.json'
       - '.github/workflows/forward-market-scoreboard-r1.yml'
       - 'research/forward_p249_p266_shadow_r1.py'
       - 'research/forward_p558_current_core_shadow_r1.py'
@@ -43,6 +49,7 @@ jobs:
         with: {python-version: '3.11'}
       - run: python research/forward_native_program_adapter_r1.py --self-test
       - run: python research/forward_market_scoreboard_r1.py --self-test
+      - run: python research/forward_challenger_scoreboard_enrichment_r1.py --self-test
       - run: python research/forward_deterministic_allocator_r1.py --self-test
 
   p46:
@@ -147,6 +154,16 @@ jobs:
             cp research/current/forward_prospective_cohort_ledger_r1.json score-inputs/prospective-current/
           fi
       - run: python research/forward_market_scoreboard_r1.py --input-root score-inputs --output artifacts/forward_market_scoreboard_r1.json
+      - name: Add forward challenger observers without allocation authority
+        run: |
+          set -euo pipefail
+          test -f research/current/p160_forward_observation_r1.json
+          test -f research/current/currency_hedge_mechanism_forward_r1.json
+          python research/forward_challenger_scoreboard_enrichment_r1.py \
+            --scoreboard artifacts/forward_market_scoreboard_r1.json \
+            --p160 research/current/p160_forward_observation_r1.json \
+            --currency research/current/currency_hedge_mechanism_forward_r1.json \
+            --output artifacts/forward_market_scoreboard_r1.json
       - name: Build governed deterministic paper allocation
         run: |
           args=(--scoreboard artifacts/forward_market_scoreboard_r1.json --output artifacts/forward_deterministic_allocator_r1.json)
@@ -171,6 +188,7 @@ jobs:
                   print('  evidence_grade=', lane.get('evidence_grade'))
           print('native_result_gaps=', ','.join(x['coverage']['native_result_gaps']))
           print('prospective_ledger=', json.dumps(x['coverage']['prospective_ledger'], sort_keys=True))
+          print('challenger_observers=', json.dumps(x['coverage']['challenger_observers'], sort_keys=True))
           print('decision_chain=', json.dumps(x['decision_chain'], sort_keys=True))
           print('allocator_policy=', a['policy_id'])
           print('allocator_targets=', json.dumps(a['final_target_weights'], sort_keys=True))
@@ -186,7 +204,7 @@ jobs:
           retention-days: 90
 
   publish-current:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: report
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -232,6 +250,8 @@ jobs:
               assert lane['scorecard']['challenger_cumulative_bps']==bp(raw['forward']['challenger_if_flattened_now']['cumulative_return'])
               assert lane['scorecard']['excess_vs_incumbent_bps']==bp(raw['forward']['challenger_minus_incumbent_cumulative'])
               assert lane['scorecard']['excess_vs_matched_cash_control_bps']==bp(raw['forward']['challenger_minus_matched_cumulative'])
+          assert lanes['P160_FIXED_P46_P47_COMBINATION']['boundaries']['allocation_authority'] is False
+          assert lanes['DEVELOPED_EXUS_CURRENCY_HEDGE']['boundaries']['allocation_authority'] is False
           print('FORWARD_CURRENT_BUNDLE_COHERENCE=PASS')
           PY
           git fetch origin main
