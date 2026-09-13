@@ -1,0 +1,45 @@
+name: ZS Dated Curve Carry Transport R1
+
+on:
+  push:
+    branches: ['market-research/dated-curve-carry-r1-20260913']
+    paths:
+      - 'research/dated_curve_carry_transport_r1.py'
+      - '.github/workflows/zs-dated-curve-carry-transport-r1.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Record provenance
+        run: |
+          echo "public_head=${GITHUB_SHA}"
+          echo "source_artifact_id=10294324888"
+          echo "experiment_id=ZS-DATED-CURVE-CARRY-TRANSPORT-R1"
+      - name: Download released F1a dated-contract corpus
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p input/staging
+          gh api /repos/${GITHUB_REPOSITORY}/actions/artifacts/10294324888/zip > /tmp/staging.zip
+          unzip -q /tmp/staging.zip -d input/staging
+      - name: Execute frozen ZS curve-carry transport discriminator
+        run: |
+          python research/dated_curve_carry_transport_r1.py \
+            --root ZS \
+            --staging input/staging \
+            --output zs-dated-curve-carry-transport-r1-result.json
+      - name: Upload scientific result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: zs-dated-curve-carry-transport-r1-result
+          path: zs-dated-curve-carry-transport-r1-result.json
+          if-no-files-found: error
+          retention-days: 30
