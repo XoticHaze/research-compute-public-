@@ -21,3 +21,4 @@ jobs:
           name: xmmo-crossfit-alpha-r1-result
           path: xmmo-crossfit-alpha-r1-result.json
           retention-days: 14
+
