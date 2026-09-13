@@ -1,0 +1,54 @@
+name: market-research-p546-recession-episode-attribution-r1
+on:
+  push:
+    paths: ['.github/workflows/market-research-p546-recession-episode-attribution-r1.yml']
+  pull_request:
+    paths: ['.github/workflows/market-research-p546-recession-episode-attribution-r1.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  p546-recession-attribution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install pandas numpy requests
+      - name: Run frozen SLOOS recession episode attribution falsifier
+        shell: python
+        run: |
+          import io,json,math,requests,pandas as pd,numpy as np
+          INHERITS=['2026-09-11T073945Z_market-research_p546_sloos_credit_standards_survivor','P546_SLOOS_EXPANSION_REGIME_FALSIFIER_R1']
+          COST=.001
+          def fred(series):
+            q=requests.get(f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}',timeout=90); q.raise_for_status()
+            x=pd.read_csv(io.StringIO(q.text)); x.columns=['date',series]; x.date=pd.to_datetime(x.date); x[series]=pd.to_numeric(x[series],errors='coerce'); return x.dropna().set_index('date')[series]
+          s=fred('DRTSCILM').resample('ME').ffill(); rec=fred('USREC').resample('ME').last().ffill()
+          q=requests.get('https://query1.finance.yahoo.com/v8/finance/chart/SPY?period1=946684800&period2=1789084800&interval=1mo&events=history&includeAdjustedClose=true',headers={'User-Agent':'Mozilla/5.0'},timeout=90); q.raise_for_status(); j=q.json()['chart']['result'][0]
+          px=pd.Series(j['indicators']['adjclose'][0]['adjclose'],index=pd.to_datetime(j['timestamp'],unit='s',utc=True).tz_convert(None)).dropna(); px.index=px.index.to_period('M').to_timestamp('M'); px=px.groupby(level=0).last(); r=px.pct_change().rename('spy')
+          d=pd.concat([r,s.rename('sloos'),rec.rename('usrec')],axis=1).dropna(); d['pos']=(d.sloos.shift(1)<=0).astype(float); d=d.dropna(); d['turn']=d.pos.diff().abs().fillna(d.pos); d['strat']=d.pos*d.spy-d['turn']*COST; beta=d.pos.mean(); d['matched']=beta*d.spy
+          def cagr(z,col):
+            z=z[col].dropna(); return float(np.prod(1+z)**(12/len(z))-1) if len(z) else None
+          def excess(z): return 100*(cagr(z,'strat')-cagr(z,'matched'))
+          # Identify consecutive NBER recession-month episodes strictly as a diagnostic partition; never used in the trading rule.
+          episodes=[]; cur=[]
+          for dt,row in d.iterrows():
+            if row.usrec>=0.5: cur.append(dt)
+            elif cur: episodes.append(cur); cur=[]
+          if cur: episodes.append(cur)
+          rows=[]
+          for ep in episodes:
+            mask=~d.index.isin(ep); z=d.loc[mask]
+            ez=d.loc[ep]
+            rows.append({'start':str(ep[0].date()),'end':str(ep[-1].date()),'months':len(ep),'episode_excess_cagr_pp':excess(ez),'leave_episode_out_full_excess_cagr_pp':excess(z)})
+          full=excess(d); robust=all(x['leave_episode_out_full_excess_cagr_pp']>0 for x in rows)
+          out={'semantic_id':'P546_SLOOS_RECESSION_EPISODE_ATTRIBUTION_R1','inherits':INHERITS,'claim_tested':'If P546 is a reusable crisis-protection mechanism rather than a single-episode artifact, its positive full-sample matched excess should remain positive after removing each NBER recession episode one at a time.','frozen_inheritance':{'series':'FRED DRTSCILM','signal':'<=0 => SPY; >0 => cash','lag_months':1,'transition_cost':COST,'instrument':'SPY','matched_control':'full-sample mean exposure * SPY'},'diagnostic_only_regime_label':'FRED USREC; used only to partition recession episodes','months':len(d),'mean_exposure':beta,'full_excess_cagr_pp':full,'recession_episode_count':len(rows),'episodes':rows,'falsifier_rule':'survive crisis-protection robustness only if full excess CAGR remains >0 after removing each recession episode individually','survives_crisis_robustness_falsifier':robust,'terminal_classification':'SURVIVES_MULTI_EPISODE_CRISIS_PROTECTION_FALSIFIER' if robust else 'REJECT_CRISIS_PROTECTION_ROBUSTNESS__SINGLE_EPISODE_DEPENDENCE','forbidden_parameter_rescue':['change SLOOS threshold','change lag','change transition cost','change instrument','redefine NBER recession episodes','drop adverse leave-one-episode-out cases','use USREC as a trading signal']}
+          print(json.dumps(out,indent=2)); open('p546_sloos_recession_episode_attribution_r1.json','w').write(json.dumps(out,indent=2))
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p546-sloos-recession-episode-attribution-r1-${{ github.run_id }}
+          path: p546_sloos_recession_episode_attribution_r1.json
+          if-no-files-found: error
+          retention-days: 14
