@@ -26,6 +26,16 @@
           "timing_authority": false
         }
       }
+    },
+    {
+      "authority": "prospective_validation_only",
+      "intel": "Cash-funded portfolio-level currency-hedge falsifier",
+      "source": "CURRENCY_HEDGE_ALLOCATOR_OVERLAY",
+      "state": {
+        "entry_date": null,
+        "forward_state": "AWAITING_ENTRY_SESSION",
+        "scorecard": null
+      }
     }
   ],
   "coverage": {
@@ -35,6 +45,11 @@
       "GENERALIZED_LARGECAP_RIDGE"
     ],
     "challenger_observers": {
+      "CURRENCY_HEDGE_ALLOCATOR_OVERLAY": {
+        "present": true,
+        "scientific_forward_credit": true,
+        "state": "AWAITING_ENTRY_SESSION"
+      },
       "DEVELOPED_EXUS_CURRENCY_HEDGE": {
         "present": true,
         "scientific_forward_credit": true,
@@ -93,6 +108,15 @@
         "scorecard": null,
         "state": "AWAITING_ENTRY_SESSION"
       },
+      "CURRENCY_HEDGE_ALLOCATOR_OVERLAY": {
+        "entry_date": null,
+        "forward_sessions": 0,
+        "funding_source": "CASH_ONLY",
+        "overlay_weight": 0.05,
+        "role": "portfolio_level_matched_control_challenger",
+        "scorecard": null,
+        "state": "AWAITING_ENTRY_SESSION"
+      },
       "JAAA": {
         "annualized_vol": null,
         "challenger_cumulative_bps": -4.32,
@@ -130,6 +154,9 @@
       "KMLM_vs_incumbent_bps": -82.8,
       "currency_hedge_mean_matched_excess_bps": null,
       "currency_hedge_opportunity_excess_vs_spy_bps": null,
+      "currency_overlay_excess_vs_incumbent_bps": null,
+      "currency_overlay_hedged_minus_spy_bps": null,
+      "currency_overlay_hedged_minus_unhedged_bps": null,
       "homebuilders_mean_excess_vs_itb_bps": null,
       "p266_increment_bps": -14.49,
       "semiconductor_mean_ticker_book_excess_vs_smh_bps": null
@@ -226,10 +253,12 @@
       ]
     }
   },
-  "generated_at": "2026-09-13T07:12:25.045860+00:00",
+  "generated_at": "2026-09-13T07:55:59.827931+00:00",
   "interpretation": {
     "broker_or_live_authority": false,
     "challenger_observers_do_not_grant_allocator_authority": true,
+    "currency_overlay_is_cash_funded_without_leverage": true,
+    "currency_overlay_is_observation_not_allocator_mutation": true,
     "currency_regime_context_is_not_timing_authority": true,
     "daily_score_does_not_imply_daily_turnover": true,
     "forward_score_requires_matched_benchmark_or_control": true,
@@ -869,6 +898,84 @@
         },
         "forward_sessions": 0,
         "regime_is_not_timing_gate": true
+      },
+      "validation_grade": "AWAITING_ENTRY_SESSION"
+    },
+    {
+      "action_text": "Test whether a 5% cash-funded HEFA/DBEF overlay improves the frozen allocator beyond both the unchanged allocator and an equal IEFA/EFA overlay. No leverage and no allocator mutation.",
+      "benchmarks": {
+        "incumbent": "frozen deterministic allocator target published 2026-09-13",
+        "matched": "incumbent with 5% cash replaced by 2.5% IEFA + 2.5% EFA",
+        "opportunity": "incumbent with 5% cash replaced by 5% SPY",
+        "portfolio_roundtrip_cost_bps_if_flattened_now": null
+      },
+      "boundaries": {
+        "allocation_authority": false,
+        "allocator_mutation": false,
+        "broker_action": false,
+        "currency_mechanism_mutation": false,
+        "live_trading_change": false,
+        "promotion_authority": false,
+        "research_only": true,
+        "runtime_authority": false
+      },
+      "decision_use": "Prospective portfolio-level falsifier: determine whether the replicated developed-ex-US currency hedge improves the actual frozen allocator target beyond both unchanged cash and an equal unhedged developed-ex-US overlay.",
+      "kind": "portfolio_level_currency_hedge_allocator_challenger",
+      "paper_action": {
+        "portfolio_authority": false,
+        "status": "OBSERVE_ONLY"
+      },
+      "program_id": "CURRENCY_HEDGE_ALLOCATOR_OVERLAY",
+      "scientific_forward_credit": true,
+      "scorecard": null,
+      "signal": {
+        "funding_source": "CASH_ONLY",
+        "hedged_challenger": {
+          "AVDV": 0.1,
+          "AVUV": 0.1,
+          "BZH": 0.0125,
+          "CASH": 0.05,
+          "CCS": 0.0125,
+          "DBC": 0.05,
+          "DBEF": 0.025,
+          "HEFA": 0.025,
+          "HOV": 0.0125,
+          "IGV": 0.0333333333,
+          "MHO": 0.0125,
+          "QQQ": 0.05,
+          "SMH": 0.05,
+          "SOXX": 0.2333333333,
+          "XBI": 0.1,
+          "XPH": 0.0666666667,
+          "XSD": 0.0666666667
+        },
+        "overlay_weight": 0.05,
+        "unhedged_matched_control": {
+          "AVDV": 0.1,
+          "AVUV": 0.1,
+          "BZH": 0.0125,
+          "CASH": 0.05,
+          "CCS": 0.0125,
+          "DBC": 0.05,
+          "EFA": 0.025,
+          "HOV": 0.0125,
+          "IEFA": 0.025,
+          "IGV": 0.0333333333,
+          "MHO": 0.0125,
+          "QQQ": 0.05,
+          "SMH": 0.05,
+          "SOXX": 0.2333333333,
+          "XBI": 0.1,
+          "XPH": 0.0666666667,
+          "XSD": 0.0666666667
+        }
+      },
+      "signal_date": "2026-09-13",
+      "timing": {
+        "entry_date": null,
+        "entry_rule": "first common market-session close after registration",
+        "forward_sessions": 0,
+        "holding_rule": "buy-and-hold frozen registration weights; no rebalance or allocator mutation"
       },
       "validation_grade": "AWAITING_ENTRY_SESSION"
     }
