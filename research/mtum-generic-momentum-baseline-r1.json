@@ -5,3 +5,4 @@
   "gates":{"full_after_cost_excess_vs_spy_min":0.01,"recent_after_cost_excess_vs_spy_min":0.005,"min_positive_calendar_years_vs_spy":6,"rolling_12m_positive_share_min":0.5,"max_drawdown_penalty_vs_spy_min":-0.05},
   "frozen_before_execution":true,"no_parameter_rescue":true,"research_only":true
 }
+
