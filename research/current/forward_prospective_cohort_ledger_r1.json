@@ -1,0 +1,139 @@
+{
+  "boundaries": {
+    "allocation_authority": false,
+    "broker_action": false,
+    "live_trading_change": false,
+    "no_outcome_backfill_after_maturity": true,
+    "promotion_authority": false,
+    "research_only": true,
+    "signal_or_horizon_mutation": false
+  },
+  "cohorts": [
+    {
+      "admission_score_fixed20_net25_bps": {
+        "BZH": 157.6918231870078,
+        "CCS": 612.5651121271583,
+        "HOV": 807.2166569371602,
+        "MHO": 430.5558276760162
+      },
+      "benchmarks": [
+        "ITB",
+        "QQQ"
+      ],
+      "cohort_id": "HOMEBUILDERS:2026-09-11:00435d369ddcc3a3",
+      "execution_delay_sessions": 1,
+      "first_registered_at": "2026-09-13T04:55:23.220121+00:00",
+      "horizon_sessions_by_symbol": {
+        "BZH": 5,
+        "CCS": 5,
+        "HOV": 5,
+        "MHO": 5
+      },
+      "program_id": "HOMEBUILDERS",
+      "resolution": null,
+      "signal_date": "2026-09-11",
+      "source_adapter_sha256": "00435d369ddcc3a3d8adbedb91a9662f047b292ff64fe6af6901bfd112466a59",
+      "source_ref": "100e356239b2399c054c1a41a18e4e9a5d07d33a",
+      "status": "AWAITING_ENTRY_SESSION",
+      "stock_round_trip_cost_bps": 25.0,
+      "symbols": [
+        "CCS",
+        "MHO",
+        "HOV",
+        "BZH"
+      ]
+    },
+    {
+      "benchmarks": [
+        "CASH",
+        "SMH",
+        "QQQ",
+        "EQUAL_WEIGHT_13"
+      ],
+      "cohort_id": "SEMICONDUCTOR_SHARED_RIDGE:2026-09-11:aed8eb43d888d3c4",
+      "execution_delay_sessions": 1,
+      "first_registered_at": "2026-09-13T04:55:23.220121+00:00",
+      "holding_horizon_sessions": 20,
+      "industry_round_trip_cost_bps": 10.0,
+      "positive_breadth": 1.0,
+      "predicted_fixed20_net_value_bps": {
+        "ADI": 218.77104353915175,
+        "AMAT": 818.9846080097676,
+        "AMD": 777.8135296533924,
+        "APH": 222.7882890439323,
+        "AVGO": 459.3369995461853,
+        "KLAC": 699.963189765575,
+        "LRCX": 720.9858048249403,
+        "MCHP": 374.14896443764127,
+        "MRVL": 821.3564577322178,
+        "MU": 1058.369846656083,
+        "NVDA": 65.48382868127038,
+        "NXPI": 377.802871441368,
+        "TXN": 364.0531406251399
+      },
+      "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+      "resolution": null,
+      "signal_date": "2026-09-11",
+      "source_adapter_sha256": "aed8eb43d888d3c4d39c4db940c89e5d2247204567d4a0fcf129e9551f04e333",
+      "source_ref": "e73ec9b15180e208de541ce5d5304888e5550433",
+      "status": "AWAITING_ENTRY_SESSION",
+      "stock_round_trip_cost_bps": 25.0,
+      "symbols": [
+        "AMAT",
+        "APH",
+        "KLAC",
+        "LRCX",
+        "TXN",
+        "NXPI",
+        "ADI",
+        "NVDA",
+        "AMD",
+        "MU",
+        "AVGO",
+        "MRVL",
+        "MCHP"
+      ],
+      "ticker_book_weights_within_cohort": {
+        "ADI": 0.10571186868808793,
+        "AMAT": 0.0677706700882186,
+        "AMD": 0.058704022319207905,
+        "APH": 0.07697123356389124,
+        "AVGO": 0.08218192293333511,
+        "KLAC": 0.06811394768327982,
+        "LRCX": 0.05986677187977857,
+        "MCHP": 0.10005782147707949,
+        "MRVL": 0.03779407262792618,
+        "MU": 0.057123456065814385,
+        "NVDA": 0.06927898059639159,
+        "NXPI": 0.11594204235544812,
+        "TXN": 0.10048318972154087
+      }
+    }
+  ],
+  "generated_at": "2026-09-13T04:55:23.220121+00:00",
+  "market_data_asof": "2026-09-13",
+  "schema": "research.forward_prospective_cohort_ledger_r1",
+  "summary": {
+    "HOMEBUILDERS": {
+      "late_registration_rejections": 0,
+      "mean_excess_vs_itb_bps": null,
+      "minimum_resolved_for_promotion": null,
+      "open_cohorts": 1,
+      "positive_hit_rate": null,
+      "promotion_authority": false,
+      "registered_cohorts": 1,
+      "resolved_cohorts": 0,
+      "resolved_observations": 0
+    },
+    "SEMICONDUCTOR_SHARED_RIDGE": {
+      "late_registration_rejections": 0,
+      "mean_ticker_book_excess_vs_smh_bps": null,
+      "mean_ticker_positive_hit_rate": null,
+      "minimum_resolved_for_promotion": 20,
+      "open_cohorts": 1,
+      "promotion_authority": false,
+      "registered_cohorts": 1,
+      "resolved_cohorts": 0
+    }
+  }
+}
