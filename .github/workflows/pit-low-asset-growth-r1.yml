@@ -1,0 +1,31 @@
+name: PIT Low Asset Growth R1
+on:
+  push:
+    branches: [market-research/pit-low-asset-growth-r1-20260913]
+    paths:
+      - 'research/pit_low_asset_growth_r1.py'
+      - '.github/workflows/pit-low-asset-growth-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.11.16'}
+      - name: Frozen provenance
+        run: |
+          echo "public_head=${GITHUB_SHA}"
+          echo "experiment_id=PIT_LOW_ASSET_GROWTH_R1_20260913"
+          echo "prereg=CommandCenter@9581ee251bfda4b9f338f93f46155949e9105682"
+      - name: Compile evaluator
+        run: python -m py_compile research/pit_net_share_contraction_r1.py research/pit_low_asset_growth_r1.py
+      - name: Execute frozen low-investment discriminator
+        run: python research/pit_low_asset_growth_r1.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pit-low-asset-growth-r1-result
+          path: research/results/pit_low_asset_growth_r1.json
+          retention-days: 30
+          if-no-files-found: error
