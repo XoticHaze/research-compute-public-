@@ -1,0 +1,201 @@
+{
+  "benchmarks": {
+    "matched": "50/50 same-universe equal-weight controls",
+    "opportunity": [
+      "SPY",
+      "QQQ"
+    ],
+    "primary_cost_bps": 50.0
+  },
+  "boundaries": {
+    "allocation_authority": false,
+    "broker_action": false,
+    "descriptive_prestart_not_forward_credit": true,
+    "live_trading_change": false,
+    "p47_standalone_reactivated": false,
+    "parameter_rescue": false,
+    "promotion_authority": false,
+    "research_only": true,
+    "runtime_authority": false
+  },
+  "decision_use": "Independent-validation challenger for the frozen P160 combination. P47 remains parked as a standalone sleeve; this observer does not reactivate it or grant allocation authority.",
+  "frozen_identity": {
+    "construction": "fixed_50_50_p46_top2_p47_top3",
+    "no_weight_search": true,
+    "primary_cost_bps": 50.0,
+    "source_blob_sha": "89d8e4c004536310e588623203e8e23e8aac15d9",
+    "source_ref": "c575e02aba939b283c0aa409d9bc21f000c0762c"
+  },
+  "generated_at": "2026-09-13T06:34:58.167530+00:00",
+  "holding_month": "2026-09",
+  "market_data_asof": "2026-09-13",
+  "paper_action": {
+    "matched_control_weights": {
+      "DBC": 0.1,
+      "GLD": 0.1,
+      "IGV": 0.0625,
+      "ITA": 0.0625,
+      "ITB": 0.0625,
+      "IWM": 0.0625,
+      "KRE": 0.0625,
+      "QQQ": 0.1,
+      "SMH": 0.0625,
+      "SPY": 0.1,
+      "TLT": 0.1,
+      "XBI": 0.0625,
+      "XRT": 0.0625
+    },
+    "portfolio_authority": false,
+    "status": "DESCRIPTIVE_SHADOW_ONLY",
+    "target_weights": {
+      "DBC": 0.25,
+      "IGV": 0.16666666666666666,
+      "IWM": 0.16666666666666666,
+      "QQQ": 0.25,
+      "XBI": 0.16666666666666666
+    }
+  },
+  "program_id": "P160_FIXED_P46_P47_COMBINATION",
+  "schema": "research.p160_forward_observer_r1",
+  "scientific_forward_credit": false,
+  "signal": {
+    "p46_cross_asset_top2": [
+      "DBC",
+      "QQQ"
+    ],
+    "p46_factor_percentiles": {
+      "DBC": {
+        "drawdown_126d": 1.0,
+        "inverse_vol_126d": 0.4,
+        "momentum_6m": 1.0,
+        "trend_200d": 1.0
+      },
+      "GLD": {
+        "drawdown_126d": 0.2,
+        "inverse_vol_126d": 0.2,
+        "momentum_6m": 0.2,
+        "trend_200d": 0.4
+      },
+      "QQQ": {
+        "drawdown_126d": 0.6,
+        "inverse_vol_126d": 0.6,
+        "momentum_6m": 0.8,
+        "trend_200d": 0.8
+      },
+      "SPY": {
+        "drawdown_126d": 0.8,
+        "inverse_vol_126d": 0.8,
+        "momentum_6m": 0.6,
+        "trend_200d": 0.6
+      },
+      "TLT": {
+        "drawdown_126d": 0.4,
+        "inverse_vol_126d": 1.0,
+        "momentum_6m": 0.4,
+        "trend_200d": 0.2
+      }
+    },
+    "p46_scores": {
+      "DBC": 0.85,
+      "GLD": 0.25,
+      "QQQ": 0.7,
+      "SPY": 0.7,
+      "TLT": 0.5
+    },
+    "p47_factor_percentiles": {
+      "IGV": {
+        "drawdown_126d": 1.0,
+        "inverse_vol_126d": 0.25,
+        "momentum_6m": 0.875,
+        "trend_200d": 0.75
+      },
+      "ITA": {
+        "drawdown_126d": 0.25,
+        "inverse_vol_126d": 0.625,
+        "momentum_6m": 0.25,
+        "trend_200d": 0.25
+      },
+      "ITB": {
+        "drawdown_126d": 0.375,
+        "inverse_vol_126d": 0.375,
+        "momentum_6m": 0.125,
+        "trend_200d": 0.125
+      },
+      "IWM": {
+        "drawdown_126d": 0.875,
+        "inverse_vol_126d": 0.875,
+        "momentum_6m": 0.625,
+        "trend_200d": 0.625
+      },
+      "KRE": {
+        "drawdown_126d": 0.625,
+        "inverse_vol_126d": 1.0,
+        "momentum_6m": 0.5,
+        "trend_200d": 0.5
+      },
+      "SMH": {
+        "drawdown_126d": 0.125,
+        "inverse_vol_126d": 0.125,
+        "momentum_6m": 1.0,
+        "trend_200d": 0.875
+      },
+      "XBI": {
+        "drawdown_126d": 0.75,
+        "inverse_vol_126d": 0.5,
+        "momentum_6m": 0.75,
+        "trend_200d": 1.0
+      },
+      "XRT": {
+        "drawdown_126d": 0.5,
+        "inverse_vol_126d": 0.75,
+        "momentum_6m": 0.375,
+        "trend_200d": 0.375
+      }
+    },
+    "p47_industry_top3": [
+      "IWM",
+      "XBI",
+      "IGV"
+    ],
+    "p47_scores": {
+      "IGV": 0.71875,
+      "ITA": 0.34375,
+      "ITB": 0.25,
+      "IWM": 0.75,
+      "KRE": 0.65625,
+      "SMH": 0.53125,
+      "XBI": 0.75,
+      "XRT": 0.5
+    }
+  },
+  "signal_month_end": "2026-08-31",
+  "source": {
+    "panel_sha256": "785a900939ad863f28eb22157d899586b818e241e492ae5277266ba38d775a2d",
+    "provider": "Yahoo Finance via yfinance; research-only public data",
+    "universe": [
+      "SPY",
+      "QQQ",
+      "TLT",
+      "GLD",
+      "DBC",
+      "SMH",
+      "XBI",
+      "ITB",
+      "KRE",
+      "ITA",
+      "IGV",
+      "IWM",
+      "XRT"
+    ]
+  },
+  "state": "PRESTART_DESCRIPTIVE_SHADOW",
+  "timing": {
+    "decision_cadence": "monthly",
+    "execution_delay_sessions": 1,
+    "execution_rule": "execute only on the next common market session after the signal close",
+    "first_scientific_signal_boundary": "2026-09-30",
+    "holding_rule": "hold until the next monthly decision boundary, then execute the next target on the following common session",
+    "same_close_execution_prohibited": true,
+    "signal_rule": "rank from the last complete month-end close"
+  }
+}
