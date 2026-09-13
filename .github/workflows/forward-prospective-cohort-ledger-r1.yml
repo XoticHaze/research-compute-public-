@@ -1,0 +1,87 @@
+name: Forward Prospective Cohort Ledger R1
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '35 0 * * 2-6'
+  push:
+    branches:
+      - main
+      - 'assistant/forward-prospective-cohort-ledger-r1'
+    paths:
+      - 'research/forward_prospective_cohort_ledger_r1.py'
+      - 'research/current/native_adapters/*.json'
+      - '.github/workflows/forward-prospective-cohort-ledger-r1.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/forward_prospective_cohort_ledger_r1.py'
+      - '.github/workflows/forward-prospective-cohort-ledger-r1.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: forward-prospective-cohort-ledger-r1
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install fixed dependencies
+        run: python -m pip install --disable-pip-version-check pandas==2.2.3 yfinance==0.2.65
+      - name: Self-test prospective chronology
+        run: python research/forward_prospective_cohort_ledger_r1.py --self-test
+      - name: Resolve only matured prospective cohorts
+        run: |
+          python research/forward_prospective_cohort_ledger_r1.py \
+            --adapter-dir research/current/native_adapters \
+            --prior research/current/forward_prospective_cohort_ledger_r1.json \
+            --output artifacts/forward_prospective_cohort_ledger_r1.json
+      - name: Print compact resolution state
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('artifacts/forward_prospective_cohort_ledger_r1.json'))
+          print('summary=',json.dumps(x['summary'],sort_keys=True))
+          for c in x['cohorts']:
+              print(c['cohort_id'],c['status'],c.get('signal_date'))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forward-prospective-cohort-ledger-r1
+          path: artifacts/forward_prospective_cohort_ledger_r1.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Publish current ledger
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          target=research/current/forward_prospective_cohort_ledger_r1.json
+          mkdir -p research/current
+          cp artifacts/forward_prospective_cohort_ledger_r1.json "$target"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$target"
+          if git diff --cached --quiet; then
+            echo 'FORWARD_PROSPECTIVE_LEDGER_UNCHANGED=true'
+            exit 0
+          fi
+          git commit -m 'Forward: publish prospective cohort ledger'
+          for attempt in $(seq 1 5); do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then
+              echo "FORWARD_PROSPECTIVE_LEDGER_PUBLISHED attempt=${attempt}"
+              exit 0
+            fi
+            sleep $(( attempt * 2 ))
+          done
+          echo 'FORWARD_PROSPECTIVE_LEDGER_PUBLISH_FAILED' >&2
+          exit 31
