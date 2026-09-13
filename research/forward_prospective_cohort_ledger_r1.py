@@ -457,7 +457,8 @@ def self_test() -> None:
         fake[symbol] = pd.Series([100 + i + j for j in range(len(dates))], index=dates, dtype=float)
 
     def loader(symbol: str, _start: date, _end: date) -> pd.Series:
-        return fake[symbol]
+        series = fake[symbol]
+        return series[series.index <= pd.Timestamp(_end)]
 
     cohort = {
         "cohort_id": "HOMEBUILDERS:2026-01-02:test",
