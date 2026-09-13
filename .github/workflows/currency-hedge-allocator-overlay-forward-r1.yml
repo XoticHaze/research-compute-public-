@@ -1,0 +1,109 @@
+name: Currency Hedge Allocator Overlay Forward R1
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '58 23 * * 1-5'
+  push:
+    branches:
+      - main
+      - 'assistant/currency-hedge-allocator-overlay-forward-r1'
+    paths:
+      - 'research/currency_hedge_allocator_overlay_forward_r1.py'
+      - '.github/workflows/currency-hedge-allocator-overlay-forward-r1.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/currency_hedge_allocator_overlay_forward_r1.py'
+      - '.github/workflows/currency-hedge-allocator-overlay-forward-r1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - name: Prove frozen allocator-overlay contract
+        run: python research/currency_hedge_allocator_overlay_forward_r1.py --self-test
+      - name: Build current prospective observation
+        run: python research/currency_hedge_allocator_overlay_forward_r1.py
+      - name: Assert chronology and authority boundaries
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('artifacts/currency_hedge_allocator_overlay_forward_r1.json'))
+          assert x['schema']=='research.currency_hedge_allocator_overlay_forward_r1'
+          assert x['registered_at_date']=='2026-09-13'
+          assert x['scientific_forward_credit'] is True
+          assert x['boundaries']['allocation_authority'] is False
+          assert x['boundaries']['runtime_authority'] is False
+          assert x['boundaries']['broker_action'] is False
+          assert x['boundaries']['live_trading_change'] is False
+          assert x['contract']['funding_source']=='CASH_ONLY'
+          assert x['contract']['leverage'] is False
+          assert abs(sum(x['positions']['incumbent'].values())-1.0)<1e-9
+          assert abs(sum(x['positions']['hedged_challenger'].values())-1.0)<1e-9
+          if x['entry_date'] is None:
+              assert x['state']=='AWAITING_ENTRY_SESSION'
+              assert x['forward_sessions']==0
+              assert x['scorecard'] is None
+          else:
+              assert x['state']=='PROSPECTIVE_OPEN'
+              assert x['entry_date']>'2026-09-13'
+              assert x['forward_sessions']>=1
+              assert x['scorecard'] is not None
+          print('CURRENCY_HEDGE_ALLOCATOR_OVERLAY_BOUNDARIES=PASS state='+x['state'])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: currency-hedge-allocator-overlay-forward-r1
+          path: artifacts/currency_hedge_allocator_overlay_forward_r1.json
+          if-no-files-found: error
+          retention-days: 90
+
+  publish-current:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: observe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {contents: write}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/download-artifact@v4
+        with:
+          name: currency-hedge-allocator-overlay-forward-r1
+          path: /tmp/currency-hedge-allocator-overlay
+      - name: Publish current prospective challenger
+        run: |
+          set -euo pipefail
+          src=/tmp/currency-hedge-allocator-overlay/currency_hedge_allocator_overlay_forward_r1.json
+          test -f "$src"
+          python - "$src" <<'PY'
+          import json,sys
+          x=json.load(open(sys.argv[1]))
+          assert x['boundaries']['allocation_authority'] is False
+          assert x['boundaries']['broker_action'] is False
+          assert x['contract']['funding_source']=='CASH_ONLY'
+          assert x['contract']['leverage'] is False
+          print('CURRENCY_HEDGE_ALLOCATOR_OVERLAY_PUBLISH_GATE=PASS')
+          PY
+          git fetch origin main
+          git checkout -B currency-hedge-allocator-overlay-publish origin/main
+          mkdir -p research/current
+          cp "$src" research/current/currency_hedge_allocator_overlay_forward_r1.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add research/current/currency_hedge_allocator_overlay_forward_r1.json
+          if git diff --cached --quiet; then
+            echo 'CURRENT_CURRENCY_HEDGE_ALLOCATOR_OVERLAY_UNCHANGED=true'
+            exit 0
+          fi
+          git commit -m 'Forward: publish current currency-hedge allocator challenger'
+          git push origin HEAD:main
