@@ -1,0 +1,99 @@
+name: P160 Forward Observer R1
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 2 1 * *'
+  push:
+    branches:
+      - main
+      - 'assistant/p160-prospective-forward-r1'
+    paths:
+      - 'research/p160_forward_observer_r1.py'
+      - '.github/workflows/p160-forward-observer-r1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Verify frozen P160 source identity
+        run: |
+          set -euo pipefail
+          ref=c575e02aba939b283c0aa409d9bc21f000c0762c
+          path=research/p160_fixed_p46_p47_combo_r1.py
+          git cat-file -e "${ref}^{commit}" 2>/dev/null || git fetch --no-tags origin "$ref"
+          actual="$(git rev-parse "${ref}:${path}")"
+          test "$actual" = '89d8e4c004536310e588623203e8e23e8aac15d9'
+          echo "P160_FROZEN_SOURCE_IDENTITY=PASS ref=${ref} blob=${actual}"
+      - name: Install fixed observer dependencies
+        run: python -m pip install --disable-pip-version-check pandas==2.2.3 yfinance==0.2.65
+      - name: Prove chronology and frozen construction
+        run: python research/p160_forward_observer_r1.py --self-test
+      - name: Build current P160 observation
+        run: python research/p160_forward_observer_r1.py --output artifacts/p160_forward_observation_r1.json
+      - name: Assert prestart/prospective boundary semantics
+        run: |
+          python - <<'PY'
+          import json
+          x=json.load(open('artifacts/p160_forward_observation_r1.json'))
+          assert x['schema']=='research.p160_forward_observer_r1'
+          assert x['frozen_identity']['source_ref']=='c575e02aba939b283c0aa409d9bc21f000c0762c'
+          assert x['frozen_identity']['source_blob_sha']=='89d8e4c004536310e588623203e8e23e8aac15d9'
+          assert x['timing']['same_close_execution_prohibited'] is True
+          assert x['boundaries']['p47_standalone_reactivated'] is False
+          assert x['boundaries']['allocation_authority'] is False
+          if x['signal_month_end'] < '2026-09-30':
+              assert x['state']=='PRESTART_DESCRIPTIVE_SHADOW'
+              assert x['scientific_forward_credit'] is False
+              assert x['paper_action']['status']=='DESCRIPTIVE_SHADOW_ONLY'
+          else:
+              assert x['state']=='PROSPECTIVE_ELIGIBLE'
+              assert x['scientific_forward_credit'] is True
+              assert x['paper_action']['status']=='PROSPECTIVE_COHORT_READY'
+          assert abs(sum(x['paper_action']['target_weights'].values())-1.0)<1e-9
+          print('P160_FORWARD_BOUNDARY_ASSERTIONS=PASS')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p160-forward-observation-r1
+          path: artifacts/p160_forward_observation_r1.json
+          if-no-files-found: error
+          retention-days: 90
+
+  publish-current:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: observe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {contents: write}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/download-artifact@v4
+        with:
+          name: p160-forward-observation-r1
+          path: /tmp/p160-forward
+      - name: Publish current observation without granting authority
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout -B p160-forward-publish origin/main
+          mkdir -p research/current
+          cp /tmp/p160-forward/p160_forward_observation_r1.json research/current/p160_forward_observation_r1.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add research/current/p160_forward_observation_r1.json
+          if git diff --cached --quiet; then
+            echo 'P160_CURRENT_UNCHANGED=true'
+            exit 0
+          fi
+          git commit -m 'Forward: publish current P160 observation'
+          git push origin HEAD:main
