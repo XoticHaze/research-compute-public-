@@ -142,3 +142,21 @@ def test_fill_from_zero_baseline_uses_single_symbol_flatten(monkeypatch):
     assert out["cleanup"]["flatten_symbol_attempted"] is True
     assert out["cleanup"]["flatten_symbol_reported_ok"] is True
     assert out["cleanup"]["flatten_all_called"] is False
+
+
+def test_r2_workflow_is_paper_only_and_publishes_failure_receipt():
+    text = (ROOT / ".github" / "workflows" / "ibkr-remote-paper-runtime-rendezvous-r2.yml").read_text()
+    assert "paper_submit_proof" in text
+    assert "ENABLE_LIVE_TRADING=0" in text
+    assert "STRATEGY_IBKR_PAPER_ORDER_SUBMIT_ENABLED_13Z53=1" in text
+    assert "STRATEGY_IBKR_PAPER_CANCEL_ENABLED_13Z37=1" in text
+    assert "STRATEGY_IBKR_PAPER_GLOBAL_CANCEL_ENABLED_13Z37D=0" in text
+    assert "/strategy/ibkr-paper-global-cancel" not in text
+    assert "flatten_all" not in text
+    assert "actions/upload-artifact" not in text
+    assert "docker logs" not in text
+    publish = text.index("Publish sanitized deterministic receipt")
+    enforce = text.index("Enforce paper proof result after receipt publication")
+    destroy = text.index("Destroy private runtime material")
+    assert publish < enforce < destroy
+    assert text.count("if: always()") >= 3
