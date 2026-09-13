@@ -1,0 +1,49 @@
+name: Homebuilder SEC Quality Tilt R1
+
+on:
+  push:
+    branches:
+      - market-research/homebuilder-sec-quality-tilt-r1-execution-20260913
+    paths:
+      - "scripts/homebuilder_sec_quality_tilt_r1.py"
+      - "scripts/homebuilder_peer_relative_alpha_r1.py"
+      - ".github/workflows/homebuilder-sec-quality-tilt-r1.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11.16"
+      - name: Record frozen provenance
+        run: |
+          echo "public_head=${GITHUB_SHA}"
+          echo "frozen_scientific_input=46f83d460da35a985ecf96c9395280f4bf1a5eb9"
+          echo "source_probe_run=34684026346"
+          echo "source_probe_job=103527731517"
+          echo "experiment_id=HOMEBUILDER-SEC-QUALITY-TILT-R1"
+      - name: Install fixed dependencies
+        run: python -m pip install --disable-pip-version-check numpy pandas scikit-learn
+      - name: Compile frozen study
+        run: python -m py_compile scripts/homebuilder_peer_relative_alpha_r1.py scripts/homebuilder_sec_quality_tilt_r1.py
+      - name: Execute frozen filed-at Homebuilder quality tilt
+        run: python scripts/homebuilder_sec_quality_tilt_r1.py
+      - name: Preserve terminal receipt in job summary
+        if: always()
+        run: |
+          if [ -f research/results/homebuilder_sec_quality_tilt_r1.json ]; then
+            cat research/results/homebuilder_sec_quality_tilt_r1.json >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: homebuilder-sec-quality-tilt-r1-result
+          path: research/results/homebuilder_sec_quality_tilt_r1.json
+          if-no-files-found: error
+          retention-days: 30
