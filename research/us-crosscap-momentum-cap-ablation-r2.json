@@ -1,0 +1,19 @@
+{
+  "schema": "us_crosscap_momentum_cap_ablation_contract.v2",
+  "scientific_id": "US-CROSSCAP-MOMENTUM-CAP-ABLATION-R2-20260913",
+  "inherits_scientific_id": "US-CROSSCAP-MOMENTUM-FACTOR-R2-20260913",
+  "invalidated_predecessor": "US-CROSSCAP-MOMENTUM-CAP-ABLATION-R1-20260913",
+  "uncertainty_resolved": "whether corrected cross-cap factor evidence depends on one capitalization segment",
+  "candidate_sleeves": ["MTUM", "XMMO", "XSMO"],
+  "matched_control_sleeves": ["SPY", "IJH", "IJR"],
+  "evaluation_start_month": "2018-01",
+  "recent_start_month": "2021-01",
+  "return_construction": "completed month-end adjusted close divided by prior completed month-end adjusted close minus one",
+  "candidate_annual_cost_drag_bps": 20,
+  "gates": {"all_loco_full_after_cost_excess_gt":0.0,"all_loco_recent_after_cost_excess_gt":0.0,"min_loco_rolling_12m_positive_share":0.50,"min_loco_max_drawdown_penalty":-0.05},
+  "frozen_before_corrected_factor_result": true,
+  "no_parameter_rescue": true,
+  "forbidden_rescue": ["drop failing omission","reweight remaining sleeves","change windows","change cost drag","substitute controls","change gates after outcome"],
+  "research_only": true,
+  "live_trading_change": false
+}
