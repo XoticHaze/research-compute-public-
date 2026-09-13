@@ -60,7 +60,9 @@ INCUMBENT = _variant("incumbent")
 HEDGED = _variant("hedged")
 UNHEDGED = _variant("unhedged")
 SPY_OPPORTUNITY = _variant("spy")
-MARKET_SYMBOLS = tuple(sorted(set(INCUMBENT) | set(HEDGED) | set(UNHEDGED) | set(SPY_OPPORTUNITY) - {"CASH"}))
+MARKET_SYMBOLS = tuple(
+    sorted((set(INCUMBENT) | set(HEDGED) | set(UNHEDGED) | set(SPY_OPPORTUNITY)) - {"CASH"})
+)
 
 
 def _download(asof: date) -> tuple[pd.DataFrame, str]:
@@ -112,6 +114,8 @@ def _overlay_roundtrip_cost_bps() -> float:
 
 
 def _validate_contract() -> None:
+    if "CASH" in MARKET_SYMBOLS:
+        raise RuntimeError("cash accounting key leaked into market-data symbols")
     for name, weights in {
         "incumbent": INCUMBENT,
         "hedged": HEDGED,
@@ -259,6 +263,7 @@ def self_test() -> None:
     assert FROZEN_ALLOCATOR_COMMIT == "6a800febaf1232fe77cd377ab28cd70e380fb8e0"
     assert FROZEN_ALLOCATOR_BLOB == "c1af1ffa76aeb8db6538f0813721382e88be0151"
     assert FROZEN_CURRENCY_OBSERVER_BLOB == "0dd0311365dd5e147fd69ef9d35aa3dc92fd66fc"
+    assert "CASH" not in MARKET_SYMBOLS
     assert abs(_overlay_roundtrip_cost_bps() - 2.5) < 1e-12
     assert INCUMBENT["CASH"] == 0.1
     assert HEDGED["CASH"] == 0.05
