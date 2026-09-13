@@ -2,7 +2,7 @@ import hashlib
 import json
 from pathlib import Path
 
-PRODUCT_HEAD = "afbbd8441c1f42b6b27e323aa98d72d4373fd36b"
+PRODUCT_HEAD = "52eec5458f58af89b60b0f831e0b6a92b5552622"
 
 
 def reconcile(runtime_id, rows):
@@ -25,7 +25,7 @@ def context(runtime_id, reconciliation):
         "destination": "Experiment Review",
         "authority": "CONTEXT ONLY",
         "attributed_experiment": preferred or None,
-        "attribution_basis": "UNIQUE RUNTIME MATCH" if preferred else None,
+        "attribution_basis": "INVENTORY UNIQUE RUNTIME MATCH" if preferred else None,
     }
 
 
@@ -54,7 +54,7 @@ def main():
         "preferred_experiment_id": "exp-target",
     }
     assert contexts["unique_match"]["attributed_experiment"] == "exp-target"
-    assert contexts["unique_match"]["attribution_basis"] == "UNIQUE RUNTIME MATCH"
+    assert contexts["unique_match"]["attribution_basis"] == "INVENTORY UNIQUE RUNTIME MATCH"
     assert cases["multiple_match"]["state"] == "MATCH"
     assert cases["multiple_match"]["matches"] == ["exp-a", "exp-b"]
     assert cases["multiple_match"]["preferred_experiment_id"] == ""
