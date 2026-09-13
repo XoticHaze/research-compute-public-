@@ -1,0 +1,29 @@
+{
+  "schema": "public.research_experiment_contract.v1",
+  "experiment_id": "ES-DATED-TREND-TRANSPORT-R1",
+  "inherits_learning_ids": ["SLP-20260913-NQ-DATED-TREND-TRANSPORT-R1", "F1B-CROSSROOT-DATED-CORPUS-RELEASE"],
+  "uncertainty_resolved": "whether the NQ simple dated-contract trend rejection is root-specific or transports to ES",
+  "root": "ES",
+  "claim": "The identical fixed 20-active-session trend sign transports across ES dated contracts and beats the same-contract always-long opportunity over the next 5 active sessions after a normalized 10 bp round-trip cost.",
+  "frozen_design": {
+    "lookback_active_sessions": 20,
+    "hold_active_sessions": 5,
+    "normalized_round_trip_cost_bps": 10,
+    "active_row_filter": "volume>0 and open_interest>0",
+    "sampling": "non-overlapping within each dated contract",
+    "recent_contract_year_gte": 2015,
+    "matched_control": "always-long same contract/same decision windows/same normalized cost",
+    "continuous_series_constructed": false,
+    "roll_cutoff_selected": false,
+    "back_adjustment": false
+  },
+  "promotion_gates": [
+    "full mean excess > 0",
+    "recent mean excess > 0",
+    "positive excess in >50% of contracts",
+    "every leave-one-contract-year-out mean excess > 0",
+    "at least 250 events"
+  ],
+  "forbidden_parameter_rescue": true,
+  "authority": "SCIENTIFIC_EVIDENCE_ONLY"
+}
