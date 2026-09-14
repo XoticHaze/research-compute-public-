@@ -11,6 +11,7 @@ env:
   RECIPIENT_ROOT: rendezvous/recipients
   RESPONSE_ROOT: rendezvous/responses
   RECEIPT_ROOT: rendezvous/receipts
+  RETURN_ROOT: rendezvous/returns
 
 jobs:
   session-reconcile:
@@ -153,7 +154,7 @@ jobs:
           print(json.loads(Path(os.environ['RUNNER_TEMP'],'ibkr-runtime.json').read_text())['mode'])
           PY
           )"
-          test "$mode" = "session_reconcile" || { echo 'R1 admits session_reconcile only; paper submit stays fail-closed until the cleanup driver is promoted'; exit 44; }
+          test "$mode" = "session_reconcile" || { echo 'R1 admits session_reconcile only; paper submit stays fail-closed until cleanup driver promotion'; exit 44; }
 
       - name: Start ephemeral IB Gateway in read-only paper mode
         run: |
@@ -217,16 +218,64 @@ jobs:
           done
           test "$ready" = 1 || { echo 'MM-IBKR canonical control runtime did not become healthy'; exit 46; }
 
-      - name: Reconcile paper broker truth through canonical MM-IBKR surfaces
+      - name: Reconcile broker truth and prepare optional encrypted account return
         run: |
           set -euo pipefail
           python scripts/ibkr_remote_paper_session_v1.py \
             --base-url http://127.0.0.1:8001 \
             --runtime "$RUNNER_TEMP/ibkr-runtime.json" \
             --receipt "$RUNNER_TEMP/ibkr-remote-paper-receipt.json" \
+            --status-json "$RUNNER_TEMP/mmibkr-data/status/status.json" \
+            --encrypted-return-dir "$RUNNER_TEMP/ibkr-paper-account-return" \
             --run-id "$GITHUB_RUN_ID" \
             --job session-reconcile \
             --public-head "$GITHUB_SHA"
+
+      - name: Publish encrypted account return chunks then authenticated envelope
+        if: ${{ hashFiles(format('{0}/ibkr-paper-account-return/ibkr-paper-account-envelope.json', runner.temp)) != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64,json,os
+          from pathlib import Path
+          from urllib.error import HTTPError
+          from urllib.request import Request,urlopen
+
+          root=Path(os.environ['RUNNER_TEMP'],'ibkr-paper-account-return')
+          envelope=json.loads((root/'ibkr-paper-account-envelope.json').read_text())
+          if envelope.get('run_id') != os.environ['GITHUB_RUN_ID']:
+              raise SystemExit('encrypted return run id mismatch')
+          prefix=f"rendezvous/returns/{os.environ['GITHUB_RUN_ID']}/"
+          token=os.environ['GH_TOKEN']
+          repo=os.environ['GITHUB_REPOSITORY']
+          branch=os.environ['EXCHANGE_REF']
+
+          def put(path, raw, message):
+              if not path.startswith(prefix) or '..' in path.split('/'):
+                  raise SystemExit('encrypted return publish path rejected')
+              body=json.dumps({'message':message,'content':base64.b64encode(raw).decode('ascii'),'branch':branch}).encode()
+              req=Request(f"https://api.github.com/repos/{repo}/contents/{path}",data=body,headers={
+                  'Authorization':'Bearer '+token,
+                  'Accept':'application/vnd.github+json',
+                  'X-GitHub-Api-Version':'2022-11-28',
+                  'Content-Type':'application/json',
+              },method='PUT')
+              try:
+                  with urlopen(req,timeout=30) as response:
+                      if response.status not in (200,201):
+                          raise SystemExit('encrypted return publish failed')
+              except HTTPError as exc:
+                  raise SystemExit(f'encrypted return publish HTTP {exc.code}') from exc
+
+          for node in envelope.get('chunks') or []:
+              put(str(node['path']), (root/str(node['local_name'])).read_bytes(), 'rendezvous: publish encrypted IBKR account return chunk')
+          put(prefix+'ibkr-paper-account-envelope.json', (root/'ibkr-paper-account-envelope.json').read_bytes(), 'rendezvous: publish encrypted IBKR account return envelope')
+          print('IBKR_REMOTE_ENCRYPTED_RETURN_PUBLISHED=1')
+          print('IBKR_REMOTE_ENCRYPTED_RETURN_CHUNKS='+str(len(envelope.get('chunks') or [])))
+          print('IBKR_REMOTE_ENCRYPTED_RETURN_CIPHERTEXT_SHA256='+str(envelope.get('ciphertext_sha256')))
+          PY
 
       - name: Publish sanitized deterministic receipt
         env:
@@ -266,4 +315,5 @@ jobs:
             "$RUNNER_TEMP/ibkr-remote-recipient.json" \
             "$RUNNER_TEMP/ibkr-remote-envelope.json" \
             "$RUNNER_TEMP/ibkr-remote-ciphertext.bin" \
+            "$RUNNER_TEMP/ibkr-paper-account-return" \
             "$RUNNER_TEMP/ibkr-remote-paper-receipt.json"
