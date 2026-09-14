@@ -1,0 +1,64 @@
+name: senior-clo-implementation-transport-r2
+on:
+  push:
+    paths: ['.github/workflows/senior-clo-implementation-transport-r2.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -q yfinance==0.2.65 pandas==2.3.2 numpy==2.3.2
+      - name: Evaluate completed-month senior-CLO transport
+        shell: python
+        run: |
+          import json, math, hashlib
+          from pathlib import Path
+          import numpy as np
+          import pandas as pd
+          import yfinance as yf
+          EXPERIMENT_ID='MR-SENIOR-CLO-IMPLEMENTATION-TRANSPORT-R2-20260914'
+          INHERITS=['SLP-20260913-SENIOR-CLO-CURRENT-CORE-FIT-R1']
+          INVALIDATES_RUN=34794997670
+          TICKERS=['JAAA','CLOA','FLRN','HYG','BIL']; START='2023-01-01'; ENDPOINT_COST=0.0025; MIN_COMMON_MONTHS=36; HAC_LAG=3
+          px=yf.download(TICKERS,start=START,auto_adjust=True,progress=False,threads=False)['Close'].dropna(how='any')
+          raw_last=px.index.max(); current_month_end=raw_last.to_period('M').to_timestamp('M')
+          monthly=px.resample('ME').last().dropna(how='any')
+          if raw_last.normalize() < current_month_end.normalize(): monthly=monthly[monthly.index < current_month_end]
+          ret=monthly.pct_change().dropna(how='any')
+          def costed(s):
+              x=s.astype(float).copy(); x.iloc[0]-=ENDPOINT_COST; x.iloc[-1]-=ENDPOINT_COST; return x
+          def fit(candidate,q):
+              z=q[[candidate,'FLRN','HYG','BIL']].dropna().copy()
+              if len(z)<12: return {'months':int(len(z)),'alpha_ann_pp':None,'alpha_t_hac':None,'beta_flrn_excess':None,'beta_hyg_excess':None}
+              y=costed(z[candidate])-z.BIL; f1=z.FLRN-z.BIL; f2=z.HYG-z.BIL
+              X=np.column_stack([np.ones(len(z)),f1.to_numpy(float),f2.to_numpy(float)]); yy=y.to_numpy(float); inv=np.linalg.pinv(X.T@X); beta=inv@X.T@yy; u=yy-X@beta; k=X.shape[1]
+              S=np.zeros((k,k),float)
+              for t in range(len(z)):
+                  xt=X[t:t+1].T; S+=(u[t]**2)*(xt@xt.T)
+              L=min(HAC_LAG,len(z)-1)
+              for lag in range(1,L+1):
+                  w=1-lag/(L+1)
+                  for t in range(lag,len(z)):
+                      xt=X[t:t+1].T; xl=X[t-lag:t-lag+1].T; S+=w*u[t]*u[t-lag]*(xt@xl.T+xl@xt.T)
+              cov=inv@S@inv
+              if len(z)>k: cov*=len(z)/(len(z)-k)
+              se0=math.sqrt(max(float(cov[0,0]),0.0))
+              return {'months':int(len(z)),'alpha_ann_pp':float(beta[0]*1200),'alpha_t_hac':None if se0<=0 else float(beta[0]/se0),'beta_flrn_excess':float(beta[1]),'beta_hyg_excess':float(beta[2])}
+          if len(ret)<MIN_COMMON_MONTHS:
+              out={'experiment_id':EXPERIMENT_ID,'inherits_learning_ids':INHERITS,'invalidates_run_id':INVALIDATES_RUN,'decision':'UNSCORED_INSUFFICIENT_COMMON_HISTORY','common_months':int(len(ret)),'min_common_months':MIN_COMMON_MONTHS,'raw_last_observation':str(raw_last.date()),'last_completed_month':None if len(ret)==0 else str(ret.index[-1].date())}
+          else:
+              windows={'full_common':ret,'2024_plus':ret.loc['2024-01-01':],'2025_plus':ret.loc['2025-01-01':],'block_2023_2024':ret.loc[:'2024-12-31'],'block_2025_plus':ret.loc['2025-01-01':]}
+              results={c:{w:fit(c,q) for w,q in windows.items()} for c in ['JAAA','CLOA']}; c=results['CLOA']; j=results['JAAA']
+              gates={'coverage_ge_36_months':len(ret)>=MIN_COMMON_MONTHS,'cloa_full_alpha_gt_0':c['full_common']['alpha_ann_pp']>0,'cloa_full_hac_t_ge_1':c['full_common']['alpha_t_hac']>=1.0,'cloa_2024_plus_alpha_gt_0':c['2024_plus']['alpha_ann_pp']>0,'cloa_2025_plus_alpha_gt_0':c['2025_plus']['alpha_ann_pp']>0,'cloa_both_disjoint_blocks_positive':all(c[k]['alpha_ann_pp']>0 for k in ['block_2023_2024','block_2025_plus']),'jaaa_same_window_alpha_gt_0':j['full_common']['alpha_ann_pp']>0}
+              out={'experiment_id':EXPERIMENT_ID,'inherits_learning_ids':INHERITS,'invalidates_run_id':INVALIDATES_RUN,'uncertainty_resolved':'whether the independently supported JAAA structured-credit effect transports to a distinct AAA-CLO implementation rather than remaining product/manager-specific','chronology_correction':'exclude partial current calendar month before monthly-return construction','claim':'Using the inherited FLRN-BIL and HYG-BIL factors and fixed 25bp endpoint friction, CLOA retains positive factor-adjusted alpha across frozen common/recent/disjoint chronology while JAAA remains positive on the identical common sample.','frozen':{'target':'CLOA','reference_survivor':'JAAA','controls':['FLRN-BIL','HYG-BIL'],'start':START,'endpoint_cost_each':ENDPOINT_COST,'min_common_months':MIN_COMMON_MONTHS,'hac_lag':HAC_LAG,'no_weight_optimization':True},'raw_last_observation':str(raw_last.date()),'common_months':int(len(ret)),'first_month':str(ret.index[0].date()),'last_completed_month':str(ret.index[-1].date()),'results':results,'promotion_gates':gates,'decision':'SUPPORT_SENIOR_CLO_FAMILY_TRANSPORT' if all(gates.values()) else 'NARROW_TO_JAAA_IMPLEMENTATION_NO_PARAMETER_RESCUE'}
+          Path('result.json').write_text(json.dumps(out,sort_keys=True,indent=2)); print('RESULT_SHA256='+hashlib.sha256(Path('result.json').read_bytes()).hexdigest()); print('RESULT_JSON='+json.dumps(out,sort_keys=True))
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: senior-clo-implementation-transport-r2
+          path: result.json
+          if-no-files-found: error
