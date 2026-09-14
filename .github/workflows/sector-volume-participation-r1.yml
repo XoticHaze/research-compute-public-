@@ -1,0 +1,44 @@
+name: sector-volume-participation-r1
+on:
+  push:
+    paths: ['.github/workflows/sector-volume-participation-r1.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -q yfinance pandas numpy
+      - name: Evaluate chronology-safe sector dollar-volume participation state
+        shell: python
+        run: |
+          import json, math
+          import numpy as np
+          import pandas as pd
+          import yfinance as yf
+          EXPERIMENT_ID='MR-SECTOR-VOLUME-PARTICIPATION-R1-20260914'
+          SECTORS=['XLB','XLE','XLF','XLI','XLK','XLP','XLU','XLV','XLY']; TICKERS=SECTORS+['SPY']
+          START='2000-01-01'; FAST=21; SLOW=126; HISTORY_DECISIONS=12; HOLDING=21; PERIOD_COST=0.0010; RECENT_START='2022-01-01'
+          raw=yf.download(TICKERS,start=START,auto_adjust=True,progress=False); px=raw['Close'].dropna(); vol=raw['Volume'].reindex(px.index); dv=px[SECTORS]*vol[SECTORS]; dates=list(px.index); states=[]
+          for i in range(SLOW,len(dates)-HOLDING,HOLDING):
+              d=dates[i]; end=dates[i+HOLDING]
+              fast=dv.iloc[i-FAST+1:i+1].mean(); slow=dv.iloc[i-SLOW+1:i+1].mean(); participation=float((fast>slow).mean())
+              ew=float((px.loc[end,SECTORS]/px.loc[d,SECTORS]-1).mean()); spy=float(px.loc[end,'SPY']/px.loc[d,'SPY']-1)
+              states.append({'date':str(d.date()),'participation':participation,'ew':ew,'spy':spy})
+          base=pd.DataFrame(states); rec=[]
+          for i in range(HISTORY_DECISIONS,len(base)):
+              row=base.iloc[i]; threshold=float(base.iloc[i-HISTORY_DECISIONS:i]['participation'].median()); broad=float(row['participation'])>threshold
+              # Hypothesis: broad sector dollar-volume acceleration signals participation broadening that favors equal-weight sectors; narrow participation favors cap-weight SPY.
+              model=(float(row.ew) if broad else float(row.spy))-PERIOD_COST; inverse=(float(row.spy) if broad else float(row.ew))-PERIOD_COST; matched=.5*float(row.ew)+.5*float(row.spy)-PERIOD_COST
+              rec.append({'date':row.date,'broad_volume':bool(broad),'model':model,'inverse':inverse,'matched':matched,'sector_ew':float(row.ew)-PERIOD_COST,'spy':float(row.spy)-PERIOD_COST})
+          q=pd.DataFrame(rec); q['year']=pd.to_datetime(q.date).dt.year
+          def ann(x): x=np.asarray(x,float); return float(np.prod(1+x)**(252/(HOLDING*len(x)))-1)
+          def maxdd(x): w=np.cumprod(1+np.asarray(x,float)); return float(np.min(w/np.maximum.accumulate(w)-1))
+          years=sorted(q.year.unique()); wins_matched=wins_spy=beats_inverse=0; yr=[]
+          for y in years:
+              z=q[q.year==y]; a,b,c,d=ann(z.model),ann(z.matched),ann(z.spy),ann(z.inverse); wins_matched+=a>b; wins_spy+=a>c; beats_inverse+=a>d; yr.append({'year':int(y),'model':a,'matched':b,'spy':c,'inverse':d})
+          recent=q[pd.to_datetime(q.date)>=RECENT_START]
+          out={'experiment_id':EXPERIMENT_ID,'claim':'Broad chronology-safe sector dollar-volume participation predicts 21-session equal-weight sector relative strength versus SPY; narrow participation favors SPY, creating durable after-cost excess versus a static 50/50 matched control and inverse mapping','frozen':{'sectors':SECTORS,'start':START,'fast_dollar_volume_sessions':FAST,'slow_dollar_volume_sessions':SLOW,'history_decisions_for_median':HISTORY_DECISIONS,'holding_sessions':HOLDING,'period_cost':PERIOD_COST,'recent_start':RECENT_START},'periods':int(len(q)),'years':int(len(years)),'broad_volume_fraction':float(q.broad_volume.mean()),'model_cagr':ann(q.model),'matched_cagr':ann(q.matched),'sector_ew_cagr':ann(q.sector_ew),'spy_cagr':ann(q.spy),'inverse_cagr':ann(q.inverse),'excess_vs_matched_pp':100*(ann(q.model)-ann(q.matched)),'excess_vs_spy_pp':100*(ann(q.model)-ann(q.spy)),'model_minus_inverse_pp':100*(ann(q.model)-ann(q.inverse)),'recent_excess_vs_matched_pp':100*(ann(recent.model)-ann(recent.matched)),'calendar_wins_vs_matched':int(wins_matched),'calendar_wins_vs_spy':int(wins_spy),'calendar_beats_inverse':int(beats_inverse),'max_drawdown_model':maxdd(q.model),'max_drawdown_matched':maxdd(q.matched),'max_drawdown_spy':maxdd(q.spy),'year_rows':yr}
+          gate=math.ceil(.6*len(years)); out['promotion_gates']={'full_excess_vs_matched_gt_1pp':out['excess_vs_matched_pp']>1,'full_excess_vs_spy_gt_0':out['excess_vs_spy_pp']>0,'recent_excess_vs_matched_gt_0':out['recent_excess_vs_matched_pp']>0,'calendar_wins_vs_matched_ge_60pct':wins_matched>=gate,'inverse_mapping_control':out['model_minus_inverse_pp']>0,'drawdown_not_worse_than_matched':out['max_drawdown_model']>=out['max_drawdown_matched']}; out['decision']='PROMOTE_MECHANISM_FOR_INDEPENDENT_VALIDATION' if all(out['promotion_gates'].values()) else 'REJECT_NO_PARAMETER_RESCUE'; print('RESULT_JSON='+json.dumps(out,sort_keys=True))
