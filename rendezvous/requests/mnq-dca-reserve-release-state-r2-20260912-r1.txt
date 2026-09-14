@@ -1,0 +1,11 @@
+workload=mnq-dca-reserve-release-state-r2-v1
+parent=mnq-dca-reserve-release-r1-terminal-rejection
+scientific_change=cc75_same_regime_normalized_six_feature_state_distance_only
+K=8
+minimum_profitable_comparables=5
+fixed_budget_contracts=4
+release_contracts=1
+capture_gate=0.50
+drawdown_ratio_gate=0.70
+positive_fold_gate=2_of_3
+science=frozen_before_public_execution
