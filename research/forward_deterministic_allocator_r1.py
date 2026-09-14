@@ -152,34 +152,44 @@ def build(scoreboard: dict[str, Any], prior: dict[str, Any] | None = None) -> di
             "reason": "no current prospectively eligible native semiconductor result",
         })
 
-    # Homebuilders: deterministic equal-weight family sizing is the temporary
-    # portfolio-expression rule; the native model still owns admission and duration.
+    # Homebuilders is an observation/adaptive-duration child, not a sizing book.
+    # Admitted symbols remain useful decision evidence, but must not be converted
+    # into portfolio weights until a separate frozen sizing contract is explicitly
+    # introduced. This is deliberately fail-closed: freshness or positive forecasts
+    # alone never create allocator authority.
     hb = _lane(scoreboard, "HOMEBUILDERS") or {}
     hb_signal = hb.get("signal") or {}
     admitted = [str(x) for x in (hb_signal.get("admitted_symbols") or [])]
     horizons = hb_signal.get("duration_horizon_sessions_by_symbol") or {}
+    hb_action = hb.get("paper_action") or {}
+    hb_status = str(hb_action.get("status") or "")
+    hb_validation = hb.get("validation") or {}
+    hb_grade = str(hb.get("validation_grade") or "")
+    sleeve_actions.append({
+        "sleeve": "HOMEBUILDERS",
+        "action": "WAIT",
+        "symbols": admitted,
+        "family_weight": 0.0,
+        "per_name_weight": 0.0,
+        "native_horizons_sessions": {s: horizons.get(s) for s in admitted},
+        "reason": (
+            "observation/adaptive-duration evidence only; no frozen Homebuilders sizing contract"
+            if admitted
+            else "no currently admitted native homebuilder opportunity"
+        ),
+        "native_paper_action_status": hb_status or None,
+        "validation_grade": hb_grade or None,
+        "historical_gate_pass": hb_validation.get("historical_gate_pass"),
+    })
     if admitted:
-        tactical_room = max(0.0, TACTICAL_BUDGET - tactical_used)
-        family_size = min(0.05, NON_CORE_FAMILY_CAP, tactical_room)
-        per_name = min(SINGLE_NAME_CAP, family_size / len(admitted)) if admitted else 0.0
-        admitted_family = per_name * len(admitted)
-        for symbol in admitted:
-            final[symbol] = final.get(symbol, 0.0) + per_name
-        tactical_used += admitted_family
-        sleeve_actions.append({
-            "sleeve": "HOMEBUILDERS",
-            "action": "ADD" if admitted_family > EPS else "WAIT",
-            "symbols": admitted,
-            "family_weight": round(admitted_family, 10),
-            "per_name_weight": round(per_name, 10),
-            "native_horizons_sessions": {s: horizons.get(s) for s in admitted},
-            "reason": "temporary deterministic equal-weight sizing; native model retains admission and 5/60 duration authority",
-        })
-    else:
-        sleeve_actions.append({
-            "sleeve": "HOMEBUILDERS",
-            "action": "WAIT",
-            "reason": "no currently admitted native homebuilder opportunity",
+        constraints.append({
+            "rule": "homebuilders_sizing_authority",
+            "admitted_symbols": admitted,
+            "native_paper_action_status": hb_status or None,
+            "validation_grade": hb_grade or None,
+            "historical_gate_pass": hb_validation.get("historical_gate_pass"),
+            "admitted_weight": 0.0,
+            "result": "fail_closed_no_frozen_sizing_contract",
         })
 
     # Explicit non-authorities.
@@ -195,7 +205,7 @@ def build(scoreboard: dict[str, Any], prior: dict[str, Any] | None = None) -> di
         "sleeve": "P46",
         "action": "NO_ACTION",
         "target_weight": 0.0,
-        "reason": "context-only while prospective scientific credit remains shakedown",
+        "reason": "context-only while prospective scientific forward credit remains shakedown",
     })
     sleeve_actions.append({
         "sleeve": "P558_KMLM_SUBSTITUTION",
@@ -285,11 +295,22 @@ def _self_test() -> None:
             {
                 "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
                 "validation_grade": "PROSPECTIVE_SIGNAL_READY",
-                "signal": {"positive_breadth": 12 / 13},
+                "signal": {"positive_breadth": 1.0},
             },
             {
                 "program_id": "HOMEBUILDERS",
-                "signal": {"admitted_symbols": ["CCS", "MHO"], "duration_horizon_sessions_by_symbol": {"CCS": 5, "MHO": 60}},
+                "validation_grade": "PROSPECTIVE_DIAGNOSTIC",
+                "validation": {
+                    "historical_gate_pass": False,
+                    "state": "PROSPECTIVE_DIAGNOSTIC_NO_PROMOTION",
+                },
+                "paper_action": {
+                    "status": "OBSERVATION_ONLY_NO_FROZEN_SIZING_AUTHORITY",
+                },
+                "signal": {
+                    "admitted_symbols": ["CCS", "MHO"],
+                    "duration_horizon_sessions_by_symbol": {"CCS": 5, "MHO": 60},
+                },
             },
             {"program_id": "GENERALIZED_LARGECAP_RIDGE", "signal": {"positive_symbols": ["CAT"]}},
         ],
@@ -298,12 +319,18 @@ def _self_test() -> None:
     w = x["final_target_weights"]
     assert abs(sum(w.values()) - 1.0) < 1e-8
     assert abs(w["SOXX"] - 0.2333333334) < 1e-8
-    assert x["sector_exposure"]["semiconductor"] <= SECTOR_CAP + EPS
-    assert 0 < w.get("SMH", 0) <= NEW_COHORT_CAP
-    assert abs(w["CCS"] - 0.025) < 1e-8 and abs(w["MHO"] - 0.025) < 1e-8
-    assert x["tactical_used"] <= TACTICAL_BUDGET + EPS
-    assert w["CASH"] >= CASH_FLOOR - EPS
-    assert all(row["target_weight"] <= SINGLE_NAME_CAP + EPS for row in x["position_actions_vs_prior_allocator_target"] if row["symbol"] in {"CCS", "MHO"})
+    assert abs(x["sector_exposure"]["semiconductor"] - SECTOR_CAP) < 1e-8
+    assert abs(w.get("SMH", 0) - NEW_COHORT_CAP) < 1e-8
+    assert "CCS" not in w and "MHO" not in w
+    assert abs(x["tactical_used"] - 0.05) < 1e-8
+    assert abs(x["unused_tactical_budget"] - 0.10) < 1e-8
+    assert abs(w["CASH"] - 0.15) < 1e-8
+    hb_action = next(row for row in x["sleeve_actions"] if row["sleeve"] == "HOMEBUILDERS")
+    assert hb_action["action"] == "WAIT"
+    assert hb_action["family_weight"] == 0.0
+    hb_guard = next(row for row in x["constraints_applied"] if row["rule"] == "homebuilders_sizing_authority")
+    assert hb_guard["result"] == "fail_closed_no_frozen_sizing_contract"
+    assert hb_guard["admitted_weight"] == 0.0
 
     missing_native = {
         "schema": scoreboard["schema"],
