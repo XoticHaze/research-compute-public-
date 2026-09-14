@@ -67,7 +67,6 @@ def decrypt_credentials(envelope_path: Path, private_key_path: Path, expected_ru
         "sender_public_b64",
         "nonce_b64",
         "ciphertext_b64",
-        "plaintext_sha256",
     }
     if set(envelope) != required:
         raise RuntimeError("IBKR envelope field set mismatch")
@@ -99,8 +98,6 @@ def decrypt_credentials(envelope_path: Path, private_key_path: Path, expected_ru
         _b64d(envelope["ciphertext_b64"]),
         aad,
     )
-    if hashlib.sha256(plaintext).hexdigest() != envelope["plaintext_sha256"]:
-        raise RuntimeError("IBKR decrypted payload digest mismatch")
 
     payload = json.loads(plaintext.decode("utf-8"))
     if set(payload) != {"schema", "username", "password"}:
