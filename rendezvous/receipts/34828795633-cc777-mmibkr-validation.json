@@ -1,0 +1,19 @@
+{
+  "boundaries": {
+    "broker_called": false,
+    "live_trading_change": false,
+    "paper_order_submitted": false,
+    "private_source_published_plaintext": false
+  },
+  "checks": {
+    "errors": 0,
+    "failures": 0,
+    "skipped": 0,
+    "tests": 0
+  },
+  "ok": false,
+  "run_id": "34828795633",
+  "schema": "cc777-mmibkr-public-validation-receipt-v1",
+  "source_head": null,
+  "status": "EXACT_PRIVATE_RUNTIME_VALIDATION_FAILED"
+}
