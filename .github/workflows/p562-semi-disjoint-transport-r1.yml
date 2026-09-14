@@ -1,0 +1,53 @@
+name: p562-semi-disjoint-transport-r1
+on:
+  push:
+    paths: ['.github/workflows/p562-semi-disjoint-transport-r1.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -q yfinance==0.2.65 pandas==2.3.2 numpy==2.3.2
+      - name: Evaluate frozen disjoint semiconductor transport
+        shell: python
+        run: |
+          import json, math, hashlib
+          from pathlib import Path
+          import pandas as pd, numpy as np, yfinance as yf
+          EXPERIMENT_ID='MR-P562-DISJOINT-SEMICONDUCTOR-TRANSPORT-R1-20260914'
+          PARENT='P562'; ORIGINAL=['ADI','AMD','AMAT','AVGO','KLAC','LRCX','MCHP','MRVL','MU','NVDA','QCOM','TXN']
+          NAMES=['ON','MPWR','SWKS','NXPI','CRUS','ACLS','ENTG','TER','UCTT','FORM','SLAB','MTSI']
+          END='2026-09-11'; COST_BPS=10.0; FOLDS=[('2011-01-01','2015-12-31'),('2016-01-01','2020-12-31'),('2021-01-01',END)]
+          assert not (set(ORIGINAL)&set(NAMES))
+          tickers=NAMES+['SMH']; raw=yf.download(tickers,start='2009-01-01',end='2026-09-12',auto_adjust=True,progress=False,group_by='column')
+          c=raw['Close'] if isinstance(raw.columns,pd.MultiIndex) else raw; c=c[tickers].copy(); r=c.pct_change(fill_method=None)
+          m=c[NAMES].resample('ME').last(); score=m.shift(1)/m.shift(12)-1
+          ranks=score.rank(axis=1,ascending=False,method='first',na_option='bottom'); eligible=score.notna(); picks=(ranks<=3)&eligible
+          w=picks.astype(float).div(picks.sum(axis=1).replace(0,np.nan),axis=0).fillna(0); dw=w.reindex(r.index,method='ffill').shift(1).fillna(0)
+          name_r=r[NAMES]; active_ret=name_r.where(name_r.notna()); prev=dw.shift(1).fillna(0); turn=(dw-prev).abs().sum(axis=1)/2
+          strat=(dw*active_ret.fillna(0)).sum(axis=1)-turn*(COST_BPS/10000)
+          eq=active_ret.mean(axis=1,skipna=True); d=pd.DataFrame({'strategy':strat,'equal_universe':eq,'SMH':r['SMH'],'turnover':turn,'names':(dw>0).sum(axis=1),'eligible':name_r.notna().sum(axis=1)}); d=d.loc[(dw.sum(axis=1)>0)&d.SMH.notna()&d.equal_universe.notna()]
+          def cagr(x):
+              x=x.dropna();
+              if len(x)<2:return None
+              y=(x.index[-1]-x.index[0]).days/365.25; wealth=float((1+x).prod()); return None if y<=0 or wealth<=0 else wealth**(1/y)-1
+          def mdd(x):
+              e=(1+x.dropna()).cumprod(); return None if len(e)==0 else float((e/e.cummax()-1).min())
+          def ev(a,b):
+              z=d.loc[a:b]; sc=cagr(z.strategy); ec=cagr(z.equal_universe); mc=cagr(z.SMH)
+              return {'days':int(len(z)),'strategy_cagr':sc,'equal_universe_cagr':ec,'smh_cagr':mc,'matched_excess_cagr':None if sc is None or ec is None else sc-ec,'smh_excess_cagr':None if sc is None or mc is None else sc-mc,'strategy_max_drawdown':mdd(z.strategy),'turnover_units':float(z.turnover.sum()),'mean_selected_names':float(z.names.mean()) if len(z) else None,'mean_available_names':float(z.eligible.mean()) if len(z) else None}
+          overall=ev('2011-01-01',END); folds=[ev(*f) for f in FOLDS]; ep=sum(x['matched_excess_cagr'] is not None and x['matched_excess_cagr']>0 for x in folds); sp=sum(x['smh_excess_cagr'] is not None and x['smh_excess_cagr']>0 for x in folds)
+          coverage=all(x['days']>=500 and (x['mean_available_names'] or 0)>=8 for x in folds)
+          gates={'disjoint_universe':True,'coverage_adequate':coverage,'aggregate_excess_vs_equal_gt_0':overall['matched_excess_cagr'] is not None and overall['matched_excess_cagr']>0,'aggregate_excess_vs_smh_gt_0':overall['smh_excess_cagr'] is not None and overall['smh_excess_cagr']>0,'positive_folds_vs_equal_ge_2':ep>=2,'positive_folds_vs_smh_ge_2':sp>=2}
+          out={'experiment_id':EXPERIMENT_ID,'parent_id':PARENT,'inherits_scientific_event':'2026-09-11T095041Z_market-research_p562_semi_ticker_momentum_supported_requires_validation','uncertainty_resolved':'whether the frozen top-3 monthly 12-1 rule transports to a completely disjoint fixed liquid semiconductor cohort, reducing dependence on the original present-day universe','claim':'The exact P562 top-3 monthly 12-1 selector with 10bp one-way turnover cost creates durable excess versus both an equal-weight same-name control and SMH in a disjoint semiconductor cohort.','frozen_contract':{'original_universe':ORIGINAL,'disjoint_universe':NAMES,'selection':'top 3 by trailing 12-month return excluding latest month','rebalance':'monthly, applied following session','cost_bps_per_one_way_turnover':COST_BPS,'controls':['equal-weight same disjoint universe','SMH'],'folds':FOLDS,'gate':'positive aggregate excess vs both controls and >=2/3 positive folds vs each, with >=8 mean available names and >=500 days per fold','no_parameter_rescue':True},'overall':overall,'folds':folds,'positive_fold_count_vs_equal_universe':ep,'positive_fold_count_vs_smh':sp,'promotion_gates':gates,'decision':'P562_DISJOINT_TRANSPORT_SUPPORTED' if all(gates.values()) else ('UNSCORED_COVERAGE_FAILURE' if not coverage else 'P562_DISJOINT_TRANSPORT_REJECT_NO_RESCUE')}
+          Path('result.json').write_text(json.dumps(out,sort_keys=True,indent=2)); print('RESULT_SHA256='+hashlib.sha256(Path('result.json').read_bytes()).hexdigest()); print('RESULT_JSON='+json.dumps(out,sort_keys=True))
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p562-semi-disjoint-transport-r1
+          path: result.json
+          if-no-files-found: error
