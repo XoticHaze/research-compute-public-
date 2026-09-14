@@ -26,7 +26,7 @@ jobs:
               d=dates[i]; end=dates[i+HOLDING]; c=dr.iloc[i-SIGNAL_LOOKBACK+1:i+1].corr().values; avg_corr=float(c[np.triu_indices(len(SECTORS),1)].mean()); ew=float((px.loc[end,SECTORS]/px.loc[d,SECTORS]-1).mean()); spy=float(px.loc[end,'SPY']/px.loc[d,'SPY']-1); raw.append({'date':str(d.date()),'corr':avg_corr,'ew':ew,'spy':spy})
           base=pd.DataFrame(raw); rec=[]
           for i in range(HISTORY_DECISIONS,len(base)):
-              row=base.iloc[i]; threshold=float(base.iloc[i-HISTORY_DECISIONS:i].corr.median()); low=float(row.corr)<threshold
+              row=base.iloc[i]; threshold=float(base.iloc[i-HISTORY_DECISIONS:i]['corr'].median()); low=float(row['corr'])<threshold
               # Hypothesis fixed before result: low sector correlation improves diversification/relative-value opportunity for equal-weight sectors; high correlation favors cap-weight SPY.
               model=(float(row.ew) if low else float(row.spy))-PERIOD_COST; inverse=(float(row.spy) if low else float(row.ew))-PERIOD_COST; matched=.5*float(row.ew)+.5*float(row.spy)-PERIOD_COST
               rec.append({'date':row.date,'low_corr':bool(low),'model':model,'inverse':inverse,'matched':matched,'sector_ew':float(row.ew)-PERIOD_COST,'spy':float(row.spy)-PERIOD_COST})
