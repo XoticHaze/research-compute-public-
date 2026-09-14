@@ -1,0 +1,51 @@
+name: commodity-inflation-association-r1
+on:
+  push:
+    paths: ['.github/workflows/commodity-inflation-association-r1.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -q yfinance pandas numpy requests
+      - name: Execute frozen COMT inflation-regime association
+        shell: python
+        run: |
+          import json, requests
+          import numpy as np
+          import pandas as pd
+          import yfinance as yf
+          EXPERIMENT_ID='CC-RF-COMMODITY-INFLATION-ASSOCIATION-001'
+          SYMBOLS=['COMT','DBC','BCI']; EVAL_START='2018-01-01'; THRESHOLD=.03; SIGNAL_LAG_MONTHS=1; COST_ANNUAL=.0010
+          G={'min_high_inflation_mean_relative_monthly':.001,'min_high_minus_low_relative_monthly':.001,'min_positive_high_inflation_fraction':.55,'min_positive_calendar_year_fraction':.60}
+          # Exact source fallback only: same CPI series, official BLS public API, no scientific parameter change.
+          url='https://api.bls.gov/publicAPI/v2/timeseries/data/'
+          payload={'seriesid':['CUSR0000SA0'],'startyear':'2016','endyear':'2026'}
+          resp=requests.post(url,json=payload,timeout=45,headers={'User-Agent':'Mozilla/5.0 research-source-audit'})
+          resp.raise_for_status(); obj=resp.json()
+          if obj.get('status')!='REQUEST_SUCCEEDED': raise RuntimeError('BLS API status '+str(obj.get('status'))+' '+str(obj.get('message')))
+          rows=[]
+          for x in obj['Results']['series'][0]['data']:
+              p=x['period']
+              if p.startswith('M') and p!='M13': rows.append((pd.Timestamp(f"{x['year']}-{p[1:]}-01"),float(x['value'])))
+          cpi=pd.Series(dict(rows)).sort_index(); yoy=cpi.pct_change(12)
+          if len(cpi[cpi.index>=pd.Timestamp('2016-01-01')])<120: raise RuntimeError('insufficient CPI history')
+          px=yf.download(SYMBOLS,start='2017-01-01',auto_adjust=True,progress=False)['Close'].dropna(); monthly=px.resample('ME').last().pct_change().dropna(); monthly.index=monthly.index.to_period('M').to_timestamp()
+          yoy.index=yoy.index.to_period('M').to_timestamp()
+          # One-month information lag: CPI observation month m conditions return month m+1.
+          sig=yoy.shift(1).reindex(monthly.index)
+          q=monthly.loc[monthly.index>=pd.Timestamp(EVAL_START)].copy(); q['inflation_yoy']=sig.loc[q.index]; q=q.dropna()
+          cost=COST_ANNUAL/12; q['EX_DBC']=q['COMT']-cost-q['DBC']; q['EX_BCI']=q['COMT']-cost-q['BCI']; q['HIGH']=q['inflation_yoy']>=THRESHOLD
+          if q.HIGH.sum()<12 or (~q.HIGH).sum()<12: raise RuntimeError('insufficient high/low inflation observations')
+          metrics={}; checks={}
+          for label,col in [('DBC','EX_DBC'),('BCI','EX_BCI')]:
+              hi=q.loc[q.HIGH,col]; lo=q.loc[~q.HIGH,col]
+              metrics[label]={'high_mean':float(hi.mean()),'low_mean':float(lo.mean()),'high_minus_low':float(hi.mean()-lo.mean()),'positive_high_fraction':float((hi>0).mean())}
+              yearly=q.loc[q.HIGH].groupby(q.loc[q.HIGH].index.year)[col].apply(lambda x: float(np.prod(1+x)-1))
+              metrics[label]['positive_calendar_year_fraction']=float((yearly>0).mean()); metrics[label]['high_years']=int(len(yearly))
+              checks[label]={'high_mean':metrics[label]['high_mean']>=G['min_high_inflation_mean_relative_monthly'],'high_minus_low':metrics[label]['high_minus_low']>=G['min_high_minus_low_relative_monthly'],'positive_high_fraction':metrics[label]['positive_high_fraction']>=G['min_positive_high_inflation_fraction'],'calendar_year_fraction':metrics[label]['positive_calendar_year_fraction']>=G['min_positive_calendar_year_fraction']}
+          out={'schema':'commodity_inflation_association_result.v1','experiment_id':EXPERIMENT_ID,'inherits_learning_ids':['SLP-20260913-COMT-COMMODITY-IMPLEMENTATION-R1'],'source':'BLS public API v2 CUSR0000SA0','contract':{'symbols':SYMBOLS,'evaluation_start':EVAL_START,'inflation_series':'CPIAUCSL_equivalent_CUSR0000SA0','inflation_threshold_yoy':THRESHOLD,'signal_lag_months':SIGNAL_LAG_MONTHS,'inherited_incremental_comt_cost_bps_per_year':10,'gates':G,'forbidden_rescue':['change 3% threshold','change one-month information lag','move evaluation date','exclude weak years','change product controls after observing result']},'observations':int(len(q)),'high_inflation_months':int(q.HIGH.sum()),'low_inflation_months':int((~q.HIGH).sum()),'metrics':metrics,'checks':checks,'decision':'PROMOTE_INFLATION_REGIME_MECHANISM' if all(all(v.values()) for v in checks.values()) else 'REJECT_NO_PARAMETER_RESCUE','research_only':True}
+          print('RESULT_JSON='+json.dumps(out,sort_keys=True))
