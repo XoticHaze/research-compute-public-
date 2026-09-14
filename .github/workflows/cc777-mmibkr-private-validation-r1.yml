@@ -1,0 +1,206 @@
+name: CC777 MMIBKR Private Validation R1
+
+on:
+  push:
+    branches:
+      - cc777-mmibkr-validation-r1
+    paths:
+      - .github/workflows/cc777-mmibkr-private-validation-r1.yml
+      - rendezvous-trigger/cc777-mmibkr-private-validation-r1.txt
+
+permissions:
+  contents: write
+
+env:
+  EXCHANGE_REF: rendezvous-exchange
+  RECIPIENT_ROOT: rendezvous/recipients
+  RESPONSE_ROOT: rendezvous/responses
+  RECEIPT_ROOT: rendezvous/receipts
+  CAPSULE_SCHEMA: cc777-mmibkr-validation-x25519-v1
+  PAYLOAD_SCHEMA: cc777-mmibkr-validation-payload-v1
+  HARNESS: cc777_mmibkr_validation_r1
+  AUTHORITY: mmibkr_private_validation
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install fixed validation dependencies
+        run: python -m pip install --disable-pip-version-check cryptography==46.0.4 pytest
+      - name: Generate run-bound recipient
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import base64, hashlib, json, os
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric import x25519
+          private = x25519.X25519PrivateKey.generate()
+          private_raw = private.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption())
+          public_raw = private.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+          recipient = {
+              'schema': 'cc777-mmibkr-validation-recipient-v1',
+              'run_id': os.environ['GITHUB_RUN_ID'],
+              'authority': os.environ['AUTHORITY'],
+              'harness': os.environ['HARNESS'],
+              'recipient_b64': base64.b64encode(public_raw).decode('ascii'),
+              'recipient_key_id': 'sha256:' + hashlib.sha256(public_raw).hexdigest(),
+          }
+          Path(os.environ['RUNNER_TEMP'], 'recipient-private.b64').write_text(base64.b64encode(private_raw).decode('ascii'), encoding='ascii')
+          Path(os.environ['RUNNER_TEMP'], 'recipient.json').write_text(json.dumps(recipient, sort_keys=True) + '\n', encoding='utf-8')
+          print('CC777_RECIPIENT_KEY_ID=' + recipient['recipient_key_id'])
+          PY
+      - name: Publish run-bound recipient
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}-cc777-mmibkr-validation.json"
+          payload="$(base64 -w0 "$RUNNER_TEMP/recipient.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json, sys
+          content, branch = sys.argv[1:]
+          print(json.dumps({'message':'rendezvous: publish CC777 MMIBKR validation recipient','content':content,'branch':branch}))
+          PY
+          )"
+          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}" -d "$body" >/dev/null
+          echo "CC777_RECIPIENT_PATH=${path}"
+      - name: Wait for encrypted exact-source capsule
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          response_root="${RESPONSE_ROOT}/${GITHUB_RUN_ID}"
+          envelope_path="${response_root}/cc777-mmibkr-validation-envelope.json"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${envelope_path}?ref=${EXCHANGE_REF}"
+          found=0
+          for _ in $(seq 1 300); do
+            if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$api" -o "$RUNNER_TEMP/envelope.json" 2>/dev/null; then found=1; break; fi
+            sleep 2
+          done
+          test "$found" = 1 || { echo 'encrypted validation capsule did not arrive'; exit 42; }
+          echo "CC777_RESPONSE_ROOT=${response_root}" >> "$GITHUB_ENV"
+      - name: Assemble and decrypt capsule
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, json, os
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+          from scripts.ephemeral_x25519_chunked_v1 import decrypt_assembled_ciphertext
+          temp = Path(os.environ['RUNNER_TEMP'])
+          envelope = json.loads((temp / 'envelope.json').read_text())
+          pieces = []
+          for node in envelope['chunks']:
+              path = node['path']
+              url = f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/{path}?ref={os.environ['EXCHANGE_REF']}"
+              req = Request(url, headers={'Authorization':'Bearer ' + os.environ['GH_TOKEN'],'Accept':'application/vnd.github.raw+json','X-GitHub-Api-Version':'2022-11-28'})
+              raw = urlopen(req, timeout=30).read()
+              if len(raw) != int(node['chars']): raise SystemExit('chunk length mismatch')
+              import hashlib
+              if hashlib.sha256(raw).hexdigest() != node['sha256']: raise SystemExit('chunk sha mismatch')
+              pieces.append(raw.decode('ascii'))
+          ciphertext = base64.b64decode(''.join(pieces).encode('ascii'), validate=True)
+          plaintext = decrypt_assembled_ciphertext(
+              envelope=envelope,
+              ciphertext=ciphertext,
+              private_key_path=temp / 'recipient-private.b64',
+              expected_schema=os.environ['CAPSULE_SCHEMA'],
+              expected_run_id=os.environ['GITHUB_RUN_ID'],
+              expected_harness=os.environ['HARNESS'],
+              response_root=os.environ['CC777_RESPONSE_ROOT'],
+              expected_authority=os.environ['AUTHORITY'],
+          )
+          payload = json.loads(plaintext.decode('utf-8'))
+          if payload.get('schema') != os.environ['PAYLOAD_SCHEMA']: raise SystemExit('payload schema mismatch')
+          files = payload.get('files')
+          if not isinstance(files, dict) or not files: raise SystemExit('payload files missing')
+          root = temp / 'private-source'
+          for rel, encoded in files.items():
+              if rel.startswith('/') or '..' in Path(rel).parts: raise SystemExit('unsafe payload path')
+              dest = root / rel
+              dest.parent.mkdir(parents=True, exist_ok=True)
+              dest.write_bytes(base64.b64decode(encoded.encode('ascii'), validate=True))
+          (temp / 'source.json').write_text(json.dumps({'source_head': payload.get('source_head')}, sort_keys=True) + '\n')
+          print('CC777_PRIVATE_SOURCE_HEAD=' + str(payload.get('source_head')))
+          PY
+      - name: Execute exact private focused contracts
+        id: tests
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/private-source"
+          python -m py_compile scripts/operator/portfolio_rebalance_plan_r1.py scripts/operator/portfolio_rebalance_refresh_r1.py tests/test_portfolio_rebalance_plan_r3.py tests/test_portfolio_rebalance_refresh_r1.py
+          PYTHONDONTWRITEBYTECODE=1 pytest -q tests/test_portfolio_rebalance_plan_r3.py tests/test_portfolio_rebalance_refresh_r1.py --junitxml="$RUNNER_TEMP/junit.xml"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          node = json.loads(Path('config/portfolio_intent_current.json').read_text())
+          weights = node['final_target_weights']
+          assert abs(sum(float(v) for v in weights.values()) - 1.0) < 1e-8
+          assert abs(sum(float(v) for k, v in weights.items() if k not in {'SMH','CASH'}) - .80) < 1e-8
+          assert abs(float(weights['SOXX']) + float(weights['XSD']) + float(weights['SMH']) - .35) < 1e-8
+          assert float(weights['SMH']) == .05 and float(weights['CASH']) == .15
+          assert node['boundaries']['broker_action'] is False
+          assert node['boundaries']['live_trading_change'] is False
+          ui = Path('ui-react/src/components/PortfolioRebalancePreviewPanel.jsx').read_text()
+          assert 'row.actual_weight ?? row.current_weight' in ui
+          assert 'plan.provenance || plan.source_intent' in ui
+          print('CC777_PRIVATE_CONTRACTS=PASS')
+          PY
+      - name: Publish sanitized receipt
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+          temp = Path(os.environ['RUNNER_TEMP'])
+          source = json.loads((temp / 'source.json').read_text()) if (temp / 'source.json').exists() else {}
+          counts = {'tests':0,'failures':0,'errors':0,'skipped':0}
+          junit = temp / 'junit.xml'
+          if junit.exists():
+              root = ET.parse(junit).getroot()
+              for key in counts: counts[key] = int(root.attrib.get(key, 0) or 0)
+          ok = os.environ.get('TEST_OUTCOME') == 'success'
+          receipt = {
+              'schema':'cc777-mmibkr-public-validation-receipt-v1',
+              'ok':ok,
+              'status':'EXACT_PRIVATE_RUNTIME_VALIDATED' if ok else 'EXACT_PRIVATE_RUNTIME_VALIDATION_FAILED',
+              'run_id':os.environ['GITHUB_RUN_ID'],
+              'source_head':source.get('source_head'),
+              'checks':counts,
+              'boundaries':{'private_source_published_plaintext':False,'broker_called':False,'paper_order_submitted':False,'live_trading_change':False},
+          }
+          (temp / 'receipt.json').write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
+          print('CC777_VALIDATION=' + json.dumps(receipt, sort_keys=True))
+          PY
+          path="${RECEIPT_ROOT}/${GITHUB_RUN_ID}-cc777-mmibkr-validation.json"
+          payload="$(base64 -w0 "$RUNNER_TEMP/receipt.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json, sys
+          content, branch = sys.argv[1:]
+          print(json.dumps({'message':'rendezvous: publish sanitized CC777 validation receipt','content':content,'branch':branch}))
+          PY
+          )"
+          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}" -d "$body" >/dev/null
+      - name: Enforce validation
+        if: always()
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        run: test "$TEST_OUTCOME" = success
+      - name: Destroy decrypted private material
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/private-source" "$RUNNER_TEMP/recipient-private.b64" "$RUNNER_TEMP/recipient.json" "$RUNNER_TEMP/envelope.json" "$RUNNER_TEMP/source.json" "$RUNNER_TEMP/junit.xml" "$RUNNER_TEMP/receipt.json"
