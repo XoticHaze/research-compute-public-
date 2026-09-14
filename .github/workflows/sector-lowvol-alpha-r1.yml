@@ -1,0 +1,36 @@
+name: sector-lowvol-alpha-r1
+on:
+  push:
+    paths: ['.github/workflows/sector-lowvol-alpha-r1.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -q yfinance pandas numpy
+      - name: Evaluate frozen cross-sector low-volatility selection
+        shell: python
+        run: |
+          import json, math
+          import numpy as np
+          import pandas as pd
+          import yfinance as yf
+          EXPERIMENT_ID='MR-SECTOR-LOWVOL-R1-20260914'
+          TICKERS=['XLB','XLE','XLF','XLI','XLK','XLP','XLRE','XLU','XLV','XLY','XLC','SPY']
+          START='2018-07-01'; LOOKBACK=63; HOLDING=21; K=3; ROUNDTRIP_COST=0.0020; RECENT_START='2022-01-01'
+          px=yf.download(TICKERS,start=START,auto_adjust=True,progress=False)['Close'].dropna(); sectors=[c for c in TICKERS if c!='SPY']; dr=px.pct_change(); dates=list(px.index); rec=[]
+          for i in range(LOOKBACK,len(dates)-HOLDING,HOLDING):
+              d=dates[i]; end=dates[i+HOLDING]; hist=dr.iloc[i-LOOKBACK+1:i+1][sectors]; vol=hist.std()*np.sqrt(252); low=list(vol.nsmallest(K).index); high=list(vol.nlargest(K).index); fwd=px.loc[end,sectors]/px.loc[d,sectors]-1
+              rec.append({'date':str(d.date()),'low':float(fwd[low].mean()-ROUNDTRIP_COST),'high':float(fwd[high].mean()-ROUNDTRIP_COST),'ew':float(fwd.mean()),'spy':float(px.loc[end,'SPY']/px.loc[d,'SPY']-1),'low_names':low,'high_names':high})
+          q=pd.DataFrame(rec); q['year']=pd.to_datetime(q.date).dt.year
+          def ann(x): x=np.asarray(x,float); return float(np.prod(1+x)**(252/(HOLDING*len(x)))-1)
+          def maxdd(x): w=np.cumprod(1+np.asarray(x,float)); return float(np.min(w/np.maximum.accumulate(w)-1))
+          years=sorted(q.year.unique()); wins_ew=wins_spy=beats_high=0; yr=[]
+          for y in years:
+              z=q[q.year==y]; a,b,c,d=ann(z.low),ann(z.ew),ann(z.spy),ann(z.high); wins_ew+=a>b; wins_spy+=a>c; beats_high+=a>d; yr.append({'year':int(y),'low':a,'ew':b,'spy':c,'high':d})
+          recent=q[pd.to_datetime(q.date)>=RECENT_START]
+          out={'experiment_id':EXPERIMENT_ID,'claim':'bottom-3 U.S. sector ETFs by trailing 63-session realized volatility deliver durable after-cost alpha over equal-weight sectors and SPY while beating high-volatility selection','frozen':{'start':START,'lookback_sessions':LOOKBACK,'holding_sessions':HOLDING,'k':K,'roundtrip_cost':ROUNDTRIP_COST,'recent_start':RECENT_START},'periods':int(len(q)),'years':int(len(years)),'lowvol_cagr':ann(q.low),'ew_cagr':ann(q.ew),'spy_cagr':ann(q.spy),'highvol_cagr':ann(q.high),'excess_vs_ew_pp':100*(ann(q.low)-ann(q.ew)),'excess_vs_spy_pp':100*(ann(q.low)-ann(q.spy)),'low_minus_high_pp':100*(ann(q.low)-ann(q.high)),'recent_excess_vs_ew_pp':100*(ann(recent.low)-ann(recent.ew)),'calendar_wins_vs_ew':int(wins_ew),'calendar_wins_vs_spy':int(wins_spy),'calendar_beats_high':int(beats_high),'max_drawdown_low':maxdd(q.low),'max_drawdown_ew':maxdd(q.ew),'max_drawdown_spy':maxdd(q.spy),'year_rows':yr}
+          gate=math.ceil(.6*len(years)); out['promotion_gates']={'full_excess_vs_ew_gt_1pp':out['excess_vs_ew_pp']>1,'full_excess_vs_spy_gt_0':out['excess_vs_spy_pp']>0,'recent_excess_vs_ew_gt_0':out['recent_excess_vs_ew_pp']>0,'calendar_wins_vs_ew_ge_60pct':wins_ew>=gate,'opposite_direction_control':out['low_minus_high_pp']>0}; out['decision']='PROMOTE_MECHANISM_FOR_ORTHOGONAL_VALIDATION' if all(out['promotion_gates'].values()) else 'REJECT_NO_PARAMETER_RESCUE'; print('RESULT_JSON='+json.dumps(out,sort_keys=True))
