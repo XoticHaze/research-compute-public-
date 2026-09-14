@@ -2,8 +2,8 @@ import hashlib
 import json
 from pathlib import Path
 
-PRODUCT_BASE = "b783b0ed8a27bb4d2fefb8d5b5f2e954119d6005"
-PRODUCT_CONTRACT_BRANCH = "assistant/portfolio-rebalance-preview-contract-r1"
+PRODUCT_BASE = "04c7dbe240300815aafe30f2c8689ccd43aaf17b"
+PRODUCT_CONTRACT_BRANCH = "assistant/portfolio-rebalance-preview-contract-r2"
 
 
 def main():
@@ -11,7 +11,8 @@ def main():
         "portfolio_workflows_route": "/portfolio/workflows",
         "wrapper_preserves_existing_workflow": True,
         "selected_action_source": "query.actionId",
-        "rebalance_plan_path": "/api/portfolio/workflows/{actionId}/rebalance-plan",
+        "selected_action_detail_path": "/portfolio/actions/{actionId}",
+        "rebalance_plan_source": "selected_action.result.rebalance_plan",
         "schema": "mm_ibkr.portfolio_rebalance_plan_r3",
         "preview_only": True,
     }
@@ -32,6 +33,8 @@ def main():
 
     assert route["wrapper_preserves_existing_workflow"] is True
     assert route["selected_action_source"] == "query.actionId"
+    assert route["selected_action_detail_path"] == "/portfolio/actions/{actionId}"
+    assert route["rebalance_plan_source"] == "selected_action.result.rebalance_plan"
     assert route["schema"] == "mm_ibkr.portfolio_rebalance_plan_r3"
     assert route["preview_only"] is True
     assert len(original_workflow_controls) == 4
@@ -49,13 +52,14 @@ def main():
     ).encode()
 
     receipt = {
-        "schema": "mm.portfolio_rebalance_preview_sanitized_acceptance.v1",
+        "schema": "mm.portfolio_rebalance_preview_sanitized_acceptance.v2",
         "product_base": PRODUCT_BASE,
         "product_contract_branch": PRODUCT_CONTRACT_BRANCH,
         "acceptance_class": "SANITIZED_READ_ONLY_REBALANCE_PREVIEW_OPERATOR_CONTRACT",
         "operator_consequence": {
             "existing_workflow_controls_preserved": True,
-            "selected_action_identity_drives_preview": True,
+            "selected_action_identity_drives_detail": True,
+            "rebalance_plan_consumed_from_selected_action_result": True,
             "canonical_rebalance_plan_schema_required": True,
             "preview_only": True,
         },
