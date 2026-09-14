@@ -1,5 +1,11 @@
 name: Strategy Health Runtime Focus Acceptance R1
 on:
+  push:
+    branches:
+      - 'continue-release/strategy-health-composite-identity-acceptance-r1'
+    paths:
+      - '.github/workflows/strategy-health-runtime-focus-acceptance-r1.yml'
+      - 'research/strategy_health_runtime_focus_acceptance_r1.py'
   pull_request:
     paths:
       - '.github/workflows/strategy-health-runtime-focus-acceptance-r1.yml'
