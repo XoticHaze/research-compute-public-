@@ -1,0 +1,38 @@
+name: credit-regime-sector-alpha-r1
+on:
+  push:
+    paths: ['.github/workflows/credit-regime-sector-alpha-r1.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -q yfinance pandas numpy
+      - name: Evaluate frozen credit-risk regime conditioning
+        shell: python
+        run: |
+          import json, math
+          import numpy as np
+          import pandas as pd
+          import yfinance as yf
+          EXPERIMENT_ID='MR-CREDIT-REGIME-SECTOR-R1-20260914'
+          SECTORS=['XLB','XLE','XLF','XLI','XLK','XLP','XLU','XLV','XLY']
+          TICKERS=SECTORS+['SPY','HYG','IEF','BIL']; START='2008-01-01'; LOOKBACK=126; HOLDING=21; PERIOD_COST=0.0010; RECENT_START='2022-01-01'
+          px=yf.download(TICKERS,start=START,auto_adjust=True,progress=False)['Close'].dropna(); dates=list(px.index); ratio=px.HYG/px.IEF; rec=[]
+          for i in range(LOOKBACK,len(dates)-HOLDING,HOLDING):
+              d=dates[i]; end=dates[i+HOLDING]; hist=ratio.iloc[i-LOOKBACK:i]; signal=float(ratio.iloc[i])>float(hist.mean())
+              sector=float((px.loc[end,SECTORS]/px.loc[d,SECTORS]-1).mean()); spy=float(px.loc[end,'SPY']/px.loc[d,'SPY']-1); cash=float(px.loc[end,'BIL']/px.loc[d,'BIL']-1)
+              model=(sector if signal else cash)-PERIOD_COST; inverse=(cash if signal else sector)-PERIOD_COST; baseline=sector-PERIOD_COST; spy_net=spy-PERIOD_COST
+              rec.append({'date':str(d.date()),'risk_on':bool(signal),'model':model,'inverse':inverse,'sector_ew':baseline,'spy':spy_net,'cash':cash})
+          q=pd.DataFrame(rec); q['year']=pd.to_datetime(q.date).dt.year
+          def ann(x): x=np.asarray(x,float); return float(np.prod(1+x)**(252/(HOLDING*len(x)))-1)
+          def maxdd(x): w=np.cumprod(1+np.asarray(x,float)); return float(np.min(w/np.maximum.accumulate(w)-1))
+          years=sorted(q.year.unique()); wins_ew=wins_spy=beats_inverse=0; yr=[]
+          for y in years:
+              z=q[q.year==y]; a,b,c,d=ann(z.model),ann(z.sector_ew),ann(z.spy),ann(z.inverse); wins_ew+=a>b; wins_spy+=a>c; beats_inverse+=a>d; yr.append({'year':int(y),'model':a,'sector_ew':b,'spy':c,'inverse':d})
+          recent=q[pd.to_datetime(q.date)>=RECENT_START]
+          out={'experiment_id':EXPERIMENT_ID,'claim':'A chronology-safe HYG/IEF credit-risk regime gate improves after-cost equal-weight U.S. sector exposure relative to unconditional sector exposure and SPY while beating the inverse regime control','frozen':{'sectors':SECTORS,'start':START,'credit_ratio':'HYG/IEF','lookback_sessions':LOOKBACK,'holding_sessions':HOLDING,'period_cost':PERIOD_COST,'recent_start':RECENT_START},'periods':int(len(q)),'years':int(len(years)),'risk_on_fraction':float(q.risk_on.mean()),'model_cagr':ann(q.model),'sector_ew_cagr':ann(q.sector_ew),'spy_cagr':ann(q.spy),'inverse_cagr':ann(q.inverse),'excess_vs_sector_ew_pp':100*(ann(q.model)-ann(q.sector_ew)),'excess_vs_spy_pp':100*(ann(q.model)-ann(q.spy)),'model_minus_inverse_pp':100*(ann(q.model)-ann(q.inverse)),'recent_excess_vs_sector_ew_pp':100*(ann(recent.model)-ann(recent.sector_ew)),'calendar_wins_vs_sector_ew':int(wins_ew),'calendar_wins_vs_spy':int(wins_spy),'calendar_beats_inverse':int(beats_inverse),'max_drawdown_model':maxdd(q.model),'max_drawdown_sector_ew':maxdd(q.sector_ew),'max_drawdown_spy':maxdd(q.spy),'year_rows':yr}
+          gate=math.ceil(.6*len(years)); out['promotion_gates']={'full_excess_vs_sector_ew_gt_1pp':out['excess_vs_sector_ew_pp']>1,'full_excess_vs_spy_gt_0':out['excess_vs_spy_pp']>0,'recent_excess_vs_sector_ew_gt_0':out['recent_excess_vs_sector_ew_pp']>0,'calendar_wins_vs_sector_ew_ge_60pct':wins_ew>=gate,'opposite_regime_control':out['model_minus_inverse_pp']>0,'drawdown_not_worse_than_sector_ew':out['max_drawdown_model']>=out['max_drawdown_sector_ew']}; out['decision']='PROMOTE_MECHANISM_FOR_ORTHOGONAL_VALIDATION' if all(out['promotion_gates'].values()) else 'REJECT_NO_PARAMETER_RESCUE'; print('RESULT_JSON='+json.dumps(out,sort_keys=True))
