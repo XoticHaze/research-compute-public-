@@ -1,0 +1,4 @@
+Market Research same-firing execution trigger.
+Hypothesis binding: cape-sector-value-crossfit-r1 unchanged frozen discriminator.
+Purpose: create a unique PR head so the existing pull_request workflow executes independently in this firing.
+No scientific parameters or inputs changed.
