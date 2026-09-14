@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -8,6 +10,15 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import ibkr_remote_paper_capsule_v1 as mod
+
+
+def _return_recipient():
+    raw = bytes(range(32))
+    return {
+        "schema": mod.RETURN_RECIPIENT_SCHEMA,
+        "recipient_b64": base64.b64encode(raw).decode("ascii"),
+        "recipient_key_id": "sha256:" + hashlib.sha256(raw).hexdigest(),
+    }
 
 
 def capsule(mode="session_reconcile"):
@@ -41,11 +52,34 @@ def validate(node):
     return mod.validate_capsule(json.dumps(node).encode())
 
 
-def test_session_reconcile_is_read_only_shape():
+def test_session_reconcile_legacy_empty_request_still_accepted():
     out = validate(capsule())
     assert out["mode"] == "session_reconcile"
     assert out["ibkr"]["trading_mode"] == "paper"
     assert out["request"] == {}
+
+
+def test_session_reconcile_accepts_only_authenticated_return_recipient():
+    node = capsule()
+    node["request"] = {"encrypted_return": _return_recipient()}
+    out = validate(node)
+    assert out["request"]["encrypted_return"]["recipient_key_id"] == _return_recipient()["recipient_key_id"]
+
+
+def test_return_recipient_fingerprint_mismatch_fails_closed():
+    node = capsule()
+    recipient = _return_recipient()
+    recipient["recipient_key_id"] = "sha256:" + "0" * 64
+    node["request"] = {"encrypted_return": recipient}
+    with pytest.raises(RuntimeError, match="fingerprint mismatch"):
+        validate(node)
+
+
+def test_session_reconcile_rejects_any_other_request_field():
+    node = capsule()
+    node["request"] = {"observe_symbols": ["SMH"]}
+    with pytest.raises(RuntimeError, match="admits only encrypted_return"):
+        validate(node)
 
 
 def test_live_mode_is_rejected():
@@ -80,11 +114,4 @@ def test_global_cancel_is_never_admitted_by_remote_proof():
     node = capsule("paper_submit_proof")
     node["cleanup"]["allow_global_cancel"] = True
     with pytest.raises(RuntimeError, match="global cancel is prohibited"):
-        validate(node)
-
-
-def test_session_reconcile_rejects_order_request():
-    node = capsule()
-    node["request"] = {"canonical_submit_payload": {"symbol": "MNQ"}}
-    with pytest.raises(RuntimeError, match="session_reconcile request must be empty"):
         validate(node)

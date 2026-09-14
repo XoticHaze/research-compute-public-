@@ -2,14 +2,16 @@ from __future__ import annotations
 
 """Decrypt and materialize one remote MM-IBKR paper-runtime capsule.
 
-The public repository owns only this fixed consumer. MM-IBKR source and broker
-credentials arrive through the run-bound encrypted envelope, live only in
-RUNNER_TEMP, and are never printed. The consumer defaults to a broker/session
-reconciliation posture; paper submit is an explicit capsule mode with mandatory
-exact-order cancel + zero-baseline flatten cleanup guards.
+Private MM-IBKR source and broker credentials arrive through the run-bound encrypted
+input envelope and live only in RUNNER_TEMP. Session reconciliation remains read-only.
+R2 additionally permits a one-run X25519 *return recipient* inside the encrypted
+request so broker/account detail can be returned encrypted to the private producer
+without entering public logs, receipts, or artifacts in plaintext.
 """
 
 import argparse
+import base64
+import hashlib
 import json
 import os
 import re
@@ -34,6 +36,8 @@ CAPSULE_FIELDS = {"schema", "mode", "source", "ibkr", "request", "cleanup"}
 SOURCE_FIELDS = {"repository", "head", "archive_url", "archive_sha256", "authorization_bearer"}
 IBKR_FIELDS = {"username", "password", "trading_mode"}
 CLEANUP_FIELDS = {"cancel_open_order", "flatten_filled_position", "require_zero_baseline", "allow_global_cancel"}
+RETURN_RECIPIENT_SCHEMA = "ibkr-remote-paper-return-recipient-v1"
+RETURN_RECIPIENT_FIELDS = {"schema", "recipient_b64", "recipient_key_id"}
 
 
 def _is_truthy(value: object) -> bool:
@@ -114,6 +118,27 @@ def _validate_cleanup(node: object, *, mode: str) -> dict:
     return result
 
 
+def _validate_return_recipient(node: object) -> dict:
+    if not isinstance(node, dict) or set(node) != RETURN_RECIPIENT_FIELDS:
+        raise RuntimeError("encrypted return recipient field set mismatch")
+    if node.get("schema") != RETURN_RECIPIENT_SCHEMA:
+        raise RuntimeError("encrypted return recipient schema mismatch")
+    try:
+        raw = base64.b64decode(str(node.get("recipient_b64") or "").encode("ascii"), validate=True)
+    except Exception as exc:
+        raise RuntimeError("encrypted return recipient key encoding invalid") from exc
+    if len(raw) != 32:
+        raise RuntimeError("encrypted return recipient must be one X25519 public key")
+    key_id = "sha256:" + hashlib.sha256(raw).hexdigest()
+    if key_id != str(node.get("recipient_key_id") or ""):
+        raise RuntimeError("encrypted return recipient fingerprint mismatch")
+    return {
+        "schema": RETURN_RECIPIENT_SCHEMA,
+        "recipient_b64": base64.b64encode(raw).decode("ascii"),
+        "recipient_key_id": key_id,
+    }
+
+
 def validate_capsule(raw: bytes) -> dict:
     try:
         capsule = json.loads(raw.decode("utf-8"))
@@ -134,8 +159,13 @@ def validate_capsule(raw: bytes) -> dict:
     _reject_live_authority(request)
     cleanup = _validate_cleanup(capsule.get("cleanup"), mode=mode)
 
-    if mode == "session_reconcile" and request:
-        raise RuntimeError("session_reconcile request must be empty")
+    if mode == "session_reconcile":
+        if set(request) - {"encrypted_return"}:
+            raise RuntimeError("session_reconcile request admits only encrypted_return")
+        if "encrypted_return" in request:
+            request = {"encrypted_return": _validate_return_recipient(request["encrypted_return"])}
+        else:
+            request = {}
     if mode == "paper_submit_proof":
         payload = request.get("canonical_submit_payload")
         if not isinstance(payload, dict) or not payload:
@@ -252,7 +282,7 @@ def materialize(capsule: dict, *, runner_temp: Path) -> dict:
     _write_private(request_path, json.dumps(capsule["request"], sort_keys=True) + "\n")
     runtime_path = runner_temp / "ibkr-runtime.json"
     runtime = {
-        "schema": "mm-ibkr-remote-paper-materialization-v1",
+        "schema": "mm-ibkr-remote-paper-materialization-v2",
         "mode": mode,
         "mmibkr_repository": SOURCE_REPOSITORY,
         "mmibkr_head": capsule["source"]["head"],
@@ -260,6 +290,7 @@ def materialize(capsule: dict, *, runner_temp: Path) -> dict:
         "source_root": str(source_root),
         "gateway_env_path": str(gateway_env),
         "request_path": str(request_path),
+        "encrypted_return_requested": bool(capsule["request"].get("encrypted_return")),
         "read_only_api": read_only_api,
         "cleanup": capsule["cleanup"],
         "paper_only": True,
@@ -306,6 +337,7 @@ def main() -> None:
                     "mmibkr_repository",
                     "mmibkr_head",
                     "source_archive_sha256",
+                    "encrypted_return_requested",
                     "read_only_api",
                     "paper_only",
                     "live_trading_change",
