@@ -21,7 +21,6 @@ jobs:
           EXPERIMENT_ID='CC-RF-COMMODITY-INFLATION-ASSOCIATION-001'
           SYMBOLS=['COMT','DBC','BCI']; EVAL_START='2018-01-01'; THRESHOLD=.03; SIGNAL_LAG_MONTHS=1; COST_ANNUAL=.0010
           G={'min_high_inflation_mean_relative_monthly':.001,'min_high_minus_low_relative_monthly':.001,'min_positive_high_inflation_fraction':.55,'min_positive_calendar_year_fraction':.60}
-          # Exact source fallback only: same CPI series, official BLS public API, no scientific parameter change.
           url='https://api.bls.gov/publicAPI/v2/timeseries/data/'
           payload={'seriesid':['CUSR0000SA0'],'startyear':'2016','endyear':'2026'}
           resp=requests.post(url,json=payload,timeout=45,headers={'User-Agent':'Mozilla/5.0 research-source-audit'})
@@ -29,14 +28,13 @@ jobs:
           if obj.get('status')!='REQUEST_SUCCEEDED': raise RuntimeError('BLS API status '+str(obj.get('status'))+' '+str(obj.get('message')))
           rows=[]
           for x in obj['Results']['series'][0]['data']:
-              p=x['period']
-              if p.startswith('M') and p!='M13': rows.append((pd.Timestamp(f"{x['year']}-{p[1:]}-01"),float(x['value'])))
+              p=x['period']; v=x.get('value')
+              if p.startswith('M') and p!='M13' and v not in (None,'','-'):
+                  rows.append((pd.Timestamp(f"{x['year']}-{p[1:]}-01"),float(v)))
           cpi=pd.Series(dict(rows)).sort_index(); yoy=cpi.pct_change(12)
           if len(cpi[cpi.index>=pd.Timestamp('2016-01-01')])<120: raise RuntimeError('insufficient CPI history')
           px=yf.download(SYMBOLS,start='2017-01-01',auto_adjust=True,progress=False)['Close'].dropna(); monthly=px.resample('ME').last().pct_change().dropna(); monthly.index=monthly.index.to_period('M').to_timestamp()
-          yoy.index=yoy.index.to_period('M').to_timestamp()
-          # One-month information lag: CPI observation month m conditions return month m+1.
-          sig=yoy.shift(1).reindex(monthly.index)
+          yoy.index=yoy.index.to_period('M').to_timestamp(); sig=yoy.shift(1).reindex(monthly.index)
           q=monthly.loc[monthly.index>=pd.Timestamp(EVAL_START)].copy(); q['inflation_yoy']=sig.loc[q.index]; q=q.dropna()
           cost=COST_ANNUAL/12; q['EX_DBC']=q['COMT']-cost-q['DBC']; q['EX_BCI']=q['COMT']-cost-q['BCI']; q['HIGH']=q['inflation_yoy']>=THRESHOLD
           if q.HIGH.sum()<12 or (~q.HIGH).sum()<12: raise RuntimeError('insufficient high/low inflation observations')
