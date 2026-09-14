@@ -1,0 +1,30 @@
+name: P377 AAA CLO Replication R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p377_aaa_clo_replication_r1.py'
+      - '.github/workflows/p377-aaa-clo-replication-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --quiet yfinance pandas
+      - id: eval
+        run: |
+          python research/p377_aaa_clo_replication_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/p377_aaa_clo_replication_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('tag='+x['decision']+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p377-aaa-clo-replication__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/p377_aaa_clo_replication_r1.json
+          if-no-files-found: error
