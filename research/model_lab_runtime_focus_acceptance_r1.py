@@ -2,7 +2,7 @@ import hashlib
 import json
 from pathlib import Path
 
-PRODUCT_HEAD = "0386bfaa3581902f07a12a8305e49cc9e0cac00b"
+PRODUCT_HEAD = "3f65cad4b5f03f04046c88ea71d8a96e4200830f"
 
 
 def reconcile(runtime_id, rows):
@@ -16,6 +16,14 @@ def reconcile(runtime_id, rows):
         state = "UNRESOLVED"
     preferred = matches[0] if len(matches) == 1 else ""
     return {"state": state, "matches": matches, "preferred_experiment_id": preferred}
+
+
+def attributed_evidence_loaded(preferred_experiment_id, evidence_state, loaded_experiment_id):
+    return bool(
+        preferred_experiment_id
+        and evidence_state == "loaded"
+        and loaded_experiment_id == preferred_experiment_id
+    )
 
 
 def main():
@@ -47,11 +55,26 @@ def main():
     assert cases["no_match"] == {"state": "NO_MATCH", "matches": [], "preferred_experiment_id": ""}
     assert cases["unresolved"] == {"state": "UNRESOLVED", "matches": [], "preferred_experiment_id": ""}
 
-    semantic_payload = json.dumps(cases, sort_keys=True, separators=(",", ":")).encode()
+    load_cases = {
+        "unique_match_loaded_same_identity": attributed_evidence_loaded("exp-target", "loaded", "exp-target"),
+        "unique_match_loading": attributed_evidence_loaded("exp-target", "loading", "exp-target"),
+        "unique_match_error": attributed_evidence_loaded("exp-target", "error", "exp-target"),
+        "loaded_different_identity": attributed_evidence_loaded("exp-target", "loaded", "exp-other"),
+        "no_unique_attribution": attributed_evidence_loaded("", "loaded", "exp-target"),
+    }
+    assert load_cases == {
+        "unique_match_loaded_same_identity": True,
+        "unique_match_loading": False,
+        "unique_match_error": False,
+        "loaded_different_identity": False,
+        "no_unique_attribution": False,
+    }
+
+    semantic_payload = json.dumps({"reconciliation": cases, "attributed_load": load_cases}, sort_keys=True, separators=(",", ":")).encode()
     receipt = {
-        "schema": "mm.model_lab_runtime_focus_sanitized_acceptance.v1",
+        "schema": "mm.model_lab_runtime_focus_sanitized_acceptance.v2",
         "product_head": PRODUCT_HEAD,
-        "acceptance_class": "SANITIZED_OPERATOR_SELECTION_SEMANTICS",
+        "acceptance_class": "SANITIZED_OPERATOR_SELECTION_AND_ATTRIBUTED_LOAD_SEMANTICS",
         "protected_boundaries": {
             "strategy_spec_mutation": False,
             "runtime_authority_change": False,
@@ -60,6 +83,7 @@ def main():
             "live_trading_change": False,
         },
         "cases": cases,
+        "attributed_load_cases": load_cases,
         "semantic_sha256": hashlib.sha256(semantic_payload).hexdigest(),
         "result": "PASS",
     }
