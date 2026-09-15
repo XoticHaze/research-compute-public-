@@ -21,7 +21,7 @@ concurrency:
 jobs:
   broker-data-proof:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 70
     env:
       FLEET_AUTHORITY_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-paper/seal
       FLEET_AUTHORITY_HEALTH: https://fleet-authority.slenderiq.workers.dev/healthz
@@ -88,8 +88,8 @@ jobs:
             -e USE_IBG_CONTROLLER=yes \
             -e TRADING_MODE=paper \
             -e READ_ONLY_API=yes \
-            -e TWOFA_TIMEOUT_ACTION=exit \
-            -e TWOFA_EXIT_INTERVAL=300 \
+            -e TWOFA_TIMEOUT_ACTION=none \
+            -e TWOFA_EXIT_INTERVAL=3600 \
             -e CONTROLLER_HEALTH_SERVER_PORT=8080 \
             -e TWS_SETTINGS_PATH=/home/ibgateway/Jts_b1 \
             -v "$jts_volume:/home/ibgateway/Jts_b1" \
@@ -97,11 +97,12 @@ jobs:
             -p 127.0.0.1:18080:8080 \
             "$IBKR_CONTROLLER_IMAGE" >/dev/null
 
-          docker exec ibkr-cloudflare-b1 /bin/sh -lc 'test "$TRADING_MODE" = paper && test "$READ_ONLY_API" = yes && test "$TWS_SETTINGS_PATH" = /home/ibgateway/Jts_b1' >/dev/null
+          docker exec ibkr-cloudflare-b1 /bin/sh -lc 'test "$TRADING_MODE" = paper && test "$READ_ONLY_API" = yes && test "$TWOFA_TIMEOUT_ACTION" = none && test "$TWS_SETTINGS_PATH" = /home/ibgateway/Jts_b1' >/dev/null
           echo 'IBKR_PAPER_READONLY_ENV_ASSERTED=1'
+          echo 'IBKR_CCP_RECOVERY_WINDOW_ENABLED=1'
 
           ready=0
-          for _ in $(seq 1 165); do
+          for _ in $(seq 1 720); do
             running="$(docker inspect -f '{{.State.Running}}' ibkr-cloudflare-b1 2>/dev/null || echo false)"
             if [ "$running" != true ]; then
               break
