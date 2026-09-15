@@ -1,4 +1,5 @@
 name: P791 SEC Management Guidance Revision R1
+# Re-admitted after parser recall run 34958809660 passed recall=1.0 and specificity=1.0.
 on:
   pull_request:
     paths:
