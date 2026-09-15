@@ -2,7 +2,7 @@ import hashlib
 import json
 from pathlib import Path
 
-PRODUCT_HEAD = "cedcae2b668d821abff06ff93423417554795f4a"
+PRODUCT_HEAD = "f84e8ab9016a0cc46193fa0f959edacc42ce0266"
 FORMULA_AUTHORITY_MERGE = "923bc9baf67344f2cec6c92b5055b39568dddbb8"
 FEATURES = ["return_5", "return_20", "return_60", "volatility_20", "distance_ma20", "distance_ma60"]
 DCA_STATE = "last_fully_completed_12min_bar_strictly_before_dca_fill"
@@ -17,9 +17,11 @@ MATCHED_BASELINE_EVIDENCE = {
     "challenger": "prospectively fixed same-causal-regime",
     "challenger_return_direction_accuracy_pct": 48.67,
     "lift_percentage_points": 1.00,
-    "aggregate_metrics_improved": "4/4",
-    "chronology_clean_fold_wins": "3/5",
-    "interpretation": "MODEST_LIFT_CONTEXT_EVIDENCE_ONLY",
+    "aggregate_metrics_improved": 4,
+    "aggregate_metrics_tested": 4,
+    "positive_fold_wins_each_metric": 3,
+    "fold_count": 5,
+    "interpretation": "MODEST_POSITIVE_LIFT",
 }
 VISIBLE_OPERATOR_CONTRACT = {
     "browser_state": "Parity not verified.",
@@ -47,9 +49,11 @@ def main():
     assert MATCHED_BASELINE_EVIDENCE["baseline_return_direction_accuracy_pct"] == 47.67
     assert MATCHED_BASELINE_EVIDENCE["challenger_return_direction_accuracy_pct"] == 48.67
     assert MATCHED_BASELINE_EVIDENCE["lift_percentage_points"] == 1.00
-    assert MATCHED_BASELINE_EVIDENCE["aggregate_metrics_improved"] == "4/4"
-    assert MATCHED_BASELINE_EVIDENCE["chronology_clean_fold_wins"] == "3/5"
-    assert MATCHED_BASELINE_EVIDENCE["interpretation"] == "MODEST_LIFT_CONTEXT_EVIDENCE_ONLY"
+    assert MATCHED_BASELINE_EVIDENCE["aggregate_metrics_improved"] == 4
+    assert MATCHED_BASELINE_EVIDENCE["aggregate_metrics_tested"] == 4
+    assert MATCHED_BASELINE_EVIDENCE["positive_fold_wins_each_metric"] == 3
+    assert MATCHED_BASELINE_EVIDENCE["fold_count"] == 5
+    assert MATCHED_BASELINE_EVIDENCE["interpretation"] == "MODEST_POSITIVE_LIFT"
     assert VISIBLE_OPERATOR_CONTRACT["browser_state"] == "Parity not verified."
     assert VISIBLE_OPERATOR_CONTRACT["browser_gap_prefix"] == "Gap:"
     assert VISIBLE_OPERATOR_CONTRACT["browser_closure_prefix"] == "Closure proof:"
@@ -84,7 +88,7 @@ def main():
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     receipt = {
-        "schema": "mm.strategy_health_cc75_provenance_sanitized_acceptance.v6",
+        "schema": "mm.strategy_health_cc75_provenance_sanitized_acceptance.v7",
         **payload,
         "semantic_sha256": hashlib.sha256(canonical).hexdigest(),
         "result": "PASS",
