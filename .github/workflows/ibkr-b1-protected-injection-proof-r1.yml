@@ -1,0 +1,376 @@
+name: MM-IBKR B1 Protected Injection Proof R1
+
+on:
+  push:
+    branches:
+      - assistant/ibkr-b1-protected-injection-r1
+    paths:
+      - '.github/workflows/ibkr-b1-protected-injection-proof-r1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ibkr-b1-protected-injection-proof-r1
+  cancel-in-progress: false
+
+env:
+  RETURN_RECIPIENT_B64: 'ji/nDz7ou6wm3iKNhSLPZzhNfhqERInS957I4YXrXgg='
+  RETURN_RECIPIENT_KEY_ID: 'sha256:f37646457dbc2cf82af43aea3edfa16b8d0734b5c9d724e086d03626af18b8a9'
+  EXCHANGE_REF: rendezvous-exchange
+
+jobs:
+  remote-readonly-session:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      MMIBKR_IBKR_READONLY_USER: ${{ secrets.MMIBKR_IBKR_READONLY_USER }}
+      MMIBKR_IBKR_READONLY_PASSWORD: ${{ secrets.MMIBKR_IBKR_READONLY_PASSWORD }}
+      IBKR_PAPER_USERNAME: ${{ secrets.IBKR_PAPER_USERNAME }}
+      IBKR_PAPER_PASSWORD: ${{ secrets.IBKR_PAPER_PASSWORD }}
+      IBKR_PAPER_USER: ${{ secrets.IBKR_PAPER_USER }}
+      TWS_USERID_PAPER: ${{ secrets.TWS_USERID_PAPER }}
+      TWS_PASSWORD_PAPER: ${{ secrets.TWS_PASSWORD_PAPER }}
+      IBKR_USERNAME: ${{ secrets.IBKR_USERNAME }}
+      IBKR_PASSWORD: ${{ secrets.IBKR_PASSWORD }}
+      IBKR_USER: ${{ secrets.IBKR_USER }}
+      TWS_USERID: ${{ secrets.TWS_USERID }}
+      TWS_PASSWORD: ${{ secrets.TWS_PASSWORD }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Install fixed read-only client dependencies
+        run: python -m pip install --disable-pip-version-check ib-insync==0.9.86 cryptography==46.0.3
+
+      - name: Select protected paper credential binding
+        id: binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          candidates = (
+              ('MMIBKR_IBKR_READONLY_USER', 'MMIBKR_IBKR_READONLY_PASSWORD'),
+              ('IBKR_PAPER_USERNAME', 'IBKR_PAPER_PASSWORD'),
+              ('IBKR_PAPER_USER', 'IBKR_PAPER_PASSWORD'),
+              ('TWS_USERID_PAPER', 'TWS_PASSWORD_PAPER'),
+              ('IBKR_USERNAME', 'IBKR_PASSWORD'),
+              ('IBKR_USER', 'IBKR_PASSWORD'),
+              ('TWS_USERID', 'TWS_PASSWORD'),
+          )
+          selected = None
+          incomplete = []
+          for user_key, password_key in candidates:
+              user = str(os.environ.get(user_key) or '')
+              password = str(os.environ.get(password_key) or '')
+              if user and password:
+                  selected = (user_key, password_key, user, password)
+                  break
+              if user or password:
+                  incomplete.append(f'{user_key}/{password_key}')
+          if selected is None:
+              print('IBKR_B1_PROTECTED_BINDING=ABSENT')
+              print('IBKR_B1_INCOMPLETE_BINDINGS=' + (','.join(incomplete) if incomplete else 'none'))
+              raise SystemExit(41)
+
+          user_key, password_key, user, password = selected
+          if any(ch in user or ch in password for ch in ('\r', '\n', '\x00')):
+              raise SystemExit('IBKR credential binding contains unsupported control character')
+          gateway_env = Path(os.environ['RUNNER_TEMP']) / 'ibkr-b1-gateway.env'
+          gateway_env.write_text(
+              '\n'.join((
+                  'TWS_USERID=' + user,
+                  'TWS_PASSWORD=' + password,
+                  'TRADING_MODE=paper',
+                  'READ_ONLY_API=yes',
+                  'TWS_ACCEPT_INCOMING=accept',
+                  'TWOFA_TIMEOUT_ACTION=exit',
+                  'RELOGIN_AFTER_TWOFA_TIMEOUT=no',
+                  'SAVE_TWS_SETTINGS=no',
+                  'ENABLE_VNC=false',
+                  '',
+              )),
+              encoding='utf-8',
+          )
+          gateway_env.chmod(0o600)
+          print('IBKR_B1_PROTECTED_BINDING=PRESENT')
+          print('IBKR_B1_CREDENTIAL_BINDING=' + user_key + '/' + password_key)
+          PY
+
+      - name: Start disposable read-only paper gateway
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/gnzsnz/ib-gateway:10.49.1c >/dev/null
+          docker run -d --name ibkr-b1-gateway \
+            --env-file "$RUNNER_TEMP/ibkr-b1-gateway.env" \
+            -e TWS_MAJOR_VRSN=10.49.1c \
+            -e TWS_ACCEPT_INCOMING=accept \
+            -e ENABLE_VNC=false \
+            -p 127.0.0.1:4002:4002 \
+            ghcr.io/gnzsnz/ib-gateway:10.49.1c >/dev/null
+          ready=0
+          for _ in $(seq 1 120); do
+            if docker exec ibkr-b1-gateway bash -lc "timeout 2 bash -c 'echo > /dev/tcp/127.0.0.1/4002'" >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$ready" != 1 ]; then
+            echo 'IBKR_B1_GATEWAY_API_READY=false'
+            exit 45
+          fi
+          echo 'IBKR_B1_GATEWAY_API_READY=true'
+
+      - name: Prove broker session and collect private read-only snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          from ib_insync import IB, Stock
+
+          ib = IB()
+          historical = {'status': 'not_attempted', 'bars': []}
+          try:
+              ib.connect('127.0.0.1', 4002, clientId=71, timeout=25, readonly=True)
+              if not ib.isConnected():
+                  raise RuntimeError('IB read-only client did not connect')
+              accounts = list(ib.managedAccounts())
+              if not accounts:
+                  raise RuntimeError('IB managed account list is empty')
+              now = ib.reqCurrentTime()
+              values = []
+              for item in ib.accountValues():
+                  if item.tag in {
+                      'NetLiquidation', 'TotalCashValue', 'AvailableFunds', 'BuyingPower',
+                      'MaintMarginReq', 'UnrealizedPnL', 'RealizedPnL'
+                  }:
+                      values.append({
+                          'account': item.account,
+                          'tag': item.tag,
+                          'value': item.value,
+                          'currency': item.currency,
+                          'modelCode': item.modelCode,
+                      })
+              positions = []
+              for pos in ib.positions():
+                  c = pos.contract
+                  positions.append({
+                      'account': pos.account,
+                      'symbol': c.symbol,
+                      'secType': c.secType,
+                      'currency': c.currency,
+                      'exchange': c.exchange,
+                      'conId': c.conId,
+                      'position': pos.position,
+                      'avgCost': pos.avgCost,
+                  })
+
+              try:
+                  contract = Stock('AMAT', 'SMART', 'USD')
+                  qualified = ib.qualifyContracts(contract)
+                  if not qualified:
+                      raise RuntimeError('AMAT qualification returned no contract')
+                  bars = ib.reqHistoricalData(
+                      contract,
+                      endDateTime='',
+                      durationStr='1 D',
+                      barSizeSetting='15 mins',
+                      whatToShow='TRADES',
+                      useRTH=True,
+                      formatDate=2,
+                      keepUpToDate=False,
+                      timeout=30,
+                  )
+                  historical = {
+                      'status': 'ok' if bars else 'empty',
+                      'symbol': 'AMAT',
+                      'bar_size': '15 mins',
+                      'duration': '1 D',
+                      'bars': [
+                          {
+                              'date': str(b.date), 'open': b.open, 'high': b.high, 'low': b.low,
+                              'close': b.close, 'volume': b.volume, 'average': b.average,
+                              'barCount': b.barCount,
+                          }
+                          for b in list(bars)[-32:]
+                      ],
+                  }
+              except Exception as exc:
+                  historical = {'status': 'unavailable', 'reason_type': type(exc).__name__, 'bars': []}
+
+              snapshot = {
+                  'schema': 'mm_ibkr.remote_readonly_agent_snapshot_v1',
+                  'observed_at_utc': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+                  'public_repository': os.environ['GITHUB_REPOSITORY'],
+                  'public_head': os.environ['GITHUB_SHA'],
+                  'run_id': os.environ['GITHUB_RUN_ID'],
+                  'job': os.environ['GITHUB_JOB'],
+                  'authority': 'ibkr_readonly_data_only',
+                  'paper_only': True,
+                  'readonly': True,
+                  'live_trading_enabled': False,
+                  'broker_session_ready': True,
+                  'broker_time': str(now),
+                  'managed_accounts': accounts,
+                  'managed_account_hashes': [hashlib.sha256(a.encode()).hexdigest() for a in accounts],
+                  'account_values': values,
+                  'positions': positions,
+                  'historical_probe': historical,
+              }
+              out = Path(os.environ['RUNNER_TEMP']) / 'ibkr-b1-private-snapshot.json'
+              out.write_text(json.dumps(snapshot, sort_keys=True) + '\n', encoding='utf-8')
+              out.chmod(0o600)
+              receipt = {
+                  'schema': 'mm_ibkr.remote_readonly_public_receipt_v1',
+                  'run_id': os.environ['GITHUB_RUN_ID'],
+                  'public_head': os.environ['GITHUB_SHA'],
+                  'authority': 'ibkr_readonly_data_only',
+                  'paper_only': True,
+                  'readonly': True,
+                  'broker_action': False,
+                  'broker_session_ready': True,
+                  'broker_time_received': True,
+                  'managed_account_count': len(accounts),
+                  'historical_probe_status': historical['status'],
+                  'historical_bar_count': len(historical.get('bars') or []),
+                  'credentials_logged': False,
+                  'account_plaintext_logged': False,
+              }
+              Path(os.environ['RUNNER_TEMP'], 'ibkr-b1-public-receipt.json').write_text(
+                  json.dumps(receipt, sort_keys=True) + '\n', encoding='utf-8'
+              )
+              print('IBKR_B1_BROKER_SESSION_READY=true')
+              print('IBKR_B1_MANAGED_ACCOUNT_COUNT=' + str(len(accounts)))
+              print('IBKR_B1_BROKER_TIME_RECEIVED=true')
+              print('IBKR_B1_HISTORICAL_PROBE_STATUS=' + historical['status'])
+              print('IBKR_B1_HISTORICAL_BAR_COUNT=' + str(len(historical.get('bars') or [])))
+          finally:
+              if ib.isConnected():
+                  ib.disconnect()
+          PY
+
+      - name: Encrypt private broker snapshot to agent-held one-run recipient
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import base64
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          from cryptography.hazmat.primitives import hashes, serialization
+          from cryptography.hazmat.primitives.asymmetric import x25519
+          from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+          from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+          recipient_raw = base64.b64decode(os.environ['RETURN_RECIPIENT_B64'].encode('ascii'), validate=True)
+          if len(recipient_raw) != 32:
+              raise SystemExit('return recipient key length invalid')
+          key_id = 'sha256:' + hashlib.sha256(recipient_raw).hexdigest()
+          if key_id != os.environ['RETURN_RECIPIENT_KEY_ID']:
+              raise SystemExit('return recipient key fingerprint mismatch')
+          plaintext = Path(os.environ['RUNNER_TEMP'], 'ibkr-b1-private-snapshot.json').read_bytes()
+          sender = x25519.X25519PrivateKey.generate()
+          sender_public = sender.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+          aad_node = {
+              'schema': 'mm_ibkr.remote_readonly_agent_return_x25519_v1',
+              'run_id': os.environ['GITHUB_RUN_ID'],
+              'public_head': os.environ['GITHUB_SHA'],
+              'recipient_key_id': key_id,
+          }
+          aad = json.dumps(aad_node, sort_keys=True, separators=(',', ':')).encode()
+          shared = sender.exchange(x25519.X25519PublicKey.from_public_bytes(recipient_raw))
+          key = HKDF(algorithm=hashes.SHA256(), length=32, salt=hashlib.sha256(aad).digest(), info=b'mm-ibkr-b1-agent-return-v1').derive(shared)
+          nonce = os.urandom(12)
+          ciphertext = ChaCha20Poly1305(key).encrypt(nonce, plaintext, aad)
+          envelope = dict(aad_node)
+          envelope.update({
+              'sender_public_b64': base64.b64encode(sender_public).decode('ascii'),
+              'nonce_b64': base64.b64encode(nonce).decode('ascii'),
+              'ciphertext_b64': base64.b64encode(ciphertext).decode('ascii'),
+              'ciphertext_sha256': hashlib.sha256(ciphertext).hexdigest(),
+          })
+          Path(os.environ['RUNNER_TEMP'], 'ibkr-b1-agent-return.enc.json').write_text(
+              json.dumps(envelope, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          print('IBKR_B1_PRIVATE_RETURN_ENCRYPTED=true')
+          print('IBKR_B1_PRIVATE_RETURN_CIPHERTEXT_SHA256=' + envelope['ciphertext_sha256'])
+          PY
+
+      - name: Publish encrypted return and sanitized receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+
+          run_id = os.environ['GITHUB_RUN_ID']
+          repo = os.environ['GITHUB_REPOSITORY']
+          branch = os.environ['EXCHANGE_REF']
+          token = os.environ['GH_TOKEN']
+          files = {
+              f'rendezvous/returns/{run_id}/ibkr-b1-agent-return.enc.json': Path(os.environ['RUNNER_TEMP'], 'ibkr-b1-agent-return.enc.json'),
+              f'rendezvous/receipts/{run_id}-ibkr-b1-readonly.json': Path(os.environ['RUNNER_TEMP'], 'ibkr-b1-public-receipt.json'),
+          }
+          for path, local in files.items():
+              payload = {
+                  'message': 'rendezvous: publish IBKR B1 protected proof',
+                  'content': base64.b64encode(local.read_bytes()).decode('ascii'),
+                  'branch': branch,
+              }
+              req = Request(
+                  f'https://api.github.com/repos/{repo}/contents/{path}',
+                  data=json.dumps(payload).encode(),
+                  headers={
+                      'Authorization': 'Bearer ' + token,
+                      'Accept': 'application/vnd.github+json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'Content-Type': 'application/json',
+                  },
+                  method='PUT',
+              )
+              with urlopen(req, timeout=30) as response:
+                  if response.status not in (200, 201):
+                      raise SystemExit(f'publish failed for {path}')
+          print('IBKR_B1_ENCRYPTED_RETURN_PUBLISHED=true')
+          print('IBKR_B1_PUBLIC_RECEIPT_PUBLISHED=true')
+          PY
+
+      - name: Destroy broker runtime and private material
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          docker rm -f ibkr-b1-gateway >/dev/null 2>&1
+          rm -f \
+            "$RUNNER_TEMP/ibkr-b1-gateway.env" \
+            "$RUNNER_TEMP/ibkr-b1-private-snapshot.json" \
+            "$RUNNER_TEMP/ibkr-b1-agent-return.enc.json" \
+            "$RUNNER_TEMP/ibkr-b1-public-receipt.json"
+          echo 'IBKR_B1_TEARDOWN_COMPLETE=true'
