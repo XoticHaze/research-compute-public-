@@ -1,0 +1,33 @@
+{
+  "schema": "research_compute_public.rc001_batch2_sanitized_job.v1",
+  "source_private_contract_git_blob": "7a3bbedbf01ded545fcd67cce2be7bed1003dd30",
+  "sanitization": {
+    "private_source_included": false,
+    "external_holdout_names_included": false,
+    "only_public_development_symbols_and_matched_etfs": true
+  },
+  "families": {
+    "oil_services": {
+      "development_universe": ["SLB", "HAL", "BKR", "NOV", "FTI", "CHX", "HP", "LBRT"],
+      "primary_industry_etf": "OIH"
+    },
+    "medical_devices": {
+      "development_universe": ["ISRG", "ABT", "MDT", "SYK", "BSX", "EW", "BDX", "RMD"],
+      "primary_industry_etf": "IHI"
+    },
+    "biotech": {
+      "development_universe": ["REGN", "VRTX", "GILD", "BIIB", "ALNY", "INCY", "BMRN", "UTHR"],
+      "primary_industry_etf": "XBI"
+    },
+    "chemicals": {
+      "development_universe": ["LIN", "APD", "SHW", "ECL", "DD", "DOW", "PPG", "FMC"],
+      "primary_industry_etf": "XLB"
+    }
+  },
+  "external_holdouts_loaded": false,
+  "research_only": true,
+  "promotion_authority": false,
+  "runtime_authority": false,
+  "broker_authority": false,
+  "live_trading_change": false
+}
