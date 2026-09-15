@@ -1,0 +1,31 @@
+name: MTUM Megacap Concentration Alpha R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/mtum_megacap_concentration_alpha_r1.py'
+      - '.github/workflows/mtum-megacap-concentration-alpha-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - id: eval
+        run: |
+          python research/mtum_megacap_concentration_alpha_r1.py
+          python - <<'PY'
+          import json,os
+          r=json.load(open('research/artifacts/mtum_megacap_concentration_alpha_r1.json'))['result']
+          b=lambda v:str(round(10000*v))
+          tag=f"{r['decision']}__fullbps_{b(r['full']['annualized_alpha_linear'])}__postbps_{b(r['post2020']['annualized_alpha_linear'])}__rollpct_{round(100*r['rolling_36m_positive_alpha_share'])}"
+          open(os.environ['GITHUB_OUTPUT'],'a').write(f'tag={tag}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mtum-megacap-concentration-alpha-r1__${{ steps.eval.outputs.tag }}
+          path: research/artifacts/mtum_megacap_concentration_alpha_r1.json
+          if-no-files-found: error
