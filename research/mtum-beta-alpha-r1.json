@@ -1,0 +1,9 @@
+{
+  "schema":"mtum_beta_alpha_contract.v1",
+  "claim_tested":"MTUM's realized excess over IWB should survive beta adjustment across both pre-2020 and post-2020 chronology rather than being explained by time-varying broad-market beta.",
+  "start":"2013-04-15",
+  "periods":{"full":["2013-04",null],"pre2020":["2013-04","2020-01"],"post2020":["2020-01",null]},
+  "gates":{"min_full_alpha":0.005,"min_pre2020_alpha":0.0,"min_post2020_alpha":0.0,"min_full_alpha_tstat":1.0},
+  "frozen_inheritance":{"parent":"SLP-20260911-MTUM-MOMENTUM-R1","primary_control":"IWB","frequency":"monthly","regression":"OLS MTUM monthly return = alpha + beta * IWB monthly return","no_parameter_rescue":true},
+  "research_only":true
+}
