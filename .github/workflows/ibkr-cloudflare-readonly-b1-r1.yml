@@ -62,15 +62,37 @@ jobs:
             --output "$RUNNER_TEMP/ibkr-gateway.env" \
             --receipt "$RUNNER_TEMP/ibkr-cloudflare-envelope-receipt.json"
 
-      - name: Start disposable read-only paper IB Gateway
+      - name: Start disposable double-read-only paper IB Gateway
         run: |
           set -euo pipefail
           docker pull "$IBKR_GATEWAY_IMAGE" >/dev/null
+
+          # IBC supports ReadOnlyLogin=yes, but the image does not expose it as
+          # an environment variable. Patch only the disposable container's IBC
+          # template before the image's normal envsubst step injects credentials.
+          docker run --rm --entrypoint /bin/bash "$IBKR_GATEWAY_IMAGE" -lc \
+            "grep -q '^ReadOnlyLogin=no$' /home/ibgateway/ibc/config.ini.tmpl"
+
           docker run -d --name ibkr-cloudflare-b1 \
             --env-file "$RUNNER_TEMP/ibkr-gateway.env" \
             -e TWS_MAJOR_VRSN=10.49.1c \
             -p 127.0.0.1:4002:4004 \
-            "$IBKR_GATEWAY_IMAGE" >/dev/null
+            --entrypoint /bin/bash \
+            "$IBKR_GATEWAY_IMAGE" -lc \
+            "set -e; sed -i 's/^ReadOnlyLogin=.*/ReadOnlyLogin=yes/' /home/ibgateway/ibc/config.ini.tmpl; grep -q '^ReadOnlyLogin=yes$' /home/ibgateway/ibc/config.ini.tmpl; exec /home/ibgateway/scripts/run.sh" >/dev/null
+
+          # Assert both independent read-only controls in the generated IBC config.
+          configured=0
+          for _ in $(seq 1 20); do
+            if docker exec ibkr-cloudflare-b1 /bin/bash -lc \
+              "grep -q '^ReadOnlyLogin=yes$' /home/ibgateway/ibc/config.ini && grep -q '^ReadOnlyApi=yes$' /home/ibgateway/ibc/config.ini"; then
+              configured=1
+              break
+            fi
+            sleep 1
+          done
+          test "$configured" = 1 || { echo 'IBKR_DOUBLE_READONLY_CONFIGURED=0'; exit 44; }
+          echo 'IBKR_DOUBLE_READONLY_CONFIGURED=1'
 
           ready=0
           for _ in $(seq 1 36); do
@@ -96,7 +118,7 @@ jobs:
           done
 
           if [ "$ready" != 1 ]; then
-            docker logs ibkr-cloudflare-b1 2>&1 | python -c 'import json,sys; t=sys.stdin.read().lower(); out={"schema":"mmibkr-ibkr-gateway-sanitized-failure-v1","twofa_signal":any(x in t for x in ["two-factor","two factor","second factor","2fa"]),"credential_rejection_signal":any(x in t for x in ["invalid username","invalid password","authentication failed","login failed"]),"existing_session_signal":"existing session" in t,"container_log_bytes":len(t.encode())}; print("IBKR_GATEWAY_SANITIZED_FAILURE="+json.dumps(out,sort_keys=True))'
+            docker logs ibkr-cloudflare-b1 2>&1 | python -c 'import json,sys; t=sys.stdin.read().lower(); out={"schema":"mmibkr-ibkr-gateway-sanitized-failure-v2","read_only_login_initiated":"initiating read-only login" in t,"twofa_initiated_exact":"second factor authentication initiated" in t,"twofa_dialog_opened":"detected dialog entitled: second factor authentication; event=opened" in t,"device_selection_required":"select second factor device" in t,"security_code_dialog":"detected dialog entitled: enter security code" in t,"paper_login_clicked":"click button: paper log in" in t,"authenticating_seen":"detected frame entitled: authenticating" in t,"login_completed":"login has completed" in t,"credential_rejection_signal":any(x in t for x in ["invalid username","invalid password","authentication failed","login failed"]),"existing_session_signal":"existing session" in t,"container_log_bytes":len(t.encode())}; print("IBKR_GATEWAY_SANITIZED_FAILURE="+json.dumps(out,sort_keys=True))'
             echo 'IBKR_GATEWAY_API_READY=0'
             exit 45
           fi
