@@ -1,0 +1,11 @@
+{
+  "schema":"dbmf_concentration_comparator_contract.v1",
+  "claim_tested":"Determine whether the identical five-best-relative-month deletion is uniquely destructive to DBMF or similarly destructive to comparator risky/trend return streams.",
+  "symbols":["DBMF","KMLM","SPY","BIL"],
+  "assets":["DBMF","KMLM","SPY"],
+  "start":"2021-05-01",
+  "top_months_removed":5,
+  "matched_control":"BIL",
+  "frozen_inheritance":{"prior_learning_ids":["SLP-20260911-DBMF-CONCENTRATION-R1","SLP-20260911-DBMF-REGIME-ROLE-R1"],"no_parameter_rescue":true},
+  "research_only":true
+}
