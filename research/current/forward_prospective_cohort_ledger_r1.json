@@ -30,11 +30,45 @@
         "MHO": 5
       },
       "program_id": "HOMEBUILDERS",
-      "resolution": null,
+      "resolution": {
+        "common_entry_date": "2026-09-14",
+        "common_market_latest_date": "2026-09-14",
+        "observations": [
+          {
+            "entry_date": "2026-09-14",
+            "horizon_sessions": 5,
+            "sessions_completed": 0,
+            "status": "OPEN",
+            "symbol": "CCS"
+          },
+          {
+            "entry_date": "2026-09-14",
+            "horizon_sessions": 5,
+            "sessions_completed": 0,
+            "status": "OPEN",
+            "symbol": "MHO"
+          },
+          {
+            "entry_date": "2026-09-14",
+            "horizon_sessions": 5,
+            "sessions_completed": 0,
+            "status": "OPEN",
+            "symbol": "HOV"
+          },
+          {
+            "entry_date": "2026-09-14",
+            "horizon_sessions": 5,
+            "sessions_completed": 0,
+            "status": "OPEN",
+            "symbol": "BZH"
+          }
+        ],
+        "summary": null
+      },
       "signal_date": "2026-09-11",
       "source_adapter_sha256": "00435d369ddcc3a3d8adbedb91a9662f047b292ff64fe6af6901bfd112466a59",
       "source_ref": "100e356239b2399c054c1a41a18e4e9a5d07d33a",
-      "status": "AWAITING_ENTRY_SESSION",
+      "status": "OPEN",
       "stock_round_trip_cost_bps": 25.0,
       "symbols": [
         "CCS",
@@ -72,11 +106,16 @@
         "TXN": 364.0531406251399
       },
       "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
-      "resolution": null,
+      "resolution": {
+        "common_market_latest_date": "2026-09-14",
+        "entry_date": "2026-09-14",
+        "horizon_sessions": 20,
+        "sessions_completed": 0
+      },
       "signal_date": "2026-09-11",
       "source_adapter_sha256": "aed8eb43d888d3c4d39c4db940c89e5d2247204567d4a0fcf129e9551f04e333",
       "source_ref": "e73ec9b15180e208de541ce5d5304888e5550433",
-      "status": "AWAITING_ENTRY_SESSION",
+      "status": "OPEN",
       "stock_round_trip_cost_bps": 25.0,
       "symbols": [
         "AMAT",
@@ -110,8 +149,8 @@
       }
     }
   ],
-  "generated_at": "2026-09-13T04:55:23.220121+00:00",
-  "market_data_asof": "2026-09-13",
+  "generated_at": "2026-09-15T05:15:35.044060+00:00",
+  "market_data_asof": "2026-09-15",
   "schema": "research.forward_prospective_cohort_ledger_r1",
   "summary": {
     "HOMEBUILDERS": {
