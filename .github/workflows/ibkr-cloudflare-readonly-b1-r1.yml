@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml'
       - 'scripts/fleet_authority_envelope_consumer_v1.py'
+      - 'scripts/ibkr_gateway_state_classifier_v1.py'
 
 permissions:
   contents: read
@@ -36,7 +37,10 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --disable-pip-version-check 'cryptography==46.0.1' 'ib_insync==0.9.86'
-          python -m py_compile scripts/fleet_authority_envelope_consumer_v1.py scripts/ibkr_readonly_data_probe_v1.py
+          python -m py_compile \
+            scripts/fleet_authority_envelope_consumer_v1.py \
+            scripts/ibkr_readonly_data_probe_v1.py \
+            scripts/ibkr_gateway_state_classifier_v1.py
 
       - name: Require configured private authority
         run: |
@@ -112,7 +116,7 @@ jobs:
           }
           print('IBKR_GENERATED_CONFIG_PROOF=' + json.dumps(out, sort_keys=True))
           PY
-            docker logs ibkr-cloudflare-b1 2>&1 | python -c 'import json,sys; t=sys.stdin.read().lower(); out={"schema":"mmibkr-ibkr-gateway-startup-proof-v1","run_banner_seen":"starting ibc" in t or "starting ibc/ib gateway" in t,"settings_apply_seen":"appling settings" in t or "applying settings" in t,"socat_started":"starting socat" in t,"ibc_process_seen":"starting ibc in paper mode" in t,"credential_rejection_signal":any(x in t for x in ["invalid username","invalid password","authentication failed","login failed"]),"shell_or_path_error_signal":any(x in t for x in ["no such file or directory","command not found","permission denied"]),"container_log_bytes":len(t.encode())}; print("IBKR_GATEWAY_STARTUP_PROOF="+json.dumps(out,sort_keys=True))'
+            docker logs ibkr-cloudflare-b1 2>&1 | python scripts/ibkr_gateway_state_classifier_v1.py
             echo 'IBKR_DOUBLE_READONLY_CONFIGURED=0'
             exit 44
           fi
@@ -142,7 +146,7 @@ jobs:
           done
 
           if [ "$ready" != 1 ]; then
-            docker logs ibkr-cloudflare-b1 2>&1 | python -c 'import json,sys; t=sys.stdin.read().lower(); out={"schema":"mmibkr-ibkr-gateway-sanitized-failure-v2","read_only_login_initiated":"initiating read-only login" in t,"twofa_initiated_exact":"second factor authentication initiated" in t,"twofa_dialog_opened":"detected dialog entitled: second factor authentication; event=opened" in t,"device_selection_required":"select second factor device" in t,"security_code_dialog":"detected dialog entitled: enter security code" in t,"paper_login_clicked":"click button: paper log in" in t,"authenticating_seen":"detected frame entitled: authenticating" in t,"login_completed":"login has completed" in t,"credential_rejection_signal":any(x in t for x in ["invalid username","invalid password","authentication failed","login failed"]),"existing_session_signal":"existing session" in t,"container_log_bytes":len(t.encode())}; print("IBKR_GATEWAY_SANITIZED_FAILURE="+json.dumps(out,sort_keys=True))'
+            docker logs ibkr-cloudflare-b1 2>&1 | python scripts/ibkr_gateway_state_classifier_v1.py
             echo 'IBKR_GATEWAY_API_READY=0'
             exit 45
           fi
