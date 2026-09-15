@@ -1,0 +1,10 @@
+{
+  "schema":"pkw_buyback_alpha_contract.v1",
+  "claim_tested":"PKW buyback-achievers selection creates durable after-cost excess versus both broad-market and value-style opportunity controls.",
+  "start":"2007-01-01",
+  "cost_bps":10,
+  "periods":{"full":["2007-01",null],"pre2020":["2007-01","2020-01"],"post2020":["2020-01",null]},
+  "gates":{"min_full_excess_vs_vtv":0.01,"min_full_excess_vs_spy":0.0,"min_pre2020_excess_vs_vtv":0.0,"min_post2020_excess_vs_vtv":0.0,"min_positive_year_fraction_vs_vtv":0.60},
+  "frozen_inheritance":{"fund":"PKW","style_control":"VTV","broad_control":"SPY","frequency":"monthly","no_parameter_rescue":true},
+  "research_only":true
+}
