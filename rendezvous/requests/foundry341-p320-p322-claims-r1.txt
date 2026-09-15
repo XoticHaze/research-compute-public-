@@ -1,0 +1,12 @@
+schema=commandcenter.public_encrypted_compute_request.v1
+role=Continue Release
+harness=foundry341_p320_p322_claim_acceptance_v1
+private_authority=XoticHaze/research-foundry
+private_pr=341
+private_head=4e5bb6a9b210ef044f00e22f31b3989487dc0508
+scope=three independent terminal-result claims
+portfolio_ranking=false
+allocation_authority=false
+runtime=false
+broker=false
+live_trading=false
