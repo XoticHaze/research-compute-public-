@@ -1,3 +1,4 @@
+// deploy-trigger: 2026-09-15T07:00Z
 const GITHUB_ISSUER = 'https://token.actions.githubusercontent.com';
 const GITHUB_JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwks';
 const EXPECTED_AUDIENCE = 'mmibkr-fleet-authority';
