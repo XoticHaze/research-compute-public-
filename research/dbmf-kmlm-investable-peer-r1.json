@@ -1,0 +1,12 @@
+{
+  "schema":"dbmf_kmlm_investable_peer_contract.v1",
+  "claim_tested":"DBMF should show persistent implementation-level excess over a directly investable managed-futures peer, KMLM, rather than only cash or a noninvestable CTA index.",
+  "symbols":["DBMF","KMLM"],
+  "start":"2021-05-01",
+  "min_full_year_days":200,
+  "rolling_days":252,
+  "gates":{"min_cagr_excess":0.01,"min_recent_2023plus_excess":0.00,"min_positive_full_years":3,"min_rolling_positive_share":0.55},
+  "frozen_inheritance":{"generic_managed_futures_family":"UNSUPPORTED","dbmf_state":"IMPLEMENTATION_SPECIFIC_PEER_EDGE_SUPPORTED_VS_SG_CTA","dbmf_annual_source_parity":"CLEARED","no_parameter_rescue":true},
+  "notes":"Actual adjusted-close returns embed each ETF's realized fee/distribution effects at market-price scale. This is a direct investable peer discriminator, not portfolio allocation authority.",
+  "research_only":true
+}

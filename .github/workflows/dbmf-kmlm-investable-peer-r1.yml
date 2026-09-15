@@ -1,0 +1,61 @@
+name: DBMF KMLM Investable Peer R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/dbmf-kmlm-investable-peer-r1.yml'
+      - 'research/dbmf-kmlm-investable-peer-r1.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Evaluate frozen DBMF vs KMLM investable peer discriminator
+        run: |
+          python - <<'PY'
+          import json, urllib.request, datetime as dt
+          from pathlib import Path
+          c=json.loads(Path('research/dbmf-kmlm-investable-peer-r1.json').read_text())
+          start=dt.datetime.fromisoformat(c['start']+'T00:00:00+00:00'); end=dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1)
+          def fetch(sym):
+              u=f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?period1={int(start.timestamp())}&period2={int(end.timestamp())}&interval=1d&events=history&includeAdjustedClose=true"
+              req=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+              with urllib.request.urlopen(req,timeout=30) as r:o=json.load(r)['chart']['result'][0]
+              a=o['indicators'].get('adjclose',[{}])[0].get('adjclose') or o['indicators']['quote'][0]['close']
+              return {dt.datetime.fromtimestamp(t,dt.timezone.utc).date().isoformat():float(p) for t,p in zip(o['timestamp'],a) if p is not None}
+          px={s:fetch(s) for s in c['symbols']}; common=sorted(set(px['DBMF'])&set(px['KMLM'])); assert len(common)>=900
+          def retmap(s):return {common[i]:px[s][common[i]]/px[s][common[i-1]]-1 for i in range(1,len(common))}
+          r={s:retmap(s) for s in c['symbols']}; ds=common[1:]
+          def cagr(s,dates):
+              v=1.0
+              for d in dates:v*=1+r[s][d]
+              yrs=max((dt.date.fromisoformat(dates[-1])-dt.date.fromisoformat(dates[0])).days/365.25,1/365.25)
+              return v**(1/yrs)-1
+          base_ex=cagr('DBMF',ds)-cagr('KMLM',ds)
+          recent=[d for d in ds if d>='2023-01-01']; recent_ex=cagr('DBMF',recent)-cagr('KMLM',recent)
+          yearly=[]
+          for y in sorted({d[:4] for d in ds}):
+              yz=[d for d in ds if d.startswith(y+'-')]
+              if len(yz)>=c['min_full_year_days']:
+                  ex=cagr('DBMF',yz)-cagr('KMLM',yz); yearly.append({'year':y,'excess_cagr':ex,'positive':ex>0,'days':len(yz)})
+          w=c['rolling_days']; rolls=[]
+          for i in range(w-1,len(ds)):
+              z=ds[i-w+1:i+1]
+              ex=cagr('DBMF',z)-cagr('KMLM',z); rolls.append(ex)
+          roll_share=sum(x>0 for x in rolls)/len(rolls)
+          out={'schema':'dbmf_kmlm_investable_peer_result.v1','common_start':common[0],'common_end':common[-1],'common_rows':len(common),'base_excess_cagr':base_ex,'recent_2023plus_excess_cagr':recent_ex,'yearly':yearly,'positive_full_years':sum(x['positive'] for x in yearly),'full_year_count':len(yearly),'rolling_days':w,'rolling_window_count':len(rolls),'rolling_positive_share':roll_share,'rolling_median_excess_cagr':sorted(rolls)[len(rolls)//2],'gates':c['gates']}
+          g=c['gates']; out['investable_peer_edge_supported']=(base_ex>=g['min_cagr_excess'] and recent_ex>=g['min_recent_2023plus_excess'] and out['positive_full_years']>=g['min_positive_full_years'] and roll_share>=g['min_rolling_positive_share'])
+          out['research_only']=True
+          Path('dbmf-kmlm-investable-peer-r1-result.json').write_text(json.dumps(out,sort_keys=True,indent=2));print(json.dumps(out,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dbmf-kmlm-investable-peer-r1-result
+          path: dbmf-kmlm-investable-peer-r1-result.json
+          retention-days: 14
