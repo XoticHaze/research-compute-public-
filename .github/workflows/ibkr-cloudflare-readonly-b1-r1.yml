@@ -2,6 +2,11 @@ name: IBKR Cloudflare Read-Only B1 R1
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ibkr-b1-authority-v1]
+    paths:
+      - '.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml'
+      - 'scripts/fleet_authority_envelope_consumer_v1.py'
 
 permissions:
   contents: read
@@ -45,6 +50,7 @@ jobs:
           if node.get('ok') is not True or node.get('authority_configured') is not True:
               raise SystemExit('fleet authority is not configured')
           print('FLEET_AUTHORITY_HEALTH=READY')
+          print('FLEET_AUTHORITY_OIDC_POLICY=' + ('READY' if node.get('oidc_policy_configured') is True else 'UNKNOWN'))
           PY
 
       - name: Obtain one-run sealed gateway environment
