@@ -1,0 +1,35 @@
+{
+  "schema":"research.p567_baker_rig_oil_services_contract.v1",
+  "parent":"P07",
+  "child":"P567",
+  "status":"FROZEN_PREPERFORMANCE_CONTRACT",
+  "claim":"Causally published U.S. oil drilling activity acceleration can identify periods when oilfield services outperform broad energy after switching costs.",
+  "source":{
+    "publisher":"Baker Hughes",
+    "dataset":"North America Rotary Rig Count",
+    "weekly_sheet":"NAM Weekly",
+    "fields":["Country","DrillFor","US_PublishDate","Rig Count Value"],
+    "series":"sum Rig Count Value where Country=UNITED STATES and DrillFor=Oil by US_PublishDate",
+    "availability":"first U.S. trading session strictly after US_PublishDate; Baker Hughes states North America count is published Friday at noon Central",
+    "history_contract":"stitch the fixed Aug-29-2025 archive through its terminal publish date with the fixed Sep-04-2026 current workbook only for later dates; exact-overlap revision audit must be reported before any support claim"
+  },
+  "signal":{
+    "lookback_observations":13,
+    "rule":"ON when current U.S. oil rig count is strictly greater than the count 13 published weekly observations earlier; otherwise OFF",
+    "on_asset":"OIH",
+    "off_asset":"XLE",
+    "hold":"until the next causally available weekly publication"
+  },
+  "costs":{"full_switch_bps":25.0},
+  "controls":{
+    "matched_static":"static OIH/XLE mix using full-sample mean ON exposure",
+    "opportunity":["OIH","XLE","XOP","SPY"]
+  },
+  "evaluation":{
+    "chronology_folds":[["2014-01-01","2016-12-31"],["2017-01-01","2019-12-31"],["2020-01-01","2022-12-31"],["2023-01-01","2026-09-11"]],
+    "pass_gate":"full matched_excess_cagr > 0 AND full xle_excess_cagr > 0 AND at least 3 of 4 folds have matched_excess_cagr > 0 AND overlap_revision_mismatch_rate <= 0.01",
+    "no_parameter_rescue":true,
+    "forbidden_rescue":["change 13-week lookback","change sign threshold","change causal lag","change OIH/XLE mapping","choose favorable subperiod","change cost after observation"]
+  },
+  "boundaries":{"portfolio_ranking":false,"allocation_authority":false,"promotion_authority":false,"runtime":false,"broker":false,"live_trading":false}
+}

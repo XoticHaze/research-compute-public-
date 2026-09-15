@@ -1,0 +1,39 @@
+name: P567 Baker Rig Oil Services R1
+
+on:
+  pull_request:
+    paths:
+      - 'research/p567_baker_rig_oil_services_r1.py'
+      - 'research/contracts/p567_baker_rig_oil_services_r1.json'
+      - '.github/workflows/p567-baker-rig-oil-services-r1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check requests==2.32.5 openpyxl==3.1.5 pandas==2.2.3 yfinance==0.2.65
+      - run: python research/p567_baker_rig_oil_services_r1.py
+      - name: Result tag
+        id: result
+        run: |
+          python - <<'PY'
+          import json, os
+          x=json.load(open('artifacts/p567_baker_rig_oil_services_r1.json'))
+          bp=lambda v: 'na' if v is None else str(int(round(v*10000)))
+          tag=f"{x['decision']}__matched_{bp(x['overall']['matched_excess_cagr'])}__xle_{bp(x['overall']['xle_excess_cagr'])}__folds_{x['positive_fold_count']}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f'tag={tag}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p567-baker-rig-oil-services__${{ steps.result.outputs.tag }}
+          path: artifacts/p567_baker_rig_oil_services_r1.json
+          if-no-files-found: error
