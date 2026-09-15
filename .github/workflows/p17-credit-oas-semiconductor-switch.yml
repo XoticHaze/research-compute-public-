@@ -1,0 +1,32 @@
+name: P17 Credit OAS Semiconductor Switch
+
+on:
+  pull_request:
+    paths:
+      - 'research/p17_credit_oas_semiconductor_switch_20260907.py'
+      - '.github/workflows/p17-credit-oas-semiconductor-switch.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install fixed dependencies
+        run: python -m pip install --disable-pip-version-check -q pandas==2.3.2 numpy==2.3.2
+      - name: Compile frozen discriminator
+        run: python -m py_compile research/p17_credit_oas_semiconductor_switch_20260907.py
+      - name: Execute frozen credit-state test
+        run: python research/p17_credit_oas_semiconductor_switch_20260907.py
+      - name: Upload terminal receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: p17-credit-oas-semiconductor-switch-${{ github.run_id }}
+          path: p17-credit-oas-semiconductor-switch-receipt.json
+          if-no-files-found: error
