@@ -3,5 +3,17 @@
   "name": "fleet-authority",
   "main": "src/index.js",
   "compatibility_date": "2026-09-15",
-  "workers_dev": true
+  "workers_dev": true,
+  "secrets": {
+    "required": [
+      "IBKR_PAPER_USERNAME",
+      "IBKR_PAPER_PASSWORD"
+    ]
+  },
+  "vars": {
+    "GITHUB_ALLOWED_REF": "refs/heads/ibkr-b1-authority-v1",
+    "GITHUB_ALLOWED_EVENT": "workflow_dispatch",
+    "GITHUB_ALLOWED_WORKFLOW_REF": "XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1",
+    "GITHUB_ALLOWED_WORKFLOW_SHA": "7d349e39d6e1017d99c54dca307573886b6bea58"
+  }
 }
