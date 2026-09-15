@@ -21,11 +21,11 @@ concurrency:
 jobs:
   broker-data-proof:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 20
     env:
       FLEET_AUTHORITY_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-paper/seal
       FLEET_AUTHORITY_HEALTH: https://fleet-authority.slenderiq.workers.dev/healthz
-      IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller:v0.10.0
+      IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
       PROBE_SYMBOL: AMAT
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -71,9 +71,9 @@ jobs:
         run: |
           set -euo pipefail
           docker pull "$IBKR_CONTROLLER_IMAGE" >/dev/null
-          image_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$IBKR_CONTROLLER_IMAGE")"
-          test -n "$image_digest"
-          echo "IBKR_CONTROLLER_IMAGE_DIGEST=$image_digest"
+          image_id="$(docker image inspect --format '{{.Id}}' "$IBKR_CONTROLLER_IMAGE")"
+          test -n "$image_id"
+          echo "IBKR_CONTROLLER_IMAGE_PINNED=1"
 
           docker run -d --name ibkr-cloudflare-b1 \
             --env-file "$RUNNER_TEMP/ibkr-gateway.env" \
@@ -84,14 +84,29 @@ jobs:
             -e TWOFA_EXIT_INTERVAL=300 \
             -e CONTROLLER_HEALTH_SERVER_PORT=8080 \
             -p 127.0.0.1:4002:4004 \
+            -p 127.0.0.1:18080:8080 \
             "$IBKR_CONTROLLER_IMAGE" >/dev/null
 
           docker exec ibkr-cloudflare-b1 /bin/sh -lc 'test "$TRADING_MODE" = paper && test "$READ_ONLY_API" = yes' >/dev/null
           echo 'IBKR_PAPER_READONLY_ENV_ASSERTED=1'
 
           ready=0
-          for _ in $(seq 1 120); do
+          for _ in $(seq 1 165); do
+            running="$(docker inspect -f '{{.State.Running}}' ibkr-cloudflare-b1 2>/dev/null || echo false)"
+            if [ "$running" != true ]; then
+              break
+            fi
+
             if python - <<'PY'
+          import socket
+          try:
+              with socket.create_connection(('127.0.0.1', 4002), timeout=0.25):
+                  pass
+          except OSError:
+              raise SystemExit(1)
+          PY
+            then
+              if python - <<'PY'
           from ib_insync import IB
           ib = IB()
           ok = False
@@ -105,14 +120,60 @@ jobs:
                   ib.disconnect()
           raise SystemExit(0 if ok else 1)
           PY
-            then
-              ready=1
-              break
+              then
+                ready=1
+                break
+              fi
             fi
             sleep 2
           done
 
+          python - <<'PY'
+          import json
+          from urllib.error import HTTPError
+          from urllib.request import urlopen
+          raw = b'{}'
+          reachable = False
+          try:
+              with urlopen('http://127.0.0.1:18080/health', timeout=2) as r:
+                  raw = r.read()
+                  reachable = True
+          except HTTPError as e:
+              raw = e.read()
+              reachable = True
+          except Exception:
+              pass
+          try:
+              node = json.loads(raw.decode('utf-8'))
+          except Exception:
+              node = {}
+          out = {
+              'schema': 'mmibkr-ibkr-controller-health-proof-v1',
+              'reachable': reachable,
+              'status': node.get('status'),
+              'mode': node.get('mode'),
+              'state': node.get('state'),
+              'jvm_alive': node.get('jvm_alive'),
+              'api_port_open': node.get('api_port_open'),
+              'ccp_lockout_streak': node.get('ccp_lockout_streak'),
+              'ccp_backoff_seconds': node.get('ccp_backoff_seconds'),
+              'last_auth_present': bool(node.get('last_auth_timestamp') or node.get('last_auth')),
+          }
+          print('IBKR_CONTROLLER_HEALTH=' + json.dumps(out, sort_keys=True))
+          PY
+
           if [ "$ready" != 1 ]; then
+            running="$(docker inspect -f '{{.State.Running}}' ibkr-cloudflare-b1 2>/dev/null || echo false)"
+            exit_code="$(docker inspect -f '{{.State.ExitCode}}' ibkr-cloudflare-b1 2>/dev/null || echo -1)"
+            RUNNING="$running" EXIT_CODE="$exit_code" python - <<'PY'
+          import json, os
+          out = {
+              'schema': 'mmibkr-ibkr-controller-container-proof-v1',
+              'running': os.environ.get('RUNNING', '').lower() == 'true',
+              'exit_code': int(os.environ.get('EXIT_CODE', '-1')),
+          }
+          print('IBKR_CONTROLLER_CONTAINER=' + json.dumps(out, sort_keys=True))
+          PY
             {
               docker logs ibkr-cloudflare-b1 2>&1 || true
               docker exec ibkr-cloudflare-b1 /bin/sh -lc 'cat /home/ibgateway/Jts/launcher.log 2>/dev/null || true' 2>&1 || true
