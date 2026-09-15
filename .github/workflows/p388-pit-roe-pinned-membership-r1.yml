@@ -1,0 +1,31 @@
+name: P388 PIT ROE Pinned Membership R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p388_pit_roe_pinned_membership_r1.py'
+      - '.github/workflows/p388-pit-roe-pinned-membership-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --quiet pandas numpy yfinance 'git+https://github.com/arielNacamulli/pitindex.git@2df030e5c9be7c83cf4b28c3d8597d74d274757e'
+      - id: result
+        run: |
+          python research/p388_pit_roe_pinned_membership_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/p388_pit_roe_pinned_membership_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('tag='+x['decision']+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p388-pit-roe-pinned-membership-r1__${{ steps.result.outputs.tag }}
+          path: research/artifacts/p388_pit_roe_pinned_membership_r1.json
+          if-no-files-found: error
+          retention-days: 90
