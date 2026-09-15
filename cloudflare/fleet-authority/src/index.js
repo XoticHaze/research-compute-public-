@@ -214,6 +214,12 @@ export default {
         ok: true,
         service: 'mmibkr-fleet-authority',
         authority_configured: Boolean(env.IBKR_PAPER_USERNAME && env.IBKR_PAPER_PASSWORD),
+        oidc_policy_configured: Boolean(
+          env.GITHUB_ALLOWED_REF &&
+          env.GITHUB_ALLOWED_EVENT &&
+          env.GITHUB_ALLOWED_WORKFLOW_REF &&
+          env.GITHUB_ALLOWED_WORKFLOW_SHA
+        ),
       });
     }
 
@@ -248,7 +254,7 @@ export default {
     } catch (error) {
       const message = String(error?.message || 'rejected');
       if (message === 'authority_not_configured') return json({ error: message }, 503);
-      if (message.startsWith('oidc_')) return json({ error: 'unauthorized' }, 401);
+      if (message.startsWith('oidc_')) return json({ error: 'unauthorized', reason: message }, 401);
       return json({ error: 'request_rejected' }, 400);
     }
   },
