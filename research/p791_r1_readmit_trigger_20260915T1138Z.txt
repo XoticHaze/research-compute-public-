@@ -1,0 +1,3 @@
+P791 R1 market-test readmission trigger.
+Authority: parser recall run 34958809660 terminal PASS with recall=1.0 and specificity=1.0.
+No scientific parameter, corpus, horizon, cost, universe, control, or threshold mutation.

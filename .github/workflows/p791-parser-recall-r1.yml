@@ -1,0 +1,30 @@
+name: P791 Parser Recall R1
+on:
+  pull_request:
+    paths:
+      - 'research/p791_parser_recall_r1.py'
+      - 'research/p791_sec_management_guidance_revision_r1.py'
+      - '.github/workflows/p791-parser-recall-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - id: eval
+        run: |
+          python research/p791_parser_recall_r1.py
+          python - <<'PY'
+          import json, os
+          x=json.load(open('research/results/p791_parser_recall_r1.json'))
+          tag=f"{x['decision']}__recall_{int(round(x['recall']*10000))}__specificity_{int(round(x['specificity']*10000))}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p791-parser-recall__${{ steps.eval.outputs.tag }}
+          path: research/results/p791_parser_recall_r1.json
+          if-no-files-found: error
