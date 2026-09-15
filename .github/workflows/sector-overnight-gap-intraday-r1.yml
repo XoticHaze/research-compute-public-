@@ -1,0 +1,23 @@
+name: sector-overnight-gap-intraday-r1
+on:
+  push:
+    paths:
+      - 'research/sector_overnight_gap_intraday_r1.py'
+      - '.github/workflows/sector-overnight-gap-intraday-r1.yml'
+  workflow_dispatch:
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install yfinance pandas numpy
+      - run: python research/sector_overnight_gap_intraday_r1.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sector-overnight-gap-intraday-r1
+          path: artifacts/sector-overnight-gap-intraday-r1/
