@@ -1,0 +1,155 @@
+name: P04 R3 H24 Context Encrypted Replay
+
+on:
+  push:
+    branches:
+      - research/p04-r3-h24-context-concordance-20260913
+    paths:
+      - 'rendezvous/requests/p04-r3-h24-context-corrected-replay-*.txt'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: p04-r3-h24-context-corrected-replay-${{ github.sha }}
+  cancel-in-progress: false
+
+env:
+  EXCHANGE_REF: rendezvous-exchange
+  RECIPIENT_ROOT: rendezvous/recipients
+  RESPONSE_ROOT: rendezvous/responses
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+      - name: Install fixed environment
+        run: python -m pip install --disable-pip-version-check -q cryptography numpy==2.4.6 pandas==3.0.5
+      - name: Compile frozen evaluator and transport
+        run: python -m py_compile scripts/ephemeral_x25519_chunked_v1.py scripts/p04_r3_h24_context_consumer_v1.py
+      - name: Generate and publish one-run corrected recipient
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import base64, hashlib, json, os
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric import x25519
+          private = x25519.X25519PrivateKey.generate()
+          private_raw = private.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption())
+          public_raw = private.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+          Path(os.environ['RUNNER_TEMP'], 'p04-r3-corrected-private.b64').write_text(base64.b64encode(private_raw).decode('ascii'))
+          recipient = {
+              'schema': 'p04-r3-h24-context-corrected-recipient-v1',
+              'run_id': os.environ['GITHUB_RUN_ID'],
+              'recipient_b64': base64.b64encode(public_raw).decode('ascii'),
+              'recipient_key_id': 'sha256:' + hashlib.sha256(public_raw).hexdigest(),
+              'consumer_head_sha': os.environ['GITHUB_SHA'],
+          }
+          Path(os.environ['RUNNER_TEMP'], 'p04-r3-corrected-recipient.json').write_text(json.dumps(recipient, sort_keys=True) + '\n')
+          print('P04_R3_CORRECTED_RUN_ID=' + os.environ['GITHUB_RUN_ID'])
+          print('P04_R3_CORRECTED_RECIPIENT_KEY_ID=' + recipient['recipient_key_id'])
+          PY
+          path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}-p04-r3-h24-context-corrected.json"
+          payload="$(base64 -w0 "$RUNNER_TEMP/p04-r3-corrected-recipient.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json,sys
+          content,branch=sys.argv[1:]
+          print(json.dumps({'message':'rendezvous: publish P04 R3 corrected recipient','content':content,'branch':branch}))
+          PY
+          )"
+          for attempt in $(seq 1 12); do
+            code="$(curl -sS -o "$RUNNER_TEMP/publish.json" -w '%{http_code}' -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}" -d "$body")"
+            [ "$code" = 201 ] && break
+            [ "$code" = 409 ] || { cat "$RUNNER_TEMP/publish.json"; exit 43; }
+            sleep "$attempt"
+          done
+          [ "$code" = 201 ] || { cat "$RUNNER_TEMP/publish.json"; exit 44; }
+          echo "P04_R3_RESPONSE_ROOT=${RESPONSE_ROOT}/${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
+      - name: Wait for run-bound corrected envelope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          envelope_path="${P04_R3_RESPONSE_ROOT}/p04-r3-h24-context-corrected-envelope.json"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${envelope_path}?ref=${EXCHANGE_REF}"
+          found=0
+          for _ in $(seq 1 420); do
+            if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/p04-r3-corrected-envelope.json"; then found=1; break; fi
+            sleep 5
+          done
+          [ "$found" = 1 ] || { echo 'run-bound corrected P04 R3 envelope did not arrive'; exit 42; }
+      - name: Reassemble authenticated ciphertext chunks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, hashlib, json, os
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+          env = json.loads(Path(os.environ['RUNNER_TEMP'], 'p04-r3-corrected-envelope.json').read_text())
+          chunks = env.get('chunks')
+          if not isinstance(chunks, list) or not chunks or len(chunks) > 64: raise SystemExit('invalid chunk list')
+          prefix = os.environ['P04_R3_RESPONSE_ROOT'].rstrip('/') + '/'
+          pieces=[]; seen=set()
+          for node in chunks:
+              if set(node) != {'path','sha256','chars'}: raise SystemExit('invalid chunk descriptor')
+              path=str(node['path'])
+              if not path.startswith(prefix) or path in seen or '..' in path.split('/'): raise SystemExit('invalid chunk path')
+              seen.add(path)
+              req=Request(f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/{path}?ref={os.environ['EXCHANGE_REF']}",headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github.raw+json','X-GitHub-Api-Version':'2022-11-28'})
+              raw=urlopen(req,timeout=30).read().strip()
+              if len(raw)!=int(node['chars']) or hashlib.sha256(raw).hexdigest()!=str(node['sha256']): raise SystemExit('chunk identity mismatch')
+              pieces.append(raw.decode('ascii'))
+          ciphertext=base64.b64decode(''.join(pieces).encode('ascii'), validate=True)
+          if hashlib.sha256(ciphertext).hexdigest()!=env.get('ciphertext_sha256'): raise SystemExit('ciphertext digest mismatch')
+          Path(os.environ['RUNNER_TEMP'], 'p04-r3-corrected-ciphertext.bin').write_bytes(ciphertext)
+          print('P04_R3_CORRECTED_CIPHERTEXT_SHA256='+hashlib.sha256(ciphertext).hexdigest())
+          PY
+      - name: Decrypt exact compact payload
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          from scripts.ephemeral_x25519_chunked_v1 import decrypt_assembled_ciphertext
+          root=Path(os.environ['RUNNER_TEMP'])
+          envelope=json.loads((root/'p04-r3-corrected-envelope.json').read_text())
+          raw=decrypt_assembled_ciphertext(
+              envelope=envelope,
+              ciphertext=(root/'p04-r3-corrected-ciphertext.bin').read_bytes(),
+              private_key_path=root/'p04-r3-corrected-private.b64',
+              expected_schema='p04-r3-h24-context-corrected-envelope-v1',
+              expected_run_id=os.environ['GITHUB_RUN_ID'],
+              expected_harness='p04-r3-h24-context-corrected-v1',
+              response_root=os.environ['P04_R3_RESPONSE_ROOT'],
+          )
+          (root/'p04-r3-corrected-payload.json').write_bytes(raw)
+          PY
+      - name: Execute corrected frozen P04 R3 evaluator
+        run: |
+          set -euo pipefail
+          python scripts/p04_r3_h24_context_consumer_v1.py \
+            --payload "$RUNNER_TEMP/p04-r3-corrected-payload.json" \
+            --output p04-r3-h24-context-corrected-receipt.json | tee "$RUNNER_TEMP/p04-r3-corrected.log"
+          grep '^P04_R3_H24_CONTEXT_RECEIPT=' "$RUNNER_TEMP/p04-r3-corrected.log"
+          cat p04-r3-h24-context-corrected-receipt.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain sanitized corrected receipt only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p04-r3-h24-context-corrected-sanitized-receipt
+          path: p04-r3-h24-context-corrected-receipt.json
+          retention-days: 30
+          if-no-files-found: error
+      - name: Remove one-run private material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/p04-r3-corrected-private.b64" "$RUNNER_TEMP/p04-r3-corrected-recipient.json" "$RUNNER_TEMP/p04-r3-corrected-envelope.json" "$RUNNER_TEMP/p04-r3-corrected-ciphertext.bin" "$RUNNER_TEMP/p04-r3-corrected-payload.json" "$RUNNER_TEMP/p04-r3-corrected.log"
