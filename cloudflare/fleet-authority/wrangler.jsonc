@@ -3,17 +3,5 @@
   "name": "fleet-authority",
   "main": "src/index.js",
   "compatibility_date": "2026-09-15",
-  "workers_dev": true,
-  "secrets": {
-    "required": [
-      "IBKR_PAPER_USERNAME",
-      "IBKR_PAPER_PASSWORD"
-    ]
-  },
-  "vars": {
-    "GITHUB_ALLOWED_REF": "refs/heads/main",
-    "GITHUB_ALLOWED_EVENT": "workflow_dispatch",
-    "GITHUB_ALLOWED_WORKFLOW_REF": "SET_AFTER_WORKFLOW_PROMOTION",
-    "GITHUB_ALLOWED_WORKFLOW_SHA": "SET_AFTER_WORKFLOW_PROMOTION"
-  }
+  "workers_dev": true
 }
