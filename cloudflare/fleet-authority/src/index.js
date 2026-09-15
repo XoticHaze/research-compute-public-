@@ -165,6 +165,8 @@ async function sealIbkrGatewayEnv(body, env, oidc) {
   const plaintext = new TextEncoder().encode([
     `TWS_USERID=${userid}`,
     `TWS_PASSWORD=${secret}`,
+    `TWS_USERID_PAPER=${userid}`,
+    `TWS_PASSWORD_PAPER=${secret}`,
     'TRADING_MODE=paper',
     'READ_ONLY_API=yes',
     'TWS_ACCEPT_INCOMING=accept',
