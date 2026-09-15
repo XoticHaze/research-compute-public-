@@ -4,7 +4,7 @@ const EXPECTED_AUDIENCE = 'mmibkr-fleet-authority';
 const EXPECTED_REPOSITORY = 'XoticHaze/research-compute-public-';
 const EXPECTED_AUTHORITY = 'ibkr-paper-readonly';
 const REQUEST_SCHEMA = 'mmibkr-fleet-authority-seal-request-v1';
-const ENVELOPE_SCHEMA = 'mmibkr-ibkr-readonly-ephemeral-x25519-hkdf-aesgcm-v1';
+const ENVELOPE_SCHEMA = 'mmibkr-ibkr-readonly-gateway-env-x25519-hkdf-aesgcm-v1';
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -44,6 +44,12 @@ async function sha256Hex(bytes) {
 
 function constantString(value) {
   return typeof value === 'string' ? value : '';
+}
+
+function validateSecretValue(value, name) {
+  const text = constantString(value);
+  if (!text || text.length > 512 || /[\r\n\0]/.test(text)) throw new Error(`${name}_rejected`);
+  return text;
 }
 
 async function verifyGithubOidc(jwt, env, requestedRunId) {
@@ -114,7 +120,7 @@ async function verifyGithubOidc(jwt, env, requestedRunId) {
   };
 }
 
-async function sealIbkrCredentials(body, env, oidc) {
+async function sealIbkrGatewayEnv(body, env, oidc) {
   if (body.schema !== REQUEST_SCHEMA || body.authority !== EXPECTED_AUTHORITY) throw new Error('request_rejected');
   const runId = String(body.run_id ?? '');
   if (!/^\d{4,24}$/.test(runId)) throw new Error('run_id_rejected');
@@ -132,6 +138,8 @@ async function sealIbkrCredentials(body, env, oidc) {
   if (recipientKeyId !== calculatedKeyId) throw new Error('recipient_key_id_rejected');
 
   if (!env.IBKR_PAPER_USERNAME || !env.IBKR_PAPER_PASSWORD) throw new Error('authority_not_configured');
+  const userid = validateSecretValue(env.IBKR_PAPER_USERNAME, 'authority_userid');
+  const secret = validateSecretValue(env.IBKR_PAPER_PASSWORD, 'authority_secret');
 
   const recipientKey = await crypto.subtle.importKey('raw', recipientRaw, { name: 'X25519' }, false, []);
   const ephemeral = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
@@ -155,13 +163,18 @@ async function sealIbkrCredentials(body, env, oidc) {
     ['encrypt'],
   );
 
-  const plaintext = new TextEncoder().encode(JSON.stringify({
-    schema: 'mmibkr-ibkr-readonly-credentials-v1',
-    authority: EXPECTED_AUTHORITY,
-    run_id: runId,
-    username: env.IBKR_PAPER_USERNAME,
-    password: env.IBKR_PAPER_PASSWORD,
-  }));
+  const plaintext = new TextEncoder().encode([
+    `TWS_USERID=${userid}`,
+    `TWS_PASSWORD=${secret}`,
+    'TRADING_MODE=paper',
+    'READ_ONLY_API=yes',
+    'TWS_ACCEPT_INCOMING=accept',
+    'TWOFA_TIMEOUT_ACTION=exit',
+    'RELOGIN_AFTER_TWOFA_TIMEOUT=no',
+    'SAVE_TWS_SETTINGS=no',
+    'ENABLE_VNC=false',
+    '',
+  ].join('\n'));
 
   const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv, additionalData: aad, tagLength: 128 },
@@ -230,7 +243,7 @@ export default {
     try {
       const runId = String(body?.run_id ?? '');
       const oidc = await verifyGithubOidc(auth.slice(7), env, runId);
-      const envelope = await sealIbkrCredentials(body, env, oidc);
+      const envelope = await sealIbkrGatewayEnv(body, env, oidc);
       return json(envelope, 200);
     } catch (error) {
       const message = String(error?.message || 'rejected');
