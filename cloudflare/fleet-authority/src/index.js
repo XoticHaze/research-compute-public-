@@ -3,6 +3,10 @@ const GITHUB_JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwk
 const EXPECTED_AUDIENCE = 'mmibkr-fleet-authority';
 const EXPECTED_REPOSITORY = 'XoticHaze/research-compute-public-';
 const EXPECTED_AUTHORITY = 'ibkr-paper-readonly';
+const ALLOWED_REF = 'refs/heads/ibkr-b1-authority-v1';
+const ALLOWED_EVENT = 'push';
+const ALLOWED_WORKFLOW_REF = 'XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1';
+const ALLOWED_WORKFLOW_SHA = 'bea604c834a1b24e40722895e6e590c55a058a1d';
 const REQUEST_SCHEMA = 'mmibkr-fleet-authority-seal-request-v1';
 const ENVELOPE_SCHEMA = 'mmibkr-ibkr-readonly-gateway-env-x25519-hkdf-aesgcm-v1';
 
@@ -42,17 +46,13 @@ async function sha256Hex(bytes) {
   return [...digest].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-function constantString(value) {
-  return typeof value === 'string' ? value : '';
-}
-
 function validateSecretValue(value, name) {
-  const text = constantString(value);
+  const text = typeof value === 'string' ? value : '';
   if (!text || text.length > 512 || /[\r\n\0]/.test(text)) throw new Error(`${name}_rejected`);
   return text;
 }
 
-async function verifyGithubOidc(jwt, env, requestedRunId) {
+async function verifyGithubOidc(jwt, requestedRunId) {
   const parts = jwt.split('.');
   if (parts.length !== 3) throw new Error('oidc_invalid');
 
@@ -103,10 +103,10 @@ async function verifyGithubOidc(jwt, env, requestedRunId) {
   if (claims.repository !== EXPECTED_REPOSITORY) throw new Error('oidc_repository_rejected');
   if (claims.repository_visibility !== 'public') throw new Error('oidc_visibility_rejected');
   if (claims.runner_environment !== 'github-hosted') throw new Error('oidc_runner_rejected');
-  if (claims.ref !== constantString(env.GITHUB_ALLOWED_REF)) throw new Error('oidc_ref_rejected');
-  if (claims.workflow_ref !== constantString(env.GITHUB_ALLOWED_WORKFLOW_REF)) throw new Error('oidc_workflow_ref_rejected');
-  if (claims.workflow_sha !== constantString(env.GITHUB_ALLOWED_WORKFLOW_SHA)) throw new Error('oidc_workflow_sha_rejected');
-  if (claims.event_name !== constantString(env.GITHUB_ALLOWED_EVENT)) throw new Error('oidc_event_rejected');
+  if (claims.ref !== ALLOWED_REF) throw new Error('oidc_ref_rejected');
+  if (claims.workflow_ref !== ALLOWED_WORKFLOW_REF) throw new Error('oidc_workflow_ref_rejected');
+  if (claims.workflow_sha !== ALLOWED_WORKFLOW_SHA) throw new Error('oidc_workflow_sha_rejected');
+  if (claims.event_name !== ALLOWED_EVENT) throw new Error('oidc_event_rejected');
   if (String(claims.run_id) !== requestedRunId) throw new Error('oidc_run_rejected');
 
   return {
@@ -116,7 +116,6 @@ async function verifyGithubOidc(jwt, env, requestedRunId) {
     workflow_sha: claims.workflow_sha,
     run_id: String(claims.run_id),
     run_attempt: String(claims.run_attempt ?? ''),
-    jti: String(claims.jti ?? ''),
   };
 }
 
@@ -242,7 +241,7 @@ export default {
 
     try {
       const runId = String(body?.run_id ?? '');
-      const oidc = await verifyGithubOidc(auth.slice(7), env, runId);
+      const oidc = await verifyGithubOidc(auth.slice(7), runId);
       const envelope = await sealIbkrGatewayEnv(body, env, oidc);
       return json(envelope, 200);
     } catch (error) {
