@@ -2,7 +2,7 @@ import hashlib
 import json
 from pathlib import Path
 
-PRODUCT_HEAD = "37cd0ae92a07f81433b2212c979995317cd75d89"
+PRODUCT_HEAD = "dcdf7b072b530828c83abd4a67434c55194f7c0e"
 FORMULA_AUTHORITY_MERGE = "923bc9baf67344f2cec6c92b5055b39568dddbb8"
 FEATURES = ["return_5", "return_20", "return_60", "volatility_20", "distance_ma20", "distance_ma60"]
 DCA_STATE = "last_fully_completed_12min_bar_strictly_before_dca_fill"
