@@ -1,0 +1,7 @@
+{
+  "schema":"spmo_rolling24_mtum_contract.v1",
+  "hypothesis":"SPMO's implementation-specific excess versus MTUM persists across overlapping 24-month chronology windows rather than being an artifact of calendar-year partitioning.",
+  "candidate":"SPMO","matched_momentum_control":"MTUM","start":"2015-10-09","cost_bps_annual":20,
+  "gates":{"positive_24m_window_share_min":0.60,"median_annualized_excess_min":0.01,"worst_24m_annualized_excess_min":-0.05},
+  "frozen_before_execution":true,"no_parameter_rescue":true,"research_only":true
+}
