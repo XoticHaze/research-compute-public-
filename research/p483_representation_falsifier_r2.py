@@ -1,0 +1,4 @@
+from __future__ import annotations
+# Frozen independent representation falsifier for supported P483 low-accrual mechanism.
+# Reuses the already-preregistered P500 evaluator unchanged except sample size N=40.
+exec(compile(open('research/p483_pit_accrual_quality_r1.py').read().replace("UA='CommandCenter MarketResearch P483 research@example.invalid'; YEARS=list(range(2018,2025)); N=20; COST=.0010","UA='CommandCenter MarketResearch P483-R2 research@example.invalid'; YEARS=list(range(2018,2025)); N=40; COST=.0010").replace("p483_pit_accrual_quality_r1.json","p483_representation_falsifier_r2.json").replace("research.p483_pit_accrual_quality_r1.v1","research.p483_representation_falsifier_r2.v1").replace("PIT_LOW_ACCRUAL_ALPHA_SUPPORTED","PIT_LOW_ACCRUAL_REPRESENTATION_SUPPORTED").replace("PIT_LOW_ACCRUAL_ALPHA_NOT_SUPPORTED","PIT_LOW_ACCRUAL_REPRESENTATION_NOT_SUPPORTED"), 'p483_representation_falsifier_r2', 'exec'))
