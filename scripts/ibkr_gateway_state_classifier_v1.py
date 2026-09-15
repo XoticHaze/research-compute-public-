@@ -68,10 +68,23 @@ def main() -> None:
     controller_app_registered = present(text, "app registered:", "gateway app registered")
     controller_login_dialog = present(text, "login dialog detected")
 
-    # ibg-controller v0.10 uses role-based SETTEXT_LOGIN_* commands. Those
-    # helpers log only on failure, so expose fixed booleans rather than raw
-    # response text. This keeps public logs credential-safe while telling us
-    # exactly which pre-submit action failed.
+    # ibg-controller v0.10 state machine and success markers. These are fixed
+    # strings and contain no account identity or secret material.
+    state_login = present(text, "[state: login]")
+    state_post_login = present(text, "[state: post_login]")
+    state_two_fa = present(text, "[state: two_fa]")
+    state_disclaimers = present(text, "[state: disclaimers]")
+    state_api_wait = present(text, "[state: api_wait]")
+    state_config = present(text, "[state: config]")
+    state_command_server = present(text, "[state: command_server]")
+    state_ready = present(text, "[state: ready]")
+    state_monitoring = present(text, "[state: monitoring]")
+    trading_mode_paper_selected = present(text, "trading mode set to paper trading via agent")
+    login_clicked_successfully = present(text, "log in clicked successfully")
+    post_login_inspection_started = present(text, "inspecting post-login dialogs")
+
+    # ibg-controller v0.10 role-based SETTEXT_LOGIN_* helpers log only on
+    # failure. Expose fixed booleans rather than raw response text.
     username_set_failure = present(text, "agent settext_login_user:")
     password_set_failure = present(text, "agent settext_login_password:")
     login_button_failure = present(text, "log in / paper log in button click failed via agent")
@@ -126,11 +139,23 @@ def main() -> None:
     passkey_prompt = present(text, "passkey prompt", "passkey authentication", "webauthn")
 
     result = {
-        "schema": "mmibkr-ibkr-gateway-state-v4",
+        "schema": "mmibkr-ibkr-gateway-state-v5",
         "controller_started": controller_started,
         "controller_input_agent_up": controller_input_agent_up,
         "controller_app_registered": controller_app_registered,
         "controller_login_dialog_detected": controller_login_dialog,
+        "controller_state_login": state_login,
+        "controller_state_post_login": state_post_login,
+        "controller_state_two_fa": state_two_fa,
+        "controller_state_disclaimers": state_disclaimers,
+        "controller_state_api_wait": state_api_wait,
+        "controller_state_config": state_config,
+        "controller_state_command_server": state_command_server,
+        "controller_state_ready": state_ready,
+        "controller_state_monitoring": state_monitoring,
+        "controller_trading_mode_paper_selected": trading_mode_paper_selected,
+        "controller_login_clicked_successfully": login_clicked_successfully,
+        "controller_post_login_inspection_started": post_login_inspection_started,
         "controller_username_set": controller_username_set,
         "controller_password_set": controller_password_set,
         "controller_username_set_failure": username_set_failure,
@@ -139,7 +164,11 @@ def main() -> None:
         "controller_paper_login_clicked": controller_paper_login_clicked,
         "controller_api_ready": controller_api_ready,
         "login_dialog_opened": present(text, "login dialog window_opened") or controller_login_dialog,
-        "paper_login_clicked": present(text, "click button: paper log in") or controller_paper_login_clicked,
+        "paper_login_clicked": (
+            present(text, "click button: paper log in")
+            or controller_paper_login_clicked
+            or login_clicked_successfully
+        ),
         "read_only_login_initiated": present(text, "initiating read-only login"),
         "loading_window_observed": present(text, "detected frame entitled: loading"),
         "authenticating_window_observed": present(text, "detected frame entitled: authenticating", "authenticating..."),
@@ -187,12 +216,18 @@ def main() -> None:
         "container_log_bytes": len(raw.encode("utf-8", errors="replace")),
     }
 
-    if controller_api_ready:
-        stage = "api_ready"
-    elif login_completed and configuration_completed:
-        stage = "gateway_configured"
-    elif login_completed:
-        stage = "login_completed_configuration_pending"
+    if state_monitoring or controller_api_ready:
+        stage = "api_ready_or_monitoring"
+    elif state_ready:
+        stage = "controller_ready"
+    elif state_command_server:
+        stage = "command_server"
+    elif state_config:
+        stage = "post_login_config"
+    elif state_api_wait:
+        stage = "api_wait"
+    elif state_disclaimers:
+        stage = "disclaimers"
     elif ccp_lockout or ccp_backoff:
         stage = "ccp_auth_lockout_backoff"
     elif wrong_region_or_server:
@@ -203,14 +238,22 @@ def main() -> None:
         stage = "connecting_to_server_stalled"
     elif passkey_prompt:
         stage = "passkey_prompt"
-    elif twofa_initiated or twofa_dialog or result["security_code_dialog_observed"]:
-        stage = "twofa_in_progress"
+    elif state_two_fa or twofa_initiated or twofa_dialog or result["security_code_dialog_observed"]:
+        stage = "twofa_wait_or_in_progress"
+    elif state_post_login or post_login_inspection_started:
+        stage = "post_login"
+    elif login_completed and configuration_completed:
+        stage = "gateway_configured"
+    elif login_completed:
+        stage = "login_completed_configuration_pending"
     elif result["starting_application_observed"]:
         stage = "starting_application"
     elif result["connecting_to_server_observed"]:
         stage = "connecting_to_server"
     elif result["authenticating_window_observed"]:
         stage = "authenticating"
+    elif login_clicked_successfully:
+        stage = "controller_login_submitted"
     elif result["paper_login_clicked"] and result["loading_window_observed"]:
         stage = "paper_login_submitted_loading"
     elif controller_paper_login_clicked:
@@ -225,7 +268,7 @@ def main() -> None:
         stage = "controller_username_set_failed"
     elif controller_username_set or controller_password_set:
         stage = "controller_credentials_entered"
-    elif controller_login_dialog:
+    elif state_login or controller_login_dialog:
         stage = "controller_login_dialog_ready"
     elif controller_app_registered or controller_input_agent_up:
         stage = "controller_gateway_registered"
