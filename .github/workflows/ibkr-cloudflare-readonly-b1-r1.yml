@@ -73,18 +73,49 @@ jobs:
             -p 127.0.0.1:4002:4004 \
             --entrypoint /bin/bash \
             "$IBKR_GATEWAY_IMAGE" -lc \
-            "set -e; if grep -q '^ReadOnlyLogin=' /home/ibgateway/ibc/config.ini.tmpl; then sed -i 's/^ReadOnlyLogin=.*/ReadOnlyLogin=yes/' /home/ibgateway/ibc/config.ini.tmpl; else printf '\nReadOnlyLogin=yes\n' >> /home/ibgateway/ibc/config.ini.tmpl; fi; grep -q '^ReadOnlyLogin=yes$' /home/ibgateway/ibc/config.ini.tmpl; exec /home/ibgateway/scripts/run.sh" >/dev/null
+            "set -e; if grep -q '^ReadOnlyLogin=' /home/ibgateway/ibc/config.ini.tmpl; then sed -i 's/^ReadOnlyLogin=.*/ReadOnlyLogin=yes/' /home/ibgateway/ibc/config.ini.tmpl; else printf '\nReadOnlyLogin=yes\n' >> /home/ibgateway/ibc/config.ini.tmpl; fi; exec /home/ibgateway/scripts/run.sh" >/dev/null
 
           configured=0
           for _ in $(seq 1 30); do
             if docker exec ibkr-cloudflare-b1 /bin/bash -lc \
-              "test -f /home/ibgateway/ibc/config.ini && grep -q '^ReadOnlyLogin=yes$' /home/ibgateway/ibc/config.ini && grep -q '^ReadOnlyApi=yes$' /home/ibgateway/ibc/config.ini" >/dev/null 2>&1; then
+              "test -f /home/ibgateway/ibc/config.ini && grep -Eiq '^[[:space:]]*ReadOnlyLogin[[:space:]]*=[[:space:]]*yes[[:space:]]*$' /home/ibgateway/ibc/config.ini && grep -Eiq '^[[:space:]]*ReadOnlyApi[[:space:]]*=[[:space:]]*yes[[:space:]]*$' /home/ibgateway/ibc/config.ini" >/dev/null 2>&1; then
               configured=1
               break
             fi
             sleep 1
           done
-          test "$configured" = 1 || { echo 'IBKR_DOUBLE_READONLY_CONFIGURED=0'; docker inspect -f '{{.State.Status}}' ibkr-cloudflare-b1 2>/dev/null | sed 's/.*/IBKR_GATEWAY_CONTAINER_STATE=NOT_READY/' || true; exit 44; }
+
+          if [ "$configured" != 1 ]; then
+            running="$(docker inspect -f '{{.State.Running}}' ibkr-cloudflare-b1 2>/dev/null || echo false)"
+            exit_code="$(docker inspect -f '{{.State.ExitCode}}' ibkr-cloudflare-b1 2>/dev/null || echo -1)"
+            rm -f "$RUNNER_TEMP/ibc-generated.ini"
+            docker cp ibkr-cloudflare-b1:/home/ibgateway/ibc/config.ini "$RUNNER_TEMP/ibc-generated.ini" >/dev/null 2>&1 || true
+            RUNNING="$running" EXIT_CODE="$exit_code" IBC_CONFIG="$RUNNER_TEMP/ibc-generated.ini" python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path(os.environ['IBC_CONFIG'])
+          values = {}
+          if p.exists():
+              for raw in p.read_text(encoding='utf-8', errors='replace').splitlines():
+                  line = raw.strip()
+                  if not line or line.startswith('#') or '=' not in line:
+                      continue
+                  k, v = line.split('=', 1)
+                  values[k.strip().lower()] = v.strip().lower()
+          out = {
+              'schema': 'mmibkr-ibkr-generated-config-proof-v1',
+              'container_running': os.environ.get('RUNNING', '').lower() == 'true',
+              'container_exit_zero': os.environ.get('EXIT_CODE') == '0',
+              'config_present': p.exists(),
+              'read_only_login_yes': values.get('readonlylogin') == 'yes',
+              'read_only_api_yes': values.get('readonlyapi') == 'yes',
+          }
+          print('IBKR_GENERATED_CONFIG_PROOF=' + json.dumps(out, sort_keys=True))
+          PY
+            docker logs ibkr-cloudflare-b1 2>&1 | python -c 'import json,sys; t=sys.stdin.read().lower(); out={"schema":"mmibkr-ibkr-gateway-startup-proof-v1","run_banner_seen":"starting ibc" in t or "starting ibc/ib gateway" in t,"settings_apply_seen":"appling settings" in t or "applying settings" in t,"socat_started":"starting socat" in t,"ibc_process_seen":"starting ibc in paper mode" in t,"credential_rejection_signal":any(x in t for x in ["invalid username","invalid password","authentication failed","login failed"]),"shell_or_path_error_signal":any(x in t for x in ["no such file or directory","command not found","permission denied"]),"container_log_bytes":len(t.encode())}; print("IBKR_GATEWAY_STARTUP_PROOF="+json.dumps(out,sort_keys=True))'
+            echo 'IBKR_DOUBLE_READONLY_CONFIGURED=0'
+            exit 44
+          fi
           echo 'IBKR_DOUBLE_READONLY_CONFIGURED=1'
 
           ready=0
@@ -145,5 +176,6 @@ jobs:
           rm -f \
             "$RUNNER_TEMP/ibkr-gateway.env" \
             "$RUNNER_TEMP/ibkr-cloudflare-envelope-receipt.json" \
-            "$RUNNER_TEMP/ibkr-readonly-data-proof.json"
+            "$RUNNER_TEMP/ibkr-readonly-data-proof.json" \
+            "$RUNNER_TEMP/ibc-generated.ini"
           echo 'IBKR_PRIVATE_RUNTIME_DESTROYED=1'
