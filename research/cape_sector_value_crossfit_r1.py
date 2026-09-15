@@ -1,3 +1,4 @@
+# Same-firing trigger only: frozen CAPE scientific specification remains unchanged.
 import datetime as dt,json,urllib.request
 from pathlib import Path
 C=json.loads(Path('research/cape-sector-value-crossfit-r1.json').read_text()); START=dt.datetime.fromisoformat(C['start']+'T00:00:00+00:00'); END=dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=1); MIN_TRAIN=60
