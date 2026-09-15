@@ -2,6 +2,8 @@ name: Sector Dispersion Reversal R1
 on:
   push:
     branches: [market-research/sector-dispersion-reversal-r1]
+  pull_request:
+    branches: [main]
 jobs:
   research:
     runs-on: ubuntu-latest
@@ -14,31 +16,23 @@ jobs:
           import json, numpy as np, pandas as pd, yfinance as yf
           syms=['XLB','XLE','XLF','XLI','XLK','XLP','XLU','XLV','XLY','SPY']
           x=yf.download(syms,start='2004-01-01',auto_adjust=True,progress=False)['Close'].dropna()
-          m=x.resample('ME').last(); r=m.pct_change()
-          sec=[s for s in syms if s!='SPY']
-          # Frozen mechanism: after unusually wide cross-sector monthly dispersion, buy prior-month bottom 3 sectors for one month.
-          disp=r[sec].std(axis=1); gate=disp.shift(1) > disp.shift(1).rolling(36,min_periods=24).quantile(.75)
-          ranks=r[sec].shift(1).rank(axis=1,ascending=True,method='first')
-          w=(ranks<=3).astype(float); w=w.div(w.sum(axis=1),axis=0).fillna(0).mul(gate,axis=0)
-          cash=1-w.sum(axis=1)
-          gross=(w*r[sec]).sum(axis=1) # cash assumed 0; conservative
-          turnover=w.diff().abs().sum(axis=1).fillna(w.abs().sum(axis=1)); net=gross-0.001*turnover
-          eq=r[sec].mean(axis=1)-0.001*(pd.Series(1/len(sec),index=sec).sub(pd.Series(1/len(sec),index=sec)).abs().sum())
+          m=x.resample('ME').last(); r=m.pct_change(); sec=[s for s in syms if s!='SPY']
+          disp=r[sec].std(axis=1); gate=disp.shift(1)>disp.shift(1).rolling(36,min_periods=24).quantile(.75)
+          ranks=r[sec].shift(1).rank(axis=1,ascending=True,method='first'); w=(ranks<=3).astype(float); w=w.div(w.sum(axis=1),axis=0).fillna(0).mul(gate,axis=0)
+          gross=(w*r[sec]).sum(axis=1); turnover=w.diff().abs().sum(axis=1).fillna(w.abs().sum(axis=1)); net=gross-0.001*turnover; eq=r[sec].mean(axis=1)
           def cagr(s):
-            s=s.dropna(); return float((1+s).prod()**(12/len(s))-1) if len(s) else None
+            s=s.dropna(); return float((1+s).prod()**(12/len(s))-1)
           def mdd(s):
             z=(1+s.fillna(0)).cumprod(); return float((z/z.cummax()-1).min())
           windows={}
           for y in [2008,2012,2016,2020,2022]:
-            q=net[net.index.year>=y]; b=eq[eq.index.year>=y]; spy=r['SPY'][r.index.year>=y]-0.001/12
+            q=net[net.index.year>=y]; b=eq[eq.index.year>=y]; spy=r['SPY'][r.index.year>=y]
             windows[str(y)]={'candidate_cagr':cagr(q),'equal_sector_cagr':cagr(b),'spy_cagr':cagr(spy),'excess_vs_equal':cagr(q)-cagr(b),'excess_vs_spy':cagr(q)-cagr(spy),'max_dd':mdd(q),'months':int(q.notna().sum())}
-          folds=[]
-          years=sorted(set(net.dropna().index.year)); cuts=np.array_split(years,4)
-          for ys in cuts:
+          years=sorted(set(net.dropna().index.year)); folds=[]
+          for ys in np.array_split(years,4):
             q=net[net.index.year.isin(ys)]; b=eq[eq.index.year.isin(ys)]; folds.append({'years':[int(min(ys)),int(max(ys))],'excess_vs_equal':cagr(q)-cagr(b)})
-          positive=sum(f['excess_vs_equal']>0 for f in folds)
-          decision='DISPERSION_REVERSAL_SUPPORTED' if windows['2012']['excess_vs_equal']>0 and windows['2020']['excess_vs_equal']>0 and positive>=3 else 'DISPERSION_REVERSAL_REJECTED'
-          out={'contract':{'signal':'prior-month bottom-3 sector reversal only after lagged dispersion above rolling 36m 75th percentile','universe':sec,'cost':'10bp one-way turnover','controls':['equal-weight same sectors','SPY'],'no_rescue':True},'windows':windows,'folds':folds,'positive_folds':positive,'decision':decision}
+          positive=sum(f['excess_vs_equal']>0 for f in folds); decision='DISPERSION_REVERSAL_SUPPORTED' if windows['2012']['excess_vs_equal']>0 and windows['2020']['excess_vs_equal']>0 and positive>=3 else 'DISPERSION_REVERSAL_REJECTED'
+          out={'contract':{'signal':'lagged bottom-3 sector reversal only after lagged cross-sector dispersion above rolling 36m 75th percentile','cost':'10bp one-way turnover','controls':['equal-weight same sectors','SPY'],'no_rescue':True},'windows':windows,'folds':folds,'positive_folds':positive,'decision':decision}
           open('sector_dispersion_reversal_r1.json','w').write(json.dumps(out,indent=2)); print(json.dumps(out,indent=2))
           PY
       - uses: actions/upload-artifact@v4
