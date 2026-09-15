@@ -50,7 +50,6 @@ jobs:
           if node.get('ok') is not True or node.get('authority_configured') is not True:
               raise SystemExit('fleet authority is not configured')
           print('FLEET_AUTHORITY_HEALTH=READY')
-          print('FLEET_AUTHORITY_OIDC_POLICY=' + ('READY' if node.get('oidc_policy_configured') is True else 'UNKNOWN'))
           PY
 
       - name: Obtain one-run sealed gateway environment
@@ -70,19 +69,24 @@ jobs:
           docker run -d --name ibkr-cloudflare-b1 \
             --env-file "$RUNNER_TEMP/ibkr-gateway.env" \
             -e TWS_MAJOR_VRSN=10.49.1c \
-            -p 127.0.0.1:4002:4002 \
+            -p 127.0.0.1:4002:4004 \
             "$IBKR_GATEWAY_IMAGE" >/dev/null
+
           ready=0
-          for _ in $(seq 1 120); do
+          for _ in $(seq 1 36); do
             if python - <<'PY'
-          import socket
-          s=socket.socket(); s.settimeout(1)
+          from ib_insync import IB
+          ib = IB()
+          ok = False
           try:
-              s.connect(('127.0.0.1',4002))
-          except OSError:
-              raise SystemExit(1)
+              ib.connect('127.0.0.1', 4002, clientId=77, timeout=5, readonly=True)
+              ok = ib.isConnected()
+          except Exception:
+              ok = False
           finally:
-              s.close()
+              if ib.isConnected():
+                  ib.disconnect()
+          raise SystemExit(0 if ok else 1)
           PY
             then
               ready=1
@@ -90,7 +94,12 @@ jobs:
             fi
             sleep 5
           done
-          test "$ready" = 1 || { echo 'IBKR_GATEWAY_API_READY=0'; exit 45; }
+
+          if [ "$ready" != 1 ]; then
+            docker logs ibkr-cloudflare-b1 2>&1 | python -c 'import json,sys; t=sys.stdin.read().lower(); out={"schema":"mmibkr-ibkr-gateway-sanitized-failure-v1","twofa_signal":any(x in t for x in ["two-factor","two factor","second factor","2fa"]),"credential_rejection_signal":any(x in t for x in ["invalid username","invalid password","authentication failed","login failed"]),"existing_session_signal":"existing session" in t,"container_log_bytes":len(t.encode())}; print("IBKR_GATEWAY_SANITIZED_FAILURE="+json.dumps(out,sort_keys=True))'
+            echo 'IBKR_GATEWAY_API_READY=0'
+            exit 45
+          fi
           echo 'IBKR_GATEWAY_API_READY=1'
 
       - name: Prove read-only broker session and historical data fetch
