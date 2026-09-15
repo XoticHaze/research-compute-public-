@@ -1,0 +1,20 @@
+name: Credit Risk Regime R1
+on:
+  pull_request:
+    paths:
+      - 'research/credit_risk_regime_r1.py'
+      - '.github/workflows/credit-risk-regime-r1.yml'
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pandas yfinance
+      - run: python research/credit_risk_regime_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: credit-risk-regime-r1
+          path: credit_risk_regime_r1_result.json
