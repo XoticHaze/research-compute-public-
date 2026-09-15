@@ -1,0 +1,31 @@
+name: P791 SEC Management Guidance Revision R1
+on:
+  pull_request:
+    paths:
+      - 'research/p791_sec_management_guidance_revision_r1.py'
+      - '.github/workflows/p791-sec-management-guidance-revision-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - id: eval
+        run: |
+          python research/p791_sec_management_guidance_revision_r1.py
+          python - <<'PY'
+          import json, os
+          x=json.load(open('research/results/p791_sec_management_guidance_revision_r1.json'))
+          r=x['result']; a=r['raise']; spread=r['raise_minus_lower_mean_sector_excess']
+          bp=lambda v: 'NA' if v is None else str(int(round(v*10000)))
+          tag=f"{r['decision']}__raise_n_{a['n']}__mean_{bp(a['mean_after_cost_sector_excess'])}bp__spread_{bp(spread)}bp__breadth_{0 if a['positive_sector_excess_share'] is None else int(round(a['positive_sector_excess_share']*10000))}"
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write(f"tag={tag}\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p791-guidance-revision__${{ steps.eval.outputs.tag }}
+          path: research/results/p791_sec_management_guidance_revision_r1.json
+          if-no-files-found: error
