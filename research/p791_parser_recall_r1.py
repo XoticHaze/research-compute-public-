@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -10,8 +11,7 @@ mod = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(mod)
 
-# Frozen before execution. Small labeled corpus exercises the exact classifier contract
-# on explicit forward-guidance revisions, including action-before-noun and noun-before-action.
+# Frozen labeled gate from R1. Cases and expected labels are unchanged.
 CASES = [
     ("R01", "RAISE", "The company raised its full-year guidance for revenue and adjusted earnings per share."),
     ("R02", "RAISE", "Management increased its 2026 outlook for net sales and operating income."),
@@ -31,8 +31,17 @@ CASES = [
     ("N04", None, "The company raised prices and reiterated its full-year guidance."),
 ]
 
+# Bounded repair only for the three demonstrated false-positive contracts:
+# 1) maintained/reaffirmed/reiterated guidance is neutral;
+# 2) an action on revenue/expenses/prices is not a guidance revision merely because a
+#    guidance noun appears nearby. No economic/date/ticker/horizon thresholds change.
+NEUTRAL_GUIDANCE = re.compile(r"\b(?:maintain(?:ed|s|ing)?|reaffirm(?:ed|s|ing)?|reiterat(?:ed|es|ing)?)\b.{0,100}\b(?:guidance|outlook|forecast)\b|\b(?:guidance|outlook|forecast)\b.{0,100}\b(?:maintain(?:ed|s|ing)?|reaffirm(?:ed|s|ing)?|reiterat(?:ed|es|ing)?)\b", re.I)
+NON_GUIDANCE_TARGET = re.compile(r"\b(?:raise(?:d|s|ing)?|increase(?:d|s|ing)?|boost(?:ed|s|ing)?|lower(?:ed|s|ing)?|reduce(?:d|s|ing)?|cut(?:s|ting)?)\s+(?:revenue|sales|prices?|pricing|operating expenses?|costs?)\b", re.I)
+
 
 def classify_text(text: str):
+    if NEUTRAL_GUIDANCE.search(text) or NON_GUIDANCE_TARGET.search(text):
+        return None
     raise_hits = sum(bool(p.search(text)) for p in mod.RAISE_PATTERNS)
     lower_hits = sum(bool(p.search(text)) for p in mod.LOWER_PATTERNS)
     if raise_hits and not lower_hits:
@@ -53,8 +62,10 @@ def main():
     specificity = sum(r["pass"] for r in negatives) / len(negatives)
     decision = "PARSER_RECALL_PASS" if recall == 1.0 and specificity == 1.0 else "PARSER_RECALL_FAIL_BOUNDED_REPAIR"
     out = {
-        "schema": "public_research.p791_parser_recall_r1",
-        "experiment_id": "P791_PARSER_RECALL_R1_20260915",
+        "schema": "public_research.p791_parser_recall_r2",
+        "experiment_id": "P791_PARSER_RECALL_R2_BOUNDED_REPAIR_20260915",
+        "inherited_learning_id": "P791_PARSER_RECALL_R1_20260915",
+        "uncertainty_resolved": "whether demonstrated false positives can be removed without losing frozen positive recall",
         "frozen_case_count": len(rows),
         "positive_case_count": len(positives),
         "negative_case_count": len(negatives),
@@ -63,10 +74,10 @@ def main():
         "decision": decision,
         "rows": rows,
         "consequence": {
-            "PARSER_RECALL_PASS": "re-admit frozen R1 economic test; zero-event failure lies outside the phrase classifier contract and must be localized before unchanged market execution",
-            "PARSER_RECALL_FAIL_BOUNDED_REPAIR": "repair only demonstrated phrase-contract misses, then rerun this same frozen gate",
+            "PARSER_RECALL_PASS": "bounded repair passes unchanged labeled gate; apply identical repair to shared market classifier, then re-admit frozen R1 economic test",
+            "PARSER_RECALL_FAIL_BOUNDED_REPAIR": "bounded repair failed unchanged gate; do not widen rescue; rotate A to orthogonal mechanism",
         }[decision],
-        "forbidden_rescue": ["horizon", "ticker", "sector", "date", "cost", "post-result economic threshold"],
+        "forbidden_rescue": ["labeled cases", "horizon", "ticker", "sector", "date", "cost", "post-result economic threshold"],
     }
     target = HERE / "results" / "p791_parser_recall_r1.json"
     target.parent.mkdir(parents=True, exist_ok=True)
