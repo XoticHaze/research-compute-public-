@@ -3,19 +3,20 @@ on:
   pull_request:
     paths:
       - 'research/p791_sec_management_guidance_revision_r1.py'
+      - 'research/p791_sec_management_guidance_revision_r2.py'
       - '.github/workflows/p791-sec-management-guidance-revision-r1.yml'
 permissions: {contents: read}
 jobs:
   evaluate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
       - id: eval
         run: |
-          python research/p791_sec_management_guidance_revision_r1.py
+          python research/p791_sec_management_guidance_revision_r2.py
           python - <<'PY'
           import json, os
           x=json.load(open('research/results/p791_sec_management_guidance_revision_r1.json'))
