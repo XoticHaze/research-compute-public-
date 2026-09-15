@@ -1,0 +1,9 @@
+parent=P01
+harness=autotuner_crw_score_core_v1
+symbol=MNQ
+timeframe=12Min
+dataset_sha256=c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e
+rows=192553
+scope=score_core_only_dca_policy_held_out
+configurations=4845
+authority=research_only
