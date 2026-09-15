@@ -1,4 +1,5 @@
 from __future__ import annotations
+# Frozen execution trigger: PIT_INSIDER_OPEN_MARKET_PURCHASE_R1, 2026-09-12.
 import bisect,json,statistics,time,urllib.request,xml.etree.ElementTree as ET
 from datetime import date
 from pathlib import Path
