@@ -67,11 +67,26 @@ def main() -> None:
     controller_input_agent_up = present(text, "input agent is up", "input-agent is up")
     controller_app_registered = present(text, "app registered:", "gateway app registered")
     controller_login_dialog = present(text, "login dialog detected")
+
+    # ibg-controller v0.10 uses role-based SETTEXT_LOGIN_* commands. Those
+    # helpers log only on failure, so expose fixed booleans rather than raw
+    # response text. This keeps public logs credential-safe while telling us
+    # exactly which pre-submit action failed.
+    username_set_failure = present(text, "agent settext_login_user:")
+    password_set_failure = present(text, "agent settext_login_password:")
+    login_button_failure = present(text, "log in / paper log in button click failed via agent")
+
+    # Retain legacy/older-controller positive markers where they exist.
     controller_username_set = present(
         text,
         "set_text on text 'username': ok",
         'set_text on text "username": ok',
         "username field set",
+    )
+    controller_password_set = present(
+        text,
+        "password field set",
+        "set_text on password: ok",
     )
     controller_paper_login_clicked = present(
         text,
@@ -111,12 +126,16 @@ def main() -> None:
     passkey_prompt = present(text, "passkey prompt", "passkey authentication", "webauthn")
 
     result = {
-        "schema": "mmibkr-ibkr-gateway-state-v3",
+        "schema": "mmibkr-ibkr-gateway-state-v4",
         "controller_started": controller_started,
         "controller_input_agent_up": controller_input_agent_up,
         "controller_app_registered": controller_app_registered,
         "controller_login_dialog_detected": controller_login_dialog,
         "controller_username_set": controller_username_set,
+        "controller_password_set": controller_password_set,
+        "controller_username_set_failure": username_set_failure,
+        "controller_password_set_failure": password_set_failure,
+        "controller_login_button_failure": login_button_failure,
         "controller_paper_login_clicked": controller_paper_login_clicked,
         "controller_api_ready": controller_api_ready,
         "login_dialog_opened": present(text, "login dialog window_opened") or controller_login_dialog,
@@ -198,7 +217,13 @@ def main() -> None:
         stage = "controller_paper_login_submitted"
     elif result["paper_login_clicked"]:
         stage = "paper_login_submitted"
-    elif controller_username_set:
+    elif login_button_failure:
+        stage = "controller_login_button_failed"
+    elif password_set_failure:
+        stage = "controller_password_set_failed"
+    elif username_set_failure:
+        stage = "controller_username_set_failed"
+    elif controller_username_set or controller_password_set:
         stage = "controller_credentials_entered"
     elif controller_login_dialog:
         stage = "controller_login_dialog_ready"
