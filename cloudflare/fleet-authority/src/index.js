@@ -52,6 +52,14 @@ function validateSecretValue(value, name) {
   return text;
 }
 
+function firstConfiguredValue(env, names, name) {
+  for (const key of names) {
+    const value = env[key];
+    if (typeof value === 'string' && value.length > 0) return validateSecretValue(value, name);
+  }
+  return null;
+}
+
 async function verifyGithubOidc(jwt, requestedRunId) {
   const parts = jwt.split('.');
   if (parts.length !== 3) throw new Error('oidc_invalid');
@@ -139,6 +147,21 @@ async function sealIbkrGatewayEnv(body, env, oidc) {
   if (!env.IBKR_PAPER_USERNAME || !env.IBKR_PAPER_PASSWORD) throw new Error('authority_not_configured');
   const userid = validateSecretValue(env.IBKR_PAPER_USERNAME, 'authority_userid');
   const secret = validateSecretValue(env.IBKR_PAPER_PASSWORD, 'authority_secret');
+  const twofactorCode = firstConfiguredValue(
+    env,
+    ['IBKR_PAPER_TWOFACTOR_CODE', 'IBKR_TWOFACTOR_CODE', 'TWOFACTOR_CODE'],
+    'authority_twofactor_code',
+  );
+  const twofaDevice = firstConfiguredValue(
+    env,
+    ['IBKR_PAPER_TWOFA_DEVICE', 'IBKR_TWOFA_DEVICE', 'TWOFA_DEVICE'],
+    'authority_twofa_device',
+  );
+  const paperServer = firstConfiguredValue(
+    env,
+    ['IBKR_PAPER_TWS_SERVER', 'TWS_SERVER_PAPER', 'IBKR_TWS_SERVER', 'TWS_SERVER'],
+    'authority_paper_server',
+  );
 
   const recipientKey = await crypto.subtle.importKey('raw', recipientRaw, { name: 'X25519' }, false, []);
   const ephemeral = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
@@ -162,7 +185,7 @@ async function sealIbkrGatewayEnv(body, env, oidc) {
     ['encrypt'],
   );
 
-  const plaintext = new TextEncoder().encode([
+  const gatewayEnv = [
     `TWS_USERID=${userid}`,
     `TWS_PASSWORD=${secret}`,
     `TWS_USERID_PAPER=${userid}`,
@@ -174,8 +197,13 @@ async function sealIbkrGatewayEnv(body, env, oidc) {
     'RELOGIN_AFTER_TWOFA_TIMEOUT=no',
     'SAVE_TWS_SETTINGS=no',
     'ENABLE_VNC=false',
-    '',
-  ].join('\n'));
+  ];
+  if (twofactorCode) gatewayEnv.push(`TWOFACTOR_CODE=${twofactorCode}`);
+  if (twofaDevice) gatewayEnv.push(`TWOFA_DEVICE=${twofaDevice}`);
+  if (paperServer) gatewayEnv.push(`TWS_SERVER_PAPER=${paperServer}`);
+  gatewayEnv.push('');
+
+  const plaintext = new TextEncoder().encode(gatewayEnv.join('\n'));
 
   const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv, additionalData: aad, tagLength: 128 },
