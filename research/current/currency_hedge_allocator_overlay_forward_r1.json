@@ -24,11 +24,11 @@
     "overlay_weight": 0.05
   },
   "decision_use": "Prospective portfolio-level falsifier: determine whether the replicated developed-ex-US currency hedge improves the actual frozen allocator target beyond both unchanged cash and an equal unhedged developed-ex-US overlay.",
-  "entry_date": null,
-  "forward_sessions": 0,
-  "generated_at": "2026-09-13T07:24:00.284682+00:00",
-  "latest_common_market_date": null,
-  "market_data_asof": "2026-09-13",
+  "entry_date": "2026-09-14",
+  "forward_sessions": 1,
+  "generated_at": "2026-09-15T02:56:54.141659+00:00",
+  "latest_common_market_date": "2026-09-14",
+  "market_data_asof": "2026-09-15",
   "positions": {
     "hedged_challenger": {
       "AVDV": 0.1,
@@ -108,9 +108,37 @@
   "registered_at_date": "2026-09-13",
   "schema": "research.currency_hedge_allocator_overlay_forward_r1",
   "scientific_forward_credit": true,
-  "scorecard": null,
+  "scorecard": {
+    "cost_interpretation": {
+      "entry_cost_bps_on_overlay": 25.0,
+      "hypothetical_exit_cost_bps_on_overlay": 25.0,
+      "overlay_notional": 0.05,
+      "portfolio_roundtrip_cost_bps_if_flattened_now": 2.5
+    },
+    "hedged_challenger": {
+      "excess_vs_incumbent_bps": -2.5,
+      "gross_return_bps": 0.0,
+      "net_if_flattened_now_bps": -2.5
+    },
+    "incumbent_return_bps": 0.0,
+    "mechanism_attribution": {
+      "hedged_minus_spy_overlay_bps": 0.0,
+      "hedged_minus_unhedged_bps": 0.0,
+      "portfolio_improvement_and_hedge_edge_both_positive": false
+    },
+    "spy_opportunity_control": {
+      "excess_vs_incumbent_bps": -2.5,
+      "gross_return_bps": 0.0,
+      "net_if_flattened_now_bps": -2.5
+    },
+    "unhedged_matched_control": {
+      "excess_vs_incumbent_bps": -2.5,
+      "gross_return_bps": 0.0,
+      "net_if_flattened_now_bps": -2.5
+    }
+  },
   "source": {
-    "panel_sha256": "1b5797a1a72c3388a60a0fe8edb2b938c24523148e42285f34bf2f1ec457c501",
+    "panel_sha256": "e0fb60d360eb66d5b9acf4d58def02777a7b0e00a162095a4f78422f4bacb958",
     "provider": "Yahoo Finance via yfinance; research-only public data",
     "symbols": [
       "AVDV",
@@ -139,5 +167,5 @@
     "frozen_allocator_blob": "c1af1ffa76aeb8db6538f0813721382e88be0151",
     "frozen_allocator_commit": "6a800febaf1232fe77cd377ab28cd70e380fb8e0"
   },
-  "state": "AWAITING_ENTRY_SESSION"
+  "state": "PROSPECTIVE_OPEN"
 }
