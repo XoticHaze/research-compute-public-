@@ -1,0 +1,26 @@
+{
+  "schema": "research_compute_public.p07_batch3_development_admission.v1",
+  "family": "equity_reits",
+  "source_pr": 20,
+  "source_head": "068166e582f831233dd211e8984e14228518fc21",
+  "workflow_run": 33989095603,
+  "artifact_id": 9976062637,
+  "artifact_digest": "sha256:75771d51537195643deadeabc02d8585ddc436041c08f9596711f3b181447452",
+  "development_gate": {
+    "passing_symbols": 5,
+    "required_passing_symbols": 5,
+    "development_family_gate_pass": true,
+    "aggregate_stock_net25_mean_bps": 165.06972246840706,
+    "aggregate_stock_after25_minus_vnq_mean_bps": 32.440790541687896,
+    "aggregate_vnq_substitution50_mean_bps": 7.440790541687898,
+    "passing_symbols_exact": ["PLD", "AMT", "SPG", "VTR", "WELL"]
+  },
+  "external_holdout_authorized_by_frozen_contract": ["AVB", "EQR", "ESS", "DLR"],
+  "benchmark": "VNQ",
+  "common_cutoff": "2026-09-01T13:30:00+00:00",
+  "external_holdouts_loaded_in_development": false,
+  "research_only": true,
+  "promotion_authority": false,
+  "runtime_mutation": false,
+  "live_trading_change": false
+}
