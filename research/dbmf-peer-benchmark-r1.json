@@ -1,0 +1,16 @@
+{
+  "schema":"dbmf_peer_benchmark_contract.v1",
+  "claim_tested":"DBMF implementation-level return evidence should exceed a managed-futures peer benchmark, not merely cash, with persistence across fixed calendar years and two first-party since-inception snapshots.",
+  "calendar_returns":{
+    "2021":{"dbmf_nav":0.0980,"sg_cta":0.0617},
+    "2022":{"dbmf_nav":0.2307,"sg_cta":0.2015},
+    "2023":{"dbmf_nav":-0.0872,"sg_cta":-0.0349},
+    "2024":{"dbmf_nav":0.0718,"sg_cta":0.0236}
+  },
+  "since_inception_2024":{"as_of":"2024-12-31","dbmf_nav_cagr":0.0732,"sg_cta_cagr":0.0525,"source_url":"https://imgpfunds.com/wp-content/uploads/pdfs/holdings/iMGP-DBi-Managed-Futures-Strategy-ETF-Deck.pdf"},
+  "since_inception_sep2025":{"as_of":"2025-09-30","dbmf_nav_cagr":0.0746,"sg_cta_cagr":0.0420,"source_url":"https://imgpfunds.com/wp-content/uploads/2025/10/DBMF-September-2025-Deck-Final-V2.pdf"},
+  "gates":{"min_since_inception_excess_cagr":0.01,"min_positive_calendar_years":3},
+  "notes":"Fund returns are first-party published NAV returns net of fund fees. SG CTA is an index benchmark and is not directly investable; this discriminator tests implementation edge relative to peer strategy exposure, not realizable allocator excess after separate benchmark implementation costs.",
+  "frozen_inheritance":{"generic_managed_futures_family":"UNSUPPORTED","dbmf_state":"IMPLEMENTATION_SPECIFIC_SURVIVOR","no_parameter_rescue":true},
+  "research_only":true
+}
