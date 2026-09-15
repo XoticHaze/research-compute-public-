@@ -16,5 +16,6 @@
     "regime_reference":"SPY monthly total return",
     "no_parameter_rescue":true
   },
+  "run_nonce":"market-research-20260911T1845Z",
   "research_only":true
 }
