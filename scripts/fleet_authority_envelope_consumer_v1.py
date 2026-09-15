@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from urllib.request import Request, urlopen
 
@@ -83,10 +84,21 @@ def _request_envelope(url: str, *, run_id: str, recipient_b64: str, recipient_ke
             "User-Agent": "mmibkr-fleet-authority-consumer-v1",
         },
     )
-    with urlopen(req, timeout=30) as response:
-        body = response.read(65537)
-        if response.status != 200:
-            raise RuntimeError(f"fleet_authority_http_{response.status}")
+    try:
+        with urlopen(req, timeout=30) as response:
+            body = response.read(65537)
+            status = int(response.status)
+    except HTTPError as exc:
+        body = exc.read(8192)
+        try:
+            node = json.loads(body.decode("utf-8"))
+        except Exception:
+            node = {"error": "non_json_error"}
+        safe_error = str(node.get("error") or "http_error")
+        safe_reason = str(node.get("reason") or "unspecified")
+        raise RuntimeError(f"fleet_authority_http_{exc.code}:{safe_error}:{safe_reason}") from exc
+    if status != 200:
+        raise RuntimeError(f"fleet_authority_http_{status}")
     if len(body) > 65536:
         raise RuntimeError("fleet_authority_response_too_large")
     node = json.loads(body.decode("utf-8"))
