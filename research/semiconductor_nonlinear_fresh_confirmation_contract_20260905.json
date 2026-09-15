@@ -1,0 +1,50 @@
+{
+  "schema": "public_compute.semiconductor_nonlinear_fresh_confirmation_contract.v1",
+  "frozen_before_target_evaluation": true,
+  "scientific_parent_pr": 26,
+  "development_parent_head": "735217e170d495ed7eaccedd047a3793c68e2d30",
+  "train_universe": ["AMAT", "APH", "KLAC", "LRCX", "TXN", "NXPI", "ADI"],
+  "spent_external_universe_pr253": ["NVDA", "AMD", "MU", "AVGO", "MRVL", "MCHP"],
+  "spent_external_universe_pr273": ["QCOM", "INTC", "ON", "MPWR", "SWKS", "LSCC", "TER", "ASX"],
+  "fresh_confirmation_universe": ["TSM", "STM", "UMC", "AMKR", "ACLS", "ENTG", "MKSI", "CRUS"],
+  "selection_rule": "eight liquid semiconductor/foundry/equipment/component names with long US-traded price histories, frozen before source preflight or target evaluation and disjoint from training plus both spent external panels",
+  "context": ["SMH", "QQQ"],
+  "candidate_admission": "exact 19-feature StandardScaler+Ridge(alpha=10) predicted value > 0",
+  "ranking_control": "same Ridge admission score",
+  "ranking_challenger": {
+    "model": "HistGradientBoostingRegressor",
+    "hyperparameters": {
+      "learning_rate": 0.05,
+      "max_iter": 120,
+      "max_leaf_nodes": 8,
+      "max_depth": 3,
+      "min_samples_leaf": 80,
+      "l2_regularization": 10.0,
+      "random_state": 0
+    },
+    "hyperparameter_sweep": false
+  },
+  "slots": 2,
+  "decision_spacing_sessions": 20,
+  "execution_delay_sessions": 1,
+  "hold_sessions": 20,
+  "stress_cost_bps": 200,
+  "confirmation_gate": {
+    "hgb_mean_top2_net200_bps_gt": 0,
+    "hgb_mean_excess_vs_admitted_equal_weight_bps_gt": 0,
+    "hgb_mean_excess_vs_smh_bps_gt": 0,
+    "hgb_mean_rank_ic_gt": 0,
+    "hgb_mean_top2_net200_bps_gt_ridge": true,
+    "hgb_mean_rank_ic_gt_ridge": true,
+    "minimum_hgb_ridge_beating_folds": 3,
+    "minimum_hgb_smh_winning_folds": 3,
+    "minimum_hgb_positive_rank_ic_folds": 3,
+    "minimum_hgb_rank_ic_improvement_folds": 3
+  },
+  "support_diagnostics_report_only": true,
+  "support_filtering_authorized": false,
+  "research_only": true,
+  "promotion_authority": false,
+  "runtime_mutation": false,
+  "live_trading_change": false
+}
