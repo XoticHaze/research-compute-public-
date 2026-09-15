@@ -12,8 +12,8 @@
   },
   "vars": {
     "GITHUB_ALLOWED_REF": "refs/heads/ibkr-b1-authority-v1",
-    "GITHUB_ALLOWED_EVENT": "workflow_dispatch",
+    "GITHUB_ALLOWED_EVENT": "push",
     "GITHUB_ALLOWED_WORKFLOW_REF": "XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1",
-    "GITHUB_ALLOWED_WORKFLOW_SHA": "7d349e39d6e1017d99c54dca307573886b6bea58"
+    "GITHUB_ALLOWED_WORKFLOW_SHA": "bea604c834a1b24e40722895e6e590c55a058a1d"
   }
 }
