@@ -1,0 +1,37 @@
+name: Open Research Job Contract
+
+on:
+  pull_request:
+    paths:
+      - jobs/**
+      - .github/workflows/open-job-contract.yml
+
+permissions:
+  contents: read
+
+jobs:
+  open-job:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate and execute open contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          p = Path('jobs/smoke-open-v1.json')
+          m = json.loads(p.read_text())
+          assert m['schema_version'] == 1
+          assert m['mode'] == 'open'
+          assert m['authority'] == 'research_only'
+          assert m['kind'] == 'sha256'
+          digest = hashlib.sha256(m['payload'].encode()).hexdigest()
+          assert digest == m['expected_sha256']
+          receipt = {'schema_version': 1, 'job_id': m['job_id'], 'mode': 'open', 'authority': 'research_only', 'status': 'PASS', 'result_sha256': digest}
+          Path('receipt.json').write_text(json.dumps(receipt, sort_keys=True, indent=2) + '\n')
+          print('OPEN_JOB=PASS', digest)
+          print(Path('receipt.json').read_text())
+          PY
