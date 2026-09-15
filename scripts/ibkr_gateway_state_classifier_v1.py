@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-"""Sanitize IB Gateway controller logs into fixed login-state booleans/counts.
+"""Sanitize IB Gateway controller/launcher logs into fixed state signals.
 
-Supports both legacy IBC and the post-IBC ibg-controller path. This classifier
-never emits source log lines, account identifiers, credentials, server names,
-or arbitrary matched text. It exists only to distinguish deterministic startup
-states while keeping public Actions logs safe.
+Supports both legacy IBC and the post-IBC ibg-controller path. Raw controller
+and launcher logs may contain account or server details, so this classifier
+never emits source lines, identifiers, credentials, hostnames, or arbitrary
+matched text. It emits only fixed booleans/counts and a bounded stage label.
 """
 
+import argparse
 import json
+from pathlib import Path
 import sys
 
 
@@ -20,9 +22,31 @@ def count(text: str, needle: str) -> int:
     return text.count(needle)
 
 
+def read_text(path: str | None) -> str:
+    if not path:
+        return ""
+    try:
+        return Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
 def main() -> None:
-    raw = sys.stdin.read()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--controller-log-file")
+    parser.add_argument("--launcher-log-file")
+    args = parser.parse_args()
+
+    if args.controller_log_file or args.launcher_log_file:
+        controller_raw = read_text(args.controller_log_file)
+        launcher_raw = read_text(args.launcher_log_file)
+    else:
+        controller_raw = sys.stdin.read()
+        launcher_raw = ""
+
+    raw = controller_raw + "\n" + launcher_raw
     text = raw.lower()
+    launcher = launcher_raw.lower()
 
     login_completed = present(
         text,
@@ -68,8 +92,6 @@ def main() -> None:
     controller_app_registered = present(text, "app registered:", "gateway app registered")
     controller_login_dialog = present(text, "login dialog detected")
 
-    # ibg-controller v0.10 state machine and success markers. These are fixed
-    # strings and contain no account identity or secret material.
     state_login = present(text, "[state: login]")
     state_post_login = present(text, "[state: post_login]")
     state_two_fa = present(text, "[state: two_fa]")
@@ -83,13 +105,10 @@ def main() -> None:
     login_clicked_successfully = present(text, "log in clicked successfully")
     post_login_inspection_started = present(text, "inspecting post-login dialogs")
 
-    # ibg-controller v0.10 role-based SETTEXT_LOGIN_* helpers log only on
-    # failure. Expose fixed booleans rather than raw response text.
     username_set_failure = present(text, "agent settext_login_user:")
     password_set_failure = present(text, "agent settext_login_password:")
     login_button_failure = present(text, "log in / paper log in button click failed via agent")
 
-    # Retain legacy/older-controller positive markers where they exist.
     controller_username_set = present(
         text,
         "set_text on text 'username': ok",
@@ -114,6 +133,27 @@ def main() -> None:
         "gateway api ready",
         "ready file written",
     )
+
+    # Fixed launcher protocol fingerprints documented by ibg-controller v0.10.
+    # These are intentionally evaluated only against launcher.log.
+    launcher_authenticating = "authenticating" in launcher
+    launcher_ns_auth_start = "ns_auth_start" in launcher
+    launcher_post_authenticate = "postauthenticate" in launcher
+    launcher_auth_timeout = "authtimeoutmonitor-ccp: timeout!" in launcher
+    launcher_auth_activate = "authtimeoutmonitor-ccp: activate" in launcher
+    launcher_ssl_failure = (
+        "sslhandshakeexception" in launcher
+        or "remote host terminated the handshake" in launcher
+    )
+    launcher_silent_auth = (
+        launcher_authenticating
+        and launcher_auth_timeout
+        and not launcher_ns_auth_start
+    )
+    launcher_server_ack_no_post = (
+        launcher_ns_auth_start and not launcher_post_authenticate
+    )
+
     ccp_lockout = present(
         text,
         "ccp lockout detected",
@@ -130,8 +170,9 @@ def main() -> None:
         text,
         "user is not known here",
         "this user is not known here",
+        "wrongregion",
     )
-    ssl_handshake_failure = present(
+    ssl_handshake_failure = launcher_ssl_failure or present(
         text,
         "sslhandshakeexception",
         "remote host terminated the handshake",
@@ -139,7 +180,7 @@ def main() -> None:
     passkey_prompt = present(text, "passkey prompt", "passkey authentication", "webauthn")
 
     result = {
-        "schema": "mmibkr-ibkr-gateway-state-v5",
+        "schema": "mmibkr-ibkr-gateway-state-v6",
         "controller_started": controller_started,
         "controller_input_agent_up": controller_input_agent_up,
         "controller_app_registered": controller_app_registered,
@@ -171,8 +212,16 @@ def main() -> None:
         ),
         "read_only_login_initiated": present(text, "initiating read-only login"),
         "loading_window_observed": present(text, "detected frame entitled: loading"),
-        "authenticating_window_observed": present(text, "detected frame entitled: authenticating", "authenticating..."),
-        "connecting_to_server_observed": present(text, "detected frame entitled: connecting to server", "connecting to server"),
+        "authenticating_window_observed": present(
+            text,
+            "detected frame entitled: authenticating",
+            "authenticating...",
+        ),
+        "connecting_to_server_observed": present(
+            text,
+            "detected frame entitled: connecting to server",
+            "connecting to server",
+        ),
         "starting_application_observed": present(text, "detected frame entitled: starting application"),
         "login_completed": login_completed,
         "configuration_completed": configuration_completed,
@@ -180,7 +229,11 @@ def main() -> None:
         "paper_warning_accepted": present(text, "click button: i understand and accept"),
         "twofa_initiated": twofa_initiated,
         "twofa_dialog_observed": twofa_dialog,
-        "security_code_dialog_observed": present(text, "detected dialog entitled: enter security code", "enter security code"),
+        "security_code_dialog_observed": present(
+            text,
+            "detected dialog entitled: enter security code",
+            "enter security code",
+        ),
         "second_factor_device_selection_signal": device_selection,
         "passkey_prompt_signal": passkey_prompt,
         "credential_rejection_signal": present(
@@ -193,7 +246,12 @@ def main() -> None:
             "incorrect username",
             "incorrect password",
         ),
-        "password_change_signal": present(text, "password expired", "change your password", "password must be changed"),
+        "password_change_signal": present(
+            text,
+            "password expired",
+            "change your password",
+            "password must be changed",
+        ),
         "existing_session_signal": present(text, "existing session", "already logged in"),
         "connection_problem_signal": present(
             text,
@@ -209,11 +267,25 @@ def main() -> None:
         "ccp_backoff_signal": ccp_backoff,
         "stuck_connecting_signal": stuck_connecting,
         "maintenance_signal": present(text, "maintenance", "system is currently unavailable"),
-        "api_readonly_setting_observed": present(text, "setting readonlyapi", "read-only api checkbox", "read_only_api"),
+        "api_readonly_setting_observed": present(
+            text,
+            "setting readonlyapi",
+            "read-only api checkbox",
+            "read_only_api",
+        ),
         "socat_internal_refused": present(text, "socat") and present(text, "connection refused"),
         "api_connection_reset_count": count(text, "connection reset by peer"),
         "login_attempt_count": count(text, "ibc: login attempt:") + count(text, "login attempt"),
-        "container_log_bytes": len(raw.encode("utf-8", errors="replace")),
+        "launcher_authenticating_seen": launcher_authenticating,
+        "launcher_ns_auth_start_seen": launcher_ns_auth_start,
+        "launcher_post_authenticate_seen": launcher_post_authenticate,
+        "launcher_auth_timeout_seen": launcher_auth_timeout,
+        "launcher_auth_activate_seen": launcher_auth_activate,
+        "launcher_silent_auth_signal": launcher_silent_auth,
+        "launcher_server_ack_without_post_auth_signal": launcher_server_ack_no_post,
+        "launcher_ssl_failure_signal": launcher_ssl_failure,
+        "container_log_bytes": len(controller_raw.encode("utf-8", errors="replace")),
+        "launcher_log_bytes": len(launcher_raw.encode("utf-8", errors="replace")),
     }
 
     if state_monitoring or controller_api_ready:
@@ -228,16 +300,22 @@ def main() -> None:
         stage = "api_wait"
     elif state_disclaimers:
         stage = "disclaimers"
-    elif ccp_lockout or ccp_backoff:
-        stage = "ccp_auth_lockout_backoff"
-    elif wrong_region_or_server:
-        stage = "regional_server_rejected"
     elif ssl_handshake_failure:
         stage = "regional_server_tls_failure"
+    elif wrong_region_or_server:
+        stage = "regional_server_rejected"
+    elif launcher_silent_auth:
+        stage = "auth_server_silent_or_cooldown"
+    elif launcher_server_ack_no_post:
+        stage = "auth_server_ack_credentials_unresolved"
+    elif ccp_lockout or ccp_backoff:
+        stage = "ccp_auth_lockout_backoff"
     elif stuck_connecting:
         stage = "connecting_to_server_stalled"
     elif passkey_prompt:
         stage = "passkey_prompt"
+    elif launcher_post_authenticate and (state_two_fa or twofa_initiated or twofa_dialog):
+        stage = "post_authenticated_waiting_second_factor"
     elif state_two_fa or twofa_initiated or twofa_dialog or result["security_code_dialog_observed"]:
         stage = "twofa_wait_or_in_progress"
     elif state_post_login or post_login_inspection_started:
@@ -250,7 +328,7 @@ def main() -> None:
         stage = "starting_application"
     elif result["connecting_to_server_observed"]:
         stage = "connecting_to_server"
-    elif result["authenticating_window_observed"]:
+    elif launcher_authenticating or result["authenticating_window_observed"]:
         stage = "authenticating"
     elif login_clicked_successfully:
         stage = "controller_login_submitted"
