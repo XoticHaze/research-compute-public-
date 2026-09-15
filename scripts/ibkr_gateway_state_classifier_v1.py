@@ -23,21 +23,24 @@ def main() -> None:
     raw = sys.stdin.read()
     text = raw.lower()
 
-    login_completed = present(text, "ibc: login has completed")
-    configuration_completed = present(text, "ibc: configuration tasks completed")
-    twofa_initiated = present(text, "ibc: second factor authentication initiated")
+    login_completed = present(text, "ibc: login has completed", "login has completed")
+    configuration_completed = present(text, "ibc: configuration tasks completed", "configuration tasks completed")
+    twofa_initiated = present(text, "ibc: second factor authentication initiated", "second factor authentication initiated")
     twofa_dialog = present(text, "detected dialog entitled: second factor authentication")
     device_selection = present(
         text,
         "could not find second factor device",
-        "second factor device",
-    ) and not present(text, "secondfactordevice=")
+        "select second factor device",
+    )
 
     result = {
-        "schema": "mmibkr-ibkr-gateway-state-v1",
+        "schema": "mmibkr-ibkr-gateway-state-v2",
         "login_dialog_opened": present(text, "login dialog window_opened"),
         "paper_login_clicked": present(text, "click button: paper log in"),
+        "read_only_login_initiated": present(text, "initiating read-only login"),
         "loading_window_observed": present(text, "detected frame entitled: loading"),
+        "authenticating_window_observed": present(text, "detected frame entitled: authenticating"),
+        "connecting_to_server_observed": present(text, "detected frame entitled: connecting to server"),
         "starting_application_observed": present(text, "detected frame entitled: starting application"),
         "login_completed": login_completed,
         "configuration_completed": configuration_completed,
@@ -45,6 +48,7 @@ def main() -> None:
         "paper_warning_accepted": present(text, "click button: i understand and accept"),
         "twofa_initiated": twofa_initiated,
         "twofa_dialog_observed": twofa_dialog,
+        "security_code_dialog_observed": present(text, "detected dialog entitled: enter security code"),
         "second_factor_device_selection_signal": device_selection,
         "credential_rejection_signal": present(
             text,
@@ -53,8 +57,20 @@ def main() -> None:
             "authentication failed",
             "login failed",
             "failed to authenticate",
+            "incorrect username",
+            "incorrect password",
         ),
-        "existing_session_signal": present(text, "existing session"),
+        "password_change_signal": present(text, "password expired", "change your password", "password must be changed"),
+        "existing_session_signal": present(text, "existing session", "already logged in"),
+        "connection_problem_signal": present(
+            text,
+            "connection failed",
+            "unable to connect",
+            "server unavailable",
+            "server is unavailable",
+            "could not connect",
+        ),
+        "maintenance_signal": present(text, "maintenance", "system is currently unavailable"),
         "api_readonly_setting_observed": present(text, "setting readonlyapi", "read-only api checkbox"),
         "socat_internal_refused": present(text, "socat") and present(text, "connection refused"),
         "api_connection_reset_count": count(text, "connection reset by peer"),
@@ -66,8 +82,14 @@ def main() -> None:
         stage = "gateway_configured"
     elif login_completed:
         stage = "login_completed_configuration_pending"
-    elif twofa_initiated or twofa_dialog:
+    elif twofa_initiated or twofa_dialog or result["security_code_dialog_observed"]:
         stage = "twofa_in_progress"
+    elif result["starting_application_observed"]:
+        stage = "starting_application"
+    elif result["connecting_to_server_observed"]:
+        stage = "connecting_to_server"
+    elif result["authenticating_window_observed"]:
+        stage = "authenticating"
     elif result["paper_login_clicked"] and result["loading_window_observed"]:
         stage = "paper_login_submitted_loading"
     elif result["paper_login_clicked"]:
