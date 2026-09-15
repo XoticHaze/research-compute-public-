@@ -18,22 +18,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          audience='mmibkr-fleet-authority'
-          encoded_aud="$(python - <<'PY'
-import urllib.parse
-print(urllib.parse.quote('mmibkr-fleet-authority', safe=''))
-PY
-)"
-          token_json="$(curl -fsSL -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${encoded_aud}")"
-          TOKEN_JSON="$token_json" python - <<'PY'
-import base64, json, os
-node=json.loads(os.environ['TOKEN_JSON'])
-token=node['value']
-parts=token.split('.')
-if len(parts)!=3:
-    raise SystemExit('invalid OIDC token shape')
-p=parts[1] + '=' * (-len(parts[1]) % 4)
-claims=json.loads(base64.urlsafe_b64decode(p).decode())
-allow=['iss','aud','repository','repository_visibility','runner_environment','ref','workflow_ref','workflow_sha','event_name','run_id','run_attempt']
-print('OIDC_CLAIMS=' + json.dumps({k:claims.get(k) for k in allow}, sort_keys=True))
-PY
+          token_json="$(curl -fsSL -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=mmibkr-fleet-authority")"
+          TOKEN_JSON="$token_json" python -c 'import base64,json,os; node=json.loads(os.environ["TOKEN_JSON"]); token=node["value"]; parts=token.split("."); p=parts[1]+"="*(-len(parts[1])%4); claims=json.loads(base64.urlsafe_b64decode(p).decode()); allow=["iss","aud","repository","repository_visibility","runner_environment","ref","workflow_ref","workflow_sha","event_name","run_id","run_attempt"]; print("OIDC_CLAIMS="+json.dumps({k:claims.get(k) for k in allow},sort_keys=True))'
