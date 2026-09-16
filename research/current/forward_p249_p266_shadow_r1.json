@@ -60,7 +60,7 @@
   "decision_at": "2026-09-10T07:25:00+00:00",
   "forward": {
     "first_close": "2026-09-10",
-    "latest_close": "2026-09-11",
+    "latest_close": "2026-09-14",
     "observations": [
       {
         "cost_detail": {
@@ -87,27 +87,37 @@
         "p249_plus_p266_gross": 0.008344679361624946,
         "p249_plus_p266_net": 0.008344679361624946,
         "satellite_increment_net": -0.000616970277643146
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-09-14",
+        "holding_month": "2026-09",
+        "p249_core_gross": -0.021491788504942832,
+        "p249_core_net": -0.021491788504942832,
+        "p249_plus_p266_gross": -0.019992025943056418,
+        "p249_plus_p266_net": -0.019992025943056418,
+        "satellite_increment_net": 0.001499762561886414
       }
     ],
     "p249_core_net": {
-      "annualized_vol": 0.28923880615922465,
-      "cumulative_return": -0.007994749181978955,
-      "days": 2,
-      "max_drawdown": 0.0,
-      "sharpe_rf0": -3.4171135293041197
+      "annualized_vol": 0.26030736040115,
+      "cumulative_return": -0.029314716228352578,
+      "days": 3,
+      "max_drawdown": -0.02149178850494282,
+      "sharpe_rf0": -9.466571065971097
     },
     "p249_plus_p266_net": {
-      "annualized_vol": 0.2916614794006348,
-      "cumulative_return": -0.009441099392009988,
-      "days": 2,
-      "max_drawdown": 0.0,
-      "sharpe_rf0": -4.015040963885228
+      "annualized_vol": 0.2496252971330333,
+      "cumulative_return": -0.029244378631090306,
+      "days": 3,
+      "max_drawdown": -0.01999202594305638,
+      "sharpe_rf0": -9.854845371806718
     },
-    "satellite_increment_cumulative": -0.0014492556293705938
+    "satellite_increment_cumulative": 4.833339318022212e-05
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-09-15T01:24:18.517270+00:00",
+  "observed_at": "2026-09-16T00:39:25.583080+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_pins": {
