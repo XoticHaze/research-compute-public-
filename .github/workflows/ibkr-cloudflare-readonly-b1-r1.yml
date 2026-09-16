@@ -10,6 +10,8 @@ on:
       - 'scripts/ibkr_auth_boundary_v1.py'
       - 'scripts/ibkr_login_window_guard_v1.py'
       - 'scripts/ibkr_post_auth_pipeline_v1.py'
+      - 'research/forward_bar_contract_v2.py'
+      - 'tests/test_ibkr_b1_auth_contracts_v1.py'
 
 permissions:
   contents: read
@@ -36,15 +38,21 @@ jobs:
         with:
           python-version: '3.11.16'
 
-      - name: Install fixed read-only probe dependencies
+      - name: Install and verify fixed read-only dependencies
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check 'cryptography==46.0.1' 'ib_insync==0.9.86'
+          python -m pip install --disable-pip-version-check \
+            'cryptography==46.0.1' \
+            'ib_insync==0.9.86' \
+            'pandas==2.2.3'
           python -m py_compile \
             scripts/fleet_authority_envelope_consumer_v1.py \
             scripts/ibkr_auth_boundary_v1.py \
             scripts/ibkr_login_window_guard_v1.py \
-            scripts/ibkr_post_auth_pipeline_v1.py
+            scripts/ibkr_post_auth_pipeline_v1.py \
+            research/forward_bar_contract_v2.py \
+            tests/test_ibkr_b1_auth_contracts_v1.py
+          python -m unittest tests.test_ibkr_b1_auth_contracts_v1 -v
 
       - name: Require deployed B1 authority contract
         run: |
@@ -282,7 +290,7 @@ jobs:
           echo 'IBKR_OPERATOR_APPROVAL_ACCEPTED=1'
           echo 'IBKR_GATEWAY_API_READY=1'
 
-      - name: Materialize sanitized post-auth consumer handoff
+      - name: Materialize canonical post-auth broker and forward-data handoff
         run: |
           set -euo pipefail
           python scripts/ibkr_post_auth_pipeline_v1.py \
@@ -290,7 +298,8 @@ jobs:
             --port 4002 \
             --client-id 78 \
             --symbols "$POST_AUTH_SYMBOLS" \
-            --output "$RUNNER_TEMP/ibkr-post-auth-handoff.json"
+            --output "$RUNNER_TEMP/ibkr-post-auth-handoff.json" \
+            --bars-output "$RUNNER_TEMP/ibkr-forward-bars-v2.jsonl"
 
       - name: Seal authenticated Gateway warm state
         run: |
@@ -328,13 +337,14 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish sanitized session handoff
+      - name: Publish canonical session and forward-data handoff
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ibkr-cloudflare-readonly-b1-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/ibkr-cloudflare-envelope-receipt.json
             ${{ runner.temp }}/ibkr-post-auth-handoff.json
+            ${{ runner.temp }}/ibkr-forward-bars-v2.jsonl
           if-no-files-found: error
           retention-days: 30
 
@@ -351,6 +361,7 @@ jobs:
             "$RUNNER_TEMP/ibkr-gateway-bootstrap.env" \
             "$RUNNER_TEMP/ibkr-cloudflare-envelope-receipt.json" \
             "$RUNNER_TEMP/ibkr-post-auth-handoff.json" \
+            "$RUNNER_TEMP/ibkr-forward-bars-v2.jsonl" \
             "$RUNNER_TEMP/ibkr-auth-boundary.json" \
             "$RUNNER_TEMP/ibkr-controller.log" \
             "$RUNNER_TEMP/ibkr-launcher.log" \
