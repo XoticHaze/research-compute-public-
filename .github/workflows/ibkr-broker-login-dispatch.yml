@@ -1,0 +1,37 @@
+name: IBKR Broker Login Dispatcher
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ibkr_login_request.txt'
+      - '.github/workflows/ibkr-broker-login-dispatch.yml'
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    if: ${{ contains(github.event.head_commit.message, '[ibkr-login]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch immutable pinned B1 auth workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REF: ibkr-b1-authority-v1
+          TARGET_WORKFLOW: ibkr-cloudflare-readonly-b1-r1.yml
+          EXPECTED_TARGET_SHA: fb04a11547a99b85d05c382f2fefb3a641aeb664
+        run: |
+          set -euo pipefail
+          actual_sha="$(gh api "/repos/${GITHUB_REPOSITORY}/git/ref/heads/${TARGET_REF}" --jq '.object.sha')"
+          if [ "$actual_sha" != "$EXPECTED_TARGET_SHA" ]; then
+            echo "PINNED_AUTH_HEAD_MISMATCH expected=$EXPECTED_TARGET_SHA actual=$actual_sha"
+            exit 42
+          fi
+          gh api --method POST \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/${TARGET_WORKFLOW}/dispatches" \
+            -f ref="$TARGET_REF"
+          echo 'IBKR_BROKER_WORKFLOW_DISPATCHED=1'
+          echo "IBKR_BROKER_WORKFLOW_SHA=$actual_sha"
