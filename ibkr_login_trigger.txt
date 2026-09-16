@@ -1,0 +1,4 @@
+IBKR paper read-only broker login trigger.
+
+Ordinary hardening commits must not consume broker authentication attempts.
+A push only enters the broker-data-proof job when its commit message contains [ibkr-login].
