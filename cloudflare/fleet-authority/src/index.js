@@ -6,7 +6,7 @@ const EXPECTED_AUTHORITY = 'ibkr-paper-readonly';
 const ALLOWED_REF = 'refs/heads/ibkr-b1-authority-v1';
 const ALLOWED_EVENT = 'push';
 const ALLOWED_WORKFLOW_REF = 'XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1';
-const ALLOWED_WORKFLOW_SHA = '0e06bc2f69405b52fa9d65ed3b1da97b61da36b1';
+const ALLOWED_WORKFLOW_SHA = 'e50ee8f3d5eea27a444ce2e54423d181fdbce3a9';
 const REQUEST_SCHEMA = 'mmibkr-fleet-authority-seal-request-v1';
 const ENVELOPE_SCHEMA = 'mmibkr-ibkr-readonly-gateway-env-x25519-hkdf-aesgcm-v1';
 
