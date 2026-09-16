@@ -18,7 +18,7 @@ class AuthBoundaryTests(unittest.TestCase):
     def test_exact_ibkey_wait_signal_is_authoritative(self):
         result = classify(
             "IB Key 2FA dialog detected\nWaiting for IB Key mobile approval — approve on your phone",
-            "ns_auth_start",
+            "Authenticating\nReceived NS_AUTH_START",
         )
         self.assertTrue(result["second_factor_challenge_observed"])
         self.assertTrue(result["ibkey_mobile_approval_wait_signal"])
@@ -35,34 +35,68 @@ class AuthBoundaryTests(unittest.TestCase):
         self.assertTrue(result["terminal_prechallenge_blocker"])
         self.assertEqual(result["stage"], "ccp_auth_lockout_backoff")
 
-    def test_unrelated_ccp_and_auth_words_do_not_form_lockout(self):
+    def test_exact_ccp_timeout_before_ns_auth_is_terminal(self):
+        result = classify(
+            "[state: TWO_FA]",
+            "Connecting ndc1.ibllc.com:4001 (SSL)\nAuthenticating\nAuthTimeoutMonitor-CCP: Timeout!",
+        )
+        self.assertTrue(result["ccp_timeout_observed"])
+        self.assertTrue(result["ccp_silent_timeout_before_ns_auth"])
+        self.assertTrue(result["terminal_prechallenge_blocker"])
+        self.assertEqual(result["stage"], "ccp_silent_timeout_before_ns_auth")
+        self.assertEqual(result["launcher_connected_host"], "ndc1.ibllc.com")
+
+    def test_ccp_timeout_after_ns_auth_is_not_silent_pre_auth_timeout(self):
+        result = classify(
+            "[state: TWO_FA]",
+            "Authenticating\nReceived NS_AUTH_START\nAuthTimeoutMonitor-CCP: Timeout!",
+        )
+        self.assertTrue(result["ccp_timeout_observed"])
+        self.assertTrue(result["ns_auth_start_observed"])
+        self.assertFalse(result["ccp_silent_timeout_before_ns_auth"])
+        self.assertFalse(result["terminal_prechallenge_blocker"])
+        self.assertEqual(result["stage"], "ns_auth_before_second_factor")
+
+    def test_unrelated_maintenance_word_does_not_claim_active_reset(self):
         result = classify(
             "CCP service initialized\n[state: TWO_FA]",
             "Authenticating with server\nmaintenance metadata loaded",
         )
         self.assertFalse(result["ccp_lockout_observed"])
+        self.assertFalse(result["maintenance_observed"])
         self.assertFalse(result["terminal_prechallenge_blocker"])
-        self.assertEqual(result["stage"], "maintenance_or_reset_signal")
+        self.assertEqual(result["stage"], "controller_internal_twofa_phase_only")
 
-    def test_maintenance_alone_is_not_terminal_blocker(self):
-        result = classify("maintenance signal observed", "Authenticating")
+    def test_active_maintenance_delay_is_distinct_but_not_terminal(self):
+        result = classify("cold start inside IBKR maintenance window; maintenance recovery delay", "Authenticating")
         self.assertTrue(result["maintenance_observed"])
         self.assertFalse(result["ccp_lockout_observed"])
         self.assertFalse(result["terminal_prechallenge_blocker"])
-        self.assertEqual(result["stage"], "maintenance_or_reset_signal")
+        self.assertEqual(result["stage"], "active_maintenance_or_reset_guard")
 
-    def test_evidence_excerpt_is_redacted(self):
+    def test_ssl_server_handshake_failure_is_terminal(self):
+        result = classify(
+            "[state: TWO_FA]",
+            "Connecting ndc1.ibllc.com:4000\nSSLHandshakeException: Remote host terminated the handshake",
+        )
+        self.assertTrue(result["ssl_handshake_failure_observed"])
+        self.assertTrue(result["terminal_prechallenge_blocker"])
+        self.assertEqual(result["stage"], "ssl_or_regional_server_handshake_failure")
+
+    def test_evidence_excerpt_and_launcher_transcript_are_redacted(self):
         result = classify(
             "username=alice@example.com password=hunter2 CCP authentication lockout retry later",
-            "account DU123456 postAuthenticate",
+            "Connecting cdc1.ibllc.com:4001\naccount DU123456 PostAuthenticate",
         )
         excerpt = "\n".join(result["evidence_excerpt"])
+        transcript = "\n".join(result["launcher_auth_transcript"])
         self.assertIn("username=<redacted>", excerpt)
         self.assertIn("password=<redacted>", excerpt)
-        self.assertIn("<redacted-account>", excerpt)
+        self.assertIn("<redacted-account>", transcript)
         self.assertNotIn("alice@example.com", excerpt)
         self.assertNotIn("hunter2", excerpt)
-        self.assertNotIn("DU123456", excerpt)
+        self.assertNotIn("DU123456", transcript)
+        self.assertEqual(result["launcher_connected_host"], "cdc1.ibllc.com")
 
     def test_device_selection_is_concrete_challenge(self):
         result = classify("Select a device for second factor authentication", "")
