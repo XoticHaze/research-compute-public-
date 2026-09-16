@@ -1,0 +1,24 @@
+name: spy-volume-shock-continuation-r1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/spy_volume_shock_continuation_r1.py'
+      - '.github/workflows/spy-volume-shock-continuation-r1.yml'
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -q yfinance pandas numpy
+      - run: set -o pipefail; python research/spy_volume_shock_continuation_r1.py | tee spy_volume_shock_continuation_r1_result.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spy-volume-shock-continuation-r1-result
+          path: spy_volume_shock_continuation_r1_result.txt
+          if-no-files-found: error
+          retention-days: 90
