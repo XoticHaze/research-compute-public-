@@ -1,0 +1,31 @@
+name: P493 PIT Operating Margin Improvement R1
+on:
+  pull_request:
+    paths:
+      - 'research/p493_pit_operating_margin_improvement_r1.py'
+      - '.github/workflows/p493-pit-operating-margin-improvement-r1.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --quiet yfinance pandas numpy requests lxml
+      - id: evaluate
+        run: |
+          python research/p493_pit_operating_margin_improvement_r1.py
+          python - <<'PY'
+          import json,os
+          x=json.load(open('research/artifacts/p493_pit_operating_margin_improvement_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('decision='+x['decision']+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p493-pit-margin-improvement__${{ steps.evaluate.outputs.decision }}
+          path: research/artifacts/p493_pit_operating_margin_improvement_r1.json
+          if-no-files-found: error
