@@ -1,0 +1,133 @@
+name: IBKR Legacy IBC Auth Comparator
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  compare-auth-boundary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      FLEET_AUTHORITY_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-paper/seal
+      LEGACY_IMAGE: ghcr.io/gnzsnz/ib-gateway@sha256:b4ede803caf48279b4bdc21c8de1fb19edaef8bedbb2b49153e72b042f660bf3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Install sealed-envelope dependency
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check 'cryptography==46.0.1'
+          python -m py_compile scripts/fleet_authority_envelope_consumer_v1.py
+
+      - name: Obtain sealed paper credentials
+        run: |
+          set -euo pipefail
+          umask 077
+          python scripts/fleet_authority_envelope_consumer_v1.py \
+            --authority-url "$FLEET_AUTHORITY_URL" \
+            --run-id "$GITHUB_RUN_ID" \
+            --output "$RUNNER_TEMP/ibkr-gateway.env" \
+            --receipt "$RUNNER_TEMP/ibkr-envelope-receipt.json"
+
+      - name: Materialize historical IBC-compatible environment
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          p=Path(os.environ['RUNNER_TEMP'])/'ibkr-gateway.env'
+          vals={}
+          for raw in p.read_text().splitlines():
+              if '=' in raw:
+                  k,v=raw.split('=',1); vals[k]=v
+          user=vals.get('TWS_USERID') or vals.get('TWS_USERID_PAPER')
+          password=vals.get('TWS_PASSWORD') or vals.get('TWS_PASSWORD_PAPER')
+          if not user or not password:
+              raise SystemExit('sealed paper credential pair missing')
+          out=Path(os.environ['RUNNER_TEMP'])/'ibkr-legacy.env'
+          out.write_text('\n'.join([
+              f'TWS_USERID={user}',
+              f'TWS_PASSWORD={password}',
+              'TRADING_MODE=paper',
+              'TWS_MAJOR_VRSN=10.45.1c',
+              'READ_ONLY_API=yes',
+              'TWS_ACCEPT_INCOMING=accept',
+              'EXISTING_SESSION_DETECTED_ACTION=primaryoverride',
+              'RELOGIN_AFTER_TWOFA_TIMEOUT=yes',
+              'TIME_ZONE=America/Chicago',
+              'TZ=America/Chicago',
+              '',
+          ]))
+          print('LEGACY_CREDENTIAL_SHAPE=generic_pair_only')
+          print('LEGACY_TRADING_MODE=paper')
+          PY
+
+      - name: Probe historical IBC authentication boundary once
+        run: |
+          set -euo pipefail
+          docker pull "$LEGACY_IMAGE" >/dev/null
+          docker run -d --name ibkr-legacy-auth \
+            --env-file "$RUNNER_TEMP/ibkr-legacy.env" \
+            -p 127.0.0.1:4002:4004 \
+            "$LEGACY_IMAGE" >/dev/null
+
+          result=unresolved
+          deadline=$((SECONDS + 150))
+          while (( SECONDS < deadline )); do
+            docker logs ibkr-legacy-auth > "$RUNNER_TEMP/ibkr-legacy.log" 2>&1 || true
+            if grep -Eqi 'detected dialog entitled: Second Factor Authentication|Second Factor Authentication' "$RUNNER_TEMP/ibkr-legacy.log"; then
+              result=second_factor_dialog
+              break
+            fi
+            if grep -Eqi 'Login failed|Authentication failed|Invalid username|Invalid password|incorrect.*password|ALERT_LOGIN_FAILED' "$RUNNER_TEMP/ibkr-legacy.log"; then
+              result=credential_rejection
+              break
+            fi
+            if grep -Eqi 'Login has completed|Configuration tasks completed' "$RUNNER_TEMP/ibkr-legacy.log"; then
+              result=authenticated
+              break
+            fi
+            sleep 3
+          done
+
+          echo "IBKR_LEGACY_AUTH_RESULT=$result"
+          case "$result" in
+            second_factor_dialog)
+              echo 'IBKR_LEGACY_CREDENTIALS_ACCEPTED_PRE_2FA=1'
+              ;;
+            authenticated)
+              echo 'IBKR_LEGACY_CREDENTIALS_ACCEPTED_PRE_2FA=1'
+              ;;
+            credential_rejection)
+              echo 'IBKR_LEGACY_CREDENTIALS_ACCEPTED_PRE_2FA=0'
+              ;;
+            *)
+              echo 'IBKR_LEGACY_CREDENTIALS_ACCEPTED_PRE_2FA=UNKNOWN'
+              ;;
+          esac
+
+          tail -n 160 "$RUNNER_TEMP/ibkr-legacy.log" \
+            | sed -E 's/([Uu]ser(name|id)?|[Pp]ass(word)?)[=:][^ ,;]*/\1=<redacted>/g' \
+            | grep -E 'IBC:|Second Factor|Authenticat|Login|ERROR|WARN|failed|Failed' \
+            | tail -n 80 || true
+
+          if [ "$result" = unresolved ]; then
+            exit 47
+          fi
+
+      - name: Destroy comparator runtime
+        if: always()
+        run: |
+          set +e
+          docker stop --time 15 ibkr-legacy-auth >/dev/null 2>&1
+          docker rm -f ibkr-legacy-auth >/dev/null 2>&1
+          rm -f "$RUNNER_TEMP/ibkr-gateway.env" "$RUNNER_TEMP/ibkr-legacy.env" "$RUNNER_TEMP/ibkr-envelope-receipt.json" "$RUNNER_TEMP/ibkr-legacy.log"
+          echo 'IBKR_LEGACY_PRIVATE_RUNTIME_DESTROYED=1'
