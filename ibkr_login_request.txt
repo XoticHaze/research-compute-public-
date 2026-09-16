@@ -1,0 +1,6 @@
+IBKR paper read-only broker login request surface.
+
+This file is intentionally inert unless the push commit message contains `[ibkr-login]`.
+The dispatcher verifies `ibkr-b1-authority-v1` is still exactly `fb04a11547a99b85d05c382f2fefb3a641aeb664` before dispatching the broker workflow.
+
+Do not trigger until the intended IBKR credential pair/account state has been independently verified.
