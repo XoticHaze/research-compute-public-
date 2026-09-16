@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 import unittest
 from datetime import datetime, timezone
+from pathlib import Path
 
 from scripts.ibkr_auth_boundary_v1 import classify
 from scripts.ibkr_login_window_guard_v1 import classify_window
@@ -74,7 +77,7 @@ class AuthBoundaryTests(unittest.TestCase):
     def test_exact_ccp_timeout_before_ns_auth_is_terminal(self):
         result = classify(
             "[state: TWO_FA]",
-            "Connecting ndc1.ibllc.com:4001 (SSL)\nAuthenticating\nAuthTimeoutMonitor-CCP: Timeout!",
+            "Connecting ndc1.ibllc.com:4001\nAuthenticating\nAuthTimeoutMonitor-CCP: Timeout!",
         )
         self.assertTrue(result["ccp_timeout_observed"])
         self.assertTrue(result["ccp_silent_timeout_before_ns_auth"])
@@ -85,7 +88,7 @@ class AuthBoundaryTests(unittest.TestCase):
     def test_pre_ns_auth_stall_after_sixty_seconds_is_terminal(self):
         result = classify(
             "[state: TWO_FA]\n2FA wait t+60s: still waiting",
-            "Connecting ndc1.ibllc.com:4001 (SSL)\nAuthenticating",
+            "Connecting ndc1.ibllc.com:4001\nAuthenticating",
         )
         self.assertTrue(result["pre_ns_auth_stall_observed"])
         self.assertFalse(result["ns_auth_start_observed"])
@@ -172,6 +175,20 @@ class ResetWindowTests(unittest.TestCase):
     def test_before_guard_start_is_allowed(self):
         result = classify_window(datetime(2026, 9, 16, 4, 9, tzinfo=timezone.utc))
         self.assertTrue(result["cold_login_allowed"])
+
+
+class PostAuthEntrypointTests(unittest.TestCase):
+    def test_post_auth_pipeline_direct_entrypoint_imports_repo_contract(self):
+        repo_root = Path(__file__).resolve().parents[1]
+        proc = subprocess.run(
+            [sys.executable, str(repo_root / "scripts" / "ibkr_post_auth_pipeline_v1.py"), "--help"],
+            cwd=repo_root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("--bars-output", proc.stdout)
 
 
 if __name__ == "__main__":
