@@ -1,0 +1,26 @@
+name: spy-turn-month-r1
+on:
+  pull_request:
+    paths:
+      - 'research/spy_turn_month_r1.py'
+      - '.github/workflows/spy-turn-month-r1.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pandas numpy yfinance
+      - run: python research/spy_turn_month_r1.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spy-turn-month-r1-result
+          path: spy_turn_month_r1_result.json
+          if-no-files-found: error
