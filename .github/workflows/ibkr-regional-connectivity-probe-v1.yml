@@ -1,0 +1,58 @@
+name: IBKR Regional Connectivity Probe V1
+
+on:
+  push:
+    branches: [assistant/ibkr-controller-image-probe-v1]
+    paths:
+      - '.github/workflows/ibkr-regional-connectivity-probe-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Probe regional TCP/TLS endpoints without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, socket, ssl, time
+
+          hosts = ['ndc1.ibllc.com', 'cdc1.ibllc.com', 'gdc1.ibllc.com', 'hdc1.ibllc.com']
+          ports = [4001]
+          results=[]
+          for host in hosts:
+              for port in ports:
+                  row={'host':host,'port':port,'dns':False,'tcp':False,'tls':False}
+                  try:
+                      infos=socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+                      row['dns']=bool(infos)
+                      row['addresses']=sorted({x[4][0] for x in infos})[:4]
+                  except Exception as exc:
+                      row['dns_error']=type(exc).__name__
+                      results.append(row); continue
+                  try:
+                      raw=socket.create_connection((host,port), timeout=5)
+                      row['tcp']=True
+                      ctx=ssl.create_default_context()
+                      try:
+                          with ctx.wrap_socket(raw, server_hostname=host) as s:
+                              row['tls']=True
+                              row['tls_version']=s.version()
+                              cert=s.getpeercert()
+                              row['cert_subject']=dict(x[0] for x in cert.get('subject', []))
+                      except Exception as exc:
+                          row['tls_error']=type(exc).__name__
+                          try: raw.close()
+                          except Exception: pass
+                  except Exception as exc:
+                      row['tcp_error']=type(exc).__name__
+                  results.append(row)
+          print('IBKR_REGIONAL_CONNECTIVITY=' + json.dumps(results, sort_keys=True))
+          if not any(r['tcp'] for r in results):
+              raise SystemExit('no regional endpoint reachable over TCP')
+          PY
