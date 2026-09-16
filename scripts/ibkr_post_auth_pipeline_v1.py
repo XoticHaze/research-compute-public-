@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Materialize the first canonical downstream boundary from an authenticated IBKR session.
+"""Materialize the canonical downstream boundary from an authenticated IBKR session.
 
 This is deliberately broader than a connectivity probe: it proves paper/read-only
 broker state access, position/order readability, contract resolution, and emits
-IBKR history through the existing ``research.forward_bar.v2`` contract.  It does
-not submit orders and does not pretend broker bars are completed-trade evidence;
-trade pairing / Strategy Health ingestion remains downstream of this boundary.
+IBKR history through the existing ``research.forward_bar.v2`` contract. Futures
+are accepted only with explicit dated/local contract authority; this consumer
+never invents a front month or roll decision.
 """
 
 from __future__ import annotations
@@ -15,9 +15,10 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ib_insync import IB, Stock
+from ib_insync import IB
 
 from research.forward_bar_contract_v2 import ForwardBarContract, ibkr_bar_to_record, normalize_frame
+from scripts.ibkr_instrument_spec_v1 import parse_instrument_specs, stock_specs
 
 
 def _jsonable(value):
@@ -34,14 +35,24 @@ def main() -> int:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=4002)
     ap.add_argument("--client-id", type=int, default=78)
-    ap.add_argument("--symbols", default="AMAT,APH")
+    ap.add_argument("--symbols", default="AMAT,APH", help="Backward-compatible SMART stock list")
+    ap.add_argument(
+        "--instrument-spec",
+        help="JSON array or @path. FUT entries must carry explicit contract_month or local_symbol authority.",
+    )
     ap.add_argument("--output", required=True, help="Sanitized broker/session handoff JSON")
     ap.add_argument("--bars-output", required=True, help="Canonical research.forward_bar.v2 JSONL")
     args = ap.parse_args()
 
-    symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
-    if not symbols:
-        raise SystemExit("at least one symbol is required")
+    if args.instrument_spec:
+        instruments = parse_instrument_specs(args.instrument_spec)
+        instrument_authority = "explicit_instrument_spec"
+    else:
+        symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
+        if not symbols:
+            raise SystemExit("at least one symbol is required")
+        instruments = stock_specs(symbols)
+        instrument_authority = "backward_compatible_stock_defaults"
 
     ib = IB()
     try:
@@ -59,19 +70,17 @@ def main() -> int:
         current_time = ib.reqCurrentTime()
         account_summary = list(ib.accountSummary())
         positions = list(ib.positions())
-        # Request the account-wide open-order view.  This is still read-only and
-        # proves the consumer can inspect execution state without submitting.
         ib.reqAllOpenOrders()
         ib.sleep(1)
         open_orders = list(ib.openOrders())
 
-        symbol_receipts: list[dict[str, object]] = []
+        instrument_receipts: list[dict[str, object]] = []
         records: list[dict[str, object]] = []
-        for symbol in symbols:
-            contract = Stock(symbol, "SMART", "USD")
+        for spec in instruments:
+            contract = spec.build_contract()
             qualified = ib.qualifyContracts(contract)
             if not qualified:
-                raise RuntimeError(f"contract qualification failed for {symbol}")
+                raise RuntimeError(f"contract qualification failed for {spec.symbol}")
             resolved = qualified[0]
             bars = ib.reqHistoricalData(
                 resolved,
@@ -84,28 +93,30 @@ def main() -> int:
                 keepUpToDate=False,
             )
             if not bars:
-                raise RuntimeError(f"historical data returned no bars for {symbol}")
+                raise RuntimeError(f"historical data returned no bars for {spec.symbol}")
             records.extend(
                 ibkr_bar_to_record(
                     bar,
                     resolved,
-                    symbol=symbol,
-                    asset_type="STK",
+                    symbol=spec.symbol,
+                    asset_type=spec.asset_type,
                     bar_size="5 mins",
                     session="all",
                     source="ibkr",
                 )
                 for bar in bars
             )
-            symbol_receipts.append(
+            receipt = spec.receipt()
+            receipt.update(
                 {
-                    "symbol": symbol,
                     "contract_qualified": True,
-                    "contract_id": f"conid:{resolved.conId}" if resolved.conId else (resolved.localSymbol or symbol),
+                    "resolved_local_symbol": resolved.localSymbol or None,
+                    "contract_id": f"conid:{resolved.conId}" if resolved.conId else (resolved.localSymbol or spec.symbol),
                     "historical_data_ready": True,
                     "historical_bar_count": len(bars),
                 }
             )
+            instrument_receipts.append(receipt)
 
         frame = normalize_frame(records)
         bars_path = Path(args.bars_output)
@@ -114,7 +125,7 @@ def main() -> int:
                 fh.write(json.dumps({k: _jsonable(v) for k, v in row.items()}, sort_keys=True) + "\n")
 
         receipt = {
-            "schema": "mmibkr-ibkr-post-auth-handoff-v2",
+            "schema": "mmibkr-ibkr-post-auth-handoff-v3",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "trading_mode": "paper",
             "read_only": True,
@@ -129,7 +140,8 @@ def main() -> int:
             "open_orders_readable": True,
             "open_order_count": len(open_orders),
             "broker_time_readable": current_time is not None,
-            "symbols": symbol_receipts,
+            "instrument_authority": instrument_authority,
+            "instruments": instrument_receipts,
             "forward_bar_contract": ForwardBarContract().schema,
             "forward_bar_count": int(len(frame)),
             "forward_bar_symbols": sorted(frame["symbol"].unique().tolist()),
@@ -140,6 +152,8 @@ def main() -> int:
                 "contract_qualification": True,
                 "historical_market_data": True,
                 "canonical_forward_bar_materialization": True,
+                "explicit_futures_contract_authority": True,
+                "implicit_futures_roll_selection": False,
                 "order_submission": False,
             },
             "completed_trade_evidence_materialized": False,
