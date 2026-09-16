@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from io import StringIO
 from urllib.request import Request, urlopen
 
@@ -24,12 +25,28 @@ def _month_end(index: pd.DatetimeIndex) -> pd.DatetimeIndex:
 
 
 def _fred_dgs10() -> pd.Series:
-    req = Request(
-        "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10",
-        headers={"User-Agent": "research-compute-public causal research/1.0"},
-    )
-    with urlopen(req, timeout=30) as response:
-        raw = response.read().decode("utf-8")
+    # Transport hardening only: the frozen scientific source remains FRED DGS10.
+    # cosd limits the response to the already-frozen START window and retries only
+    # transient transport failures; it does not alter the series or chronology.
+    url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd={START}"
+    raw = None
+    last_error: Exception | None = None
+    for attempt in range(4):
+        req = Request(
+            url,
+            headers={"User-Agent": "research-compute-public causal research/1.0"},
+        )
+        try:
+            with urlopen(req, timeout=60) as response:
+                raw = response.read().decode("utf-8")
+            break
+        except Exception as exc:  # transport only; fail closed after bounded retries
+            last_error = exc
+            if attempt < 3:
+                time.sleep(2 ** attempt)
+    if raw is None:
+        raise RuntimeError(f"FRED DGS10 transport failed after bounded retries: {last_error}")
+
     frame = pd.read_csv(StringIO(raw))
     date_col = frame.columns[0]
     frame[date_col] = pd.to_datetime(frame[date_col], utc=False)
@@ -38,7 +55,10 @@ def _fred_dgs10() -> pd.Series:
     out.index = pd.DatetimeIndex(out.index).tz_localize(None)
     out = out.loc[out.index >= pd.Timestamp(START)]
     out.index = _month_end(out.index)
-    return out.groupby(level=0).last().sort_index()
+    out = out.groupby(level=0).last().sort_index()
+    if out.empty or out.index.min() > pd.Timestamp("2007-01-31"):
+        raise RuntimeError("FRED DGS10 coverage does not reach frozen start window")
+    return out
 
 
 def _spy_cash_yield() -> pd.Series:
