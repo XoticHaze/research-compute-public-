@@ -6,10 +6,11 @@ second-factor challenge is authoritative only when a concrete dialog/initiation
 or IB Key mobile-approval signal is present.
 
 For the pre-2FA boundary, mirror IB Gateway's launcher protocol directly:
-Authenticating -> NS_AUTH_START -> PostAuthenticate. A CCP Timeout before
-NS_AUTH_START means the auth request never crossed the server handshake boundary;
-it can be rate limiting, a wrong regional server, or another network/account-side
-pre-auth problem and must not be mislabeled as a delivered 2FA challenge.
+Authenticating -> NS_AUTH_START -> PostAuthenticate. A CCP Timeout or explicit
+authorization disconnect before NS_AUTH_START means the auth request never crossed
+the server handshake boundary; it can be rate limiting, a wrong regional server,
+credential/account authorization, or another account-side pre-auth problem and
+must not be mislabeled as a delivered 2FA challenge.
 """
 
 from __future__ import annotations
@@ -76,6 +77,7 @@ def _launcher_auth_transcript(launcher: str, limit: int = 28) -> list[str]:
         "ns_auth_start",
         "postauthenticate",
         "authtimeoutmonitor-ccp",
+        "disconnect_authorization_failed",
         "sslhandshakeexception",
         "remote host terminated",
         "not known here",
@@ -160,6 +162,11 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
     ns_auth_start_observed = "NS_AUTH_START" in launcher
     post_authenticate_observed = "PostAuthenticate" in launcher
     authenticating_observed = "Authenticating" in launcher
+    authorization_rejected_before_ns_auth = (
+        _has(launcher, "DISCONNECT_AUTHORIZATION_FAILED")
+        and authenticating_observed
+        and not ns_auth_start_observed
+    )
     ssl_handshake_failure_observed = _has(launcher, "SSLHandshakeException", "Remote host terminated the handshake")
     wrong_server_rejection_observed = _has(
         launcher,
@@ -170,10 +177,6 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
     )
     ccp_silent_timeout_before_ns_auth = ccp_timeout_observed and authenticating_observed and not ns_auth_start_observed
 
-    # If Gateway has been sitting in the controller's optimistic 2FA wait for
-    # >=60s but launcher never received NS_AUTH_START, the broker handshake did
-    # not progress. Do not burn the controller's full 30-minute 2FA wait or our
-    # old 15-minute outer deadline on a challenge that cannot exist yet.
     pre_ns_auth_stall_observed = (
         authenticating_observed
         and not ns_auth_start_observed
@@ -217,6 +220,7 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
             (
                 credential_rejection_observed,
                 explicit_ccp_lockout_observed,
+                authorization_rejected_before_ns_auth,
                 ccp_silent_timeout_before_ns_auth,
                 pre_ns_auth_stall_observed,
                 ssl_handshake_failure_observed,
@@ -235,6 +239,8 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         stage = "ssl_or_regional_server_handshake_failure"
     elif wrong_server_rejection_observed:
         stage = "regional_server_rejected_user"
+    elif authorization_rejected_before_ns_auth:
+        stage = "authorization_rejected_before_ns_auth"
     elif ccp_silent_timeout_before_ns_auth:
         stage = "ccp_silent_timeout_before_ns_auth"
     elif pre_ns_auth_stall_observed:
@@ -258,7 +264,7 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
 
     transcript = _launcher_auth_transcript(launcher)
     return {
-        "schema": "mmibkr-ibkr-auth-boundary-v3",
+        "schema": "mmibkr-ibkr-auth-boundary-v4",
         "stage": stage,
         "controller_internal_twofa_phase": controller_internal_twofa_phase,
         "second_factor_challenge_observed": second_factor_challenge_observed,
@@ -270,6 +276,7 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         "device_selection_observed": device_selection_observed,
         "passkey_prompt_observed": passkey_prompt_observed,
         "credential_rejection_observed": credential_rejection_observed,
+        "authorization_rejected_before_ns_auth": authorization_rejected_before_ns_auth,
         "ccp_lockout_observed": explicit_ccp_lockout_observed,
         "ccp_timeout_observed": ccp_timeout_observed,
         "ccp_silent_timeout_before_ns_auth": ccp_silent_timeout_before_ns_auth,
