@@ -35,6 +35,20 @@ class AuthBoundaryTests(unittest.TestCase):
         self.assertTrue(result["terminal_prechallenge_blocker"])
         self.assertEqual(result["stage"], "ccp_auth_lockout_backoff")
 
+    def test_authorization_disconnect_before_ns_auth_is_terminal_but_not_called_bad_credentials(self):
+        result = classify(
+            "[state: TWO_FA]",
+            "Connecting ndc1.ibllc.com:4001 (SSL)\nAuthenticating\n"
+            "Disconnecting ndc1.ibllc.com:4001 (SSL) "
+            "[disconnectDetails=DisconnectDetails[reason=DISCONNECT_AUTHORIZATION_FAILED]]",
+        )
+        self.assertTrue(result["authorization_rejected_before_ns_auth"])
+        self.assertFalse(result["credential_rejection_observed"])
+        self.assertFalse(result["ns_auth_start_observed"])
+        self.assertTrue(result["terminal_prechallenge_blocker"])
+        self.assertEqual(result["stage"], "authorization_rejected_before_ns_auth")
+        self.assertIn("DISCONNECT_AUTHORIZATION_FAILED", "\n".join(result["launcher_auth_transcript"]))
+
     def test_exact_ccp_timeout_before_ns_auth_is_terminal(self):
         result = classify(
             "[state: TWO_FA]",
@@ -124,19 +138,16 @@ class AuthBoundaryTests(unittest.TestCase):
 
 class ResetWindowTests(unittest.TestCase):
     def test_inside_reset_guard_is_blocked(self):
-        # 2026-09-16 05:35Z == 01:35 EDT.
         result = classify_window(datetime(2026, 9, 16, 5, 35, tzinfo=timezone.utc))
         self.assertFalse(result["cold_login_allowed"])
         self.assertEqual(result["reason"], "north_america_daily_reset_guard")
 
     def test_after_guard_margin_is_allowed(self):
-        # 2026-09-16 05:51Z == 01:51 EDT.
         result = classify_window(datetime(2026, 9, 16, 5, 51, tzinfo=timezone.utc))
         self.assertTrue(result["cold_login_allowed"])
         self.assertEqual(result["reason"], "outside_reset_guard")
 
     def test_before_guard_start_is_allowed(self):
-        # 2026-09-16 04:09Z == 00:09 EDT.
         result = classify_window(datetime(2026, 9, 16, 4, 9, tzinfo=timezone.utc))
         self.assertTrue(result["cold_login_allowed"])
 
