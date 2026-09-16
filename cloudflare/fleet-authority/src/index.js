@@ -161,7 +161,7 @@ async function sealIbkrGatewayEnv(body, env, oidc) {
     env,
     ['IBKR_PAPER_TWS_SERVER', 'TWS_SERVER_PAPER', 'IBKR_TWS_SERVER', 'TWS_SERVER'],
     'authority_paper_server',
-  );
+  ) || 'ndc1.ibllc.com';
 
   const recipientKey = await crypto.subtle.importKey('raw', recipientRaw, { name: 'X25519' }, false, []);
   const ephemeral = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
