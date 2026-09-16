@@ -12,6 +12,7 @@ class AuthBoundaryTests(unittest.TestCase):
         result = classify("[state: TWO_FA]\nPost-login inspection", "Authenticating")
         self.assertTrue(result["controller_internal_twofa_phase"])
         self.assertFalse(result["second_factor_challenge_observed"])
+        self.assertFalse(result["terminal_prechallenge_blocker"])
         self.assertEqual(result["stage"], "controller_internal_twofa_phase_only")
 
     def test_exact_ibkey_wait_signal_is_authoritative(self):
@@ -21,25 +22,59 @@ class AuthBoundaryTests(unittest.TestCase):
         )
         self.assertTrue(result["second_factor_challenge_observed"])
         self.assertTrue(result["ibkey_mobile_approval_wait_signal"])
+        self.assertFalse(result["terminal_prechallenge_blocker"])
         self.assertEqual(result["stage"], "ibkey_mobile_approval_wait")
 
-    def test_ccp_lockout_wins_over_internal_twofa_phase(self):
+    def test_concrete_ccp_lockout_is_terminal_prechallenge_blocker(self):
         result = classify(
-            "[state: TWO_FA]\nmaintenance\nCCP lockout authentication backoff",
+            "[state: TWO_FA]\nCCP authentication lockout; retry later",
             "Authenticating",
         )
         self.assertFalse(result["second_factor_challenge_observed"])
+        self.assertTrue(result["ccp_lockout_observed"])
+        self.assertTrue(result["terminal_prechallenge_blocker"])
         self.assertEqual(result["stage"], "ccp_auth_lockout_backoff")
+
+    def test_unrelated_ccp_and_auth_words_do_not_form_lockout(self):
+        result = classify(
+            "CCP service initialized\n[state: TWO_FA]",
+            "Authenticating with server\nmaintenance metadata loaded",
+        )
+        self.assertFalse(result["ccp_lockout_observed"])
+        self.assertFalse(result["terminal_prechallenge_blocker"])
+        self.assertEqual(result["stage"], "maintenance_or_reset_signal")
+
+    def test_maintenance_alone_is_not_terminal_blocker(self):
+        result = classify("maintenance signal observed", "Authenticating")
+        self.assertTrue(result["maintenance_observed"])
+        self.assertFalse(result["ccp_lockout_observed"])
+        self.assertFalse(result["terminal_prechallenge_blocker"])
+        self.assertEqual(result["stage"], "maintenance_or_reset_signal")
+
+    def test_evidence_excerpt_is_redacted(self):
+        result = classify(
+            "username=alice@example.com password=hunter2 CCP authentication lockout retry later",
+            "account DU123456 postAuthenticate",
+        )
+        excerpt = "\n".join(result["evidence_excerpt"])
+        self.assertIn("<redacted-email>", excerpt)
+        self.assertIn("password=<redacted>", excerpt)
+        self.assertIn("<redacted-account>", excerpt)
+        self.assertNotIn("alice@example.com", excerpt)
+        self.assertNotIn("hunter2", excerpt)
+        self.assertNotIn("DU123456", excerpt)
 
     def test_device_selection_is_concrete_challenge(self):
         result = classify("Select a device for second factor authentication", "")
         self.assertTrue(result["device_selection_observed"])
         self.assertTrue(result["second_factor_challenge_observed"])
+        self.assertFalse(result["terminal_prechallenge_blocker"])
 
     def test_warm_api_ready_does_not_require_second_factor(self):
         result = classify("API port open — session preserved", "")
         self.assertTrue(result["api_ready_observed"])
         self.assertFalse(result["second_factor_challenge_observed"])
+        self.assertFalse(result["terminal_prechallenge_blocker"])
         self.assertEqual(result["stage"], "api_ready")
 
 
