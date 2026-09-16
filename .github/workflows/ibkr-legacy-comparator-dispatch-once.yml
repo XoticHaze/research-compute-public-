@@ -1,0 +1,54 @@
+name: IBKR Legacy Comparator Dispatch Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ibkr-legacy-comparator-dispatch-once.yml'
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      FLEET_AUTHORITY_HEALTH: https://fleet-authority.slenderiq.workers.dev/healthz
+      EXPECTED_WORKFLOW_SHA: f1cbc1516efdc7d5854a666e6d753dd157a37cf9
+      EXPECTED_WORKFLOW_CONTRACT: canonical-b1+legacy-ibc-comparator
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Wait for exact deployed comparator authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, time
+          from urllib.request import Request, urlopen
+          url=os.environ['FLEET_AUTHORITY_HEALTH']
+          want_sha=os.environ['EXPECTED_WORKFLOW_SHA']
+          want_contract=os.environ['EXPECTED_WORKFLOW_CONTRACT']
+          for _ in range(60):
+              try:
+                  req=Request(url,headers={'Accept':'application/json','User-Agent':'mmibkr-legacy-dispatch-v1'})
+                  with urlopen(req,timeout=10) as r:
+                      node=json.loads(r.read().decode())
+                  if node.get('allowed_workflow_sha')==want_sha and node.get('allowed_workflow_contract')==want_contract:
+                      print('LEGACY_COMPARATOR_AUTHORITY_READY=1')
+                      raise SystemExit(0)
+              except Exception:
+                  pass
+              time.sleep(5)
+          raise SystemExit('legacy comparator authority did not converge')
+          PY
+
+      - name: Dispatch immutable legacy IBC comparator
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run ibkr-legacy-ibc-auth-comparator.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref ibkr-b1-authority-v1
+          echo 'IBKR_LEGACY_COMPARATOR_DISPATCHED=1'
