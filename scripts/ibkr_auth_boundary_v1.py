@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Classify the IBKR login boundary without conflating controller state with 2FA.
+"""Classify the IBKR login boundary from concrete launcher/controller evidence.
 
 The controller's internal TWO_FA state is only an implementation phase. A real
 second-factor challenge is authoritative only when a concrete dialog/initiation
-or IB Key mobile-approval signal is present in controller/launcher logs.
+or IB Key mobile-approval signal is present.
 
-Pre-challenge blockers are deliberately stricter: CCP lockout/backoff is true
-only when a single log line contains both a CCP/auth context and an explicit
-lockout/backoff condition. This avoids combining unrelated words that happen to
-occur elsewhere in a long launcher log.
+For the pre-2FA boundary, mirror IB Gateway's launcher protocol directly:
+Authenticating -> NS_AUTH_START -> PostAuthenticate. A CCP Timeout before
+NS_AUTH_START means the auth request never crossed the server handshake boundary;
+it can be rate limiting, a wrong regional server, or another network/account-side
+pre-auth problem and must not be mislabeled as a delivered 2FA challenge.
 """
 
 from __future__ import annotations
@@ -57,8 +58,6 @@ def _ccp_lockout_line(line: str) -> bool:
 
 
 def _redact(line: str) -> str:
-    # Keep evidence operator-useful while preventing credentials/account identity
-    # from being emitted into public Actions logs or artifacts.
     line = re.sub(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", "<redacted-email>", line, flags=re.I)
     line = re.sub(r"\b(?:DU|U)\d{4,}\b", "<redacted-account>", line, flags=re.I)
     line = re.sub(
@@ -66,115 +65,126 @@ def _redact(line: str) -> str:
         lambda match: f"{match.group(1)}=<redacted>",
         line,
     )
-    return line[:320]
+    return line[:360]
 
 
-def _evidence_excerpt(controller: str, launcher: str, limit: int = 16) -> list[str]:
+def _launcher_auth_transcript(launcher: str, limit: int = 28) -> list[str]:
+    """Return a compact redacted transcript of the actual launcher auth protocol."""
     markers = (
-        "ccp",
-        "lockout",
-        "locked",
-        "backoff",
-        "too many",
-        "retry later",
-        "try again later",
-        "authenticat",
+        "connecting ",
+        "connected to ",
+        "authenticating",
         "ns_auth_start",
         "postauthenticate",
+        "authtimeoutmonitor-ccp",
+        "sslhandshakeexception",
+        "remote host terminated",
+        "not known here",
+        "user is not known",
+        "unknown user",
+        "login failed",
+        "authentication failed",
+    )
+    selected: list[str] = []
+    for raw in _lines(launcher):
+        folded = raw.casefold()
+        if any(marker in folded for marker in markers):
+            selected.append(_redact(raw))
+            if len(selected) >= limit:
+                break
+    return selected
+
+
+def _evidence_excerpt(controller: str, launcher: str, limit: int = 20) -> list[str]:
+    # Prioritize launcher protocol because it is authoritative for the pre-2FA
+    # server handshake. Then add concrete controller challenge/blocker lines.
+    selected = [f"launcher: {line}" for line in _launcher_auth_transcript(launcher, limit=limit)]
+    seen = set(selected)
+    markers = (
+        "ccp lockout",
+        "ccp backoff",
         "second factor",
-        "2fa",
+        "2fa dialog",
         "ib key",
         "security code",
         "passkey",
-        "maintenance",
-        "reset window",
-        "server reset",
+        "inside ibkr maintenance window",
+        "maintenance recovery delay",
+        "reset guard",
     )
-    selected: list[str] = []
-    seen: set[str] = set()
-    for source, text in (("controller", controller), ("launcher", launcher)):
-        for raw in _lines(text):
-            folded = raw.casefold()
-            if not any(marker in folded for marker in markers):
-                continue
-            item = f"{source}: {_redact(raw)}"
-            if item in seen:
-                continue
-            seen.add(item)
+    for raw in _lines(controller):
+        folded = raw.casefold()
+        if not any(marker in folded for marker in markers):
+            continue
+        item = f"controller: {_redact(raw)}"
+        if item not in seen:
             selected.append(item)
-            if len(selected) >= limit:
-                return selected
+            seen.add(item)
+        if len(selected) >= limit:
+            break
     return selected
+
+
+def _connected_host(launcher: str) -> str | None:
+    # Examples: "Connecting ndc1.ibllc.com:4001 (SSL)" and
+    # "Connected to cdc1.ibllc.com:4001 (SSL)/...".
+    for pattern in (
+        r"\bConnecting\s+([A-Za-z0-9._-]+):\d+",
+        r"\bConnected\s+to\s+([A-Za-z0-9._-]+):\d+",
+    ):
+        match = re.search(pattern, launcher, flags=re.I)
+        if match:
+            return match.group(1).lower()
+    return None
 
 
 def classify(controller: str, launcher: str) -> dict[str, object]:
     combined = controller + "\n" + launcher
     all_lines = _lines(combined)
 
-    controller_internal_twofa_phase = _has(
-        controller,
-        "[state: two_fa]",
-        "state_two_fa",
-        "state: two_fa",
-    )
+    controller_internal_twofa_phase = _has(controller, "[state: two_fa]", "state_two_fa", "state: two_fa")
     ibkey_dialog_detected = _has(combined, "ib key 2fa dialog detected")
     ibkey_mobile_approval_wait_signal = _has(combined, "waiting for ib key mobile approval")
-    twofa_initiated_signal = _has(
-        combined,
-        "second factor authentication initiated",
-        "two-factor authentication initiated",
-        "2fa initiated",
-    )
-    generic_twofa_dialog_detected = _has(
-        combined,
-        "2fa dialog detected",
-        "two-factor dialog detected",
-        "second factor dialog detected",
-    )
-    security_code_dialog_observed = _has(
-        combined,
-        "security code dialog",
-        "enter security code",
-        "authentication code",
-    )
-    device_selection_observed = _has(
-        combined,
-        "second factor device",
-        "select a device",
-        "select device",
-        "device selection",
-    )
+    twofa_initiated_signal = _has(combined, "second factor authentication initiated", "two-factor authentication initiated", "2fa initiated")
+    generic_twofa_dialog_detected = _has(combined, "2fa dialog detected", "two-factor dialog detected", "second factor dialog detected")
+    security_code_dialog_observed = _has(combined, "security code dialog", "enter security code", "authentication code")
+    device_selection_observed = _has(combined, "second factor device", "select a device", "select device", "device selection")
     passkey_prompt_observed = _has(combined, "passkey", "security key")
+
     credential_rejection_observed = _has(
-        combined,
+        launcher,
         "invalid username",
         "invalid password",
         "incorrect username",
         "incorrect password",
-        "login failed",
         "authentication failed",
     )
-    ccp_lockout_observed = any(_ccp_lockout_line(line) for line in all_lines)
-    maintenance_observed = _has(
-        combined,
-        "maintenance",
-        "reset window",
-        "server reset",
-        "daily reset",
+    explicit_ccp_lockout_observed = any(_ccp_lockout_line(line) for line in all_lines)
+    ccp_timeout_observed = "AuthTimeoutMonitor-CCP: Timeout!" in launcher
+    ns_auth_start_observed = "NS_AUTH_START" in launcher
+    post_authenticate_observed = "PostAuthenticate" in launcher
+    authenticating_observed = "Authenticating" in launcher
+    ssl_handshake_failure_observed = _has(launcher, "SSLHandshakeException", "Remote host terminated the handshake")
+    wrong_server_rejection_observed = _has(
+        launcher,
+        "this user is not known here",
+        "user is not known here",
+        "unknown user at this server",
+        "not known on this server",
     )
-    ns_auth_start_observed = _has(launcher, "ns_auth_start")
-    post_authenticate_observed = _has(launcher, "postauthenticate")
-    api_ready_observed = _has(
-        combined,
-        "api port open",
-        "api ready",
-        "api_ready",
-        "session preserved",
+    ccp_silent_timeout_before_ns_auth = ccp_timeout_observed and authenticating_observed and not ns_auth_start_observed
+
+    # Only concrete active/reset-delay language counts as maintenance. Merely
+    # mentioning "maintenance" in guard metadata is not an observed outage.
+    maintenance_observed = _has(
+        controller,
+        "cold start inside ibkr maintenance window",
+        "maintenance recovery delay",
+        "north_america_daily_reset_guard",
     )
 
-    # Authoritative boundary: raw controller TWO_FA state is deliberately
-    # excluded. It identifies an internal phase only; it is not proof that IBKR
-    # emitted a second-factor challenge or that a phone notification exists.
+    api_ready_observed = _has(combined, "api port open", "api ready", "api_ready", "session preserved")
+
     second_factor_challenge_observed = any(
         (
             ibkey_dialog_detected,
@@ -190,7 +200,15 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
     terminal_prechallenge_blocker = (
         not second_factor_challenge_observed
         and not api_ready_observed
-        and (credential_rejection_observed or ccp_lockout_observed)
+        and any(
+            (
+                credential_rejection_observed,
+                explicit_ccp_lockout_observed,
+                ccp_silent_timeout_before_ns_auth,
+                ssl_handshake_failure_observed,
+                wrong_server_rejection_observed,
+            )
+        )
     )
 
     if api_ready_observed:
@@ -199,25 +217,32 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         stage = "ibkey_mobile_approval_wait"
     elif second_factor_challenge_observed:
         stage = "second_factor_challenge_observed"
+    elif ssl_handshake_failure_observed:
+        stage = "ssl_or_regional_server_handshake_failure"
+    elif wrong_server_rejection_observed:
+        stage = "regional_server_rejected_user"
+    elif ccp_silent_timeout_before_ns_auth:
+        stage = "ccp_silent_timeout_before_ns_auth"
     elif credential_rejection_observed:
         stage = "credential_rejected"
-    elif ccp_lockout_observed:
+    elif explicit_ccp_lockout_observed:
         stage = "ccp_auth_lockout_backoff"
-    elif maintenance_observed:
-        stage = "maintenance_or_reset_signal"
     elif post_authenticate_observed:
         stage = "post_authenticate_before_second_factor"
     elif ns_auth_start_observed:
         stage = "ns_auth_before_second_factor"
+    elif maintenance_observed:
+        stage = "active_maintenance_or_reset_guard"
     elif controller_internal_twofa_phase:
         stage = "controller_internal_twofa_phase_only"
-    elif _has(combined, "authenticating", "connecting to server"):
+    elif authenticating_observed or _has(combined, "connecting to server"):
         stage = "authentication_before_second_factor"
     else:
         stage = "pre_auth_or_unknown"
 
+    transcript = _launcher_auth_transcript(launcher)
     return {
-        "schema": "mmibkr-ibkr-auth-boundary-v2",
+        "schema": "mmibkr-ibkr-auth-boundary-v3",
         "stage": stage,
         "controller_internal_twofa_phase": controller_internal_twofa_phase,
         "second_factor_challenge_observed": second_factor_challenge_observed,
@@ -229,12 +254,19 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         "device_selection_observed": device_selection_observed,
         "passkey_prompt_observed": passkey_prompt_observed,
         "credential_rejection_observed": credential_rejection_observed,
-        "ccp_lockout_observed": ccp_lockout_observed,
+        "ccp_lockout_observed": explicit_ccp_lockout_observed,
+        "ccp_timeout_observed": ccp_timeout_observed,
+        "ccp_silent_timeout_before_ns_auth": ccp_silent_timeout_before_ns_auth,
+        "ssl_handshake_failure_observed": ssl_handshake_failure_observed,
+        "wrong_server_rejection_observed": wrong_server_rejection_observed,
         "maintenance_observed": maintenance_observed,
         "terminal_prechallenge_blocker": terminal_prechallenge_blocker,
+        "authenticating_observed": authenticating_observed,
         "ns_auth_start_observed": ns_auth_start_observed,
         "post_authenticate_observed": post_authenticate_observed,
         "api_ready_observed": api_ready_observed,
+        "launcher_connected_host": _connected_host(launcher),
+        "launcher_auth_transcript": transcript,
         "evidence_excerpt": _evidence_excerpt(controller, launcher),
         "controller_log_bytes": len(controller.encode(errors="replace")),
         "launcher_log_bytes": len(launcher.encode(errors="replace")),
