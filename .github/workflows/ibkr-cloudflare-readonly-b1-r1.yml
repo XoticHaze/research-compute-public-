@@ -53,18 +53,18 @@ jobs:
           url = os.environ['FLEET_AUTHORITY_HEALTH']
           for _ in range(60):
               try:
-                  req=Request(url,headers={'Accept':'application/json','User-Agent':'mmibkr-b1-health-v2'})
+                  req=Request(url,headers={'Accept':'application/json','User-Agent':'mmibkr-b1-health-v3'})
                   with urlopen(req,timeout=15) as r:
                       node=json.loads(r.read().decode('utf-8'))
-                  if node.get('ok') is True and node.get('authority_configured') is True and node.get('contract_version') == 2:
-                      print('FLEET_AUTHORITY_HEALTH=READY_V2')
+                  if node.get('ok') is True and node.get('authority_configured') is True and node.get('contract_version') == 3:
+                      print('FLEET_AUTHORITY_HEALTH=READY_V3')
                       print('IBKR_PAPER_SERVER_CONFIGURED=' + ('1' if node.get('paper_server_configured') else '0'))
                       print('IBKR_TOTP_CONFIGURED=' + ('1' if node.get('totp_configured') else '0'))
                       raise SystemExit(0)
               except Exception:
                   pass
               time.sleep(5)
-          raise SystemExit('deployed fleet authority has not reached B1 contract v2')
+          raise SystemExit('deployed fleet authority has not reached B1 contract v3')
           PY
 
       - name: Obtain one-run sealed gateway environment
@@ -86,8 +86,6 @@ jobs:
           print('SEALED_TOTP_PRESENT=' + ('1' if 'TWOFACTOR_CODE' in keys else '0'))
           if 'TWS_SERVER_PAPER' not in keys:
               raise SystemExit('TWS_SERVER_PAPER is required for deterministic first-login bootstrap')
-          # This bootstrap intentionally forces IB Key / phone approval. Do not feed
-          # an unattended TOTP or device selector into the first-login process.
           kept=[]
           for raw in p.read_text().splitlines():
               key = raw.split('=', 1)[0] if '=' in raw else ''
@@ -139,7 +137,7 @@ jobs:
           docker run --rm -v "$jts_volume:/state" -v "$RUNNER_TEMP:/import:ro" alpine:3.22 sh -lc 'tar -xzf /import/ibkr-b1-warm-state.tgz -C /state && chmod -R u+rwX,go-rwx /state || true'
           echo 'IBKR_WARM_STATE_RESTORED=1'
 
-      - name: Trigger first-login IBKR Mobile challenge
+      - name: Trigger verified IBKR Mobile challenge
         run: |
           set -euo pipefail
           jts_volume="ibkr-b1-jts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
@@ -168,37 +166,28 @@ jobs:
           echo 'IBKR_FIRST_LOGIN_STARTED=1'
 
           challenge=0
-          for _ in $(seq 1 120); do
+          for _ in $(seq 1 180); do
             running="$(docker inspect -f '{{.State.Running}}' ibkr-cloudflare-b1 2>/dev/null || echo false)"
             [ "$running" = true ] || break
-            state="$(python - <<'PY'
-          import json
-          from urllib.error import HTTPError
-          from urllib.request import urlopen
-          raw=b'{}'
-          try:
-              with urlopen('http://127.0.0.1:18080/health',timeout=2) as r: raw=r.read()
-          except HTTPError as e: raw=e.read()
-          except Exception: pass
-          try: node=json.loads(raw.decode())
-          except Exception: node={}
-          print(str(node.get('state') or '').upper())
-          PY
-          )"
-            case "$state" in
-              TWO_FA|POST_LOGIN|DISCLAIMERS|CONFIG|API_WAIT|READY|MONITORING)
-                challenge=1
-                echo "IBKR_LOGIN_STAGE=$state"
-                break
-                ;;
-            esac
+            docker logs ibkr-cloudflare-b1 > "$RUNNER_TEMP/ibkr-controller.log" 2>&1 || true
+            if grep -Fqi 'Waiting for IB Key mobile approval' "$RUNNER_TEMP/ibkr-controller.log"; then
+              challenge=1
+              echo 'IBKR_IBKEY_PUSH_WAIT_SIGNAL=1'
+              break
+            fi
             sleep 5
           done
+
           if [ "$challenge" != 1 ]; then
-            docker logs ibkr-cloudflare-b1 > "$RUNNER_TEMP/ibkr-controller.log" 2>&1 || true
-            docker run --rm --entrypoint /bin/sh -v "$jts_volume:/evidence:ro" "$IBKR_CONTROLLER_IMAGE" -lc 'cat /evidence/launcher.log 2>/dev/null || true' > "$RUNNER_TEMP/ibkr-launcher.log" 2>/dev/null || true
-            python scripts/ibkr_gateway_state_classifier_v1.py --controller-log-file "$RUNNER_TEMP/ibkr-controller.log" --launcher-log-file "$RUNNER_TEMP/ibkr-launcher.log"
-            raise=1
+            docker run --rm --entrypoint /bin/sh \
+              -v "$jts_volume:/evidence:ro" \
+              "$IBKR_CONTROLLER_IMAGE" \
+              -lc 'cat /evidence/launcher.log 2>/dev/null || true' \
+              > "$RUNNER_TEMP/ibkr-launcher.log" 2>/dev/null || true
+            python scripts/ibkr_gateway_state_classifier_v1.py \
+              --controller-log-file "$RUNNER_TEMP/ibkr-controller.log" \
+              --launcher-log-file "$RUNNER_TEMP/ibkr-launcher.log"
+            echo 'IBKR_IBKEY_PUSH_WAIT_SIGNAL=0'
             echo 'IBKR_MOBILE_CHALLENGE_REACHED=0'
             exit 47
           fi
@@ -209,7 +198,7 @@ jobs:
         run: |
           set -euo pipefail
           ready=0
-          for _ in $(seq 1 300); do
+          for _ in $(seq 1 120); do
             running="$(docker inspect -f '{{.State.Running}}' ibkr-cloudflare-b1 2>/dev/null || echo false)"
             [ "$running" = true ] || break
             if python - <<'PY'
@@ -233,8 +222,14 @@ jobs:
           if [ "$ready" != 1 ]; then
             jts_volume="ibkr-b1-jts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
             docker logs ibkr-cloudflare-b1 > "$RUNNER_TEMP/ibkr-controller.log" 2>&1 || true
-            docker run --rm --entrypoint /bin/sh -v "$jts_volume:/evidence:ro" "$IBKR_CONTROLLER_IMAGE" -lc 'cat /evidence/launcher.log 2>/dev/null || true' > "$RUNNER_TEMP/ibkr-launcher.log" 2>/dev/null || true
-            python scripts/ibkr_gateway_state_classifier_v1.py --controller-log-file "$RUNNER_TEMP/ibkr-controller.log" --launcher-log-file "$RUNNER_TEMP/ibkr-launcher.log"
+            docker run --rm --entrypoint /bin/sh \
+              -v "$jts_volume:/evidence:ro" \
+              "$IBKR_CONTROLLER_IMAGE" \
+              -lc 'cat /evidence/launcher.log 2>/dev/null || true' \
+              > "$RUNNER_TEMP/ibkr-launcher.log" 2>/dev/null || true
+            python scripts/ibkr_gateway_state_classifier_v1.py \
+              --controller-log-file "$RUNNER_TEMP/ibkr-controller.log" \
+              --launcher-log-file "$RUNNER_TEMP/ibkr-launcher.log"
             echo 'IBKR_OPERATOR_APPROVAL_ACCEPTED=0'
             exit 48
           fi
