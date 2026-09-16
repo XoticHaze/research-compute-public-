@@ -1,0 +1,59 @@
+name: IBKR Controller Image Probe V1
+
+on:
+  push:
+    branches: [assistant/ibkr-controller-image-probe-v1]
+    paths:
+      - '.github/workflows/ibkr-controller-image-probe-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PINNED: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
+      RELEASE: ghcr.io/code-hustler-ft3d/ibg-controller:v0.10.0
+    steps:
+      - name: Resolve pinned and v0.10.0 identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe() {
+            label="$1"; image="$2"
+            echo "=== ${label} ==="
+            docker pull "$image"
+            echo "${label}_IMAGE_ID=$(docker image inspect "$image" --format '{{.Id}}')"
+            echo "${label}_REPO_DIGESTS=$(docker image inspect "$image" --format '{{json .RepoDigests}}')"
+            echo "${label}_CREATED=$(docker image inspect "$image" --format '{{.Created}}')"
+            echo "${label}_ENV=$(docker image inspect "$image" --format '{{json .Config.Env}}')"
+            docker run --rm --entrypoint /bin/sh "$image" -lc '
+              set -eu
+              controller="$(find /home/ibgateway -maxdepth 3 -name gateway_controller.py -print -quit)"
+              echo "CONTROLLER_PATH=${controller}"
+              if [ -n "$controller" ]; then
+                grep -m1 "^__version__" "$controller" || true
+              fi
+              printf "TWS_MAJOR_VRSN=%s\n" "${TWS_MAJOR_VRSN:-}"
+              printf "IB_GATEWAY_VERSION=%s\n" "${IB_GATEWAY_VERSION:-}"
+            '
+          }
+          probe PINNED "$PINNED"
+          probe RELEASE "$RELEASE"
+
+      - name: Compare identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$PINNED" >/dev/null
+          docker pull "$RELEASE" >/dev/null
+          p="$(docker image inspect "$PINNED" --format '{{.Id}}')"
+          r="$(docker image inspect "$RELEASE" --format '{{.Id}}')"
+          if [ "$p" = "$r" ]; then
+            echo 'IBKR_CONTROLLER_IMAGES_IDENTICAL=1'
+          else
+            echo 'IBKR_CONTROLLER_IMAGES_IDENTICAL=0'
+          fi
