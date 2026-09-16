@@ -36,14 +36,8 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         "state_two_fa",
         "state: two_fa",
     )
-    ibkey_dialog_detected = _has(
-        combined,
-        "ib key 2fa dialog detected",
-    )
-    ibkey_mobile_approval_wait_signal = _has(
-        combined,
-        "waiting for ib key mobile approval",
-    )
+    ibkey_dialog_detected = _has(combined, "ib key 2fa dialog detected")
+    ibkey_mobile_approval_wait_signal = _has(combined, "waiting for ib key mobile approval")
     twofa_initiated_signal = _has(
         combined,
         "second factor authentication initiated",
@@ -65,14 +59,11 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
     device_selection_observed = _has(
         combined,
         "second factor device",
-        "select.*device",
+        "select a device",
+        "select device",
         "device selection",
     )
-    passkey_prompt_observed = _has(
-        combined,
-        "passkey",
-        "security key",
-    )
+    passkey_prompt_observed = _has(combined, "passkey", "security key")
     credential_rejection_observed = _has(
         combined,
         "invalid username",
@@ -113,8 +104,9 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         "session preserved",
     )
 
-    # The authoritative boundary: internal TWO_FA state alone is deliberately
-    # excluded.  It only says which controller branch is active.
+    # Authoritative boundary: raw controller TWO_FA state is deliberately
+    # excluded. It identifies an internal phase only; it is not proof that IBKR
+    # emitted a second-factor challenge or that a phone notification exists.
     second_factor_challenge_observed = any(
         (
             ibkey_dialog_detected,
