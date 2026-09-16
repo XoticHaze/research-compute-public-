@@ -6,11 +6,11 @@ second-factor challenge is authoritative only when a concrete dialog/initiation
 or IB Key mobile-approval signal is present.
 
 For the pre-2FA boundary, mirror IB Gateway's launcher protocol directly:
-Authenticating -> NS_AUTH_START -> PostAuthenticate. A CCP Timeout or explicit
-authorization disconnect before NS_AUTH_START means the auth request never crossed
-the server handshake boundary; it can be rate limiting, a wrong regional server,
-credential/account authorization, or another account-side pre-auth problem and
-must not be mislabeled as a delivered 2FA challenge.
+Authenticating -> NS_AUTH_START -> PostAuthenticate. A CCP Timeout before
+NS_AUTH_START is terminal. DISCONNECT_AUTHORIZATION_FAILED is intentionally held
+open for a short diagnostic window because Gateway can paint a human-readable
+credential rejection modal a few seconds after the wire-level disconnect. Only
+that concrete UI/controller evidence is classified as bad credentials.
 """
 
 from __future__ import annotations
@@ -96,10 +96,16 @@ def _launcher_auth_transcript(launcher: str, limit: int = 28) -> list[str]:
     return selected
 
 
-def _evidence_excerpt(controller: str, launcher: str, limit: int = 20) -> list[str]:
+def _evidence_excerpt(controller: str, launcher: str, limit: int = 24) -> list[str]:
     selected = [f"launcher: {line}" for line in _launcher_auth_transcript(launcher, limit=limit)]
     seen = set(selected)
     markers = (
+        "alert_login_failed",
+        "bad-credentials",
+        "invalid username",
+        "invalid password",
+        "authentication failed",
+        "login failed",
         "ccp lockout",
         "ccp backoff",
         "second factor",
@@ -150,12 +156,16 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
     passkey_prompt_observed = _has(combined, "passkey", "security key")
 
     credential_rejection_observed = _has(
-        launcher,
+        combined,
+        'ALERT_LOGIN_FAILED mode=',
+        'reason="bad-credentials"',
+        "invalid username or password",
         "invalid username",
         "invalid password",
         "incorrect username",
         "incorrect password",
         "authentication failed",
+        "login failed",
     )
     explicit_ccp_lockout_observed = any(_ccp_lockout_line(line) for line in all_lines)
     ccp_timeout_observed = "AuthTimeoutMonitor-CCP: Timeout!" in launcher
@@ -213,6 +223,14 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         )
     )
 
+    authorization_rejection_diagnostic_pending = (
+        authorization_rejected_before_ns_auth
+        and not credential_rejection_observed
+        and not explicit_ccp_lockout_observed
+        and not pre_ns_auth_stall_observed
+        and not ccp_silent_timeout_before_ns_auth
+    )
+
     terminal_prechallenge_blocker = (
         not second_factor_challenge_observed
         and not api_ready_observed
@@ -220,7 +238,6 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
             (
                 credential_rejection_observed,
                 explicit_ccp_lockout_observed,
-                authorization_rejected_before_ns_auth,
                 ccp_silent_timeout_before_ns_auth,
                 pre_ns_auth_stall_observed,
                 ssl_handshake_failure_observed,
@@ -239,16 +256,20 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         stage = "ssl_or_regional_server_handshake_failure"
     elif wrong_server_rejection_observed:
         stage = "regional_server_rejected_user"
-    elif authorization_rejected_before_ns_auth:
-        stage = "authorization_rejected_before_ns_auth"
-    elif ccp_silent_timeout_before_ns_auth:
-        stage = "ccp_silent_timeout_before_ns_auth"
-    elif pre_ns_auth_stall_observed:
-        stage = "authentication_stalled_before_ns_auth"
     elif credential_rejection_observed:
         stage = "credential_rejected"
+    elif ccp_silent_timeout_before_ns_auth:
+        stage = "ccp_silent_timeout_before_ns_auth"
+    elif pre_ns_auth_stall_observed and authorization_rejected_before_ns_auth:
+        stage = "authorization_rejected_no_ui_diagnosis"
+    elif pre_ns_auth_stall_observed:
+        stage = "authentication_stalled_before_ns_auth"
     elif explicit_ccp_lockout_observed:
         stage = "ccp_auth_lockout_backoff"
+    elif authorization_rejection_diagnostic_pending:
+        stage = "authorization_rejected_observing_ui"
+    elif authorization_rejected_before_ns_auth:
+        stage = "authorization_rejected_before_ns_auth"
     elif post_authenticate_observed:
         stage = "post_authenticate_before_second_factor"
     elif ns_auth_start_observed:
@@ -264,7 +285,7 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
 
     transcript = _launcher_auth_transcript(launcher)
     return {
-        "schema": "mmibkr-ibkr-auth-boundary-v4",
+        "schema": "mmibkr-ibkr-auth-boundary-v5",
         "stage": stage,
         "controller_internal_twofa_phase": controller_internal_twofa_phase,
         "second_factor_challenge_observed": second_factor_challenge_observed,
@@ -277,6 +298,7 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         "passkey_prompt_observed": passkey_prompt_observed,
         "credential_rejection_observed": credential_rejection_observed,
         "authorization_rejected_before_ns_auth": authorization_rejected_before_ns_auth,
+        "authorization_rejection_diagnostic_pending": authorization_rejection_diagnostic_pending,
         "ccp_lockout_observed": explicit_ccp_lockout_observed,
         "ccp_timeout_observed": ccp_timeout_observed,
         "ccp_silent_timeout_before_ns_auth": ccp_silent_timeout_before_ns_auth,
