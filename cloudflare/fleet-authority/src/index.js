@@ -6,7 +6,7 @@ const EXPECTED_AUTHORITY = 'ibkr-paper-readonly';
 const ALLOWED_REF = 'refs/heads/ibkr-b1-authority-v1';
 const ALLOWED_EVENT = 'push';
 const ALLOWED_WORKFLOW_REF = 'XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1';
-const ALLOWED_WORKFLOW_SHA = 'c179417f6e43f379f9a38b2a760608cc781113a5';
+const ALLOWED_WORKFLOW_SHA = '41edecadb0c38898828e4b3153c1f2b98e43d856';
 const REQUEST_SCHEMA = 'mmibkr-fleet-authority-seal-request-v1';
 const ENVELOPE_SCHEMA = 'mmibkr-ibkr-readonly-gateway-env-x25519-hkdf-aesgcm-v1';
 
@@ -242,7 +242,7 @@ export default {
       return json({
         ok: true,
         service: 'mmibkr-fleet-authority',
-        contract_version: 2,
+        contract_version: 3,
         authority_configured: Boolean(env.IBKR_PAPER_USERNAME && env.IBKR_PAPER_PASSWORD),
         paper_server_configured: Boolean(env.IBKR_PAPER_TWS_SERVER || env.TWS_SERVER_PAPER || env.IBKR_TWS_SERVER || env.TWS_SERVER),
         totp_configured: Boolean(env.IBKR_PAPER_TWOFACTOR_CODE || env.IBKR_TWOFACTOR_CODE || env.TWOFACTOR_CODE),
