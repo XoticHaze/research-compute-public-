@@ -1,0 +1,89 @@
+name: IBKR Repin and Dispatch 10.49 Comparator Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ibkr-repin-and-dispatch-1049-once.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  repin-dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      TARGET_SHA: 8fe2cf4c5998bd5e5ef03d0bdc0e0280eefaa768
+      HEALTH_URL: https://fleet-authority.slenderiq.workers.dev/healthz
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+
+      - name: Repin fleet authority and trigger Cloudflare deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os, re
+          from pathlib import Path
+          target=os.environ['TARGET_SHA']
+          p=Path('cloudflare/fleet-authority/src/index.js')
+          text=p.read_text()
+          new,n=re.subn(
+              r"const ALLOWED_WORKFLOW_SHA = '[0-9a-f]{40}';",
+              f"const ALLOWED_WORKFLOW_SHA = '{target}';",
+              text,
+              count=1,
+          )
+          if n != 1:
+              raise SystemExit('failed to replace ALLOWED_WORKFLOW_SHA exactly once')
+          p.write_text(new)
+          trigger=Path('cloudflare/fleet-authority/DEPLOY_TRIGGER_20260915.md')
+          trigger.write_text(trigger.read_text().rstrip() + f"\n\n10.49 comparator authority pin refresh: {target}\n")
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add cloudflare/fleet-authority/src/index.js cloudflare/fleet-authority/DEPLOY_TRIGGER_20260915.md
+          git diff --cached --check
+          git commit -m "fix(ibkr): pin 10.49 auth comparator"
+          git push origin HEAD:main
+
+      - name: Require deployed comparator pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, time
+          from urllib.request import Request, urlopen
+          target=os.environ['TARGET_SHA']
+          url=os.environ['HEALTH_URL']
+          last=None
+          for _ in range(48):
+              try:
+                  req=Request(url,headers={'Accept':'application/json','User-Agent':'mmibkr-1049-comparator-repin'})
+                  with urlopen(req,timeout=10) as r:
+                      last=json.loads(r.read().decode())
+                  if last.get('allowed_workflow_sha') == target:
+                      print('FLEET_AUTHORITY_1049_COMPARATOR_PIN_DEPLOYED=1')
+                      print('ALLOWED_WORKFLOW_SHA=' + target)
+                      raise SystemExit(0)
+              except Exception as exc:
+                  last={'error':type(exc).__name__}
+              time.sleep(5)
+          print('LAST_HEALTH=' + json.dumps(last,sort_keys=True))
+          raise SystemExit('Cloudflare comparator pin did not deploy')
+          PY
+
+      - name: Dispatch exactly one current-version comparator
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/ibkr-legacy-ibc-auth-comparator.yml/dispatches" \
+            -f ref='ibkr-b1-authority-v1'
+          echo 'IBKR_1049_COMPARATOR_DISPATCHED=1'
