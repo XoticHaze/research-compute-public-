@@ -1,0 +1,23 @@
+name: cross-asset-relative-momentum-r1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/cross_asset_relative_momentum_r1.py'
+      - '.github/workflows/cross-asset-relative-momentum-r1.yml'
+  workflow_dispatch:
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -q yfinance pandas numpy
+      - name: Execute frozen cross-asset relative momentum discriminator
+        run: set -o pipefail; python research/cross_asset_relative_momentum_r1.py | tee cross_asset_relative_momentum_r1_result.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cross-asset-relative-momentum-r1-result
+          path: cross_asset_relative_momentum_r1_result.txt
