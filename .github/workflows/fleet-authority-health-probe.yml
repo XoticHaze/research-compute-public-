@@ -19,8 +19,9 @@ jobs:
       - name: Require deployed authority provenance
         env:
           FLEET_AUTHORITY_HEALTH: https://fleet-authority.slenderiq.workers.dev/healthz
-          EXPECTED_WORKFLOW_SHA: e50ee8f3d5eea27a444ce2e54423d181fdbce3a9
+          EXPECTED_WORKFLOW_SHA: fb04a11547a99b85d05c382f2fefb3a641aeb664
           EXPECTED_CREDENTIAL_BINDING: IBKR_PAPER_USERNAME+IBKR_PAPER_PASSWORD
+          EXPECTED_EVENT_CONTRACT: push+workflow_dispatch
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -30,10 +31,11 @@ jobs:
           url = os.environ['FLEET_AUTHORITY_HEALTH']
           expected_sha = os.environ['EXPECTED_WORKFLOW_SHA']
           expected_binding = os.environ['EXPECTED_CREDENTIAL_BINDING']
+          expected_event = os.environ['EXPECTED_EVENT_CONTRACT']
           last = None
           for _ in range(36):
               try:
-                  req = Request(url, headers={'Accept': 'application/json', 'User-Agent': 'mmibkr-authority-health-probe-v1'})
+                  req = Request(url, headers={'Accept': 'application/json', 'User-Agent': 'mmibkr-authority-health-probe-v2'})
                   with urlopen(req, timeout=10) as response:
                       node = json.loads(response.read().decode('utf-8'))
                   last = node
@@ -44,10 +46,12 @@ jobs:
                       and node.get('paper_password_binding_configured') is True
                       and node.get('allowed_workflow_sha') == expected_sha
                       and node.get('credential_binding_contract') == expected_binding
+                      and node.get('allowed_event_contract') == expected_event
                   ):
                       print('FLEET_AUTHORITY_DEPLOYMENT_PROVEN=1')
                       print('ALLOWED_WORKFLOW_SHA=' + node['allowed_workflow_sha'])
                       print('CREDENTIAL_BINDING_CONTRACT=' + node['credential_binding_contract'])
+                      print('ALLOWED_EVENT_CONTRACT=' + node['allowed_event_contract'])
                       print('PAPER_USERNAME_BINDING_CONFIGURED=1')
                       print('PAPER_PASSWORD_BINDING_CONFIGURED=1')
                       raise SystemExit(0)
