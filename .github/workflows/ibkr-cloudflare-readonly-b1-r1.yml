@@ -92,10 +92,10 @@ jobs:
           from pathlib import Path
           p = Path(os.environ['RUNNER_TEMP']) / 'ibkr-gateway.env'
           keys = {line.split('=', 1)[0] for line in p.read_text().splitlines() if '=' in line}
-          print('SEALED_PAPER_SERVER_PRESENT=' + ('1' if 'TWS_SERVER_PAPER' in keys else '0'))
+          explicit_server = 'TWS_SERVER_PAPER' in keys
+          print('SEALED_PAPER_SERVER_PRESENT=' + ('1' if explicit_server else '0'))
+          print('IBKR_PAPER_SERVER_MODE=' + ('explicit_authority' if explicit_server else 'gateway_default_discovery'))
           print('SEALED_TOTP_PRESENT=' + ('1' if 'TWOFACTOR_CODE' in keys else '0'))
-          if 'TWS_SERVER_PAPER' not in keys:
-              raise SystemExit('TWS_SERVER_PAPER is required for deterministic first-login bootstrap')
           kept=[]
           for raw in p.read_text().splitlines():
               key = raw.split('=', 1)[0] if '=' in raw else ''
@@ -182,7 +182,7 @@ jobs:
             -p 127.0.0.1:18080:8080 \
             "$IBKR_CONTROLLER_IMAGE" >/dev/null
 
-          docker exec ibkr-cloudflare-b1 /bin/sh -lc 'test "$TRADING_MODE" = paper && test "$READ_ONLY_API" = yes && test "$TWOFA_TIMEOUT_ACTION" = none && test "$TWOFA_EXIT_INTERVAL" = 120 && test "$RELOGIN_AFTER_TWOFA_TIMEOUT" = yes && test -n "$TWS_SERVER_PAPER"' >/dev/null
+          docker exec ibkr-cloudflare-b1 /bin/sh -lc 'test "$TRADING_MODE" = paper && test "$READ_ONLY_API" = yes && test "$TWOFA_TIMEOUT_ACTION" = none && test "$TWOFA_EXIT_INTERVAL" = 120 && test "$RELOGIN_AFTER_TWOFA_TIMEOUT" = yes' >/dev/null
           echo 'IBKR_SESSION_RESOLUTION_STARTED=1'
 
           mode=none
