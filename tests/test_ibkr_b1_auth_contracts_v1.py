@@ -46,6 +46,16 @@ class AuthBoundaryTests(unittest.TestCase):
         self.assertEqual(result["stage"], "ccp_silent_timeout_before_ns_auth")
         self.assertEqual(result["launcher_connected_host"], "ndc1.ibllc.com")
 
+    def test_pre_ns_auth_stall_after_sixty_seconds_is_terminal(self):
+        result = classify(
+            "[state: TWO_FA]\n2FA wait t+60s: still waiting",
+            "Connecting ndc1.ibllc.com:4001 (SSL)\nAuthenticating",
+        )
+        self.assertTrue(result["pre_ns_auth_stall_observed"])
+        self.assertFalse(result["ns_auth_start_observed"])
+        self.assertTrue(result["terminal_prechallenge_blocker"])
+        self.assertEqual(result["stage"], "authentication_stalled_before_ns_auth")
+
     def test_ccp_timeout_after_ns_auth_is_not_silent_pre_auth_timeout(self):
         result = classify(
             "[state: TWO_FA]",
