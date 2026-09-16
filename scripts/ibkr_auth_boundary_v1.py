@@ -11,6 +11,11 @@ NS_AUTH_START is terminal. DISCONNECT_AUTHORIZATION_FAILED is intentionally held
 open for a short diagnostic window because Gateway can paint a human-readable
 credential rejection modal a few seconds after the wire-level disconnect. Only
 that concrete UI/controller evidence is classified as bad credentials.
+
+IBKR's MULTIPLE_PAPER_ERROR is a separate terminal account-routing condition:
+the supplied login maps to multiple Paper Trading users and Gateway requires one
+specific Paper Trading username plus its corresponding password. It must never
+be collapsed into bad credentials, generic authorization failure, or 2FA.
 """
 
 from __future__ import annotations
@@ -78,6 +83,9 @@ def _launcher_auth_transcript(launcher: str, limit: int = 28) -> list[str]:
         "postauthenticate",
         "authtimeoutmonitor-ccp",
         "disconnect_authorization_failed",
+        "multiple_paper_error",
+        "multiple paper trading users",
+        "one of the paper trading users",
         "sslhandshakeexception",
         "remote host terminated",
         "not known here",
@@ -106,6 +114,8 @@ def _evidence_excerpt(controller: str, launcher: str, limit: int = 24) -> list[s
         "invalid password",
         "authentication failed",
         "login failed",
+        "multiple_paper_error",
+        "multiple paper trading users",
         "ccp lockout",
         "ccp backoff",
         "second factor",
@@ -167,6 +177,12 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         "authentication failed",
         "login failed",
     )
+    multiple_paper_users_observed = _has(
+        launcher,
+        "NSErrorResponse.MULTIPLE_PAPER_ERROR",
+        "specified user has multiple Paper Trading users associated with it",
+        "log on using one of the Paper Trading users and corresponding password",
+    )
     explicit_ccp_lockout_observed = any(_ccp_lockout_line(line) for line in all_lines)
     ccp_timeout_observed = "AuthTimeoutMonitor-CCP: Timeout!" in launcher
     ns_auth_start_observed = "NS_AUTH_START" in launcher
@@ -225,6 +241,7 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
 
     authorization_rejection_diagnostic_pending = (
         authorization_rejected_before_ns_auth
+        and not multiple_paper_users_observed
         and not credential_rejection_observed
         and not explicit_ccp_lockout_observed
         and not pre_ns_auth_stall_observed
@@ -236,6 +253,7 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         and not api_ready_observed
         and any(
             (
+                multiple_paper_users_observed,
                 credential_rejection_observed,
                 explicit_ccp_lockout_observed,
                 ccp_silent_timeout_before_ns_auth,
@@ -252,6 +270,8 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         stage = "ibkey_mobile_approval_wait"
     elif second_factor_challenge_observed:
         stage = "second_factor_challenge_observed"
+    elif multiple_paper_users_observed:
+        stage = "multiple_paper_users_require_specific_login"
     elif ssl_handshake_failure_observed:
         stage = "ssl_or_regional_server_handshake_failure"
     elif wrong_server_rejection_observed:
@@ -285,7 +305,7 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
 
     transcript = _launcher_auth_transcript(launcher)
     return {
-        "schema": "mmibkr-ibkr-auth-boundary-v5",
+        "schema": "mmibkr-ibkr-auth-boundary-v6",
         "stage": stage,
         "controller_internal_twofa_phase": controller_internal_twofa_phase,
         "second_factor_challenge_observed": second_factor_challenge_observed,
@@ -297,6 +317,7 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         "device_selection_observed": device_selection_observed,
         "passkey_prompt_observed": passkey_prompt_observed,
         "credential_rejection_observed": credential_rejection_observed,
+        "multiple_paper_users_observed": multiple_paper_users_observed,
         "authorization_rejected_before_ns_auth": authorization_rejected_before_ns_auth,
         "authorization_rejection_diagnostic_pending": authorization_rejection_diagnostic_pending,
         "ccp_lockout_observed": explicit_ccp_lockout_observed,
