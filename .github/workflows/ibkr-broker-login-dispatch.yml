@@ -22,7 +22,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TARGET_REF: ibkr-b1-authority-v1
           TARGET_WORKFLOW: ibkr-cloudflare-readonly-b1-r1.yml
-          EXPECTED_TARGET_SHA: 0bec094d15c2bdff1c835ca1dfe486d52f230780
+          EXPECTED_TARGET_SHA: 2cd779dc56b06c382c6320466c580c22edf19730
         run: |
           set -euo pipefail
           actual_sha="$(gh api "/repos/${GITHUB_REPOSITORY}/git/ref/heads/${TARGET_REF}" --jq '.object.sha')"
