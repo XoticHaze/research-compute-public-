@@ -35,19 +35,41 @@ class AuthBoundaryTests(unittest.TestCase):
         self.assertTrue(result["terminal_prechallenge_blocker"])
         self.assertEqual(result["stage"], "ccp_auth_lockout_backoff")
 
-    def test_authorization_disconnect_before_ns_auth_is_terminal_but_not_called_bad_credentials(self):
+    def test_authorization_disconnect_waits_for_ui_diagnosis(self):
         result = classify(
-            "[state: TWO_FA]",
+            "[state: LOGIN]",
             "Connecting ndc1.ibllc.com:4001 (SSL)\nAuthenticating\n"
             "Disconnecting ndc1.ibllc.com:4001 (SSL) "
             "[disconnectDetails=DisconnectDetails[reason=DISCONNECT_AUTHORIZATION_FAILED]]",
         )
         self.assertTrue(result["authorization_rejected_before_ns_auth"])
+        self.assertTrue(result["authorization_rejection_diagnostic_pending"])
         self.assertFalse(result["credential_rejection_observed"])
         self.assertFalse(result["ns_auth_start_observed"])
+        self.assertFalse(result["terminal_prechallenge_blocker"])
+        self.assertEqual(result["stage"], "authorization_rejected_observing_ui")
+
+    def test_controller_bad_credentials_alert_closes_authorization_rejection(self):
+        result = classify(
+            'ALERT_LOGIN_FAILED mode=paper reason="bad-credentials" suggested_action="verify paper credentials"',
+            "Authenticating\nDISCONNECT_AUTHORIZATION_FAILED",
+        )
+        self.assertTrue(result["authorization_rejected_before_ns_auth"])
+        self.assertTrue(result["credential_rejection_observed"])
+        self.assertFalse(result["authorization_rejection_diagnostic_pending"])
         self.assertTrue(result["terminal_prechallenge_blocker"])
-        self.assertEqual(result["stage"], "authorization_rejected_before_ns_auth")
-        self.assertIn("DISCONNECT_AUTHORIZATION_FAILED", "\n".join(result["launcher_auth_transcript"]))
+        self.assertEqual(result["stage"], "credential_rejected")
+
+    def test_authorization_rejection_without_ui_closes_at_pre_ns_stall(self):
+        result = classify(
+            "[state: TWO_FA]\n2FA wait t+60s: still waiting",
+            "Connecting ndc1.ibllc.com:4001 (SSL)\nAuthenticating\nDISCONNECT_AUTHORIZATION_FAILED",
+        )
+        self.assertTrue(result["authorization_rejected_before_ns_auth"])
+        self.assertFalse(result["credential_rejection_observed"])
+        self.assertTrue(result["pre_ns_auth_stall_observed"])
+        self.assertTrue(result["terminal_prechallenge_blocker"])
+        self.assertEqual(result["stage"], "authorization_rejected_no_ui_diagnosis")
 
     def test_exact_ccp_timeout_before_ns_auth_is_terminal(self):
         result = classify(
