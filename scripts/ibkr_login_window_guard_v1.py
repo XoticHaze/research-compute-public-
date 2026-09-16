@@ -2,7 +2,7 @@
 """Fail fast when a cold IBKR login would start inside the daily reset window.
 
 The guard is intentionally conservative: it adds five minutes of margin around
-the published North America 00:15-01:45 America/New_York reset window.  A warm
+the published North America 00:15-01:45 America/New_York reset window. A warm
 session that is already API-ready is not governed by this script; this guard is
 for starting a new authenticated Gateway login.
 """
@@ -28,16 +28,13 @@ def parse_now(raw: str | None) -> datetime:
     return dt
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--now", help="Offset-aware ISO timestamp, for deterministic tests")
-    args = ap.parse_args()
-
-    now_utc = parse_now(args.now).astimezone(timezone.utc)
+def classify_window(now: datetime) -> dict[str, object]:
+    if now.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
+    now_utc = now.astimezone(timezone.utc)
     now_et = now_utc.astimezone(ET)
     blocked = BLOCK_START <= now_et.timetz().replace(tzinfo=None) < BLOCK_END
-
-    result = {
+    return {
         "schema": "mmibkr-login-window-v1",
         "now_utc": now_utc.isoformat(),
         "now_et": now_et.isoformat(),
@@ -46,8 +43,16 @@ def main() -> int:
         "cold_login_allowed": not blocked,
         "reason": "north_america_daily_reset_guard" if blocked else "outside_reset_guard",
     }
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--now", help="Offset-aware ISO timestamp, for deterministic tests")
+    args = ap.parse_args()
+
+    result = classify_window(parse_now(args.now))
     print("IBKR_LOGIN_WINDOW=" + json.dumps(result, sort_keys=True))
-    return 46 if blocked else 0
+    return 0 if result["cold_login_allowed"] else 46
 
 
 if __name__ == "__main__":
