@@ -11,8 +11,15 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install -q yfinance pandas numpy
-      - run: set -o pipefail; python research/tlt_rate_shock_reversal_r1.py | tee tlt_rate_shock_reversal_r1_result.txt
+      - name: Execute current Market Research discriminator
+        run: |
+          set -o pipefail
+          if [ -f research/uup_efa_dollar_regime_r1.py ]; then
+            python research/uup_efa_dollar_regime_r1.py | tee market_research_result.txt
+          else
+            python research/tlt_rate_shock_reversal_r1.py | tee market_research_result.txt
+          fi
       - uses: actions/upload-artifact@v4
         with:
-          name: tlt-rate-shock-reversal-r1-result
-          path: tlt_rate_shock_reversal_r1_result.txt
+          name: market-research-result
+          path: market_research_result.txt
