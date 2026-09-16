@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """Classify the IBKR login boundary without conflating controller state with 2FA.
 
-The controller's internal TWO_FA state is only an implementation phase.  A real
+The controller's internal TWO_FA state is only an implementation phase. A real
 second-factor challenge is authoritative only when a concrete dialog/initiation
 or IB Key mobile-approval signal is present in controller/launcher logs.
+
+Pre-challenge blockers are deliberately stricter: CCP lockout/backoff is true
+only when a single log line contains both a CCP/auth context and an explicit
+lockout/backoff condition. This avoids combining unrelated words that happen to
+occur elsewhere in a long launcher log.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 
@@ -27,8 +33,83 @@ def _has(text: str, *needles: str) -> bool:
     return any(needle.casefold() in hay for needle in needles)
 
 
+def _lines(text: str) -> list[str]:
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def _ccp_lockout_line(line: str) -> bool:
+    hay = line.casefold()
+    context = any(token in hay for token in ("ccp", "authentication", "authenticate", "login"))
+    blocker = any(
+        token in hay
+        for token in (
+            "lockout",
+            "locked out",
+            "temporarily locked",
+            "too many login attempts",
+            "too many attempts",
+            "backoff",
+            "retry later",
+            "try again later",
+        )
+    )
+    return context and blocker
+
+
+def _redact(line: str) -> str:
+    # Keep evidence operator-useful while preventing credentials/account identity
+    # from being emitted into public Actions logs or artifacts.
+    line = re.sub(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", "<redacted-email>", line, flags=re.I)
+    line = re.sub(r"\b(?:DU|U)\d{4,}\b", "<redacted-account>", line, flags=re.I)
+    line = re.sub(
+        r"(?i)\b(username|user|password|passwd|token|secret|api[_-]?key)\s*[:=]\s*[^\s,;]+",
+        lambda match: f"{match.group(1)}=<redacted>",
+        line,
+    )
+    return line[:320]
+
+
+def _evidence_excerpt(controller: str, launcher: str, limit: int = 16) -> list[str]:
+    markers = (
+        "ccp",
+        "lockout",
+        "locked",
+        "backoff",
+        "too many",
+        "retry later",
+        "try again later",
+        "authenticat",
+        "ns_auth_start",
+        "postauthenticate",
+        "second factor",
+        "2fa",
+        "ib key",
+        "security code",
+        "passkey",
+        "maintenance",
+        "reset window",
+        "server reset",
+    )
+    selected: list[str] = []
+    seen: set[str] = set()
+    for source, text in (("controller", controller), ("launcher", launcher)):
+        for raw in _lines(text):
+            folded = raw.casefold()
+            if not any(marker in folded for marker in markers):
+                continue
+            item = f"{source}: {_redact(raw)}"
+            if item in seen:
+                continue
+            seen.add(item)
+            selected.append(item)
+            if len(selected) >= limit:
+                return selected
+    return selected
+
+
 def classify(controller: str, launcher: str) -> dict[str, object]:
     combined = controller + "\n" + launcher
+    all_lines = _lines(combined)
 
     controller_internal_twofa_phase = _has(
         controller,
@@ -73,20 +154,7 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         "login failed",
         "authentication failed",
     )
-    ccp_lockout_observed = _has(
-        combined,
-        "ccp",
-        "lockout",
-        "too many login attempts",
-        "temporarily locked",
-    ) and _has(
-        combined,
-        "lock",
-        "backoff",
-        "maintenance",
-        "temporarily",
-        "authentication",
-    )
+    ccp_lockout_observed = any(_ccp_lockout_line(line) for line in all_lines)
     maintenance_observed = _has(
         combined,
         "maintenance",
@@ -119,6 +187,12 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         )
     )
 
+    terminal_prechallenge_blocker = (
+        not second_factor_challenge_observed
+        and not api_ready_observed
+        and (credential_rejection_observed or ccp_lockout_observed)
+    )
+
     if api_ready_observed:
         stage = "api_ready"
     elif ibkey_mobile_approval_wait_signal:
@@ -127,8 +201,10 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         stage = "second_factor_challenge_observed"
     elif credential_rejection_observed:
         stage = "credential_rejected"
-    elif ccp_lockout_observed or maintenance_observed:
+    elif ccp_lockout_observed:
         stage = "ccp_auth_lockout_backoff"
+    elif maintenance_observed:
+        stage = "maintenance_or_reset_signal"
     elif post_authenticate_observed:
         stage = "post_authenticate_before_second_factor"
     elif ns_auth_start_observed:
@@ -141,7 +217,7 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         stage = "pre_auth_or_unknown"
 
     return {
-        "schema": "mmibkr-ibkr-auth-boundary-v1",
+        "schema": "mmibkr-ibkr-auth-boundary-v2",
         "stage": stage,
         "controller_internal_twofa_phase": controller_internal_twofa_phase,
         "second_factor_challenge_observed": second_factor_challenge_observed,
@@ -155,9 +231,11 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         "credential_rejection_observed": credential_rejection_observed,
         "ccp_lockout_observed": ccp_lockout_observed,
         "maintenance_observed": maintenance_observed,
+        "terminal_prechallenge_blocker": terminal_prechallenge_blocker,
         "ns_auth_start_observed": ns_auth_start_observed,
         "post_authenticate_observed": post_authenticate_observed,
         "api_ready_observed": api_ready_observed,
+        "evidence_excerpt": _evidence_excerpt(controller, launcher),
         "controller_log_bytes": len(controller.encode(errors="replace")),
         "launcher_log_bytes": len(launcher.encode(errors="replace")),
     }
@@ -168,11 +246,13 @@ def main() -> int:
     ap.add_argument("--controller-log-file")
     ap.add_argument("--launcher-log-file")
     ap.add_argument("--output")
+    ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
     result = classify(_text(args.controller_log_file), _text(args.launcher_log_file))
     payload = json.dumps(result, sort_keys=True)
-    print("IBKR_AUTH_BOUNDARY=" + payload)
+    if not args.quiet:
+        print("IBKR_AUTH_BOUNDARY=" + payload)
     if args.output:
         Path(args.output).write_text(payload + "\n")
     return 0
