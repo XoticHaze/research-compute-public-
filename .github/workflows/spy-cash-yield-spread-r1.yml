@@ -28,7 +28,11 @@ jobs:
       - name: Compile frozen discriminator
         run: python -m py_compile research/spy_cash_yield_spread_r1.py
       - name: Execute frozen discriminator
-        run: python research/spy_cash_yield_spread_r1.py | tee spy_cash_yield_spread_r1_result.txt
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/spy_cash_yield_spread_r1.py | tee spy_cash_yield_spread_r1_result.txt
+          grep '^RESULT_JSON=' spy_cash_yield_spread_r1_result.txt
       - name: Retain result
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
