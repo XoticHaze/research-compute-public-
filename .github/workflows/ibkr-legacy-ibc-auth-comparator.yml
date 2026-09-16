@@ -83,12 +83,23 @@ jobs:
           deadline=$((SECONDS + 150))
           while (( SECONDS < deadline )); do
             docker logs ibkr-legacy-auth > "$RUNNER_TEMP/ibkr-legacy.log" 2>&1 || true
+            docker exec ibkr-legacy-auth /bin/sh -lc 'cat /home/ibgateway/Jts/launcher.log 2>/dev/null || true' \
+              > "$RUNNER_TEMP/ibkr-legacy-launcher.log" 2>/dev/null || true
+
             if grep -Eqi 'detected dialog entitled: Second Factor Authentication|Second Factor Authentication' "$RUNNER_TEMP/ibkr-legacy.log"; then
               result=second_factor_dialog
               break
             fi
             if grep -Eqi 'Login failed|Authentication failed|Invalid username|Invalid password|incorrect.*password|ALERT_LOGIN_FAILED' "$RUNNER_TEMP/ibkr-legacy.log"; then
               result=credential_rejection
+              break
+            fi
+            if grep -Eqi 'DISCONNECT_AUTHORIZATION_FAILED' "$RUNNER_TEMP/ibkr-legacy-launcher.log"; then
+              result=authorization_rejected
+              break
+            fi
+            if grep -Eqi 'ns_auth_start|postAuthenticate' "$RUNNER_TEMP/ibkr-legacy-launcher.log"; then
+              result=auth_protocol_started
               break
             fi
             if grep -Eqi 'Login has completed|Configuration tasks completed' "$RUNNER_TEMP/ibkr-legacy.log"; then
@@ -100,24 +111,31 @@ jobs:
 
           echo "IBKR_LEGACY_AUTH_RESULT=$result"
           case "$result" in
-            second_factor_dialog)
-              echo 'IBKR_LEGACY_CREDENTIALS_ACCEPTED_PRE_2FA=1'
-              ;;
-            authenticated)
+            second_factor_dialog|auth_protocol_started|authenticated)
               echo 'IBKR_LEGACY_CREDENTIALS_ACCEPTED_PRE_2FA=1'
               ;;
             credential_rejection)
               echo 'IBKR_LEGACY_CREDENTIALS_ACCEPTED_PRE_2FA=0'
+              ;;
+            authorization_rejected)
+              echo 'IBKR_LEGACY_CREDENTIALS_ACCEPTED_PRE_2FA=UNKNOWN'
+              echo 'IBKR_LEGACY_AUTHORIZATION_REJECTED_BEFORE_NS_AUTH=1'
               ;;
             *)
               echo 'IBKR_LEGACY_CREDENTIALS_ACCEPTED_PRE_2FA=UNKNOWN'
               ;;
           esac
 
+          echo '--- IBC evidence ---'
           tail -n 160 "$RUNNER_TEMP/ibkr-legacy.log" \
             | sed -E 's/([Uu]ser(name|id)?|[Pp]ass(word)?)[=:][^ ,;]*/\1=<redacted>/g' \
             | grep -E 'IBC:|Second Factor|Authenticat|Login|ERROR|WARN|failed|Failed' \
             | tail -n 80 || true
+          echo '--- launcher auth evidence ---'
+          tail -n 240 "$RUNNER_TEMP/ibkr-legacy-launcher.log" \
+            | sed -E 's/([Uu]ser(name|id)?|[Pp]ass(word)?)[=:][^ ,;]*/\1=<redacted>/g' \
+            | grep -Ei 'connecting|connected|auth|disconnect|server|peer|failed|error' \
+            | tail -n 100 || true
 
           if [ "$result" = unresolved ]; then
             exit 47
@@ -129,5 +147,10 @@ jobs:
           set +e
           docker stop --time 15 ibkr-legacy-auth >/dev/null 2>&1
           docker rm -f ibkr-legacy-auth >/dev/null 2>&1
-          rm -f "$RUNNER_TEMP/ibkr-gateway.env" "$RUNNER_TEMP/ibkr-legacy.env" "$RUNNER_TEMP/ibkr-envelope-receipt.json" "$RUNNER_TEMP/ibkr-legacy.log"
+          rm -f \
+            "$RUNNER_TEMP/ibkr-gateway.env" \
+            "$RUNNER_TEMP/ibkr-legacy.env" \
+            "$RUNNER_TEMP/ibkr-envelope-receipt.json" \
+            "$RUNNER_TEMP/ibkr-legacy.log" \
+            "$RUNNER_TEMP/ibkr-legacy-launcher.log"
           echo 'IBKR_LEGACY_PRIVATE_RUNTIME_DESTROYED=1'
