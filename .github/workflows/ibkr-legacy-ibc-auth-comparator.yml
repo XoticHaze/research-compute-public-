@@ -10,10 +10,10 @@ permissions:
 jobs:
   compare-auth-boundary:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 6
     env:
       FLEET_AUTHORITY_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-paper/seal
-      LEGACY_IMAGE: ghcr.io/gnzsnz/ib-gateway@sha256:b4ede803caf48279b4bdc21c8de1fb19edaef8bedbb2b49153e72b042f660bf3
+      LEGACY_IMAGE: ghcr.io/gnzsnz/ib-gateway@sha256:b6c839e6cbf55a622793df748cc28d80ff73fb9efff404c6e0271b1999f08b2c
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -37,7 +37,7 @@ jobs:
             --output "$RUNNER_TEMP/ibkr-gateway.env" \
             --receipt "$RUNNER_TEMP/ibkr-envelope-receipt.json"
 
-      - name: Materialize historical IBC-compatible environment
+      - name: Materialize current IBC-compatible environment
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -57,7 +57,7 @@ jobs:
               f'TWS_USERID={user}',
               f'TWS_PASSWORD={password}',
               'TRADING_MODE=paper',
-              'TWS_MAJOR_VRSN=10.45.1c',
+              'TWS_MAJOR_VRSN=10.49.1c',
               'READ_ONLY_API=yes',
               'TWS_ACCEPT_INCOMING=accept',
               'EXISTING_SESSION_DETECTED_ACTION=primaryoverride',
@@ -68,9 +68,10 @@ jobs:
           ]))
           print('LEGACY_CREDENTIAL_SHAPE=generic_pair_only')
           print('LEGACY_TRADING_MODE=paper')
+          print('LEGACY_GATEWAY_VERSION=10.49.1c')
           PY
 
-      - name: Probe historical IBC authentication boundary once
+      - name: Probe current IBC authentication boundary once
         run: |
           set -euo pipefail
           docker pull "$LEGACY_IMAGE" >/dev/null
@@ -80,7 +81,7 @@ jobs:
             "$LEGACY_IMAGE" >/dev/null
 
           result=unresolved
-          deadline=$((SECONDS + 150))
+          deadline=$((SECONDS + 75))
           while (( SECONDS < deadline )); do
             docker logs ibkr-legacy-auth > "$RUNNER_TEMP/ibkr-legacy.log" 2>&1 || true
             docker exec ibkr-legacy-auth /bin/sh -lc 'cat /home/ibgateway/Jts/launcher.log 2>/dev/null || true' \
