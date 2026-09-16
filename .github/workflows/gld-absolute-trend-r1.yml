@@ -4,6 +4,10 @@ on:
     paths:
       - 'research/gld_absolute_trend_r1.py'
       - '.github/workflows/gld-absolute-trend-r1.yml'
+  pull_request:
+    paths:
+      - 'research/gld_absolute_trend_r1.py'
+      - '.github/workflows/gld-absolute-trend-r1.yml'
   workflow_dispatch:
 permissions: {contents: read}
 jobs:
