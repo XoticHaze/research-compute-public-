@@ -1,0 +1,13 @@
+from __future__ import annotations
+import json
+from pathlib import Path
+import pandas as pd,yfinance as yf
+T=['SPMO','IJS','SPY','IJR','DBMF']; raw=yf.download(T,start='2015-01-01',end='2026-09-11',auto_adjust=True,progress=False,threads=False)
+c=raw['Close'] if isinstance(raw.columns,pd.MultiIndex) else raw; r=c[T].resample('ME').last().pct_change(fill_method=None).dropna()
+p249=.5*(r.SPMO+r.IJS); p305=.5*(r.SPMO+r.IJS); ctl249=.5*(r.SPY+r.IJR); ctl305=.5*(r.SPY+r.IJR)
+a=.75*p249+.25*r.DBMF; b=.75*p305+.25*r.DBMF
+max_base=float((p249-p305).abs().max()); max_ctl=float((ctl249-ctl305).abs().max()); max_candidate=float((a-b).abs().max())
+identical=max_base==0.0 and max_ctl==0.0 and max_candidate==0.0 and len(a)>60
+decision='P249_DBMF25_AND_P305_DBMF25_IDENTICAL_IMPLEMENTATION' if identical else 'DBMF_SIBLING_IDENTITY_DIFFERENCE_CONFIRMED'
+out={'schema':'research.p464_dbmf_sibling_identity_r1.v1','workload_id':'P464_DBMF_SIBLING_IDENTITY_R1','claim':'Resolve the staged DBMF sibling ambiguity at the exact current scientific implementation level before any capital-budget comparison. P249/P455 and P305 capital-efficiency source both define their equity base as 50% SPMO + 50% IJS and matched equity control as 50% SPY + 50% IJR; both use the same 25% DBMF diagnostic dose.','source_refs':{'p305':'research/p305_dbmf_capital_efficiency_r1.py@15d991ce45848da33b5d49eda354c6f2bd6973d5','p249_p455':'research/p455_dbmf_vs_complements_r1.py@ff7098a240a51d20b7bf5baa9ae51a53ddfe0cac'},'observations':{'months':len(a),'max_abs_base_return_difference':max_base,'max_abs_control_return_difference':max_ctl,'max_abs_75_25_dbmf_candidate_return_difference':max_candidate},'decision':decision,'scientific_consequence':('Collapse the two DBMF labels to one implementation identity for downstream scientific comparison; do not double-count them as independent survivors.' if identical else 'Keep the two implementations distinct and pass their exact difference to downstream comparison.'),'boundaries':{'scientific_identity_authority':True,'portfolio_ranking':False,'allocation_authority':False,'runtime':False,'broker':False,'live_trading':False}}
+Path('research/artifacts').mkdir(parents=True,exist_ok=True); Path('research/artifacts/p464_dbmf_sibling_identity_r1.json').write_text(json.dumps(out,indent=2,sort_keys=True)); print(json.dumps({'decision':decision,**out['observations']},sort_keys=True))
