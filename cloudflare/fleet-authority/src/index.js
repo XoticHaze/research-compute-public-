@@ -11,7 +11,7 @@ const ALLOWED_WORKFLOW_REFS = new Set([
   'XoticHaze/research-compute-public-/.github/workflows/ibkr-legacy-ibc-auth-comparator.yml@refs/heads/ibkr-b1-authority-v1',
 ]);
 const ALLOWED_WORKFLOW_CONTRACT = 'canonical-b1+legacy-ibc-comparator';
-const ALLOWED_WORKFLOW_SHA = 'f1cbc1516efdc7d5854a666e6d753dd157a37cf9';
+const ALLOWED_WORKFLOW_SHA = '8fe2cf4c5998bd5e5ef03d0bdc0e0280eefaa768';
 const CREDENTIAL_BINDING_CONTRACT = 'IBKR_PAPER_USERNAME+IBKR_PAPER_PASSWORD';
 const REQUEST_SCHEMA = 'mmibkr-fleet-authority-seal-request-v1';
 const ENVELOPE_SCHEMA = 'mmibkr-ibkr-readonly-gateway-env-x25519-hkdf-aesgcm-v1';
