@@ -57,7 +57,7 @@ class AuthBoundaryTests(unittest.TestCase):
             "account DU123456 postAuthenticate",
         )
         excerpt = "\n".join(result["evidence_excerpt"])
-        self.assertIn("<redacted-email>", excerpt)
+        self.assertIn("username=<redacted>", excerpt)
         self.assertIn("password=<redacted>", excerpt)
         self.assertIn("<redacted-account>", excerpt)
         self.assertNotIn("alice@example.com", excerpt)
