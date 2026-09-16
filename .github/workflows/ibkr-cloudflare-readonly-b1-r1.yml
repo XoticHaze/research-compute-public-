@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   id-token: write
 
 concurrency:
@@ -21,7 +22,7 @@ concurrency:
 jobs:
   broker-data-proof:
     runs-on: ubuntu-24.04
-    timeout-minutes: 70
+    timeout-minutes: 40
     env:
       FLEET_AUTHORITY_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-paper/seal
       FLEET_AUTHORITY_HEALTH: https://fleet-authority.slenderiq.workers.dev/healthz
@@ -43,18 +44,27 @@ jobs:
             scripts/ibkr_readonly_data_probe_v1.py \
             scripts/ibkr_gateway_state_classifier_v1.py
 
-      - name: Require configured private authority
+      - name: Require deployed B1 authority contract
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, os
+          import json, os, time
           from urllib.request import Request, urlopen
-          req=Request(os.environ['FLEET_AUTHORITY_HEALTH'],headers={'Accept':'application/json','User-Agent':'mmibkr-b1-health-v1'})
-          with urlopen(req,timeout=15) as r:
-              node=json.loads(r.read().decode('utf-8'))
-          if node.get('ok') is not True or node.get('authority_configured') is not True:
-              raise SystemExit('fleet authority is not configured')
-          print('FLEET_AUTHORITY_HEALTH=READY')
+          url = os.environ['FLEET_AUTHORITY_HEALTH']
+          for _ in range(60):
+              try:
+                  req=Request(url,headers={'Accept':'application/json','User-Agent':'mmibkr-b1-health-v2'})
+                  with urlopen(req,timeout=15) as r:
+                      node=json.loads(r.read().decode('utf-8'))
+                  if node.get('ok') is True and node.get('authority_configured') is True and node.get('contract_version') == 2:
+                      print('FLEET_AUTHORITY_HEALTH=READY_V2')
+                      print('IBKR_PAPER_SERVER_CONFIGURED=' + ('1' if node.get('paper_server_configured') else '0'))
+                      print('IBKR_TOTP_CONFIGURED=' + ('1' if node.get('totp_configured') else '0'))
+                      raise SystemExit(0)
+              except Exception:
+                  pass
+              time.sleep(5)
+          raise SystemExit('deployed fleet authority has not reached B1 contract v2')
           PY
 
       - name: Obtain one-run sealed gateway environment
@@ -67,138 +77,168 @@ jobs:
             --output "$RUNNER_TEMP/ibkr-gateway.env" \
             --receipt "$RUNNER_TEMP/ibkr-cloudflare-envelope-receipt.json"
 
-      - name: Start disposable post-IBC paper Gateway
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          p = Path(os.environ['RUNNER_TEMP']) / 'ibkr-gateway.env'
+          keys = {line.split('=', 1)[0] for line in p.read_text().splitlines() if '=' in line}
+          print('SEALED_PAPER_SERVER_PRESENT=' + ('1' if 'TWS_SERVER_PAPER' in keys else '0'))
+          print('SEALED_TOTP_PRESENT=' + ('1' if 'TWOFACTOR_CODE' in keys else '0'))
+          if 'TWS_SERVER_PAPER' not in keys:
+              raise SystemExit('TWS_SERVER_PAPER is required for deterministic first-login bootstrap')
+          # This bootstrap intentionally forces IB Key / phone approval. Do not feed
+          # an unattended TOTP or device selector into the first-login process.
+          kept=[]
+          for raw in p.read_text().splitlines():
+              key = raw.split('=', 1)[0] if '=' in raw else ''
+              if key in {'TWOFACTOR_CODE', 'TWOFA_DEVICE'}:
+                  continue
+              kept.append(raw)
+          (Path(os.environ['RUNNER_TEMP']) / 'ibkr-gateway-bootstrap.env').write_text('\n'.join(kept) + '\n')
+          PY
+
+      - name: Restore encrypted warm Gateway state if available
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          docker pull "$IBKR_CONTROLLER_IMAGE" >/dev/null
-          image_id="$(docker image inspect --format '{{.Id}}' "$IBKR_CONTROLLER_IMAGE")"
-          test -n "$image_id"
-          echo "IBKR_CONTROLLER_IMAGE_PINNED=1"
-
           jts_volume="ibkr-b1-jts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           docker volume create "$jts_volume" >/dev/null
-          docker run --rm --user 0 --entrypoint /bin/sh \
-            -v "$jts_volume:/state" \
-            "$IBKR_CONTROLLER_IMAGE" \
-            -lc 'chmod 0777 /state' >/dev/null
-          echo 'IBKR_EPHEMERAL_JTS_EVIDENCE_READY=1'
+          docker run --rm --user 0 --entrypoint /bin/sh -v "$jts_volume:/state" "$IBKR_CONTROLLER_IMAGE" -lc 'chmod 0777 /state' >/dev/null
+
+          artifact_url="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=ibkr-b1-warm-state&per_page=20" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].archive_download_url // empty')"
+          if [ -z "$artifact_url" ]; then
+            echo 'IBKR_WARM_STATE_RESTORED=0'
+            exit 0
+          fi
+
+          gh api "$artifact_url" > "$RUNNER_TEMP/ibkr-b1-warm-state.zip"
+          unzip -q "$RUNNER_TEMP/ibkr-b1-warm-state.zip" -d "$RUNNER_TEMP/warm-artifact"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from cryptography.hazmat.primitives import hashes
+          from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+          from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+          temp=Path(os.environ['RUNNER_TEMP'])
+          vals={}
+          for raw in (temp/'ibkr-gateway.env').read_text().splitlines():
+              if '=' in raw:
+                  k,v=raw.split('=',1); vals[k]=v
+          password=vals.get('TWS_PASSWORD_PAPER') or vals.get('TWS_PASSWORD')
+          if not password:
+              raise SystemExit('paper password missing from sealed environment')
+          blob=(temp/'warm-artifact'/'ibkr-b1-warm-state.tgz.enc').read_bytes()
+          if blob[:9] != b'MMIBKRWS1':
+              raise SystemExit('warm state envelope schema mismatch')
+          salt,nonce,ciphertext=blob[9:25],blob[25:37],blob[37:]
+          key=PBKDF2HMAC(algorithm=hashes.SHA256(),length=32,salt=salt,iterations=250000).derive(password.encode())
+          plain=AESGCM(key).decrypt(nonce,ciphertext,b'mmibkr-b1-warm-state-v1')
+          (temp/'ibkr-b1-warm-state.tgz').write_bytes(plain)
+          PY
+          docker run --rm -v "$jts_volume:/state" -v "$RUNNER_TEMP:/import:ro" alpine:3.22 sh -lc 'tar -xzf /import/ibkr-b1-warm-state.tgz -C /state && chmod -R u+rwX,go-rwx /state || true'
+          echo 'IBKR_WARM_STATE_RESTORED=1'
+
+      - name: Trigger first-login IBKR Mobile challenge
+        run: |
+          set -euo pipefail
+          jts_volume="ibkr-b1-jts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker pull "$IBKR_CONTROLLER_IMAGE" >/dev/null
+          echo 'IBKR_CONTROLLER_IMAGE_PINNED=1'
 
           docker run -d --name ibkr-cloudflare-b1 \
-            --env-file "$RUNNER_TEMP/ibkr-gateway.env" \
+            --env-file "$RUNNER_TEMP/ibkr-gateway-bootstrap.env" \
             -e USE_IBG_CONTROLLER=yes \
             -e TRADING_MODE=paper \
             -e READ_ONLY_API=yes \
             -e TWOFA_TIMEOUT_ACTION=none \
-            -e TWOFA_EXIT_INTERVAL=3600 \
+            -e TWOFA_EXIT_INTERVAL=1800 \
+            -e RELOGIN_AFTER_TWOFA_TIMEOUT=no \
             -e CONTROLLER_HEALTH_SERVER_PORT=8080 \
             -e TWS_SETTINGS_PATH=/home/ibgateway/Jts_b1 \
+            -e AUTO_RESTART_TIME='04:15 AM' \
+            -e AUTO_LOGOFF_TIME='04:15 AM' \
+            -e TIME_ZONE=America/Chicago \
             -v "$jts_volume:/home/ibgateway/Jts_b1" \
             -p 127.0.0.1:4002:4004 \
             -p 127.0.0.1:18080:8080 \
             "$IBKR_CONTROLLER_IMAGE" >/dev/null
 
-          docker exec ibkr-cloudflare-b1 /bin/sh -lc 'test "$TRADING_MODE" = paper && test "$READ_ONLY_API" = yes && test "$TWOFA_TIMEOUT_ACTION" = none && test "$TWS_SETTINGS_PATH" = /home/ibgateway/Jts_b1' >/dev/null
-          echo 'IBKR_PAPER_READONLY_ENV_ASSERTED=1'
-          echo 'IBKR_CCP_RECOVERY_WINDOW_ENABLED=1'
+          docker exec ibkr-cloudflare-b1 /bin/sh -lc 'test "$TRADING_MODE" = paper && test "$READ_ONLY_API" = yes && test "$TWOFA_TIMEOUT_ACTION" = none && test -n "$TWS_SERVER_PAPER"' >/dev/null
+          echo 'IBKR_FIRST_LOGIN_STARTED=1'
 
-          ready=0
-          for _ in $(seq 1 720); do
+          challenge=0
+          for _ in $(seq 1 120); do
             running="$(docker inspect -f '{{.State.Running}}' ibkr-cloudflare-b1 2>/dev/null || echo false)"
-            if [ "$running" != true ]; then
-              break
-            fi
-
-            if python - <<'PY'
-          import socket
-          try:
-              with socket.create_connection(('127.0.0.1', 4002), timeout=0.25):
-                  pass
-          except OSError:
-              raise SystemExit(1)
-          PY
-            then
-              if python - <<'PY'
-          from ib_insync import IB
-          ib = IB()
-          ok = False
-          try:
-              ib.connect('127.0.0.1', 4002, clientId=77, timeout=3, readonly=True)
-              ok = ib.isConnected()
-          except Exception:
-              ok = False
-          finally:
-              if ib.isConnected():
-                  ib.disconnect()
-          raise SystemExit(0 if ok else 1)
-          PY
-              then
-                ready=1
-                break
-              fi
-            fi
-            sleep 2
-          done
-
-          python - <<'PY'
+            [ "$running" = true ] || break
+            state="$(python - <<'PY'
           import json
           from urllib.error import HTTPError
           from urllib.request import urlopen
-          raw = b'{}'
-          reachable = False
+          raw=b'{}'
           try:
-              with urlopen('http://127.0.0.1:18080/health', timeout=2) as r:
-                  raw = r.read()
-                  reachable = True
-          except HTTPError as e:
-              raw = e.read()
-              reachable = True
-          except Exception:
-              pass
-          try:
-              node = json.loads(raw.decode('utf-8'))
-          except Exception:
-              node = {}
-          out = {
-              'schema': 'mmibkr-ibkr-controller-health-proof-v1',
-              'reachable': reachable,
-              'status': node.get('status'),
-              'mode': node.get('mode'),
-              'state': node.get('state'),
-              'jvm_alive': node.get('jvm_alive'),
-              'api_port_open': node.get('api_port_open'),
-              'ccp_lockout_streak': node.get('ccp_lockout_streak'),
-              'ccp_backoff_seconds': node.get('ccp_backoff_seconds'),
-              'last_auth_present': bool(node.get('last_auth_timestamp') or node.get('last_auth')),
-          }
-          print('IBKR_CONTROLLER_HEALTH=' + json.dumps(out, sort_keys=True))
+              with urlopen('http://127.0.0.1:18080/health',timeout=2) as r: raw=r.read()
+          except HTTPError as e: raw=e.read()
+          except Exception: pass
+          try: node=json.loads(raw.decode())
+          except Exception: node={}
+          print(str(node.get('state') or '').upper())
           PY
-
-          if [ "$ready" != 1 ]; then
-            running="$(docker inspect -f '{{.State.Running}}' ibkr-cloudflare-b1 2>/dev/null || echo false)"
-            exit_code="$(docker inspect -f '{{.State.ExitCode}}' ibkr-cloudflare-b1 2>/dev/null || echo -1)"
-            RUNNING="$running" EXIT_CODE="$exit_code" python - <<'PY'
-          import json, os
-          out = {
-              'schema': 'mmibkr-ibkr-controller-container-proof-v1',
-              'running': os.environ.get('RUNNING', '').lower() == 'true',
-              'exit_code': int(os.environ.get('EXIT_CODE', '-1')),
-          }
-          print('IBKR_CONTROLLER_CONTAINER=' + json.dumps(out, sort_keys=True))
-          PY
-
+          )"
+            case "$state" in
+              TWO_FA|POST_LOGIN|DISCLAIMERS|CONFIG|API_WAIT|READY|MONITORING)
+                challenge=1
+                echo "IBKR_LOGIN_STAGE=$state"
+                break
+                ;;
+            esac
+            sleep 5
+          done
+          if [ "$challenge" != 1 ]; then
             docker logs ibkr-cloudflare-b1 > "$RUNNER_TEMP/ibkr-controller.log" 2>&1 || true
-            docker run --rm --entrypoint /bin/sh \
-              -v "$jts_volume:/evidence:ro" \
-              "$IBKR_CONTROLLER_IMAGE" \
-              -lc 'cat /evidence/launcher.log 2>/dev/null || true' \
-              > "$RUNNER_TEMP/ibkr-launcher.log" 2>/dev/null || true
-
-            python scripts/ibkr_gateway_state_classifier_v1.py \
-              --controller-log-file "$RUNNER_TEMP/ibkr-controller.log" \
-              --launcher-log-file "$RUNNER_TEMP/ibkr-launcher.log"
-            echo 'IBKR_GATEWAY_API_READY=0'
-            exit 45
+            docker run --rm --entrypoint /bin/sh -v "$jts_volume:/evidence:ro" "$IBKR_CONTROLLER_IMAGE" -lc 'cat /evidence/launcher.log 2>/dev/null || true' > "$RUNNER_TEMP/ibkr-launcher.log" 2>/dev/null || true
+            python scripts/ibkr_gateway_state_classifier_v1.py --controller-log-file "$RUNNER_TEMP/ibkr-controller.log" --launcher-log-file "$RUNNER_TEMP/ibkr-launcher.log"
+            raise=1
+            echo 'IBKR_MOBILE_CHALLENGE_REACHED=0'
+            exit 47
           fi
+          echo 'IBKR_MOBILE_CHALLENGE_REACHED=1'
+          echo 'IBKR_OPERATOR_ACTION=APPROVE_IBKR_MOBILE_NOTIFICATION'
+
+      - name: Wait for IBKR Mobile approval
+        run: |
+          set -euo pipefail
+          ready=0
+          for _ in $(seq 1 300); do
+            running="$(docker inspect -f '{{.State.Running}}' ibkr-cloudflare-b1 2>/dev/null || echo false)"
+            [ "$running" = true ] || break
+            if python - <<'PY'
+          from ib_insync import IB
+          ib=IB()
+          try:
+              ib.connect('127.0.0.1',4002,clientId=77,timeout=3,readonly=True)
+              ok=ib.isConnected()
+          except Exception:
+              ok=False
+          finally:
+              if ib.isConnected(): ib.disconnect()
+          raise SystemExit(0 if ok else 1)
+          PY
+            then
+              ready=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$ready" != 1 ]; then
+            jts_volume="ibkr-b1-jts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            docker logs ibkr-cloudflare-b1 > "$RUNNER_TEMP/ibkr-controller.log" 2>&1 || true
+            docker run --rm --entrypoint /bin/sh -v "$jts_volume:/evidence:ro" "$IBKR_CONTROLLER_IMAGE" -lc 'cat /evidence/launcher.log 2>/dev/null || true' > "$RUNNER_TEMP/ibkr-launcher.log" 2>/dev/null || true
+            python scripts/ibkr_gateway_state_classifier_v1.py --controller-log-file "$RUNNER_TEMP/ibkr-controller.log" --launcher-log-file "$RUNNER_TEMP/ibkr-launcher.log"
+            echo 'IBKR_OPERATOR_APPROVAL_ACCEPTED=0'
+            exit 48
+          fi
+          echo 'IBKR_OPERATOR_APPROVAL_ACCEPTED=1'
           echo 'IBKR_GATEWAY_API_READY=1'
 
       - name: Prove read-only broker session and historical data fetch
@@ -210,6 +250,42 @@ jobs:
             --client-id 78 \
             --symbol "$PROBE_SYMBOL" \
             --output "$RUNNER_TEMP/ibkr-readonly-data-proof.json"
+
+      - name: Seal authenticated Gateway warm state
+        run: |
+          set -euo pipefail
+          jts_volume="ibkr-b1-jts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker run --rm -v "$jts_volume:/state:ro" -v "$RUNNER_TEMP:/export" alpine:3.22 sh -lc 'tar -C /state -czf /export/ibkr-b1-warm-state.tgz .'
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from cryptography.hazmat.primitives import hashes
+          from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+          from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+          temp=Path(os.environ['RUNNER_TEMP'])
+          vals={}
+          for raw in (temp/'ibkr-gateway.env').read_text().splitlines():
+              if '=' in raw:
+                  k,v=raw.split('=',1); vals[k]=v
+          password=vals.get('TWS_PASSWORD_PAPER') or vals.get('TWS_PASSWORD')
+          if not password:
+              raise SystemExit('paper password missing from sealed environment')
+          salt=os.urandom(16); nonce=os.urandom(12)
+          key=PBKDF2HMAC(algorithm=hashes.SHA256(),length=32,salt=salt,iterations=250000).derive(password.encode())
+          plain=(temp/'ibkr-b1-warm-state.tgz').read_bytes()
+          ciphertext=AESGCM(key).encrypt(nonce,plain,b'mmibkr-b1-warm-state-v1')
+          (temp/'ibkr-b1-warm-state.tgz.enc').write_bytes(b'MMIBKRWS1'+salt+nonce+ciphertext)
+          (temp/'ibkr-b1-warm-state.tgz').unlink()
+          print('IBKR_WARM_STATE_SEALED=1')
+          PY
+
+      - name: Publish reusable encrypted warm state
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ibkr-b1-warm-state
+          path: ${{ runner.temp }}/ibkr-b1-warm-state.tgz.enc
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Publish sanitized proof artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -229,10 +305,15 @@ jobs:
           docker stop --time 75 ibkr-cloudflare-b1 >/dev/null 2>&1
           docker rm -f ibkr-cloudflare-b1 >/dev/null 2>&1
           docker volume rm -f "$jts_volume" >/dev/null 2>&1
-          rm -f \
+          rm -rf \
             "$RUNNER_TEMP/ibkr-gateway.env" \
+            "$RUNNER_TEMP/ibkr-gateway-bootstrap.env" \
             "$RUNNER_TEMP/ibkr-cloudflare-envelope-receipt.json" \
             "$RUNNER_TEMP/ibkr-readonly-data-proof.json" \
             "$RUNNER_TEMP/ibkr-controller.log" \
-            "$RUNNER_TEMP/ibkr-launcher.log"
+            "$RUNNER_TEMP/ibkr-launcher.log" \
+            "$RUNNER_TEMP/ibkr-b1-warm-state.zip" \
+            "$RUNNER_TEMP/ibkr-b1-warm-state.tgz" \
+            "$RUNNER_TEMP/ibkr-b1-warm-state.tgz.enc" \
+            "$RUNNER_TEMP/warm-artifact"
           echo 'IBKR_PRIVATE_RUNTIME_DESTROYED=1'
