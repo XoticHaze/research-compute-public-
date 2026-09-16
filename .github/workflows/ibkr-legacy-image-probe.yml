@@ -13,22 +13,34 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 12
     env:
-      LEGACY_IMAGE: ghcr.io/gnzsnz/ib-gateway:10.45.1c
+      IMAGE_1045: ghcr.io/gnzsnz/ib-gateway:10.45.1c
+      IMAGE_1047: ghcr.io/gnzsnz/ib-gateway:10.47.1e
+      IMAGE_1049: ghcr.io/gnzsnz/ib-gateway:10.49.1c
     steps:
-      - name: Resolve historical Gateway identity
+      - name: Resolve Gateway image identities
         shell: bash
         run: |
           set -euo pipefail
-          docker pull "$LEGACY_IMAGE"
-          echo "LEGACY_IMAGE_ID=$(docker image inspect "$LEGACY_IMAGE" --format '{{.Id}}')"
-          echo "LEGACY_REPO_DIGESTS=$(docker image inspect "$LEGACY_IMAGE" --format '{{json .RepoDigests}}')"
-          echo "LEGACY_CREATED=$(docker image inspect "$LEGACY_IMAGE" --format '{{.Created}}')"
-          docker run --rm --entrypoint /bin/sh "$LEGACY_IMAGE" -lc '
-            set -eu
-            printf "TWS_MAJOR_VRSN=%s\n" "${TWS_MAJOR_VRSN:-}"
-            printf "IBC_PATH="; command -v ibcstart.sh || true
-            find /opt /home/ibgateway -maxdepth 4 \( -iname "*ibc*.jar" -o -iname "ibcstart.sh" \) -print 2>/dev/null | head -20 || true
-            find /home/ibgateway/Jts/ibgateway -maxdepth 1 -mindepth 1 -type d -printf "GATEWAY_DIR=%f\n" 2>/dev/null || true
-          '
+          probe() {
+            label="$1"; image="$2"
+            echo "=== ${label} ${image} ==="
+            if ! docker pull "$image"; then
+              echo "${label}_AVAILABLE=0"
+              return 0
+            fi
+            echo "${label}_AVAILABLE=1"
+            echo "${label}_IMAGE_ID=$(docker image inspect "$image" --format '{{.Id}}')"
+            echo "${label}_REPO_DIGESTS=$(docker image inspect "$image" --format '{{json .RepoDigests}}')"
+            echo "${label}_CREATED=$(docker image inspect "$image" --format '{{.Created}}')"
+            docker run --rm --entrypoint /bin/sh "$image" -lc '
+              set -eu
+              printf "TWS_MAJOR_VRSN=%s\n" "${TWS_MAJOR_VRSN:-}"
+              printf "IBC_PATH="; command -v ibcstart.sh || true
+              find /home/ibgateway/Jts/ibgateway -maxdepth 1 -mindepth 1 -type d -printf "GATEWAY_DIR=%f\n" 2>/dev/null || true
+            '
+          }
+          probe V1045 "$IMAGE_1045"
+          probe V1047 "$IMAGE_1047"
+          probe V1049 "$IMAGE_1049"
