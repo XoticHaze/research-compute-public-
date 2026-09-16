@@ -69,7 +69,6 @@ def _redact(line: str) -> str:
 
 
 def _launcher_auth_transcript(launcher: str, limit: int = 28) -> list[str]:
-    """Return a compact redacted transcript of the actual launcher auth protocol."""
     markers = (
         "connecting ",
         "connected to ",
@@ -96,8 +95,6 @@ def _launcher_auth_transcript(launcher: str, limit: int = 28) -> list[str]:
 
 
 def _evidence_excerpt(controller: str, launcher: str, limit: int = 20) -> list[str]:
-    # Prioritize launcher protocol because it is authoritative for the pre-2FA
-    # server handshake. Then add concrete controller challenge/blocker lines.
     selected = [f"launcher: {line}" for line in _launcher_auth_transcript(launcher, limit=limit)]
     seen = set(selected)
     markers = (
@@ -105,6 +102,7 @@ def _evidence_excerpt(controller: str, launcher: str, limit: int = 20) -> list[s
         "ccp backoff",
         "second factor",
         "2fa dialog",
+        "2fa wait",
         "ib key",
         "security code",
         "passkey",
@@ -126,8 +124,6 @@ def _evidence_excerpt(controller: str, launcher: str, limit: int = 20) -> list[s
 
 
 def _connected_host(launcher: str) -> str | None:
-    # Examples: "Connecting ndc1.ibllc.com:4001 (SSL)" and
-    # "Connected to cdc1.ibllc.com:4001 (SSL)/...".
     for pattern in (
         r"\bConnecting\s+([A-Za-z0-9._-]+):\d+",
         r"\bConnected\s+to\s+([A-Za-z0-9._-]+):\d+",
@@ -174,8 +170,25 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
     )
     ccp_silent_timeout_before_ns_auth = ccp_timeout_observed and authenticating_observed and not ns_auth_start_observed
 
-    # Only concrete active/reset-delay language counts as maintenance. Merely
-    # mentioning "maintenance" in guard metadata is not an observed outage.
+    # If Gateway has been sitting in the controller's optimistic 2FA wait for
+    # >=60s but launcher never received NS_AUTH_START, the broker handshake did
+    # not progress. Do not burn the controller's full 30-minute 2FA wait or our
+    # old 15-minute outer deadline on a challenge that cannot exist yet.
+    pre_ns_auth_stall_observed = (
+        authenticating_observed
+        and not ns_auth_start_observed
+        and _has(
+            controller,
+            "2fa wait t+60s: still waiting",
+            "2fa wait t+70s: still waiting",
+            "2fa wait t+80s: still waiting",
+            "2fa wait t+90s: still waiting",
+            "2fa wait t+100s: still waiting",
+            "2fa wait t+110s: still waiting",
+            "2fa wait t+120s: still waiting",
+        )
+    )
+
     maintenance_observed = _has(
         controller,
         "cold start inside ibkr maintenance window",
@@ -205,6 +218,7 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
                 credential_rejection_observed,
                 explicit_ccp_lockout_observed,
                 ccp_silent_timeout_before_ns_auth,
+                pre_ns_auth_stall_observed,
                 ssl_handshake_failure_observed,
                 wrong_server_rejection_observed,
             )
@@ -223,6 +237,8 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         stage = "regional_server_rejected_user"
     elif ccp_silent_timeout_before_ns_auth:
         stage = "ccp_silent_timeout_before_ns_auth"
+    elif pre_ns_auth_stall_observed:
+        stage = "authentication_stalled_before_ns_auth"
     elif credential_rejection_observed:
         stage = "credential_rejected"
     elif explicit_ccp_lockout_observed:
@@ -257,6 +273,7 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         "ccp_lockout_observed": explicit_ccp_lockout_observed,
         "ccp_timeout_observed": ccp_timeout_observed,
         "ccp_silent_timeout_before_ns_auth": ccp_silent_timeout_before_ns_auth,
+        "pre_ns_auth_stall_observed": pre_ns_auth_stall_observed,
         "ssl_handshake_failure_observed": ssl_handshake_failure_observed,
         "wrong_server_rejection_observed": wrong_server_rejection_observed,
         "maintenance_observed": maintenance_observed,
