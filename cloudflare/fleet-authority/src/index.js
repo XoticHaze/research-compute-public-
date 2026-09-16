@@ -6,7 +6,7 @@ const EXPECTED_AUTHORITY = 'ibkr-paper-readonly';
 const ALLOWED_REF = 'refs/heads/ibkr-b1-authority-v1';
 const ALLOWED_EVENT = 'push';
 const ALLOWED_WORKFLOW_REF = 'XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1';
-const ALLOWED_WORKFLOW_SHA = '9a80c17411fdf30fb4b5bf87f9920e1d1c4c3850';
+const ALLOWED_WORKFLOW_SHA = '040db17a9d237bdda86bad0e21bf0f72fa108c0f';
 const REQUEST_SCHEMA = 'mmibkr-fleet-authority-seal-request-v1';
 const ENVELOPE_SCHEMA = 'mmibkr-ibkr-readonly-gateway-env-x25519-hkdf-aesgcm-v1';
 
@@ -194,7 +194,7 @@ async function sealIbkrGatewayEnv(body, env, oidc) {
     'READ_ONLY_API=yes',
     'TWS_ACCEPT_INCOMING=accept',
     'TWOFA_TIMEOUT_ACTION=exit',
-    'RELOGIN_AFTER_TWOFA_TIMEOUT=no',
+    'RELOGIN_AFTER_TWOFA_TIMEOUT=yes',
     'SAVE_TWS_SETTINGS=no',
     'ENABLE_VNC=false',
   ];
