@@ -95,7 +95,7 @@ class AuthBoundaryTests(unittest.TestCase):
 
     def test_evidence_excerpt_and_launcher_transcript_are_redacted(self):
         result = classify(
-            "username=alice@example.com password=hunter2 CCP authentication lockout retry later",
+            "username=alice@example.com password=hunter2 CCP lockout authentication retry later",
             "Connecting cdc1.ibllc.com:4001\naccount DU123456 PostAuthenticate",
         )
         excerpt = "\n".join(result["evidence_excerpt"])
