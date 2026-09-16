@@ -1,0 +1,20 @@
+name: spy-gap-reversal-r1
+on:
+  pull_request:
+    paths:
+      - 'research/spy_gap_reversal_r1.py'
+      - '.github/workflows/spy-gap-reversal-r1.yml'
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -q yfinance pandas numpy
+      - run: set -o pipefail; python research/spy_gap_reversal_r1.py | tee spy_gap_reversal_r1_result.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spy-gap-reversal-r1-result
+          path: spy_gap_reversal_r1_result.txt
