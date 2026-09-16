@@ -4,9 +4,10 @@ const EXPECTED_AUDIENCE = 'mmibkr-fleet-authority';
 const EXPECTED_REPOSITORY = 'XoticHaze/research-compute-public-';
 const EXPECTED_AUTHORITY = 'ibkr-paper-readonly';
 const ALLOWED_REF = 'refs/heads/ibkr-b1-authority-v1';
-const ALLOWED_EVENT = 'push';
+const ALLOWED_EVENTS = new Set(['push', 'workflow_dispatch']);
+const ALLOWED_EVENT_CONTRACT = 'push+workflow_dispatch';
 const ALLOWED_WORKFLOW_REF = 'XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1';
-const ALLOWED_WORKFLOW_SHA = 'e50ee8f3d5eea27a444ce2e54423d181fdbce3a9';
+const ALLOWED_WORKFLOW_SHA = 'fb04a11547a99b85d05c382f2fefb3a641aeb664';
 const CREDENTIAL_BINDING_CONTRACT = 'IBKR_PAPER_USERNAME+IBKR_PAPER_PASSWORD';
 const REQUEST_SCHEMA = 'mmibkr-fleet-authority-seal-request-v1';
 const ENVELOPE_SCHEMA = 'mmibkr-ibkr-readonly-gateway-env-x25519-hkdf-aesgcm-v1';
@@ -115,7 +116,7 @@ async function verifyGithubOidc(jwt, requestedRunId) {
   if (claims.ref !== ALLOWED_REF) throw new Error('oidc_ref_rejected');
   if (claims.workflow_ref !== ALLOWED_WORKFLOW_REF) throw new Error('oidc_workflow_ref_rejected');
   if (claims.workflow_sha !== ALLOWED_WORKFLOW_SHA) throw new Error('oidc_workflow_sha_rejected');
-  if (claims.event_name !== ALLOWED_EVENT) throw new Error('oidc_event_rejected');
+  if (!ALLOWED_EVENTS.has(claims.event_name)) throw new Error('oidc_event_rejected');
   if (String(claims.run_id) !== requestedRunId) throw new Error('oidc_run_rejected');
 
   return {
@@ -123,6 +124,7 @@ async function verifyGithubOidc(jwt, requestedRunId) {
     ref: claims.ref,
     workflow_ref: claims.workflow_ref,
     workflow_sha: claims.workflow_sha,
+    event_name: claims.event_name,
     run_id: String(claims.run_id),
     run_attempt: String(claims.run_attempt ?? ''),
   };
@@ -230,6 +232,7 @@ async function sealIbkrGatewayEnv(body, env, oidc) {
       ref: oidc.ref,
       workflow_ref: oidc.workflow_ref,
       workflow_sha: oidc.workflow_sha,
+      event_name: oidc.event_name,
       run_id: oidc.run_id,
       run_attempt: oidc.run_attempt,
     },
@@ -246,6 +249,7 @@ export default {
         service: 'mmibkr-fleet-authority',
         contract_version: 3,
         allowed_workflow_sha: ALLOWED_WORKFLOW_SHA,
+        allowed_event_contract: ALLOWED_EVENT_CONTRACT,
         credential_binding_contract: CREDENTIAL_BINDING_CONTRACT,
         authority_configured: Boolean(env.IBKR_PAPER_USERNAME && env.IBKR_PAPER_PASSWORD),
         paper_username_binding_configured: Boolean(env.IBKR_PAPER_USERNAME),
