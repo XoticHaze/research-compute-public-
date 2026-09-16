@@ -211,21 +211,49 @@ jobs:
             fi
 
             docker logs ibkr-cloudflare-b1 > "$RUNNER_TEMP/ibkr-controller.log" 2>&1 || true
-            if grep -Fqi 'Waiting for IB Key mobile approval' "$RUNNER_TEMP/ibkr-controller.log"; then
+            docker exec ibkr-cloudflare-b1 /bin/sh -lc 'cat "$TWS_SETTINGS_PATH/launcher.log" 2>/dev/null || true' \
+              > "$RUNNER_TEMP/ibkr-launcher.log" 2>/dev/null || true
+            python scripts/ibkr_auth_boundary_v1.py \
+              --quiet \
+              --controller-log-file "$RUNNER_TEMP/ibkr-controller.log" \
+              --launcher-log-file "$RUNNER_TEMP/ibkr-launcher.log" \
+              --output "$RUNNER_TEMP/ibkr-auth-boundary.json"
+
+            boundary_state="$(python - <<'PY'
+          import json, os
+          from pathlib import Path
+          node=json.loads((Path(os.environ['RUNNER_TEMP'])/'ibkr-auth-boundary.json').read_text())
+          if node.get('ibkey_mobile_approval_wait_signal'):
+              print('challenge')
+          elif node.get('terminal_prechallenge_blocker'):
+              print('blocker')
+          else:
+              print('continue')
+          PY
+            )"
+
+            if [ "$boundary_state" = challenge ]; then
               mode=challenge
               echo 'IBKR_IBKEY_PUSH_WAIT_SIGNAL=1'
               echo 'IBKR_SECOND_FACTOR_CHALLENGE_OBSERVED=1'
               break
+            fi
+            if [ "$boundary_state" = blocker ]; then
+              echo 'IBKR_PRECHALLENGE_TERMINAL_BLOCKER=1'
+              python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path(os.environ['RUNNER_TEMP'])/'ibkr-auth-boundary.json'
+          print('IBKR_AUTH_BOUNDARY=' + json.dumps(json.loads(p.read_text()), sort_keys=True))
+          PY
+              exit 49
             fi
             sleep 5
           done
 
           if [ "$mode" = none ]; then
             docker logs ibkr-cloudflare-b1 > "$RUNNER_TEMP/ibkr-controller.log" 2>&1 || true
-            docker run --rm --entrypoint /bin/sh \
-              -v "$jts_volume:/evidence:ro" \
-              "$IBKR_CONTROLLER_IMAGE" \
-              -lc 'cat /evidence/launcher.log 2>/dev/null || true' \
+            docker exec ibkr-cloudflare-b1 /bin/sh -lc 'cat "$TWS_SETTINGS_PATH/launcher.log" 2>/dev/null || true' \
               > "$RUNNER_TEMP/ibkr-launcher.log" 2>/dev/null || true
             python scripts/ibkr_auth_boundary_v1.py \
               --controller-log-file "$RUNNER_TEMP/ibkr-controller.log" \
