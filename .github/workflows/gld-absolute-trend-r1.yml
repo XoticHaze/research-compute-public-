@@ -1,0 +1,26 @@
+name: gld-absolute-trend-r1
+on:
+  push:
+    paths:
+      - 'research/gld_absolute_trend_r1.py'
+      - '.github/workflows/gld-absolute-trend-r1.yml'
+  pull_request:
+    paths:
+      - 'research/gld_absolute_trend_r1.py'
+      - '.github/workflows/gld-absolute-trend-r1.yml'
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -q yfinance pandas numpy
+      - name: Execute frozen GLD absolute-trend discriminator
+        run: python research/gld_absolute_trend_r1.py | tee gld_absolute_trend_r1_result.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gld-absolute-trend-r1-result
+          path: gld_absolute_trend_r1_result.txt
