@@ -6,7 +6,7 @@ const EXPECTED_AUTHORITY = 'ibkr-paper-readonly';
 const ALLOWED_REF = 'refs/heads/ibkr-b1-authority-v1';
 const ALLOWED_EVENT = 'push';
 const ALLOWED_WORKFLOW_REF = 'XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1';
-const ALLOWED_WORKFLOW_SHA = '040db17a9d237bdda86bad0e21bf0f72fa108c0f';
+const ALLOWED_WORKFLOW_SHA = '0e06bc2f69405b52fa9d65ed3b1da97b61da36b1';
 const REQUEST_SCHEMA = 'mmibkr-fleet-authority-seal-request-v1';
 const ENVELOPE_SCHEMA = 'mmibkr-ibkr-readonly-gateway-env-x25519-hkdf-aesgcm-v1';
 
@@ -161,7 +161,7 @@ async function sealIbkrGatewayEnv(body, env, oidc) {
     env,
     ['IBKR_PAPER_TWS_SERVER', 'TWS_SERVER_PAPER', 'IBKR_TWS_SERVER', 'TWS_SERVER'],
     'authority_paper_server',
-  ) || 'ndc1.ibllc.com';
+  );
 
   const recipientKey = await crypto.subtle.importKey('raw', recipientRaw, { name: 'X25519' }, false, []);
   const ephemeral = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
