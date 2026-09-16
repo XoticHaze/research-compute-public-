@@ -18,66 +18,81 @@ FOLDS = [
     ("2018-01-01", "2021-12-31"),
     ("2022-01-01", None),
 ]
+BOARD_H15_URL = (
+    "https://www.federalreserve.gov/datadownload/Output.aspx?rel=H15"
+    "&series=bf17364827e38702b42a58cf8eaa3f78&lastobs=&from=&to="
+    "&filetype=csv&label=include&layout=seriescolumn&type=package"
+)
+# Frozen source-equivalence anchors captured before this transport repair from
+# the daily FRED DGS10 surface. They are identity checks only, never model inputs.
+DGS10_PARITY_ANCHORS = {
+    "2026-09-08": 0.0480,
+    "2026-09-09": 0.0483,
+    "2026-09-10": 0.0495,
+    "2026-09-11": 0.0496,
+    "2026-09-14": 0.0497,
+}
 
 
 def _month_end(index: pd.DatetimeIndex) -> pd.DatetimeIndex:
     return index.to_period("M").to_timestamp("M")
 
 
-def _parse_fred_dgs10(raw: str) -> pd.Series:
-    frame = pd.read_csv(StringIO(raw))
-    if frame.empty:
-        raise RuntimeError("FRED DGS10 response empty")
-    date_col = "DATE" if "DATE" in frame.columns else (
-        "observation_date" if "observation_date" in frame.columns else frame.columns[0]
-    )
-    if "DGS10" in frame.columns:
-        value_col = "DGS10"
-    elif "VALUE" in frame.columns:
-        value_col = "VALUE"
-    else:
-        raise RuntimeError(f"FRED DGS10 response missing expected value column: {list(frame.columns)}")
-    frame[date_col] = pd.to_datetime(frame[date_col], utc=False)
-    frame[value_col] = pd.to_numeric(frame[value_col], errors="coerce") / 100.0
-    out = frame.dropna(subset=[value_col]).set_index(date_col)[value_col]
-    out.index = pd.DatetimeIndex(out.index).tz_localize(None)
-    out = out.loc[out.index >= pd.Timestamp(START)]
-    out.index = _month_end(out.index)
-    out = out.groupby(level=0).last().sort_index()
-    if out.empty or out.index.min() > pd.Timestamp("2007-01-31"):
-        raise RuntimeError("FRED DGS10 coverage does not reach frozen start window")
-    return out.rename("DGS10")
+def _board_h15_dgs10() -> tuple[pd.Series, dict[str, float]]:
+    """Load the Board's underlying H.15 daily 10Y constant-maturity series.
 
-
-def _fred_dgs10() -> tuple[pd.Series, str]:
-    # Transport hardening only. Both routes are official FRED downloads of the
-    # exact frozen DGS10 series. No alternate Treasury series or source is used.
-    routes = [
-        (
-            "fred_series_download",
-            "https://fred.stlouisfed.org/series/DGS10/downloaddata/DGS10.csv",
-        ),
-        (
-            "fred_graph_csv",
-            f"https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd={START}",
-        ),
-    ]
+    This is a source-transport repair after both official FRED download routes
+    timed out on hosted public compute. The economic series remains the exact
+    daily 10-year H.15 constant-maturity yield represented by FRED as DGS10.
+    A pre-frozen recent-observation parity gate must pass before any economics.
+    """
+    raw = None
     errors: list[str] = []
-    for route_name, url in routes:
-        for attempt in range(2):
-            req = Request(
-                url,
-                headers={"User-Agent": "research-compute-public causal research/1.0"},
+    for attempt in range(3):
+        req = Request(
+            BOARD_H15_URL,
+            headers={"User-Agent": "research-compute-public causal research/1.0"},
+        )
+        try:
+            with urlopen(req, timeout=60) as response:
+                raw = response.read().decode("utf-8-sig")
+            break
+        except Exception as exc:
+            errors.append(f"board_h15[{attempt + 1}]={type(exc).__name__}:{exc}")
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+    if raw is None:
+        raise RuntimeError("Board H15 DGS10 transport failed: " + " | ".join(errors))
+
+    # Board H.15 package has five metadata rows, then the series-column header.
+    frame = pd.read_csv(StringIO(raw), header=5, na_values=["ND"])
+    if frame.empty or "RIFLGFCY10_N.B" not in frame.columns:
+        raise RuntimeError(f"Board H15 package missing RIFLGFCY10_N.B: {list(frame.columns)}")
+    date_col = frame.columns[0]
+    frame[date_col] = pd.to_datetime(frame[date_col], errors="coerce")
+    frame["RIFLGFCY10_N.B"] = pd.to_numeric(frame["RIFLGFCY10_N.B"], errors="coerce") / 100.0
+    daily = frame.dropna(subset=[date_col, "RIFLGFCY10_N.B"]).set_index(date_col)["RIFLGFCY10_N.B"]
+    daily.index = pd.DatetimeIndex(daily.index).tz_localize(None)
+    daily = daily.sort_index()
+
+    observed_anchors: dict[str, float] = {}
+    for date_text, expected in DGS10_PARITY_ANCHORS.items():
+        ts = pd.Timestamp(date_text)
+        if ts not in daily.index:
+            raise RuntimeError(f"Board H15 parity anchor missing: {date_text}")
+        actual = float(daily.loc[ts])
+        observed_anchors[date_text] = actual
+        if not np.isclose(actual, expected, atol=1e-12, rtol=0.0):
+            raise RuntimeError(
+                f"Board H15/FRED DGS10 parity mismatch {date_text}: expected={expected} actual={actual}"
             )
-            try:
-                with urlopen(req, timeout=45) as response:
-                    raw = response.read().decode("utf-8")
-                return _parse_fred_dgs10(raw), route_name
-            except Exception as exc:  # transport/format only; bounded and fail closed
-                errors.append(f"{route_name}[{attempt + 1}]={type(exc).__name__}:{exc}")
-                if attempt == 0:
-                    time.sleep(2)
-    raise RuntimeError("FRED DGS10 official transports failed: " + " | ".join(errors))
+
+    out = daily.loc[daily.index >= pd.Timestamp(START)].copy()
+    if out.empty or out.index.min() > pd.Timestamp("2007-01-03"):
+        raise RuntimeError("Board H15 DGS10 coverage does not reach frozen start window")
+    out.index = _month_end(out.index)
+    out = out.groupby(level=0).last().sort_index().rename("DGS10")
+    return out, observed_anchors
 
 
 def _spy_cash_yield() -> pd.Series:
@@ -123,8 +138,9 @@ def _stats(r: pd.Series) -> dict[str, float | None]:
 def main() -> int:
     monthly = _monthly_total_returns()
     spy_cash_yield = _spy_cash_yield()
-    dgs10, fred_transport = _fred_dgs10()
-    print("FRED_DGS10_TRANSPORT=" + fred_transport)
+    dgs10, parity_observed = _board_h15_dgs10()
+    print("DGS10_SOURCE_PARITY=PASS")
+    print("DGS10_TRANSPORT=board_h15_RIFLGFCY10_N.B")
 
     common = monthly.index.intersection(spy_cash_yield.index).intersection(dgs10.index)
     monthly = monthly.loc[common].copy()
@@ -197,15 +213,20 @@ def main() -> int:
         ),
         "mechanism": (
             "prior completed month SPY trailing-365d cash dividends / unadjusted close "
-            "minus same-month-end FRED DGS10; hold SPY next month when spread > 0 else BIL"
+            "minus same-month-end 10Y H15 constant-maturity yield; hold SPY next month when spread > 0 else BIL"
         ),
         "scientific_role": "A_NEW_ALPHA_DISCOVERY",
         "causal_information_time": "completed month-end only; one-month application lag",
         "source_semantics": {
             "equity_cash_distribution": "SPY historical cash dividends paid/ex-date through month-end via yfinance actions",
             "equity_yield_denominator": "SPY unadjusted close at completed month-end",
-            "treasury_yield": "FRED DGS10 last available observation in completed month",
-            "treasury_transport_used": fred_transport,
+            "treasury_series": "Board H15 RIFLGFCY10_N.B, source-equivalent to FRED DGS10",
+            "treasury_transport_used": "Board H15 Data Download Program",
+            "source_parity_gate": {
+                "status": "PASS",
+                "frozen_fred_dgs10_anchors": DGS10_PARITY_ANCHORS,
+                "board_h15_observed": parity_observed,
+            },
             "return_series": "yfinance auto-adjusted SPY and BIL monthly total-return proxies",
         },
         "cost_one_way": COST_ONE_WAY,
