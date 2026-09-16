@@ -1,0 +1,37 @@
+name: IBKR Current Gateway Image Probe
+
+on:
+  push:
+    paths:
+      - '.github/workflows/ibkr-current-gateway-image-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        image:
+          - ghcr.io/gnzsnz/ib-gateway:10.47.1e
+          - ghcr.io/gnzsnz/ib-gateway:10.49.1c
+    steps:
+      - name: Resolve image identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='${{ matrix.image }}'
+          echo "IMAGE=$image"
+          docker pull "$image"
+          echo "IMAGE_ID=$(docker image inspect "$image" --format '{{.Id}}')"
+          echo "REPO_DIGESTS=$(docker image inspect "$image" --format '{{json .RepoDigests}}')"
+          echo "CREATED=$(docker image inspect "$image" --format '{{.Created}}')"
+          docker run --rm --entrypoint /bin/sh "$image" -lc '
+            set -eu
+            printf "TWS_MAJOR_VRSN=%s\n" "${TWS_MAJOR_VRSN:-}"
+            printf "IBC_PATH="; command -v ibcstart.sh || true
+            find /home/ibgateway/Jts/ibgateway -maxdepth 1 -mindepth 1 -type d -printf "GATEWAY_DIR=%f\n" 2>/dev/null || true
+          '
