@@ -7,6 +7,7 @@ const ALLOWED_REF = 'refs/heads/ibkr-b1-authority-v1';
 const ALLOWED_EVENT = 'push';
 const ALLOWED_WORKFLOW_REF = 'XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1';
 const ALLOWED_WORKFLOW_SHA = 'e50ee8f3d5eea27a444ce2e54423d181fdbce3a9';
+const CREDENTIAL_BINDING_CONTRACT = 'IBKR_PAPER_USERNAME+IBKR_PAPER_PASSWORD';
 const REQUEST_SCHEMA = 'mmibkr-fleet-authority-seal-request-v1';
 const ENVELOPE_SCHEMA = 'mmibkr-ibkr-readonly-gateway-env-x25519-hkdf-aesgcm-v1';
 
@@ -215,6 +216,7 @@ async function sealIbkrGatewayEnv(body, env, oidc) {
   return {
     schema: ENVELOPE_SCHEMA,
     authority: EXPECTED_AUTHORITY,
+    credential_binding_contract: CREDENTIAL_BINDING_CONTRACT,
     run_id: runId,
     recipient_key_id: recipientKeyId,
     ephemeral_public_b64: bytesToB64(ephemeralPublic),
@@ -243,7 +245,11 @@ export default {
         ok: true,
         service: 'mmibkr-fleet-authority',
         contract_version: 3,
+        allowed_workflow_sha: ALLOWED_WORKFLOW_SHA,
+        credential_binding_contract: CREDENTIAL_BINDING_CONTRACT,
         authority_configured: Boolean(env.IBKR_PAPER_USERNAME && env.IBKR_PAPER_PASSWORD),
+        paper_username_binding_configured: Boolean(env.IBKR_PAPER_USERNAME),
+        paper_password_binding_configured: Boolean(env.IBKR_PAPER_PASSWORD),
         paper_server_configured: Boolean(env.IBKR_PAPER_TWS_SERVER || env.TWS_SERVER_PAPER || env.IBKR_TWS_SERVER || env.TWS_SERVER),
         totp_configured: Boolean(env.IBKR_PAPER_TWOFACTOR_CODE || env.IBKR_TWOFACTOR_CODE || env.TWOFACTOR_CODE),
         twofa_device_configured: Boolean(env.IBKR_PAPER_TWOFA_DEVICE || env.IBKR_TWOFA_DEVICE || env.TWOFA_DEVICE),
