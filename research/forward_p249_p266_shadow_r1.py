@@ -4,6 +4,7 @@ import json
 import runpy
 from pathlib import Path
 
+# Fresh execution trigger only: frozen observer semantics remain unchanged.
 LEGACY_MODULE = Path(__file__).with_name("p279_p249_p266_forward_shadow_observer_r1.py")
 LEGACY_ARTIFACT = Path("artifacts/p279_p249_p266_forward_shadow_observer_r1.json")
 OUTPUT = Path("artifacts/forward_p249_p266_shadow_r1.json")
