@@ -1,0 +1,30 @@
+name: P438 Semiconductor Forward MTD R1
+on:
+  pull_request:
+    paths:
+      - 'research/p438_semiconductor_forward_mtd_r1.py'
+      - '.github/workflows/p438-semiconductor-forward-mtd-r1.yml'
+permissions:
+  contents: read
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet pandas numpy
+      - id: result
+        run: |
+          python research/p438_semiconductor_forward_mtd_r1.py
+          python - <<'PY'
+          import json, os
+          x=json.load(open('research/artifacts/p438_semiconductor_forward_mtd_r1.json'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('classification='+x['classification']+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p438-semiconductor-forward-mtd__${{ steps.result.outputs.classification }}
+          path: research/artifacts/p438_semiconductor_forward_mtd_r1.json
+          if-no-files-found: error
