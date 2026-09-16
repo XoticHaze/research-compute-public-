@@ -36,6 +36,12 @@ class AuthBoundaryTests(unittest.TestCase):
         self.assertTrue(result["device_selection_observed"])
         self.assertTrue(result["second_factor_challenge_observed"])
 
+    def test_warm_api_ready_does_not_require_second_factor(self):
+        result = classify("API port open — session preserved", "")
+        self.assertTrue(result["api_ready_observed"])
+        self.assertFalse(result["second_factor_challenge_observed"])
+        self.assertEqual(result["stage"], "api_ready")
+
 
 class ResetWindowTests(unittest.TestCase):
     def test_inside_reset_guard_is_blocked(self):
