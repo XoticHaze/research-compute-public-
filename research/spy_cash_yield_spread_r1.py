@@ -24,41 +24,60 @@ def _month_end(index: pd.DatetimeIndex) -> pd.DatetimeIndex:
     return index.to_period("M").to_timestamp("M")
 
 
-def _fred_dgs10() -> pd.Series:
-    # Transport hardening only: the frozen scientific source remains FRED DGS10.
-    # cosd limits the response to the already-frozen START window and retries only
-    # transient transport failures; it does not alter the series or chronology.
-    url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd={START}"
-    raw = None
-    last_error: Exception | None = None
-    for attempt in range(4):
-        req = Request(
-            url,
-            headers={"User-Agent": "research-compute-public causal research/1.0"},
-        )
-        try:
-            with urlopen(req, timeout=60) as response:
-                raw = response.read().decode("utf-8")
-            break
-        except Exception as exc:  # transport only; fail closed after bounded retries
-            last_error = exc
-            if attempt < 3:
-                time.sleep(2 ** attempt)
-    if raw is None:
-        raise RuntimeError(f"FRED DGS10 transport failed after bounded retries: {last_error}")
-
+def _parse_fred_dgs10(raw: str) -> pd.Series:
     frame = pd.read_csv(StringIO(raw))
-    date_col = frame.columns[0]
+    if frame.empty:
+        raise RuntimeError("FRED DGS10 response empty")
+    date_col = "DATE" if "DATE" in frame.columns else (
+        "observation_date" if "observation_date" in frame.columns else frame.columns[0]
+    )
+    if "DGS10" in frame.columns:
+        value_col = "DGS10"
+    elif "VALUE" in frame.columns:
+        value_col = "VALUE"
+    else:
+        raise RuntimeError(f"FRED DGS10 response missing expected value column: {list(frame.columns)}")
     frame[date_col] = pd.to_datetime(frame[date_col], utc=False)
-    frame["DGS10"] = pd.to_numeric(frame["DGS10"], errors="coerce") / 100.0
-    out = frame.dropna(subset=["DGS10"]).set_index(date_col)["DGS10"]
+    frame[value_col] = pd.to_numeric(frame[value_col], errors="coerce") / 100.0
+    out = frame.dropna(subset=[value_col]).set_index(date_col)[value_col]
     out.index = pd.DatetimeIndex(out.index).tz_localize(None)
     out = out.loc[out.index >= pd.Timestamp(START)]
     out.index = _month_end(out.index)
     out = out.groupby(level=0).last().sort_index()
     if out.empty or out.index.min() > pd.Timestamp("2007-01-31"):
         raise RuntimeError("FRED DGS10 coverage does not reach frozen start window")
-    return out
+    return out.rename("DGS10")
+
+
+def _fred_dgs10() -> tuple[pd.Series, str]:
+    # Transport hardening only. Both routes are official FRED downloads of the
+    # exact frozen DGS10 series. No alternate Treasury series or source is used.
+    routes = [
+        (
+            "fred_series_download",
+            "https://fred.stlouisfed.org/series/DGS10/downloaddata/DGS10.csv",
+        ),
+        (
+            "fred_graph_csv",
+            f"https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10&cosd={START}",
+        ),
+    ]
+    errors: list[str] = []
+    for route_name, url in routes:
+        for attempt in range(2):
+            req = Request(
+                url,
+                headers={"User-Agent": "research-compute-public causal research/1.0"},
+            )
+            try:
+                with urlopen(req, timeout=45) as response:
+                    raw = response.read().decode("utf-8")
+                return _parse_fred_dgs10(raw), route_name
+            except Exception as exc:  # transport/format only; bounded and fail closed
+                errors.append(f"{route_name}[{attempt + 1}]={type(exc).__name__}:{exc}")
+                if attempt == 0:
+                    time.sleep(2)
+    raise RuntimeError("FRED DGS10 official transports failed: " + " | ".join(errors))
 
 
 def _spy_cash_yield() -> pd.Series:
@@ -104,7 +123,8 @@ def _stats(r: pd.Series) -> dict[str, float | None]:
 def main() -> int:
     monthly = _monthly_total_returns()
     spy_cash_yield = _spy_cash_yield()
-    dgs10 = _fred_dgs10()
+    dgs10, fred_transport = _fred_dgs10()
+    print("FRED_DGS10_TRANSPORT=" + fred_transport)
 
     common = monthly.index.intersection(spy_cash_yield.index).intersection(dgs10.index)
     monthly = monthly.loc[common].copy()
@@ -185,6 +205,7 @@ def main() -> int:
             "equity_cash_distribution": "SPY historical cash dividends paid/ex-date through month-end via yfinance actions",
             "equity_yield_denominator": "SPY unadjusted close at completed month-end",
             "treasury_yield": "FRED DGS10 last available observation in completed month",
+            "treasury_transport_used": fred_transport,
             "return_series": "yfinance auto-adjusted SPY and BIL monthly total-return proxies",
         },
         "cost_one_way": COST_ONE_WAY,
