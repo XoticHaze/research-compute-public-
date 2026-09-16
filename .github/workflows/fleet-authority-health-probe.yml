@@ -19,7 +19,7 @@ jobs:
       - name: Require deployed authority provenance
         env:
           FLEET_AUTHORITY_HEALTH: https://fleet-authority.slenderiq.workers.dev/healthz
-          EXPECTED_WORKFLOW_SHA: 0bec094d15c2bdff1c835ca1dfe486d52f230780
+          EXPECTED_WORKFLOW_SHA: 2cd779dc56b06c382c6320466c580c22edf19730
           EXPECTED_CREDENTIAL_BINDING: IBKR_PAPER_USERNAME+IBKR_PAPER_PASSWORD
           EXPECTED_EVENT_CONTRACT: push+workflow_dispatch
           EXPECTED_WORKFLOW_CONTRACT: canonical-b1+legacy-ibc-comparator
