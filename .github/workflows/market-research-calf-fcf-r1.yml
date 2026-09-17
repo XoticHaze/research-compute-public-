@@ -1,0 +1,25 @@
+name: Market Research CALF FCF Small-Cap R1
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/market-research-calf-fcf-r1.yml'
+      - 'research/calf_fcf_smallcap_alpha_r1.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  discriminate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Execute frozen CALF FCF residual-alpha discriminator
+        run: python -m research.calf_fcf_smallcap_alpha_r1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calf-fcf-smallcap-alpha-r1-result
+          path: calf-fcf-smallcap-alpha-r1-result.json
+          if-no-files-found: error
