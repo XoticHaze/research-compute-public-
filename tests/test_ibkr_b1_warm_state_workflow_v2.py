@@ -128,6 +128,17 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         self.assertIn('--exchange-ref rendezvous-exchange', self.text)
         self.assertIn('GH_TOKEN: ${{ github.token }}', self.text)
 
+    def test_paper_submit_proof_requires_restored_warm_state(self):
+        restore = self.text.index('name: Restore encrypted warm Gateway state if available')
+        require = self.text.index('name: Require restored warm state for paper submit proof')
+        auth = self.text.index('name: Resolve authenticated session boundary')
+        self.assertLess(restore, require)
+        self.assertLess(require, auth)
+        guard = self.text[require:auth]
+        self.assertIn("if: env.IBKR_PAPER_PROOF_MODE == '1'", guard)
+        self.assertIn('steps.restore.outputs.restored', guard)
+        self.assertIn('IBKR_PAPER_PROOF_WARM_STATE_REQUIRED=1', guard)
+
     def test_paper_proof_failure_is_reported_only_after_warm_state_persistence(self):
         proof = self.text.index('name: Execute one encrypted MM-authorized selected-runtime paper proof')
         stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
