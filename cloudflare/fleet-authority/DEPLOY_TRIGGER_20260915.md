@@ -10,8 +10,11 @@ The Worker authorizes the IBKR paper read-only seal request from the canonical G
 - issuer is `https://token.actions.githubusercontent.com`
 - audience is `mmibkr-fleet-authority`
 - repository is `XoticHaze/research-compute-public-`
+- repository visibility is `public`
+- runner environment is `github-hosted`
 - ref is `refs/heads/ibkr-b1-authority-v1`
 - workflow ref is `XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1`
+- event is `push` or `workflow_dispatch`
 - OIDC `run_id` matches the seal request run id
 
 The moving workflow commit SHA is provenance only. It is **not** an authorization gate and must not require Cloudflare configuration changes after ordinary commits.
@@ -20,4 +23,4 @@ The sealed one-run X25519/HKDF/AES-GCM credential envelope remains the credentia
 
 ## Steady-state operator expectation
 
-Normal workflow changes on the admitted authority branch do not require a Cloudflare dashboard edit, Wrangler variable update, health-contract update, or one-time phrase. A Cloudflare change is needed only if the stable workload identity itself changes, such as repository, authority branch, workflow path, or OIDC audience.
+Normal workflow changes on the admitted authority branch do not require a Cloudflare dashboard edit, Wrangler variable update, health-contract update, or one-time phrase. A Cloudflare change is needed only if the stable workload identity itself changes, such as repository, authority branch, workflow path, OIDC audience, runner class, or admitted trigger type.
