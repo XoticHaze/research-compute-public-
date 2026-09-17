@@ -396,7 +396,7 @@ def execute_paper_proof(
         "final_reconciliation": {},
         "authority": {
             "canonical_submit_route": "/strategy/ibkr-paper-order-submit",
-            "canonical_cancel_route": "/strategy/ibkr-paper-cancel-submit",
+            "canonical_cancel_route": "/strategy/ibkr-paper-order-cancel-submit",
             "canonical_flatten_route": "/strategy/ibkr-paper-flatten-submit-suite",
             "cloud_strategy_authority": False,
             "cloud_execution_policy_authority": False,
@@ -454,7 +454,7 @@ def execute_paper_proof(
             "source": "remote_selected_runtime_paper_proof_v1",
             "operator_approved": True,
             "operator_approval": True,
-            "ibkr_paper_cancel_ack_13z37": "IBKR_PAPER_CANCEL_ACK_13Z37",
+            "ibkr_paper_order_cancel_ack_13z60": "IBKR_PAPER_ORDER_CANCEL_ACK_13Z60",
             "exact_cancel_only": True,
             "global_cancel_allowed": False,
             "symbol": symbol,
@@ -471,8 +471,8 @@ def execute_paper_proof(
         if identity.get("order_ref"):
             cancel_payload["order_ref"] = identity["order_ref"]
             cancel_payload["expected_order_ref"] = identity["order_ref"]
-        preview_status, cancel_preview = send("POST", "/strategy/ibkr-paper-cancel-preview", payload=cancel_payload, timeout=60.0)
-        cancel_status, cancel = send("POST", "/strategy/ibkr-paper-cancel-submit", payload=cancel_payload, timeout=90.0)
+        preview_status, cancel_preview = send("POST", "/strategy/ibkr-paper-order-cancel-preview", payload=cancel_payload, timeout=60.0)
+        cancel_status, cancel = send("POST", "/strategy/ibkr-paper-order-cancel-submit", payload=cancel_payload, timeout=90.0)
         receipt["cleanup"].update({
             "exact_cancel_called": True,
             "exact_cancel_preview_http_status": preview_status,
