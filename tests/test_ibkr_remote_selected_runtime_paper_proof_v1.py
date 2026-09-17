@@ -141,6 +141,67 @@ class RemoteSelectedRuntimePaperProofTests(unittest.TestCase):
         self.assertEqual(flatten_call["payload"]["fallback_policy"], "none")
         self.assertFalse(any("global-cancel" in c["route"] for c in sender.calls))
 
+    def test_jit_quote_refresh_uses_canonical_quote_and_changes_only_price_fields(self):
+        request = self._request()
+        payload = request["canonical_submit_payload"]
+        payload["remote_proof_refresh_limit_price"] = True
+        payload["remote_proof_candidate_quote_received_at_utc"] = "2026-09-17T18:00:00Z"
+        payload["remote_proof_candidate_quote_max_age_sec"] = 15
+        payload["operator_approved"] = True
+        payload["ibkr_paper_order_submit_ack_13z53"] = "IBKR_PAPER_ORDER_SUBMIT_ACK_13Z53"
+        original_action = payload["action"]
+        original_quantity = payload["quantity"]
+
+        responses = self._base()
+        responses[("POST", "/strategy/ibkr-paper-quote-snapshot")] = [
+            (200, {
+                "ok": True,
+                "status": "ready",
+                "executable_quote_available": True,
+                "limit_price_policy": {"final_limit_price": 22010.25},
+                "blockers": [],
+            })
+        ]
+        responses[("POST", "/strategy/ibkr-paper-order-submit")] = [
+            (409, {
+                "ok": False,
+                "status": "blocked",
+                "place_order_called": False,
+                "broker_order_placed": False,
+                "guards": {"selected_runtime_id": "mnq-runtime"},
+                "blockers": ["route_currently_active_required_or_explicit_override_13z53"],
+            })
+        ]
+        sender = FakeSender(responses)
+        receipt = execute_paper_proof(runtime=self._runtime(), request=request, send=sender, run_id="6", public_head="p")
+        self.assertEqual(receipt["status"], "CANONICAL_SUBMIT_BLOCKED")
+        self.assertTrue(receipt["quote_refresh"]["ok"])
+        self.assertEqual(receipt["quote_refresh"]["final_limit_price"], 22010.25)
+        submit_call = next(c for c in sender.calls if c["route"] == "/strategy/ibkr-paper-order-submit")
+        self.assertEqual(submit_call["payload"]["action"], original_action)
+        self.assertEqual(submit_call["payload"]["quantity"], original_quantity)
+        self.assertEqual(submit_call["payload"]["limit_price"], 22010.25)
+        self.assertEqual(submit_call["payload"]["lmtPrice"], 22010.25)
+        self.assertEqual(submit_call["payload"]["limit_price_source"], "remote_proof_jit_canonical_quote_snapshot")
+        self.assertNotIn("remote_proof_refresh_limit_price", submit_call["payload"])
+        self.assertTrue(submit_call["payload"]["operator_approved"])
+        self.assertEqual(submit_call["payload"]["ibkr_paper_order_submit_ack_13z53"], "IBKR_PAPER_ORDER_SUBMIT_ACK_13Z53")
+
+    def test_jit_quote_refresh_failure_blocks_before_submit(self):
+        request = self._request()
+        request["canonical_submit_payload"]["remote_proof_refresh_limit_price"] = True
+        responses = self._base()
+        responses[("POST", "/strategy/ibkr-paper-quote-snapshot")] = [
+            (409, {"ok": False, "status": "blocked", "blockers": ["executable_quote_source_missing_13z65"]})
+        ]
+        sender = FakeSender(responses)
+        receipt = execute_paper_proof(runtime=self._runtime(), request=request, send=sender, run_id="7", public_head="p")
+        self.assertEqual(receipt["status"], "JIT_QUOTE_REFRESH_BLOCKED")
+        self.assertFalse(receipt["ok"])
+        self.assertFalse(receipt["submit"]["called"])
+        self.assertFalse(receipt["quote_refresh"]["ok"])
+        self.assertFalse(any(c["route"] == "/strategy/ibkr-paper-order-submit" for c in sender.calls))
+
     def test_live_authority_in_request_is_rejected(self):
         request = self._request()
         request["canonical_submit_payload"]["nested"] = {"enable_live_trading": True}

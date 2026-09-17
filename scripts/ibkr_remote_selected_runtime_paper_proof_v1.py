@@ -239,6 +239,101 @@ def _flatten_snapshot(send: JsonSender, symbol: str) -> tuple[int, dict[str, Any
     )
 
 
+def _positive_price(value: Any) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _canonical_quote_final_limit(body: Mapping[str, Any]) -> float | None:
+    if not isinstance(body, Mapping):
+        return None
+    limit_policy = body.get("limit_price_policy") if isinstance(body.get("limit_price_policy"), Mapping) else {}
+    lmt_chase = body.get("lmt_chase_policy") if isinstance(body.get("lmt_chase_policy"), Mapping) else {}
+    for value in (
+        body.get("final_limit_price"),
+        body.get("limit_price"),
+        body.get("lmtPrice"),
+        limit_policy.get("final_limit_price"),
+        lmt_chase.get("base_limit_price"),
+        lmt_chase.get("limit_price"),
+    ):
+        price = _positive_price(value)
+        if price is not None:
+            return price
+    return None
+
+
+def _jit_refresh_authorized_lmt_payload(
+    *,
+    send: JsonSender,
+    payload: Mapping[str, Any],
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    submit_payload = dict(payload)
+    requested = submit_payload.get("remote_proof_refresh_limit_price") is True
+    if not requested:
+        return submit_payload, {"requested": False, "performed": False, "ok": None}
+
+    order_type = str(submit_payload.get("order_type") or submit_payload.get("orderType") or "").strip().upper()
+    if order_type != "LMT":
+        return None, {
+            "requested": True,
+            "performed": False,
+            "ok": False,
+            "blockers": ["jit_quote_refresh_requires_lmt_order"],
+        }
+
+    quote_payload = dict(submit_payload)
+    quote_payload["require_executable_quote"] = True
+    # The command owns whether refresh is authorized; the canonical MM route owns
+    # market-data/contract/session/limit policy. Cloud code only consumes its
+    # returned final limit and never changes action, quantity, runtime, or contract.
+    status, quote = send(
+        "POST",
+        "/strategy/ibkr-paper-quote-snapshot",
+        payload=quote_payload,
+        timeout=90.0,
+    )
+    final_limit = _canonical_quote_final_limit(quote)
+    blockers = list(quote.get("blockers") or []) if isinstance(quote, Mapping) else []
+    ok = bool(status == 200 and isinstance(quote, Mapping) and quote.get("ok") is True and final_limit is not None)
+    evidence = {
+        "requested": True,
+        "performed": True,
+        "ok": ok,
+        "http_status": status,
+        "status": quote.get("status") if isinstance(quote, Mapping) else None,
+        "final_limit_price": final_limit,
+        "executable_quote_available": quote.get("executable_quote_available") if isinstance(quote, Mapping) else None,
+        "blockers": blockers,
+        "canonical_route": "/strategy/ibkr-paper-quote-snapshot",
+        "price_fields_only": True,
+    }
+    if not ok:
+        if final_limit is None:
+            evidence["blockers"] = sorted(set(blockers + ["canonical_quote_final_limit_required"]))
+        return None, evidence
+
+    for key in (
+        "remote_proof_refresh_limit_price",
+        "remote_proof_candidate_quote_received_at_utc",
+        "remote_proof_candidate_quote_max_age_sec",
+    ):
+        submit_payload.pop(key, None)
+    submit_payload.update({
+        "limit_price": final_limit,
+        "lmtPrice": final_limit,
+        "reference_price": final_limit,
+        "marketPrice": final_limit,
+        "limit_price_source": "remote_proof_jit_canonical_quote_snapshot",
+        "requested_price_source": "remote_proof_jit_canonical_quote_snapshot",
+        "quote_materialized_limit_price_14th27b": final_limit,
+    })
+    return submit_payload, evidence
+
+
 def execute_paper_proof(
     *,
     runtime: Mapping[str, Any],
@@ -295,6 +390,7 @@ def execute_paper_proof(
             "target_position": target_position_before,
             "blockers": preflight_blockers,
         },
+        "quote_refresh": {"requested": False, "performed": False, "ok": None},
         "submit": {"called": False, "http_status": None, "ok": False, "broker_order_placed": False, "order_identity": {}},
         "cleanup": {"exact_cancel_called": False, "exact_cancel_ok": None, "flatten_called": False, "flatten_ok": None, "global_cancel_called": False},
         "final_reconciliation": {},
@@ -312,7 +408,13 @@ def execute_paper_proof(
     if preflight_blockers:
         return receipt
 
-    submit_status, submit = send("POST", "/strategy/ibkr-paper-order-submit", payload=auth["payload"], timeout=120.0)
+    submit_payload, quote_refresh = _jit_refresh_authorized_lmt_payload(send=send, payload=auth["payload"])
+    receipt["quote_refresh"] = quote_refresh
+    if submit_payload is None:
+        receipt["status"] = "JIT_QUOTE_REFRESH_BLOCKED"
+        return receipt
+
+    submit_status, submit = send("POST", "/strategy/ibkr-paper-order-submit", payload=submit_payload, timeout=120.0)
     identity = _extract_order_identity(submit, symbol)
     guards = submit.get("guards") if isinstance(submit.get("guards"), Mapping) else {}
     canonical_runtime_id = str(guards.get("selected_runtime_id") or "").strip()
