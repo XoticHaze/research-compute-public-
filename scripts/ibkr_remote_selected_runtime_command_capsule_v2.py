@@ -5,10 +5,12 @@ from __future__ import annotations
 V2 deliberately contains no broker username/password. Gateway authentication is
 owned by the admitted Fleet Authority + clean warm-state lifecycle. The capsule
 carries only exact private MM-IBKR source capability, one MM-authorized paper
-command, and mandatory cleanup semantics.
+command, mandatory cleanup semantics, and a one-run encrypted proof-return
+recipient.
 """
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -34,7 +36,8 @@ from ibkr_remote_paper_capsule_v1 import (
 
 CAPSULE_SCHEMA = "mmibkr.remote_selected_runtime_command_capsule.v2"
 MODE = "paper_submit_proof"
-CAPSULE_FIELDS = {"schema", "mode", "source", "request", "cleanup"}
+RETURN_RECIPIENT_SCHEMA = "ibkr-remote-paper-return-recipient-v1"
+CAPSULE_FIELDS = {"schema", "mode", "source", "request", "cleanup", "return_recipient"}
 REQUEST_FIELDS = {
     "command_id",
     "source_ref",
@@ -47,6 +50,7 @@ CLEANUP_FIELDS = {
     "require_zero_baseline",
     "allow_global_cancel",
 }
+RETURN_RECIPIENT_FIELDS = {"schema", "recipient_b64", "recipient_key_id"}
 SHA256_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
@@ -90,6 +94,27 @@ def _validate_cleanup(value: Any) -> dict[str, bool]:
     if cleanup != expected:
         raise RuntimeError("paper proof cleanup contract mismatch")
     return cleanup
+
+
+def _validate_return_recipient(value: Any) -> dict[str, str]:
+    if not isinstance(value, Mapping) or set(value) != RETURN_RECIPIENT_FIELDS:
+        raise RuntimeError("proof return recipient field set mismatch")
+    if value.get("schema") != RETURN_RECIPIENT_SCHEMA:
+        raise RuntimeError("proof return recipient schema mismatch")
+    try:
+        raw = base64.b64decode(str(value.get("recipient_b64") or "").encode("ascii"), validate=True)
+    except Exception as exc:
+        raise RuntimeError("proof return recipient key encoding invalid") from exc
+    if len(raw) != 32:
+        raise RuntimeError("proof return recipient key length invalid")
+    key_id = "sha256:" + hashlib.sha256(raw).hexdigest()
+    if key_id != str(value.get("recipient_key_id") or ""):
+        raise RuntimeError("proof return recipient fingerprint mismatch")
+    return {
+        "schema": RETURN_RECIPIENT_SCHEMA,
+        "recipient_b64": base64.b64encode(raw).decode("ascii"),
+        "recipient_key_id": key_id,
+    }
 
 
 def _validate_request(value: Any) -> dict[str, Any]:
@@ -151,12 +176,14 @@ def validate_capsule(raw: bytes) -> dict[str, Any]:
     source = _validate_source(capsule.get("source"))
     request = _validate_request(capsule.get("request"))
     cleanup = _validate_cleanup(capsule.get("cleanup"))
+    return_recipient = _validate_return_recipient(capsule.get("return_recipient"))
     return {
         "schema": CAPSULE_SCHEMA,
         "mode": MODE,
         "source": source,
         "request": request,
         "cleanup": cleanup,
+        "return_recipient": return_recipient,
     }
 
 
@@ -168,6 +195,8 @@ def materialize(capsule: Mapping[str, Any], *, runner_temp: Path) -> dict[str, A
 
     request_path = runner_temp / "ibkr-submit-request.json"
     _write_private(request_path, json.dumps(capsule["request"], sort_keys=True) + "\n")
+    return_recipient_path = runner_temp / "ibkr-proof-return-recipient.json"
+    _write_private(return_recipient_path, json.dumps(capsule["return_recipient"], sort_keys=True) + "\n")
     runtime_path = runner_temp / "ibkr-runtime.json"
     runtime = {
         "schema": "mmibkr.remote_selected_runtime_materialization.v3",
@@ -177,6 +206,8 @@ def materialize(capsule: Mapping[str, Any], *, runner_temp: Path) -> dict[str, A
         "source_archive_sha256": capsule["source"]["archive_sha256"],
         "source_root": str(source_root),
         "request_path": str(request_path),
+        "return_recipient_path": str(return_recipient_path),
+        "encrypted_return_requested": True,
         "read_only_api": "no",
         "cleanup": dict(capsule["cleanup"]),
         "paper_only": True,
@@ -223,6 +254,7 @@ def main() -> None:
         "paper_only": runtime["paper_only"],
         "gateway_auth_source": runtime["gateway_auth_source"],
         "gateway_credentials_in_capsule": runtime["gateway_credentials_in_capsule"],
+        "encrypted_return_requested": runtime["encrypted_return_requested"],
         "live_trading_change": runtime["live_trading_change"],
     }, sort_keys=True))
 
