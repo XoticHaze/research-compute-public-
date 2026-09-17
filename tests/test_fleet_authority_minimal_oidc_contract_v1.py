@@ -10,8 +10,11 @@ def test_worker_authorizes_stable_github_workload_identity_without_commit_sha_ga
 
     # Stable workload identity remains mandatory.
     assert "claims.repository !== EXPECTED_REPOSITORY" in text
+    assert "claims.repository_visibility !== 'public'" in text
+    assert "claims.runner_environment !== 'github-hosted'" in text
     assert "claims.ref !== ALLOWED_REF" in text
     assert "claims.workflow_ref !== ALLOWED_WORKFLOW_REF" in text
+    assert "!ALLOWED_EVENTS.has(claims.event_name)" in text
     assert "String(claims.run_id) !== requestedRunId" in text
 
     # A moving commit SHA must never be an authorization requirement.
@@ -35,5 +38,5 @@ def test_worker_keeps_cryptographic_and_time_validation():
 def test_wrangler_has_no_mutable_sha_or_legacy_event_authority_vars():
     text = WRANGLER.read_text()
     assert "ALLOWED_WORKFLOW_SHA" not in text
-    assert "ALLOWED_EVENT_NAME" not in text
-    assert "ALLOWED_REF" not in text
+    assert "GITHUB_ALLOWED_EVENT" not in text
+    assert "GITHUB_ALLOWED_REF" not in text
