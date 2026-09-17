@@ -11,7 +11,7 @@ const ALLOWED_WORKFLOW_REFS = new Set([
   'XoticHaze/research-compute-public-/.github/workflows/ibkr-legacy-ibc-auth-comparator.yml@refs/heads/ibkr-b1-authority-v1',
 ]);
 const ALLOWED_WORKFLOW_CONTRACT = 'canonical-b1+legacy-ibc-comparator';
-const ALLOWED_WORKFLOW_SHA = '0bec094d15c2bdff1c835ca1dfe486d52f230780';
+const ALLOWED_WORKFLOW_SHA = '2cd779dc56b06c382c6320466c580c22edf19730';
 const CREDENTIAL_BINDING_CONTRACT = 'IBKR_PAPER_USERNAME+IBKR_PAPER_PASSWORD';
 const REQUEST_SCHEMA = 'mmibkr-fleet-authority-seal-request-v1';
 const ENVELOPE_SCHEMA = 'mmibkr-ibkr-readonly-gateway-env-x25519-hkdf-aesgcm-v1';
@@ -94,7 +94,7 @@ async function verifyGithubOidc(jwt, requestedRunId) {
 
   const key = await crypto.subtle.importKey(
     'jwk',
-    jwk,
+    { ...jwk },
     { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
     false,
     ['verify'],
