@@ -4,11 +4,5 @@
   "main": "src/index.js",
   "compatibility_date": "2026-09-15",
   "workers_dev": true,
-  "keep_vars": true,
-  "vars": {
-    "GITHUB_ALLOWED_REF": "refs/heads/ibkr-b1-authority-v1",
-    "GITHUB_ALLOWED_EVENT": "push",
-    "GITHUB_ALLOWED_WORKFLOW_REF": "XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1",
-    "GITHUB_ALLOWED_WORKFLOW_SHA": "3ad32e4a8f983a4e31c27f7aa49f2c30f4825142"
-  }
+  "keep_vars": true
 }
