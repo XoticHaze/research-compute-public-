@@ -1,0 +1,29 @@
+name: UUP Independent Vendor Acquisition R3
+on:
+  push:
+    branches: [market-research-uup-vendor-acquisition-r3-20260917]
+    paths:
+      - research/uup_independent_vendor_acquisition_r3.py
+      - .github/workflows/uup-independent-vendor-acquisition-r3.yml
+  pull_request:
+    paths:
+      - research/uup_independent_vendor_acquisition_r3.py
+      - .github/workflows/uup-independent-vendor-acquisition-r3.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install -q requests
+      - run: python research/uup_independent_vendor_acquisition_r3.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uup-independent-vendor-acquisition-r3-result
+          path: research/results/uup_independent_vendor_acquisition_r3.json
+          retention-days: 90
