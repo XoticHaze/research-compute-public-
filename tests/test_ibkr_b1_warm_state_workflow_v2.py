@@ -15,10 +15,15 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         self.assertIn('scripts/fleet_authority_envelope_consumer_v1.py', self.text)
         self.assertNotIn('FLEET_AUTHORITY_HEALTH', self.text)
         self.assertNotIn('Require deployed B1 authority contract', self.text)
+        self.assertNotIn('/healthz', self.text)
         self.assertNotIn('allowed_workflow_sha', self.text)
         self.assertNotIn('ALLOWED_WORKFLOW_SHA', self.text)
         self.assertNotIn('expected_sha = os.environ[\'GITHUB_SHA\']', self.text)
         self.assertNotIn('deployed fleet authority provenance does not match this workflow SHA', self.text)
+
+        obtain = self.text.index('name: Obtain one-run sealed gateway environment')
+        restore = self.text.index('name: Restore encrypted warm Gateway state if available')
+        self.assertLess(obtain, restore)
 
     def test_fresh_and_restored_sessions_are_classified_separately(self):
         self.assertIn('${{ steps.restore.outputs.restored }}', self.text)
