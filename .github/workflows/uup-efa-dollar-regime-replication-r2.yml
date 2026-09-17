@@ -1,0 +1,22 @@
+name: UUP EFA Dollar Regime Replication R2
+on:
+  pull_request:
+    paths:
+      - 'research/uup_efa_dollar_regime_replication_r2.py'
+      - '.github/workflows/uup-efa-dollar-regime-replication-r2.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -q pandas numpy pandas_datareader
+      - run: set -o pipefail; python research/uup_efa_dollar_regime_replication_r2.py | tee uup_efa_dollar_regime_replication_r2_result.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uup-efa-dollar-regime-replication-r2-result
+          path: uup_efa_dollar_regime_replication_r2_result.txt
