@@ -1,21 +1,44 @@
 name: IBKR Cloudflare Read-Only B1 R1
+run-name: >-
+  IBKR B1 ${{ github.event_name == 'workflow_dispatch' && format('{0} {1}', inputs.mode, inputs.dispatch_nonce) || github.event_name }}
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Execution mode
+        required: true
+        default: readonly
+        type: choice
+        options:
+          - readonly
+          - paper_submit_proof
+      dispatch_nonce:
+        description: Optional one-run correlation token
+        required: false
+        default: ''
+        type: string
   push:
     branches:
       - ibkr-b1-authority-v1
       - assistant/ibkr-controller-native-warm-20260917
       - assistant/ibkr-warm-seed-owner-20260917
+      - assistant/ibkr-warm-paper-proof-activation-20260917
     paths:
       - '.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml'
       - 'scripts/fleet_authority_envelope_consumer_v1.py'
       - 'scripts/ibkr_auth_boundary_v1.py'
       - 'scripts/ibkr_login_window_guard_v1.py'
       - 'scripts/ibkr_post_auth_pipeline_v1.py'
+      - 'scripts/ibkr_remote_selected_runtime_command_capsule_v2.py'
+      - 'scripts/ibkr_remote_selected_runtime_paper_proof_v1.py'
+      - 'scripts/ibkr_remote_selected_runtime_paper_proof_v2.py'
+      - 'scripts/ibkr_remote_paper_proof_return_v1.py'
+      - 'scripts/ibkr_warm_selected_runtime_activation_v1.py'
       - 'research/forward_bar_contract_v2.py'
       - 'tests/test_ibkr_b1_auth_contracts_v1.py'
       - 'tests/test_ibkr_b1_warm_state_workflow_v2.py'
+      - 'tests/test_ibkr_warm_selected_runtime_activation_v1.py'
       - 'ibkr_login_trigger.txt'
 
 permissions:
@@ -51,9 +74,15 @@ jobs:
             scripts/ibkr_auth_boundary_v1.py \
             scripts/ibkr_login_window_guard_v1.py \
             scripts/ibkr_post_auth_pipeline_v1.py \
+            scripts/ibkr_remote_selected_runtime_command_capsule_v2.py \
+            scripts/ibkr_remote_selected_runtime_paper_proof_v1.py \
+            scripts/ibkr_remote_selected_runtime_paper_proof_v2.py \
+            scripts/ibkr_remote_paper_proof_return_v1.py \
+            scripts/ibkr_warm_selected_runtime_activation_v1.py \
             research/forward_bar_contract_v2.py \
             tests/test_ibkr_b1_auth_contracts_v1.py \
-            tests/test_ibkr_b1_warm_state_workflow_v2.py
+            tests/test_ibkr_b1_warm_state_workflow_v2.py \
+            tests/test_ibkr_warm_selected_runtime_activation_v1.py
           python - <<'PY'
           from pathlib import Path
           import yaml
@@ -65,18 +94,25 @@ jobs:
           PY
           python -m unittest \
             tests.test_ibkr_b1_auth_contracts_v1 \
-            tests.test_ibkr_b1_warm_state_workflow_v2 -v
+            tests.test_ibkr_b1_warm_state_workflow_v2 \
+            tests.test_ibkr_warm_selected_runtime_activation_v1 -v
           echo 'IBKR_BROKER_LOGIN_ATTEMPTED=0'
+          echo 'IBKR_BROKER_ORDER_ATTEMPTED=0'
 
   broker-data-proof:
     needs: validate
     if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[ibkr-login]') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
     env:
       FLEET_AUTHORITY_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-paper/seal
       IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
       POST_AUTH_SYMBOLS: AMAT,APH
+      IBKR_PAPER_PROOF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' && '1' || '0' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -84,7 +120,7 @@ jobs:
         with:
           python-version: '3.11.16'
 
-      - name: Install and verify fixed read-only dependencies
+      - name: Install and verify fixed broker dependencies
         run: |
           set -euo pipefail
           python -m pip install --disable-pip-version-check \
@@ -96,9 +132,18 @@ jobs:
             scripts/ibkr_auth_boundary_v1.py \
             scripts/ibkr_login_window_guard_v1.py \
             scripts/ibkr_post_auth_pipeline_v1.py \
+            scripts/ibkr_remote_selected_runtime_command_capsule_v2.py \
+            scripts/ibkr_remote_selected_runtime_paper_proof_v1.py \
+            scripts/ibkr_remote_selected_runtime_paper_proof_v2.py \
+            scripts/ibkr_remote_paper_proof_return_v1.py \
+            scripts/ibkr_warm_selected_runtime_activation_v1.py \
             research/forward_bar_contract_v2.py \
-            tests/test_ibkr_b1_auth_contracts_v1.py
-          python -m unittest tests.test_ibkr_b1_auth_contracts_v1 -v
+            tests/test_ibkr_b1_auth_contracts_v1.py \
+            tests/test_ibkr_warm_selected_runtime_activation_v1.py
+          python -m unittest \
+            tests.test_ibkr_b1_auth_contracts_v1 \
+            tests.test_ibkr_warm_selected_runtime_activation_v1 -v
+          echo "IBKR_PAPER_PROOF_MODE=${IBKR_PAPER_PROOF_MODE}"
 
       - name: Obtain one-run sealed gateway environment
         run: |
@@ -206,6 +251,12 @@ jobs:
           docker pull "$IBKR_CONTROLLER_IMAGE" >/dev/null
           echo 'IBKR_CONTROLLER_IMAGE_PINNED=1'
 
+          api_read_only=yes
+          if [ "$IBKR_PAPER_PROOF_MODE" = "1" ]; then
+            api_read_only=no
+          fi
+          echo "IBKR_GATEWAY_READ_ONLY_API=${api_read_only}"
+
           warm_state_args=()
           if [ "${{ steps.restore.outputs.restored }}" = "1" ]; then
             warm_state_args=(
@@ -218,7 +269,7 @@ jobs:
             --env-file "$RUNNER_TEMP/ibkr-gateway-bootstrap.env" \
             -e USE_IBG_CONTROLLER=yes \
             -e TRADING_MODE=paper \
-            -e READ_ONLY_API=yes \
+            -e READ_ONLY_API="$api_read_only" \
             -e TWOFA_TIMEOUT_ACTION=none \
             -e TWOFA_EXIT_INTERVAL=120 \
             -e RELOGIN_AFTER_TWOFA_TIMEOUT=yes \
@@ -233,7 +284,9 @@ jobs:
             -p 127.0.0.1:18080:8080 \
             "$IBKR_CONTROLLER_IMAGE" >/dev/null
 
-          docker exec ibkr-cloudflare-b1 /bin/sh -lc 'test "$TRADING_MODE" = paper && test "$READ_ONLY_API" = yes && test "$TWOFA_TIMEOUT_ACTION" = none && test "$TWOFA_EXIT_INTERVAL" = 120 && test "$RELOGIN_AFTER_TWOFA_TIMEOUT" = yes' >/dev/null
+          actual_read_only="$(docker exec ibkr-cloudflare-b1 /bin/sh -lc 'printf %s "$READ_ONLY_API"')"
+          test "$actual_read_only" = "$api_read_only"
+          docker exec ibkr-cloudflare-b1 /bin/sh -lc 'test "$TRADING_MODE" = paper && test "$TWOFA_TIMEOUT_ACTION" = none && test "$TWOFA_EXIT_INTERVAL" = 120 && test "$RELOGIN_AFTER_TWOFA_TIMEOUT" = yes' >/dev/null
           if [ "${{ steps.restore.outputs.restored }}" = "1" ]; then
             docker exec ibkr-cloudflare-b1 /bin/sh -lc 'test "$GATEWAY_WARM_STATE" = /home/ibgateway/warm-state && test "$TWS_SETTINGS_PATH" = /home/ibgateway/Jts_b1 && test "$GATEWAY_WARM_STATE" != "$TWS_SETTINGS_PATH"' >/dev/null
             echo 'IBKR_CONTROLLER_NATIVE_WARM_SEED_BOUND=1'
@@ -395,6 +448,24 @@ jobs:
             --bars-output "$RUNNER_TEMP/ibkr-forward-bars-v2.jsonl"
           echo 'IBKR_CONSUMER_READY=1'
 
+      - name: Execute one encrypted MM-authorized selected-runtime paper proof
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$IBKR_PAPER_PROOF_MODE" = "1"
+          python scripts/ibkr_warm_selected_runtime_activation_v1.py \
+            --run-id "$GITHUB_RUN_ID" \
+            --public-head "$GITHUB_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --exchange-ref rendezvous-exchange \
+            --runner-temp "$RUNNER_TEMP" \
+            --gateway-host 127.0.0.1 \
+            --gateway-port 4002 \
+            --wait-seconds 900
+          echo 'IBKR_WARM_SELECTED_RUNTIME_PAPER_PROOF_TRANSPORT_COMPLETE=1'
+
       - name: Gracefully stop authenticated Gateway before warm-state snapshot
         id: graceful_stop
         run: |
@@ -464,6 +535,8 @@ jobs:
           set +e
           jts_volume="ibkr-b1-jts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           warm_volume="ibkr-b1-warm-seed-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker rm -f mmibkr-warm-selected-runtime-proof >/dev/null 2>&1
+          docker image rm "mmibkr-warm-proof:${GITHUB_RUN_ID}" >/dev/null 2>&1
           docker stop --time 90 ibkr-cloudflare-b1 >/dev/null 2>&1
           docker rm -f ibkr-cloudflare-b1 >/dev/null 2>&1
           docker volume rm -f "$jts_volume" >/dev/null 2>&1
@@ -480,5 +553,15 @@ jobs:
             "$RUNNER_TEMP/ibkr-b1-warm-state.zip" \
             "$RUNNER_TEMP/ibkr-b1-warm-state.tgz" \
             "$RUNNER_TEMP/ibkr-b1-warm-state.tgz.enc" \
+            "$RUNNER_TEMP/ibkr-command-private.b64" \
+            "$RUNNER_TEMP/ibkr-command-envelope.json" \
+            "$RUNNER_TEMP/ibkr-command-ciphertext.bin" \
+            "$RUNNER_TEMP/ibkr-submit-request.json" \
+            "$RUNNER_TEMP/ibkr-runtime.json" \
+            "$RUNNER_TEMP/ibkr-proof-return-recipient.json" \
+            "$RUNNER_TEMP/ibkr-paper-proof-receipt.json" \
+            "$RUNNER_TEMP/ibkr-paper-proof-return" \
+            "$RUNNER_TEMP/mm-ibkr-source" \
+            "$RUNNER_TEMP/mmibkr-proof-data" \
             "$RUNNER_TEMP/warm-artifact"
           echo 'IBKR_PRIVATE_RUNTIME_DESTROYED=1'
