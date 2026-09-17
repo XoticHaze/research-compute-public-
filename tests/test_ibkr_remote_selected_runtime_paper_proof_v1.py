@@ -111,16 +111,18 @@ class RemoteSelectedRuntimePaperProofTests(unittest.TestCase):
             self._open(),
         ]
         responses[("POST", "/strategy/ibkr-paper-flatten-preview-suite")] = [self._pos(), self._pos(), self._pos(), self._pos()]
-        responses[("POST", "/strategy/ibkr-paper-cancel-preview")] = [(200, {"ok": True})]
-        responses[("POST", "/strategy/ibkr-paper-cancel-submit")] = [(200, {"ok": True, "status": "cancel_reconciled"})]
+        responses[("POST", "/strategy/ibkr-paper-order-cancel-preview")] = [(200, {"ok": True})]
+        responses[("POST", "/strategy/ibkr-paper-order-cancel-submit")] = [(200, {"ok": True, "status": "cancel_reconciled"})]
         sender = FakeSender(responses)
         receipt = execute_paper_proof(runtime=self._runtime(), request=self._request(), send=sender, run_id="3", public_head="p")
         self.assertEqual(receipt["status"], "PAPER_PROOF_RECONCILED")
         self.assertTrue(receipt["ok"])
         self.assertTrue(receipt["cleanup"]["exact_cancel_called"])
         self.assertFalse(receipt["cleanup"]["flatten_called"])
-        cancel_call = next(c for c in sender.calls if c["route"] == "/strategy/ibkr-paper-cancel-submit")
+        cancel_call = next(c for c in sender.calls if c["route"] == "/strategy/ibkr-paper-order-cancel-submit")
         self.assertEqual(cancel_call["payload"]["order_id"], 77)
+        self.assertEqual(cancel_call["payload"]["ibkr_paper_order_cancel_ack_13z60"], "IBKR_PAPER_ORDER_CANCEL_ACK_13Z60")
+        self.assertNotIn("ibkr_paper_cancel_ack_13z37", cancel_call["payload"])
         self.assertFalse(cancel_call["payload"]["global_cancel_allowed"])
         self.assertFalse(any("global-cancel" in c["route"] for c in sender.calls))
 
