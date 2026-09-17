@@ -18,12 +18,28 @@ on:
         required: false
         default: ''
         type: string
+      symbols:
+        description: Comma-separated market symbols for the read-only post-auth handoff
+        required: false
+        default: 'AMAT,APH'
+        type: string
+      read_return_recipient_b64:
+        description: Optional one-run X25519 public recipient for encrypted detailed read return
+        required: false
+        default: ''
+        type: string
+      read_return_recipient_key_id:
+        description: SHA-256 fingerprint of the encrypted read-return recipient
+        required: false
+        default: ''
+        type: string
   push:
     branches:
       - ibkr-b1-authority-v1
       - assistant/ibkr-controller-native-warm-20260917
       - assistant/ibkr-warm-seed-owner-20260917
       - assistant/ibkr-warm-paper-proof-activation-20260917
+      - assistant/ibkr-warm-read-gateway-20260917
     paths:
       - '.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml'
       - 'scripts/fleet_authority_envelope_consumer_v1.py'
@@ -35,10 +51,12 @@ on:
       - 'scripts/ibkr_remote_selected_runtime_paper_proof_v2.py'
       - 'scripts/ibkr_remote_paper_proof_return_v1.py'
       - 'scripts/ibkr_warm_selected_runtime_activation_v1.py'
+      - 'scripts/ibkr_warm_read_return_v1.py'
       - 'research/forward_bar_contract_v2.py'
       - 'tests/test_ibkr_b1_auth_contracts_v1.py'
       - 'tests/test_ibkr_b1_warm_state_workflow_v2.py'
       - 'tests/test_ibkr_warm_selected_runtime_activation_v1.py'
+      - 'tests/test_ibkr_warm_read_return_v1.py'
       - 'ibkr_login_trigger.txt'
 
 permissions:
@@ -79,10 +97,12 @@ jobs:
             scripts/ibkr_remote_selected_runtime_paper_proof_v2.py \
             scripts/ibkr_remote_paper_proof_return_v1.py \
             scripts/ibkr_warm_selected_runtime_activation_v1.py \
+            scripts/ibkr_warm_read_return_v1.py \
             research/forward_bar_contract_v2.py \
             tests/test_ibkr_b1_auth_contracts_v1.py \
             tests/test_ibkr_b1_warm_state_workflow_v2.py \
-            tests/test_ibkr_warm_selected_runtime_activation_v1.py
+            tests/test_ibkr_warm_selected_runtime_activation_v1.py \
+            tests/test_ibkr_warm_read_return_v1.py
           python - <<'PY'
           from pathlib import Path
           import yaml
@@ -95,7 +115,8 @@ jobs:
           python -m unittest \
             tests.test_ibkr_b1_auth_contracts_v1 \
             tests.test_ibkr_b1_warm_state_workflow_v2 \
-            tests.test_ibkr_warm_selected_runtime_activation_v1 -v
+            tests.test_ibkr_warm_selected_runtime_activation_v1 \
+            tests.test_ibkr_warm_read_return_v1 -v
           echo 'IBKR_BROKER_LOGIN_ATTEMPTED=0'
           echo 'IBKR_BROKER_ORDER_ATTEMPTED=0'
 
@@ -111,7 +132,8 @@ jobs:
     env:
       FLEET_AUTHORITY_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-paper/seal
       IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
-      POST_AUTH_SYMBOLS: AMAT,APH
+      POST_AUTH_SYMBOLS: ${{ github.event_name == 'workflow_dispatch' && inputs.symbols || 'AMAT,APH' }}
+      IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'readonly' && inputs.read_return_recipient_b64 != '' && inputs.read_return_recipient_key_id != '' && '1' || '0' }}
       IBKR_PAPER_PROOF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' && '1' || '0' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -137,13 +159,44 @@ jobs:
             scripts/ibkr_remote_selected_runtime_paper_proof_v2.py \
             scripts/ibkr_remote_paper_proof_return_v1.py \
             scripts/ibkr_warm_selected_runtime_activation_v1.py \
+            scripts/ibkr_warm_read_return_v1.py \
             research/forward_bar_contract_v2.py \
             tests/test_ibkr_b1_auth_contracts_v1.py \
-            tests/test_ibkr_warm_selected_runtime_activation_v1.py
+            tests/test_ibkr_warm_selected_runtime_activation_v1.py \
+            tests/test_ibkr_warm_read_return_v1.py
           python -m unittest \
             tests.test_ibkr_b1_auth_contracts_v1 \
-            tests.test_ibkr_warm_selected_runtime_activation_v1 -v
+            tests.test_ibkr_warm_selected_runtime_activation_v1 \
+            tests.test_ibkr_warm_read_return_v1 -v
           echo "IBKR_PAPER_PROOF_MODE=${IBKR_PAPER_PROOF_MODE}"
+
+      - name: Validate optional encrypted warm read-return request
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.read_return_recipient_b64 != '' || inputs.read_return_recipient_key_id != '') }}
+        env:
+          READ_RETURN_MODE: ${{ inputs.mode }}
+          READ_RETURN_RECIPIENT_B64: ${{ inputs.read_return_recipient_b64 }}
+          READ_RETURN_RECIPIENT_KEY_ID: ${{ inputs.read_return_recipient_key_id }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, hashlib, os
+          if os.environ.get('READ_RETURN_MODE') != 'readonly':
+              raise SystemExit('encrypted detailed read return is admitted only in readonly mode')
+          encoded=os.environ.get('READ_RETURN_RECIPIENT_B64','').strip()
+          key_id=os.environ.get('READ_RETURN_RECIPIENT_KEY_ID','').strip()
+          if not encoded or not key_id:
+              raise SystemExit('encrypted read return requires recipient key and fingerprint together')
+          try:
+              raw=base64.b64decode(encoded.encode('ascii'),validate=True)
+          except Exception as exc:
+              raise SystemExit('encrypted read return recipient is not valid base64') from exc
+          if len(raw) != 32:
+              raise SystemExit('encrypted read return recipient must be a 32-byte X25519 public key')
+          expected='sha256:'+hashlib.sha256(raw).hexdigest()
+          if key_id != expected:
+              raise SystemExit('encrypted read return recipient fingerprint mismatch')
+          print('IBKR_WARM_READ_RETURN_REQUEST_VALID=1')
+          PY
 
       - name: Obtain one-run sealed gateway environment
         run: |
@@ -455,6 +508,63 @@ jobs:
             --bars-output "$RUNNER_TEMP/ibkr-forward-bars-v2.jsonl"
           echo 'IBKR_CONSUMER_READY=1'
 
+      - name: Encrypt optional detailed warm read snapshot for private consumer
+        id: warm_read_return
+        if: env.IBKR_WARM_READ_RETURN_REQUESTED == '1'
+        env:
+          READ_RETURN_RECIPIENT_B64: ${{ inputs.read_return_recipient_b64 }}
+          READ_RETURN_RECIPIENT_KEY_ID: ${{ inputs.read_return_recipient_key_id }}
+        run: |
+          set -euo pipefail
+          python scripts/ibkr_warm_read_return_v1.py \
+            --host 127.0.0.1 \
+            --port 4002 \
+            --client-id 79 \
+            --run-id "$GITHUB_RUN_ID" \
+            --public-head "$GITHUB_SHA" \
+            --handoff-file "$RUNNER_TEMP/ibkr-post-auth-handoff.json" \
+            --bars-file "$RUNNER_TEMP/ibkr-forward-bars-v2.jsonl" \
+            --recipient-b64 "$READ_RETURN_RECIPIENT_B64" \
+            --recipient-key-id "$READ_RETURN_RECIPIENT_KEY_ID" \
+            --output-dir "$RUNNER_TEMP/ibkr-warm-read-return"
+          echo 'ready=1' >> "$GITHUB_OUTPUT"
+          echo 'IBKR_WARM_READ_RETURN_ENCRYPTED=1'
+
+      - name: Publish encrypted warm read return
+        if: steps.warm_read_return.outputs.ready == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64,json,os,subprocess
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'ibkr-warm-read-return'
+          envelope=json.loads((root/'ibkr-warm-read-envelope.json').read_text(encoding='utf-8'))
+          run_id=os.environ['GITHUB_RUN_ID']
+          if str(envelope.get('run_id')) != run_id:
+              raise SystemExit('encrypted warm read return run id mismatch')
+          prefix=f'rendezvous/returns/{run_id}/'
+          files=[]
+          for node in envelope.get('chunks') or []:
+              path=str(node.get('path') or '')
+              local_name=str(node.get('local_name') or '')
+              if not path.startswith(prefix) or '..' in path.split('/') or '/' in local_name:
+                  raise SystemExit('encrypted warm read return publish path rejected')
+              files.append((path, root/local_name))
+          files.append((prefix+'ibkr-warm-read-envelope.json', root/'ibkr-warm-read-envelope.json'))
+          repo=os.environ['GITHUB_REPOSITORY']
+          for path,local in files:
+              content=base64.b64encode(local.read_bytes()).decode('ascii')
+              subprocess.run([
+                  'gh','api','--method','PUT',f'/repos/{repo}/contents/{path}',
+                  '-f','message=rendezvous: publish encrypted IBKR warm read return',
+                  '-f',f'content={content}','-f','branch=rendezvous-exchange',
+              ],check=True,stdout=subprocess.DEVNULL)
+          print('IBKR_WARM_READ_RETURN_PUBLISHED=1')
+          print('IBKR_WARM_READ_RETURN_PLAINTEXT_PUBLISHED=0')
+          PY
+
       - name: Execute one encrypted MM-authorized selected-runtime paper proof
         id: paper_proof
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' }}
@@ -581,6 +691,7 @@ jobs:
             "$RUNNER_TEMP/ibkr-proof-return-recipient.json" \
             "$RUNNER_TEMP/ibkr-paper-proof-receipt.json" \
             "$RUNNER_TEMP/ibkr-paper-proof-return" \
+            "$RUNNER_TEMP/ibkr-warm-read-return" \
             "$RUNNER_TEMP/mm-ibkr-source" \
             "$RUNNER_TEMP/mmibkr-proof-data" \
             "$RUNNER_TEMP/warm-artifact"
