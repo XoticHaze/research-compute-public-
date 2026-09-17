@@ -1,0 +1,65 @@
+name: Apply IBKR Warm Paper Proof Activation Patch
+
+on:
+  push:
+    branches:
+      - assistant/ibkr-warm-paper-proof-activation-20260917
+    paths:
+      - 'scripts/patch_ibkr_warm_paper_proof_activation_v1.py'
+      - '.github/workflows/ibkr-warm-paper-proof-patch-apply.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: assistant/ibkr-warm-paper-proof-activation-20260917
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Apply deterministic activation patch
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check 'PyYAML==6.0.2'
+          python scripts/patch_ibkr_warm_paper_proof_activation_v1.py
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          p=Path('.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml')
+          text=p.read_text()
+          node=yaml.safe_load(text)
+          assert isinstance(node,dict) and 'jobs' in node
+          required=[
+              'paper_submit_proof',
+              'PAPER_PROOF_REQUESTED',
+              'READ_ONLY_API="$gateway_read_only"',
+              'IB_PORT=4004',
+              'STRATEGY_IBKR_PAPER_ORDER_SUBMIT_ENABLED_13Z53=1',
+              'STRATEGY_IBKR_PAPER_CANCEL_ENABLED_13Z37=1',
+              'STRATEGY_IBKR_PAPER_GLOBAL_CANCEL_ENABLED_13Z37D=0',
+              'STRATEGY_IBKR_PAPER_FLATTEN_ENABLED_13Z39=1',
+              'ibkr_remote_selected_runtime_paper_proof_v2.py',
+              'ibkr_remote_paper_proof_return_v1.py',
+              'IBKR_PLAINTEXT_PAPER_PROOF_PUBLISHED=0',
+          ]
+          for marker in required:
+              assert marker in text, marker
+          assert 'placeOrder(' not in text
+          assert 'reqGlobalCancel' not in text
+          print('IBKR_WARM_PAPER_PROOF_WORKFLOW_STATIC_VALID=1')
+          PY
+          git diff --check
+      - name: Commit activation workflow
+        run: |
+          set -euo pipefail
+          git config user.name 'XoticHaze'
+          git config user.email '152584286+XoticHaze@users.noreply.github.com'
+          git add .github/workflows/ibkr-cloudflare-readonly-b1-r1.yml
+          git diff --cached --quiet && { echo 'activation workflow already patched'; exit 0; }
+          git commit -m 'IBKR: wire selected-runtime paper proof into accepted warm workflow'
+          git push origin HEAD:assistant/ibkr-warm-paper-proof-activation-20260917
