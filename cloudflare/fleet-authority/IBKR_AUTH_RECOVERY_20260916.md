@@ -1,115 +1,149 @@
-# IBKR B1 pre-2FA authorization recovery gate
+# IBKR B1 authentication recovery + resume gate
 
-## Current proven boundary
+## Purpose
+
+This file is the durable resume point for the IBKR Paper read-only authentication lane. It supersedes the earlier pre-2FA-only diagnosis in this file.
+
+Do not restart the investigation from the original `DISCONNECT_AUTHORIZATION_FAILED` symptom. The credential boundary has moved materially since that point.
+
+## Current source truth
+
+Repository: `XoticHaze/research-compute-public-`
 
 Canonical broker authority:
 
 - branch: `ibkr-b1-authority-v1`
+- current branch HEAD: `2cd779dc56b06c382c6320466c580c22edf19730`
 - canonical workflow: `.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml`
 - diagnostic comparator: `.github/workflows/ibkr-legacy-ibc-auth-comparator.yml`
-- allowed workflow SHA: `8fe2cf4c5998bd5e5ef03d0bdc0e0280eefaa768`
 - credential binding contract: `IBKR_PAPER_USERNAME+IBKR_PAPER_PASSWORD`
 - deliberate event contract: `push+workflow_dispatch`
-- controller path: `ibg-controller v0.10.0` / IB Gateway `10.45.1j`
-- current IBC comparator: `gnzsnz/ib-gateway 10.49.1c` pinned by digest
+- allowed workflow contract: `canonical-b1+legacy-ibc-comparator`
+- canonical controller path: `ibg-controller v0.10.0` / IB Gateway `10.45.1j`
+- current IBC comparator: `ghcr.io/gnzsnz/ib-gateway:10.49.1c`, pinned by immutable digest
 
-Do not call raw controller `TWO_FA` a phone challenge. It is not authoritative.
+Recent auth-branch hardening after the original 10.49 comparator point:
 
-## Exact cause discovered
+- `0bec094d15c2bdff1c835ca1dfe486d52f230780` — `fix(ibkr): classify multiple paper users explicitly`
+- `718b270636e780bf0c25c12c5ce75afdd2b8bc16` — `fix(ibkr): make post-auth pipeline direct entrypoint import-safe`
+- `2cd779dc56b06c382c6320466c580c22edf19730` — `test(ibkr): guard direct post-auth entrypoint imports`
 
-The current 10.49.1c IBC comparator used the same sealed Cloudflare credential pair and reproduced the pre-2FA failure, but its launcher log exposed the server reason that 10.45.x had obscured:
+## Credential diagnosis: UPDATED
+
+An earlier 10.49.1c comparator attempt exposed:
 
 `NSErrorResponse.MULTIPLE_PAPER_ERROR`
 
-IBKR returned:
+IBKR said the submitted user had multiple Paper Trading users associated with it and requested one concrete Paper Trading username/password pair.
 
-> The specified user has multiple Paper Trading users associated with it. Please log on using one of the Paper Trading users and corresponding password.
+The operator then reverified that the configured username is the explicit Paper Trading username from IBKR Paper Trading settings. The operator did **not** replace it with a `DU...` account number. A `DU...` account number is not the login username and must not be substituted into `IBKR_PAPER_USERNAME`.
 
-The sequence was:
+After that re-verification, the same sealed Cloudflare paper credential pair was tested again through the pinned 10.49.1c IBC comparator. The prior `MULTIPLE_PAPER_ERROR` did **not** reproduce. The comparator progressed into the IBKR authentication protocol and emitted evidence including:
 
-`Paper Log In -> Connected ndc1.ibllc.com -> Authenticating -> MULTIPLE_PAPER_ERROR -> DISCONNECT_AUTHORIZATION_FAILED`
+- `NS_AUTH_START` / authentication protocol start
+- `Passed pwd authentication.`
+- `Authentication completed.`
+- `IBKR_LEGACY_CREDENTIALS_ACCEPTED_PRE_2FA=1`
 
-with **no** `NS_AUTH_START`, no second-factor dialog, and no IB Key mobile-approval wait signal.
+### Current credential conclusion
 
-Therefore the current failure is not evidence of a bad password and is not a 2FA failure. The submitted username is being treated by IBKR as a user that maps to multiple Paper Trading users. Gateway requires one concrete Paper Trading username and that paper user's corresponding password.
+The current Cloudflare-sealed Paper Trading username/password pair has now been accepted by IBKR through the password/pre-2FA boundary.
 
-This also explains the historical MM-IBKR env comment:
+Do **not** treat the current pair as unverified or reset/rotate it merely because of the older multi-paper result. Do **not** change the username to a `DU...` account number.
 
-`Paper login (use the specific paper user to avoid multi-paper prompt)`
+The active problem is now advancing the canonical attended path through the real second-factor/session boundary, not proving password validity again.
 
-## Retry freeze
+## Critical authority/deployment mismatch to resolve FIRST
 
-Do **not** perform another broker login with the current Cloudflare credential values. Repeating the same username only reproduces the multi-paper rejection and can add unnecessary login pressure.
+At this checkpoint, repository source has a deliberate SHA mismatch that must be reconciled before another canonical broker attempt:
 
-Ordinary code/CI pushes must remain validation-only. A broker attempt is justified only after the Cloudflare paper username/password have been changed to one explicit Paper Trading user pair.
+- auth branch HEAD = `2cd779dc56b06c382c6320466c580c22edf19730`
+- `.github/workflows/fleet-authority-health-probe.yml` on `main` expects `2cd779dc56b06c382c6320466c580c22edf19730`
+- `cloudflare/fleet-authority/src/index.js` checked into `main` still has `ALLOWED_WORKFLOW_SHA = '0bec094d15c2bdff1c835ca1dfe486d52f230780'`
 
-## Operator-safe paper-user resolution
+Do not assume the live Worker has either value without proving `/healthz` after deployment.
 
-Never paste credentials into GitHub logs, issues, commits, ChatGPT, or other plaintext channels.
+### Cheapest decisive next executable
 
-IBKR documents that the Paper Trading Account settings page lets the operator view the paper username/account number and reset the paper password:
+1. Update the Worker source pin to exactly `2cd779dc56b06c382c6320466c580c22edf19730`.
+2. Use the existing Cloudflare deployment-trigger mechanism; do not invent a second deployment path.
+3. Run/consume the existing Fleet Authority health probe.
+4. Require live `/healthz` to prove all of:
+   - `allowed_workflow_sha == 2cd779dc56b06c382c6320466c580c22edf19730`
+   - `credential_binding_contract == IBKR_PAPER_USERNAME+IBKR_PAPER_PASSWORD`
+   - `allowed_event_contract == push+workflow_dispatch`
+   - `allowed_workflow_contract == canonical-b1+legacy-ibc-comparator`
+   - paper username/password bindings configured
+5. Only after that provenance gate is green, dispatch exactly **one** canonical `IBKR Cloudflare Read-Only B1 R1` run at the immutable auth-branch HEAD.
 
-`User menu -> Settings -> Account Configuration -> Paper Trading Account`
+Do not make an auth-branch commit merely to trigger login; changing the SHA recreates the Worker-pin race. Use the existing deliberate dispatch path/workflow-dispatch once the Worker is pinned to the current immutable HEAD.
 
-Use one concrete Paper Trading username shown there, not a production/master username that fronts multiple paper users.
+## Canonical attended-login acceptance chain
 
-Useful IBKR documentation:
+Watch the canonical run in this order:
 
-- https://www.ibkrguides.com/orgportal/papertradingaccount.htm
-- https://www.ibkrguides.com/advisorportal/paper.htm
-- https://www.ibkrguides.com/clientportal/aboutpapertradingaccounts.htm
+1. **Warm API ready** — consume the authenticated session; no phone action required.
+2. **Exact IB Key mobile wait** — only the literal signal `Waiting for IB Key mobile approval` is authority to tell the operator to approve IBKR Mobile.
+3. **Real second-factor boundary without the exact mobile-wait token** — inspect exact controller/launcher evidence before instructing the operator.
+4. **`MULTIPLE_PAPER_ERROR`** — stop; this would contradict the latest accepted-credential comparator and needs exact launcher evidence before changing credentials.
+5. **Explicit bad-credentials/login-failed evidence** — stop; do not retry blindly.
+6. **Other pre-NS authorization rejection** — stop and inspect the exact launcher reason.
+7. **Maintenance/reset** — retry only outside the guarded reset window.
 
-If the intended paper user's password is uncertain, reset that paper user's password from IBKR before rotating the authority.
-
-## Cloudflare cutover
-
-After choosing one explicit paper user, update the Worker secrets atomically:
-
-- `IBKR_PAPER_USERNAME`
-- `IBKR_PAPER_PASSWORD`
-
-Do not add a production-credential fallback to source code and do not store either value in repository variables/files.
-
-The non-secret health contract should continue to prove:
-
-- `allowed_workflow_sha == 8fe2cf4c5998bd5e5ef03d0bdc0e0280eefaa768`
-- `credential_binding_contract == IBKR_PAPER_USERNAME+IBKR_PAPER_PASSWORD`
-- `paper_username_binding_configured == true`
-- `paper_password_binding_configured == true`
-- `allowed_event_contract == push+workflow_dispatch`
-
-The health endpoint intentionally does not expose credential values or reusable fingerprints.
-
-## One-attempt acceptance chain after rotation
-
-After the explicit paper-user pair is installed, perform **one** deliberate broker attempt.
-
-Accept outcomes in this order:
-
-1. **Warm API ready**: reuse the authenticated session; no phone action is required.
-2. **Exact IB Key mobile approval wait**: only `Waiting for IB Key mobile approval` authorizes telling the operator to approve IBKR Mobile.
-3. **`MULTIPLE_PAPER_ERROR` again**: the username is still not one explicit paper user; stop and correct the authority.
-4. **Explicit credential rejection**: controller-visible login failure / `bad-credentials` is a credential verdict; stop retries and correct the selected paper user's password.
-5. **Other pre-NS authorization rejection**: stop retries and investigate the exact launcher reason before another attempt.
-6. **Maintenance/reset**: retry only outside the guarded reset window.
-
-Never reinterpret raw `TWO_FA` as outcome 2.
+Never treat raw controller state `TWO_FA` as proof that a phone notification exists.
 
 ## First-auth completion criteria
 
-A first attended authentication is not complete until all of these are true:
+A successful first attended authentication is not complete until all of these are true:
 
-- exact real second-factor boundary observed (unless warm session already opened),
-- IBKR Mobile approval accepted when required,
-- local paper API is readable,
+- real second-factor boundary observed (unless a warm session opens directly),
+- IBKR Mobile approval accepted when actually required,
+- local Paper API is readable,
 - canonical post-auth broker/session handoff is materialized,
 - forward-data artifact is materialized,
-- encrypted Gateway warm state is published.
+- encrypted Gateway warm-state artifact is published.
 
-Immediately follow with a second warm-reuse run. The durable objective is:
+Then immediately run a second warm-reuse proof and require:
 
 - warm state restored,
 - API ready without a new phone challenge,
-- ordinary read-only data jobs can consume the authenticated session.
+- ordinary read-only data jobs able to consume the authenticated session.
 
-If warm-state transplant across GitHub-hosted runners fails, diagnose session portability rather than falling back to repeated attended logins.
+If cross-runner JTS state transplant fails, diagnose session portability. Do not fall back to repeated attended-login spraying.
+
+## Post-auth pipeline already present
+
+The canonical workflow is designed to continue beyond authentication rather than stopping at login. Its post-auth path is intended to:
+
+- connect read-only to the local Paper API,
+- verify the managed paper account,
+- read broker time/account summary/positions/open orders,
+- fetch AMAT/APH historical bars,
+- emit normalized forward-bar evidence,
+- materialize the broker/session handoff,
+- publish encrypted warm Gateway state.
+
+Recent commits `718b270...` and `2cd779...` specifically hardened direct post-auth entrypoint imports/tests. Preserve those changes.
+
+## Safety / retry rules
+
+- Paper/read-only only.
+- Never paste or print credential values.
+- One broker attempt per meaningful discriminator.
+- Ordinary code pushes should remain validation-only.
+- Do not use live credentials as a fallback.
+- Do not change regional servers without new evidence.
+- Do not downgrade/upgrade Gateway/controller merely to chase authentication after the 10.49 comparator accepted the current credential pair.
+- Do not claim a second-factor push was sent unless the exact mobile-approval wait evidence exists.
+
+## Historical context that is now CLOSED
+
+These were useful discriminators but are no longer the active blocker:
+
+- controller v0.10.0 / 10.45.1j version uncertainty
+- guessed regional server override
+- Cloudflare secret binding-name ambiguity
+- generic `DISCONNECT_AUTHORIZATION_FAILED` as an unexplained credential verdict
+- whether the current sealed pair can pass password authentication
+
+The latest comparator moved the boundary forward: current credentials are accepted pre-2FA. Continue from the authority/deployment provenance gate, then one canonical attended login.
