@@ -5,3 +5,5 @@ Scientific comparison only. Four already-supported sleeve classes are compared u
 Candidates: P266 industry momentum, JAAA senior CLO, SRLN floating-rate bank loans, KMLM managed futures.
 
 Evidence ends with the last completed month, August 2026. No candidate-specific weights, dates, controls, products, costs, thresholds, or partial-month rescue are permitted. Ranking is diagnostic only and confers no portfolio allocation, runtime, broker, or live-trading authority.
+
+Execution initiation: Market Research 2026-09-17. This marker changes no scientific parameter; it exists only to trigger the already-frozen public-compute discriminator.
