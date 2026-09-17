@@ -3,7 +3,9 @@ name: IBKR Cloudflare Read-Only B1 R1
 on:
   workflow_dispatch:
   push:
-    branches: [ibkr-b1-authority-v1]
+    branches:
+      - ibkr-b1-authority-v1
+      - assistant/ibkr-controller-native-warm-20260917
     paths:
       - '.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml'
       - 'scripts/fleet_authority_envelope_consumer_v1.py'
@@ -12,6 +14,7 @@ on:
       - 'scripts/ibkr_post_auth_pipeline_v1.py'
       - 'research/forward_bar_contract_v2.py'
       - 'tests/test_ibkr_b1_auth_contracts_v1.py'
+      - 'tests/test_ibkr_b1_warm_state_workflow_v2.py'
       - 'ibkr_login_trigger.txt'
 
 permissions:
@@ -40,15 +43,28 @@ jobs:
           python -m pip install --disable-pip-version-check \
             'cryptography==46.0.1' \
             'ib_insync==0.9.86' \
-            'pandas==2.2.3'
+            'pandas==2.2.3' \
+            'PyYAML==6.0.2'
           python -m py_compile \
             scripts/fleet_authority_envelope_consumer_v1.py \
             scripts/ibkr_auth_boundary_v1.py \
             scripts/ibkr_login_window_guard_v1.py \
             scripts/ibkr_post_auth_pipeline_v1.py \
             research/forward_bar_contract_v2.py \
-            tests/test_ibkr_b1_auth_contracts_v1.py
-          python -m unittest tests.test_ibkr_b1_auth_contracts_v1 -v
+            tests/test_ibkr_b1_auth_contracts_v1.py \
+            tests/test_ibkr_b1_warm_state_workflow_v2.py
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          path=Path('.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml')
+          node=yaml.safe_load(path.read_text(encoding='utf-8'))
+          if not isinstance(node, dict) or 'jobs' not in node:
+              raise SystemExit('workflow YAML did not parse into expected mapping')
+          print('IBKR_WORKFLOW_YAML_VALID=1')
+          PY
+          python -m unittest \
+            tests.test_ibkr_b1_auth_contracts_v1 \
+            tests.test_ibkr_b1_warm_state_workflow_v2 -v
           echo 'IBKR_BROKER_LOGIN_ATTEMPTED=0'
 
   broker-data-proof:
@@ -118,8 +134,11 @@ jobs:
         run: |
           set -euo pipefail
           jts_volume="ibkr-b1-jts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          warm_volume="ibkr-b1-warm-seed-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           docker volume create "$jts_volume" >/dev/null
+          docker volume create "$warm_volume" >/dev/null
           docker run --rm --user 0 --entrypoint /bin/sh -v "$jts_volume:/state" "$IBKR_CONTROLLER_IMAGE" -lc 'chmod 0777 /state' >/dev/null
+          docker run --rm --user 0 --entrypoint /bin/sh -v "$warm_volume:/warm-seed" "$IBKR_CONTROLLER_IMAGE" -lc 'chmod 0777 /warm-seed' >/dev/null
           echo 'IBKR_WARM_STATE_GENERATION=clean-stop-v2'
 
           artifact_id="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=ibkr-b1-warm-state-clean-v2&per_page=20" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
@@ -153,8 +172,13 @@ jobs:
           plain=AESGCM(key).decrypt(nonce,ciphertext,b'mmibkr-b1-warm-state-v1')
           (temp/'ibkr-b1-warm-state.tgz').write_bytes(plain)
           PY
-          docker run --rm -v "$jts_volume:/state" -v "$RUNNER_TEMP:/import:ro" alpine:3.22 sh -lc 'tar -xzf /import/ibkr-b1-warm-state.tgz -C /state && chmod -R u+rwX,go-rwx /state || true'
+          docker run --rm \
+            -v "$warm_volume:/warm-seed" \
+            -v "$RUNNER_TEMP:/import:ro" \
+            alpine:3.22 \
+            sh -lc 'tar -xzf /import/ibkr-b1-warm-state.tgz -C /warm-seed && chmod -R u+rwX,go-rwx /warm-seed || true'
           echo 'IBKR_WARM_STATE_RESTORED=1'
+          echo 'IBKR_WARM_STATE_SEED_MODE=CONTROLLER_NATIVE'
           echo 'restored=1' >> "$GITHUB_OUTPUT"
 
       - name: Refuse cold login inside IBKR reset window
@@ -168,8 +192,17 @@ jobs:
         run: |
           set -euo pipefail
           jts_volume="ibkr-b1-jts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          warm_volume="ibkr-b1-warm-seed-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           docker pull "$IBKR_CONTROLLER_IMAGE" >/dev/null
           echo 'IBKR_CONTROLLER_IMAGE_PINNED=1'
+
+          warm_state_args=()
+          if [ "${{ steps.restore.outputs.restored }}" = "1" ]; then
+            warm_state_args=(
+              -e GATEWAY_WARM_STATE=/home/ibgateway/warm-state
+              -v "$warm_volume:/home/ibgateway/warm-state:ro"
+            )
+          fi
 
           docker run -d --name ibkr-cloudflare-b1 \
             --env-file "$RUNNER_TEMP/ibkr-gateway-bootstrap.env" \
@@ -184,12 +217,17 @@ jobs:
             -e AUTO_RESTART_TIME='04:15 AM' \
             -e AUTO_LOGOFF_TIME='04:15 AM' \
             -e TIME_ZONE=America/Chicago \
+            "${warm_state_args[@]}" \
             -v "$jts_volume:/home/ibgateway/Jts_b1" \
             -p 127.0.0.1:4002:4004 \
             -p 127.0.0.1:18080:8080 \
             "$IBKR_CONTROLLER_IMAGE" >/dev/null
 
           docker exec ibkr-cloudflare-b1 /bin/sh -lc 'test "$TRADING_MODE" = paper && test "$READ_ONLY_API" = yes && test "$TWOFA_TIMEOUT_ACTION" = none && test "$TWOFA_EXIT_INTERVAL" = 120 && test "$RELOGIN_AFTER_TWOFA_TIMEOUT" = yes' >/dev/null
+          if [ "${{ steps.restore.outputs.restored }}" = "1" ]; then
+            docker exec ibkr-cloudflare-b1 /bin/sh -lc 'test "$GATEWAY_WARM_STATE" = /home/ibgateway/warm-state && test "$TWS_SETTINGS_PATH" = /home/ibgateway/Jts_b1 && test "$GATEWAY_WARM_STATE" != "$TWS_SETTINGS_PATH"' >/dev/null
+            echo 'IBKR_CONTROLLER_NATIVE_WARM_SEED_BOUND=1'
+          fi
           echo 'IBKR_SESSION_RESOLUTION_STARTED=1'
 
           mode=none
@@ -345,6 +383,7 @@ jobs:
             --symbols "$POST_AUTH_SYMBOLS" \
             --output "$RUNNER_TEMP/ibkr-post-auth-handoff.json" \
             --bars-output "$RUNNER_TEMP/ibkr-forward-bars-v2.jsonl"
+          echo 'IBKR_CONSUMER_READY=1'
 
       - name: Gracefully stop authenticated Gateway before warm-state snapshot
         id: graceful_stop
@@ -414,9 +453,11 @@ jobs:
         run: |
           set +e
           jts_volume="ibkr-b1-jts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          warm_volume="ibkr-b1-warm-seed-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           docker stop --time 90 ibkr-cloudflare-b1 >/dev/null 2>&1
           docker rm -f ibkr-cloudflare-b1 >/dev/null 2>&1
           docker volume rm -f "$jts_volume" >/dev/null 2>&1
+          docker volume rm -f "$warm_volume" >/dev/null 2>&1
           rm -rf \
             "$RUNNER_TEMP/ibkr-gateway.env" \
             "$RUNNER_TEMP/ibkr-gateway-bootstrap.env" \
