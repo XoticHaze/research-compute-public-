@@ -6,6 +6,7 @@ on:
     branches:
       - ibkr-b1-authority-v1
       - assistant/ibkr-controller-native-warm-20260917
+      - assistant/ibkr-warm-seed-owner-20260917
     paths:
       - '.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml'
       - 'scripts/fleet_authority_envelope_consumer_v1.py'
@@ -137,6 +138,8 @@ jobs:
           warm_volume="ibkr-b1-warm-seed-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           docker volume create "$jts_volume" >/dev/null
           docker volume create "$warm_volume" >/dev/null
+          gateway_uid="$(docker run --rm --entrypoint /usr/bin/id "$IBKR_CONTROLLER_IMAGE" -u)"
+          gateway_gid="$(docker run --rm --entrypoint /usr/bin/id "$IBKR_CONTROLLER_IMAGE" -g)"
           docker run --rm --user 0 --entrypoint /bin/sh -v "$jts_volume:/state" "$IBKR_CONTROLLER_IMAGE" -lc 'chmod 0777 /state' >/dev/null
           docker run --rm --user 0 --entrypoint /bin/sh -v "$warm_volume:/warm-seed" "$IBKR_CONTROLLER_IMAGE" -lc 'chmod 0777 /warm-seed' >/dev/null
           echo 'IBKR_WARM_STATE_GENERATION=clean-stop-v2'
@@ -173,10 +176,17 @@ jobs:
           (temp/'ibkr-b1-warm-state.tgz').write_bytes(plain)
           PY
           docker run --rm \
+            -e GATEWAY_UID="$gateway_uid" \
+            -e GATEWAY_GID="$gateway_gid" \
             -v "$warm_volume:/warm-seed" \
             -v "$RUNNER_TEMP:/import:ro" \
             alpine:3.22 \
-            sh -lc 'tar -xzf /import/ibkr-b1-warm-state.tgz -C /warm-seed && chmod -R u+rwX,go-rwx /warm-seed || true'
+            sh -lc 'set -eu; tar -xzf /import/ibkr-b1-warm-state.tgz -C /warm-seed; chown -R "$GATEWAY_UID:$GATEWAY_GID" /warm-seed; chmod -R u+rwX,go-rwx /warm-seed'
+          docker run --rm --entrypoint /bin/sh \
+            -v "$warm_volume:/warm-seed:ro" \
+            "$IBKR_CONTROLLER_IMAGE" \
+            -lc 'set -eu; rm -rf /tmp/warm-read-check; mkdir -p /tmp/warm-read-check; cp -a /warm-seed/. /tmp/warm-read-check/; rm -rf /tmp/warm-read-check'
+          echo 'IBKR_WARM_STATE_SEED_READABLE=1'
           echo 'IBKR_WARM_STATE_RESTORED=1'
           echo 'IBKR_WARM_STATE_SEED_MODE=CONTROLLER_NATIVE'
           echo 'restored=1' >> "$GITHUB_OUTPUT"
