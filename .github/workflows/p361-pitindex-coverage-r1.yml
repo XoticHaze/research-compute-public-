@@ -1,0 +1,25 @@
+name: P361 PITIndex Coverage R1
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/p361_pitindex_coverage_r1.py'
+      - '.github/workflows/p361-pitindex-coverage-r1.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python research/p361_pitindex_coverage_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p361-pitindex-coverage
+          path: research/artifacts/p361_pitindex_coverage_r1.json
+          if-no-files-found: error
+          retention-days: 90
