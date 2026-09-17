@@ -112,6 +112,11 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         self.assertIn('-e READ_ONLY_API="$api_read_only"', self.text)
         self.assertNotIn('-e READ_ONLY_API=no', self.text)
 
+    def test_explicit_dispatch_nonce_is_bound_into_run_identity(self):
+        self.assertIn('dispatch_nonce:', self.text)
+        self.assertIn("format('{0} {1}', inputs.mode, inputs.dispatch_nonce)", self.text)
+        self.assertIn('run-name: >-', self.text)
+
     def test_paper_proof_uses_existing_warm_job_and_encrypted_command_gate(self):
         post_auth = self.text.index('name: Materialize canonical post-auth broker and forward-data handoff')
         proof = self.text.index('name: Execute one encrypted MM-authorized selected-runtime paper proof')
