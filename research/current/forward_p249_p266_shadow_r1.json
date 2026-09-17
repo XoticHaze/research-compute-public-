@@ -60,7 +60,7 @@
   "decision_at": "2026-09-10T07:25:00+00:00",
   "forward": {
     "first_close": "2026-09-10",
-    "latest_close": "2026-09-15",
+    "latest_close": "2026-09-16",
     "observations": [
       {
         "cost_detail": {
@@ -107,27 +107,37 @@
         "p249_plus_p266_gross": -0.0021937084686260524,
         "p249_plus_p266_net": -0.0021937084686260524,
         "satellite_increment_net": -0.0022278893582532953
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-09-16",
+        "holding_month": "2026-09",
+        "p249_core_gross": 0.000980639960341731,
+        "p249_core_net": 0.000980639960341731,
+        "p249_plus_p266_gross": 0.0006969597610098681,
+        "p249_plus_p266_net": 0.0006969597610098681,
+        "satellite_increment_net": -0.0002836801993318629
       }
     ],
     "p249_core_net": {
-      "annualized_vol": 0.22636183472934726,
-      "cumulative_return": -0.02928153196951999,
-      "days": 4,
+      "annualized_vol": 0.2047117517694428,
+      "cumulative_return": -0.02832960664952755,
+      "days": 5,
       "max_drawdown": -0.021491793078064036,
-      "sharpe_rf0": -8.155128457370862
+      "sharpe_rf0": -6.972651084816838
     },
     "p249_plus_p266_net": {
-      "annualized_vol": 0.2124863341423028,
-      "cumulative_return": -0.031373929428160086,
-      "days": 4,
+      "annualized_vol": 0.19380854283330223,
+      "cumulative_return": -0.030698836033506427,
+      "days": 5,
       "max_drawdown": -0.022141881157382914,
-      "sharpe_rf0": -9.333387959788455
+      "sharpe_rf0": -8.00505034260647
     },
-    "satellite_increment_cumulative": -0.0021796650696578324
+    "satellite_increment_cumulative": -0.002462726941168336
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-09-17T00:46:43.994021+00:00",
+  "observed_at": "2026-09-17T01:20:55.492065+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_pins": {
