@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import json
 import unittest
 
@@ -5,6 +7,14 @@ from scripts import ibkr_remote_selected_runtime_command_capsule_v2 as mod
 
 
 class SelectedRuntimeCommandCapsuleV2Tests(unittest.TestCase):
+    def recipient(self):
+        raw = bytes(range(32))
+        return {
+            "schema": mod.RETURN_RECIPIENT_SCHEMA,
+            "recipient_b64": base64.b64encode(raw).decode("ascii"),
+            "recipient_key_id": "sha256:" + hashlib.sha256(raw).hexdigest(),
+        }
+
     def capsule(self):
         return {
             "schema": mod.CAPSULE_SCHEMA,
@@ -46,6 +56,7 @@ class SelectedRuntimeCommandCapsuleV2Tests(unittest.TestCase):
                 "require_zero_baseline": True,
                 "allow_global_cancel": False,
             },
+            "return_recipient": self.recipient(),
         }
 
     def validate(self, node):
@@ -57,11 +68,22 @@ class SelectedRuntimeCommandCapsuleV2Tests(unittest.TestCase):
         self.assertNotIn("ibkr", out)
         self.assertEqual(out["mode"], "paper_submit_proof")
         self.assertEqual(out["request"]["command_id"], "sha256:" + "c" * 64)
+        self.assertEqual(out["return_recipient"]["recipient_key_id"], self.recipient()["recipient_key_id"])
 
     def test_legacy_ibkr_credentials_are_rejected_as_extra_capsule_field(self):
         node = self.capsule()
         node["ibkr"] = {"username": "paper", "password": "secret", "trading_mode": "paper"}
         with self.assertRaisesRegex(RuntimeError, "field set mismatch"):
+            self.validate(node)
+
+    def test_return_recipient_is_required_and_fingerprint_bound(self):
+        node = self.capsule()
+        del node["return_recipient"]
+        with self.assertRaisesRegex(RuntimeError, "field set mismatch"):
+            self.validate(node)
+        node = self.capsule()
+        node["return_recipient"]["recipient_key_id"] = "sha256:" + "0" * 64
+        with self.assertRaisesRegex(RuntimeError, "fingerprint mismatch"):
             self.validate(node)
 
     def test_live_authority_is_rejected_recursively(self):
