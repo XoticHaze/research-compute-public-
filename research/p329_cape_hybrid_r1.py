@@ -1,0 +1,14 @@
+from __future__ import annotations
+import json, math
+from pathlib import Path
+import numpy as np, pandas as pd, yfinance as yf
+SYMS=['CAPE','SPY']; START='2013-01-01'; END='2026-09-10'; COST_BPS=10
+raw=yf.download(SYMS,start=START,end=END,auto_adjust=True,progress=False,threads=False); px=(raw['Close'] if isinstance(raw.columns,pd.MultiIndex) else raw)[SYMS].dropna().resample('ME').last(); r=px.pct_change().dropna(); q=r.CAPE.copy(); q.iloc[0]-=COST_BPS/10000
+def stats(s):
+ s=s.dropna(); w=(1+s).cumprod(); yrs=len(s)/12; sd=s.std(); return {'months':int(len(s)),'cagr':float(w.iloc[-1]**(1/yrs)-1),'sharpe':float(s.mean()/sd*math.sqrt(12)) if sd>0 else 0.,'max_drawdown':float((w/w.cummax()-1).min())}
+res={}
+for name,start in {'2014_plus':'2014-01-01','2018_plus':'2018-01-01','2020_plus':'2020-01-01','2022_plus':'2022-01-01'}.items():
+ z=pd.DataFrame({'q':q,'b':r.SPY}).loc[start:].dropna(); qs,bs=stats(z.q),stats(z.b); res[name]={'cape_hybrid':qs,'matched_spy':bs,'matched_excess_cagr':qs['cagr']-bs['cagr']}
+z=pd.DataFrame({'q':q,'b':r.SPY}).loc['2014-01-01':].dropna(); folds=[stats(f.q)['cagr']-stats(f.b)['cagr'] for f in np.array_split(z,5)]; passed=all(v['matched_excess_cagr']>0 for v in res.values()) and sum(x>0 for x in folds)>=3; decision='P329_CAPE_HYBRID_SUPPORTED' if passed else 'P329_CAPE_HYBRID_NOT_SUPPORTED'
+out={'schema':'research.p329_cape_hybrid_r1','parent':'P329','claim':'Test a fixed valuation-plus-sector-momentum hybrid using CAPE versus SPY after 10bp external entry friction across fixed 2014+/2018+/2020+/2022+ windows and five chronology folds. No sector count, valuation horizon, momentum window, product, weighting, or date search.','cost_bps':COST_BPS,'results':res,'chronology_fold_matched_excess_cagr':folds,'positive_folds':sum(x>0 for x in folds),'decision_rule':'Support only if matched excess CAGR is positive in every fixed window and >=3/5 chronology folds. Failure closes this fixed hybrid implementation without sector-count, CAPE-horizon, momentum-window, product, weighting, or date rescue.','decision':decision,'limitations':['fund-level hybrid methodology proxy, not constituent-level reconstruction','SPY is the broad-US matched opportunity control','same adjusted-price provider','no allocation/ranking/runtime/broker/live authority'],'boundaries':{'scientific_authority':True,'portfolio_ranking':False,'allocation_authority':False,'runtime':False,'broker':False,'live_trading':False}}
+Path('research/artifacts').mkdir(parents=True,exist_ok=True); Path('research/artifacts/p329_cape_hybrid_r1.json').write_text(json.dumps(out,indent=2,sort_keys=True,allow_nan=False)); print(json.dumps(out,sort_keys=True))
