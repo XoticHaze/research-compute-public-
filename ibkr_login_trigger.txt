@@ -4,3 +4,4 @@ Ordinary hardening commits must not consume broker authentication attempts.
 A push only enters the broker-data-proof job when its commit message contains [ibkr-login].
 
 Acceptance trigger: restore the clean-stop-v2 artifact produced by run 35192121227 on a fresh runner.
+Controller-native acceptance: restore into a dedicated GATEWAY_WARM_STATE seed and keep TWS_SETTINGS_PATH as a distinct live settings directory.
