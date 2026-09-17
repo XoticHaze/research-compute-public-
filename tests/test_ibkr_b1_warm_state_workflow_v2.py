@@ -65,6 +65,12 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         self.assertLess(sealed, persisted)
         self.assertLess(persisted, ready)
 
+    def test_clean_stop_generation_does_not_consume_legacy_live_snapshot(self):
+        self.assertIn('name=ibkr-b1-warm-state-clean-v2&per_page=20', self.text)
+        self.assertIn('name: ibkr-b1-warm-state-clean-v2', self.text)
+        self.assertNotIn('name=ibkr-b1-warm-state&per_page=20', self.text)
+        self.assertNotIn('name: ibkr-b1-warm-state\n', self.text)
+
 
 if __name__ == '__main__':
     unittest.main()

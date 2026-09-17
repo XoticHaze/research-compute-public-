@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - assistant/ibkr-cloud-warm-repair-20260916
+      - assistant/ibkr-warm-clean-generation-20260917
     paths:
       - '.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml'
       - '.github/workflows/ibkr-warm-state-repair-validate.yml'

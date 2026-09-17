@@ -120,8 +120,9 @@ jobs:
           jts_volume="ibkr-b1-jts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           docker volume create "$jts_volume" >/dev/null
           docker run --rm --user 0 --entrypoint /bin/sh -v "$jts_volume:/state" "$IBKR_CONTROLLER_IMAGE" -lc 'chmod 0777 /state' >/dev/null
+          echo 'IBKR_WARM_STATE_GENERATION=clean-stop-v2'
 
-          artifact_id="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=ibkr-b1-warm-state&per_page=20" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
+          artifact_id="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=ibkr-b1-warm-state-clean-v2&per_page=20" --jq '.artifacts | map(select(.expired == false)) | sort_by(.created_at) | reverse | .[0].id // empty')"
           if [ -z "$artifact_id" ]; then
             echo 'IBKR_WARM_STATE_RESTORED=0'
             echo 'restored=0' >> "$GITHUB_OUTPUT"
@@ -392,7 +393,7 @@ jobs:
       - name: Publish reusable encrypted warm state
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: ibkr-b1-warm-state
+          name: ibkr-b1-warm-state-clean-v2
           path: ${{ runner.temp }}/ibkr-b1-warm-state.tgz.enc
           if-no-files-found: error
           retention-days: 30
