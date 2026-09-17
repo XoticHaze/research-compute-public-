@@ -13,6 +13,8 @@ on:
       - 'research/forward_deterministic_allocator_r1.py'
       - 'research/forward_native_program_adapter_r1.py'
       - 'research/forward_challenger_scoreboard_enrichment_r1.py'
+      - 'research/forward_prospective_cohort_ledger_r1.py'
+      - 'research/forward_scoreboard_lineage_r1.py'
       - 'research/current/native_adapters/*.json'
       - 'research/current/forward_prospective_cohort_ledger_r1.json'
       - 'research/current/p160_forward_observation_r1.json'
@@ -26,6 +28,8 @@ on:
       - 'research/forward_deterministic_allocator_r1.py'
       - 'research/forward_native_program_adapter_r1.py'
       - 'research/forward_challenger_scoreboard_enrichment_r1.py'
+      - 'research/forward_prospective_cohort_ledger_r1.py'
+      - 'research/forward_scoreboard_lineage_r1.py'
       - 'research/current/native_adapters/*.json'
       - 'research/current/forward_prospective_cohort_ledger_r1.json'
       - 'research/current/p160_forward_observation_r1.json'
@@ -53,6 +57,7 @@ jobs:
       - run: python research/forward_market_scoreboard_r1.py --self-test
       - run: python research/forward_challenger_scoreboard_enrichment_r1.py --self-test
       - run: python research/forward_deterministic_allocator_r1.py --self-test
+      - run: python research/forward_scoreboard_lineage_r1.py --self-test
 
   p46:
     runs-on: ubuntu-24.04
@@ -121,11 +126,12 @@ jobs:
   report:
     needs: [self-test, p46, p249-p266, p558, senior-clo]
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check pandas==2.3.2 yfinance==0.2.65
       - uses: actions/download-artifact@v4
         with:
           pattern: forward-*
@@ -151,10 +157,14 @@ jobs:
           PY
             cp "$src" score-inputs/native-current/
           done
-          if test -f research/current/forward_prospective_cohort_ledger_r1.json; then
-            mkdir -p score-inputs/prospective-current
-            cp research/current/forward_prospective_cohort_ledger_r1.json score-inputs/prospective-current/
-          fi
+      - name: Refresh prospective cohort ledger before scoring
+        run: |
+          set -euo pipefail
+          mkdir -p score-inputs/prospective-current
+          python research/forward_prospective_cohort_ledger_r1.py \
+            --adapter-dir score-inputs/native-current \
+            --prior research/current/forward_prospective_cohort_ledger_r1.json \
+            --output score-inputs/prospective-current/forward_prospective_cohort_ledger_r1.json
       - run: python research/forward_market_scoreboard_r1.py --input-root score-inputs --output artifacts/forward_market_scoreboard_r1.json
       - name: Add forward challenger observers without allocation authority
         run: |
@@ -168,6 +178,13 @@ jobs:
             --currency research/current/currency_hedge_mechanism_forward_r1.json \
             --currency-overlay research/current/currency_hedge_allocator_overlay_forward_r1.json \
             --output artifacts/forward_market_scoreboard_r1.json
+      - name: Bind scoreboard to exact prospective evidence snapshot
+        run: |
+          python research/forward_scoreboard_lineage_r1.py \
+            --mode scoreboard \
+            --scoreboard artifacts/forward_market_scoreboard_r1.json \
+            --ledger score-inputs/prospective-current/forward_prospective_cohort_ledger_r1.json \
+            --output artifacts/forward_market_scoreboard_r1.json
       - name: Build governed deterministic paper allocation
         run: |
           args=(--scoreboard artifacts/forward_market_scoreboard_r1.json --output artifacts/forward_deterministic_allocator_r1.json)
@@ -175,22 +192,41 @@ jobs:
             args+=(--prior research/current/forward_deterministic_allocator_r1.json)
           fi
           python research/forward_deterministic_allocator_r1.py "${args[@]}"
-      - name: Prove challenger observer noninterference
+          python research/forward_scoreboard_lineage_r1.py \
+            --mode allocator \
+            --scoreboard artifacts/forward_market_scoreboard_r1.json \
+            --allocator artifacts/forward_deterministic_allocator_r1.json \
+            --output artifacts/forward_deterministic_allocator_r1.json
+          cp score-inputs/prospective-current/forward_prospective_cohort_ledger_r1.json artifacts/forward_prospective_cohort_ledger_r1.json
+      - name: Prove challenger observer noninterference and lineage
         run: |
           python - <<'PY'
-          import json
+          import hashlib,json
+          from pathlib import Path
           score=json.load(open('artifacts/forward_market_scoreboard_r1.json'))
           after=json.load(open('artifacts/forward_deterministic_allocator_r1.json'))
+          ledger_path=Path('artifacts/forward_prospective_cohort_ledger_r1.json')
+          ledger=json.load(open(ledger_path))
+          ledger_sha=hashlib.sha256(ledger_path.read_bytes()).hexdigest()
           lanes={x['program_id']:x for x in score['lanes']}
           for program in ('P160_FIXED_P46_P47_COMBINATION','DEVELOPED_EXUS_CURRENCY_HEDGE','CURRENCY_HEDGE_ALLOCATOR_OVERLAY'):
               assert lanes[program]['boundaries']['allocation_authority'] is False
           overlay=lanes['CURRENCY_HEDGE_ALLOCATOR_OVERLAY']
           assert overlay['boundaries']['allocator_mutation'] is False
           assert overlay['signal']['funding_source']=='CASH_ONLY'
-          if __import__('pathlib').Path('research/current/forward_deterministic_allocator_r1.json').exists():
+          assert score['input_lineage']['prospective_ledger']['sha256']==ledger_sha
+          assert score['input_lineage']['prospective_ledger']['generated_at']==ledger['generated_at']
+          assert after['source_scoreboard_lineage']['prospective_ledger']['sha256']==ledger_sha
+          zero={row['source_program_id']:row['observation_status'] for row in after['zero_weight_lane_visibility']}
+          assert zero['HOMEBUILDERS']=='ACTIVE'
+          assert zero['P46']=='CONTEXT_ONLY'
+          assert zero['P558']=='ACTIVE'
+          assert zero['SENIOR_CLO']=='ACTIVE'
+          if Path('research/current/forward_deterministic_allocator_r1.json').exists():
               prior=json.load(open('research/current/forward_deterministic_allocator_r1.json'))
               assert after['final_target_weights']==prior['final_target_weights']
           print('FORWARD_CHALLENGER_ALLOCATOR_NONINTERFERENCE=PASS')
+          print('FORWARD_PROSPECTIVE_LINEAGE=PASS',ledger_sha)
           print('ALLOCATOR_TARGETS='+json.dumps(after['final_target_weights'],sort_keys=True))
           PY
       - name: Print compact decision report
@@ -200,7 +236,7 @@ jobs:
           x=json.load(open('artifacts/forward_market_scoreboard_r1.json'))
           a=json.load(open('artifacts/forward_deterministic_allocator_r1.json'))
           for lane in x['lanes']:
-              print(lane['program_id'], lane.get('validation_grade', lane.get('status')), lane.get('action_text', ''))
+              print(lane['program_id'], lane.get('observation_status'), lane.get('validation_grade', lane.get('status')), lane.get('action_text', ''))
               if lane.get('timing'):
                   print('  timing=', json.dumps(lane['timing'], sort_keys=True))
               if lane.get('scorecard'):
@@ -214,7 +250,7 @@ jobs:
           print('decision_chain=', json.dumps(x['decision_chain'], sort_keys=True))
           print('allocator_policy=', a['policy_id'])
           print('allocator_targets=', json.dumps(a['final_target_weights'], sort_keys=True))
-          print('allocator_sleeve_actions=', json.dumps(a['sleeve_actions'], sort_keys=True))
+          print('allocator_zero_weight_lanes=', json.dumps(a['zero_weight_lane_visibility'], sort_keys=True))
           PY
       - uses: actions/upload-artifact@v4
         with:
@@ -222,6 +258,7 @@ jobs:
           path: |
             artifacts/forward_market_scoreboard_r1.json
             artifacts/forward_deterministic_allocator_r1.json
+            artifacts/forward_prospective_cohort_ledger_r1.json
           if-no-files-found: error
           retention-days: 90
 
@@ -248,17 +285,24 @@ jobs:
           set -euo pipefail
           scoreboard=/tmp/forward-market-scoreboard/forward_market_scoreboard_r1.json
           allocator=/tmp/forward-market-scoreboard/forward_deterministic_allocator_r1.json
+          ledger=/tmp/forward-market-scoreboard/forward_prospective_cohort_ledger_r1.json
           p249=/tmp/forward-score-inputs/forward_p249_p266_shadow_r1.json
           p558=/tmp/forward-score-inputs/forward_p558_current_core_shadow_r1.json
           clo=/tmp/forward-score-inputs/forward_senior_clo_current_core_shadow_r1.json
           test -f "$scoreboard"
           test -f "$allocator"
+          test -f "$ledger"
           test -f "$p249"
           test -f "$p558"
           test -f "$clo"
-          python - "$scoreboard" "$p249" "$p558" "$clo" <<'PY'
-          import json,sys
-          score,p249,p558,clo=(json.load(open(p)) for p in sys.argv[1:])
+          python - "$scoreboard" "$allocator" "$ledger" "$p249" "$p558" "$clo" <<'PY'
+          import hashlib,json,sys
+          from pathlib import Path
+          score,allocator,ledger,p249,p558,clo=(json.load(open(p)) for p in sys.argv[1:])
+          ledger_sha=hashlib.sha256(Path(sys.argv[3]).read_bytes()).hexdigest()
+          assert score['input_lineage']['prospective_ledger']['sha256']==ledger_sha
+          assert score['input_lineage']['prospective_ledger']['generated_at']==ledger['generated_at']
+          assert allocator['source_scoreboard_lineage']['prospective_ledger']['sha256']==ledger_sha
           lanes={row['program_id']:row for row in score['lanes']}
           def bp(value): return round(float(value)*10000.0,2)
           p=lanes['P249_P266']; f=p249['forward']
@@ -283,6 +327,7 @@ jobs:
           mkdir -p research/current
           cp "$scoreboard" research/current/forward_market_scoreboard_r1.json
           cp "$allocator" research/current/forward_deterministic_allocator_r1.json
+          cp "$ledger" research/current/forward_prospective_cohort_ledger_r1.json
           cp "$p249" research/current/forward_p249_p266_shadow_r1.json
           cp "$p558" research/current/forward_p558_current_core_shadow_r1.json
           cp "$clo" research/current/forward_senior_clo_current_core_shadow_r1.json
@@ -291,6 +336,7 @@ jobs:
           git add \
             research/current/forward_market_scoreboard_r1.json \
             research/current/forward_deterministic_allocator_r1.json \
+            research/current/forward_prospective_cohort_ledger_r1.json \
             research/current/forward_p249_p266_shadow_r1.json \
             research/current/forward_p558_current_core_shadow_r1.json \
             research/current/forward_senior_clo_current_core_shadow_r1.json
