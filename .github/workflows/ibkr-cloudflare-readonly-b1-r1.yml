@@ -1,4 +1,6 @@
 name: IBKR Cloudflare Read-Only B1 R1
+run-name: >-
+  IBKR B1 ${{ github.event_name == 'workflow_dispatch' && format('{0} {1}', inputs.mode, inputs.dispatch_nonce) || github.event_name }}
 
 on:
   workflow_dispatch:
@@ -11,6 +13,11 @@ on:
         options:
           - readonly
           - paper_submit_proof
+      dispatch_nonce:
+        description: Optional one-run correlation token
+        required: false
+        default: ''
+        type: string
   push:
     branches:
       - ibkr-b1-authority-v1
