@@ -236,6 +236,13 @@ jobs:
           echo 'IBKR_WARM_STATE_SEED_MODE=CONTROLLER_NATIVE'
           echo 'restored=1' >> "$GITHUB_OUTPUT"
 
+      - name: Require restored warm state for paper submit proof
+        if: env.IBKR_PAPER_PROOF_MODE == '1'
+        run: |
+          set -euo pipefail
+          test "${{ steps.restore.outputs.restored }}" = "1" || { echo 'paper submit proof requires accepted restored warm state'; exit 43; }
+          echo 'IBKR_PAPER_PROOF_WARM_STATE_REQUIRED=1'
+
       - name: Refuse cold login inside IBKR reset window
         if: steps.restore.outputs.restored != '1'
         run: |
