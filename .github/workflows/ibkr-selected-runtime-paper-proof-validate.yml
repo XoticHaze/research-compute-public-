@@ -8,8 +8,10 @@ on:
       - ibkr-b1-authority-v1
     paths:
       - 'scripts/ibkr_remote_selected_runtime_paper_proof_v1.py'
+      - 'scripts/ibkr_remote_selected_runtime_paper_proof_v2.py'
       - 'scripts/ibkr_remote_selected_runtime_command_capsule_v2.py'
       - 'tests/test_ibkr_remote_selected_runtime_paper_proof_v1.py'
+      - 'tests/test_ibkr_remote_selected_runtime_paper_proof_v2.py'
       - 'tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py'
       - '.github/workflows/ibkr-selected-runtime-paper-proof-validate.yml'
 
@@ -31,14 +33,18 @@ jobs:
           python -m pip install --disable-pip-version-check 'cryptography==46.0.1'
           python -m py_compile \
             scripts/ibkr_remote_selected_runtime_paper_proof_v1.py \
+            scripts/ibkr_remote_selected_runtime_paper_proof_v2.py \
             scripts/ibkr_remote_selected_runtime_command_capsule_v2.py \
             tests/test_ibkr_remote_selected_runtime_paper_proof_v1.py \
+            tests/test_ibkr_remote_selected_runtime_paper_proof_v2.py \
             tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py
           python -m unittest \
             tests.test_ibkr_remote_selected_runtime_paper_proof_v1 \
+            tests.test_ibkr_remote_selected_runtime_paper_proof_v2 \
             tests.test_ibkr_remote_selected_runtime_command_capsule_v2 -v
           echo 'IBKR_SELECTED_RUNTIME_PROOF_STATIC_VALID=1'
           echo 'IBKR_COMMAND_CAPSULE_V2_CREDENTIAL_FREE=1'
           echo 'IBKR_GATEWAY_AUTH_SOURCE=FLEET_AUTHORITY_WARM_STATE'
+          echo 'IBKR_LEGACY_CREDENTIAL_CAPSULE_ALLOWED=0'
           echo 'IBKR_BROKER_LOGIN_ATTEMPTED=0'
           echo 'IBKR_BROKER_ORDER_ATTEMPTED=0'
