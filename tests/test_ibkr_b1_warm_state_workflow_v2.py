@@ -144,6 +144,17 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         self.assertIn('"$RUNNER_TEMP/ibkr-paper-proof-return"', self.text)
         self.assertIn('"$RUNNER_TEMP/mm-ibkr-source"', self.text)
 
+    def test_paper_submit_proof_requires_restored_warm_state(self):
+        restore = self.text.index('name: Restore encrypted warm Gateway state if available')
+        require = self.text.index('name: Require restored warm state for paper submit proof')
+        auth = self.text.index('name: Resolve authenticated session boundary')
+        self.assertLess(restore, require)
+        self.assertLess(require, auth)
+        guard = self.text[require:auth]
+        self.assertIn("if: env.IBKR_PAPER_PROOF_MODE == '1'", guard)
+        self.assertIn('steps.restore.outputs.restored', guard)
+        self.assertIn('IBKR_PAPER_PROOF_WARM_STATE_REQUIRED=1', guard)
+
 
 if __name__ == '__main__':
     unittest.main()
