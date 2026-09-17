@@ -42,25 +42,25 @@
             "portfolio_roundtrip_cost_bps_if_flattened_now": 2.5
           },
           "hedged_challenger": {
-            "excess_vs_incumbent_bps": -3.284,
-            "gross_return_bps": -13.898,
-            "net_if_flattened_now_bps": -16.398
+            "excess_vs_incumbent_bps": -2.5374,
+            "gross_return_bps": -19.1458,
+            "net_if_flattened_now_bps": -21.6458
           },
-          "incumbent_return_bps": -13.114,
+          "incumbent_return_bps": -19.1085,
           "mechanism_attribution": {
-            "hedged_minus_spy_overlay_bps": 1.5094,
-            "hedged_minus_unhedged_bps": 1.2415,
+            "hedged_minus_spy_overlay_bps": 4.4509,
+            "hedged_minus_unhedged_bps": 3.7217,
             "portfolio_improvement_and_hedge_edge_both_positive": false
           },
           "spy_opportunity_control": {
-            "excess_vs_incumbent_bps": -4.7934,
-            "gross_return_bps": -15.4074,
-            "net_if_flattened_now_bps": -17.9074
+            "excess_vs_incumbent_bps": -6.9882,
+            "gross_return_bps": -23.5967,
+            "net_if_flattened_now_bps": -26.0967
           },
           "unhedged_matched_control": {
-            "excess_vs_incumbent_bps": -4.5255,
-            "gross_return_bps": -15.1395,
-            "net_if_flattened_now_bps": -17.6395
+            "excess_vs_incumbent_bps": -6.2591,
+            "gross_return_bps": -22.8675,
+            "net_if_flattened_now_bps": -25.3675
           }
         }
       }
@@ -91,12 +91,14 @@
     },
     "native_result_gaps": [],
     "prospective_ledger": {
-      "market_data_asof": "2026-09-16",
+      "generated_at": "2026-09-17T10:06:46.223828+00:00",
+      "market_data_asof": "2026-09-17",
       "present": true,
       "programs": [
         "HOMEBUILDERS",
         "SEMICONDUCTOR_SHARED_RIDGE"
-      ]
+      ],
+      "sha256": "ae23b5bd1fafbfda963b3ee30362d92452f1b04b092f310af35f3551886daf6e"
     },
     "scored_now": [
       "P46",
@@ -135,16 +137,16 @@
         "role": "matched-control_mechanism_challenger",
         "scorecard": {
           "DBEF": {
-            "EFA_return_bps": 0.0,
-            "gross_return_bps": 0.0,
-            "matched_excess_if_flattened_now_bps": -50.0,
-            "net_if_flattened_now_bps": -50.0
+            "EFA_return_bps": -42.5127,
+            "gross_return_bps": -29.2024,
+            "matched_excess_if_flattened_now_bps": -36.6897,
+            "net_if_flattened_now_bps": -79.2024
           },
           "HEFA": {
-            "IEFA_return_bps": 0.0,
-            "gross_return_bps": 0.0,
-            "matched_excess_if_flattened_now_bps": -50.0,
-            "net_if_flattened_now_bps": -50.0
+            "IEFA_return_bps": -38.508,
+            "gross_return_bps": -2.1566,
+            "matched_excess_if_flattened_now_bps": -13.6485,
+            "net_if_flattened_now_bps": -52.1566
           },
           "cost_interpretation": {
             "entry_cost_bps": 25.0,
@@ -152,18 +154,18 @@
             "reported_net_is_if_flattened_now": true
           },
           "mechanism": {
-            "SPY_return_bps": 0.0,
+            "SPY_return_bps": -45.8678,
             "both_implementations_positive_vs_matched": false,
-            "mean_matched_excess_if_flattened_now_bps": -50.0,
-            "mean_net_if_flattened_now_bps": -50.0,
-            "opportunity_excess_vs_SPY_bps": -50.0
+            "mean_matched_excess_if_flattened_now_bps": -25.1691,
+            "mean_net_if_flattened_now_bps": -65.6795,
+            "opportunity_excess_vs_SPY_bps": -19.8117
           }
         },
         "state": "PROSPECTIVE_OPEN"
       },
       "CURRENCY_HEDGE_ALLOCATOR_OVERLAY": {
         "entry_date": "2026-09-14",
-        "forward_sessions": 2,
+        "forward_sessions": 3,
         "funding_source": "CASH_ONLY",
         "overlay_weight": 0.05,
         "role": "portfolio_level_matched_control_challenger",
@@ -175,42 +177,42 @@
             "portfolio_roundtrip_cost_bps_if_flattened_now": 2.5
           },
           "hedged_challenger": {
-            "excess_vs_incumbent_bps": -3.284,
-            "gross_return_bps": -13.898,
-            "net_if_flattened_now_bps": -16.398
+            "excess_vs_incumbent_bps": -2.5374,
+            "gross_return_bps": -19.1458,
+            "net_if_flattened_now_bps": -21.6458
           },
-          "incumbent_return_bps": -13.114,
+          "incumbent_return_bps": -19.1085,
           "mechanism_attribution": {
-            "hedged_minus_spy_overlay_bps": 1.5094,
-            "hedged_minus_unhedged_bps": 1.2415,
+            "hedged_minus_spy_overlay_bps": 4.4509,
+            "hedged_minus_unhedged_bps": 3.7217,
             "portfolio_improvement_and_hedge_edge_both_positive": false
           },
           "spy_opportunity_control": {
-            "excess_vs_incumbent_bps": -4.7934,
-            "gross_return_bps": -15.4074,
-            "net_if_flattened_now_bps": -17.9074
+            "excess_vs_incumbent_bps": -6.9882,
+            "gross_return_bps": -23.5967,
+            "net_if_flattened_now_bps": -26.0967
           },
           "unhedged_matched_control": {
-            "excess_vs_incumbent_bps": -4.5255,
-            "gross_return_bps": -15.1395,
-            "net_if_flattened_now_bps": -17.6395
+            "excess_vs_incumbent_bps": -6.2591,
+            "gross_return_bps": -22.8675,
+            "net_if_flattened_now_bps": -25.3675
           }
         },
         "state": "PROSPECTIVE_OPEN"
       },
       "JAAA": {
-        "annualized_vol": 0.09535666305195158,
-        "challenger_cumulative_bps": -113.51,
-        "excess_vs_incumbent_bps": 44.24,
-        "excess_vs_matched_cash_control_bps": 0.31,
-        "max_drawdown": -0.013390914864147785
+        "annualized_vol": 0.08086111053083322,
+        "challenger_cumulative_bps": -116.01,
+        "excess_vs_incumbent_bps": 53.65,
+        "excess_vs_matched_cash_control_bps": 3.74,
+        "max_drawdown": -0.013640470247167857
       },
       "KMLM": {
-        "annualized_vol": 0.12804708920106891,
-        "challenger_cumulative_bps": -119.34,
-        "excess_vs_incumbent_bps": 38.28,
-        "excess_vs_matched_cash_control_bps": -5.65,
-        "max_drawdown": -0.013259827733677731
+        "annualized_vol": 0.11628080282231334,
+        "challenger_cumulative_bps": -133.18,
+        "excess_vs_incumbent_bps": 36.46,
+        "excess_vs_matched_cash_control_bps": -13.45,
+        "max_drawdown": -0.013382505522192556
       }
     },
     "portfolio": {
@@ -229,17 +231,17 @@
       "validation_grade": "EVIDENCE_ACCUMULATING"
     },
     "realized_excess": {
-      "JAAA_vs_cash_control_bps": 0.31,
-      "JAAA_vs_incumbent_bps": 44.24,
-      "KMLM_vs_cash_control_bps": -5.65,
-      "KMLM_vs_incumbent_bps": 38.28,
-      "currency_hedge_mean_matched_excess_bps": -50.0,
-      "currency_hedge_opportunity_excess_vs_spy_bps": -50.0,
-      "currency_overlay_excess_vs_incumbent_bps": -3.284,
-      "currency_overlay_hedged_minus_spy_bps": 1.5094,
-      "currency_overlay_hedged_minus_unhedged_bps": 1.2415,
+      "JAAA_vs_cash_control_bps": 3.74,
+      "JAAA_vs_incumbent_bps": 53.65,
+      "KMLM_vs_cash_control_bps": -13.45,
+      "KMLM_vs_incumbent_bps": 36.46,
+      "currency_hedge_mean_matched_excess_bps": -25.1691,
+      "currency_hedge_opportunity_excess_vs_spy_bps": -19.8117,
+      "currency_overlay_excess_vs_incumbent_bps": -2.5374,
+      "currency_overlay_hedged_minus_spy_bps": 4.4509,
+      "currency_overlay_hedged_minus_unhedged_bps": 3.7217,
       "homebuilders_mean_excess_vs_itb_bps": null,
-      "p266_increment_bps": -24.63,
+      "p266_increment_bps": -20.6,
       "semiconductor_mean_ticker_book_excess_vs_smh_bps": null
     },
     "regime": {
@@ -272,7 +274,7 @@
           "current_signal_date": "2026-09-11",
           "late_registration_rejections": 0,
           "ledger_status": "PRESENT",
-          "market_data_asof": "2026-09-16",
+          "market_data_asof": "2026-09-17",
           "mean_excess_vs_itb_bps": null,
           "minimum_resolved_for_promotion": null,
           "open_cohorts": 1,
@@ -294,12 +296,12 @@
           "current_resolution": {
             "entry_date": "2026-09-14",
             "horizon_sessions": 20,
-            "sessions_completed": 1
+            "sessions_completed": 2
           },
           "current_signal_date": "2026-09-11",
           "late_registration_rejections": 0,
           "ledger_status": "PRESENT",
-          "market_data_asof": "2026-09-16",
+          "market_data_asof": "2026-09-17",
           "mean_ticker_book_excess_vs_smh_bps": null,
           "mean_ticker_positive_hit_rate": null,
           "minimum_resolved_for_promotion": 20,
@@ -339,7 +341,16 @@
       ]
     }
   },
-  "generated_at": "2026-09-17T01:21:11.270370+00:00",
+  "generated_at": "2026-09-17T10:06:52.178317+00:00",
+  "input_lineage": {
+    "prospective_ledger": {
+      "cohort_count": 2,
+      "generated_at": "2026-09-17T10:06:46.223828+00:00",
+      "market_data_asof": "2026-09-17",
+      "schema": "research.forward_prospective_cohort_ledger_r1",
+      "sha256": "ae23b5bd1fafbfda963b3ee30362d92452f1b04b092f310af35f3551886daf6e"
+    }
+  },
   "interpretation": {
     "broker_or_live_authority": false,
     "challenger_observers_do_not_grant_allocator_authority": true,
@@ -352,7 +363,8 @@
     "positive_model_score_is_not_position_size": true,
     "prospective_evidence_does_not_grant_allocation_authority": true,
     "small_samples_are_not_promotion_evidence": true,
-    "weight_is_not_forecast": true
+    "weight_is_not_forecast": true,
+    "zero_weight_does_not_mean_inactive_observer": true
   },
   "lanes": [
     {
@@ -368,6 +380,12 @@
       "decision_use": "Cross-asset regime/context signal only until prospective credit is active. Selection indicates relative preference, not a return forecast.",
       "forward_days": null,
       "kind": "cross_asset_selector",
+      "observation_lineage": {
+        "market_data_asof": "2026-09-17",
+        "prospective_ledger_generated_at": "2026-09-17T10:06:46.223828+00:00",
+        "prospective_ledger_sha256": "ae23b5bd1fafbfda963b3ee30362d92452f1b04b092f310af35f3551886daf6e"
+      },
+      "observation_status": "CONTEXT_ONLY",
       "paper_action": {
         "DBC": 0.5,
         "GLD": 0.0,
@@ -410,6 +428,12 @@
       "decision_use": "This is not a price target. Weights are the frozen portfolio expression. Use prospective return, drawdown and the P266 incremental result to decide whether the construction adds value.",
       "forward_days": 5,
       "kind": "portfolio_construction_plus_industry_momentum_satellite",
+      "observation_lineage": {
+        "market_data_asof": "2026-09-17",
+        "prospective_ledger_generated_at": "2026-09-17T10:06:46.223828+00:00",
+        "prospective_ledger_sha256": "ae23b5bd1fafbfda963b3ee30362d92452f1b04b092f310af35f3551886daf6e"
+      },
+      "observation_status": "ACTIVE",
       "paper_action": {
         "AVDV": 0.125,
         "AVUV": 0.125,
@@ -423,11 +447,11 @@
       },
       "program_id": "P249_P266",
       "scorecard": {
-        "p249_core_annualized_vol": 0.2047117517694428,
-        "p249_core_net_cumulative_bps": -283.3,
-        "p249_plus_p266_annualized_vol": 0.19380854283330223,
-        "p249_plus_p266_net_cumulative_bps": -306.99,
-        "p266_increment_cumulative_bps": -24.63
+        "p249_core_annualized_vol": 0.20170995977019743,
+        "p249_core_net_cumulative_bps": -298.96,
+        "p249_plus_p266_annualized_vol": 0.1912859646749657,
+        "p249_plus_p266_net_cumulative_bps": -318.71,
+        "p266_increment_cumulative_bps": -20.6
       },
       "signal": {
         "p249_core_weights": {
@@ -461,8 +485,14 @@
         "runtime": false
       },
       "decision_use": "Tests whether allocating half the incumbent portfolio to KMLM improves capital efficiency and diversification. A market decision requires positive excess versus both the unchanged incumbent and matched BIL control with enough forward observations.",
-      "forward_days": 3,
+      "forward_days": 4,
       "kind": "portfolio_diversification_challenger",
+      "observation_lineage": {
+        "market_data_asof": "2026-09-17",
+        "prospective_ledger_generated_at": "2026-09-17T10:06:46.223828+00:00",
+        "prospective_ledger_sha256": "ae23b5bd1fafbfda963b3ee30362d92452f1b04b092f310af35f3551886daf6e"
+      },
+      "observation_status": "ACTIVE",
       "paper_action": {
         "AVDV": 0.0625,
         "AVUV": 0.0625,
@@ -477,11 +507,11 @@
       },
       "program_id": "P558",
       "scorecard": {
-        "annualized_vol": 0.12804708920106891,
-        "challenger_cumulative_bps": -119.34,
-        "excess_vs_incumbent_bps": 38.28,
-        "excess_vs_matched_cash_control_bps": -5.65,
-        "max_drawdown": -0.013259827733677731
+        "annualized_vol": 0.11628080282231334,
+        "challenger_cumulative_bps": -133.18,
+        "excess_vs_incumbent_bps": 36.46,
+        "excess_vs_matched_cash_control_bps": -13.45,
+        "max_drawdown": -0.013382505522192556
       },
       "signal": {
         "alternative": "KMLM",
@@ -503,8 +533,14 @@
         "runtime": false
       },
       "decision_use": "Tests whether allocating half the incumbent portfolio to JAAA improves capital efficiency and diversification. A market decision requires positive excess versus both the unchanged incumbent and matched BIL control with enough forward observations.",
-      "forward_days": 3,
+      "forward_days": 4,
       "kind": "portfolio_diversification_challenger",
+      "observation_lineage": {
+        "market_data_asof": "2026-09-17",
+        "prospective_ledger_generated_at": "2026-09-17T10:06:46.223828+00:00",
+        "prospective_ledger_sha256": "ae23b5bd1fafbfda963b3ee30362d92452f1b04b092f310af35f3551886daf6e"
+      },
+      "observation_status": "ACTIVE",
       "paper_action": {
         "AVDV": 0.0625,
         "AVUV": 0.0625,
@@ -519,11 +555,11 @@
       },
       "program_id": "SENIOR_CLO",
       "scorecard": {
-        "annualized_vol": 0.09535666305195158,
-        "challenger_cumulative_bps": -113.51,
-        "excess_vs_incumbent_bps": 44.24,
-        "excess_vs_matched_cash_control_bps": 0.31,
-        "max_drawdown": -0.013390914864147785
+        "annualized_vol": 0.08086111053083322,
+        "challenger_cumulative_bps": -116.01,
+        "excess_vs_incumbent_bps": 53.65,
+        "excess_vs_matched_cash_control_bps": 3.74,
+        "max_drawdown": -0.013640470247167857
       },
       "signal": {
         "alternative": "JAAA",
@@ -562,6 +598,17 @@
       "decision_use": "Use as semiconductor entry/timing evidence. Positive forecasts authorize only the frozen paper cohort rules; prediction magnitude is not ranking or sizing authority. Prefer sector-level corroboration unless prospective stock-selection excess versus SMH is established.",
       "evidence_grade": "PROSPECTIVE_OPEN",
       "kind": "daily_entry_value_with_three_book_expression",
+      "observation_lineage": {
+        "cohort_id": "SEMICONDUCTOR_SHARED_RIDGE:2026-09-11:aed8eb43d888d3c4",
+        "cohort_status": "OPEN",
+        "market_data_asof": "2026-09-17",
+        "prospective_ledger_generated_at": "2026-09-17T10:06:46.223828+00:00",
+        "prospective_ledger_sha256": "ae23b5bd1fafbfda963b3ee30362d92452f1b04b092f310af35f3551886daf6e",
+        "signal_date": "2026-09-11",
+        "source_adapter_sha256": "aed8eb43d888d3c4d39c4db940c89e5d2247204567d4a0fcf129e9551f04e333",
+        "source_ref": "e73ec9b15180e208de541ce5d5304888e5550433"
+      },
+      "observation_status": "ACTIVE",
       "paper_action": {
         "industry_book": {
           "cohort_cash_fraction_nav": 0.0,
@@ -637,12 +684,12 @@
         "current_resolution": {
           "entry_date": "2026-09-14",
           "horizon_sessions": 20,
-          "sessions_completed": 1
+          "sessions_completed": 2
         },
         "current_signal_date": "2026-09-11",
         "late_registration_rejections": 0,
         "ledger_status": "PRESENT",
-        "market_data_asof": "2026-09-16",
+        "market_data_asof": "2026-09-17",
         "mean_ticker_book_excess_vs_smh_bps": null,
         "mean_ticker_positive_hit_rate": null,
         "minimum_resolved_for_promotion": 20,
@@ -722,6 +769,17 @@
       "decision_use": null,
       "evidence_grade": "PROSPECTIVE_OPEN",
       "kind": "entry_admission_plus_adaptive_duration",
+      "observation_lineage": {
+        "cohort_id": "HOMEBUILDERS:2026-09-11:00435d369ddcc3a3",
+        "cohort_status": "OPEN",
+        "market_data_asof": "2026-09-17",
+        "prospective_ledger_generated_at": "2026-09-17T10:06:46.223828+00:00",
+        "prospective_ledger_sha256": "ae23b5bd1fafbfda963b3ee30362d92452f1b04b092f310af35f3551886daf6e",
+        "signal_date": "2026-09-11",
+        "source_adapter_sha256": "00435d369ddcc3a3d8adbedb91a9662f047b292ff64fe6af6901bfd112466a59",
+        "source_ref": "100e356239b2399c054c1a41a18e4e9a5d07d33a"
+      },
+      "observation_status": "ACTIVE",
       "paper_action": {},
       "program_id": "HOMEBUILDERS",
       "prospective_evidence": {
@@ -730,7 +788,7 @@
         "current_signal_date": "2026-09-11",
         "late_registration_rejections": 0,
         "ledger_status": "PRESENT",
-        "market_data_asof": "2026-09-16",
+        "market_data_asof": "2026-09-17",
         "mean_excess_vs_itb_bps": null,
         "minimum_resolved_for_promotion": null,
         "open_cohorts": 1,
@@ -798,6 +856,12 @@
       "decision_use": "Use as cross-sector corroboration/discovery. It is the semiconductor-trained Ridge transported to target-excluded large caps, not an independently trained stock-selection model.",
       "evidence_grade": "NO_REGISTERED_PROSPECTIVE_COHORT",
       "kind": "target_excluded_transport_corroboration",
+      "observation_lineage": {
+        "market_data_asof": "2026-09-17",
+        "prospective_ledger_generated_at": "2026-09-17T10:06:46.223828+00:00",
+        "prospective_ledger_sha256": "ae23b5bd1fafbfda963b3ee30362d92452f1b04b092f310af35f3551886daf6e"
+      },
+      "observation_status": "CONTEXT_ONLY",
       "paper_action": {
         "avoid_or_falsify": [
           "XOM"
@@ -816,7 +880,7 @@
       "prospective_evidence": {
         "late_registration_rejections": 0,
         "ledger_status": "PRESENT",
-        "market_data_asof": "2026-09-16",
+        "market_data_asof": "2026-09-17",
         "minimum_resolved_for_promotion": null,
         "open_cohorts": 0,
         "program_id": "GENERALIZED_LARGECAP_RIDGE",
@@ -882,6 +946,12 @@
       },
       "decision_use": "Independent-validation challenger for the frozen P160 combination. P47 remains parked as a standalone sleeve; this observer does not reactivate it or grant allocation authority.",
       "kind": "fixed_cross_asset_industry_combination_challenger",
+      "observation_lineage": {
+        "market_data_asof": "2026-09-17",
+        "prospective_ledger_generated_at": "2026-09-17T10:06:46.223828+00:00",
+        "prospective_ledger_sha256": "ae23b5bd1fafbfda963b3ee30362d92452f1b04b092f310af35f3551886daf6e"
+      },
+      "observation_status": "CONTEXT_ONLY",
       "paper_action": {
         "matched_control_weights": {
           "DBC": 0.1,
@@ -957,6 +1027,12 @@
       },
       "decision_use": "Prospective replication monitor for the developed-ex-US currency-hedge mechanism. Judge HEFA and DBEF against their own unhedged controls; report SPY only as opportunity cost.",
       "kind": "developed_exus_currency_hedge_mechanism_challenger",
+      "observation_lineage": {
+        "market_data_asof": "2026-09-17",
+        "prospective_ledger_generated_at": "2026-09-17T10:06:46.223828+00:00",
+        "prospective_ledger_sha256": "ae23b5bd1fafbfda963b3ee30362d92452f1b04b092f310af35f3551886daf6e"
+      },
+      "observation_status": "ACTIVE",
       "paper_action": {
         "portfolio_authority": false,
         "status": "OBSERVE_ONLY"
@@ -965,16 +1041,16 @@
       "scientific_forward_credit": true,
       "scorecard": {
         "DBEF": {
-          "EFA_return_bps": 0.0,
-          "gross_return_bps": 0.0,
-          "matched_excess_if_flattened_now_bps": -50.0,
-          "net_if_flattened_now_bps": -50.0
+          "EFA_return_bps": -42.5127,
+          "gross_return_bps": -29.2024,
+          "matched_excess_if_flattened_now_bps": -36.6897,
+          "net_if_flattened_now_bps": -79.2024
         },
         "HEFA": {
-          "IEFA_return_bps": 0.0,
-          "gross_return_bps": 0.0,
-          "matched_excess_if_flattened_now_bps": -50.0,
-          "net_if_flattened_now_bps": -50.0
+          "IEFA_return_bps": -38.508,
+          "gross_return_bps": -2.1566,
+          "matched_excess_if_flattened_now_bps": -13.6485,
+          "net_if_flattened_now_bps": -52.1566
         },
         "cost_interpretation": {
           "entry_cost_bps": 25.0,
@@ -982,11 +1058,11 @@
           "reported_net_is_if_flattened_now": true
         },
         "mechanism": {
-          "SPY_return_bps": 0.0,
+          "SPY_return_bps": -45.8678,
           "both_implementations_positive_vs_matched": false,
-          "mean_matched_excess_if_flattened_now_bps": -50.0,
-          "mean_net_if_flattened_now_bps": -50.0,
-          "opportunity_excess_vs_SPY_bps": -50.0
+          "mean_matched_excess_if_flattened_now_bps": -25.1691,
+          "mean_net_if_flattened_now_bps": -65.6795,
+          "opportunity_excess_vs_SPY_bps": -19.8117
         }
       },
       "signal": {
@@ -1012,7 +1088,7 @@
           "date": "2026-09-14",
           "rule": "first common market-session close after registration"
         },
-        "forward_sessions": 1,
+        "forward_sessions": 2,
         "regime_is_not_timing_gate": true
       },
       "validation_grade": "PROSPECTIVE_OPEN"
@@ -1037,6 +1113,12 @@
       },
       "decision_use": "Prospective portfolio-level falsifier: determine whether the replicated developed-ex-US currency hedge improves the actual frozen allocator target beyond both unchanged cash and an equal unhedged developed-ex-US overlay.",
       "kind": "portfolio_level_currency_hedge_allocator_challenger",
+      "observation_lineage": {
+        "market_data_asof": "2026-09-17",
+        "prospective_ledger_generated_at": "2026-09-17T10:06:46.223828+00:00",
+        "prospective_ledger_sha256": "ae23b5bd1fafbfda963b3ee30362d92452f1b04b092f310af35f3551886daf6e"
+      },
+      "observation_status": "ACTIVE",
       "paper_action": {
         "portfolio_authority": false,
         "status": "OBSERVE_ONLY"
@@ -1051,25 +1133,25 @@
           "portfolio_roundtrip_cost_bps_if_flattened_now": 2.5
         },
         "hedged_challenger": {
-          "excess_vs_incumbent_bps": -3.284,
-          "gross_return_bps": -13.898,
-          "net_if_flattened_now_bps": -16.398
+          "excess_vs_incumbent_bps": -2.5374,
+          "gross_return_bps": -19.1458,
+          "net_if_flattened_now_bps": -21.6458
         },
-        "incumbent_return_bps": -13.114,
+        "incumbent_return_bps": -19.1085,
         "mechanism_attribution": {
-          "hedged_minus_spy_overlay_bps": 1.5094,
-          "hedged_minus_unhedged_bps": 1.2415,
+          "hedged_minus_spy_overlay_bps": 4.4509,
+          "hedged_minus_unhedged_bps": 3.7217,
           "portfolio_improvement_and_hedge_edge_both_positive": false
         },
         "spy_opportunity_control": {
-          "excess_vs_incumbent_bps": -4.7934,
-          "gross_return_bps": -15.4074,
-          "net_if_flattened_now_bps": -17.9074
+          "excess_vs_incumbent_bps": -6.9882,
+          "gross_return_bps": -23.5967,
+          "net_if_flattened_now_bps": -26.0967
         },
         "unhedged_matched_control": {
-          "excess_vs_incumbent_bps": -4.5255,
-          "gross_return_bps": -15.1395,
-          "net_if_flattened_now_bps": -17.6395
+          "excess_vs_incumbent_bps": -6.2591,
+          "gross_return_bps": -22.8675,
+          "net_if_flattened_now_bps": -25.3675
         }
       },
       "signal": {
@@ -1118,7 +1200,7 @@
       "timing": {
         "entry_date": "2026-09-14",
         "entry_rule": "first common market-session close after registration",
-        "forward_sessions": 2,
+        "forward_sessions": 3,
         "holding_rule": "buy-and-hold frozen registration weights; no rebalance or allocator mutation"
       },
       "validation_grade": "PROSPECTIVE_OPEN"

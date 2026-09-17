@@ -112,32 +112,32 @@
         "cost_detail": null,
         "date": "2026-09-16",
         "holding_month": "2026-09",
-        "p249_core_gross": 0.000980639960341731,
-        "p249_core_net": 0.000980639960341731,
-        "p249_plus_p266_gross": 0.0006969597610098681,
-        "p249_plus_p266_net": 0.0006969597610098681,
-        "satellite_increment_net": -0.0002836801993318629
+        "p249_core_gross": -0.0006333004393428313,
+        "p249_core_net": -0.0006333004393428313,
+        "p249_plus_p266_gross": -0.0005134955387535535,
+        "p249_plus_p266_net": -0.0005134955387535535,
+        "satellite_increment_net": 0.00011980490058927779
       }
     ],
     "p249_core_net": {
-      "annualized_vol": 0.2047117517694428,
-      "cumulative_return": -0.02832960664952755,
+      "annualized_vol": 0.20170995977019743,
+      "cumulative_return": -0.029896288401801918,
       "days": 5,
-      "max_drawdown": -0.021491793078064036,
-      "sharpe_rf0": -6.972651084816838
+      "max_drawdown": -0.022078057655932626,
+      "sharpe_rf0": -7.479681300382553
     },
     "p249_plus_p266_net": {
-      "annualized_vol": 0.19380854283330223,
-      "cumulative_return": -0.030698836033506427,
+      "annualized_vol": 0.1912859646749657,
+      "cumulative_return": -0.03187131459411918,
       "days": 5,
-      "max_drawdown": -0.022141881157382914,
-      "sharpe_rf0": -8.00505034260647
+      "max_drawdown": -0.02264400693894264,
+      "sharpe_rf0": -8.429547311825806
     },
-    "satellite_increment_cumulative": -0.002462726941168336
+    "satellite_increment_cumulative": -0.0020601213036255395
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-09-17T01:20:55.492065+00:00",
+  "observed_at": "2026-09-17T10:06:07.180672+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_pins": {
