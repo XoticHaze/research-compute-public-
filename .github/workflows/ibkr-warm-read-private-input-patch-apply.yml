@@ -1,0 +1,80 @@
+name: IBKR Warm Read Private Input Patch Apply
+
+on:
+  push:
+    branches:
+      - assistant/ibkr-warm-read-private-input-20260917
+    paths:
+      - '.github/workflows/ibkr-warm-read-private-input-patch-apply.yml'
+      - 'scripts/patch_ibkr_warm_read_private_input_v1.py'
+      - 'scripts/ibkr_warm_read_request_v1.py'
+      - 'tests/test_ibkr_warm_read_request_v1.py'
+      - 'tests/test_ibkr_b1_warm_state_workflow_v2.py'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: assistant/ibkr-warm-read-private-input-20260917
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Apply deterministic private-input workflow patch
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/patch_ibkr_warm_read_private_input_v1.py scripts/ibkr_warm_read_request_v1.py tests/test_ibkr_warm_read_request_v1.py
+          python scripts/patch_ibkr_warm_read_private_input_v1.py
+
+      - name: Validate workflow and read request/return contracts
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check \
+            'cryptography==46.0.1' \
+            'ib_insync==0.9.86' \
+            'pandas==2.2.3' \
+            'PyYAML==6.0.2'
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          path=Path('.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml')
+          node=yaml.safe_load(path.read_text(encoding='utf-8'))
+          if not isinstance(node, dict) or 'jobs' not in node:
+              raise SystemExit('patched warm workflow YAML invalid')
+          print('IBKR_WARM_READ_PRIVATE_INPUT_YAML_VALID=1')
+          PY
+          python -m py_compile \
+            scripts/ibkr_warm_read_request_v1.py \
+            scripts/ibkr_warm_read_return_v1.py \
+            tests/test_ibkr_warm_read_request_v1.py \
+            tests/test_ibkr_warm_read_return_v1.py \
+            tests/test_ibkr_b1_warm_state_workflow_v2.py
+          python -m unittest \
+            tests.test_ibkr_warm_read_request_v1 \
+            tests.test_ibkr_warm_read_return_v1 \
+            tests.test_ibkr_b1_warm_state_workflow_v2 -v
+          echo 'IBKR_BROKER_LOGIN_ATTEMPTED=0'
+          echo 'IBKR_BROKER_ORDER_ATTEMPTED=0'
+          echo 'IBKR_WARM_READ_PRIVATE_INPUT_VALID=1'
+
+      - name: Stage exact validated workflow blob
+        run: |
+          set -euo pipefail
+          mkdir -p staging/ibkr-warm-read-private-input
+          cp .github/workflows/ibkr-cloudflare-readonly-b1-r1.yml staging/ibkr-warm-read-private-input/ibkr-cloudflare-readonly-b1-r1.validated.yml
+          sha256sum staging/ibkr-warm-read-private-input/ibkr-cloudflare-readonly-b1-r1.validated.yml > staging/ibkr-warm-read-private-input/ibkr-cloudflare-readonly-b1-r1.validated.sha256
+          git checkout -- .github/workflows/ibkr-cloudflare-readonly-b1-r1.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add staging/ibkr-warm-read-private-input
+          git diff --cached --check
+          git diff --cached --quiet && { echo 'private-input staging produced no changes'; exit 3; }
+          git commit -m 'test: stage validated private-input warm read workflow'
+          git push origin HEAD:assistant/ibkr-warm-read-private-input-20260917
