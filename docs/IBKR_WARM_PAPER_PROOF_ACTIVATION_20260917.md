@@ -58,3 +58,7 @@ Canonical submit acknowledgements and the MM-authorized order intent still come 
 - nonce-correlated workflow validation: run `35215591132` — validate PASS, broker job SKIPPED.
 
 No broker login or order mutation was attempted by these validation runs.
+
+## Failure ordering guarantee
+
+The paper-proof step is `continue-on-error` only to preserve lifecycle cleanup. A blocked or failed proof is not accepted: the existing Gateway is still gracefully stopped, the clean warm state is resealed and persisted, and only then does a dedicated assessment step fail the job. This prevents a proof failure from degrading the already-proven reusable authentication state.
