@@ -102,6 +102,43 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         consumer_ready = self.text.index("echo 'IBKR_CONSUMER_READY=1'", post_auth)
         self.assertLess(post_auth, consumer_ready)
 
+    def test_readonly_remains_default_and_writable_api_requires_explicit_proof_dispatch(self):
+        self.assertIn('default: readonly', self.text)
+        self.assertIn('- paper_submit_proof', self.text)
+        self.assertIn("IBKR_PAPER_PROOF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' && '1' || '0' }}", self.text)
+        self.assertIn('api_read_only=yes', self.text)
+        self.assertIn('if [ "$IBKR_PAPER_PROOF_MODE" = "1" ]; then', self.text)
+        self.assertIn('api_read_only=no', self.text)
+        self.assertIn('-e READ_ONLY_API="$api_read_only"', self.text)
+        self.assertNotIn('-e READ_ONLY_API=no', self.text)
+
+    def test_paper_proof_uses_existing_warm_job_and_encrypted_command_gate(self):
+        post_auth = self.text.index('name: Materialize canonical post-auth broker and forward-data handoff')
+        proof = self.text.index('name: Execute one encrypted MM-authorized selected-runtime paper proof')
+        stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
+        self.assertLess(post_auth, proof)
+        self.assertLess(proof, stop)
+        self.assertIn("if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' }}", self.text)
+        self.assertIn('python scripts/ibkr_warm_selected_runtime_activation_v1.py', self.text)
+        self.assertIn('--exchange-ref rendezvous-exchange', self.text)
+        self.assertIn('GH_TOKEN: ${{ github.token }}', self.text)
+
+    def test_broker_job_write_permission_is_scoped_to_same_job_and_live_stays_disabled(self):
+        broker = self.text.index('broker-data-proof:')
+        broker_tail = self.text[broker:]
+        self.assertIn('permissions:\n      contents: write\n      actions: read\n      id-token: write', broker_tail)
+        self.assertIn('IBKR_REMOTE_GLOBAL_CANCEL_CALLED=0', Path('scripts/ibkr_warm_selected_runtime_activation_v1.py').read_text(encoding='utf-8'))
+        activator = Path('scripts/ibkr_warm_selected_runtime_activation_v1.py').read_text(encoding='utf-8')
+        self.assertIn('"ENABLE_LIVE_TRADING": "0"', activator)
+        self.assertIn('"STRATEGY_IBKR_PAPER_GLOBAL_CANCEL_ENABLED_13Z37D": "0"', activator)
+
+    def test_activation_private_material_is_destroyed_with_gateway_runtime(self):
+        self.assertIn('docker rm -f mmibkr-warm-selected-runtime-proof', self.text)
+        self.assertIn('docker image rm "mmibkr-warm-proof:${GITHUB_RUN_ID}"', self.text)
+        self.assertIn('"$RUNNER_TEMP/ibkr-command-private.b64"', self.text)
+        self.assertIn('"$RUNNER_TEMP/ibkr-paper-proof-return"', self.text)
+        self.assertIn('"$RUNNER_TEMP/mm-ibkr-source"', self.text)
+
 
 if __name__ == '__main__':
     unittest.main()
