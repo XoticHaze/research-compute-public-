@@ -5,14 +5,7 @@ const EXPECTED_REPOSITORY = 'XoticHaze/research-compute-public-';
 const EXPECTED_AUTHORITY = 'ibkr-paper-readonly';
 const ALLOWED_REF = 'refs/heads/ibkr-b1-authority-v1';
 const ALLOWED_EVENTS = new Set(['push', 'workflow_dispatch']);
-const ALLOWED_EVENT_CONTRACT = 'push+workflow_dispatch';
-const ALLOWED_WORKFLOW_REFS = new Set([
-  'XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1',
-  'XoticHaze/research-compute-public-/.github/workflows/ibkr-legacy-ibc-auth-comparator.yml@refs/heads/ibkr-b1-authority-v1',
-]);
-const ALLOWED_WORKFLOW_CONTRACT = 'canonical-b1+legacy-ibc-comparator';
-const ALLOWED_WORKFLOW_SHA = '2cd779dc56b06c382c6320466c580c22edf19730';
-const CREDENTIAL_BINDING_CONTRACT = 'IBKR_PAPER_USERNAME+IBKR_PAPER_PASSWORD';
+const ALLOWED_WORKFLOW_REF = 'XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1';
 const REQUEST_SCHEMA = 'mmibkr-fleet-authority-seal-request-v1';
 const ENVELOPE_SCHEMA = 'mmibkr-ibkr-readonly-gateway-env-x25519-hkdf-aesgcm-v1';
 
@@ -118,8 +111,7 @@ async function verifyGithubOidc(jwt, requestedRunId) {
   if (claims.repository_visibility !== 'public') throw new Error('oidc_visibility_rejected');
   if (claims.runner_environment !== 'github-hosted') throw new Error('oidc_runner_rejected');
   if (claims.ref !== ALLOWED_REF) throw new Error('oidc_ref_rejected');
-  if (!ALLOWED_WORKFLOW_REFS.has(claims.workflow_ref)) throw new Error('oidc_workflow_ref_rejected');
-  if (claims.workflow_sha !== ALLOWED_WORKFLOW_SHA) throw new Error('oidc_workflow_sha_rejected');
+  if (claims.workflow_ref !== ALLOWED_WORKFLOW_REF) throw new Error('oidc_workflow_ref_rejected');
   if (!ALLOWED_EVENTS.has(claims.event_name)) throw new Error('oidc_event_rejected');
   if (String(claims.run_id) !== requestedRunId) throw new Error('oidc_run_rejected');
 
@@ -221,7 +213,6 @@ async function sealIbkrGatewayEnv(body, env, oidc) {
   return {
     schema: ENVELOPE_SCHEMA,
     authority: EXPECTED_AUTHORITY,
-    credential_binding_contract: CREDENTIAL_BINDING_CONTRACT,
     run_id: runId,
     recipient_key_id: recipientKeyId,
     ephemeral_public_b64: bytesToB64(ephemeralPublic),
@@ -247,21 +238,7 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === 'GET' && url.pathname === '/healthz') {
-      return json({
-        ok: true,
-        service: 'mmibkr-fleet-authority',
-        contract_version: 3,
-        allowed_workflow_sha: ALLOWED_WORKFLOW_SHA,
-        allowed_event_contract: ALLOWED_EVENT_CONTRACT,
-        allowed_workflow_contract: ALLOWED_WORKFLOW_CONTRACT,
-        credential_binding_contract: CREDENTIAL_BINDING_CONTRACT,
-        authority_configured: Boolean(env.IBKR_PAPER_USERNAME && env.IBKR_PAPER_PASSWORD),
-        paper_username_binding_configured: Boolean(env.IBKR_PAPER_USERNAME),
-        paper_password_binding_configured: Boolean(env.IBKR_PAPER_PASSWORD),
-        paper_server_configured: Boolean(env.IBKR_PAPER_TWS_SERVER || env.TWS_SERVER_PAPER || env.IBKR_TWS_SERVER || env.TWS_SERVER),
-        totp_configured: Boolean(env.IBKR_PAPER_TWOFACTOR_CODE || env.IBKR_TWOFACTOR_CODE || env.TWOFACTOR_CODE),
-        twofa_device_configured: Boolean(env.IBKR_PAPER_TWOFA_DEVICE || env.IBKR_TWOFA_DEVICE || env.TWOFA_DEVICE),
-      });
+      return json({ ok: true, service: 'mmibkr-fleet-authority' });
     }
 
     if (request.method !== 'POST' || url.pathname !== '/v1/authorities/ibkr-paper/seal') {
