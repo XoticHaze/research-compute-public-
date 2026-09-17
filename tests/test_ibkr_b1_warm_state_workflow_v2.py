@@ -84,6 +84,16 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         self.assertIn('IBKR_WARM_STATE_SEED_MODE=CONTROLLER_NATIVE', self.text)
         self.assertNotIn('-v "$jts_volume:/state" -v "$RUNNER_TEMP:/import:ro" alpine:3.22 sh -lc \'tar -xzf /import/ibkr-b1-warm-state.tgz -C /state', self.text)
 
+    def test_restored_seed_is_owned_and_readable_by_controller_runtime_user(self):
+        self.assertIn('gateway_uid="$(docker run --rm --entrypoint /usr/bin/id "$IBKR_CONTROLLER_IMAGE" -u)"', self.text)
+        self.assertIn('gateway_gid="$(docker run --rm --entrypoint /usr/bin/id "$IBKR_CONTROLLER_IMAGE" -g)"', self.text)
+        self.assertIn('-e GATEWAY_UID="$gateway_uid"', self.text)
+        self.assertIn('-e GATEWAY_GID="$gateway_gid"', self.text)
+        self.assertIn('chown -R "$GATEWAY_UID:$GATEWAY_GID" /warm-seed', self.text)
+        self.assertIn('-v "$warm_volume:/warm-seed:ro"', self.text)
+        self.assertIn('cp -a /warm-seed/. /tmp/warm-read-check/', self.text)
+        self.assertIn('IBKR_WARM_STATE_SEED_READABLE=1', self.text)
+
     def test_native_seed_volume_is_destroyed_with_private_runtime(self):
         self.assertIn('docker volume rm -f "$warm_volume"', self.text)
 
