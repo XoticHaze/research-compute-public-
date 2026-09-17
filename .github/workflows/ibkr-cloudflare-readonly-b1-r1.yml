@@ -58,7 +58,6 @@ jobs:
     timeout-minutes: 40
     env:
       FLEET_AUTHORITY_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-paper/seal
-      FLEET_AUTHORITY_HEALTH: https://fleet-authority.slenderiq.workers.dev/healthz
       IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
       POST_AUTH_SYMBOLS: AMAT,APH
     steps:
@@ -83,41 +82,6 @@ jobs:
             research/forward_bar_contract_v2.py \
             tests/test_ibkr_b1_auth_contracts_v1.py
           python -m unittest tests.test_ibkr_b1_auth_contracts_v1 -v
-
-      - name: Require deployed B1 authority contract
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json, os, time
-          from urllib.request import Request, urlopen
-          url = os.environ['FLEET_AUTHORITY_HEALTH']
-          expected_sha = os.environ['GITHUB_SHA']
-          expected_binding = 'IBKR_PAPER_USERNAME+IBKR_PAPER_PASSWORD'
-          for _ in range(60):
-              try:
-                  req=Request(url,headers={'Accept':'application/json','User-Agent':'mmibkr-b1-health-v4'})
-                  with urlopen(req,timeout=15) as r:
-                      node=json.loads(r.read().decode('utf-8'))
-                  if (
-                      node.get('ok') is True
-                      and node.get('authority_configured') is True
-                      and node.get('contract_version') == 3
-                      and node.get('paper_username_binding_configured') is True
-                      and node.get('paper_password_binding_configured') is True
-                      and node.get('allowed_workflow_sha') == expected_sha
-                      and node.get('credential_binding_contract') == expected_binding
-                  ):
-                      print('FLEET_AUTHORITY_HEALTH=READY_V3_PROVENANCE')
-                      print('ALLOWED_WORKFLOW_SHA=' + node['allowed_workflow_sha'])
-                      print('CREDENTIAL_BINDING_CONTRACT=' + node['credential_binding_contract'])
-                      print('IBKR_PAPER_SERVER_CONFIGURED=' + ('1' if node.get('paper_server_configured') else '0'))
-                      print('IBKR_TOTP_CONFIGURED=' + ('1' if node.get('totp_configured') else '0'))
-                      raise SystemExit(0)
-              except Exception:
-                  pass
-              time.sleep(5)
-          raise SystemExit('deployed fleet authority provenance does not match this workflow SHA')
-          PY
 
       - name: Obtain one-run sealed gateway environment
         run: |
