@@ -73,7 +73,9 @@ class WarmReadReturnTests(unittest.TestCase):
             self.assertEqual(envelope["schema"], mod.RETURN_ENVELOPE_SCHEMA)
             self.assertEqual(envelope["run_id"], "12345")
             self.assertEqual(envelope["recipient_key_id"], recipient_key_id)
+            self.assertEqual(mod.RETURN_INFO, b"mm-ibkr-warm-read-return-v1")
             self.assertGreater(len(envelope["chunks"]), 0)
+            self.assertFalse((root / "ibkr-warm-read-snapshot.json").exists())
 
             pieces = []
             for node in envelope["chunks"]:
