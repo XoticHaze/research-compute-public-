@@ -88,6 +88,57 @@ Do not destroy or replace the known-good `2cd779dc...` authority branch while te
 - Survivor-forward decision -> canonical paper action -> attributable completed-trade evidence.
 - Controlled transition from read-only broker proof to narrowly scoped paper-submit authority.
 
+## Current MM-IBKR canonical paper-execution binding
+Grounded against `XoticHaze/mm-IBKR` `main` at commit `dbbae1be58e45e3e89cc0ec56c8b4c1b043a8c41`, tree `d9d1adf33510c1ffcc3bee9cb2b5f48a94792059`.
+
+### Broker/session owner
+- `main.py` owns the shared `IB()` session.
+- The internal control runtime reuses that session rather than creating a second broker connection.
+- `controller.selected_runtime_submit_callable_14th31cx` is the selected-runtime execution seam used by natural candidate materialization.
+
+### Canonical primary submit
+- Route: `POST /strategy/ibkr-paper-order-submit`
+- Handler: `strategy_ibkr_paper_order_submit`
+- Contract: `ibkr_paper_order_submit_13z53`
+- Materializer/qualification chain: `_ibkr_order_13z50_materialize` -> `_ibkr_order_13z51_req_contract_details` -> `_ibkr_order_13z52_order_type_support` -> `_ibkr_order_13z62_execution_policy`.
+- Selected-runtime authority: `_selected_runtime_execution_authority_14th31cx(payload, symbol=...)`.
+- Submit is blocked unless that authority reports `paper_submit_enabled=true`.
+- Selected runtime `execution_policy` also controls market orders, inactive-session orders, shorts, and sizing/limits.
+- `_ibkr_order_14th31lg_resolve_selected_runtime_sizing` resolves authoritative paper quantity/current-position consequences before submit.
+- A single DU paper account is required.
+- Duplicate/open-order state and orderRef conflicts are blocked before placement.
+- Contract qualification, broker order-type support, route/session policy, limit-price/minTick policy, and authoritative broker-state preflight all fail closed.
+- Live authority remains independently exposed as `ENABLE_LIVE_TRADING`; do not collapse that into paper-submit authority.
+
+### Open-order truth and duplicate guard
+- Route: `GET /strategy/ibkr-paper-open-orders`.
+- `_ibkr_submit_13z36_open_order_rows()` joins `ib.openTrades()` and `ib.openOrders()` into canonical open-order rows with orderId, permId, clientId, orderRef, action, status, filled, remaining, account and contract identity.
+- `_ibkr_submit_13z36_build_open_order_guard()` blocks duplicate `orderRef`, exact duplicate open orders, and unresolved same-symbol/account/action broker orders before `placeOrder`.
+
+### Cancel
+- Routes: `POST /strategy/ibkr-paper-cancel-preview` and `POST /strategy/ibkr-paper-cancel-submit`.
+- Handler core: `_ibkr_cancel_13z37_result(payload, execute=...)`.
+- Submit requires a single DU paper account, `STRATEGY_IBKR_PAPER_CANCEL_ENABLED_13Z37`, operator approval, and exact `IBKR_PAPER_CANCEL_ACK_13Z37` acknowledgement.
+- Cancel uses the existing `ib.openTrades()` order object and `ib.cancelOrder()`.
+- It then re-reads open-order state and fails reconciliation if requested orders remain open or a clientId mismatch is suspected.
+- Global cancel also has dedicated preview/submit routes with exact expected-order-set matching before `reqGlobalCancel`.
+
+### Flatten
+- Preview route: `POST /strategy/ibkr-paper-flatten-preview-suite`.
+- Current flatten chain derives action/quantity from actual `ib.positions()` plus portfolio state and blocks when unresolved orders exist for the symbol or the session is not a single DU paper account.
+- The submit/lifecycle artifacts live under `strategy_ibkr_paper_flatten_submit_suite_13z39`; cloud integration should reuse this executor contract rather than synthesize close orders independently.
+
+### Reconcile / lifecycle evidence
+- Route: `POST /strategy/ibkr-paper-order-reconcile`.
+- Contract: `ibkr_paper_submitted_open_reconcile_13z60`.
+- Current lifecycle code joins exact order identity, broker status, openTrades/openOrders, fills/remaining, and before/after position snapshots.
+- Canonical lifecycle schema: `broker_lifecycle_13z58.v1`.
+- It records lifecycle state, fill mode, failure mode, avg/last fill price, permId, position before/after/delta, whether an open order remains, retry policy, and whether a confirmed BUY makes a subsequent SELL safe.
+- `POST /strategy/ibkr-paper-broker-lifecycle-artifacts` exposes local lifecycle artifacts and optional explicit live broker snapshots without mutating orders.
+
+### Cloud integration consequence
+Do not build a second cloud-native trader. The encrypted public-compute worker should transport a narrowly scoped canonical request and authoritative selected-runtime context, then execute the same semantic contract above against its authenticated paper `IB()` session. The minimum accepted paper-forward proof must preserve all fail-closed guards and return enough broker identity/lifecycle evidence to be consumed by MM-IBKR Strategy Intelligence.
+
 ## Survivor-forward objective
 The remaining high-value vertical slice is:
 
@@ -109,7 +160,7 @@ The existing encrypted survivor acceptance capsule only proves the verifier/admi
 2. Add broker-free contract tests for fresh-vs-restored classifier behavior and lifecycle ordering where feasible.
 3. Advance Cloudflare allowed workflow SHA intentionally to the repair commit, then rerun cold/fresh proof if required by authority contract.
 4. Run cross-runner warm restoration and require authenticated/API-ready continuation.
-5. In `XoticHaze/mm-IBKR`, locate and record exact canonical paper submit/cancel/reconcile functions and selected-runtime gates.
+5. **DONE:** Ground current `XoticHaze/mm-IBKR` canonical submit/cancel/reconcile functions and selected-runtime gates at `dbbae1be58e45e3e89cc0ec56c8b4c1b043a8c41`.
 6. Expose those mechanics to the hardened public compute worker without duplicating decision authority.
 7. Start with minimal paper action scope and mandatory post-action order/position/fill reconciliation.
 8. Feed attributable results back into the existing Strategy Intelligence / survivor-forward evidence path.
