@@ -109,13 +109,19 @@ jobs:
           echo 'IBKR_BROKER_ORDER_ATTEMPTED=0'
           echo 'IBKR_WARM_READ_GATEWAY_PATCH_VALID=1'
 
-      - name: Commit accepted wiring
+      - name: Publish validated workflow blob for trusted promotion
         run: |
           set -euo pipefail
+          mkdir -p staging/ibkr-warm-read-gateway
+          cp .github/workflows/ibkr-cloudflare-readonly-b1-r1.yml staging/ibkr-warm-read-gateway/ibkr-cloudflare-readonly-b1-r1.validated.yml
+          sha256sum staging/ibkr-warm-read-gateway/ibkr-cloudflare-readonly-b1-r1.validated.yml > staging/ibkr-warm-read-gateway/ibkr-cloudflare-readonly-b1-r1.validated.sha256
+          # The Actions token is intentionally not allowed to update workflow files.
+          # Revert the workflow path and push only the validated blob + regression tests.
+          git checkout -- .github/workflows/ibkr-cloudflare-readonly-b1-r1.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/workflows/ibkr-cloudflare-readonly-b1-r1.yml tests/test_ibkr_b1_warm_state_workflow_v2.py
+          git add staging/ibkr-warm-read-gateway tests/test_ibkr_b1_warm_state_workflow_v2.py
           git diff --cached --check
-          git diff --cached --quiet && { echo 'warm read gateway patch produced no changes'; exit 3; }
-          git commit -m 'feat: wire encrypted warm read gateway return'
+          git diff --cached --quiet && { echo 'warm read gateway staging produced no changes'; exit 3; }
+          git commit -m 'test: stage validated encrypted warm read workflow'
           git push origin HEAD:assistant/ibkr-warm-read-gateway-20260917
