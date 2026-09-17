@@ -173,37 +173,43 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         self.assertIn('"$RUNNER_TEMP/ibkr-paper-proof-return"', self.text)
         self.assertIn('"$RUNNER_TEMP/mm-ibkr-source"', self.text)
 
+    def test_optional_warm_read_request_is_private_and_run_bound(self):
+        self.assertIn('read_return_requested:', self.text)
+        self.assertNotIn('read_return_recipient_b64:', self.text)
+        self.assertNotIn('read_return_recipient_key_id:', self.text)
+        self.assertNotIn('description: Comma-separated market symbols', self.text)
+        self.assertIn('python scripts/ibkr_warm_read_request_v1.py', self.text)
+        self.assertIn('--run-id "$GITHUB_RUN_ID"', self.text)
+        self.assertIn('--public-head "$GITHUB_SHA"', self.text)
+        self.assertIn('--dispatch-nonce "$READ_DISPATCH_NONCE"', self.text)
+        self.assertIn('IBKR_WARM_READ_REQUEST_MATERIALIZED=1', self.text)
+        self.assertIn('IBKR_WARM_READ_RETURN_REQUESTED=1', self.text)
+        self.assertIn('"$RUNNER_TEMP/ibkr-warm-read-request"', self.text)
 
+    def test_optional_warm_read_return_is_encrypted_after_private_request(self):
+        request = self.text.index('name: Materialize optional encrypted warm read request')
+        obtain = self.text.index('name: Obtain one-run sealed gateway environment')
+        post_auth = self.text.index('name: Materialize canonical post-auth broker and forward-data handoff')
+        encrypt = self.text.index('name: Encrypt optional detailed warm read snapshot for private consumer')
+        publish = self.text.index('name: Publish encrypted warm read return')
+        proof = self.text.index('name: Execute one encrypted MM-authorized selected-runtime paper proof')
+        stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
+        self.assertLess(request, obtain)
+        self.assertLess(obtain, post_auth)
+        self.assertLess(post_auth, encrypt)
+        self.assertLess(encrypt, publish)
+        self.assertLess(publish, proof)
+        self.assertLess(proof, stop)
+        self.assertIn('python scripts/ibkr_warm_read_return_v1.py', self.text)
+        self.assertIn('IBKR_WARM_READ_RETURN_PLAINTEXT_PUBLISHED=0', self.text)
 
-def test_optional_warm_read_return_is_readonly_run_bound_and_encrypted(self):
-    self.assertIn('read_return_recipient_b64:', self.text)
-    self.assertIn('read_return_recipient_key_id:', self.text)
-    self.assertIn('symbols:', self.text)
-    self.assertIn("inputs.mode == 'readonly'", self.text)
-    self.assertIn('IBKR_WARM_READ_RETURN_REQUEST_VALID=1', self.text)
-    self.assertIn('python scripts/ibkr_warm_read_return_v1.py', self.text)
-    self.assertIn('--run-id "$GITHUB_RUN_ID"', self.text)
-    self.assertIn('--public-head "$GITHUB_SHA"', self.text)
-    self.assertIn('rendezvous/returns/{run_id}/', self.text)
-    self.assertIn('IBKR_WARM_READ_RETURN_PLAINTEXT_PUBLISHED=0', self.text)
-    self.assertIn('"$RUNNER_TEMP/ibkr-warm-read-return"', self.text)
-    post_auth = self.text.index('name: Materialize canonical post-auth broker and forward-data handoff')
-    encrypt = self.text.index('name: Encrypt optional detailed warm read snapshot for private consumer')
-    publish = self.text.index('name: Publish encrypted warm read return')
-    proof = self.text.index('name: Execute one encrypted MM-authorized selected-runtime paper proof')
-    stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
-    self.assertLess(post_auth, encrypt)
-    self.assertLess(encrypt, publish)
-    self.assertLess(publish, proof)
-    self.assertLess(proof, stop)
+    def test_warm_read_return_does_not_enable_writable_gateway(self):
+        self.assertIn("IBKR_WARM_READ_RETURN_REQUESTED: '0'", self.text)
+        writable = self.text.index('if [ "$IBKR_PAPER_PROOF_MODE" = "1" ]; then')
+        writable_tail = self.text[writable:writable + 160]
+        self.assertIn('api_read_only=no', writable_tail)
+        self.assertNotIn('IBKR_WARM_READ_RETURN_REQUESTED', writable_tail)
 
-def test_warm_read_return_does_not_enable_writable_gateway(self):
-    needle = "IBKR_WARM_READ_RETURN_REQUESTED: $" + "{{ github.event_name == 'workflow_dispatch' && inputs.mode == 'readonly'"
-    self.assertIn(needle, self.text)
-    writable = self.text.index('if [ "$IBKR_PAPER_PROOF_MODE" = "1" ]; then')
-    writable_tail = self.text[writable:writable + 160]
-    self.assertIn('api_read_only=no', writable_tail)
-    self.assertNotIn('IBKR_WARM_READ_RETURN_REQUESTED', writable_tail)
 
 if __name__ == '__main__':
     unittest.main()
