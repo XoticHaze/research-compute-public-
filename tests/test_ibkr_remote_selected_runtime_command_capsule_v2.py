@@ -89,7 +89,7 @@ class SelectedRuntimeCommandCapsuleV2Tests(unittest.TestCase):
     def test_selected_runtime_must_be_paper_only(self):
         node = self.capsule()
         node["request"]["selected_runtime_authority"]["live_submit_enabled"] = True
-        with self.assertRaisesRegex(RuntimeError, "live submit must be disabled"):
+        with self.assertRaisesRegex(RuntimeError, "live authority rejected"):
             self.validate(node)
         node = self.capsule()
         node["request"]["selected_runtime_authority"]["paper_submit_enabled"] = False
