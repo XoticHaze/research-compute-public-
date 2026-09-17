@@ -62,7 +62,21 @@ Repair direction:
 5. Publish encrypted state.
 6. Destroy runtime material.
 
-Do not destroy or replace the known-good `2cd779dc...` authority branch while testing this repair. Cloudflare provenance/allowlisting must be intentionally advanced to any new workflow SHA before a broker run can consume it.
+## Fleet-authority steady-state contract
+PR #1433 merged to `main` as `7b5fc27b42202bbc9061c67ca545fb74d85b1317` and removes the moving workflow-SHA authorization ceremony from the Cloudflare Worker.
+
+The Worker now trusts the stable GitHub OIDC workload identity while retaining fail-closed signature/time validation and stable defense-in-depth claims:
+- exact repository
+- public repository visibility
+- GitHub-hosted runner
+- exact authority branch/ref
+- exact canonical workflow ref
+- admitted `push` / `workflow_dispatch` event
+- matching `run_id`
+
+`workflow_sha` remains provenance metadata only. Normal commits on the admitted authority branch must not require a Cloudflare dashboard edit, Wrangler SHA update, health-contract update, or one-time phrase. `/healthz` is liveness only.
+
+The warm-repair workflow therefore removes the old SHA/config health preflight and goes directly from broker-free validation to the one-run sealed envelope request.
 
 ## Cloud exchange-capability matrix
 ### Proven
@@ -156,14 +170,15 @@ The existing encrypted survivor acceptance capsule only proves the verifier/admi
 - Do not report `WARM_SESSION_REUSED` unless reuse actually occurred.
 
 ## Next executable sequence
-1. Patch the B1 workflow on a side branch: truthful auth-path classifier + graceful-stop-before-snapshot + 90-second stop grace.
-2. Add broker-free contract tests for fresh-vs-restored classifier behavior and lifecycle ordering where feasible.
-3. Advance Cloudflare allowed workflow SHA intentionally to the repair commit, then rerun cold/fresh proof if required by authority contract.
-4. Run cross-runner warm restoration and require authenticated/API-ready continuation.
-5. **DONE:** Ground current `XoticHaze/mm-IBKR` canonical submit/cancel/reconcile functions and selected-runtime gates at `dbbae1be58e45e3e89cc0ec56c8b4c1b043a8c41`.
-6. Expose those mechanics to the hardened public compute worker without duplicating decision authority.
-7. Start with minimal paper action scope and mandatory post-action order/position/fill reconciliation.
-8. Feed attributable results back into the existing Strategy Intelligence / survivor-forward evidence path.
+1. **DONE:** Patch the B1 workflow on a side branch with truthful auth-path classification, graceful-stop-before-snapshot, and 90-second stop grace.
+2. **DONE:** Add broker-free contract tests for fresh-vs-restored classifier behavior, lifecycle ordering, and absence of mutable SHA/health preflight.
+3. **DONE:** Replace mutable Cloudflare SHA authorization with stable GitHub OIDC workload identity in PR #1433 / `7b5fc27b...`.
+4. Merge the warm repair into `ibkr-b1-authority-v1` and run the canonical broker proof. A successful one-run sealed-envelope request is also the live proof that the new Worker deployment is active.
+5. Run a second fresh-runner proof and require restored state -> API-ready authenticated paper continuation before reporting warm-session reuse accepted.
+6. **DONE:** Ground current `XoticHaze/mm-IBKR` canonical submit/cancel/reconcile functions and selected-runtime gates at `dbbae1be58e45e3e89cc0ec56c8b4c1b043a8c41`.
+7. Expose those mechanics to the hardened public compute worker without duplicating decision authority.
+8. Start with minimal paper action scope and mandatory post-action order/position/fill reconciliation.
+9. Feed attributable results back into the existing Strategy Intelligence / survivor-forward evidence path.
 
 ## Agent pickup rule
 Do not reconstruct this lane from chat summaries or compacted poller output if repository truth is available. Pin the repository/branch/SHA first, fetch the exact workflow/source files through the GitHub connector, run the cheapest decisive test, implement the consequence, and update this handoff or its successor with commit/run evidence.
