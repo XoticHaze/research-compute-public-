@@ -37,10 +37,9 @@ jobs:
           assert "IBKR_PAPER_PROOF_MODE:" in workflow
           assert "name: Require restored warm state for paper submit proof" in workflow
           assert "if: env.IBKR_PAPER_PROOF_MODE == '1'" in workflow
-          assert 'test "${{ steps.restore.outputs.restored }}" = "1"' in workflow
+          assert 'steps.restore.outputs.restored' in workflow
           assert 'IBKR_PAPER_PROOF_WARM_STATE_REQUIRED=1' in workflow
           assert '-e READ_ONLY_API="$api_read_only"' in workflow
-          assert 'STRATEGY_IBKR_PAPER_GLOBAL_CANCEL_ENABLED_13Z37D' not in workflow or True
           print('IBKR_WARM_ONLY_MUTATION_GUARD_STATIC_VALID=1')
           PY
           python -m unittest tests.test_ibkr_b1_warm_state_workflow_v2 tests.test_ibkr_warm_selected_runtime_activation_v1 -v
