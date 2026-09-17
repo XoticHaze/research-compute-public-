@@ -18,6 +18,7 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -27,6 +28,10 @@ from urllib.request import Request, urlopen
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import x25519
+
+SCRIPTS_ROOT = Path(__file__).resolve().parent
+if str(SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_ROOT))
 
 import ibkr_remote_paper_proof_return_v1 as proof_return
 import ibkr_remote_selected_runtime_command_capsule_v2 as capsule_v2
