@@ -33,6 +33,7 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           from scripts import patch_ibkr_warm_read_gateway_v1 as patch
+          import textwrap
 
           workflow = patch.WORKFLOW.read_text(encoding='utf-8')
           patch.WORKFLOW.write_text(patch.patch_workflow(workflow), encoding='utf-8')
@@ -68,15 +69,13 @@ jobs:
                   self.assertLess(proof, stop)
 
               def test_warm_read_return_does_not_enable_writable_gateway(self):
-                  self.assertIn("IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'readonly'", self.text)
+                  needle = "IBKR_WARM_READ_RETURN_REQUESTED: $" + "{{ github.event_name == 'workflow_dispatch' && inputs.mode == 'readonly'"
+                  self.assertIn(needle, self.text)
                   writable = self.text.index('if [ "$IBKR_PAPER_PROOF_MODE" = "1" ]; then')
                   writable_tail = self.text[writable:writable + 160]
                   self.assertIn('api_read_only=no', writable_tail)
                   self.assertNotIn('IBKR_WARM_READ_RETURN_REQUESTED', writable_tail)
           '''
-          # Dedent the literal from this workflow's Python heredoc so methods stay
-          # at the class's four-space indentation level.
-          import textwrap
           addition = textwrap.dedent(addition)
           path.write_text(text[:at] + addition + text[at:], encoding='utf-8')
           print('IBKR_WARM_READ_GATEWAY_WORKFLOW_PATCHED=1')
