@@ -10,6 +10,16 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
     def setUpClass(cls):
         cls.text = WORKFLOW.read_text(encoding='utf-8')
 
+    def test_authority_request_path_has_no_mutable_sha_or_health_preflight(self):
+        self.assertIn('FLEET_AUTHORITY_URL:', self.text)
+        self.assertIn('scripts/fleet_authority_envelope_consumer_v1.py', self.text)
+        self.assertNotIn('FLEET_AUTHORITY_HEALTH', self.text)
+        self.assertNotIn('Require deployed B1 authority contract', self.text)
+        self.assertNotIn('allowed_workflow_sha', self.text)
+        self.assertNotIn('ALLOWED_WORKFLOW_SHA', self.text)
+        self.assertNotIn('expected_sha = os.environ[\'GITHUB_SHA\']', self.text)
+        self.assertNotIn('deployed fleet authority provenance does not match this workflow SHA', self.text)
+
     def test_fresh_and_restored_sessions_are_classified_separately(self):
         self.assertIn('${{ steps.restore.outputs.restored }}', self.text)
         self.assertIn('IBKR_AUTH_PATH=WARM_STATE_RESTORED', self.text)
@@ -38,7 +48,7 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         self.assertNotIn('docker stop --time 10 ibkr-cloudflare-b1', self.text)
 
     def test_snapshot_requires_confirmed_clean_stop(self):
-        self.assertIn("id: graceful_stop", self.text)
+        self.assertIn('id: graceful_stop', self.text)
         self.assertIn("echo 'stopped=1' >> \"$GITHUB_OUTPUT\"", self.text)
         self.assertIn("if: steps.graceful_stop.outputs.stopped == '1'", self.text)
         self.assertIn('IBKR_GATEWAY_GRACEFUL_STOP=1', self.text)
