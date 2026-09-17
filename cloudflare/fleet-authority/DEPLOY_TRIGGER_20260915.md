@@ -1,9 +1,23 @@
-# Fleet authority deployment trigger
+# Fleet authority deployment contract
 
-Harmless production-branch change used to trigger Cloudflare Workers deployment after repository connection.
+Cloudflare Workers deployment is repository-connected from the production branch. A merge that changes `cloudflare/fleet-authority/` is the deployment trigger; there is no recurring operator SHA-pinning step.
 
-B1 guarded broker authority pin: f1cbc1516efdc7d5854a666e6d753dd157a37cf9
+## Stable authorization boundary
 
-2026-09-16 provenance contract: `/healthz` must expose the exact allowed workflow SHA, `IBKR_PAPER_USERNAME+IBKR_PAPER_PASSWORD` credential binding contract, deliberate `push+workflow_dispatch` event contract, and `canonical-b1+legacy-ibc-comparator` workflow contract.
+The Worker authorizes the IBKR paper read-only seal request from the canonical GitHub workload identity:
 
-10.49 comparator authority pin refresh: 8fe2cf4c5998bd5e5ef03d0bdc0e0280eefaa768
+- GitHub OIDC JWT signature is valid
+- issuer is `https://token.actions.githubusercontent.com`
+- audience is `mmibkr-fleet-authority`
+- repository is `XoticHaze/research-compute-public-`
+- ref is `refs/heads/ibkr-b1-authority-v1`
+- workflow ref is `XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1`
+- OIDC `run_id` matches the seal request run id
+
+The moving workflow commit SHA is provenance only. It is **not** an authorization gate and must not require Cloudflare configuration changes after ordinary commits.
+
+The sealed one-run X25519/HKDF/AES-GCM credential envelope remains the credential transport boundary. `/healthz` is liveness only and must not expose mutable authorization configuration or credential-binding detail.
+
+## Steady-state operator expectation
+
+Normal workflow changes on the admitted authority branch do not require a Cloudflare dashboard edit, Wrangler variable update, health-contract update, or one-time phrase. A Cloudflare change is needed only if the stable workload identity itself changes, such as repository, authority branch, workflow path, or OIDC audience.
