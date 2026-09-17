@@ -449,7 +449,9 @@ jobs:
           echo 'IBKR_CONSUMER_READY=1'
 
       - name: Execute one encrypted MM-authorized selected-runtime paper proof
+        id: paper_proof
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' }}
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -528,6 +530,17 @@ jobs:
             ${{ runner.temp }}/ibkr-forward-bars-v2.jsonl
           if-no-files-found: error
           retention-days: 30
+
+      - name: Enforce paper proof result after warm-state persistence
+        if: ${{ always() && env.IBKR_PAPER_PROOF_MODE == '1' }}
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.paper_proof.outcome }}" != "success" ]; then
+            echo 'IBKR_WARM_SELECTED_RUNTIME_PAPER_PROOF_ACCEPTED=0'
+            echo 'Paper proof failed or was blocked; Gateway was stopped and warm state was resealed before surfacing this failure.'
+            exit 52
+          fi
+          echo 'IBKR_WARM_SELECTED_RUNTIME_PAPER_PROOF_ACCEPTED=1'
 
       - name: Destroy private runtime material
         if: always()
