@@ -1,0 +1,36 @@
+name: B Survivor MAE Abstention R1
+
+on:
+  push:
+    branches:
+      - market-research-b-mae-abstention-r1-20260917
+    paths:
+      - "research/b_survivor_mae_abstention_r1.py"
+      - ".github/workflows/b-survivor-mae-abstention-r1.yml"
+  pull_request:
+    paths:
+      - "research/b_survivor_mae_abstention_r1.py"
+      - ".github/workflows/b-survivor-mae-abstention-r1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q numpy pandas scikit-learn requests
+      - name: Run frozen B MAE abstention discriminator
+        run: python research/b_survivor_mae_abstention_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b-survivor-mae-abstention-r1-result
+          path: research/results/b_survivor_mae_abstention_r1.json
+          if-no-files-found: error
+          retention-days: 90
