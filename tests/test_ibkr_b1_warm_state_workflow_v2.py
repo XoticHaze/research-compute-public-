@@ -128,6 +128,24 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         self.assertIn('--exchange-ref rendezvous-exchange', self.text)
         self.assertIn('GH_TOKEN: ${{ github.token }}', self.text)
 
+    def test_paper_proof_failure_is_reported_only_after_warm_state_persistence(self):
+        proof = self.text.index('name: Execute one encrypted MM-authorized selected-runtime paper proof')
+        stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
+        seal = self.text.index('name: Seal authenticated Gateway warm state')
+        publish = self.text.index('name: Publish reusable encrypted warm state')
+        assess = self.text.index('name: Enforce paper proof result after warm-state persistence')
+        cleanup = self.text.index('name: Destroy private runtime material')
+        self.assertLess(proof, stop)
+        self.assertLess(stop, seal)
+        self.assertLess(seal, publish)
+        self.assertLess(publish, assess)
+        self.assertLess(assess, cleanup)
+        proof_block = self.text[proof:stop]
+        self.assertIn('id: paper_proof', proof_block)
+        self.assertIn('continue-on-error: true', proof_block)
+        self.assertIn('steps.paper_proof.outcome', self.text[assess:cleanup])
+        self.assertIn('IBKR_WARM_SELECTED_RUNTIME_PAPER_PROOF_ACCEPTED=0', self.text[assess:cleanup])
+
     def test_broker_job_write_permission_is_scoped_to_same_job_and_live_stays_disabled(self):
         broker = self.text.index('broker-data-proof:')
         broker_tail = self.text[broker:]
