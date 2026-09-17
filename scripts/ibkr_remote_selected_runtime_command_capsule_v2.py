@@ -13,8 +13,13 @@ import hashlib
 import json
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Any, Mapping
+
+SCRIPTS_ROOT = Path(__file__).resolve().parent
+if str(SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from ephemeral_x25519_chunked_v1 import decrypt_assembled_ciphertext
 from ibkr_remote_paper_capsule_v1 import (
