@@ -390,6 +390,48 @@ def sample_exact_contract_quote(
     }
 
 
+def _dedupe_identical_history_records(records: list[dict[str, object]]) -> tuple[list[dict[str, object]], int]:
+    """Collapse exact overlap from adjacent private-owned history chunks.
+
+    Conflicting rows for the same normalized bar identity are intentionally
+    retained so research.forward_bar.v2 rejects them as duplicate/conflicting
+    source truth rather than silently choosing a price.
+    """
+    out: list[dict[str, object]] = []
+    first_by_identity: dict[tuple[str, str, str, str], dict[str, object]] = {}
+    dropped = 0
+    for raw in records:
+        row = dict(raw)
+        timestamp = row.get("timestamp")
+        timestamp_key = (
+            timestamp.isoformat()
+            if hasattr(timestamp, "isoformat")
+            else str(timestamp)
+        )
+        identity = (
+            str(row.get("symbol") or ""),
+            timestamp_key,
+            str(row.get("contract_id") or ""),
+            str(row.get("bar_size") or ""),
+        )
+        prior = first_by_identity.get(identity)
+        if prior is None:
+            first_by_identity[identity] = row
+            out.append(row)
+            continue
+
+        comparable_prior = {key: _jsonable(value) for key, value in prior.items()}
+        comparable_row = {key: _jsonable(value) for key, value in row.items()}
+        if comparable_prior == comparable_row:
+            dropped += 1
+            continue
+
+        # Preserve the conflict. normalize_frame() must fail on duplicate bar
+        # identity so public compute never decides which OHLC is authoritative.
+        out.append(row)
+    return out, dropped
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
@@ -565,7 +607,8 @@ def main() -> int:
                 }
             )
 
-        frame = normalize_frame(records)
+        deduped_records, identical_overlap_rows_dropped = _dedupe_identical_history_records(records)
+        frame = normalize_frame(deduped_records)
         bars_path = Path(args.bars_output)
         with bars_path.open("w", encoding="utf-8") as fh:
             for row in frame.to_dict(orient="records"):
@@ -595,6 +638,7 @@ def main() -> int:
             "forward_bar_contract": ForwardBarContract().schema,
             "forward_bar_count": int(len(frame)),
             "forward_bar_symbols": sorted(frame["symbol"].unique().tolist()),
+            "identical_history_overlap_rows_dropped": int(identical_overlap_rows_dropped),
             "capabilities": {
                 "account_state": True,
                 "positions": True,
