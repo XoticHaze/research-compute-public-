@@ -16,6 +16,7 @@ from typing import Any
 SCOREBOARD_SCHEMA = "research.forward_market_scoreboard_r1"
 LEDGER_SCHEMA = "research.forward_prospective_cohort_ledger_r1"
 ALLOCATOR_SCHEMA = "research.forward_deterministic_allocator_r1"
+LARGECAP_SCHEMA = "research.forward_generalized_largecap_observation_r1"
 
 ACTIVE = "ACTIVE"
 CONTEXT_ONLY = "CONTEXT_ONLY"
@@ -23,7 +24,6 @@ BLOCKED_NO_FROZEN_OBSERVATION_CONTRACT = "BLOCKED_NO_FROZEN_OBSERVATION_CONTRACT
 
 _CONTEXT_ONLY_PROGRAMS = {
     "P46",
-    "GENERALIZED_LARGECAP_RIDGE",
     "P160_FIXED_P46_P47_COMBINATION",
 }
 _PROSPECTIVE_LEDGER_PROGRAMS = {
@@ -72,6 +72,8 @@ def _ledger_lineage(ledger: dict[str, Any], raw: bytes) -> dict[str, Any]:
 
 def _observation_status(lane: dict[str, Any]) -> str:
     program = str(lane.get("program_id") or "")
+    if program == "GENERALIZED_LARGECAP_RIDGE":
+        return ACTIVE if lane.get("forward_observation") else CONTEXT_ONLY
     if program in _CONTEXT_ONLY_PROGRAMS:
         return CONTEXT_ONLY
     if program in _PROSPECTIVE_LEDGER_PROGRAMS:
@@ -84,7 +86,63 @@ def _observation_status(lane: dict[str, Any]) -> str:
     return CONTEXT_ONLY
 
 
-def annotate_scoreboard(scoreboard: dict[str, Any], ledger: dict[str, Any], ledger_raw: bytes) -> dict[str, Any]:
+def _attach_largecap(scoreboard: dict[str, Any], observation: dict[str, Any], raw: bytes) -> None:
+    if observation.get("schema") != LARGECAP_SCHEMA:
+        raise RuntimeError(f"unexpected largecap observer schema {observation.get('schema')}")
+    if observation.get("program_id") != "GENERALIZED_LARGECAP_RIDGE":
+        raise RuntimeError(f"unexpected largecap observer program {observation.get('program_id')}")
+    lane = next(
+        (x for x in (scoreboard.get("lanes") or []) if x.get("program_id") == "GENERALIZED_LARGECAP_RIDGE"),
+        None,
+    )
+    if lane is None:
+        raise RuntimeError("GENERALIZED_LARGECAP_RIDGE lane is required for observer attachment")
+    boundaries = observation.get("boundaries") or {}
+    for key in ("allocation_authority", "broker_action", "live_trading_change", "promotion_authority"):
+        if boundaries.get(key) is not False:
+            raise RuntimeError(f"largecap observer boundary must remain false key={key}")
+    lane["forward_observation"] = observation
+    lane["forward_scorecard"] = observation.get("mark_to_market_scorecard")
+    lane["formal_resolved_scorecard"] = observation.get("formal_resolved_scorecard")
+    lane["observation_status"] = ACTIVE
+    lane["observation_grade"] = (
+        "PROSPECTIVE_RESULTS_AVAILABLE"
+        if observation.get("state") == "RESOLVED"
+        else "PROSPECTIVE_OPEN"
+    )
+    lane.setdefault("observation_lineage", {}).update({
+        "largecap_observer_sha256": hashlib.sha256(raw).hexdigest(),
+        "largecap_observer_generated_at": observation.get("generated_at"),
+        "largecap_market_latest_date": observation.get("market_latest_date"),
+        "source_adapter_sha256": observation.get("source_adapter_sha256"),
+    })
+    scoreboard.setdefault("coverage", {}).setdefault("observation_only_lanes", {})[
+        "GENERALIZED_LARGECAP_RIDGE"
+    ] = {
+        "present": True,
+        "state": observation.get("state"),
+        "sessions_completed": observation.get("sessions_completed"),
+        "market_latest_date": observation.get("market_latest_date"),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "allocation_authority": False,
+    }
+    scoreboard.setdefault("decision_chain", {}).setdefault("tickers", {})[
+        "largecap_forward_observation"
+    ] = {
+        "state": observation.get("state"),
+        "sessions_completed": observation.get("sessions_completed"),
+        "scorecard": observation.get("mark_to_market_scorecard"),
+        "allocation_authority": False,
+    }
+
+
+def annotate_scoreboard(
+    scoreboard: dict[str, Any],
+    ledger: dict[str, Any],
+    ledger_raw: bytes,
+    largecap: dict[str, Any] | None = None,
+    largecap_raw: bytes | None = None,
+) -> dict[str, Any]:
     if scoreboard.get("schema") != SCOREBOARD_SCHEMA:
         raise RuntimeError(f"unexpected scoreboard schema {scoreboard.get('schema')}")
     lineage = _ledger_lineage(ledger, ledger_raw)
@@ -110,6 +168,9 @@ def annotate_scoreboard(scoreboard: dict[str, Any], ledger: dict[str, Any], ledg
                 "source_ref": cohort.get("source_ref"),
             })
         lane["observation_lineage"] = lane_lineage
+
+    if largecap is not None:
+        _attach_largecap(scoreboard, largecap, largecap_raw or b"")
 
     coverage = scoreboard.setdefault("coverage", {}).setdefault("prospective_ledger", {})
     coverage.update({
@@ -191,14 +252,35 @@ def self_test() -> None:
             {"program_id": "HOMEBUILDERS", "prospective_evidence": {"ledger_status": "PRESENT"}},
             {"program_id": "P46"},
             {"program_id": "P558"},
+            {"program_id": "GENERALIZED_LARGECAP_RIDGE"},
             {"program_id": "SEMICONDUCTOR_SHARED_RIDGE", "prospective_evidence": {"ledger_status": "NOT_SUPPLIED"}},
         ],
     }
-    score = annotate_scoreboard(score, ledger, raw)
+    largecap = {
+        "schema": LARGECAP_SCHEMA,
+        "program_id": "GENERALIZED_LARGECAP_RIDGE",
+        "generated_at": "2026-09-17T00:00:30+00:00",
+        "state": "PROSPECTIVE_OPEN",
+        "sessions_completed": 3,
+        "market_latest_date": "2026-09-17",
+        "source_adapter_sha256": "largecap-adapter",
+        "mark_to_market_scorecard": {"absolute_direction_hit_rate": 0.5},
+        "formal_resolved_scorecard": None,
+        "boundaries": {
+            "allocation_authority": False,
+            "broker_action": False,
+            "live_trading_change": False,
+            "promotion_authority": False,
+        },
+    }
+    largecap_raw = (json.dumps(largecap, sort_keys=True) + "\n").encode()
+    score = annotate_scoreboard(score, ledger, raw, largecap, largecap_raw)
     by_id = {x["program_id"]: x for x in score["lanes"]}
     assert by_id["HOMEBUILDERS"]["observation_status"] == ACTIVE
     assert by_id["P46"]["observation_status"] == CONTEXT_ONLY
     assert by_id["P558"]["observation_status"] == ACTIVE
+    assert by_id["GENERALIZED_LARGECAP_RIDGE"]["observation_status"] == ACTIVE
+    assert by_id["GENERALIZED_LARGECAP_RIDGE"]["forward_scorecard"]["absolute_direction_hit_rate"] == 0.5
     assert by_id["SEMICONDUCTOR_SHARED_RIDGE"]["observation_status"] == BLOCKED_NO_FROZEN_OBSERVATION_CONTRACT
 
     alloc = {
@@ -224,6 +306,7 @@ def main() -> None:
     p.add_argument("--scoreboard")
     p.add_argument("--ledger")
     p.add_argument("--allocator")
+    p.add_argument("--largecap")
     p.add_argument("--output")
     args = p.parse_args()
 
@@ -239,7 +322,11 @@ def main() -> None:
         if not args.ledger:
             p.error("--ledger is required in scoreboard mode")
         ledger, ledger_raw = _read(Path(args.ledger))
-        result = annotate_scoreboard(scoreboard, ledger, ledger_raw)
+        largecap = None
+        largecap_raw = None
+        if args.largecap:
+            largecap, largecap_raw = _read(Path(args.largecap))
+        result = annotate_scoreboard(scoreboard, ledger, ledger_raw, largecap, largecap_raw)
     else:
         if not args.allocator:
             p.error("--allocator is required in allocator mode")
