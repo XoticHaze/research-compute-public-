@@ -108,6 +108,33 @@ class SelectedRuntimeCommandCapsuleV2Tests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "cleanup contract mismatch"):
             self.validate(node)
 
+    def test_persistent_execute_mode_requires_no_automatic_cleanup(self):
+        node = self.capsule()
+        node["mode"] = mod.EXECUTE_MODE
+        node["cleanup"] = {
+            "cancel_open_order": False,
+            "flatten_filled_position": False,
+            "require_zero_baseline": False,
+            "allow_global_cancel": False,
+        }
+        out = self.validate(node)
+        self.assertEqual(out["mode"], mod.EXECUTE_MODE)
+        self.assertFalse(out["cleanup"]["cancel_open_order"])
+        self.assertFalse(out["cleanup"]["flatten_filled_position"])
+        self.assertFalse(out["cleanup"]["require_zero_baseline"])
+        self.assertFalse(out["cleanup"]["allow_global_cancel"])
+
+        node = self.capsule()
+        node["mode"] = mod.EXECUTE_MODE
+        with self.assertRaisesRegex(RuntimeError, "persistent paper execute cleanup contract mismatch"):
+            self.validate(node)
+
+    def test_unknown_command_mode_is_rejected(self):
+        node = self.capsule()
+        node["mode"] = "paper_magic"
+        with self.assertRaisesRegex(RuntimeError, "mode mismatch"):
+            self.validate(node)
+
     def test_selected_runtime_must_be_paper_only(self):
         node = self.capsule()
         node["request"]["selected_runtime_authority"]["live_submit_enabled"] = True
