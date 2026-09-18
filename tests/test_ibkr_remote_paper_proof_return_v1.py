@@ -22,7 +22,7 @@ class RemotePaperProofReturnTests(unittest.TestCase):
         }
 
     def runtime(self):
-        return {"command_id": "sha256:" + "c" * 64}
+        return {"mode": "paper_submit_proof", "command_id": "sha256:" + "c" * 64}
 
     def receipt(self):
         return {
@@ -80,6 +80,24 @@ class RemotePaperProofReturnTests(unittest.TestCase):
             receipt["cleanup"]["global_cancel_called"] = True
             with self.assertRaisesRegex(RuntimeError, "global cancel was called"):
                 mod.encrypt_receipt(receipt=receipt, runtime=self.runtime(), recipient=recipient, run_id="12345", output_dir=Path(td))
+
+    def test_persistent_execute_receipt_uses_same_encrypted_return_transport(self):
+        runtime = self.runtime()
+        runtime["mode"] = "paper_execute"
+        receipt = self.receipt()
+        receipt["schema"] = mod.EXECUTE_RECEIPT_SCHEMA
+        receipt["status"] = "PAPER_EXECUTE_RECONCILED"
+        receipt["cleanup"] = {
+            "automatic_cleanup": False,
+            "exact_cancel_called": False,
+            "flatten_called": False,
+            "global_cancel_called": False,
+        }
+        out = mod.validate_receipt(receipt, runtime, run_id="12345")
+        self.assertEqual(out["schema"], mod.EXECUTE_RECEIPT_SCHEMA)
+
+        with self.assertRaisesRegex(RuntimeError, "mode/receipt schema mismatch"):
+            mod.validate_receipt(self.receipt(), runtime, run_id="12345")
 
     def test_recipient_fingerprint_is_verified(self):
         _, recipient = self.recipient()
