@@ -7,3 +7,4 @@ Acceptance trigger: restore the clean-stop-v2 artifact produced by run 351921212
 Controller-native acceptance: restore into a dedicated GATEWAY_WARM_STATE seed and keep TWS_SETTINGS_PATH as a distinct live settings directory.
 Authority-branch acceptance: verify restored warm reuse through the canonical admitted OIDC workload identity.
 Seed-owner acceptance: prove the restored seed is readable by the pinned controller runtime user before launch, then require warm API/consumer reuse.
+2026-09-18T23:58Z canonical selected-runtime initial backfill trigger
