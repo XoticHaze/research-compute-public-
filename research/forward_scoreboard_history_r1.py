@@ -123,6 +123,7 @@ def make_entry(
         "source_scoreboard_sha256": _sha(scoreboard_raw),
         "source_allocator_sha256": _sha(allocator_raw),
         "source_p249_sha256": _sha(p249_raw),
+        "historical_recovery": scoreboard.get("historical_recovery"),
         "models": lanes,
         "combined_portfolio": {
             "target_weights": allocator.get("final_target_weights"),
