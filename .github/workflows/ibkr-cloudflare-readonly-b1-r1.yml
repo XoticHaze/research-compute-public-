@@ -39,6 +39,11 @@ on:
         required: false
         default: ''
         type: string
+      include_quotes:
+        description: Include exact-contract read-only quote snapshots for requested symbols
+        required: false
+        default: false
+        type: boolean
       read_return_recipient_b64:
         description: Optional one-run X25519 public recipient for encrypted detailed read return
         required: false
@@ -168,6 +173,7 @@ jobs:
       POST_AUTH_SYMBOLS: ${{ github.event_name == 'workflow_dispatch' && inputs.symbols || 'AMAT,APH' }}
       POST_AUTH_CONTRACTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.contracts_json || '{}' }}
       POST_AUTH_BAR_REQUESTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.bar_requests_json || '' }}
+      POST_AUTH_INCLUDE_QUOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.include_quotes && '1' || '0' }}
       IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'paper_execute') && inputs.read_return_recipient_b64 != '' && inputs.read_return_recipient_key_id != '' && '1' || '0' }}
       IBKR_PAPER_PROOF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' && '1' || '0' }}
       IBKR_PAPER_EXECUTE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_execute' && '1' || '0' }}
@@ -577,6 +583,10 @@ jobs:
       - name: Materialize canonical post-auth broker and forward-data handoff
         run: |
           set -euo pipefail
+          quote_args=()
+          if [ "$POST_AUTH_INCLUDE_QUOTES" = "1" ]; then
+            quote_args+=(--include-quotes)
+          fi
           python scripts/ibkr_post_auth_pipeline_v1.py \
             --host 127.0.0.1 \
             --port 4002 \
@@ -584,6 +594,7 @@ jobs:
             --symbols "$POST_AUTH_SYMBOLS" \
             --contracts-json "$POST_AUTH_CONTRACTS_JSON" \
             --bar-requests-json "$POST_AUTH_BAR_REQUESTS_JSON" \
+            "${quote_args[@]}" \
             --output "$RUNNER_TEMP/ibkr-post-auth-handoff.json" \
             --bars-output "$RUNNER_TEMP/ibkr-forward-bars-v2.jsonl"
           echo 'IBKR_CONSUMER_READY=1'
