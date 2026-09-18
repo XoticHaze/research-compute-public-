@@ -14,6 +14,7 @@ import argparse
 import json
 import re
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -62,7 +63,8 @@ BAR_REQUEST_FIELDS = {
     "duration_str",
 }
 BAR_SIZE_RE = re.compile(r"^(?:[1-9][0-9]{0,2}) (?:sec|secs|min|mins|hour|hours|day|week|month)$")
-DURATION_RE = re.compile(r"^(?:[1-9][0-9]{0,2}) [DWMY]$")
+DURATION_RE = re.compile(r"^(?:[1-9][0-9]{0,5}) [SDWMY]$")
+SAFE_SECONDS_DURATIONS = {60, 120, 1800, 3600, 14400, 28800}
 MAX_BAR_REQUESTS = 50
 
 
@@ -72,6 +74,8 @@ def _bounded_duration(value: str) -> bool:
         return False
     count_text, unit = str(value).split()
     count = int(count_text)
+    if unit == "S":
+        return count in SAFE_SECONDS_DURATIONS
     limits = {"D": 30, "W": 8, "M": 12, "Y": 7}
     return 1 <= count <= limits[unit]
 
@@ -230,8 +234,14 @@ def main() -> int:
         raise RuntimeError("contract hints include unrequested symbols: " + ",".join(unexpected_hints))
 
     ib = IB()
+    pipeline_started = time.perf_counter()
+    connect_elapsed_ms = None
+    account_state_elapsed_ms = None
+    market_data_elapsed_ms = 0.0
     try:
+        connect_started = time.perf_counter()
         ib.connect(args.host, args.port, clientId=args.client_id, timeout=10, readonly=True)
+        connect_elapsed_ms = round((time.perf_counter() - connect_started) * 1000.0, 3)
         if not ib.isConnected():
             raise RuntimeError("IBKR API connection did not become ready")
 
@@ -242,6 +252,7 @@ def main() -> int:
         if not paper_accounts:
             raise RuntimeError("authenticated session is not a DU paper account")
 
+        account_started = time.perf_counter()
         current_time = ib.reqCurrentTime()
         account_summary = list(ib.accountSummary())
         positions = list(ib.positions())
@@ -250,12 +261,19 @@ def main() -> int:
         ib.reqAllOpenOrders()
         ib.sleep(1)
         open_orders = list(ib.openOrders())
+        account_state_elapsed_ms = round((time.perf_counter() - account_started) * 1000.0, 3)
 
         symbol_receipts: list[dict[str, object]] = []
         records: list[dict[str, object]] = []
         for symbol in symbols:
+            symbol_started = time.perf_counter()
             contract, contract_request = contract_request_for_symbol(symbol, contract_hints)
+            qualify_started = time.perf_counter()
             qualified = ib.qualifyContracts(contract)
+            contract_qualification_elapsed_ms = round(
+                (time.perf_counter() - qualify_started) * 1000.0,
+                3,
+            )
             if not qualified:
                 raise RuntimeError(f"contract qualification failed for {symbol}")
             resolved = qualified[0]
@@ -279,6 +297,7 @@ def main() -> int:
             for bar_request in effective_requests:
                 bar_size = str(bar_request["bar_size_setting"])
                 duration = str(bar_request["duration_str"])
+                request_started = time.perf_counter()
                 bars = ib.reqHistoricalData(
                     resolved,
                     endDateTime="",
@@ -307,9 +326,15 @@ def main() -> int:
                     )
                     for bar in bars
                 )
+                request_elapsed_ms = round(
+                    (time.perf_counter() - request_started) * 1000.0,
+                    3,
+                )
+                market_data_elapsed_ms += request_elapsed_ms
                 request_receipts.append({
                     **dict(bar_request),
                     "historical_bar_count": len(bars),
+                    "request_elapsed_ms": request_elapsed_ms,
                 })
             symbol_receipts.append(
                 {
@@ -320,6 +345,8 @@ def main() -> int:
                     "historical_bar_count": historical_bar_count,
                     "bar_request_source": "mm_exact_bar_requests" if symbol in bar_requests else "compatibility_default_5min",
                     "bar_requests": request_receipts,
+                    "contract_qualification_elapsed_ms": contract_qualification_elapsed_ms,
+                    "symbol_elapsed_ms": round((time.perf_counter() - symbol_started) * 1000.0, 3),
                     "contract_source": contract_request.get("source"),
                     "requested_contract": contract_request,
                     "resolved_contract": {
@@ -379,6 +406,12 @@ def main() -> int:
             },
             "completed_trade_evidence_materialized": False,
             "consumer_ready": True,
+            "latency_ms": {
+                "connect": connect_elapsed_ms,
+                "account_state_and_open_orders": account_state_elapsed_ms,
+                "historical_market_data_sum": round(market_data_elapsed_ms, 3),
+                "pipeline_total": round((time.perf_counter() - pipeline_started) * 1000.0, 3),
+            },
         }
         Path(args.output).write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
         print("IBKR_POST_AUTH_PIPELINE=" + json.dumps(receipt, sort_keys=True))
