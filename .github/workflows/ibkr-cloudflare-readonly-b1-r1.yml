@@ -61,6 +61,7 @@ on:
       - assistant/ibkr-warm-seed-owner-20260917
       - assistant/ibkr-warm-paper-proof-activation-20260917
       - assistant/ibkr-warm-read-gateway-20260917
+      - assistant/ibkr-initial-selected-runtime-backfill-20260918
     paths:
       - '.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml'
       - 'scripts/fleet_authority_envelope_consumer_v1.py'
@@ -170,9 +171,9 @@ jobs:
     env:
       FLEET_AUTHORITY_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-paper/seal
       IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
-      POST_AUTH_SYMBOLS: ${{ github.event_name == 'workflow_dispatch' && inputs.symbols || 'AMAT,APH' }}
-      POST_AUTH_CONTRACTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.contracts_json || '{}' }}
-      POST_AUTH_BAR_REQUESTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.bar_requests_json || '' }}
+      POST_AUTH_SYMBOLS: ${{ github.event_name == 'workflow_dispatch' && inputs.symbols || 'AMAT,APH,MNQ' }}
+      POST_AUTH_CONTRACTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.contracts_json || '{"MNQ":{"symbol":"MNQ","secType":"FUT","exchange":"CME","currency":"USD","lastTradeDateOrContractMonth":"202612"}}' }}
+      POST_AUTH_BAR_REQUESTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.bar_requests_json || '{"AMAT":[{"source_timeframe":"15Min","target_timeframe":"15Min","bar_size_setting":"15 mins","duration_str":"2 W"}],"APH":[{"source_timeframe":"15Min","target_timeframe":"15Min","bar_size_setting":"15 mins","duration_str":"2 W"}],"MNQ":[{"source_timeframe":"1Min","target_timeframe":"12Min","bar_size_setting":"1 min","duration_str":"1 D"},{"source_timeframe":"1Min","target_timeframe":"12Min","bar_size_setting":"1 min","duration_str":"1 D","end_date_time_utc":"2026-09-18T00:00:00Z"},{"source_timeframe":"1Min","target_timeframe":"12Min","bar_size_setting":"1 min","duration_str":"1 D","end_date_time_utc":"2026-09-17T00:00:00Z"},{"source_timeframe":"1Min","target_timeframe":"12Min","bar_size_setting":"1 min","duration_str":"1 D","end_date_time_utc":"2026-09-16T00:00:00Z"},{"source_timeframe":"1Min","target_timeframe":"12Min","bar_size_setting":"1 min","duration_str":"1 D","end_date_time_utc":"2026-09-15T00:00:00Z"}]}' }}
       POST_AUTH_INCLUDE_QUOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.include_quotes && '1' || '0' }}
       IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'paper_execute') && inputs.read_return_recipient_b64 != '' && inputs.read_return_recipient_key_id != '' && '1' || '0' }}
       IBKR_PAPER_PROOF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' && '1' || '0' }}
