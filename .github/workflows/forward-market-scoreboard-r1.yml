@@ -17,6 +17,7 @@ on:
       - 'research/forward_scoreboard_lineage_r1.py'
       - 'research/forward_largecap_transport_observer_r1.py'
       - 'research/forward_bundle_publish_guard_r1.py'
+      - 'research/forward_scoreboard_history_r1.py'
       - 'research/current/native_adapters/*.json'
       - 'research/current/p160_forward_observation_r1.json'
       - 'research/current/currency_hedge_mechanism_forward_r1.json'
@@ -33,6 +34,7 @@ on:
       - 'research/forward_scoreboard_lineage_r1.py'
       - 'research/forward_largecap_transport_observer_r1.py'
       - 'research/forward_bundle_publish_guard_r1.py'
+      - 'research/forward_scoreboard_history_r1.py'
       - 'research/current/native_adapters/*.json'
       - 'research/current/p160_forward_observation_r1.json'
       - 'research/current/currency_hedge_mechanism_forward_r1.json'
@@ -68,6 +70,7 @@ jobs:
       - run: python -m pip install --disable-pip-version-check pandas==2.3.2
       - run: python research/forward_largecap_transport_observer_r1.py --self-test
       - run: python research/forward_bundle_publish_guard_r1.py --self-test
+      - run: python research/forward_scoreboard_history_r1.py --self-test
 
   p46:
     runs-on: ubuntu-24.04
@@ -155,7 +158,8 @@ jobs:
           for path in \
             research/current/forward_prospective_cohort_ledger_r1.json \
             research/current/forward_largecap_transport_observation_r1.json \
-            research/current/forward_deterministic_allocator_r1.json
+            research/current/forward_deterministic_allocator_r1.json \
+            research/current/forward_market_scoreboard_history_r1.json
           do
             out="score-inputs/prior-current/${path##*/}"
             if git show "origin/main:$path" > "$out" 2>/dev/null; then
@@ -235,6 +239,24 @@ jobs:
             --allocator artifacts/forward_deterministic_allocator_r1.json \
             --output artifacts/forward_deterministic_allocator_r1.json
           cp score-inputs/prospective-current/forward_prospective_cohort_ledger_r1.json artifacts/forward_prospective_cohort_ledger_r1.json
+      - name: Build compact append-only scoreboard history
+        shell: bash
+        run: |
+          set -euo pipefail
+          p249="$(find score-inputs -name forward_p249_p266_shadow_r1.json -print -quit)"
+          test -n "$p249"
+          args=(
+            --scoreboard artifacts/forward_market_scoreboard_r1.json
+            --allocator artifacts/forward_deterministic_allocator_r1.json
+            --p249 "$p249"
+            --output artifacts/forward_market_scoreboard_history_r1.json
+          )
+          if test -f score-inputs/prior-current/forward_market_scoreboard_history_r1.json; then
+            args+=(--prior score-inputs/prior-current/forward_market_scoreboard_history_r1.json)
+          else
+            args+=(--bootstrap-repo . --bootstrap-ref origin/main)
+          fi
+          python research/forward_scoreboard_history_r1.py "${args[@]}"
       - name: Prove challenger observer noninterference and lineage
         run: |
           python - <<'PY'
@@ -298,6 +320,7 @@ jobs:
             artifacts/forward_deterministic_allocator_r1.json
             artifacts/forward_prospective_cohort_ledger_r1.json
             artifacts/forward_largecap_transport_observation_r1.json
+            artifacts/forward_market_scoreboard_history_r1.json
           if-no-files-found: error
           retention-days: 90
 
@@ -326,6 +349,7 @@ jobs:
           allocator=/tmp/forward-market-scoreboard/forward_deterministic_allocator_r1.json
           ledger=/tmp/forward-market-scoreboard/forward_prospective_cohort_ledger_r1.json
           largecap=/tmp/forward-market-scoreboard/forward_largecap_transport_observation_r1.json
+          history=/tmp/forward-market-scoreboard/forward_market_scoreboard_history_r1.json
           p249=/tmp/forward-score-inputs/forward_p249_p266_shadow_r1.json
           p558=/tmp/forward-score-inputs/forward_p558_current_core_shadow_r1.json
           clo=/tmp/forward-score-inputs/forward_senior_clo_current_core_shadow_r1.json
@@ -333,6 +357,7 @@ jobs:
           test -f "$allocator"
           test -f "$ledger"
           test -f "$largecap"
+          test -f "$history"
           test -f "$p249"
           test -f "$p558"
           test -f "$clo"
@@ -367,6 +392,22 @@ jobs:
           assert lanes['CURRENCY_HEDGE_ALLOCATOR_OVERLAY']['signal']['funding_source']=='CASH_ONLY'
           print('FORWARD_CURRENT_BUNDLE_COHERENCE=PASS')
           PY
+          python - "$scoreboard" "$allocator" "$history" <<'PY'
+          import hashlib,json,sys
+          from pathlib import Path
+          score_path,alloc_path,history_path=map(Path,sys.argv[1:])
+          score=json.load(open(score_path))
+          alloc=json.load(open(alloc_path))
+          hist=json.load(open(history_path))
+          assert hist['schema']=='research.forward_market_scoreboard_history_r1'
+          assert hist['sessions']
+          latest=hist['sessions'][-1]
+          assert latest['source_scoreboard_sha256']==hashlib.sha256(score_path.read_bytes()).hexdigest()
+          assert latest['source_allocator_sha256']==hashlib.sha256(alloc_path.read_bytes()).hexdigest()
+          assert latest['scoreboard_generated_at']==score['generated_at']
+          assert latest['allocator_generated_at']==alloc['generated_at']
+          print('FORWARD_HISTORY_COHERENCE=PASS',latest['session_date'],hist['session_count'])
+          PY
           git fetch origin main
           git checkout -B forward-market-scoreboard-publish origin/main
           set +e
@@ -387,6 +428,12 @@ jobs:
           cp "$allocator" research/current/forward_deterministic_allocator_r1.json
           cp "$ledger" research/current/forward_prospective_cohort_ledger_r1.json
           cp "$largecap" research/current/forward_largecap_transport_observation_r1.json
+          cp "$history" research/current/forward_market_scoreboard_history_r1.json
+          session_date="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["latest_session_date"])' "$history")"
+          history_dir=research/history/forward_market_scoreboard
+          mkdir -p "$history_dir"
+          cp "$scoreboard" "$history_dir/$session_date.json"
+          cp "$allocator" "$history_dir/$session_date.allocator.json"
           cp "$p249" research/current/forward_p249_p266_shadow_r1.json
           cp "$p558" research/current/forward_p558_current_core_shadow_r1.json
           cp "$clo" research/current/forward_senior_clo_current_core_shadow_r1.json
@@ -397,6 +444,9 @@ jobs:
             research/current/forward_deterministic_allocator_r1.json \
             research/current/forward_prospective_cohort_ledger_r1.json \
             research/current/forward_largecap_transport_observation_r1.json \
+            research/current/forward_market_scoreboard_history_r1.json \
+            "$history_dir/$session_date.json" \
+            "$history_dir/$session_date.allocator.json" \
             research/current/forward_p249_p266_shadow_r1.json \
             research/current/forward_p558_current_core_shadow_r1.json \
             research/current/forward_senior_clo_current_core_shadow_r1.json
