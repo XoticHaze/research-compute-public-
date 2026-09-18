@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import x25519
@@ -44,6 +45,40 @@ class WarmReadReturnTests(unittest.TestCase):
                 }
             ],
             "open_trades": [],
+            "fills": [
+                {
+                    "contract": {"conId": 266093, "symbol": "AMAT", "secType": "STK"},
+                    "execution": {
+                        "execId": "exec-1",
+                        "time": "2026-09-17T00:00:00Z",
+                        "acctNumber": "DU123456",
+                        "side": "BOT",
+                        "shares": 2.0,
+                        "price": 150.0,
+                        "permId": 11,
+                        "orderId": 12,
+                    },
+                    "commission_report": {
+                        "execId": "exec-1",
+                        "commission": 1.0,
+                        "currency": "USD",
+                        "realizedPNL": 0.0,
+                    },
+                }
+            ],
+            "completed_execution_evidence": {
+                "requested": True,
+                "req_executions_called": True,
+                "source": "ibkr.reqExecutions",
+                "returned_fill_count": 1,
+                "requested_contract_fill_count": 1,
+                "execution_ids": ["exec-1"],
+                "request_elapsed_ms": 12.0,
+                "complete_history_claimed": False,
+                "broker_mutation_called": False,
+                "global_cancel_called": False,
+                "live_execution_allowed": False,
+            },
             "broker_time": "2026-09-17T00:00:00+00:00",
             "post_auth_handoff": {"schema": "mmibkr-ibkr-post-auth-handoff-v2"},
             "requested_symbols": ["AMAT"],
@@ -54,6 +89,7 @@ class WarmReadReturnTests(unittest.TestCase):
                 "positions": True,
                 "open_orders": True,
                 "historical_market_data": True,
+                "completed_executions": True,
                 "order_submission": False,
                 "global_cancel": False,
                 "live_execution": False,
@@ -102,6 +138,93 @@ class WarmReadReturnTests(unittest.TestCase):
             plaintext = ChaCha20Poly1305(key).decrypt(nonce, ciphertext, aad)
             self.assertEqual(hashlib.sha256(plaintext).hexdigest(), envelope["plaintext_sha256"])
             self.assertEqual(json.loads(plaintext.decode("utf-8")), snapshot)
+
+    def test_requested_fill_filter_keeps_only_exact_mm_contracts_and_managed_accounts(self):
+        amat = {
+            "contract": {"conId": 266093, "symbol": "AMAT", "secType": "STK"},
+            "execution": {"execId": "amat-1", "acctNumber": "DU123456"},
+        }
+        other = {
+            "contract": {"conId": 999, "symbol": "OTHER", "secType": "STK"},
+            "execution": {"execId": "other-1", "acctNumber": "DU123456"},
+        }
+        handoff = {
+            "symbols": [{
+                "symbol": "AMAT",
+                "resolved_contract": {
+                    "conId": 266093,
+                    "symbol": "AMAT",
+                    "secType": "STK",
+                    "localSymbol": "AMAT",
+                },
+            }]
+        }
+        rows, ids = mod._filter_requested_fills(
+            [amat, other],
+            handoff=handoff,
+            managed_accounts=["DU123456"],
+        )
+        self.assertEqual(rows, [amat])
+        self.assertEqual(ids, ["amat-1"])
+
+        escaped = {
+            "contract": {"conId": 266093, "symbol": "AMAT", "secType": "STK"},
+            "execution": {"execId": "bad", "acctNumber": "U999"},
+        }
+        with self.assertRaisesRegex(RuntimeError, "escaped managed DU accounts"):
+            mod._filter_requested_fills(
+                [escaped],
+                handoff=handoff,
+                managed_accounts=["DU123456"],
+            )
+
+    def test_execution_fill_serializer_preserves_position_policy_fields(self):
+        fill = SimpleNamespace(
+            contract=SimpleNamespace(
+                conId=793356225,
+                symbol="MNQ",
+                secType="FUT",
+                exchange="CME",
+                primaryExchange="",
+                currency="USD",
+                localSymbol="MNQU6",
+                tradingClass="MNQ",
+                lastTradeDateOrContractMonth="202609",
+            ),
+            execution=SimpleNamespace(
+                execId="exec-mnq-1",
+                time=__import__("datetime").datetime(
+                    2026, 9, 18, 14, 0,
+                    tzinfo=__import__("datetime").timezone.utc,
+                ),
+                acctNumber="DU123456",
+                exchange="CME",
+                side="BOT",
+                shares=1.0,
+                price=24000.25,
+                permId=42,
+                clientId=79,
+                orderId=17,
+                cumQty=1.0,
+                avgPrice=24000.25,
+                orderRef="MMIBKR",
+            ),
+            commissionReport=SimpleNamespace(
+                execId="exec-mnq-1",
+                commission=0.62,
+                currency="USD",
+                realizedPNL=0.0,
+            ),
+        )
+        row = mod._execution_fill(fill)
+        self.assertEqual(row["contract"]["conId"], 793356225)
+        self.assertEqual(row["execution"]["side"], "BOT")
+        self.assertEqual(row["execution"]["shares"], 1.0)
+        self.assertEqual(row["execution"]["price"], 24000.25)
+        self.assertEqual(row["execution"]["permId"], 42)
+        self.assertEqual(row["execution"]["orderId"], 17)
+        self.assertEqual(row["execution"]["execId"], "exec-mnq-1")
+        self.assertEqual(row["execution"]["acctNumber"], "DU123456")
 
     def test_wrong_recipient_fingerprint_fails_closed(self):
         _, recipient_b64, _ = self._recipient()
@@ -187,6 +310,8 @@ class WarmReadReturnTests(unittest.TestCase):
     def test_source_has_readonly_connect_and_no_mutation_calls(self):
         source = Path(mod.__file__).read_text(encoding="utf-8")
         self.assertIn("readonly=True", source)
+        self.assertIn("ib.reqExecutions()", source)
+        self.assertIn('"complete_history_claimed": False', source)
         self.assertNotIn("placeOrder(", source)
         self.assertNotIn("cancelOrder(", source)
         self.assertNotIn("reqGlobalCancel", source)
