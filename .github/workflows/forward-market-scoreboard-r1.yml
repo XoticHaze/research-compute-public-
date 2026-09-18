@@ -153,7 +153,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin main
+          if git rev-parse --is-shallow-repository | grep -qx true; then
+            git fetch --unshallow origin main
+          else
+            git fetch origin main
+          fi
           mkdir -p score-inputs/prior-current
           for path in \
             research/current/forward_prospective_cohort_ledger_r1.json \
@@ -253,10 +257,20 @@ jobs:
           )
           if test -f score-inputs/prior-current/forward_market_scoreboard_history_r1.json; then
             args+=(--prior score-inputs/prior-current/forward_market_scoreboard_history_r1.json)
-          else
-            args+=(--bootstrap-repo . --bootstrap-ref origin/main)
           fi
+          args+=(
+            --bootstrap-repo .
+            --bootstrap-ref origin/main
+            --bootstrap-snapshot-dir artifacts/forward_history_snapshots
+          )
           python research/forward_scoreboard_history_r1.py "${args[@]}"
+          python - artifacts/forward_market_scoreboard_history_r1.json <<'PY'
+          import json,sys
+          h=json.load(open(sys.argv[1]))
+          assert h.get('git_history_bootstrap_complete') is True
+          assert int(h.get('session_count') or 0) > 1
+          print('FORWARD_HISTORY_BOOTSTRAP=PASS',h['first_session_date'],h['latest_session_date'],h['session_count'])
+          PY
       - name: Prove challenger observer noninterference and lineage
         run: |
           python - <<'PY'
@@ -321,6 +335,7 @@ jobs:
             artifacts/forward_prospective_cohort_ledger_r1.json
             artifacts/forward_largecap_transport_observation_r1.json
             artifacts/forward_market_scoreboard_history_r1.json
+            artifacts/forward_history_snapshots/
           if-no-files-found: error
           retention-days: 90
 
@@ -350,6 +365,7 @@ jobs:
           ledger=/tmp/forward-market-scoreboard/forward_prospective_cohort_ledger_r1.json
           largecap=/tmp/forward-market-scoreboard/forward_largecap_transport_observation_r1.json
           history=/tmp/forward-market-scoreboard/forward_market_scoreboard_history_r1.json
+          bootstrap_snapshots=/tmp/forward-market-scoreboard/forward_history_snapshots
           p249=/tmp/forward-score-inputs/forward_p249_p266_shadow_r1.json
           p558=/tmp/forward-score-inputs/forward_p558_current_core_shadow_r1.json
           clo=/tmp/forward-score-inputs/forward_senior_clo_current_core_shadow_r1.json
@@ -401,6 +417,8 @@ jobs:
           hist=json.load(open(history_path))
           assert hist['schema']=='research.forward_market_scoreboard_history_r1'
           assert hist['sessions']
+          assert hist.get('git_history_bootstrap_complete') is True
+          assert int(hist.get('session_count') or 0) > 1
           latest=hist['sessions'][-1]
           assert latest['source_scoreboard_sha256']==hashlib.sha256(score_path.read_bytes()).hexdigest()
           assert latest['source_allocator_sha256']==hashlib.sha256(alloc_path.read_bytes()).hexdigest()
@@ -432,6 +450,9 @@ jobs:
           session_date="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["latest_session_date"])' "$history")"
           history_dir=research/history/forward_market_scoreboard
           mkdir -p "$history_dir"
+          if test -d "$bootstrap_snapshots"; then
+            cp "$bootstrap_snapshots"/*.json "$history_dir"/
+          fi
           cp "$scoreboard" "$history_dir/$session_date.json"
           cp "$allocator" "$history_dir/$session_date.allocator.json"
           cp "$p249" research/current/forward_p249_p266_shadow_r1.json
@@ -445,8 +466,7 @@ jobs:
             research/current/forward_prospective_cohort_ledger_r1.json \
             research/current/forward_largecap_transport_observation_r1.json \
             research/current/forward_market_scoreboard_history_r1.json \
-            "$history_dir/$session_date.json" \
-            "$history_dir/$session_date.allocator.json" \
+            "$history_dir" \
             research/current/forward_p249_p266_shadow_r1.json \
             research/current/forward_p558_current_core_shadow_r1.json \
             research/current/forward_senior_clo_current_core_shadow_r1.json
