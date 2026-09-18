@@ -1,0 +1,24 @@
+name: MR gold miner gold trend information B7 20260918
+on:
+  pull_request:
+    paths:
+      - 'research/mr_gold_miner_gold_trend_information_b7_20260918.py'
+      - '.github/workflows/mr-gold-miner-gold-trend-information-b7-20260918.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pandas numpy yfinance
+      - name: Execute frozen B7 discriminator
+        run: python research/mr_gold_miner_gold_trend_information_b7_20260918.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mr-gold-miner-gold-trend-information-b7
+          path: research/artifacts/mr_gold_miner_gold_trend_information_b7_20260918.json
