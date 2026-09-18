@@ -65,12 +65,13 @@ def execute_paper_execute(
     validated = validate_fleet_authority_execute_runtime(runtime)
     auth = proof_v1._validate_selected_runtime_request(request)
     symbol = auth["symbol"]
+    execution_contract = dict(auth["execution_contract"])
 
     health_status, health = send("GET", "/healthz", timeout=15.0)
     open_status, open_before = send(
         "GET", "/strategy/ibkr-paper-open-orders", params={"symbol": symbol}, timeout=45.0
     )
-    pos_status, position_before = proof_v1._flatten_snapshot(send, symbol)
+    pos_status, position_before = proof_v1._flatten_snapshot(send, symbol, execution_contract)
     global_open_before, target_open_before = proof_v1._open_counts(open_before, symbol)
     target_position_before = proof_v1._position_for_symbol(position_before, symbol)
 
@@ -99,6 +100,7 @@ def execute_paper_execute(
             "strategy_spec_digest": auth["strategy_spec_digest"],
             "symbol": symbol,
             "timeframe": auth["authority"].get("timeframe"),
+            "execution_contract": execution_contract,
         },
         "preflight": {
             "health_http_status": health_status,
@@ -193,7 +195,7 @@ def execute_paper_execute(
     post_open_status, open_after = send(
         "GET", "/strategy/ibkr-paper-open-orders", params={"symbol": symbol}, timeout=45.0
     )
-    post_pos_status, position_after = proof_v1._flatten_snapshot(send, symbol)
+    post_pos_status, position_after = proof_v1._flatten_snapshot(send, symbol, execution_contract)
     global_open_after, target_open_after = proof_v1._open_counts(open_after, symbol)
     target_position_after = proof_v1._position_for_symbol(position_after, symbol)
     post_ok = bool(
