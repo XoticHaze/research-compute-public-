@@ -65,6 +65,7 @@ BAR_REQUEST_FIELDS = {
 }
 BAR_REQUEST_OPTIONAL_FIELDS = {
     "end_date_time_utc",
+    "allow_empty",
 }
 BAR_SIZE_RE = re.compile(r"^(?:[1-9][0-9]{0,2}) (?:sec|secs|min|mins|hour|hours|day|week|month)$")
 DURATION_RE = re.compile(r"^(?:[1-9][0-9]{0,5}) [SDWMY]$")
@@ -155,6 +156,19 @@ def _ibkr_history_end(value: str):
     return datetime.fromisoformat(normalized.replace("Z", "+00:00"))
 
 
+def _normalize_allow_empty(value: object) -> bool:
+    if value in (None, ""):
+        return False
+    if isinstance(value, bool):
+        return value
+    raw = str(value).strip().lower()
+    if raw in {"1", "true", "yes"}:
+        return True
+    if raw in {"0", "false", "no"}:
+        return False
+    raise RuntimeError("bar request allow_empty must be boolean")
+
+
 def parse_bar_requests(raw: str, symbols: list[str]) -> dict[str, list[dict[str, str]]]:
     """Validate exact MM-supplied history requests without choosing a timeframe."""
     if not str(raw or "").strip():
@@ -189,6 +203,7 @@ def parse_bar_requests(raw: str, symbols: list[str]) -> dict[str, list[dict[str,
             row["end_date_time_utc"] = _normalize_history_end_utc(
                 raw_row.get("end_date_time_utc")
             )
+            row["allow_empty"] = _normalize_allow_empty(raw_row.get("allow_empty"))
             if not row["source_timeframe"] or not row["target_timeframe"]:
                 raise RuntimeError(f"bar request timeframe identity missing for {symbol}")
             if not BAR_SIZE_RE.fullmatch(row["bar_size_setting"]):
@@ -208,6 +223,7 @@ def parse_bar_requests(raw: str, symbols: list[str]) -> dict[str, list[dict[str,
                 row["bar_size_setting"],
                 row["duration_str"],
                 row["end_date_time_utc"],
+                "1" if row["allow_empty"] else "0",
             )
             if identity in seen:
                 raise RuntimeError(f"duplicate bar request for {symbol}")
@@ -454,6 +470,7 @@ def main() -> int:
                 "bar_size_setting": "5 mins",
                 "duration_str": "2 D",
                 "end_date_time_utc": "",
+                "allow_empty": False,
             }]
             request_receipts: list[dict[str, object]] = []
             historical_bar_count = 0
@@ -461,6 +478,7 @@ def main() -> int:
                 bar_size = str(bar_request["bar_size_setting"])
                 duration = str(bar_request["duration_str"])
                 end_date_time_utc = str(bar_request.get("end_date_time_utc") or "")
+                allow_empty = bool(bar_request.get("allow_empty"))
                 request_end = _ibkr_history_end(end_date_time_utc)
                 request_started = time.perf_counter()
                 bars = ib.reqHistoricalData(
@@ -473,11 +491,12 @@ def main() -> int:
                     formatDate=2,
                     keepUpToDate=False,
                 )
-                if not bars:
+                if not bars and not allow_empty:
                     raise RuntimeError(
                         f"historical data returned no bars for {symbol} "
                         f"{bar_request['source_timeframe']}"
                     )
+                bars = list(bars or [])
                 historical_bar_count += len(bars)
                 records.extend(
                     ibkr_bar_to_record(
