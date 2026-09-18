@@ -569,7 +569,16 @@ def execute_paper_proof(
                 },
                 timeout=90.0,
             )
-            evidence_ok = bool(evidence_status == 200 and evidence.get("ok") is True)
+            evidence_ok = bool(
+                evidence_status == 200
+                and evidence.get("ok") is True
+                and evidence.get("read_only") is True
+                and evidence.get("broker_mutation_called") is False
+                and evidence.get("cloud_strategy_authority") is False
+                and evidence.get("cloud_execution_policy_authority") is False
+                and evidence.get("live_execution_allowed") is False
+                and evidence.get("global_cancel_allowed") is False
+            )
             receipt["completed_execution_reconciliation"] = {
                 **dict(evidence),
                 "requested": True,
