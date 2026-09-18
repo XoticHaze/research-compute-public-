@@ -208,7 +208,7 @@ def test_optional_warm_read_return_is_readonly_run_bound_and_encrypted(self):
     self.assertIn('read_return_recipient_b64:', self.text)
     self.assertIn('read_return_recipient_key_id:', self.text)
     self.assertIn('symbols:', self.text)
-    self.assertIn("inputs.mode == 'readonly'", self.text)
+    self.assertIn("(inputs.mode == 'readonly' || inputs.mode == 'paper_execute')", self.text)
     self.assertIn('IBKR_WARM_READ_RETURN_REQUEST_VALID=1', self.text)
     self.assertIn('python scripts/ibkr_warm_read_return_v1.py', self.text)
     self.assertIn('--run-id "$GITHUB_RUN_ID"', self.text)
@@ -226,13 +226,16 @@ def test_optional_warm_read_return_is_readonly_run_bound_and_encrypted(self):
     self.assertLess(publish, proof)
     self.assertLess(proof, stop)
 
-def test_warm_read_return_does_not_enable_writable_gateway(self):
-    needle = "IBKR_WARM_READ_RETURN_REQUESTED: $" + "{{ github.event_name == 'workflow_dispatch' && inputs.mode == 'readonly'"
+def test_warm_read_return_can_share_paper_execute_run_without_owning_mutation(self):
+    needle = "IBKR_WARM_READ_RETURN_REQUESTED: $" + "{{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'paper_execute')"
     self.assertIn(needle, self.text)
-    writable = self.text.index('if [ "$IBKR_PAPER_PROOF_MODE" = "1" ] || [ "$IBKR_PAPER_EXECUTE_MODE" = "1" ]; then')
-    writable_tail = self.text[writable:writable + 160]
-    self.assertIn('api_read_only=no', writable_tail)
-    self.assertNotIn('IBKR_WARM_READ_RETURN_REQUESTED', writable_tail)
+    self.assertIn("mode not in {'readonly','paper_execute'}", self.text)
+    snapshot = self.text.index('name: Publish encrypted warm read return')
+    execute = self.text.index('name: Execute one encrypted MM-authorized persistent paper command')
+    self.assertLess(snapshot, execute)
+    activator = Path('scripts/ibkr_warm_selected_runtime_activation_v1.py').read_text(encoding='utf-8')
+    self.assertIn('"ENABLE_LIVE_TRADING": "0"', activator)
+    self.assertIn('IBKR_REMOTE_GLOBAL_CANCEL_CALLED=0', activator)
 
 if __name__ == '__main__':
     unittest.main()
