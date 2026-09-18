@@ -15,6 +15,7 @@ on:
       - 'research/forward_challenger_scoreboard_enrichment_r1.py'
       - 'research/forward_prospective_cohort_ledger_r1.py'
       - 'research/forward_scoreboard_lineage_r1.py'
+      - 'research/forward_largecap_transport_observer_r1.py'
       - 'research/current/native_adapters/*.json'
       - 'research/current/forward_prospective_cohort_ledger_r1.json'
       - 'research/current/p160_forward_observation_r1.json'
@@ -30,6 +31,7 @@ on:
       - 'research/forward_challenger_scoreboard_enrichment_r1.py'
       - 'research/forward_prospective_cohort_ledger_r1.py'
       - 'research/forward_scoreboard_lineage_r1.py'
+      - 'research/forward_largecap_transport_observer_r1.py'
       - 'research/current/native_adapters/*.json'
       - 'research/current/forward_prospective_cohort_ledger_r1.json'
       - 'research/current/p160_forward_observation_r1.json'
@@ -58,6 +60,7 @@ jobs:
       - run: python research/forward_challenger_scoreboard_enrichment_r1.py --self-test
       - run: python research/forward_deterministic_allocator_r1.py --self-test
       - run: python research/forward_scoreboard_lineage_r1.py --self-test
+      - run: python research/forward_largecap_transport_observer_r1.py --self-test
 
   p46:
     runs-on: ubuntu-24.04
@@ -185,6 +188,13 @@ jobs:
             --scoreboard artifacts/forward_market_scoreboard_r1.json \
             --ledger score-inputs/prospective-current/forward_prospective_cohort_ledger_r1.json \
             --output artifacts/forward_market_scoreboard_r1.json
+      - name: Add generalized large-cap observation-only tape
+        run: |
+          python research/forward_largecap_transport_observer_r1.py \
+            --adapter research/current/native_adapters/generalized_largecap_ridge.json \
+            --output artifacts/forward_largecap_transport_observation_r1.json \
+            --scoreboard artifacts/forward_market_scoreboard_r1.json \
+            --scoreboard-output artifacts/forward_market_scoreboard_r1.json
       - name: Build governed deterministic paper allocation
         run: |
           args=(--scoreboard artifacts/forward_market_scoreboard_r1.json --output artifacts/forward_deterministic_allocator_r1.json)
@@ -222,6 +232,7 @@ jobs:
           assert zero['P46']=='CONTEXT_ONLY'
           assert zero['P558']=='ACTIVE'
           assert zero['SENIOR_CLO']=='ACTIVE'
+          assert zero['GENERALIZED_LARGECAP_RIDGE']=='ACTIVE'
           if Path('research/current/forward_deterministic_allocator_r1.json').exists():
               prior=json.load(open('research/current/forward_deterministic_allocator_r1.json'))
               assert after['final_target_weights']==prior['final_target_weights']
@@ -259,6 +270,7 @@ jobs:
             artifacts/forward_market_scoreboard_r1.json
             artifacts/forward_deterministic_allocator_r1.json
             artifacts/forward_prospective_cohort_ledger_r1.json
+            artifacts/forward_largecap_transport_observation_r1.json
           if-no-files-found: error
           retention-days: 90
 
@@ -286,24 +298,30 @@ jobs:
           scoreboard=/tmp/forward-market-scoreboard/forward_market_scoreboard_r1.json
           allocator=/tmp/forward-market-scoreboard/forward_deterministic_allocator_r1.json
           ledger=/tmp/forward-market-scoreboard/forward_prospective_cohort_ledger_r1.json
+          largecap=/tmp/forward-market-scoreboard/forward_largecap_transport_observation_r1.json
           p249=/tmp/forward-score-inputs/forward_p249_p266_shadow_r1.json
           p558=/tmp/forward-score-inputs/forward_p558_current_core_shadow_r1.json
           clo=/tmp/forward-score-inputs/forward_senior_clo_current_core_shadow_r1.json
           test -f "$scoreboard"
           test -f "$allocator"
           test -f "$ledger"
+          test -f "$largecap"
           test -f "$p249"
           test -f "$p558"
           test -f "$clo"
-          python - "$scoreboard" "$allocator" "$ledger" "$p249" "$p558" "$clo" <<'PY'
+          python - "$scoreboard" "$allocator" "$ledger" "$p249" "$p558" "$clo" "$largecap" <<'PY'
           import hashlib,json,sys
           from pathlib import Path
-          score,allocator,ledger,p249,p558,clo=(json.load(open(p)) for p in sys.argv[1:])
+          score,allocator,ledger,p249,p558,clo,largecap=(json.load(open(p)) for p in sys.argv[1:])
           ledger_sha=hashlib.sha256(Path(sys.argv[3]).read_bytes()).hexdigest()
           assert score['input_lineage']['prospective_ledger']['sha256']==ledger_sha
           assert score['input_lineage']['prospective_ledger']['generated_at']==ledger['generated_at']
           assert allocator['source_scoreboard_lineage']['prospective_ledger']['sha256']==ledger_sha
+          assert largecap['schema']=='research.forward_largecap_transport_observation_r1'
           lanes={row['program_id']:row for row in score['lanes']}
+          assert lanes['GENERALIZED_LARGECAP_RIDGE']['observation_status']=='ACTIVE'
+          zero={row['source_program_id']:row['observation_status'] for row in allocator['zero_weight_lane_visibility']}
+          assert zero['GENERALIZED_LARGECAP_RIDGE']=='ACTIVE'
           def bp(value): return round(float(value)*10000.0,2)
           p=lanes['P249_P266']; f=p249['forward']
           assert p['forward_days']==f['p249_plus_p266_net']['days']
@@ -328,6 +346,7 @@ jobs:
           cp "$scoreboard" research/current/forward_market_scoreboard_r1.json
           cp "$allocator" research/current/forward_deterministic_allocator_r1.json
           cp "$ledger" research/current/forward_prospective_cohort_ledger_r1.json
+          cp "$largecap" research/current/forward_largecap_transport_observation_r1.json
           cp "$p249" research/current/forward_p249_p266_shadow_r1.json
           cp "$p558" research/current/forward_p558_current_core_shadow_r1.json
           cp "$clo" research/current/forward_senior_clo_current_core_shadow_r1.json
@@ -337,6 +356,7 @@ jobs:
             research/current/forward_market_scoreboard_r1.json \
             research/current/forward_deterministic_allocator_r1.json \
             research/current/forward_prospective_cohort_ledger_r1.json \
+            research/current/forward_largecap_transport_observation_r1.json \
             research/current/forward_p249_p266_shadow_r1.json \
             research/current/forward_p558_current_core_shadow_r1.json \
             research/current/forward_senior_clo_current_core_shadow_r1.json
