@@ -2,7 +2,10 @@ import datetime as dt
 import unittest
 from unittest.mock import patch
 
-from scripts.ibkr_remote_selected_runtime_paper_proof_v1 import execute_paper_proof
+from scripts.ibkr_remote_selected_runtime_paper_proof_v1 import (
+    _validate_selected_runtime_request,
+    execute_paper_proof,
+)
 
 
 class FakeSender:
@@ -59,6 +62,16 @@ class RemoteSelectedRuntimePaperProofTests(unittest.TestCase):
                 "timeframe": "12Min",
                 "paper_submit_enabled": True,
                 "live_submit_enabled": False,
+                "execution_contract": {
+                    "conId": 793356225,
+                    "symbol": "MNQ",
+                    "secType": "FUT",
+                    "exchange": "CME",
+                    "currency": "USD",
+                    "localSymbol": "MNQU6",
+                    "lastTradeDateOrContractMonth": "202609",
+                    "multiplier": "2",
+                },
             },
             "encrypted_return": {"schema": "unused-in-driver"},
         }
@@ -79,6 +92,73 @@ class RemoteSelectedRuntimePaperProofTests(unittest.TestCase):
             ("GET", "/strategy/ibkr-paper-open-orders"): [self._open()],
             ("POST", "/strategy/ibkr-paper-flatten-preview-suite"): [self._pos()],
         }
+
+    def test_selected_runtime_exact_option_contract_is_accepted_without_public_invention(self):
+        request = self._request()
+        request["canonical_submit_payload"].update({
+            "symbol": "SPY",
+            "runtime_id": "spy-opt-runtime",
+        })
+        request["selected_runtime_authority"].update({
+            "runtime_id": "spy-opt-runtime",
+            "symbol": "SPY",
+            "execution_contract": {
+                "conId": 999001,
+                "symbol": "SPY",
+                "secType": "OPT",
+                "exchange": "SMART",
+                "currency": "USD",
+                "lastTradeDateOrContractMonth": "20261016",
+                "strike": 600.0,
+                "right": "C",
+                "multiplier": "100",
+                "tradingClass": "SPY",
+            },
+        })
+        out = _validate_selected_runtime_request(request)
+        self.assertEqual(out["execution_contract"], request["selected_runtime_authority"]["execution_contract"])
+
+    def test_ambiguous_nonstock_execution_contract_is_rejected(self):
+        request = self._request()
+        request["selected_runtime_authority"]["execution_contract"] = {
+            "symbol": "MNQ",
+            "secType": "FUT",
+            "exchange": "CME",
+            "currency": "USD",
+        }
+        with self.assertRaisesRegex(RuntimeError, "exact_futures_execution_contract_required"):
+            _validate_selected_runtime_request(request)
+
+    def test_preflight_position_snapshot_receives_exact_mm_contract(self):
+        responses = self._base()
+        responses[("POST", "/strategy/ibkr-paper-order-submit")] = [
+            (409, {
+                "ok": False,
+                "status": "blocked",
+                "place_order_called": False,
+                "broker_order_placed": False,
+                "guards": {"selected_runtime_id": "mnq-runtime"},
+                "blockers": ["route_currently_active_required_or_explicit_override_13z53"],
+            })
+        ]
+        sender = FakeSender(responses)
+        request = self._request()
+        execute_paper_proof(
+            runtime=self._runtime(),
+            request=request,
+            send=sender,
+            run_id="contract-preflight",
+            public_head="p",
+        )
+        flatten_calls = [
+            call for call in sender.calls
+            if call["route"] == "/strategy/ibkr-paper-flatten-preview-suite"
+        ]
+        self.assertGreaterEqual(len(flatten_calls), 1)
+        expected = request["selected_runtime_authority"]["execution_contract"]
+        for call in flatten_calls:
+            self.assertEqual(call["payload"]["contract"], expected)
+            self.assertEqual(call["payload"]["execution_contract"], expected)
 
     def test_existing_open_order_blocks_before_submit(self):
         responses = self._base()
@@ -203,6 +283,9 @@ class RemoteSelectedRuntimePaperProofTests(unittest.TestCase):
         flatten_call = next(c for c in sender.calls if c["route"] == "/strategy/ibkr-paper-flatten-submit-suite")
         self.assertEqual(flatten_call["payload"]["ibkr_paper_flatten_ack_13z39"], "IBKR_PAPER_FLATTEN_ACK_13Z39")
         self.assertEqual(flatten_call["payload"]["fallback_policy"], "none")
+        expected_contract = self._request()["selected_runtime_authority"]["execution_contract"]
+        self.assertEqual(flatten_call["payload"]["contract"], expected_contract)
+        self.assertEqual(flatten_call["payload"]["execution_contract"], expected_contract)
         evidence_call = next(c for c in sender.calls if c["route"] == "/strategy/ibkr-paper-completed-executions")
         roles = [row["role"] for row in evidence_call["payload"]["identities"]]
         self.assertEqual(roles, ["entry", "cleanup_exit"])
