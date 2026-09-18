@@ -16,8 +16,8 @@
   "entry_date": "2026-09-14",
   "evaluation_date": "2026-09-17",
   "execution_delay_sessions": 1,
-  "first_registered_at": "2026-09-18T05:06:45.444059+00:00",
-  "generated_at": "2026-09-18T05:13:24.207103+00:00",
+  "first_registered_at": "2026-09-18T05:06:08.956014+00:00",
+  "generated_at": "2026-09-18T05:16:56.769546+00:00",
   "holding_horizon_sessions": 20,
   "interpretation": {
     "current_mark_before_horizon_is_not_terminal_accuracy": true,
@@ -100,6 +100,11 @@
     }
   ],
   "program_id": "GENERALIZED_LARGECAP_RIDGE",
+  "registration_anchor_source": {
+    "evidence_commit": "c36500fa4ab554b01c24df7fd0ab603b9504d31e",
+    "first_registered_at": "2026-09-18T05:06:08.956014+00:00",
+    "kind": "repo_history_recovery"
+  },
   "schema": "research.forward_largecap_transport_observation_r1",
   "sessions_completed": 3,
   "signal_date": "2026-09-11",
