@@ -1,0 +1,29 @@
+name: IBKR Boundary Read Contract CI
+
+on:
+  push:
+    branches:
+      - assistant/ibkr-boundary-read-20260918
+    paths:
+      - .github/workflows/ibkr-cloudflare-readonly-b1-r1.yml
+      - .github/workflows/ibkr-boundary-read-contract-ci.yml
+      - tests/test_ibkr_boundary_read_workflow_v1.py
+  pull_request:
+    paths:
+      - .github/workflows/ibkr-cloudflare-readonly-b1-r1.yml
+      - .github/workflows/ibkr-boundary-read-contract-ci.yml
+      - tests/test_ibkr_boundary_read_workflow_v1.py
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest tests.test_ibkr_boundary_read_workflow_v1 -v
