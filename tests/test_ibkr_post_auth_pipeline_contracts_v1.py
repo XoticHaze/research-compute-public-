@@ -27,7 +27,7 @@ class PostAuthPipelineContractTests(unittest.TestCase):
         self.assertEqual(contract.exchange, "CME")
         self.assertEqual(contract.currency, "USD")
         self.assertEqual(contract.localSymbol, "MNQU6")
-        self.assertEqual(evidence["source"], "mm_selected_runtime_execution_contract")
+        self.assertEqual(evidence["source"], "mm_exact_contract_hint")
 
     def test_equity_without_hint_retains_stock_fallback(self):
         contract, evidence = mod.contract_request_for_symbol("AMAT", {})
@@ -59,7 +59,7 @@ class PostAuthPipelineContractTests(unittest.TestCase):
         self.assertEqual(contract.right, "C")
         self.assertEqual(contract.multiplier, "100")
         self.assertEqual(contract.lastTradeDateOrContractMonth, "20261016")
-        self.assertEqual(evidence["source"], "mm_selected_runtime_execution_contract")
+        self.assertEqual(evidence["source"], "mm_exact_contract_hint")
 
     def test_option_hint_requires_exact_right_and_strike(self):
         with self.assertRaisesRegex(RuntimeError, "option right/strike"):
