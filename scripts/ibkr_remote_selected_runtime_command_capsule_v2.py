@@ -35,7 +35,10 @@ from ibkr_remote_paper_capsule_v1 import (
 )
 
 CAPSULE_SCHEMA = "mmibkr.remote_selected_runtime_command_capsule.v2"
-MODE = "paper_submit_proof"
+PROOF_MODE = "paper_submit_proof"
+EXECUTE_MODE = "paper_execute"
+MODES = {PROOF_MODE, EXECUTE_MODE}
+MODE = PROOF_MODE
 RETURN_RECIPIENT_SCHEMA = "ibkr-remote-paper-return-recipient-v1"
 CAPSULE_FIELDS = {"schema", "mode", "source", "request", "cleanup", "return_recipient"}
 REQUEST_FIELDS = {
@@ -81,18 +84,28 @@ def _reject_live(value: Any, path: str = "request") -> None:
             _reject_live(child, f"{path}[{index}]")
 
 
-def _validate_cleanup(value: Any) -> dict[str, bool]:
+def _validate_cleanup(value: Any, *, mode: str) -> dict[str, bool]:
     if not isinstance(value, Mapping) or set(value) != CLEANUP_FIELDS:
         raise RuntimeError("cleanup contract field set mismatch")
     cleanup = {key: bool(value.get(key)) for key in CLEANUP_FIELDS}
-    expected = {
-        "cancel_open_order": True,
-        "flatten_filled_position": True,
-        "require_zero_baseline": True,
-        "allow_global_cancel": False,
-    }
+    expected = (
+        {
+            "cancel_open_order": True,
+            "flatten_filled_position": True,
+            "require_zero_baseline": True,
+            "allow_global_cancel": False,
+        }
+        if mode == PROOF_MODE
+        else {
+            "cancel_open_order": False,
+            "flatten_filled_position": False,
+            "require_zero_baseline": False,
+            "allow_global_cancel": False,
+        }
+    )
     if cleanup != expected:
-        raise RuntimeError("paper proof cleanup contract mismatch")
+        label = "paper proof" if mode == PROOF_MODE else "persistent paper execute"
+        raise RuntimeError(f"{label} cleanup contract mismatch")
     return cleanup
 
 
@@ -171,15 +184,16 @@ def validate_capsule(raw: bytes) -> dict[str, Any]:
         raise RuntimeError("command capsule field set mismatch")
     if capsule.get("schema") != CAPSULE_SCHEMA:
         raise RuntimeError("command capsule schema mismatch")
-    if capsule.get("mode") != MODE:
+    mode = str(capsule.get("mode") or "").strip()
+    if mode not in MODES:
         raise RuntimeError("command capsule mode mismatch")
     source = _validate_source(capsule.get("source"))
     request = _validate_request(capsule.get("request"))
-    cleanup = _validate_cleanup(capsule.get("cleanup"))
+    cleanup = _validate_cleanup(capsule.get("cleanup"), mode=mode)
     return_recipient = _validate_return_recipient(capsule.get("return_recipient"))
     return {
         "schema": CAPSULE_SCHEMA,
-        "mode": MODE,
+        "mode": mode,
         "source": source,
         "request": request,
         "cleanup": cleanup,
@@ -200,7 +214,7 @@ def materialize(capsule: Mapping[str, Any], *, runner_temp: Path) -> dict[str, A
     runtime_path = runner_temp / "ibkr-runtime.json"
     runtime = {
         "schema": "mmibkr.remote_selected_runtime_materialization.v3",
-        "mode": MODE,
+        "mode": str(capsule["mode"]),
         "mmibkr_repository": capsule["source"]["repository"],
         "mmibkr_head": capsule["source"]["head"],
         "source_archive_sha256": capsule["source"]["archive_sha256"],
