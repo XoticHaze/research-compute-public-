@@ -64,8 +64,55 @@ BAR_REQUEST_FIELDS = {
 }
 BAR_SIZE_RE = re.compile(r"^(?:[1-9][0-9]{0,2}) (?:sec|secs|min|mins|hour|hours|day|week|month)$")
 DURATION_RE = re.compile(r"^(?:[1-9][0-9]{0,5}) [SDWMY]$")
-SAFE_SECONDS_DURATIONS = {60, 120, 1800, 3600, 14400, 28800}
+SAFE_SECONDS_MAX_BAR = {
+    60: 60,
+    120: 120,
+    1800: 1800,
+    3600: 3600,
+    14400: 10800,
+    28800: 28800,
+}
+SAFE_SECONDS_DURATIONS = set(SAFE_SECONDS_MAX_BAR)
 MAX_BAR_REQUESTS = 50
+
+
+def _bar_size_seconds(value: str) -> int | None:
+    match = re.fullmatch(
+        r"([1-9][0-9]{0,2}) (sec|secs|min|mins|hour|hours|day|week|month)",
+        str(value or "").strip(),
+    )
+    if not match:
+        return None
+    count = int(match.group(1))
+    unit = match.group(2)
+    multiplier = {
+        "sec": 1,
+        "secs": 1,
+        "min": 60,
+        "mins": 60,
+        "hour": 3600,
+        "hours": 3600,
+        "day": 86400,
+        "week": 7 * 86400,
+        "month": 30 * 86400,
+    }[unit]
+    return count * multiplier
+
+
+def _seconds_duration_bar_compatible(duration: str, bar_size: str) -> bool:
+    raw = str(duration or "").strip()
+    if not raw.endswith(" S"):
+        return True
+    try:
+        count = int(raw.split()[0])
+    except Exception:
+        return False
+    bar_seconds = _bar_size_seconds(bar_size)
+    return (
+        count in SAFE_SECONDS_MAX_BAR
+        and bar_seconds is not None
+        and bar_seconds <= SAFE_SECONDS_MAX_BAR[count]
+    )
 
 
 def _bounded_duration(value: str) -> bool:
@@ -112,6 +159,13 @@ def parse_bar_requests(raw: str, symbols: list[str]) -> dict[str, list[dict[str,
                 raise RuntimeError(f"bar request bar size rejected for {symbol}")
             if not _bounded_duration(row["duration_str"]):
                 raise RuntimeError(f"bar request duration rejected for {symbol}")
+            if not _seconds_duration_bar_compatible(
+                row["duration_str"],
+                row["bar_size_setting"],
+            ):
+                raise RuntimeError(
+                    f"bar request seconds duration/bar size combination rejected for {symbol}"
+                )
             identity = (
                 row["source_timeframe"],
                 row["target_timeframe"],
