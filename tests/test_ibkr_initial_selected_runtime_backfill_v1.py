@@ -65,15 +65,15 @@ class InitialSelectedRuntimeBackfillContractTests(unittest.TestCase):
     def test_one_shot_loader_does_not_change_normal_push_defaults(self):
         text = self.workflow
         self.assertIn(
-            "POST_AUTH_SYMBOLS: \${{ github.event_name == 'workflow_dispatch' && inputs.symbols || 'AMAT,APH' }}",
+            "POST_AUTH_SYMBOLS: ${{ github.event_name == 'workflow_dispatch' && inputs.symbols || 'AMAT,APH' }}",
             text,
         )
         self.assertIn(
-            "POST_AUTH_CONTRACTS_JSON: \${{ github.event_name == 'workflow_dispatch' && inputs.contracts_json || '{}' }}",
+            "POST_AUTH_CONTRACTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.contracts_json || '{}' }}",
             text,
         )
         self.assertIn(
-            "POST_AUTH_BAR_REQUESTS_JSON: \${{ github.event_name == 'workflow_dispatch' && inputs.bar_requests_json || '' }}",
+            "POST_AUTH_BAR_REQUESTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.bar_requests_json || '' }}",
             text,
         )
         loader = text.index("name: Load one-shot selected-runtime initial backfill request")
