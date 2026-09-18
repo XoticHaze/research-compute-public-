@@ -1,5 +1,6 @@
 import datetime as dt
 import unittest
+from unittest.mock import patch
 
 from scripts.ibkr_remote_selected_runtime_paper_proof_v1 import execute_paper_proof
 
@@ -300,6 +301,44 @@ class RemoteSelectedRuntimePaperProofTests(unittest.TestCase):
         self.assertNotIn("remote_proof_refresh_limit_price", submit_call["payload"])
         self.assertTrue(submit_call["payload"]["operator_approved"])
         self.assertEqual(submit_call["payload"]["ibkr_paper_order_submit_ack_13z53"], "IBKR_PAPER_ORDER_SUBMIT_ACK_13Z53")
+
+    def test_candidate_lease_is_rechecked_after_read_only_preflight(self):
+        request = self._request()
+        now = dt.datetime.now(dt.timezone.utc)
+        request["canonical_submit_payload"]["remote_proof_candidate_materialized_at_utc"] = now.isoformat().replace("+00:00", "Z")
+        request["canonical_submit_payload"]["remote_proof_candidate_max_age_sec"] = 180
+        responses = self._base()
+        sender = FakeSender(responses)
+        initial = {
+            "requested": True,
+            "ok": True,
+            "materialized_at_utc": request["canonical_submit_payload"]["remote_proof_candidate_materialized_at_utc"],
+            "age_sec": 10.0,
+            "max_age_sec": 180.0,
+            "issues": [],
+            "authority_change": False,
+        }
+        expired = {
+            **initial,
+            "ok": False,
+            "age_sec": 181.0,
+            "issues": ["remote_candidate_transport_lease_expired"],
+        }
+        with patch(
+            "scripts.ibkr_remote_selected_runtime_paper_proof_v1._candidate_transport_lease",
+            side_effect=[initial, expired],
+        ) as lease:
+            receipt = execute_paper_proof(
+                runtime=self._runtime(),
+                request=request,
+                send=sender,
+                run_id="11",
+                public_head="p",
+            )
+        self.assertEqual(lease.call_count, 2)
+        self.assertEqual(receipt["status"], "CANDIDATE_LEASE_BLOCKED")
+        self.assertEqual(receipt["candidate_lease"]["age_sec"], 181.0)
+        self.assertFalse(any(c["route"] == "/strategy/ibkr-paper-order-submit" for c in sender.calls))
 
     def test_expired_remote_candidate_lease_blocks_before_submit(self):
         request = self._request()
