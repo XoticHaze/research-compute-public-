@@ -18,7 +18,6 @@ on:
       - 'research/forward_largecap_transport_observer_r1.py'
       - 'research/forward_bundle_publish_guard_r1.py'
       - 'research/current/native_adapters/*.json'
-      - 'research/current/forward_prospective_cohort_ledger_r1.json'
       - 'research/current/p160_forward_observation_r1.json'
       - 'research/current/currency_hedge_mechanism_forward_r1.json'
       - 'research/current/currency_hedge_allocator_overlay_forward_r1.json'
@@ -35,7 +34,6 @@ on:
       - 'research/forward_largecap_transport_observer_r1.py'
       - 'research/forward_bundle_publish_guard_r1.py'
       - 'research/current/native_adapters/*.json'
-      - 'research/current/forward_prospective_cohort_ledger_r1.json'
       - 'research/current/p160_forward_observation_r1.json'
       - 'research/current/currency_hedge_mechanism_forward_r1.json'
       - 'research/current/currency_hedge_allocator_overlay_forward_r1.json'
@@ -45,6 +43,11 @@ on:
       - 'research/forward_senior_clo_current_core_shadow_r1.py'
       - 'research/p46_forward_observer_r2.py'
       - 'research/forward_bar_contract_v2.py'
+
+concurrency:
+  group: forward-market-scoreboard-${{ github.ref }}
+  cancel-in-progress: false
+  queue: max
 
 permissions:
   contents: read
@@ -143,6 +146,25 @@ jobs:
         with:
           pattern: forward-*
           path: score-inputs
+      - name: Resolve latest prior forward state from live main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          mkdir -p score-inputs/prior-current
+          for path in \
+            research/current/forward_prospective_cohort_ledger_r1.json \
+            research/current/forward_largecap_transport_observation_r1.json \
+            research/current/forward_deterministic_allocator_r1.json
+          do
+            out="score-inputs/prior-current/${path##*/}"
+            if git show "origin/main:$path" > "$out" 2>/dev/null; then
+              echo "LIVE_PRIOR_RESOLVED=$path"
+            else
+              rm -f "$out"
+              echo "LIVE_PRIOR_MISSING=$path"
+            fi
+          done
       - name: Add privately admitted sanitized native adapters
         shell: bash
         run: |
@@ -170,7 +192,7 @@ jobs:
           mkdir -p score-inputs/prospective-current
           python research/forward_prospective_cohort_ledger_r1.py \
             --adapter-dir score-inputs/native-current \
-            --prior research/current/forward_prospective_cohort_ledger_r1.json \
+            --prior score-inputs/prior-current/forward_prospective_cohort_ledger_r1.json \
             --output score-inputs/prospective-current/forward_prospective_cohort_ledger_r1.json
       - run: python research/forward_market_scoreboard_r1.py --input-root score-inputs --output artifacts/forward_market_scoreboard_r1.json
       - name: Add forward challenger observers without allocation authority
@@ -196,14 +218,15 @@ jobs:
         run: |
           python research/forward_largecap_transport_observer_r1.py \
             --adapter research/current/native_adapters/generalized_largecap_ridge.json \
+            --prior score-inputs/prior-current/forward_largecap_transport_observation_r1.json \
             --output artifacts/forward_largecap_transport_observation_r1.json \
             --scoreboard artifacts/forward_market_scoreboard_r1.json \
             --scoreboard-output artifacts/forward_market_scoreboard_r1.json
       - name: Build governed deterministic paper allocation
         run: |
           args=(--scoreboard artifacts/forward_market_scoreboard_r1.json --output artifacts/forward_deterministic_allocator_r1.json)
-          if test -f research/current/forward_deterministic_allocator_r1.json; then
-            args+=(--prior research/current/forward_deterministic_allocator_r1.json)
+          if test -f score-inputs/prior-current/forward_deterministic_allocator_r1.json; then
+            args+=(--prior score-inputs/prior-current/forward_deterministic_allocator_r1.json)
           fi
           python research/forward_deterministic_allocator_r1.py "${args[@]}"
           python research/forward_scoreboard_lineage_r1.py \
@@ -237,8 +260,8 @@ jobs:
           assert zero['P558']=='ACTIVE'
           assert zero['SENIOR_CLO']=='ACTIVE'
           assert zero['GENERALIZED_LARGECAP_RIDGE']=='ACTIVE'
-          if Path('research/current/forward_deterministic_allocator_r1.json').exists():
-              prior=json.load(open('research/current/forward_deterministic_allocator_r1.json'))
+          if Path('score-inputs/prior-current/forward_deterministic_allocator_r1.json').exists():
+              prior=json.load(open('score-inputs/prior-current/forward_deterministic_allocator_r1.json'))
               assert after['final_target_weights']==prior['final_target_weights']
           print('FORWARD_CHALLENGER_ALLOCATOR_NONINTERFERENCE=PASS')
           print('FORWARD_PROSPECTIVE_LINEAGE=PASS',ledger_sha)
