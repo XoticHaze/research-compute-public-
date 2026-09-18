@@ -149,7 +149,7 @@ def append_history(prior: dict[str, Any] | None, entry: dict[str, Any]) -> dict[
         by_date[day] = entry
 
     ordered = [by_date[d] for d in sorted(by_date)]
-    return {
+    result = {
         "schema": SCHEMA,
         "session_count": len(ordered),
         "first_session_date": ordered[0]["session_date"] if ordered else None,
@@ -163,6 +163,11 @@ def append_history(prior: dict[str, Any] | None, entry: dict[str, Any]) -> dict[
             "live_trading_change": False,
         },
     }
+    if prior is not None:
+        for key in ("git_history_bootstrap_complete", "git_history_bootstrap_ref"):
+            if key in prior:
+                result[key] = prior[key]
+    return result
 
 
 
@@ -179,7 +184,11 @@ def _git_show(repo: Path, ref: str, path: str) -> tuple[dict[str, Any] | None, b
     return json.loads(raw), raw
 
 
-def bootstrap_from_git(repo: Path, ref: str) -> dict[str, Any] | None:
+def bootstrap_from_git(
+    repo: Path,
+    ref: str,
+    snapshot_dir: Path | None = None,
+) -> dict[str, Any] | None:
     path = "research/current/forward_market_scoreboard_r1.json"
     proc = subprocess.run(
         ["git", "-C", str(repo), "log", "--format=%H", "--reverse", ref, "--", path],
@@ -215,6 +224,14 @@ def bootstrap_from_git(repo: Path, ref: str) -> dict[str, Any] | None:
             continue
         entry["bootstrap_source_commit"] = commit
         history = append_history(history, entry)
+        if snapshot_dir is not None:
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            day = entry["session_date"]
+            (snapshot_dir / f"{day}.json").write_bytes(scoreboard_raw)
+            (snapshot_dir / f"{day}.allocator.json").write_bytes(allocator_raw)
+    if history is not None:
+        history["git_history_bootstrap_complete"] = True
+        history["git_history_bootstrap_ref"] = ref
     return history
 
 
@@ -281,6 +298,7 @@ def main() -> None:
     p.add_argument("--prior")
     p.add_argument("--bootstrap-repo")
     p.add_argument("--bootstrap-ref", default="origin/main")
+    p.add_argument("--bootstrap-snapshot-dir")
     p.add_argument("--output")
     p.add_argument("--self-test", action="store_true")
     args = p.parse_args()
@@ -295,8 +313,20 @@ def main() -> None:
     allocator, allocator_raw = _read(Path(args.allocator))
     p249, p249_raw = _read(Path(args.p249)) if args.p249 else (None, None)
     prior, _ = _read(Path(args.prior)) if args.prior else (None, None)
-    if prior is None and args.bootstrap_repo:
-        prior = bootstrap_from_git(Path(args.bootstrap_repo), args.bootstrap_ref)
+    if args.bootstrap_repo and not bool((prior or {}).get("git_history_bootstrap_complete")):
+        boot = bootstrap_from_git(
+            Path(args.bootstrap_repo),
+            args.bootstrap_ref,
+            Path(args.bootstrap_snapshot_dir) if args.bootstrap_snapshot_dir else None,
+        )
+        if boot is not None:
+            if prior is None:
+                prior = boot
+            else:
+                for historical_entry in boot.get("sessions") or []:
+                    prior = append_history(prior, historical_entry)
+                prior["git_history_bootstrap_complete"] = True
+                prior["git_history_bootstrap_ref"] = args.bootstrap_ref
     assert scoreboard is not None and scoreboard_raw is not None
     assert allocator is not None and allocator_raw is not None
 
