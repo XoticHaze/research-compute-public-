@@ -1,0 +1,211 @@
+name: Forward Scoreboard Gap Recovery R1
+
+on:
+  workflow_dispatch:
+    inputs:
+      asof:
+        description: Missing market session to recover (YYYY-MM-DD)
+        required: true
+        default: '2026-09-15'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/forward-scoreboard-gap-recovery-r1.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: forward-scoreboard-gap-recovery-r1
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install narrow recovery dependencies
+        run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 yfinance==0.2.65
+
+      - name: Recovery self-tests
+        run: |
+          set -euo pipefail
+          python research/forward_asof_tape_recovery_r1.py --self-test
+          python research/forward_scoreboard_recover_from_asof_r1.py --self-test
+          python research/forward_scoreboard_history_r1.py --self-test
+
+      - name: Resolve target and bracketing historical shell
+        id: target
+        shell: bash
+        env:
+          DISPATCH_ASOF: ${{ github.event.inputs.asof }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          asof="${DISPATCH_ASOF:-2026-09-15}"
+          echo "asof=$asof" >> "$GITHUB_OUTPUT"
+          python - "$asof" <<'PY' > /tmp/recovery_target.env
+          import json,sys
+          target=sys.argv[1]
+          h=json.load(open('research/current/forward_market_scoreboard_history_r1.json'))
+          sessions=sorted(h.get('sessions') or [], key=lambda row: row['session_date'])
+          if any(row['session_date']==target for row in sessions):
+              raise SystemExit(f"target already exists in history: {target}")
+          before=[row for row in sessions if row['session_date'] < target]
+          after=[row for row in sessions if row['session_date'] > target]
+          if not before or not after:
+              raise SystemExit(f"target lacks bracketing snapshots: {target}")
+          prev=before[-1]
+          nxt=after[0]
+          ref=prev.get('bootstrap_source_commit')
+          if not ref:
+              raise SystemExit(f"previous snapshot lacks bootstrap_source_commit: {prev['session_date']}")
+          print(f"BASE_REF={ref}")
+          print(f"PREV_DATE={prev['session_date']}")
+          print(f"NEXT_DATE={nxt['session_date']}")
+          print('PREV_TARGETS='+json.dumps((prev.get('combined_portfolio') or {}).get('target_weights') or {},sort_keys=True))
+          print('NEXT_TARGETS='+json.dumps((nxt.get('combined_portfolio') or {}).get('target_weights') or {},sort_keys=True))
+          PY
+          cat /tmp/recovery_target.env
+          cat /tmp/recovery_target.env >> "$GITHUB_ENV"
+
+      - name: Materialize exact historical shell and source state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/recovery/base /tmp/recovery/asof /tmp/recovery/native
+          git show "$BASE_REF:research/current/forward_market_scoreboard_r1.json" > /tmp/recovery/base/scoreboard.json
+          git show "$BASE_REF:research/current/forward_deterministic_allocator_r1.json" > /tmp/recovery/base/allocator.json
+          if git show "$BASE_REF:research/current/forward_prospective_cohort_ledger_r1.json" > /tmp/recovery/base/ledger.json 2>/dev/null; then
+            echo "BASE_LEDGER_RESOLVED=true"
+          else
+            cp research/current/forward_prospective_cohort_ledger_r1.json /tmp/recovery/base/ledger.json
+            echo "BASE_LEDGER_FALLBACK_CURRENT=true"
+          fi
+          cp research/current/native_adapters/*.json /tmp/recovery/native/
+          cp research/current/p160_forward_observation_r1.json /tmp/recovery/base/p160.json
+
+      - name: Rebuild core and challenger tapes exactly through target session
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/forward_asof_tape_recovery_r1.py             --asof "${{ steps.target.outputs.asof }}"             --p249 research/current/forward_p249_p266_shadow_r1.json             --p558 research/current/forward_p558_current_core_shadow_r1.json             --clo research/current/forward_senior_clo_current_core_shadow_r1.json             --output-dir /tmp/recovery/asof/core
+
+      - name: Rebuild prospective cohorts and auxiliary challengers through target session
+        shell: bash
+        run: |
+          set -euo pipefail
+          asof="${{ steps.target.outputs.asof }}"
+          python research/forward_prospective_cohort_ledger_r1.py             --adapter-dir /tmp/recovery/native             --prior /tmp/recovery/base/ledger.json             --asof "$asof"             --output /tmp/recovery/asof/ledger.json
+          python research/currency_hedge_mechanism_forward_r1.py             --asof "$asof"             --output /tmp/recovery/asof/currency.json
+          python research/currency_hedge_allocator_overlay_forward_r1.py             --asof "$asof"             --output /tmp/recovery/asof/currency-overlay.json
+
+      - name: Compose recovered scoreboard with canonical lane helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          asof="${{ steps.target.outputs.asof }}"
+          python research/forward_scoreboard_recover_from_asof_r1.py             --base-scoreboard /tmp/recovery/base/scoreboard.json             --base-ref "$BASE_REF"             --p249 /tmp/recovery/asof/core/forward_p249_p266_shadow_r1.json             --p558 /tmp/recovery/asof/core/forward_p558_current_core_shadow_r1.json             --clo /tmp/recovery/asof/core/forward_senior_clo_current_core_shadow_r1.json             --native-adapter-dir /tmp/recovery/native             --ledger /tmp/recovery/asof/ledger.json             --p160 /tmp/recovery/base/p160.json             --currency /tmp/recovery/asof/currency.json             --currency-overlay /tmp/recovery/asof/currency-overlay.json             --session-date "$asof"             --output /tmp/recovery/asof/scoreboard.json
+
+      - name: Rebuild allocator without granting new authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/forward_deterministic_allocator_r1.py             --scoreboard /tmp/recovery/asof/scoreboard.json             --prior /tmp/recovery/base/allocator.json             --output /tmp/recovery/asof/allocator.json
+          python research/forward_scoreboard_lineage_r1.py             --mode allocator             --scoreboard /tmp/recovery/asof/scoreboard.json             --allocator /tmp/recovery/asof/allocator.json             --output /tmp/recovery/asof/allocator.json
+
+      - name: Prove recovered snapshot against bracketing portfolio and boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os
+          score=json.load(open('/tmp/recovery/asof/scoreboard.json'))
+          alloc=json.load(open('/tmp/recovery/asof/allocator.json'))
+          p249=json.load(open('/tmp/recovery/asof/core/forward_p249_p266_shadow_r1.json'))
+          p558=json.load(open('/tmp/recovery/asof/core/forward_p558_current_core_shadow_r1.json'))
+          clo=json.load(open('/tmp/recovery/asof/core/forward_senior_clo_current_core_shadow_r1.json'))
+          prev=json.loads(os.environ['PREV_TARGETS'])
+          nxt=json.loads(os.environ['NEXT_TARGETS'])
+          assert prev == nxt, (prev,nxt)
+          assert alloc['final_target_weights'] == prev, (alloc['final_target_weights'],prev)
+          assert score['historical_recovery']['original_scoreboard_published'] is False
+          assert score['historical_recovery']['allocation_authority'] is False
+          lanes={x['program_id']:x for x in score['lanes']}
+          assert len(lanes) == 10, sorted(lanes)
+          assert lanes['GENERALIZED_LARGECAP_RIDGE']['observation_status']=='CONTEXT_ONLY'
+          assert int(p249['forward']['p249_plus_p266_net']['days']) == 4
+          assert int(p558['forward']['challenger_if_flattened_now']['days']) == 3
+          assert int(clo['forward']['challenger_if_flattened_now']['days']) == 3
+          assert all((x.get('boundaries') or {}).get('broker_action') is not True for x in score['lanes'])
+          print('RECOVERED_SCOREBOARD_BRACKET_AND_BOUNDARIES=PASS')
+          print('RECOVERED_TARGETS='+json.dumps(alloc['final_target_weights'],sort_keys=True))
+          PY
+
+      - name: Append recovered session to latest durable history
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/forward_scoreboard_history_r1.py             --scoreboard /tmp/recovery/asof/scoreboard.json             --allocator /tmp/recovery/asof/allocator.json             --p249 /tmp/recovery/asof/core/forward_p249_p266_shadow_r1.json             --prior research/current/forward_market_scoreboard_history_r1.json             --output /tmp/recovery/asof/history.json
+          python - <<'PY'
+          import json
+          h=json.load(open('/tmp/recovery/asof/history.json'))
+          coverage=h['session_coverage']
+          assert h['session_count'] == 6, h['session_count']
+          assert coverage['expected_market_session_count'] == 4, coverage
+          # The as-of P249 tape ends Sep 15, so coverage for that truncated tape
+          # must be complete through the recovery date.
+          assert coverage['snapshot_coverage_complete'] is True, coverage
+          row=next(x for x in h['sessions'] if x['session_date']=='2026-09-15')
+          assert row['historical_recovery']['kind']=='RECONSTRUCTED_FROM_DURABLE_TAPES_AND_FROZEN_CONTRACTS'
+          print('RECOVERED_HISTORY_APPEND=PASS',h['session_count'])
+          PY
+
+      - name: Publish recovered snapshot and merge into freshest history
+        shell: bash
+        run: |
+          set -euo pipefail
+          asof="${{ steps.target.outputs.asof }}"
+          git fetch origin main
+          git checkout -B forward-scoreboard-gap-recovery-publish origin/main
+          mkdir -p research/recovered
+
+          # Re-append against the freshest history after checkout so a concurrent
+          # current-bundle publication cannot erase the recovered session.
+          python research/forward_scoreboard_history_r1.py             --scoreboard /tmp/recovery/asof/scoreboard.json             --allocator /tmp/recovery/asof/allocator.json             --p249 research/current/forward_p249_p266_shadow_r1.json             --prior research/current/forward_market_scoreboard_history_r1.json             --output /tmp/recovery/final-history.json
+
+          cp /tmp/recovery/asof/scoreboard.json "research/recovered/forward_market_scoreboard_${asof}_r1.json"
+          cp /tmp/recovery/asof/allocator.json "research/recovered/forward_deterministic_allocator_${asof}_r1.json"
+          cp /tmp/recovery/final-history.json research/current/forward_market_scoreboard_history_r1.json
+
+          python - "$asof" <<'PY'
+          import json,sys
+          target=sys.argv[1]
+          h=json.load(open('research/current/forward_market_scoreboard_history_r1.json'))
+          dates=[x['session_date'] for x in h['sessions']]
+          assert target in dates, dates
+          assert h['session_count'] >= 6, h['session_count']
+          coverage=h['session_coverage']
+          assert target not in coverage['missing_scoreboard_snapshot_sessions'], coverage
+          row=next(x for x in h['sessions'] if x['session_date']==target)
+          assert row['historical_recovery']['original_scoreboard_published'] is False
+          print('RECOVERED_HISTORY_FINAL=PASS',h['session_count'],dates)
+          PY
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add             "research/recovered/forward_market_scoreboard_${asof}_r1.json"             "research/recovered/forward_deterministic_allocator_${asof}_r1.json"             research/current/forward_market_scoreboard_history_r1.json
+          if git diff --cached --quiet; then
+            echo "RECOVERY_ALREADY_PUBLISHED=true"
+            exit 0
+          fi
+          git commit -m "Forward: recover ${asof} scoreboard snapshot"
+          git push origin HEAD:main
