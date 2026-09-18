@@ -341,6 +341,14 @@ def _jit_refresh_authorized_lmt_payload(
     payload: Mapping[str, Any],
 ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     submit_payload = dict(payload)
+    # Candidate lease metadata is transport-only. The lease has already been
+    # validated by execute_paper_proof and must never broaden or alter MM's
+    # canonical submit contract.
+    for key in (
+        "remote_proof_candidate_materialized_at_utc",
+        "remote_proof_candidate_max_age_sec",
+    ):
+        submit_payload.pop(key, None)
     requested = submit_payload.get("remote_proof_refresh_limit_price") is True
     if not requested:
         return submit_payload, {"requested": False, "performed": False, "ok": None}
