@@ -268,7 +268,15 @@ def parse_contract_hints(raw: str) -> dict[str, dict[str, object]]:
             con_id = int(raw_hint.get("conId") or 0)
         except (TypeError, ValueError):
             con_id = 0
-        if sec_type != "STK" and con_id <= 0:
+        if sec_type == "FUT" and con_id <= 0:
+            expiry = str(raw_hint.get("lastTradeDateOrContractMonth") or "").strip()
+            exchange = str(raw_hint.get("exchange") or "").strip()
+            currency = str(raw_hint.get("currency") or "").strip()
+            if not re.fullmatch(r"\d{6}(?:\d{2})?", expiry) or not exchange or not currency:
+                raise RuntimeError(
+                    f"futures read contract without conId requires exact expiry/exchange/currency for {symbol}"
+                )
+        elif sec_type != "STK" and con_id <= 0:
             raise RuntimeError(f"explicit conId required for non-stock contract {symbol}")
         if sec_type == "OPT":
             right = str(raw_hint.get("right") or "").strip().upper()
@@ -314,8 +322,13 @@ def contract_request_for_symbol(
             kwargs[field] = value
     kwargs["symbol"] = symbol
     kwargs["secType"] = str(hint.get("secType") or "").upper()
+    source = (
+        "mm_expiry_qualified_read_contract"
+        if str(kwargs.get("secType") or "").upper() == "FUT" and not int(kwargs.get("conId") or 0)
+        else "mm_exact_contract_hint"
+    )
     return Contract(**kwargs), {
-        "source": "mm_exact_contract_hint",
+        "source": source,
         **{k: v for k, v in kwargs.items() if v not in (None, "")},
     }
 
@@ -498,7 +511,10 @@ def main() -> int:
             if not qualified:
                 raise RuntimeError(f"contract qualification failed for {symbol}")
             resolved = qualified[0]
-            if contract_request.get("source") == "mm_exact_contract_hint":
+            if contract_request.get("source") in {
+                "mm_exact_contract_hint",
+                "mm_expiry_qualified_read_contract",
+            }:
                 requested_con_id = int(contract_request.get("conId") or 0)
                 resolved_con_id = int(getattr(resolved, "conId", 0) or 0)
                 if requested_con_id > 0 and resolved_con_id != requested_con_id:
@@ -507,6 +523,18 @@ def main() -> int:
                 resolved_sec_type = str(getattr(resolved, "secType", "") or "").upper()
                 if requested_sec_type and resolved_sec_type != requested_sec_type:
                     raise RuntimeError(f"qualified contract secType mismatch for {symbol}")
+                requested_expiry = str(
+                    contract_request.get("lastTradeDateOrContractMonth") or ""
+                ).strip()
+                resolved_expiry = str(
+                    getattr(resolved, "lastTradeDateOrContractMonth", "") or ""
+                ).strip()
+                if (
+                    requested_expiry
+                    and resolved_expiry
+                    and not resolved_expiry.startswith(requested_expiry[:6])
+                ):
+                    raise RuntimeError(f"qualified contract expiry mismatch for {symbol}")
             effective_requests = bar_requests.get(symbol) or [{
                 "source_timeframe": "5Min",
                 "target_timeframe": "5Min",

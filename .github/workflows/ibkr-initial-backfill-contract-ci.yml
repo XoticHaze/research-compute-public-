@@ -1,0 +1,40 @@
+name: IBKR Initial Backfill Contract CI
+
+on:
+  push:
+    branches:
+      - assistant/ibkr-initial-selected-runtime-backfill-20260918
+    paths:
+      - scripts/ibkr_post_auth_pipeline_v1.py
+      - tests/test_ibkr_post_auth_pipeline_contracts_v1.py
+      - config/ibkr_initial_selected_runtime_backfill_v1.json
+      - tests/test_ibkr_initial_selected_runtime_backfill_v1.py
+      - .github/workflows/ibkr-cloudflare-readonly-b1-r1.yml
+      - .github/workflows/ibkr-initial-backfill-contract-ci.yml
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate exact-expiry read contract and one-shot backfill request
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check \
+            'ib_insync==0.9.86' \
+            'pandas==2.2.3' \
+            'PyYAML==6.0.2'
+          python -m py_compile \
+            scripts/ibkr_post_auth_pipeline_v1.py \
+            tests/test_ibkr_post_auth_pipeline_contracts_v1.py \
+            tests/test_ibkr_initial_selected_runtime_backfill_v1.py
+          python -m unittest \
+            tests.test_ibkr_post_auth_pipeline_contracts_v1 \
+            tests.test_ibkr_initial_selected_runtime_backfill_v1 -v

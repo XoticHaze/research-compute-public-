@@ -74,15 +74,57 @@ class PostAuthPipelineContractTests(unittest.TestCase):
                 }
             }))
 
-    def test_non_stock_hint_requires_explicit_conid(self):
-        with self.assertRaisesRegex(RuntimeError, "explicit conId required"):
+    def test_futures_read_hint_can_be_exact_by_expiry_without_conid(self):
+        hints = mod.parse_contract_hints(json.dumps({
+            "MNQ": {
+                "symbol": "MNQ",
+                "secType": "FUT",
+                "exchange": "CME",
+                "currency": "USD",
+                "lastTradeDateOrContractMonth": "202612",
+            }
+        }))
+        contract, evidence = mod.contract_request_for_symbol("MNQ", hints)
+        self.assertEqual(contract.conId, 0)
+        self.assertEqual(contract.symbol, "MNQ")
+        self.assertEqual(contract.secType, "FUT")
+        self.assertEqual(contract.exchange, "CME")
+        self.assertEqual(contract.currency, "USD")
+        self.assertEqual(contract.lastTradeDateOrContractMonth, "202612")
+        self.assertEqual(evidence["source"], "mm_expiry_qualified_read_contract")
+
+    def test_futures_read_hint_without_conid_fails_closed_if_expiry_or_exchange_is_missing(self):
+        with self.assertRaisesRegex(RuntimeError, "exact expiry/exchange/currency"):
             mod.parse_contract_hints(json.dumps({
                 "MNQ": {
                     "symbol": "MNQ",
                     "secType": "FUT",
                     "exchange": "CME",
                     "currency": "USD",
-                    "localSymbol": "MNQU6",
+                }
+            }))
+
+        with self.assertRaisesRegex(RuntimeError, "exact expiry/exchange/currency"):
+            mod.parse_contract_hints(json.dumps({
+                "MNQ": {
+                    "symbol": "MNQ",
+                    "secType": "FUT",
+                    "currency": "USD",
+                    "lastTradeDateOrContractMonth": "202612",
+                }
+            }))
+
+    def test_option_still_requires_explicit_conid(self):
+        with self.assertRaisesRegex(RuntimeError, "explicit conId required"):
+            mod.parse_contract_hints(json.dumps({
+                "SPY": {
+                    "symbol": "SPY",
+                    "secType": "OPT",
+                    "exchange": "SMART",
+                    "currency": "USD",
+                    "lastTradeDateOrContractMonth": "20261016",
+                    "strike": 600.0,
+                    "right": "C",
                 }
             }))
 

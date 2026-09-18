@@ -84,7 +84,9 @@ on:
       - 'tests/test_ibkr_remote_selected_runtime_paper_execute_v1.py'
       - 'tests/test_ibkr_remote_paper_proof_return_v1.py'
       - 'tests/test_ibkr_warm_read_return_v1.py'
+      - 'tests/test_ibkr_initial_selected_runtime_backfill_v1.py'
       - 'ibkr_login_trigger.txt'
+      - 'config/ibkr_initial_selected_runtime_backfill_v1.json'
 
 permissions:
   contents: read
@@ -135,7 +137,8 @@ jobs:
             tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py \
             tests/test_ibkr_remote_selected_runtime_paper_execute_v1.py \
             tests/test_ibkr_remote_paper_proof_return_v1.py \
-            tests/test_ibkr_warm_read_return_v1.py
+            tests/test_ibkr_warm_read_return_v1.py \
+            tests/test_ibkr_initial_selected_runtime_backfill_v1.py
           python - <<'PY'
           from pathlib import Path
           import yaml
@@ -154,7 +157,8 @@ jobs:
             tests.test_ibkr_remote_selected_runtime_command_capsule_v2 \
             tests.test_ibkr_remote_selected_runtime_paper_execute_v1 \
             tests.test_ibkr_remote_paper_proof_return_v1 \
-            tests.test_ibkr_warm_read_return_v1 -v
+            tests.test_ibkr_warm_read_return_v1 \
+            tests.test_ibkr_initial_selected_runtime_backfill_v1 -v
           echo 'IBKR_BROKER_LOGIN_ATTEMPTED=0'
           echo 'IBKR_BROKER_ORDER_ATTEMPTED=0'
 
@@ -211,7 +215,8 @@ jobs:
             tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py \
             tests/test_ibkr_remote_selected_runtime_paper_execute_v1.py \
             tests/test_ibkr_remote_paper_proof_return_v1.py \
-            tests/test_ibkr_warm_read_return_v1.py
+            tests/test_ibkr_warm_read_return_v1.py \
+            tests/test_ibkr_initial_selected_runtime_backfill_v1.py
           python -m unittest \
             tests.test_ibkr_b1_auth_contracts_v1 \
             tests.test_ibkr_post_auth_pipeline_contracts_v1 \
@@ -220,8 +225,36 @@ jobs:
             tests.test_ibkr_remote_selected_runtime_command_capsule_v2 \
             tests.test_ibkr_remote_selected_runtime_paper_execute_v1 \
             tests.test_ibkr_remote_paper_proof_return_v1 \
-            tests.test_ibkr_warm_read_return_v1 -v
+            tests.test_ibkr_warm_read_return_v1 \
+            tests.test_ibkr_initial_selected_runtime_backfill_v1 -v
           echo "IBKR_PAPER_PROOF_MODE=${IBKR_PAPER_PROOF_MODE}"
+
+      - name: Load one-shot selected-runtime initial backfill request
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[ibkr-initial-backfill]') }}
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_ENV"
+          import json
+          from pathlib import Path
+          node=json.loads(Path('config/ibkr_initial_selected_runtime_backfill_v1.json').read_text(encoding='utf-8'))
+          symbols=node.get('symbols') or []
+          contracts=node.get('contracts') or {}
+          requests=node.get('bar_requests') or {}
+          required=node.get('required_completed_bars') or {}
+          if set(symbols) != set(requests):
+              raise SystemExit('initial backfill request must cover every requested symbol')
+          if int(required.get('AMAT_target_15Min') or 0) < 400:
+              raise SystemExit('AMAT warmup floor must remain >=400 target bars')
+          if int(required.get('APH_target_15Min') or 0) < 400:
+              raise SystemExit('APH warmup floor must remain >=400 target bars')
+          if int(required.get('MNQ_source_1Min') or 0) < 4800:
+              raise SystemExit('MNQ warmup floor must remain >=4800 source bars')
+          print('POST_AUTH_SYMBOLS=' + ','.join(symbols))
+          print('POST_AUTH_CONTRACTS_JSON=' + json.dumps(contracts,separators=(',',':')))
+          print('POST_AUTH_BAR_REQUESTS_JSON=' + json.dumps(requests,separators=(',',':')))
+          print('IBKR_INITIAL_SELECTED_RUNTIME_BACKFILL=1')
+          PY
+          echo 'IBKR_INITIAL_SELECTED_RUNTIME_BACKFILL_REQUEST_LOADED=1'
 
       - name: Validate optional encrypted warm read-return request
         if: ${{ github.event_name == 'workflow_dispatch' && (inputs.read_return_recipient_b64 != '' || inputs.read_return_recipient_key_id != '') }}
