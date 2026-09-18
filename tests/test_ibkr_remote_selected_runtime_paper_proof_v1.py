@@ -113,6 +113,18 @@ class RemoteSelectedRuntimePaperProofTests(unittest.TestCase):
         responses[("POST", "/strategy/ibkr-paper-flatten-preview-suite")] = [self._pos(), self._pos(), self._pos(), self._pos()]
         responses[("POST", "/strategy/ibkr-paper-order-cancel-preview")] = [(200, {"ok": True})]
         responses[("POST", "/strategy/ibkr-paper-order-cancel-submit")] = [(200, {"ok": True, "status": "cancel_reconciled"})]
+        responses[("POST", "/strategy/ibkr-paper-completed-executions")] = [(
+            200,
+            {
+                "ok": True,
+                "status": "completed_execution_reconciliation_ready",
+                "read_only": True,
+                "matched_fill_count": 0,
+                "fills": [],
+                "req_executions_called": True,
+                "broker_mutation_called": False,
+            },
+        )]
         sender = FakeSender(responses)
         receipt = execute_paper_proof(runtime=self._runtime(), request=self._request(), send=sender, run_id="3", public_head="p")
         self.assertEqual(receipt["status"], "PAPER_PROOF_RECONCILED")
@@ -124,6 +136,11 @@ class RemoteSelectedRuntimePaperProofTests(unittest.TestCase):
         self.assertEqual(cancel_call["payload"]["ibkr_paper_order_cancel_ack_13z60"], "IBKR_PAPER_ORDER_CANCEL_ACK_13Z60")
         self.assertNotIn("ibkr_paper_cancel_ack_13z37", cancel_call["payload"])
         self.assertFalse(cancel_call["payload"]["global_cancel_allowed"])
+        evidence_call = next(c for c in sender.calls if c["route"] == "/strategy/ibkr-paper-completed-executions")
+        self.assertEqual(evidence_call["payload"]["identities"][0]["role"], "entry")
+        self.assertEqual(evidence_call["payload"]["identities"][0]["order_id"], 77)
+        self.assertTrue(receipt["completed_execution_reconciliation"]["ok"])
+        self.assertFalse(receipt["completed_execution_reconciliation"]["broker_mutation_called"])
         self.assertFalse(any("global-cancel" in c["route"] for c in sender.calls))
 
     def test_fill_is_flattened_only_through_canonical_flatten_route(self):
@@ -133,7 +150,42 @@ class RemoteSelectedRuntimePaperProofTests(unittest.TestCase):
         ]
         responses[("GET", "/strategy/ibkr-paper-open-orders")] = [self._open(), self._open(), self._open(), self._open()]
         responses[("POST", "/strategy/ibkr-paper-flatten-preview-suite")] = [self._pos(), self._pos(1), self._pos(1), self._pos()]
-        responses[("POST", "/strategy/ibkr-paper-flatten-submit-suite")] = [(200, {"ok": True, "status": "flatten_reconciled"})]
+        responses[("POST", "/strategy/ibkr-paper-flatten-submit-suite")] = [(
+            200,
+            {
+                "ok": True,
+                "status": "flatten_reconciled",
+                "flatten_attempts": [
+                    {
+                        "symbol": "MNQ",
+                        "broker_status": {
+                            "symbol": "MNQ",
+                            "order_id": 91,
+                            "perm_id": 901,
+                            "order_ref": "MMIBKR_FLATTEN_13Z39",
+                            "status": "Filled",
+                        },
+                    }
+                ],
+            },
+        )]
+        responses[("POST", "/strategy/ibkr-paper-completed-executions")] = [(
+            200,
+            {
+                "ok": True,
+                "status": "completed_execution_reconciliation_ready",
+                "read_only": True,
+                "matched_fill_count": 2,
+                "execution_ids": ["entry-90", "exit-91"],
+                "fills": [
+                    {"exec_id": "entry-90", "order_id": 90, "realized_pnl": 0.0},
+                    {"exec_id": "exit-91", "order_id": 91, "realized_pnl": 6.0},
+                ],
+                "total_realized_pnl": 6.0,
+                "req_executions_called": True,
+                "broker_mutation_called": False,
+            },
+        )]
         sender = FakeSender(responses)
         receipt = execute_paper_proof(runtime=self._runtime(), request=self._request(), send=sender, run_id="4", public_head="p")
         self.assertEqual(receipt["status"], "PAPER_PROOF_RECONCILED")
@@ -141,7 +193,58 @@ class RemoteSelectedRuntimePaperProofTests(unittest.TestCase):
         flatten_call = next(c for c in sender.calls if c["route"] == "/strategy/ibkr-paper-flatten-submit-suite")
         self.assertEqual(flatten_call["payload"]["ibkr_paper_flatten_ack_13z39"], "IBKR_PAPER_FLATTEN_ACK_13Z39")
         self.assertEqual(flatten_call["payload"]["fallback_policy"], "none")
+        evidence_call = next(c for c in sender.calls if c["route"] == "/strategy/ibkr-paper-completed-executions")
+        roles = [row["role"] for row in evidence_call["payload"]["identities"]]
+        self.assertEqual(roles, ["entry", "cleanup_exit"])
+        self.assertEqual(receipt["completed_execution_reconciliation"]["total_realized_pnl"], 6.0)
+        self.assertFalse(receipt["completed_execution_reconciliation"]["broker_mutation_called"])
         self.assertFalse(any("global-cancel" in c["route"] for c in sender.calls))
+
+    def test_completed_execution_evidence_failure_prevents_reconciled_success(self):
+        responses = self._base()
+        responses[("POST", "/strategy/ibkr-paper-order-submit")] = [
+            (200, {
+                "ok": True,
+                "status": "submitted",
+                "place_order_called": True,
+                "broker_order_placed": True,
+                "guards": {"selected_runtime_id": "mnq-runtime"},
+                "broker_lifecycle": {
+                    "symbol": "MNQ",
+                    "order_id": 77,
+                    "perm_id": 88,
+                    "order_ref": "proof-abc",
+                    "status": "Submitted",
+                },
+            })
+        ]
+        responses[("GET", "/strategy/ibkr-paper-open-orders")] = [
+            self._open(),
+            self._open([{"symbol": "MNQ", "unresolved": True, "orderId": 77, "permId": 88, "orderRef": "proof-abc"}]),
+            self._open(),
+            self._open(),
+        ]
+        responses[("POST", "/strategy/ibkr-paper-flatten-preview-suite")] = [
+            self._pos(), self._pos(), self._pos(), self._pos()
+        ]
+        responses[("POST", "/strategy/ibkr-paper-order-cancel-preview")] = [(200, {"ok": True})]
+        responses[("POST", "/strategy/ibkr-paper-order-cancel-submit")] = [(200, {"ok": True, "status": "cancel_reconciled"})]
+        responses[("POST", "/strategy/ibkr-paper-completed-executions")] = [
+            (502, {"ok": False, "status": "req_executions_failed", "read_only": True, "broker_mutation_called": False})
+        ]
+        sender = FakeSender(responses)
+        receipt = execute_paper_proof(
+            runtime=self._runtime(),
+            request=self._request(),
+            send=sender,
+            run_id="8",
+            public_head="p",
+        )
+        self.assertFalse(receipt["ok"])
+        self.assertEqual(receipt["status"], "PAPER_PROOF_EXECUTION_EVIDENCE_INCOMPLETE")
+        self.assertTrue(receipt["final_reconciliation"]["zero_baseline_restored"])
+        self.assertFalse(receipt["completed_execution_reconciliation"]["ok"])
+        self.assertFalse(receipt["completed_execution_reconciliation"]["broker_mutation_called"])
 
     def test_jit_quote_refresh_uses_canonical_quote_and_changes_only_price_fields(self):
         request = self._request()
