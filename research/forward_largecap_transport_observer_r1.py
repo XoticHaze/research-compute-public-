@@ -13,6 +13,7 @@ excess only; prediction-magnitude calibration remains deliberately blocked.
 """
 
 import argparse
+import hashlib
 import json
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -256,7 +257,11 @@ def build(
     }
 
 
-def enrich_scoreboard(scoreboard: dict[str, Any], observation: dict[str, Any]) -> dict[str, Any]:
+def enrich_scoreboard(
+    scoreboard: dict[str, Any],
+    observation: dict[str, Any],
+    observation_sha256: str | None = None,
+) -> dict[str, Any]:
     if scoreboard.get("schema") != SCOREBOARD_SCHEMA:
         raise RuntimeError(f"unexpected scoreboard schema {scoreboard.get('schema')}")
     if observation.get("schema") != SCHEMA or observation.get("program_id") != PROGRAM_ID:
@@ -267,6 +272,11 @@ def enrich_scoreboard(scoreboard: dict[str, Any], observation: dict[str, Any]) -
         raise RuntimeError("large-cap lane missing from scoreboard")
     lane["forward_observation"] = observation
     lane["observation_status"] = "ACTIVE"
+    lane.setdefault("observation_lineage", {}).update({
+        "largecap_observation_sha256": observation_sha256,
+        "largecap_observation_generated_at": observation.get("generated_at"),
+        "largecap_market_data_asof": observation.get("market_data_asof"),
+    })
     lane["evidence_grade"] = "FORWARD_OBSERVATION_RESOLVED" if observation.get("state") == "RESOLVED" else "FORWARD_OBSERVATION_OPEN"
     scorecard = dict(lane.get("scorecard") or {})
     scorecard.update({
@@ -285,6 +295,7 @@ def enrich_scoreboard(scoreboard: dict[str, Any], observation: dict[str, Any]) -
         "generated_at": observation.get("generated_at"),
         "market_data_asof": observation.get("market_data_asof"),
         "sessions_completed": observation.get("sessions_completed"),
+        "sha256": observation_sha256,
     }
     scoreboard.setdefault("interpretation", {})["largecap_transport_observation_does_not_grant_allocation_authority"] = True
     scoreboard.setdefault("decision_chain", {}).setdefault("tickers", {})["largecap_transport_forward_observation"] = {
@@ -356,10 +367,11 @@ def self_test() -> None:
     assert resolved["state"] == "RESOLVED"
 
     score = {"schema": SCOREBOARD_SCHEMA, "lanes": [{"program_id": PROGRAM_ID}], "coverage": {}, "decision_chain": {}}
-    score = enrich_scoreboard(score, out)
+    score = enrich_scoreboard(score, out, "test-largecap-sha")
     lane = score["lanes"][0]
     assert lane["observation_status"] == "ACTIVE"
     assert lane["scorecard"]["terminal_accuracy_available"] is False
+    assert lane["observation_lineage"]["largecap_observation_sha256"] == "test-largecap-sha"
     print("FORWARD_LARGECAP_TRANSPORT_OBSERVER_SELF_TEST=PASS")
 
 
@@ -390,11 +402,13 @@ def main() -> None:
         else None
     )
     observation = build(adapter, asof, now.isoformat(), prior=prior)
-    _write(Path(args.output), observation)
+    output_path = Path(args.output)
+    _write(output_path, observation)
+    observation_sha256 = hashlib.sha256(output_path.read_bytes()).hexdigest()
 
     if args.scoreboard:
         score = json.loads(Path(args.scoreboard).read_text(encoding="utf-8"))
-        score = enrich_scoreboard(score, observation)
+        score = enrich_scoreboard(score, observation, observation_sha256)
         score_out = Path(args.scoreboard_output or args.scoreboard)
         _write(score_out, score)
 
@@ -404,6 +418,7 @@ def main() -> None:
         "market_data_asof": observation.get("market_data_asof"),
         "sessions_completed": observation.get("sessions_completed"),
         "summary": observation.get("summary"),
+        "observation_sha256": observation_sha256,
     }, sort_keys=True))
 
 
