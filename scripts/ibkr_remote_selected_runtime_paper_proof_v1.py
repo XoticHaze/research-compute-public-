@@ -489,6 +489,11 @@ def execute_paper_proof(
     }
     if preflight_blockers:
         return receipt
+
+    # Recompute after all read-only preflight calls so broker/session latency
+    # cannot let a candidate silently outlive its transport lease before submit.
+    candidate_lease = _candidate_transport_lease(auth["payload"])
+    receipt["candidate_lease"] = candidate_lease
     if candidate_lease.get("requested") is True and candidate_lease.get("ok") is not True:
         receipt["status"] = "CANDIDATE_LEASE_BLOCKED"
         return receipt
