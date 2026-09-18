@@ -102,12 +102,14 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         consumer_ready = self.text.index("echo 'IBKR_CONSUMER_READY=1'", post_auth)
         self.assertLess(post_auth, consumer_ready)
 
-    def test_readonly_remains_default_and_writable_api_requires_explicit_proof_dispatch(self):
+    def test_readonly_remains_default_and_writable_api_requires_explicit_mutation_mode(self):
         self.assertIn('default: readonly', self.text)
         self.assertIn('- paper_submit_proof', self.text)
+        self.assertIn('- paper_execute', self.text)
         self.assertIn("IBKR_PAPER_PROOF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' && '1' || '0' }}", self.text)
+        self.assertIn("IBKR_PAPER_EXECUTE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_execute' && '1' || '0' }}", self.text)
         self.assertIn('api_read_only=yes', self.text)
-        self.assertIn('if [ "$IBKR_PAPER_PROOF_MODE" = "1" ]; then', self.text)
+        self.assertIn('if [ "$IBKR_PAPER_PROOF_MODE" = "1" ] || [ "$IBKR_PAPER_EXECUTE_MODE" = "1" ]; then', self.text)
         self.assertIn('api_read_only=no', self.text)
         self.assertIn('-e READ_ONLY_API="$api_read_only"', self.text)
         self.assertNotIn('-e READ_ONLY_API=no', self.text)
@@ -128,16 +130,43 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         self.assertIn('--exchange-ref rendezvous-exchange', self.text)
         self.assertIn('GH_TOKEN: ${{ github.token }}', self.text)
 
-    def test_paper_submit_proof_requires_restored_warm_state(self):
+    def test_all_broker_mutation_modes_require_restored_warm_state(self):
         restore = self.text.index('name: Restore encrypted warm Gateway state if available')
-        require = self.text.index('name: Require restored warm state for paper submit proof')
+        require = self.text.index('name: Require restored warm state for broker-mutating selected-runtime command')
         auth = self.text.index('name: Resolve authenticated session boundary')
         self.assertLess(restore, require)
         self.assertLess(require, auth)
         guard = self.text[require:auth]
-        self.assertIn("if: env.IBKR_PAPER_PROOF_MODE == '1'", guard)
+        self.assertIn("env.IBKR_PAPER_PROOF_MODE == '1' || env.IBKR_PAPER_EXECUTE_MODE == '1'", guard)
         self.assertIn('steps.restore.outputs.restored', guard)
-        self.assertIn('IBKR_PAPER_PROOF_WARM_STATE_REQUIRED=1', guard)
+        self.assertIn('IBKR_PAPER_MUTATION_WARM_STATE_REQUIRED=1', guard)
+
+    def test_persistent_execute_uses_same_warm_job_but_has_distinct_mode(self):
+        post_auth = self.text.index('name: Materialize canonical post-auth broker and forward-data handoff')
+        execute = self.text.index('name: Execute one encrypted MM-authorized persistent paper command')
+        stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
+        self.assertLess(post_auth, execute)
+        self.assertLess(execute, stop)
+        block = self.text[execute:stop]
+        self.assertIn("inputs.mode == 'paper_execute'", block)
+        self.assertIn('--mode paper_execute', block)
+        self.assertIn('id: paper_execute', block)
+        self.assertIn('continue-on-error: true', block)
+
+    def test_persistent_execute_failure_is_reported_only_after_warm_state_persistence(self):
+        execute = self.text.index('name: Execute one encrypted MM-authorized persistent paper command')
+        stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
+        seal = self.text.index('name: Seal authenticated Gateway warm state')
+        publish = self.text.index('name: Publish reusable encrypted warm state')
+        assess = self.text.index('name: Enforce persistent paper execute result after warm-state persistence')
+        cleanup = self.text.index('name: Destroy private runtime material')
+        self.assertLess(execute, stop)
+        self.assertLess(stop, seal)
+        self.assertLess(seal, publish)
+        self.assertLess(publish, assess)
+        self.assertLess(assess, cleanup)
+        self.assertIn('steps.paper_execute.outcome', self.text[assess:cleanup])
+        self.assertIn('IBKR_WARM_SELECTED_RUNTIME_PAPER_EXECUTE_ACCEPTED=0', self.text[assess:cleanup])
 
     def test_paper_proof_failure_is_reported_only_after_warm_state_persistence(self):
         proof = self.text.index('name: Execute one encrypted MM-authorized selected-runtime paper proof')
@@ -200,7 +229,7 @@ def test_optional_warm_read_return_is_readonly_run_bound_and_encrypted(self):
 def test_warm_read_return_does_not_enable_writable_gateway(self):
     needle = "IBKR_WARM_READ_RETURN_REQUESTED: $" + "{{ github.event_name == 'workflow_dispatch' && inputs.mode == 'readonly'"
     self.assertIn(needle, self.text)
-    writable = self.text.index('if [ "$IBKR_PAPER_PROOF_MODE" = "1" ]; then')
+    writable = self.text.index('if [ "$IBKR_PAPER_PROOF_MODE" = "1" ] || [ "$IBKR_PAPER_EXECUTE_MODE" = "1" ]; then')
     writable_tail = self.text[writable:writable + 160]
     self.assertIn('api_read_only=no', writable_tail)
     self.assertNotIn('IBKR_WARM_READ_RETURN_REQUESTED', writable_tail)
