@@ -182,7 +182,21 @@ jobs:
 
           # Re-append against the freshest history after checkout so a concurrent
           # current-bundle publication cannot erase the recovered session.
-          python research/forward_scoreboard_history_r1.py             --scoreboard /tmp/recovery/asof/scoreboard.json             --allocator /tmp/recovery/asof/allocator.json             --p249 research/current/forward_p249_p266_shadow_r1.json             --prior research/current/forward_market_scoreboard_history_r1.json             --output /tmp/recovery/final-history.json
+          python research/forward_scoreboard_history_r1.py             --scoreboard /tmp/recovery/asof/scoreboard.json             --allocator /tmp/recovery/asof/allocator.json             --p249 /tmp/recovery/asof/core/forward_p249_p266_shadow_r1.json             --prior research/current/forward_market_scoreboard_history_r1.json             --output /tmp/recovery/history-appended.json
+
+          # The recovered entry must use the target-session tape for date
+          # authority, then coverage is recomputed against the freshest full tape.
+          python - <<'PY'
+          import json,sys
+          sys.path.insert(0,'research')
+          from forward_scoreboard_history_r1 import attach_session_coverage
+          h=json.load(open('/tmp/recovery/history-appended.json'))
+          p249=json.load(open('research/current/forward_p249_p266_shadow_r1.json'))
+          h=attach_session_coverage(h,p249)
+          with open('/tmp/recovery/final-history.json','w') as fh:
+              json.dump(h,fh,indent=2,sort_keys=True,allow_nan=False)
+              fh.write('\\n')
+          PY
 
           cp /tmp/recovery/asof/scoreboard.json "research/recovered/forward_market_scoreboard_${asof}_r1.json"
           cp /tmp/recovery/asof/allocator.json "research/recovered/forward_deterministic_allocator_${asof}_r1.json"
@@ -196,7 +210,10 @@ jobs:
           assert target in dates, dates
           assert h['session_count'] >= 6, h['session_count']
           coverage=h['session_coverage']
-          assert target not in coverage['missing_scoreboard_snapshot_sessions'], coverage
+          assert coverage['expected_market_session_count'] == 6, coverage
+          assert coverage['persisted_scoreboard_snapshot_count'] == 6, coverage
+          assert coverage['snapshot_coverage_complete'] is True, coverage
+          assert coverage['missing_scoreboard_snapshot_sessions'] == [], coverage
           row=next(x for x in h['sessions'] if x['session_date']==target)
           assert row['historical_recovery']['original_scoreboard_published'] is False
           print('RECOVERED_HISTORY_FINAL=PASS',h['session_count'],dates)
