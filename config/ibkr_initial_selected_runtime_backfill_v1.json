@@ -5,21 +5,22 @@
   "runtime_execution_contract_mutation": false,
   "live_trading_change": false,
   "symbols": [
-    "AMAT",
-    "APH",
     "MNQ"
   ],
   "contracts": {
     "MNQ": {
+      "conId": 815824267,
       "symbol": "MNQ",
       "secType": "FUT",
       "exchange": "CME",
       "currency": "USD",
-      "lastTradeDateOrContractMonth": "202612"
+      "localSymbol": "MNQZ6",
+      "lastTradeDateOrContractMonth": "202612",
+      "multiplier": "2"
     }
   },
   "contract_notes": {
-    "MNQ": "Read-only signal-history contract after CME equity-index lead-month signal roll. This does not replace the selected runtime execution_contract."
+    "MNQ": "Resolved by IBKR in successful read-only run 35403509979 from MM-selected 202612 expiry. Read/signal-history identity only; does not mutate selected execution_contract."
   },
   "required_completed_bars": {
     "AMAT_target_15Min": 400,
@@ -28,22 +29,6 @@
     "MNQ_source_1Min": 4800
   },
   "bar_requests": {
-    "AMAT": [
-      {
-        "source_timeframe": "15Min",
-        "target_timeframe": "15Min",
-        "bar_size_setting": "15 mins",
-        "duration_str": "2 W"
-      }
-    ],
-    "APH": [
-      {
-        "source_timeframe": "15Min",
-        "target_timeframe": "15Min",
-        "bar_size_setting": "15 mins",
-        "duration_str": "2 W"
-      }
-    ],
     "MNQ": [
       {
         "source_timeframe": "1Min",
@@ -56,29 +41,44 @@
         "target_timeframe": "12Min",
         "bar_size_setting": "1 min",
         "duration_str": "1 D",
-        "end_date_time_utc": "2026-09-18T00:00:00Z"
+        "end_date_time_utc": "2026-09-17T21:00:00Z"
       },
       {
         "source_timeframe": "1Min",
         "target_timeframe": "12Min",
         "bar_size_setting": "1 min",
         "duration_str": "1 D",
-        "end_date_time_utc": "2026-09-17T00:00:00Z"
+        "end_date_time_utc": "2026-09-16T21:00:00Z"
       },
       {
         "source_timeframe": "1Min",
         "target_timeframe": "12Min",
         "bar_size_setting": "1 min",
         "duration_str": "1 D",
-        "end_date_time_utc": "2026-09-16T00:00:00Z"
+        "end_date_time_utc": "2026-09-15T21:00:00Z"
       },
       {
         "source_timeframe": "1Min",
         "target_timeframe": "12Min",
         "bar_size_setting": "1 min",
         "duration_str": "1 D",
-        "end_date_time_utc": "2026-09-15T00:00:00Z"
+        "end_date_time_utc": "2026-09-14T21:00:00Z"
       }
     ]
+  },
+  "phase": "mnq_completion_after_initial_stock_warmup",
+  "evidence_from_prior_run": {
+    "run_id": 35403509979,
+    "AMAT_target_15Min_rows": 571,
+    "APH_target_15Min_rows": 559,
+    "MNQ_unique_source_1Min_rows": 1740,
+    "MNQ_required_source_1Min_rows": 4800,
+    "MNQ_resolved_contract": {
+      "conId": 815824267,
+      "localSymbol": "MNQZ6",
+      "lastTradeDateOrContractMonth": "20261218",
+      "multiplier": "2"
+    },
+    "reason_for_continuation": "00:00Z explicit ends returned only 22:00-23:59 UTC slices; use 21:00Z session-end boundaries"
   }
 }
