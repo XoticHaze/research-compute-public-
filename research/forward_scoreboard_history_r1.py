@@ -14,6 +14,7 @@ allocation, promotion, broker, or live-trading authority.
 import argparse
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -164,6 +165,59 @@ def append_history(prior: dict[str, Any] | None, entry: dict[str, Any]) -> dict[
     }
 
 
+
+def _git_show(repo: Path, ref: str, path: str) -> tuple[dict[str, Any] | None, bytes | None]:
+    proc = subprocess.run(
+        ["git", "-C", str(repo), "show", f"{ref}:{path}"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return None, None
+    raw = proc.stdout
+    return json.loads(raw), raw
+
+
+def bootstrap_from_git(repo: Path, ref: str) -> dict[str, Any] | None:
+    path = "research/current/forward_market_scoreboard_r1.json"
+    proc = subprocess.run(
+        ["git", "-C", str(repo), "log", "--format=%H", "--reverse", ref, "--", path],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"git history lookup failed ref={ref}: {proc.stderr.strip()}")
+
+    history: dict[str, Any] | None = None
+    for commit in [x.strip() for x in proc.stdout.splitlines() if x.strip()]:
+        scoreboard, scoreboard_raw = _git_show(repo, commit, path)
+        allocator, allocator_raw = _git_show(
+            repo, commit, "research/current/forward_deterministic_allocator_r1.json"
+        )
+        p249, p249_raw = _git_show(
+            repo, commit, "research/current/forward_p249_p266_shadow_r1.json"
+        )
+        if scoreboard is None or scoreboard_raw is None or allocator is None or allocator_raw is None:
+            continue
+        try:
+            entry = make_entry(
+                scoreboard,
+                scoreboard_raw,
+                allocator,
+                allocator_raw,
+                p249,
+                p249_raw,
+            )
+        except RuntimeError:
+            continue
+        entry["bootstrap_source_commit"] = commit
+        history = append_history(history, entry)
+    return history
+
+
 def self_test() -> None:
     score = {
         "schema": SCOREBOARD_SCHEMA,
@@ -225,6 +279,8 @@ def main() -> None:
     p.add_argument("--allocator")
     p.add_argument("--p249")
     p.add_argument("--prior")
+    p.add_argument("--bootstrap-repo")
+    p.add_argument("--bootstrap-ref", default="origin/main")
     p.add_argument("--output")
     p.add_argument("--self-test", action="store_true")
     args = p.parse_args()
@@ -239,6 +295,8 @@ def main() -> None:
     allocator, allocator_raw = _read(Path(args.allocator))
     p249, p249_raw = _read(Path(args.p249)) if args.p249 else (None, None)
     prior, _ = _read(Path(args.prior)) if args.prior else (None, None)
+    if prior is None and args.bootstrap_repo:
+        prior = bootstrap_from_git(Path(args.bootstrap_repo), args.bootstrap_ref)
     assert scoreboard is not None and scoreboard_raw is not None
     assert allocator is not None and allocator_raw is not None
 
