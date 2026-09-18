@@ -42,6 +42,42 @@ def _bp(x: float | int | None) -> float | None:
     return None if x is None else round(float(x) * 10000.0, 2)
 
 
+def _positive_session_stats(values: list[float]) -> dict[str, Any]:
+    observed = len(values)
+    positive = sum(1 for value in values if float(value) > 0.0)
+    return {
+        "observed_sessions": observed,
+        "positive_sessions": positive,
+        "hit_rate": None if observed == 0 else round(positive / observed, 6),
+    }
+
+
+def _challenger_session_stats(fwd: dict[str, Any]) -> dict[str, Any]:
+    challenger = {
+        str(row.get("date")): row
+        for row in (fwd.get("challenger_observations") or [])
+        if row.get("date")
+    }
+    incumbent_excess = [
+        float(row.get("net_return", 0.0)) - float(row.get("core_return", 0.0))
+        for row in challenger.values()
+    ]
+    matched = {
+        str(row.get("date")): row
+        for row in (fwd.get("matched_control_observations") or [])
+        if row.get("date")
+    }
+    matched_excess = [
+        float(row.get("net_return", 0.0)) - float(matched[day].get("net_return", 0.0))
+        for day, row in challenger.items()
+        if day in matched
+    ]
+    return {
+        "vs_incumbent": _positive_session_stats(incumbent_excess),
+        "vs_matched_cash_control": _positive_session_stats(matched_excess),
+    }
+
+
 def _grade(days: int, scientific_credit: bool = True) -> str:
     if not scientific_credit:
         return "SHAKEDOWN_ONLY"
@@ -101,6 +137,11 @@ def _p249(x: dict[str, Any] | None) -> dict[str, Any]:
     combo = fwd.get("p249_plus_p266_net", {})
     days = int(combo.get("days", 0) or 0)
     state = x.get("current_state", {})
+    increment_stats = _positive_session_stats([
+        float(row.get("satellite_increment_net", 0.0))
+        for row in (fwd.get("observations") or [])
+        if row.get("satellite_increment_net") is not None
+    ])
     return {
         "program_id": "P249_P266",
         "kind": "portfolio_construction_plus_industry_momentum_satellite",
@@ -120,6 +161,9 @@ def _p249(x: dict[str, Any] | None) -> dict[str, Any]:
             "p249_core_net_cumulative_bps": _bp(core.get("cumulative_return")),
             "p249_plus_p266_net_cumulative_bps": _bp(combo.get("cumulative_return")),
             "p266_increment_cumulative_bps": _bp(fwd.get("satellite_increment_cumulative")),
+            "p266_increment_observed_sessions": increment_stats["observed_sessions"],
+            "p266_increment_positive_sessions": increment_stats["positive_sessions"],
+            "p266_increment_session_hit_rate": increment_stats["hit_rate"],
             "p249_core_annualized_vol": core.get("annualized_vol"),
             "p249_plus_p266_annualized_vol": combo.get("annualized_vol"),
         },
@@ -139,6 +183,7 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
     metrics = fwd.get("challenger_if_flattened_now", {})
     days = int(metrics.get("days", 0) or 0)
     pos = x.get("current_positions", {}).get("challenger", {})
+    session_stats = _challenger_session_stats(fwd)
     return {
         "program_id": program_id,
         "kind": "portfolio_diversification_challenger",
@@ -155,6 +200,12 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
             "challenger_cumulative_bps": _bp(metrics.get("cumulative_return")),
             "excess_vs_incumbent_bps": _bp(fwd.get("challenger_minus_incumbent_cumulative")),
             "excess_vs_matched_cash_control_bps": _bp(fwd.get("challenger_minus_matched_cumulative")),
+            "vs_incumbent_observed_sessions": session_stats["vs_incumbent"]["observed_sessions"],
+            "vs_incumbent_positive_sessions": session_stats["vs_incumbent"]["positive_sessions"],
+            "vs_incumbent_session_hit_rate": session_stats["vs_incumbent"]["hit_rate"],
+            "vs_matched_cash_control_observed_sessions": session_stats["vs_matched_cash_control"]["observed_sessions"],
+            "vs_matched_cash_control_positive_sessions": session_stats["vs_matched_cash_control"]["positive_sessions"],
+            "vs_matched_cash_control_session_hit_rate": session_stats["vs_matched_cash_control"]["hit_rate"],
             "max_drawdown": metrics.get("max_drawdown"),
             "annualized_vol": metrics.get("annualized_vol"),
         },
@@ -488,6 +539,19 @@ def self_test() -> None:
         assert out["schema"] == SCHEMA
         assert out["lanes"][0]["validation_grade"] == "SHAKEDOWN_ONLY"
         assert out["lanes"][1]["scorecard"]["p266_increment_cumulative_bps"] == -10.0
+        assert out["lanes"][1]["scorecard"]["p266_increment_observed_sessions"] == 0
+        stats = _challenger_session_stats({
+            "challenger_observations": [
+                {"date": "2026-09-10", "net_return": 0.02, "core_return": 0.01},
+                {"date": "2026-09-11", "net_return": -0.01, "core_return": 0.0},
+            ],
+            "matched_control_observations": [
+                {"date": "2026-09-10", "net_return": 0.015},
+                {"date": "2026-09-11", "net_return": -0.02},
+            ],
+        })
+        assert stats["vs_incumbent"] == {"observed_sessions": 2, "positive_sessions": 1, "hit_rate": 0.5}
+        assert stats["vs_matched_cash_control"] == {"observed_sessions": 2, "positive_sessions": 2, "hit_rate": 1.0}
         assert out["coverage"]["native_result_gaps"] == []
         assert out["decision_chain"]["sectors"]["homebuilders"]["horizons"] == {"CCS": 5}
         native_by_id = {x["program_id"]: x for x in out["lanes"]}
