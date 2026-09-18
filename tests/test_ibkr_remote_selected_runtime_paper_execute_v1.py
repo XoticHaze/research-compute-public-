@@ -37,6 +37,16 @@ class PersistentPaperExecuteTests(unittest.TestCase):
                 "runtime_id": "mnq-runtime",
                 "strategy_id": "crw_score_multi_mode",
                 "timeframe": "12Min",
+                "execution_contract": {
+                    "conId": 793356225,
+                    "symbol": "MNQ",
+                    "secType": "FUT",
+                    "exchange": "CME",
+                    "currency": "USD",
+                    "localSymbol": "MNQU6",
+                    "lastTradeDateOrContractMonth": "202609",
+                    "multiplier": "2",
+                },
             },
             "payload": {
                 "runtime_id": "mnq-runtime",
@@ -69,6 +79,16 @@ class PersistentPaperExecuteTests(unittest.TestCase):
                 "strategy_spec_digest": "spec-1",
                 "symbol": "MNQ",
                 "timeframe": "12Min",
+                "execution_contract": {
+                    "conId": 793356225,
+                    "symbol": "MNQ",
+                    "secType": "FUT",
+                    "exchange": "CME",
+                    "currency": "USD",
+                    "localSymbol": "MNQU6",
+                    "lastTradeDateOrContractMonth": "202609",
+                    "multiplier": "2",
+                },
             },
         }
 
@@ -114,6 +134,10 @@ class PersistentPaperExecuteTests(unittest.TestCase):
 
         self.assertTrue(receipt["ok"])
         self.assertEqual(receipt["status"], "CANONICAL_SUBMIT_BLOCKED")
+        self.assertEqual(
+            receipt["command"]["execution_contract"],
+            self.request()["selected_runtime_authority"]["execution_contract"],
+        )
         with self.assertRaisesRegex(RuntimeError, "paper_submit_proof_runtime_required"):
             mod.proof_v1._validate_authorized_request(self.runtime(), self.request())
 
