@@ -116,6 +116,7 @@ class PostAuthPipelineContractTests(unittest.TestCase):
         self.assertEqual(requests["MNQ"][0]["bar_size_setting"], "1 min")
         self.assertEqual(requests["MNQ"][0]["duration_str"], "1 D")
         self.assertEqual(requests["MNQ"][0]["end_date_time_utc"], "")
+        self.assertFalse(requests["MNQ"][0]["allow_empty"])
         self.assertEqual(requests["AMAT"][0]["bar_size_setting"], "15 mins")
 
     def test_exact_historical_chunk_end_times_allow_same_request_shape_at_distinct_boundaries(self):
@@ -148,6 +149,30 @@ class PostAuthPipelineContractTests(unittest.TestCase):
         )
         end = mod._ibkr_history_end(requests["MNQ"][0]["end_date_time_utc"])
         self.assertEqual(end.isoformat(), "2026-09-17T21:00:00+00:00")
+
+    def test_maintenance_chunk_can_explicitly_allow_empty_nontrading_window(self):
+        requests = mod.parse_bar_requests(json.dumps({
+            "MNQ": [{
+                "source_timeframe": "1Min",
+                "target_timeframe": "12Min",
+                "bar_size_setting": "1 min",
+                "duration_str": "1 D",
+                "end_date_time_utc": "2026-09-13T21:00:00Z",
+                "allow_empty": True,
+            }],
+        }), ["MNQ"])
+        self.assertTrue(requests["MNQ"][0]["allow_empty"])
+
+        with self.assertRaisesRegex(RuntimeError, "allow_empty must be boolean"):
+            mod.parse_bar_requests(json.dumps({
+                "MNQ": [{
+                    "source_timeframe": "1Min",
+                    "target_timeframe": "12Min",
+                    "bar_size_setting": "1 min",
+                    "duration_str": "1 D",
+                    "allow_empty": "sometimes",
+                }],
+            }), ["MNQ"])
 
     def test_exact_historical_chunk_end_requires_timezone_and_remains_duplicate_safe(self):
         with self.assertRaisesRegex(RuntimeError, "explicit timezone"):
