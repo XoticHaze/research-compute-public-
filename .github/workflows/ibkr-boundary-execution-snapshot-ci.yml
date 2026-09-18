@@ -1,0 +1,34 @@
+name: IBKR Boundary Execution Snapshot CI
+
+on:
+  push:
+    branches:
+      - assistant/ibkr-boundary-executions-20260918
+    paths:
+      - scripts/ibkr_warm_read_return_v1.py
+      - tests/test_ibkr_warm_read_return_v1.py
+      - .github/workflows/ibkr-boundary-execution-snapshot-ci.yml
+  pull_request:
+    paths:
+      - scripts/ibkr_warm_read_return_v1.py
+      - tests/test_ibkr_warm_read_return_v1.py
+      - .github/workflows/ibkr-boundary-execution-snapshot-ci.yml
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install focused dependencies
+        run: python -m pip install --disable-pip-version-check cryptography ib_insync
+      - name: Compile and test read-only completed execution snapshot
+        run: |
+          python -m py_compile scripts/ibkr_warm_read_return_v1.py tests/test_ibkr_warm_read_return_v1.py
+          python -m unittest tests.test_ibkr_warm_read_return_v1 -v
