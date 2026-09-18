@@ -272,7 +272,7 @@ def parse_contract_hints(raw: str) -> dict[str, dict[str, object]]:
             expiry = str(raw_hint.get("lastTradeDateOrContractMonth") or "").strip()
             exchange = str(raw_hint.get("exchange") or "").strip()
             currency = str(raw_hint.get("currency") or "").strip()
-            if not re.fullmatch(r"\\d{6}(?:\\d{2})?", expiry) or not exchange or not currency:
+            if not re.fullmatch(r"\d{6}(?:\d{2})?", expiry) or not exchange or not currency:
                 raise RuntimeError(
                     f"futures read contract without conId requires exact expiry/exchange/currency for {symbol}"
                 )
