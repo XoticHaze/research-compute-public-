@@ -406,6 +406,25 @@ def _summary(cohorts: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
+def _observed_market_data_asof(cohorts: list[dict[str, Any]], requested: date) -> str:
+    """Return the latest date supported by every active cohort's common tape.
+
+    The requested UTC date can be ahead of the latest completed market close. Using
+    it as market_data_asof overstates freshness, so active cohorts with explicit
+    common_market_latest_date govern. Resolved cohorts no longer constrain current
+    freshness because their terminal outcome is already fixed.
+    """
+    active = {"REGISTERED", "AWAITING_ENTRY_SESSION", "OPEN", "PARTIALLY_RESOLVED"}
+    observed: list[str] = []
+    for cohort in cohorts:
+        if str(cohort.get("status") or "") not in active:
+            continue
+        latest = str(((cohort.get("resolution") or {}).get("common_market_latest_date") or ""))[:10]
+        if latest:
+            observed.append(latest)
+    return min(observed) if observed else requested.isoformat()
+
+
 def build(
     adapter_dir: Path,
     prior: dict[str, Any] | None,
@@ -433,7 +452,8 @@ def build(
     return {
         "schema": SCHEMA,
         "generated_at": now_iso,
-        "market_data_asof": asof.isoformat(),
+        "requested_market_data_asof": asof.isoformat(),
+        "market_data_asof": _observed_market_data_asof(cohorts, asof),
         "cohorts": cohorts,
         "summary": _summary(cohorts),
         "boundaries": {
@@ -479,6 +499,7 @@ def self_test() -> None:
     }
     open_row = _advance_cohort(cohort, True, date(2026, 1, 8), loader)
     assert open_row["status"] == "OPEN"
+    assert _observed_market_data_asof([open_row], date(2026, 1, 9)) == "2026-01-08"
     late = _advance_cohort(cohort, True, date(2026, 1, 15), loader)
     assert late["status"] == "LATE_REGISTRATION_REJECTED"
     resolved = _advance_cohort(open_row, False, date(2026, 1, 15), loader)
