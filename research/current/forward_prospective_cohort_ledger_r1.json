@@ -149,8 +149,8 @@
       }
     }
   ],
-  "generated_at": "2026-09-17T10:06:46.223828+00:00",
-  "market_data_asof": "2026-09-17",
+  "generated_at": "2026-09-18T01:15:57.376276+00:00",
+  "market_data_asof": "2026-09-18",
   "schema": "research.forward_prospective_cohort_ledger_r1",
   "summary": {
     "HOMEBUILDERS": {
