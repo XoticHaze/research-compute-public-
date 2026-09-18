@@ -59,6 +59,7 @@ on:
       - 'scripts/ibkr_warm_read_return_v1.py'
       - 'research/forward_bar_contract_v2.py'
       - 'tests/test_ibkr_b1_auth_contracts_v1.py'
+      - 'tests/test_ibkr_post_auth_pipeline_contracts_v1.py'
       - 'tests/test_ibkr_b1_warm_state_workflow_v2.py'
       - 'tests/test_ibkr_warm_selected_runtime_activation_v1.py'
       - 'tests/test_ibkr_warm_read_return_v1.py'
