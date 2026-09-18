@@ -1,0 +1,42 @@
+name: IBKR Boundary Runtime Slot CI
+
+on:
+  push:
+    branches:
+      - assistant/ibkr-boundary-runtime-slot-20260918
+    paths:
+      - .github/workflows/ibkr-cloudflare-readonly-b1-r1.yml
+      - .github/workflows/ibkr-boundary-runtime-slot-ci.yml
+      - tests/test_ibkr_boundary_read_workflow_v1.py
+      - tests/test_ibkr_b1_warm_state_workflow_v2.py
+  pull_request:
+    paths:
+      - .github/workflows/ibkr-cloudflare-readonly-b1-r1.yml
+      - .github/workflows/ibkr-boundary-runtime-slot-ci.yml
+      - tests/test_ibkr_boundary_read_workflow_v1.py
+      - tests/test_ibkr_b1_warm_state_workflow_v2.py
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Parse workflow and run boundary-slot contracts
+        run: |
+          python -m pip install --disable-pip-version-check PyYAML
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          path=Path('.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml')
+          node=yaml.safe_load(path.read_text(encoding='utf-8'))
+          assert isinstance(node, dict) and 'jobs' in node
+          print('IBKR_BOUNDARY_RUNTIME_WORKFLOW_YAML_VALID=1')
+          PY
+          python -m unittest             tests.test_ibkr_boundary_read_workflow_v1             tests.test_ibkr_b1_warm_state_workflow_v2             -v
