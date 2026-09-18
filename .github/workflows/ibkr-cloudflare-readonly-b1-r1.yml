@@ -29,6 +29,11 @@ on:
         required: false
         default: '{}'
         type: string
+      snapshot_not_before_utc:
+        description: Optional UTC instant; readonly detailed snapshot must not be sampled before this boundary
+        required: false
+        default: ''
+        type: string
       read_return_recipient_b64:
         description: Optional one-run X25519 public recipient for encrypted detailed read return
         required: false
@@ -526,6 +531,36 @@ jobs:
           fi
           echo 'IBKR_OPERATOR_APPROVAL_ACCEPTED=1'
           echo 'IBKR_GATEWAY_API_READY=1'
+
+      - name: Wait for optional completed-bar snapshot boundary
+        if: ${{ env.IBKR_WARM_READ_RETURN_REQUESTED == '1' && inputs.snapshot_not_before_utc != '' }}
+        env:
+          IBKR_SNAPSHOT_NOT_BEFORE_UTC: ${{ inputs.snapshot_not_before_utc }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os,time
+          from datetime import datetime,timezone
+
+          raw=os.environ['IBKR_SNAPSHOT_NOT_BEFORE_UTC'].strip()
+          try:
+              target=datetime.fromisoformat(raw.replace('Z','+00:00'))
+          except Exception as exc:
+              raise SystemExit('snapshot_not_before_utc must be ISO-8601') from exc
+          if target.tzinfo is None:
+              raise SystemExit('snapshot_not_before_utc must include an explicit UTC offset')
+          target=target.astimezone(timezone.utc)
+          now=datetime.now(timezone.utc)
+          delay=(target-now).total_seconds()
+          if delay > 600:
+              raise SystemExit('snapshot boundary is more than 600 seconds in the future')
+          if delay < -60:
+              raise SystemExit('snapshot boundary is more than 60 seconds stale')
+          if delay > 0:
+              print('IBKR_SNAPSHOT_BOUNDARY_WAIT_SEC='+str(round(delay,3)))
+              time.sleep(delay)
+          print('IBKR_SNAPSHOT_BOUNDARY_REACHED_UTC='+target.isoformat().replace('+00:00','Z'))
+          PY
 
       - name: Materialize canonical post-auth broker and forward-data handoff
         run: |
