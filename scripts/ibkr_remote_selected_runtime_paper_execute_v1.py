@@ -214,40 +214,51 @@ def execute_paper_execute(
     }
 
     evidence_ok = True
-    if receipt["submit"].get("broker_order_placed") is True and identity:
-        evidence_status, evidence = send(
-            "POST",
-            "/strategy/ibkr-paper-completed-executions",
-            payload={
-                "runtime_id": auth["runtime_id"],
-                "symbol": symbol,
-                "identities": [{
-                    "role": "persistent_submit",
-                    "order_id": identity.get("order_id"),
-                    "perm_id": identity.get("perm_id"),
-                    "order_ref": identity.get("order_ref"),
-                }],
-            },
-            timeout=90.0,
-        )
-        evidence_ok = bool(
-            evidence_status == 200
-            and evidence.get("ok") is True
-            and evidence.get("read_only") is True
-            and evidence.get("broker_mutation_called") is False
-            and evidence.get("cloud_strategy_authority") is False
-            and evidence.get("cloud_execution_policy_authority") is False
-            and evidence.get("live_execution_allowed") is False
-            and evidence.get("global_cancel_allowed") is False
-        )
-        receipt["completed_execution_reconciliation"] = {
-            **dict(evidence),
-            "requested": True,
-            "http_status": evidence_status,
-            "ok": evidence_ok,
-            "read_only": evidence.get("read_only") is True,
-            "broker_mutation_called": evidence.get("broker_mutation_called") is True,
-        }
+    if receipt["submit"].get("broker_order_placed") is True:
+        evidence_ok = False
+        if identity:
+            evidence_status, evidence = send(
+                "POST",
+                "/strategy/ibkr-paper-completed-executions",
+                payload={
+                    "runtime_id": auth["runtime_id"],
+                    "symbol": symbol,
+                    "identities": [{
+                        "role": "persistent_submit",
+                        "order_id": identity.get("order_id"),
+                        "perm_id": identity.get("perm_id"),
+                        "order_ref": identity.get("order_ref"),
+                    }],
+                },
+                timeout=90.0,
+            )
+            evidence_ok = bool(
+                evidence_status == 200
+                and evidence.get("ok") is True
+                and evidence.get("read_only") is True
+                and evidence.get("broker_mutation_called") is False
+                and evidence.get("cloud_strategy_authority") is False
+                and evidence.get("cloud_execution_policy_authority") is False
+                and evidence.get("live_execution_allowed") is False
+                and evidence.get("global_cancel_allowed") is False
+            )
+            receipt["completed_execution_reconciliation"] = {
+                **dict(evidence),
+                "requested": True,
+                "http_status": evidence_status,
+                "ok": evidence_ok,
+                "read_only": evidence.get("read_only") is True,
+                "broker_mutation_called": evidence.get("broker_mutation_called") is True,
+            }
+        else:
+            receipt["completed_execution_reconciliation"] = {
+                "requested": True,
+                "http_status": None,
+                "ok": False,
+                "read_only": True,
+                "broker_mutation_called": False,
+                "status": "broker_order_identity_missing_for_completed_execution_reconciliation",
+            }
 
     receipt["ok"] = bool(post_ok and evidence_ok)
     if not post_ok:
