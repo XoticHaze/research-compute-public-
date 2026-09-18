@@ -372,8 +372,8 @@ def self_test() -> None:
     recovered_adapter = dict(adapter)
     recovered_adapter["signal_date"] = "2026-09-11"
     recovered = build(recovered_adapter, date(2026, 1, 9), "2026-09-18T06:00:00+00:00", loader)
-    assert recovered["first_registered_at"] == "2026-09-18T05:06:08.956014+00:00"
-    assert recovered["registration_anchor_source"]["evidence_commit"] == "c36500fa4ab554b01c24df7fd0ab603b9504d31e"
+    assert recovered["first_registered_at"] == "2026-09-18T05:03:20.113496+00:00"
+    assert recovered["registration_anchor_source"]["evidence_commit"] == "ae327a88bf02dc55f596416ad563375b0cd076d7"
     assert out["entry_date"] == "2026-01-05"
     assert out["summary"]["directional_sign_hit_rate"] == 1.0
     assert all(r["prediction_error_bps"] is None for r in out["observations"])
