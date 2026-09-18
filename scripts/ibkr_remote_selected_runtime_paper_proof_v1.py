@@ -491,7 +491,9 @@ def execute_paper_proof(
         receipt["status"] = "EXACT_CANCEL_RECONCILIATION_FAILED"
         return receipt
 
-    flatten_identity: dict[str, Any] = {}\n    if abs(target_position_after_cancel) > 1e-12:\n        flatten_payload = {
+    flatten_identity: dict[str, Any] = {}
+    if abs(target_position_after_cancel) > 1e-12:
+        flatten_payload = {
             "symbol": symbol,
             "symbols": [symbol],
             "operator_approved": True,
