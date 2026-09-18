@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - assistant/ibkr-initial-selected-runtime-backfill-20260918
+      - assistant/ibkr-mnq-backfill-session-boundaries-20260918
     paths:
       - scripts/ibkr_post_auth_pipeline_v1.py
       - tests/test_ibkr_post_auth_pipeline_contracts_v1.py
