@@ -1,0 +1,23 @@
+name: MR B9 copper trend transport
+on:
+  push:
+    branches: [mr-b9-copper-input-trend-20260918]
+    paths:
+      - 'research/mr_b9_copper_trend_transport.py'
+      - '.github/workflows/mr-b9-copper-trend-transport.yml'
+  workflow_dispatch:
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pandas numpy yfinance
+      - run: python research/mr_b9_copper_trend_transport.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mr-b9-copper-trend-transport
+          path: mr_b9_copper_trend_transport.json
