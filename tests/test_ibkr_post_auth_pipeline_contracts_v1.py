@@ -199,6 +199,14 @@ class PostAuthPipelineContractTests(unittest.TestCase):
                 ["MNQ"],
             )
 
+    def test_explicit_historical_chunks_are_paced_but_live_tail_reads_are_not(self):
+        from pathlib import Path
+        source = Path(mod.__file__).read_text(encoding="utf-8")
+        self.assertIn("HISTORICAL_CHUNK_PACE_SEC = 0.4", source)
+        self.assertIn("if end_date_time_utc:", source)
+        self.assertIn("ib.sleep(HISTORICAL_CHUNK_PACE_SEC)", source)
+        self.assertIn('"maintenance_pacing_sec": (', source)
+
     def test_pipeline_uses_private_supplied_historical_end_without_public_time_selection(self):
         from pathlib import Path
         source = Path(mod.__file__).read_text(encoding="utf-8")
