@@ -63,7 +63,7 @@ def execute_paper_execute(
     public_head: str,
 ) -> dict[str, Any]:
     validated = validate_fleet_authority_execute_runtime(runtime)
-    auth = proof_v1._validate_authorized_request(validated, request)
+    auth = proof_v1._validate_selected_runtime_request(request)
     symbol = auth["symbol"]
 
     health_status, health = send("GET", "/healthz", timeout=15.0)
