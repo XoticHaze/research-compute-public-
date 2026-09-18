@@ -90,23 +90,23 @@
       }
     },
     "largecap_transport_observer": {
-      "generated_at": "2026-09-18T05:08:14.930691+00:00",
+      "generated_at": "2026-09-18T05:13:24.207103+00:00",
       "market_data_asof": "2026-09-17",
       "present": true,
       "sessions_completed": 3,
-      "sha256": "214a8e5fe2616a8624f0645862473d12ac3a9cc0c78ff28a3dcf9a73e9551385",
+      "sha256": "09897670e2f437f73f08d830e46ba8a9b21d4facfeb7b7a0b83193cb5441d4f4",
       "state": "PROSPECTIVE_OPEN"
     },
     "native_result_gaps": [],
     "prospective_ledger": {
-      "generated_at": "2026-09-18T05:08:06.491925+00:00",
+      "generated_at": "2026-09-18T05:13:19.503454+00:00",
       "market_data_asof": "2026-09-17",
       "present": true,
       "programs": [
         "HOMEBUILDERS",
         "SEMICONDUCTOR_SHARED_RIDGE"
       ],
-      "sha256": "f9c260fb167cc13b08e94f385aaa522a569a5676a55184bf84e8f3e142fc41f0"
+      "sha256": "fc53609b837544d692481ae4c1ca6f93be3c4f28f2db4817e76c39b5f8a92603"
     },
     "scored_now": [
       "P46",
@@ -364,14 +364,14 @@
       ]
     }
   },
-  "generated_at": "2026-09-18T05:08:14.637423+00:00",
+  "generated_at": "2026-09-18T05:13:23.738564+00:00",
   "input_lineage": {
     "prospective_ledger": {
       "cohort_count": 2,
-      "generated_at": "2026-09-18T05:08:06.491925+00:00",
+      "generated_at": "2026-09-18T05:13:19.503454+00:00",
       "market_data_asof": "2026-09-17",
       "schema": "research.forward_prospective_cohort_ledger_r1",
-      "sha256": "f9c260fb167cc13b08e94f385aaa522a569a5676a55184bf84e8f3e142fc41f0"
+      "sha256": "fc53609b837544d692481ae4c1ca6f93be3c4f28f2db4817e76c39b5f8a92603"
     }
   },
   "interpretation": {
@@ -406,8 +406,8 @@
       "kind": "cross_asset_selector",
       "observation_lineage": {
         "market_data_asof": "2026-09-17",
-        "prospective_ledger_generated_at": "2026-09-18T05:08:06.491925+00:00",
-        "prospective_ledger_sha256": "f9c260fb167cc13b08e94f385aaa522a569a5676a55184bf84e8f3e142fc41f0"
+        "prospective_ledger_generated_at": "2026-09-18T05:13:19.503454+00:00",
+        "prospective_ledger_sha256": "fc53609b837544d692481ae4c1ca6f93be3c4f28f2db4817e76c39b5f8a92603"
       },
       "observation_status": "CONTEXT_ONLY",
       "paper_action": {
@@ -454,8 +454,8 @@
       "kind": "portfolio_construction_plus_industry_momentum_satellite",
       "observation_lineage": {
         "market_data_asof": "2026-09-17",
-        "prospective_ledger_generated_at": "2026-09-18T05:08:06.491925+00:00",
-        "prospective_ledger_sha256": "f9c260fb167cc13b08e94f385aaa522a569a5676a55184bf84e8f3e142fc41f0"
+        "prospective_ledger_generated_at": "2026-09-18T05:13:19.503454+00:00",
+        "prospective_ledger_sha256": "fc53609b837544d692481ae4c1ca6f93be3c4f28f2db4817e76c39b5f8a92603"
       },
       "observation_status": "ACTIVE",
       "paper_action": {
@@ -513,8 +513,8 @@
       "kind": "portfolio_diversification_challenger",
       "observation_lineage": {
         "market_data_asof": "2026-09-17",
-        "prospective_ledger_generated_at": "2026-09-18T05:08:06.491925+00:00",
-        "prospective_ledger_sha256": "f9c260fb167cc13b08e94f385aaa522a569a5676a55184bf84e8f3e142fc41f0"
+        "prospective_ledger_generated_at": "2026-09-18T05:13:19.503454+00:00",
+        "prospective_ledger_sha256": "fc53609b837544d692481ae4c1ca6f93be3c4f28f2db4817e76c39b5f8a92603"
       },
       "observation_status": "ACTIVE",
       "paper_action": {
@@ -561,8 +561,8 @@
       "kind": "portfolio_diversification_challenger",
       "observation_lineage": {
         "market_data_asof": "2026-09-17",
-        "prospective_ledger_generated_at": "2026-09-18T05:08:06.491925+00:00",
-        "prospective_ledger_sha256": "f9c260fb167cc13b08e94f385aaa522a569a5676a55184bf84e8f3e142fc41f0"
+        "prospective_ledger_generated_at": "2026-09-18T05:13:19.503454+00:00",
+        "prospective_ledger_sha256": "fc53609b837544d692481ae4c1ca6f93be3c4f28f2db4817e76c39b5f8a92603"
       },
       "observation_status": "ACTIVE",
       "paper_action": {
@@ -626,8 +626,8 @@
         "cohort_id": "SEMICONDUCTOR_SHARED_RIDGE:2026-09-11:aed8eb43d888d3c4",
         "cohort_status": "OPEN",
         "market_data_asof": "2026-09-17",
-        "prospective_ledger_generated_at": "2026-09-18T05:08:06.491925+00:00",
-        "prospective_ledger_sha256": "f9c260fb167cc13b08e94f385aaa522a569a5676a55184bf84e8f3e142fc41f0",
+        "prospective_ledger_generated_at": "2026-09-18T05:13:19.503454+00:00",
+        "prospective_ledger_sha256": "fc53609b837544d692481ae4c1ca6f93be3c4f28f2db4817e76c39b5f8a92603",
         "signal_date": "2026-09-11",
         "source_adapter_sha256": "aed8eb43d888d3c4d39c4db940c89e5d2247204567d4a0fcf129e9551f04e333",
         "source_ref": "e73ec9b15180e208de541ce5d5304888e5550433"
@@ -797,8 +797,8 @@
         "cohort_id": "HOMEBUILDERS:2026-09-11:00435d369ddcc3a3",
         "cohort_status": "OPEN",
         "market_data_asof": "2026-09-17",
-        "prospective_ledger_generated_at": "2026-09-18T05:08:06.491925+00:00",
-        "prospective_ledger_sha256": "f9c260fb167cc13b08e94f385aaa522a569a5676a55184bf84e8f3e142fc41f0",
+        "prospective_ledger_generated_at": "2026-09-18T05:13:19.503454+00:00",
+        "prospective_ledger_sha256": "fc53609b837544d692481ae4c1ca6f93be3c4f28f2db4817e76c39b5f8a92603",
         "signal_date": "2026-09-11",
         "source_adapter_sha256": "00435d369ddcc3a3d8adbedb91a9662f047b292ff64fe6af6901bfd112466a59",
         "source_ref": "100e356239b2399c054c1a41a18e4e9a5d07d33a"
@@ -898,7 +898,7 @@
         "evaluation_date": "2026-09-17",
         "execution_delay_sessions": 1,
         "first_registered_at": "2026-09-18T05:06:45.444059+00:00",
-        "generated_at": "2026-09-18T05:08:14.930691+00:00",
+        "generated_at": "2026-09-18T05:13:24.207103+00:00",
         "holding_horizon_sessions": 20,
         "interpretation": {
           "current_mark_before_horizon_is_not_terminal_accuracy": true,
@@ -1000,11 +1000,11 @@
       "kind": "target_excluded_transport_corroboration",
       "observation_lineage": {
         "largecap_market_data_asof": "2026-09-17",
-        "largecap_observation_generated_at": "2026-09-18T05:08:14.930691+00:00",
-        "largecap_observation_sha256": "214a8e5fe2616a8624f0645862473d12ac3a9cc0c78ff28a3dcf9a73e9551385",
+        "largecap_observation_generated_at": "2026-09-18T05:13:24.207103+00:00",
+        "largecap_observation_sha256": "09897670e2f437f73f08d830e46ba8a9b21d4facfeb7b7a0b83193cb5441d4f4",
         "market_data_asof": "2026-09-17",
-        "prospective_ledger_generated_at": "2026-09-18T05:08:06.491925+00:00",
-        "prospective_ledger_sha256": "f9c260fb167cc13b08e94f385aaa522a569a5676a55184bf84e8f3e142fc41f0"
+        "prospective_ledger_generated_at": "2026-09-18T05:13:19.503454+00:00",
+        "prospective_ledger_sha256": "fc53609b837544d692481ae4c1ca6f93be3c4f28f2db4817e76c39b5f8a92603"
       },
       "observation_status": "ACTIVE",
       "paper_action": {
@@ -1100,8 +1100,8 @@
       "kind": "fixed_cross_asset_industry_combination_challenger",
       "observation_lineage": {
         "market_data_asof": "2026-09-17",
-        "prospective_ledger_generated_at": "2026-09-18T05:08:06.491925+00:00",
-        "prospective_ledger_sha256": "f9c260fb167cc13b08e94f385aaa522a569a5676a55184bf84e8f3e142fc41f0"
+        "prospective_ledger_generated_at": "2026-09-18T05:13:19.503454+00:00",
+        "prospective_ledger_sha256": "fc53609b837544d692481ae4c1ca6f93be3c4f28f2db4817e76c39b5f8a92603"
       },
       "observation_status": "CONTEXT_ONLY",
       "paper_action": {
@@ -1181,8 +1181,8 @@
       "kind": "developed_exus_currency_hedge_mechanism_challenger",
       "observation_lineage": {
         "market_data_asof": "2026-09-17",
-        "prospective_ledger_generated_at": "2026-09-18T05:08:06.491925+00:00",
-        "prospective_ledger_sha256": "f9c260fb167cc13b08e94f385aaa522a569a5676a55184bf84e8f3e142fc41f0"
+        "prospective_ledger_generated_at": "2026-09-18T05:13:19.503454+00:00",
+        "prospective_ledger_sha256": "fc53609b837544d692481ae4c1ca6f93be3c4f28f2db4817e76c39b5f8a92603"
       },
       "observation_status": "ACTIVE",
       "paper_action": {
@@ -1267,8 +1267,8 @@
       "kind": "portfolio_level_currency_hedge_allocator_challenger",
       "observation_lineage": {
         "market_data_asof": "2026-09-17",
-        "prospective_ledger_generated_at": "2026-09-18T05:08:06.491925+00:00",
-        "prospective_ledger_sha256": "f9c260fb167cc13b08e94f385aaa522a569a5676a55184bf84e8f3e142fc41f0"
+        "prospective_ledger_generated_at": "2026-09-18T05:13:19.503454+00:00",
+        "prospective_ledger_sha256": "fc53609b837544d692481ae4c1ca6f93be3c4f28f2db4817e76c39b5f8a92603"
       },
       "observation_status": "ACTIVE",
       "paper_action": {
