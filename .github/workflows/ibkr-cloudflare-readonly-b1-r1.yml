@@ -13,6 +13,7 @@ on:
         options:
           - readonly
           - paper_submit_proof
+          - paper_execute
       dispatch_nonce:
         description: Optional one-run correlation token
         required: false
@@ -54,6 +55,7 @@ on:
       - 'scripts/ibkr_remote_selected_runtime_command_capsule_v2.py'
       - 'scripts/ibkr_remote_selected_runtime_paper_proof_v1.py'
       - 'scripts/ibkr_remote_selected_runtime_paper_proof_v2.py'
+      - 'scripts/ibkr_remote_selected_runtime_paper_execute_v1.py'
       - 'scripts/ibkr_remote_paper_proof_return_v1.py'
       - 'scripts/ibkr_warm_selected_runtime_activation_v1.py'
       - 'scripts/ibkr_warm_read_return_v1.py'
@@ -62,6 +64,9 @@ on:
       - 'tests/test_ibkr_post_auth_pipeline_contracts_v1.py'
       - 'tests/test_ibkr_b1_warm_state_workflow_v2.py'
       - 'tests/test_ibkr_warm_selected_runtime_activation_v1.py'
+      - 'tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py'
+      - 'tests/test_ibkr_remote_selected_runtime_paper_execute_v1.py'
+      - 'tests/test_ibkr_remote_paper_proof_return_v1.py'
       - 'tests/test_ibkr_warm_read_return_v1.py'
       - 'ibkr_login_trigger.txt'
 
@@ -102,6 +107,7 @@ jobs:
             scripts/ibkr_remote_selected_runtime_command_capsule_v2.py \
             scripts/ibkr_remote_selected_runtime_paper_proof_v1.py \
             scripts/ibkr_remote_selected_runtime_paper_proof_v2.py \
+            scripts/ibkr_remote_selected_runtime_paper_execute_v1.py \
             scripts/ibkr_remote_paper_proof_return_v1.py \
             scripts/ibkr_warm_selected_runtime_activation_v1.py \
             scripts/ibkr_warm_read_return_v1.py \
@@ -109,6 +115,9 @@ jobs:
             tests/test_ibkr_b1_auth_contracts_v1.py \
             tests/test_ibkr_b1_warm_state_workflow_v2.py \
             tests/test_ibkr_warm_selected_runtime_activation_v1.py \
+            tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py \
+            tests/test_ibkr_remote_selected_runtime_paper_execute_v1.py \
+            tests/test_ibkr_remote_paper_proof_return_v1.py \
             tests/test_ibkr_warm_read_return_v1.py
           python - <<'PY'
           from pathlib import Path
@@ -124,6 +133,9 @@ jobs:
             tests.test_ibkr_post_auth_pipeline_contracts_v1 \
             tests.test_ibkr_b1_warm_state_workflow_v2 \
             tests.test_ibkr_warm_selected_runtime_activation_v1 \
+            tests.test_ibkr_remote_selected_runtime_command_capsule_v2 \
+            tests.test_ibkr_remote_selected_runtime_paper_execute_v1 \
+            tests.test_ibkr_remote_paper_proof_return_v1 \
             tests.test_ibkr_warm_read_return_v1 -v
           echo 'IBKR_BROKER_LOGIN_ATTEMPTED=0'
           echo 'IBKR_BROKER_ORDER_ATTEMPTED=0'
@@ -144,6 +156,7 @@ jobs:
       POST_AUTH_CONTRACTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.contracts_json || '{}' }}
       IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'readonly' && inputs.read_return_recipient_b64 != '' && inputs.read_return_recipient_key_id != '' && '1' || '0' }}
       IBKR_PAPER_PROOF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' && '1' || '0' }}
+      IBKR_PAPER_EXECUTE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_execute' && '1' || '0' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -167,17 +180,24 @@ jobs:
             scripts/ibkr_remote_selected_runtime_command_capsule_v2.py \
             scripts/ibkr_remote_selected_runtime_paper_proof_v1.py \
             scripts/ibkr_remote_selected_runtime_paper_proof_v2.py \
+            scripts/ibkr_remote_selected_runtime_paper_execute_v1.py \
             scripts/ibkr_remote_paper_proof_return_v1.py \
             scripts/ibkr_warm_selected_runtime_activation_v1.py \
             scripts/ibkr_warm_read_return_v1.py \
             research/forward_bar_contract_v2.py \
             tests/test_ibkr_b1_auth_contracts_v1.py \
             tests/test_ibkr_warm_selected_runtime_activation_v1.py \
+            tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py \
+            tests/test_ibkr_remote_selected_runtime_paper_execute_v1.py \
+            tests/test_ibkr_remote_paper_proof_return_v1.py \
             tests/test_ibkr_warm_read_return_v1.py
           python -m unittest \
             tests.test_ibkr_b1_auth_contracts_v1 \
             tests.test_ibkr_post_auth_pipeline_contracts_v1 \
             tests.test_ibkr_warm_selected_runtime_activation_v1 \
+            tests.test_ibkr_remote_selected_runtime_command_capsule_v2 \
+            tests.test_ibkr_remote_selected_runtime_paper_execute_v1 \
+            tests.test_ibkr_remote_paper_proof_return_v1 \
             tests.test_ibkr_warm_read_return_v1 -v
           echo "IBKR_PAPER_PROOF_MODE=${IBKR_PAPER_PROOF_MODE}"
 
@@ -300,12 +320,12 @@ jobs:
           echo 'IBKR_WARM_STATE_SEED_MODE=CONTROLLER_NATIVE'
           echo 'restored=1' >> "$GITHUB_OUTPUT"
 
-      - name: Require restored warm state for paper submit proof
-        if: env.IBKR_PAPER_PROOF_MODE == '1'
+      - name: Require restored warm state for broker-mutating selected-runtime command
+        if: env.IBKR_PAPER_PROOF_MODE == '1' || env.IBKR_PAPER_EXECUTE_MODE == '1'
         run: |
           set -euo pipefail
-          test "${{ steps.restore.outputs.restored }}" = "1" || { echo 'paper submit proof requires accepted restored warm state'; exit 43; }
-          echo 'IBKR_PAPER_PROOF_WARM_STATE_REQUIRED=1'
+          test "${{ steps.restore.outputs.restored }}" = "1" || { echo 'broker-mutating selected-runtime command requires accepted restored warm state'; exit 43; }
+          echo 'IBKR_PAPER_MUTATION_WARM_STATE_REQUIRED=1'
 
       - name: Refuse cold login inside IBKR reset window
         if: steps.restore.outputs.restored != '1'
@@ -323,7 +343,7 @@ jobs:
           echo 'IBKR_CONTROLLER_IMAGE_PINNED=1'
 
           api_read_only=yes
-          if [ "$IBKR_PAPER_PROOF_MODE" = "1" ]; then
+          if [ "$IBKR_PAPER_PROOF_MODE" = "1" ] || [ "$IBKR_PAPER_EXECUTE_MODE" = "1" ]; then
             api_read_only=no
           fi
           echo "IBKR_GATEWAY_READ_ONLY_API=${api_read_only}"
@@ -594,8 +614,30 @@ jobs:
             --runner-temp "$RUNNER_TEMP" \
             --gateway-host 127.0.0.1 \
             --gateway-port 4002 \
-            --wait-seconds 900
+            --wait-seconds 900 \
+            --mode paper_submit_proof
           echo 'IBKR_WARM_SELECTED_RUNTIME_PAPER_PROOF_TRANSPORT_COMPLETE=1'
+
+      - name: Execute one encrypted MM-authorized persistent paper command
+        id: paper_execute
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_execute' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$IBKR_PAPER_EXECUTE_MODE" = "1"
+          python scripts/ibkr_warm_selected_runtime_activation_v1.py \
+            --run-id "$GITHUB_RUN_ID" \
+            --public-head "$GITHUB_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --exchange-ref rendezvous-exchange \
+            --runner-temp "$RUNNER_TEMP" \
+            --gateway-host 127.0.0.1 \
+            --gateway-port 4002 \
+            --wait-seconds 900 \
+            --mode paper_execute
+          echo 'IBKR_WARM_SELECTED_RUNTIME_PAPER_EXECUTE_TRANSPORT_COMPLETE=1'
 
       - name: Gracefully stop authenticated Gateway before warm-state snapshot
         id: graceful_stop
@@ -671,6 +713,17 @@ jobs:
           fi
           echo 'IBKR_WARM_SELECTED_RUNTIME_PAPER_PROOF_ACCEPTED=1'
 
+      - name: Enforce persistent paper execute result after warm-state persistence
+        if: ${{ always() && env.IBKR_PAPER_EXECUTE_MODE == '1' }}
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.paper_execute.outcome }}" != "success" ]; then
+            echo 'IBKR_WARM_SELECTED_RUNTIME_PAPER_EXECUTE_ACCEPTED=0'
+            echo 'Persistent paper execute failed or was blocked; Gateway was stopped and warm state was resealed before surfacing this failure.'
+            exit 53
+          fi
+          echo 'IBKR_WARM_SELECTED_RUNTIME_PAPER_EXECUTE_ACCEPTED=1'
+
       - name: Destroy private runtime material
         if: always()
         run: |
@@ -702,6 +755,7 @@ jobs:
             "$RUNNER_TEMP/ibkr-runtime.json" \
             "$RUNNER_TEMP/ibkr-proof-return-recipient.json" \
             "$RUNNER_TEMP/ibkr-paper-proof-receipt.json" \
+            "$RUNNER_TEMP/ibkr-paper-execute-receipt.json" \
             "$RUNNER_TEMP/ibkr-paper-proof-return" \
             "$RUNNER_TEMP/ibkr-warm-read-return" \
             "$RUNNER_TEMP/mm-ibkr-source" \
