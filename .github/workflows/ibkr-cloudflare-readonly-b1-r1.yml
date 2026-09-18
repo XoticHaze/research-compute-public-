@@ -61,6 +61,7 @@ on:
       - assistant/ibkr-warm-seed-owner-20260917
       - assistant/ibkr-warm-paper-proof-activation-20260917
       - assistant/ibkr-warm-read-gateway-20260917
+      - assistant/ibkr-initial-backfill-20260918
     paths:
       - '.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml'
       - 'scripts/fleet_authority_envelope_consumer_v1.py'
@@ -174,9 +175,9 @@ jobs:
     env:
       FLEET_AUTHORITY_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-paper/seal
       IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
-      POST_AUTH_SYMBOLS: ${{ github.event_name == 'workflow_dispatch' && inputs.symbols || 'AMAT,APH' }}
-      POST_AUTH_CONTRACTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.contracts_json || '{}' }}
-      POST_AUTH_BAR_REQUESTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.bar_requests_json || '' }}
+      POST_AUTH_SYMBOLS: ${{ github.event_name == 'workflow_dispatch' && inputs.symbols || 'AMAT,APH,MNQ' }}
+      POST_AUTH_CONTRACTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.contracts_json || '{"AMAT":{"conId":266093,"symbol":"AMAT","secType":"STK","exchange":"SMART","currency":"USD"},"APH":{"conId":4493,"symbol":"APH","secType":"STK","exchange":"SMART","currency":"USD"},"MNQ":{"conId":793356225,"symbol":"MNQ","secType":"FUT","exchange":"CME","currency":"USD","localSymbol":"MNQU6","lastTradeDateOrContractMonth":"202609","multiplier":"2"}}' }}
+      POST_AUTH_BAR_REQUESTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.bar_requests_json || '{"AMAT":[{"source_timeframe":"15Min","target_timeframe":"15Min","bar_size_setting":"15 mins","duration_str":"2 W"}],"APH":[{"source_timeframe":"15Min","target_timeframe":"15Min","bar_size_setting":"15 mins","duration_str":"2 W"}],"MNQ":[{"source_timeframe":"1Min","target_timeframe":"12Min","bar_size_setting":"1 min","duration_str":"1 D"},{"source_timeframe":"1Min","target_timeframe":"12Min","bar_size_setting":"1 min","duration_str":"1 D","end_date_time_utc":"2026-09-18T00:00:00Z"},{"source_timeframe":"1Min","target_timeframe":"12Min","bar_size_setting":"1 min","duration_str":"1 D","end_date_time_utc":"2026-09-17T00:00:00Z"},{"source_timeframe":"1Min","target_timeframe":"12Min","bar_size_setting":"1 min","duration_str":"1 D","end_date_time_utc":"2026-09-16T00:00:00Z"},{"source_timeframe":"1Min","target_timeframe":"12Min","bar_size_setting":"1 min","duration_str":"1 D","end_date_time_utc":"2026-09-15T00:00:00Z"}]}' }}
       POST_AUTH_INCLUDE_QUOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.include_quotes && '1' || '0' }}
       IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'paper_execute') && inputs.read_return_recipient_b64 != '' && inputs.read_return_recipient_key_id != '' && '1' || '0' }}
       IBKR_PAPER_PROOF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' && '1' || '0' }}
@@ -631,6 +632,39 @@ jobs:
             --output "$RUNNER_TEMP/ibkr-post-auth-handoff.json" \
             --bars-output "$RUNNER_TEMP/ibkr-forward-bars-v2.jsonl"
           echo 'IBKR_CONSUMER_READY=1'
+
+      - name: Build initial backfill coverage evidence
+        if: github.event_name == 'push' && github.ref_name == 'assistant/ibkr-initial-backfill-20260918'
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from collections import defaultdict
+          from pathlib import Path
+          temp=Path(os.environ['RUNNER_TEMP'])
+          bars=temp/'ibkr-forward-bars-v2.jsonl'
+          rows=[json.loads(line) for line in bars.read_text(encoding='utf-8').splitlines() if line.strip()]
+          groups=defaultdict(list)
+          for row in rows:
+              groups[(str(row.get('symbol')), str(row.get('bar_size')))].append(row)
+          out={'schema':'mmibkr.initial_backfill_coverage.v1','groups':[],'total_rows':len(rows)}
+          for (symbol,bar_size),items in sorted(groups.items()):
+              timestamps=sorted(str(x.get('timestamp')) for x in items)
+              out['groups'].append({'symbol':symbol,'bar_size':bar_size,'row_count':len(items),'first_timestamp':timestamps[0] if timestamps else None,'last_timestamp':timestamps[-1] if timestamps else None})
+          (temp/'ibkr-initial-backfill-coverage.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          print('IBKR_INITIAL_BACKFILL_COVERAGE='+json.dumps(out,sort_keys=True))
+          PY
+
+      - name: Upload public initial backfill market-data artifact
+        if: github.event_name == 'push' && github.ref_name == 'assistant/ibkr-initial-backfill-20260918'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ibkr-initial-backfill-market-data-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/ibkr-forward-bars-v2.jsonl
+            ${{ runner.temp }}/ibkr-initial-backfill-coverage.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Encrypt optional detailed warm read snapshot for private consumer
         id: warm_read_return
