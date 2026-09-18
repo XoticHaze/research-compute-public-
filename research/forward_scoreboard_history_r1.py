@@ -170,6 +170,36 @@ def append_history(prior: dict[str, Any] | None, entry: dict[str, Any]) -> dict[
     return result
 
 
+def attach_session_coverage(
+    history: dict[str, Any],
+    p249: dict[str, Any] | None,
+) -> dict[str, Any]:
+    observations = (((p249 or {}).get("forward") or {}).get("observations") or [])
+    expected = sorted({
+        str(row.get("date"))[:10]
+        for row in observations
+        if isinstance(row, dict) and row.get("date")
+    })
+    snapshots = sorted({
+        str(row.get("session_date"))[:10]
+        for row in (history.get("sessions") or [])
+        if isinstance(row, dict) and row.get("session_date")
+    })
+    missing = [d for d in expected if d not in snapshots]
+    extra = [d for d in snapshots if expected and d not in expected]
+    history["session_coverage"] = {
+        "authority": "P249_P266.forward.observations[].date",
+        "expected_market_sessions": expected,
+        "persisted_scoreboard_snapshot_sessions": snapshots,
+        "expected_market_session_count": len(expected),
+        "persisted_scoreboard_snapshot_count": len(snapshots),
+        "missing_scoreboard_snapshot_sessions": missing,
+        "snapshot_coverage_complete": not missing,
+        "snapshot_sessions_outside_current_p249_tape": extra,
+    }
+    return history
+
+
 
 def _git_show(repo: Path, ref: str, path: str) -> tuple[dict[str, Any] | None, bytes | None]:
     proc = subprocess.run(
@@ -259,32 +289,40 @@ def self_test() -> None:
             "target_weight": 0.0,
         }],
     }
-    p249 = {"forward": {"latest_close": "2026-09-17"}}
+    p249 = {"forward": {"latest_close": "2026-09-17", "observations": [
+        {"date": "2026-09-16"}, {"date": "2026-09-17"}
+    ]}}
     raw_s = (json.dumps(score, sort_keys=True) + "\n").encode()
     raw_a = (json.dumps(alloc, sort_keys=True) + "\n").encode()
     raw_p = (json.dumps(p249, sort_keys=True) + "\n").encode()
     first = make_entry(score, raw_s, alloc, raw_a, p249, raw_p)
     assert first["session_date"] == "2026-09-17"
     assert first["session_date_authority"] == "P249_P266.forward.latest_close"
-    hist = append_history(None, first)
+    hist = attach_session_coverage(append_history(None, first), p249)
     assert hist["session_count"] == 1
+    assert hist["session_coverage"]["missing_scoreboard_snapshot_sessions"] == ["2026-09-16"]
+    assert hist["session_coverage"]["snapshot_coverage_complete"] is False
     assert hist["sessions"][0]["models"][0]["allocator_action"]["target_weight"] == 0.0
 
     score2 = dict(score)
     score2["generated_at"] = "2026-09-19T02:00:00+00:00"
     score2["lanes"] = [dict(score["lanes"][0], scorecard={"hit_rate": 0.75})]
     raw_s2 = (json.dumps(score2, sort_keys=True) + "\n").encode()
-    p249_2 = {"forward": {"latest_close": "2026-09-18"}}
+    p249_2 = {"forward": {"latest_close": "2026-09-18", "observations": [
+        {"date": "2026-09-16"}, {"date": "2026-09-17"}, {"date": "2026-09-18"}
+    ]}}
     raw_p2 = (json.dumps(p249_2, sort_keys=True) + "\n").encode()
     second = make_entry(score2, raw_s2, alloc, raw_a, p249_2, raw_p2)
-    hist = append_history(hist, second)
+    hist = attach_session_coverage(append_history(hist, second), p249_2)
     assert hist["session_count"] == 2
+    assert hist["session_coverage"]["missing_scoreboard_snapshot_sessions"] == ["2026-09-16"]
+    assert hist["session_coverage"]["expected_market_session_count"] == 3
     assert hist["latest_session_date"] == "2026-09-18"
 
     same_day_newer = dict(second)
     same_day_newer["scoreboard_generated_at"] = "2026-09-19T03:00:00+00:00"
     same_day_newer["models"] = [dict(second["models"][0], scorecard={"hit_rate": 0.8})]
-    hist = append_history(hist, same_day_newer)
+    hist = attach_session_coverage(append_history(hist, same_day_newer), p249_2)
     assert hist["session_count"] == 2
     assert hist["sessions"][-1]["models"][0]["scorecard"]["hit_rate"] == 0.8
     print("FORWARD_SCOREBOARD_HISTORY_SELF_TEST=PASS")
@@ -331,7 +369,7 @@ def main() -> None:
     assert allocator is not None and allocator_raw is not None
 
     entry = make_entry(scoreboard, scoreboard_raw, allocator, allocator_raw, p249, p249_raw)
-    history = append_history(prior, entry)
+    history = attach_session_coverage(append_history(prior, entry), p249)
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(history, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
@@ -340,6 +378,7 @@ def main() -> None:
         "session_date_authority": entry["session_date_authority"],
         "session_count": history["session_count"],
         "latest_session_date": history["latest_session_date"],
+        "session_coverage": history.get("session_coverage"),
     }, sort_keys=True))
 
 
