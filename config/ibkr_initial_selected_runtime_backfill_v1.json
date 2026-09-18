@@ -1,0 +1,84 @@
+{
+  "schema": "mmibkr.ibkr_initial_selected_runtime_backfill.v1",
+  "purpose": "one-shot cold-start warmup for active selected runtime market-data sources",
+  "broker_mutation": false,
+  "runtime_execution_contract_mutation": false,
+  "live_trading_change": false,
+  "symbols": [
+    "AMAT",
+    "APH",
+    "MNQ"
+  ],
+  "contracts": {
+    "MNQ": {
+      "symbol": "MNQ",
+      "secType": "FUT",
+      "exchange": "CME",
+      "currency": "USD",
+      "lastTradeDateOrContractMonth": "202612"
+    }
+  },
+  "contract_notes": {
+    "MNQ": "Read-only signal-history contract after CME equity-index lead-month signal roll. This does not replace the selected runtime execution_contract."
+  },
+  "required_completed_bars": {
+    "AMAT_target_15Min": 400,
+    "APH_target_15Min": 400,
+    "MNQ_target_12Min": 400,
+    "MNQ_source_1Min": 4800
+  },
+  "bar_requests": {
+    "AMAT": [
+      {
+        "source_timeframe": "15Min",
+        "target_timeframe": "15Min",
+        "bar_size_setting": "15 mins",
+        "duration_str": "2 W"
+      }
+    ],
+    "APH": [
+      {
+        "source_timeframe": "15Min",
+        "target_timeframe": "15Min",
+        "bar_size_setting": "15 mins",
+        "duration_str": "2 W"
+      }
+    ],
+    "MNQ": [
+      {
+        "source_timeframe": "1Min",
+        "target_timeframe": "12Min",
+        "bar_size_setting": "1 min",
+        "duration_str": "1 D"
+      },
+      {
+        "source_timeframe": "1Min",
+        "target_timeframe": "12Min",
+        "bar_size_setting": "1 min",
+        "duration_str": "1 D",
+        "end_date_time_utc": "2026-09-18T00:00:00Z"
+      },
+      {
+        "source_timeframe": "1Min",
+        "target_timeframe": "12Min",
+        "bar_size_setting": "1 min",
+        "duration_str": "1 D",
+        "end_date_time_utc": "2026-09-17T00:00:00Z"
+      },
+      {
+        "source_timeframe": "1Min",
+        "target_timeframe": "12Min",
+        "bar_size_setting": "1 min",
+        "duration_str": "1 D",
+        "end_date_time_utc": "2026-09-16T00:00:00Z"
+      },
+      {
+        "source_timeframe": "1Min",
+        "target_timeframe": "12Min",
+        "bar_size_setting": "1 min",
+        "duration_str": "1 D",
+        "end_date_time_utc": "2026-09-15T00:00:00Z"
+      }
+    ]
+  }
+}
