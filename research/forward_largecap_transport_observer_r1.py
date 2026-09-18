@@ -96,6 +96,7 @@ def build(
     asof: date,
     now_iso: str,
     loader: Callable[[str, date, date], pd.Series] = _download_close,
+    prior: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     _validate_adapter(adapter)
     signal = adapter.get("signal") or {}
@@ -111,6 +112,18 @@ def build(
     timing = adapter.get("timing") or {}
     delay = int(timing["execution_delay_sessions"])
     horizon = int(timing["holding_horizon_sessions"])
+    prior_is_same_signal = bool(
+        prior
+        and prior.get("schema") == SCHEMA
+        and prior.get("program_id") == PROGRAM_ID
+        and prior.get("signal_date") == signal_date
+        and prior.get("first_registered_at")
+    )
+    first_registered_at = (
+        str(prior["first_registered_at"])
+        if prior_is_same_signal
+        else now_iso
+    )
     required = symbols + ["SPY", "QQQ"]
     start = date.fromisoformat(signal_date) - timedelta(days=10)
     prices = {s: loader(s, start, asof) for s in dict.fromkeys(required)}
@@ -124,6 +137,7 @@ def build(
             "market_data_asof": asof.isoformat(),
             "program_id": PROGRAM_ID,
             "signal_date": signal_date,
+            "first_registered_at": first_registered_at,
             "state": "AWAITING_ENTRY_SESSION",
             "execution_delay_sessions": delay,
             "holding_horizon_sessions": horizon,
@@ -135,12 +149,41 @@ def build(
                 "broker_action": False,
                 "live_trading_change": False,
                 "transaction_cost_calibration_authority": False,
+                "no_outcome_backfill_after_maturity": True,
             },
         }
 
     entry_i, entry_ts = entry
     sessions_completed = max(0, len(calendar) - 1 - entry_i)
     terminal = entry_i + horizon < len(calendar)
+    if terminal and not prior_is_same_signal:
+        return {
+            "schema": SCHEMA,
+            "generated_at": now_iso,
+            "market_data_asof": calendar[-1].date().isoformat(),
+            "program_id": PROGRAM_ID,
+            "signal_date": signal_date,
+            "first_registered_at": first_registered_at,
+            "state": "LATE_REGISTRATION_REJECTED",
+            "entry_date": entry_ts.date().isoformat(),
+            "execution_delay_sessions": delay,
+            "holding_horizon_sessions": horizon,
+            "sessions_completed": horizon,
+            "benchmarks": ["SPY", "QQQ"],
+            "observations": [],
+            "summary": None,
+            "rejection_reason": "fixed20 outcome was already observable before first durable observer registration",
+            "boundaries": {
+                "research_only": True,
+                "allocation_authority": False,
+                "promotion_authority": False,
+                "broker_action": False,
+                "live_trading_change": False,
+                "sizing_book_created": False,
+                "transaction_cost_calibration_authority": False,
+                "no_outcome_backfill_after_maturity": True,
+            },
+        }
     eval_i = entry_i + horizon if terminal else len(calendar) - 1
     eval_ts = calendar[eval_i]
     spy = _ret_bps(prices["SPY"], entry_ts, eval_ts)
@@ -185,6 +228,7 @@ def build(
         "market_data_asof": calendar[-1].date().isoformat() if len(calendar) else asof.isoformat(),
         "program_id": PROGRAM_ID,
         "signal_date": signal_date,
+        "first_registered_at": first_registered_at,
         "state": "RESOLVED" if terminal else "PROSPECTIVE_OPEN",
         "entry_date": entry_ts.date().isoformat(),
         "evaluation_date": eval_ts.date().isoformat(),
@@ -207,6 +251,7 @@ def build(
             "live_trading_change": False,
             "sizing_book_created": False,
             "transaction_cost_calibration_authority": False,
+            "no_outcome_backfill_after_maturity": True,
         },
     }
 
@@ -289,9 +334,26 @@ def self_test() -> None:
     }
     out = build(adapter, date(2026, 1, 9), "2026-01-09T00:00:00+00:00", loader)
     assert out["state"] == "PROSPECTIVE_OPEN"
+    assert out["first_registered_at"] == "2026-01-09T00:00:00+00:00"
     assert out["entry_date"] == "2026-01-05"
     assert out["summary"]["directional_sign_hit_rate"] == 1.0
     assert all(r["prediction_error_bps"] is None for r in out["observations"])
+    continued = build(adapter, date(2026, 1, 9), "2026-01-10T00:00:00+00:00", loader, prior=out)
+    assert continued["first_registered_at"] == out["first_registered_at"]
+
+    long_dates = pd.bdate_range("2026-01-02", periods=26)
+    long_fake = {
+        "CAT": pd.Series([100 + i for i in range(len(long_dates))], index=long_dates, dtype=float),
+        "XOM": pd.Series([100 - 0.5 * i for i in range(len(long_dates))], index=long_dates, dtype=float),
+        "SPY": pd.Series([100 + 0.2 * i for i in range(len(long_dates))], index=long_dates, dtype=float),
+        "QQQ": pd.Series([100 + 0.3 * i for i in range(len(long_dates))], index=long_dates, dtype=float),
+    }
+    def long_loader(symbol: str, _start: date, _end: date) -> pd.Series:
+        return long_fake[symbol][long_fake[symbol].index <= pd.Timestamp(_end)]
+    late = build(adapter, long_dates[-1].date(), "2026-02-10T00:00:00+00:00", long_loader)
+    assert late["state"] == "LATE_REGISTRATION_REJECTED"
+    resolved = build(adapter, long_dates[-1].date(), "2026-02-10T00:00:00+00:00", long_loader, prior=out)
+    assert resolved["state"] == "RESOLVED"
 
     score = {"schema": SCOREBOARD_SCHEMA, "lanes": [{"program_id": PROGRAM_ID}], "coverage": {}, "decision_chain": {}}
     score = enrich_scoreboard(score, out)
@@ -305,6 +367,7 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--adapter", default="research/current/native_adapters/generalized_largecap_ridge.json")
     p.add_argument("--output")
+    p.add_argument("--prior", default="research/current/forward_largecap_transport_observation_r1.json")
     p.add_argument("--scoreboard")
     p.add_argument("--scoreboard-output")
     p.add_argument("--asof")
@@ -320,7 +383,13 @@ def main() -> None:
     adapter = json.loads(Path(args.adapter).read_text(encoding="utf-8"))
     now = datetime.now(timezone.utc)
     asof = date.fromisoformat(args.asof) if args.asof else now.date()
-    observation = build(adapter, asof, now.isoformat())
+    prior_path = Path(args.prior) if args.prior else None
+    prior = (
+        json.loads(prior_path.read_text(encoding="utf-8"))
+        if prior_path is not None and prior_path.is_file()
+        else None
+    )
+    observation = build(adapter, asof, now.isoformat(), prior=prior)
     _write(Path(args.output), observation)
 
     if args.scoreboard:
