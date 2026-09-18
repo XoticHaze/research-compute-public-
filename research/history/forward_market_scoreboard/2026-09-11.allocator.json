@@ -4,7 +4,6 @@
     "broker_action": false,
     "live_trading_change": false,
     "native_model_science_mutated": false,
-    "observation_status_changes_allocation_authority": false,
     "prediction_magnitude_used_as_unbounded_size": false,
     "research_paper_only": true
   },
@@ -67,7 +66,7 @@
     "XPH": 0.0666666667,
     "XSD": 0.0666666667
   },
-  "generated_at": "2026-09-18T06:36:24.655692+00:00",
+  "generated_at": "2026-09-15T01:24:40.120564+00:00",
   "learned_allocator_role": "shadow_challenger_must_beat_this_baseline_after_costs_and_opportunity_cost",
   "policy_id": "CC770_DETERMINISTIC_ALLOCATOR_V0",
   "position_actions_vs_prior_allocator_target": [
@@ -161,35 +160,16 @@
   "sleeve_actions": [
     {
       "action": "HOLD",
-      "observation_lineage": {
-        "market_data_asof": "2026-09-17",
-        "prospective_ledger_generated_at": "2026-09-18T06:36:16.906961+00:00",
-        "prospective_ledger_sha256": "fc5e1967a0339eb9866c03b63fc31aa10d28da62d115fe5920f9bbf757d8146b"
-      },
-      "observation_status": "ACTIVE",
       "reason": "frozen strategic core; daily score refresh is not a rebalance signal",
       "sleeve": "P249_P266_CORE",
-      "source_program_id": "P249_P266",
       "target_weight": 0.8
     },
     {
       "action": "ADD",
       "instrument": "SMH",
       "native_horizon": "+1 session execution / fixed20 hold",
-      "observation_lineage": {
-        "cohort_id": "SEMICONDUCTOR_SHARED_RIDGE:2026-09-11:aed8eb43d888d3c4",
-        "cohort_status": "OPEN",
-        "market_data_asof": "2026-09-17",
-        "prospective_ledger_generated_at": "2026-09-18T06:36:16.906961+00:00",
-        "prospective_ledger_sha256": "fc5e1967a0339eb9866c03b63fc31aa10d28da62d115fe5920f9bbf757d8146b",
-        "signal_date": "2026-09-11",
-        "source_adapter_sha256": "aed8eb43d888d3c4d39c4db940c89e5d2247204567d4a0fcf129e9551f04e333",
-        "source_ref": "e73ec9b15180e208de541ce5d5304888e5550433"
-      },
-      "observation_status": "ACTIVE",
       "reason": "breadth-sized paper expression: 5% * 1.0000",
       "sleeve": "SEMICONDUCTOR_SHARED_RIDGE_INDUSTRY_BOOK",
-      "source_program_id": "SEMICONDUCTOR_SHARED_RIDGE",
       "target_new_cohort_weight": 0.05
     },
     {
@@ -203,21 +183,9 @@
         "MHO": 5
       },
       "native_paper_action_status": null,
-      "observation_lineage": {
-        "cohort_id": "HOMEBUILDERS:2026-09-11:00435d369ddcc3a3",
-        "cohort_status": "OPEN",
-        "market_data_asof": "2026-09-17",
-        "prospective_ledger_generated_at": "2026-09-18T06:36:16.906961+00:00",
-        "prospective_ledger_sha256": "fc5e1967a0339eb9866c03b63fc31aa10d28da62d115fe5920f9bbf757d8146b",
-        "signal_date": "2026-09-11",
-        "source_adapter_sha256": "00435d369ddcc3a3d8adbedb91a9662f047b292ff64fe6af6901bfd112466a59",
-        "source_ref": "100e356239b2399c054c1a41a18e4e9a5d07d33a"
-      },
-      "observation_status": "ACTIVE",
       "per_name_weight": 0.0,
       "reason": "observation/adaptive-duration evidence only; no frozen Homebuilders sizing contract",
       "sleeve": "HOMEBUILDERS",
-      "source_program_id": "HOMEBUILDERS",
       "symbols": [
         "CCS",
         "MHO",
@@ -228,15 +196,6 @@
     },
     {
       "action": "NO_ACTION",
-      "observation_lineage": {
-        "largecap_market_data_asof": "2026-09-17",
-        "largecap_observation_generated_at": "2026-09-18T06:36:22.468408+00:00",
-        "largecap_observation_sha256": "58267f42c06a70616f6d5a89a0efe7db387155636858e5206d553a7510a6597a",
-        "market_data_asof": "2026-09-17",
-        "prospective_ledger_generated_at": "2026-09-18T06:36:16.906961+00:00",
-        "prospective_ledger_sha256": "fc5e1967a0339eb9866c03b63fc31aa10d28da62d115fe5920f9bbf757d8146b"
-      },
-      "observation_status": "ACTIVE",
       "positive_corroboration": [
         "CAT",
         "JPM",
@@ -246,93 +205,29 @@
       ],
       "reason": "corroboration-only; no standalone sizing authority",
       "sleeve": "GENERALIZED_LARGECAP_RIDGE",
-      "source_program_id": "GENERALIZED_LARGECAP_RIDGE",
       "target_weight": 0.0
     },
     {
       "action": "NO_ACTION",
-      "observation_lineage": {
-        "market_data_asof": "2026-09-17",
-        "prospective_ledger_generated_at": "2026-09-18T06:36:16.906961+00:00",
-        "prospective_ledger_sha256": "fc5e1967a0339eb9866c03b63fc31aa10d28da62d115fe5920f9bbf757d8146b"
-      },
-      "observation_status": "CONTEXT_ONLY",
       "reason": "context-only while prospective scientific forward credit remains shakedown",
       "sleeve": "P46",
-      "source_program_id": "P46",
       "target_weight": 0.0
     },
     {
       "action": "NO_ACTION",
-      "observation_lineage": {
-        "market_data_asof": "2026-09-17",
-        "prospective_ledger_generated_at": "2026-09-18T06:36:16.906961+00:00",
-        "prospective_ledger_sha256": "fc5e1967a0339eb9866c03b63fc31aa10d28da62d115fe5920f9bbf757d8146b"
-      },
-      "observation_status": "ACTIVE",
       "reason": "challenger has not earned substitution authority versus incumbent and BIL control",
       "sleeve": "P558_KMLM_SUBSTITUTION",
-      "source_program_id": "P558",
       "target_weight": 0.0
     },
     {
       "action": "NO_ACTION",
-      "observation_lineage": {
-        "market_data_asof": "2026-09-17",
-        "prospective_ledger_generated_at": "2026-09-18T06:36:16.906961+00:00",
-        "prospective_ledger_sha256": "fc5e1967a0339eb9866c03b63fc31aa10d28da62d115fe5920f9bbf757d8146b"
-      },
-      "observation_status": "ACTIVE",
       "reason": "challenger has not earned substitution authority versus incumbent and BIL control",
       "sleeve": "SENIOR_CLO_JAAA_SUBSTITUTION",
-      "source_program_id": "SENIOR_CLO",
       "target_weight": 0.0
     }
   ],
-  "source_scoreboard_generated_at": "2026-09-18T06:36:22.133276+00:00",
-  "source_scoreboard_lineage": {
-    "prospective_ledger": {
-      "cohort_count": 2,
-      "generated_at": "2026-09-18T06:36:16.906961+00:00",
-      "market_data_asof": "2026-09-17",
-      "schema": "research.forward_prospective_cohort_ledger_r1",
-      "sha256": "fc5e1967a0339eb9866c03b63fc31aa10d28da62d115fe5920f9bbf757d8146b"
-    },
-    "scoreboard_generated_at": "2026-09-18T06:36:22.133276+00:00"
-  },
+  "source_scoreboard_generated_at": "2026-09-15T01:24:40.007047+00:00",
   "source_scoreboard_schema": "research.forward_market_scoreboard_r1",
   "tactical_used": 0.05,
-  "unused_tactical_budget": 0.1,
-  "zero_weight_lane_visibility": [
-    {
-      "observation_status": "ACTIVE",
-      "reason": "observation/adaptive-duration evidence only; no frozen Homebuilders sizing contract",
-      "sleeve": "HOMEBUILDERS",
-      "source_program_id": "HOMEBUILDERS"
-    },
-    {
-      "observation_status": "ACTIVE",
-      "reason": "corroboration-only; no standalone sizing authority",
-      "sleeve": "GENERALIZED_LARGECAP_RIDGE",
-      "source_program_id": "GENERALIZED_LARGECAP_RIDGE"
-    },
-    {
-      "observation_status": "CONTEXT_ONLY",
-      "reason": "context-only while prospective scientific forward credit remains shakedown",
-      "sleeve": "P46",
-      "source_program_id": "P46"
-    },
-    {
-      "observation_status": "ACTIVE",
-      "reason": "challenger has not earned substitution authority versus incumbent and BIL control",
-      "sleeve": "P558_KMLM_SUBSTITUTION",
-      "source_program_id": "P558"
-    },
-    {
-      "observation_status": "ACTIVE",
-      "reason": "challenger has not earned substitution authority versus incumbent and BIL control",
-      "sleeve": "SENIOR_CLO_JAAA_SUBSTITUTION",
-      "source_program_id": "SENIOR_CLO"
-    }
-  ]
+  "unused_tactical_budget": 0.1
 }
