@@ -148,7 +148,7 @@ class PersistentPaperExecuteTests(unittest.TestCase):
                 }
             raise AssertionError(path)
 
-        with patch.object(mod.proof_v1, "_validate_authorized_request", return_value=self.auth()),              patch.object(mod.proof_v1, "_candidate_transport_lease", return_value={"requested": False, "ok": None}),              patch.object(mod.proof_v1, "_jit_refresh_authorized_lmt_payload", return_value=(self.auth()["payload"], {"requested": True, "performed": True, "ok": True})),              patch.object(mod.proof_v1, "_flatten_snapshot", side_effect=[
+        with patch.object(mod.proof_v1, "_validate_selected_runtime_request", return_value=self.auth()),              patch.object(mod.proof_v1, "_candidate_transport_lease", return_value={"requested": False, "ok": None}),              patch.object(mod.proof_v1, "_jit_refresh_authorized_lmt_payload", return_value=(self.auth()["payload"], {"requested": True, "performed": True, "ok": True})),              patch.object(mod.proof_v1, "_flatten_snapshot", side_effect=[
                  (200, {"ok": True, "positions": [{"symbol": "MNQ", "position": 2}]}),
                  (200, {"ok": True, "positions": [{"symbol": "MNQ", "position": 3}]}),
              ]),              patch.object(mod.proof_v1, "_open_counts", return_value=(0, 0)),              patch.object(mod.proof_v1, "_position_for_symbol", side_effect=[2.0, 3.0]),              patch.object(mod.proof_v1, "_extract_order_identity", return_value={"order_id": 11, "perm_id": 22, "order_ref": "ref-1"}):
@@ -190,7 +190,7 @@ class PersistentPaperExecuteTests(unittest.TestCase):
                 }
             raise AssertionError(path)
 
-        with patch.object(mod.proof_v1, "_validate_authorized_request", return_value=self.auth()),              patch.object(mod.proof_v1, "_candidate_transport_lease", return_value={"requested": False, "ok": None}),              patch.object(mod.proof_v1, "_jit_refresh_authorized_lmt_payload", return_value=(self.auth()["payload"], {"requested": False, "performed": False, "ok": None})),              patch.object(mod.proof_v1, "_flatten_snapshot", return_value=(200, {"ok": True})),              patch.object(mod.proof_v1, "_open_counts", return_value=(0, 0)),              patch.object(mod.proof_v1, "_position_for_symbol", return_value=0.0),              patch.object(mod.proof_v1, "_extract_order_identity", return_value={}):
+        with patch.object(mod.proof_v1, "_validate_selected_runtime_request", return_value=self.auth()),              patch.object(mod.proof_v1, "_candidate_transport_lease", return_value={"requested": False, "ok": None}),              patch.object(mod.proof_v1, "_jit_refresh_authorized_lmt_payload", return_value=(self.auth()["payload"], {"requested": False, "performed": False, "ok": None})),              patch.object(mod.proof_v1, "_flatten_snapshot", return_value=(200, {"ok": True})),              patch.object(mod.proof_v1, "_open_counts", return_value=(0, 0)),              patch.object(mod.proof_v1, "_position_for_symbol", return_value=0.0),              patch.object(mod.proof_v1, "_extract_order_identity", return_value={}):
             receipt = mod.execute_paper_execute(
                 runtime=self.runtime(), request={}, send=send, run_id="123", public_head="d" * 40
             )
