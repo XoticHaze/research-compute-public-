@@ -63,6 +63,10 @@ BAR_REQUEST_FIELDS = {
     "bar_size_setting",
     "duration_str",
 }
+BAR_REQUEST_OPTIONAL_FIELDS = {
+    "end_date_time_utc",
+    "allow_empty",
+}
 BAR_SIZE_RE = re.compile(r"^(?:[1-9][0-9]{0,2}) (?:sec|secs|min|mins|hour|hours|day|week|month)$")
 DURATION_RE = re.compile(r"^(?:[1-9][0-9]{0,5}) [SDWMY]$")
 SAFE_SECONDS_MAX_BAR = {
@@ -75,6 +79,7 @@ SAFE_SECONDS_MAX_BAR = {
 }
 SAFE_SECONDS_DURATIONS = set(SAFE_SECONDS_MAX_BAR)
 MAX_BAR_REQUESTS = 50
+HISTORICAL_CHUNK_PACE_SEC = 0.4
 
 
 def _bar_size_seconds(value: str) -> int | None:
@@ -128,6 +133,43 @@ def _bounded_duration(value: str) -> bool:
     return 1 <= count <= limits[unit]
 
 
+def _normalize_history_end_utc(value: object) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except Exception as exc:
+        raise RuntimeError("bar request end_date_time_utc is invalid") from exc
+    if parsed.tzinfo is None:
+        raise RuntimeError("bar request end_date_time_utc requires explicit timezone")
+    parsed = parsed.astimezone(timezone.utc)
+    now = datetime.now(timezone.utc)
+    if parsed.timestamp() > now.timestamp() + 300:
+        raise RuntimeError("bar request end_date_time_utc is too far in the future")
+    return parsed.isoformat().replace("+00:00", "Z")
+
+
+def _ibkr_history_end(value: str):
+    normalized = _normalize_history_end_utc(value)
+    if not normalized:
+        return ""
+    return datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+
+
+def _normalize_allow_empty(value: object) -> bool:
+    if value in (None, ""):
+        return False
+    if isinstance(value, bool):
+        return value
+    raw = str(value).strip().lower()
+    if raw in {"1", "true", "yes"}:
+        return True
+    if raw in {"0", "false", "no"}:
+        return False
+    raise RuntimeError("bar request allow_empty must be boolean")
+
+
 def parse_bar_requests(raw: str, symbols: list[str]) -> dict[str, list[dict[str, str]]]:
     """Validate exact MM-supplied history requests without choosing a timeframe."""
     if not str(raw or "").strip():
@@ -149,11 +191,20 @@ def parse_bar_requests(raw: str, symbols: list[str]) -> dict[str, list[dict[str,
         if not isinstance(rows, list) or not rows:
             raise RuntimeError(f"bar requests require a non-empty list for {symbol}")
         clean_rows: list[dict[str, str]] = []
-        seen: set[tuple[str, str, str, str]] = set()
+        seen: set[tuple[str, str, str, str, str]] = set()
         for raw_row in rows:
-            if not isinstance(raw_row, dict) or set(raw_row) != BAR_REQUEST_FIELDS:
+            if not isinstance(raw_row, dict):
+                raise RuntimeError(f"bar request field set mismatch for {symbol}")
+            fields = set(raw_row)
+            if not BAR_REQUEST_FIELDS.issubset(fields) or not fields.issubset(
+                BAR_REQUEST_FIELDS | BAR_REQUEST_OPTIONAL_FIELDS
+            ):
                 raise RuntimeError(f"bar request field set mismatch for {symbol}")
             row = {key: str(raw_row.get(key) or "").strip() for key in BAR_REQUEST_FIELDS}
+            row["end_date_time_utc"] = _normalize_history_end_utc(
+                raw_row.get("end_date_time_utc")
+            )
+            row["allow_empty"] = _normalize_allow_empty(raw_row.get("allow_empty"))
             if not row["source_timeframe"] or not row["target_timeframe"]:
                 raise RuntimeError(f"bar request timeframe identity missing for {symbol}")
             if not BAR_SIZE_RE.fullmatch(row["bar_size_setting"]):
@@ -172,6 +223,8 @@ def parse_bar_requests(raw: str, symbols: list[str]) -> dict[str, list[dict[str,
                 row["target_timeframe"],
                 row["bar_size_setting"],
                 row["duration_str"],
+                row["end_date_time_utc"],
+                "1" if row["allow_empty"] else "0",
             )
             if identity in seen:
                 raise RuntimeError(f"duplicate bar request for {symbol}")
@@ -417,16 +470,21 @@ def main() -> int:
                 "target_timeframe": "5Min",
                 "bar_size_setting": "5 mins",
                 "duration_str": "2 D",
+                "end_date_time_utc": "",
+                "allow_empty": False,
             }]
             request_receipts: list[dict[str, object]] = []
             historical_bar_count = 0
             for bar_request in effective_requests:
                 bar_size = str(bar_request["bar_size_setting"])
                 duration = str(bar_request["duration_str"])
+                end_date_time_utc = str(bar_request.get("end_date_time_utc") or "")
+                allow_empty = bool(bar_request.get("allow_empty"))
+                request_end = _ibkr_history_end(end_date_time_utc)
                 request_started = time.perf_counter()
                 bars = ib.reqHistoricalData(
                     resolved,
-                    endDateTime="",
+                    endDateTime=request_end,
                     durationStr=duration,
                     barSizeSetting=bar_size,
                     whatToShow="TRADES",
@@ -434,11 +492,12 @@ def main() -> int:
                     formatDate=2,
                     keepUpToDate=False,
                 )
-                if not bars:
+                if not bars and not allow_empty:
                     raise RuntimeError(
                         f"historical data returned no bars for {symbol} "
                         f"{bar_request['source_timeframe']}"
                     )
+                bars = list(bars or [])
                 historical_bar_count += len(bars)
                 records.extend(
                     ibkr_bar_to_record(
@@ -461,7 +520,12 @@ def main() -> int:
                     **dict(bar_request),
                     "historical_bar_count": len(bars),
                     "request_elapsed_ms": request_elapsed_ms,
+                    "maintenance_pacing_sec": (
+                        HISTORICAL_CHUNK_PACE_SEC if end_date_time_utc else 0.0
+                    ),
                 })
+                if end_date_time_utc:
+                    ib.sleep(HISTORICAL_CHUNK_PACE_SEC)
             quote_snapshot = None
             if args.include_quotes:
                 quote_snapshot = sample_exact_contract_quote(ib, resolved)

@@ -115,7 +115,104 @@ class PostAuthPipelineContractTests(unittest.TestCase):
         self.assertEqual(requests["MNQ"][0]["target_timeframe"], "12Min")
         self.assertEqual(requests["MNQ"][0]["bar_size_setting"], "1 min")
         self.assertEqual(requests["MNQ"][0]["duration_str"], "1 D")
+        self.assertEqual(requests["MNQ"][0]["end_date_time_utc"], "")
+        self.assertFalse(requests["MNQ"][0]["allow_empty"])
         self.assertEqual(requests["AMAT"][0]["bar_size_setting"], "15 mins")
+
+    def test_exact_historical_chunk_end_times_allow_same_request_shape_at_distinct_boundaries(self):
+        requests = mod.parse_bar_requests(json.dumps({
+            "MNQ": [
+                {
+                    "source_timeframe": "1Min",
+                    "target_timeframe": "12Min",
+                    "bar_size_setting": "1 min",
+                    "duration_str": "1 D",
+                    "end_date_time_utc": "2026-09-17T21:00:00Z",
+                },
+                {
+                    "source_timeframe": "1Min",
+                    "target_timeframe": "12Min",
+                    "bar_size_setting": "1 min",
+                    "duration_str": "1 D",
+                    "end_date_time_utc": "2026-09-18T21:00:00+00:00",
+                },
+            ],
+        }), ["MNQ"])
+        self.assertEqual(len(requests["MNQ"]), 2)
+        self.assertEqual(
+            requests["MNQ"][0]["end_date_time_utc"],
+            "2026-09-17T21:00:00Z",
+        )
+        self.assertEqual(
+            requests["MNQ"][1]["end_date_time_utc"],
+            "2026-09-18T21:00:00Z",
+        )
+        end = mod._ibkr_history_end(requests["MNQ"][0]["end_date_time_utc"])
+        self.assertEqual(end.isoformat(), "2026-09-17T21:00:00+00:00")
+
+    def test_maintenance_chunk_can_explicitly_allow_empty_nontrading_window(self):
+        requests = mod.parse_bar_requests(json.dumps({
+            "MNQ": [{
+                "source_timeframe": "1Min",
+                "target_timeframe": "12Min",
+                "bar_size_setting": "1 min",
+                "duration_str": "1 D",
+                "end_date_time_utc": "2026-09-13T21:00:00Z",
+                "allow_empty": True,
+            }],
+        }), ["MNQ"])
+        self.assertTrue(requests["MNQ"][0]["allow_empty"])
+
+        with self.assertRaisesRegex(RuntimeError, "allow_empty must be boolean"):
+            mod.parse_bar_requests(json.dumps({
+                "MNQ": [{
+                    "source_timeframe": "1Min",
+                    "target_timeframe": "12Min",
+                    "bar_size_setting": "1 min",
+                    "duration_str": "1 D",
+                    "allow_empty": "sometimes",
+                }],
+            }), ["MNQ"])
+
+    def test_exact_historical_chunk_end_requires_timezone_and_remains_duplicate_safe(self):
+        with self.assertRaisesRegex(RuntimeError, "explicit timezone"):
+            mod.parse_bar_requests(json.dumps({
+                "MNQ": [{
+                    "source_timeframe": "1Min",
+                    "target_timeframe": "12Min",
+                    "bar_size_setting": "1 min",
+                    "duration_str": "1 D",
+                    "end_date_time_utc": "2026-09-17T21:00:00",
+                }],
+            }), ["MNQ"])
+
+        duplicate = {
+            "source_timeframe": "1Min",
+            "target_timeframe": "12Min",
+            "bar_size_setting": "1 min",
+            "duration_str": "1 D",
+            "end_date_time_utc": "2026-09-17T21:00:00Z",
+        }
+        with self.assertRaisesRegex(RuntimeError, "duplicate bar request"):
+            mod.parse_bar_requests(
+                json.dumps({"MNQ": [duplicate, dict(duplicate)]}),
+                ["MNQ"],
+            )
+
+    def test_explicit_historical_chunks_are_paced_but_live_tail_reads_are_not(self):
+        from pathlib import Path
+        source = Path(mod.__file__).read_text(encoding="utf-8")
+        self.assertIn("HISTORICAL_CHUNK_PACE_SEC = 0.4", source)
+        self.assertIn("if end_date_time_utc:", source)
+        self.assertIn("ib.sleep(HISTORICAL_CHUNK_PACE_SEC)", source)
+        self.assertIn('"maintenance_pacing_sec": (', source)
+
+    def test_pipeline_uses_private_supplied_historical_end_without_public_time_selection(self):
+        from pathlib import Path
+        source = Path(mod.__file__).read_text(encoding="utf-8")
+        self.assertIn('end_date_time_utc = str(bar_request.get("end_date_time_utc") or "")', source)
+        self.assertIn("request_end = _ibkr_history_end(end_date_time_utc)", source)
+        self.assertIn("endDateTime=request_end", source)
 
     def test_seconds_bar_requests_are_admitted_only_in_safe_step_size_pairs(self):
         requests = mod.parse_bar_requests(json.dumps({
