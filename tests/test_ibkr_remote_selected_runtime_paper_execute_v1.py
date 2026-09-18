@@ -33,6 +33,16 @@ class PersistentPaperExecuteTests(unittest.TestCase):
             "command_id": "sha256:" + "c" * 64,
             "source_ref": "selected-runtime-candidate:example",
             "strategy_spec_digest": "spec-1",
+            "execution_contract": {
+                "conId": 793356225,
+                "symbol": "MNQ",
+                "secType": "FUT",
+                "exchange": "CME",
+                "currency": "USD",
+                "localSymbol": "MNQU6",
+                "lastTradeDateOrContractMonth": "202609",
+                "multiplier": "2",
+            },
             "authority": {
                 "runtime_id": "mnq-runtime",
                 "strategy_id": "crw_score_multi_mode",
