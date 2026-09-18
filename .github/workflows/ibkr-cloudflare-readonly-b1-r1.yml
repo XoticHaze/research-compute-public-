@@ -61,6 +61,7 @@ on:
       - assistant/ibkr-warm-seed-owner-20260917
       - assistant/ibkr-warm-paper-proof-activation-20260917
       - assistant/ibkr-warm-read-gateway-20260917
+      - assistant/ibkr-initial-backfill-run2-20260918
     paths:
       - '.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml'
       - 'scripts/fleet_authority_envelope_consumer_v1.py'
