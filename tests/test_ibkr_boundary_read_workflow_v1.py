@@ -10,7 +10,7 @@ class BoundaryReadWorkflowTests(unittest.TestCase):
     def setUpClass(cls):
         cls.text = WORKFLOW.read_text(encoding="utf-8")
 
-    def test_optional_boundary_input_is_readonly_snapshot_only(self):
+    def test_optional_boundary_input_supports_readonly_and_paper_execute_snapshot(self):
         self.assertIn("snapshot_not_before_utc:", self.text)
         self.assertIn("IBKR_WARM_READ_RETURN_REQUESTED == '1'", self.text)
         self.assertIn("inputs.snapshot_not_before_utc != ''", self.text)
@@ -29,15 +29,21 @@ class BoundaryReadWorkflowTests(unittest.TestCase):
         self.assertIn("time.sleep(delay)", self.text)
         self.assertIn("IBKR_SNAPSHOT_BOUNDARY_REACHED_UTC=", self.text)
 
-    def test_boundary_feature_does_not_make_readonly_gateway_writable(self):
+    def test_boundary_snapshot_is_readonly_client_evidence_even_inside_paper_execute(self):
         self.assertIn(
-            "IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'readonly'",
+            "IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'paper_execute')",
             self.text,
         )
+        self.assertIn("mode not in {'readonly','paper_execute'}", self.text)
         writable = self.text.index('if [ "$IBKR_PAPER_PROOF_MODE" = "1" ] || [ "$IBKR_PAPER_EXECUTE_MODE" = "1" ]; then')
         block = self.text[writable:writable + 220]
         self.assertIn("api_read_only=no", block)
-        self.assertNotIn("snapshot_not_before_utc", block)
+
+        handoff = self.text.index("name: Materialize canonical post-auth broker and forward-data handoff")
+        snapshot = self.text.index("name: Encrypt optional detailed warm read snapshot for private consumer")
+        execute = self.text.index("name: Execute one encrypted MM-authorized persistent paper command")
+        self.assertLess(handoff, snapshot)
+        self.assertLess(snapshot, execute)
 
     def test_boundary_wait_happens_after_gateway_ready(self):
         ready = self.text.index("IBKR_GATEWAY_API_READY=1")

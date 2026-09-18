@@ -35,10 +35,15 @@ on:
         default: ''
         type: string
       snapshot_not_before_utc:
-        description: Optional UTC instant; readonly detailed snapshot must not be sampled before this boundary
+        description: Optional UTC instant; encrypted detailed snapshot must not be sampled before this boundary
         required: false
         default: ''
         type: string
+      include_quotes:
+        description: Include exact-contract read-only quote snapshots for requested symbols
+        required: false
+        default: false
+        type: boolean
       read_return_recipient_b64:
         description: Optional one-run X25519 public recipient for encrypted detailed read return
         required: false
@@ -168,7 +173,8 @@ jobs:
       POST_AUTH_SYMBOLS: ${{ github.event_name == 'workflow_dispatch' && inputs.symbols || 'AMAT,APH' }}
       POST_AUTH_CONTRACTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.contracts_json || '{}' }}
       POST_AUTH_BAR_REQUESTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.bar_requests_json || '' }}
-      IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'readonly' && inputs.read_return_recipient_b64 != '' && inputs.read_return_recipient_key_id != '' && '1' || '0' }}
+      POST_AUTH_INCLUDE_QUOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.include_quotes && '1' || '0' }}
+      IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'paper_execute') && inputs.read_return_recipient_b64 != '' && inputs.read_return_recipient_key_id != '' && '1' || '0' }}
       IBKR_PAPER_PROOF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' && '1' || '0' }}
       IBKR_PAPER_EXECUTE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_execute' && '1' || '0' }}
     steps:
@@ -227,8 +233,9 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           import base64, hashlib, os
-          if os.environ.get('READ_RETURN_MODE') != 'readonly':
-              raise SystemExit('encrypted detailed read return is admitted only in readonly mode')
+          mode=os.environ.get('READ_RETURN_MODE')
+          if mode not in {'readonly','paper_execute'}:
+              raise SystemExit('encrypted detailed read return is admitted only in readonly or paper_execute mode')
           encoded=os.environ.get('READ_RETURN_RECIPIENT_B64','').strip()
           key_id=os.environ.get('READ_RETURN_RECIPIENT_KEY_ID','').strip()
           if not encoded or not key_id:
@@ -576,6 +583,10 @@ jobs:
       - name: Materialize canonical post-auth broker and forward-data handoff
         run: |
           set -euo pipefail
+          quote_args=()
+          if [ "$POST_AUTH_INCLUDE_QUOTES" = "1" ]; then
+            quote_args+=(--include-quotes)
+          fi
           python scripts/ibkr_post_auth_pipeline_v1.py \
             --host 127.0.0.1 \
             --port 4002 \
@@ -583,6 +594,7 @@ jobs:
             --symbols "$POST_AUTH_SYMBOLS" \
             --contracts-json "$POST_AUTH_CONTRACTS_JSON" \
             --bar-requests-json "$POST_AUTH_BAR_REQUESTS_JSON" \
+            "${quote_args[@]}" \
             --output "$RUNNER_TEMP/ibkr-post-auth-handoff.json" \
             --bars-output "$RUNNER_TEMP/ibkr-forward-bars-v2.jsonl"
           echo 'IBKR_CONSUMER_READY=1'

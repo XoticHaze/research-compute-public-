@@ -210,6 +210,88 @@ class PostAuthPipelineContractTests(unittest.TestCase):
                 }]
             }), ["MNQ"])
 
+    def test_exact_contract_quote_reports_realtime_bid_ask_without_mutation(self):
+        class Ticker:
+            marketDataType = 1
+            bid = 100.0
+            ask = 100.25
+            last = 100.1
+            def marketPrice(self):
+                return 100.125
+
+        class FakeIB:
+            def __init__(self):
+                self.ticker = Ticker()
+                self.requested_type = None
+                self.requested_contract = None
+                self.cancelled_contract = None
+            def reqMarketDataType(self, value):
+                self.requested_type = value
+            def reqMktData(self, contract, generic, snapshot, regulatory):
+                self.requested_contract = contract
+                return self.ticker
+            def sleep(self, seconds):
+                return None
+            def cancelMktData(self, contract):
+                self.cancelled_contract = contract
+
+        ib = FakeIB()
+        contract = Stock("AMAT", "SMART", "USD")
+        quote = mod.sample_exact_contract_quote(ib, contract, timeout_sec=0.2, poll_interval_sec=0.05)
+        self.assertEqual(ib.requested_type, 1)
+        self.assertIs(ib.requested_contract, contract)
+        self.assertIs(ib.cancelled_contract, contract)
+        self.assertEqual(quote["bid"], 100.0)
+        self.assertEqual(quote["ask"], 100.25)
+        self.assertTrue(quote["bid_ask_available"])
+        self.assertTrue(quote["executable_quote_available"])
+        self.assertFalse(quote["route_selected_by_public"])
+        self.assertFalse(quote["contract_selected_by_public"])
+        self.assertFalse(quote["broker_mutation"])
+        self.assertGreaterEqual(quote["request_elapsed_ms"], 0.0)
+
+    def test_delayed_bid_ask_is_diagnostic_not_executable(self):
+        class Ticker:
+            marketDataType = 3
+            bid = 100.0
+            ask = 100.25
+            last = 100.1
+            def marketPrice(self):
+                return 100.125
+
+        class FakeIB:
+            def reqMarketDataType(self, value):
+                pass
+            def reqMktData(self, contract, generic, snapshot, regulatory):
+                return Ticker()
+            def sleep(self, seconds):
+                pass
+            def cancelMktData(self, contract):
+                pass
+
+        quote = mod.sample_exact_contract_quote(
+            FakeIB(),
+            Stock("AMAT", "SMART", "USD"),
+            timeout_sec=0.2,
+            poll_interval_sec=0.05,
+        )
+        self.assertTrue(quote["bid_ask_available"])
+        self.assertFalse(quote["executable_quote_available"])
+        self.assertEqual(quote["effective_market_data_type"], 3)
+
+    def test_quote_sampler_source_has_no_order_or_route_selection(self):
+        from pathlib import Path
+        source = Path(mod.__file__).read_text(encoding="utf-8")
+        start = source.index("def sample_exact_contract_quote(")
+        end = source.index("\ndef main() -> int:", start)
+        block = source[start:end]
+        self.assertIn("reqMktData(", block)
+        self.assertIn("cancelMktData(", block)
+        self.assertNotIn("placeOrder(", block)
+        self.assertNotIn("reqGlobalCancel", block)
+        self.assertIn('"route_selected_by_public": False', block)
+        self.assertIn('"contract_selected_by_public": False', block)
+
     def test_contract_hint_parser_rejects_non_object(self):
         with self.assertRaisesRegex(RuntimeError, "object keyed by symbol"):
             mod.parse_contract_hints("[]")
