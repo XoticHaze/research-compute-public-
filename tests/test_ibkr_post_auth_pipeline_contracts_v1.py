@@ -117,6 +117,57 @@ class PostAuthPipelineContractTests(unittest.TestCase):
         self.assertEqual(requests["MNQ"][0]["duration_str"], "1 D")
         self.assertEqual(requests["AMAT"][0]["bar_size_setting"], "15 mins")
 
+    def test_seconds_bar_requests_are_admitted_only_in_safe_step_size_pairs(self):
+        requests = mod.parse_bar_requests(json.dumps({
+            "MNQ": [{
+                "source_timeframe": "1Min",
+                "target_timeframe": "12Min",
+                "bar_size_setting": "1 min",
+                "duration_str": "120 S",
+            }],
+            "AMAT": [{
+                "source_timeframe": "15Min",
+                "target_timeframe": "15Min",
+                "bar_size_setting": "15 mins",
+                "duration_str": "1800 S",
+            }],
+        }), ["MNQ", "AMAT"])
+        self.assertEqual(requests["MNQ"][0]["duration_str"], "120 S")
+        self.assertEqual(requests["AMAT"][0]["duration_str"], "1800 S")
+
+        with self.assertRaisesRegex(RuntimeError, "seconds duration/bar size combination rejected"):
+            mod.parse_bar_requests(json.dumps({
+                "AMAT": [{
+                    "source_timeframe": "15Min",
+                    "target_timeframe": "15Min",
+                    "bar_size_setting": "15 mins",
+                    "duration_str": "120 S",
+                }]
+            }), ["AMAT"])
+
+        with self.assertRaisesRegex(RuntimeError, "duration rejected"):
+            mod.parse_bar_requests(json.dumps({
+                "MNQ": [{
+                    "source_timeframe": "1Min",
+                    "target_timeframe": "12Min",
+                    "bar_size_setting": "1 min",
+                    "duration_str": "61 S",
+                }]
+            }), ["MNQ"])
+
+    def test_pipeline_source_emits_per_request_and_phase_latency_evidence(self):
+        from pathlib import Path
+        source = Path(mod.__file__).read_text(encoding="utf-8")
+        for token in (
+            "request_elapsed_ms",
+            "contract_qualification_elapsed_ms",
+            "symbol_elapsed_ms",
+            '"latency_ms"',
+            '"historical_market_data_sum"',
+            '"pipeline_total"',
+        ):
+            self.assertIn(token, source)
+
     def test_explicit_bar_requests_fail_closed_on_missing_symbol_or_unsafe_window(self):
         with self.assertRaisesRegex(RuntimeError, "missing requested symbols"):
             mod.parse_bar_requests(json.dumps({
