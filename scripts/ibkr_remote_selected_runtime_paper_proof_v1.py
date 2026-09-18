@@ -10,6 +10,7 @@ final reconciliation. Global cancel and live trading are prohibited.
 """
 
 import argparse
+import datetime as dt
 import json
 import re
 from pathlib import Path
@@ -50,6 +51,74 @@ def _reject_live(value: Any, path: str = "request") -> None:
     elif isinstance(value, (list, tuple)):
         for index, child in enumerate(value):
             _reject_live(child, f"{path}[{index}]")
+
+
+MAX_REMOTE_CANDIDATE_LEASE_SEC = 300.0
+
+
+def _parse_utc(value: Any) -> dt.datetime | None:
+    if not value:
+        return None
+    try:
+        raw = str(value).strip()
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        parsed = dt.datetime.fromisoformat(raw)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=dt.timezone.utc)
+        return parsed.astimezone(dt.timezone.utc)
+    except Exception:
+        return None
+
+
+def _candidate_transport_lease(
+    payload: Mapping[str, Any],
+    *,
+    now: dt.datetime | None = None,
+) -> dict[str, Any]:
+    materialized_raw = str(payload.get("remote_proof_candidate_materialized_at_utc") or "").strip()
+    max_age_raw = payload.get("remote_proof_candidate_max_age_sec")
+    requested = bool(materialized_raw or max_age_raw is not None)
+    if not requested:
+        return {
+            "requested": False,
+            "ok": None,
+            "materialized_at_utc": None,
+            "age_sec": None,
+            "max_age_sec": None,
+            "issues": [],
+            "authority_change": False,
+        }
+
+    issues: list[str] = []
+    materialized = _parse_utc(materialized_raw)
+    if materialized is None:
+        issues.append("remote_candidate_materialized_at_required")
+    try:
+        max_age_sec = float(max_age_raw)
+    except (TypeError, ValueError):
+        max_age_sec = 0.0
+    if not (1.0 <= max_age_sec <= MAX_REMOTE_CANDIDATE_LEASE_SEC):
+        issues.append("remote_candidate_max_age_out_of_bounds")
+
+    age_sec: float | None = None
+    if materialized is not None:
+        now_utc = (now or dt.datetime.now(dt.timezone.utc)).astimezone(dt.timezone.utc)
+        age_sec = (now_utc - materialized).total_seconds()
+        if age_sec < -5.0:
+            issues.append("remote_candidate_clock_skew")
+        if max_age_sec > 0 and age_sec > max_age_sec:
+            issues.append("remote_candidate_transport_lease_expired")
+
+    return {
+        "requested": True,
+        "ok": not issues,
+        "materialized_at_utc": materialized_raw or None,
+        "age_sec": age_sec,
+        "max_age_sec": max_age_sec or None,
+        "issues": issues,
+        "authority_change": False,
+    }
 
 
 def _http_json(
@@ -320,6 +389,8 @@ def _jit_refresh_authorized_lmt_payload(
         "remote_proof_refresh_limit_price",
         "remote_proof_candidate_quote_received_at_utc",
         "remote_proof_candidate_quote_max_age_sec",
+        "remote_proof_candidate_materialized_at_utc",
+        "remote_proof_candidate_max_age_sec",
     ):
         submit_payload.pop(key, None)
     submit_payload.update({
@@ -344,6 +415,7 @@ def execute_paper_proof(
 ) -> dict[str, Any]:
     auth = _validate_authorized_request(runtime, request)
     symbol = auth["symbol"]
+    candidate_lease = _candidate_transport_lease(auth["payload"])
 
     health_status, health = send("GET", "/healthz", timeout=15.0)
     open_status, open_before = send("GET", "/strategy/ibkr-paper-open-orders", params={"symbol": symbol}, timeout=45.0)
@@ -390,6 +462,7 @@ def execute_paper_proof(
             "target_position": target_position_before,
             "blockers": preflight_blockers,
         },
+        "candidate_lease": candidate_lease,
         "quote_refresh": {"requested": False, "performed": False, "ok": None},
         "submit": {"called": False, "http_status": None, "ok": False, "broker_order_placed": False, "order_identity": {}},
         "cleanup": {"exact_cancel_called": False, "exact_cancel_ok": None, "flatten_called": False, "flatten_ok": None, "global_cancel_called": False},
@@ -407,6 +480,9 @@ def execute_paper_proof(
         },
     }
     if preflight_blockers:
+        return receipt
+    if candidate_lease.get("requested") is True and candidate_lease.get("ok") is not True:
+        receipt["status"] = "CANDIDATE_LEASE_BLOCKED"
         return receipt
 
     submit_payload, quote_refresh = _jit_refresh_authorized_lmt_payload(send=send, payload=auth["payload"])
