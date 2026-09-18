@@ -223,6 +223,9 @@ def self_test() -> None:
         "summary": {},
     }
     p160 = {
+        "schema": "research.p160_forward_observer_r1",
+        "program_id": "P160_FIXED_P46_P47_COMBINATION",
+        "signal_month_end": "2026-08-31",
         "state": "PRESTART_DESCRIPTIVE_SHADOW",
         "scientific_forward_credit": False,
         "paper_action": {"target_weights": {}},
@@ -237,6 +240,10 @@ def self_test() -> None:
         },
     }
     currency = {
+        "schema": "research.currency_hedge_mechanism_forward_r1",
+        "program_id": "DEVELOPED_EXUS_CURRENCY_HEDGE",
+        "registered_at_date": "2026-09-13",
+        "contract": {"implementations": {}, "regime_is_not_timing_gate": True},
         "state": "PROSPECTIVE_OPEN",
         "scientific_forward_credit": True,
         "scorecard": {},
@@ -252,12 +259,21 @@ def self_test() -> None:
         },
     }
     overlay = {
+        "schema": "research.currency_hedge_allocator_overlay_forward_r1",
+        "program_id": "CURRENCY_HEDGE_ALLOCATOR_OVERLAY",
+        "registered_at_date": "2026-09-13",
         "state": "PROSPECTIVE_OPEN",
         "scientific_forward_credit": True,
         "scorecard": {},
         "entry_date": "2026-09-14",
         "forward_sessions": 2,
-        "contract": {"funding_source": "CASH_ONLY", "overlay_weight": 0.05},
+        "contract": {
+            "funding_source": "CASH_ONLY",
+            "overlay_weight": 0.05,
+            "leverage": False,
+            "entry_rule": "test",
+            "holding_rule": "test",
+        },
         "positions": {},
         "boundaries": {
             "allocation_authority": False,
