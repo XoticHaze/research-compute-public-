@@ -307,6 +307,50 @@ class PostAuthPipelineContractTests(unittest.TestCase):
                 }]
             }), ["MNQ"])
 
+    def test_identical_history_overlap_collapses_but_conflicting_bar_survives_to_fail(self):
+        base = {
+            "symbol": "MNQ",
+            "timestamp": "2026-09-18T20:59:00Z",
+            "open": 24000.0,
+            "high": 24001.0,
+            "low": 23999.0,
+            "close": 24000.5,
+            "volume": 100.0,
+            "source": "ibkr",
+            "asset_type": "FUT",
+            "bar_size": "1 min",
+            "session": "all",
+            "contract_id": "conid:793356225",
+            "wap": 24000.4,
+            "bar_count": 5,
+        }
+        rows, dropped = mod._dedupe_identical_history_records([base, dict(base)])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(dropped, 1)
+
+        conflict = dict(base)
+        conflict["close"] = 24000.75
+        rows, dropped = mod._dedupe_identical_history_records([base, conflict])
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(dropped, 0)
+        with self.assertRaisesRegex(ValueError, "duplicate normalized bars"):
+            mod.normalize_frame(rows)
+
+    def test_history_overlap_dedupe_identity_includes_bar_size(self):
+        first = {
+            "symbol": "MNQ",
+            "timestamp": "2026-09-18T20:59:00Z",
+            "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0,
+            "volume": 1.0, "source": "ibkr", "asset_type": "FUT",
+            "bar_size": "1 min", "session": "all",
+            "contract_id": "conid:793356225", "wap": 1.0, "bar_count": 1,
+        }
+        second = dict(first)
+        second["bar_size"] = "15 mins"
+        rows, dropped = mod._dedupe_identical_history_records([first, second])
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(dropped, 0)
+
     def test_exact_contract_quote_reports_realtime_bid_ask_without_mutation(self):
         class Ticker:
             marketDataType = 1
