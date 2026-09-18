@@ -26,6 +26,17 @@ ADAPTER_SCHEMA = "foundry.forward_program_adapter.v1"
 SCOREBOARD_SCHEMA = "research.forward_market_scoreboard_r1"
 PROGRAM_ID = "GENERALIZED_LARGECAP_RIDGE"
 
+# Recovery evidence for the first version of this observer that durably carried a
+# first_registered_at field. This is not model science; it repairs a publication
+# race that temporarily moved the anchor forward. Evidence commit:
+# c36500fa4ab554b01c24df7fd0ab603b9504d31e.
+RECOVERED_REGISTRATION_ANCHORS = {
+    "2026-09-11": {
+        "first_registered_at": "2026-09-18T05:06:08.956014+00:00",
+        "evidence_commit": "c36500fa4ab554b01c24df7fd0ab603b9504d31e",
+    },
+}
+
 
 def _normalize_series(series: pd.Series) -> pd.Series:
     x = series.dropna().astype(float).copy()
@@ -120,10 +131,19 @@ def build(
         and prior.get("signal_date") == signal_date
         and prior.get("first_registered_at")
     )
-    first_registered_at = (
-        str(prior["first_registered_at"])
-        if prior_is_same_signal
-        else now_iso
+    recovered = RECOVERED_REGISTRATION_ANCHORS.get(signal_date)
+    recovered_first = None if recovered is None else str(recovered["first_registered_at"])
+    candidates = [now_iso]
+    if prior_is_same_signal:
+        candidates.append(str(prior["first_registered_at"]))
+    if recovered_first:
+        candidates.append(recovered_first)
+    first_registered_at = min(candidates, key=lambda value: datetime.fromisoformat(value.replace("Z", "+00:00")))
+    registration_evidence_present = prior_is_same_signal or recovered is not None
+    registration_anchor_source = (
+        {"kind": "repo_history_recovery", **recovered}
+        if recovered_first and first_registered_at == recovered_first
+        else {"kind": "prior_current_artifact" if prior_is_same_signal else "current_run"}
     )
     required = symbols + ["SPY", "QQQ"]
     start = date.fromisoformat(signal_date) - timedelta(days=10)
@@ -139,6 +159,7 @@ def build(
             "program_id": PROGRAM_ID,
             "signal_date": signal_date,
             "first_registered_at": first_registered_at,
+            "registration_anchor_source": registration_anchor_source,
             "state": "AWAITING_ENTRY_SESSION",
             "execution_delay_sessions": delay,
             "holding_horizon_sessions": horizon,
@@ -157,7 +178,7 @@ def build(
     entry_i, entry_ts = entry
     sessions_completed = max(0, len(calendar) - 1 - entry_i)
     terminal = entry_i + horizon < len(calendar)
-    if terminal and not prior_is_same_signal:
+    if terminal and not registration_evidence_present:
         return {
             "schema": SCHEMA,
             "generated_at": now_iso,
@@ -165,6 +186,7 @@ def build(
             "program_id": PROGRAM_ID,
             "signal_date": signal_date,
             "first_registered_at": first_registered_at,
+            "registration_anchor_source": registration_anchor_source,
             "state": "LATE_REGISTRATION_REJECTED",
             "entry_date": entry_ts.date().isoformat(),
             "execution_delay_sessions": delay,
@@ -230,6 +252,7 @@ def build(
         "program_id": PROGRAM_ID,
         "signal_date": signal_date,
         "first_registered_at": first_registered_at,
+        "registration_anchor_source": registration_anchor_source,
         "state": "RESOLVED" if terminal else "PROSPECTIVE_OPEN",
         "entry_date": entry_ts.date().isoformat(),
         "evaluation_date": eval_ts.date().isoformat(),
@@ -346,6 +369,11 @@ def self_test() -> None:
     out = build(adapter, date(2026, 1, 9), "2026-01-09T00:00:00+00:00", loader)
     assert out["state"] == "PROSPECTIVE_OPEN"
     assert out["first_registered_at"] == "2026-01-09T00:00:00+00:00"
+    recovered_adapter = dict(adapter)
+    recovered_adapter["signal_date"] = "2026-09-11"
+    recovered = build(recovered_adapter, date(2026, 1, 9), "2026-09-18T06:00:00+00:00", loader)
+    assert recovered["first_registered_at"] == "2026-09-18T05:06:08.956014+00:00"
+    assert recovered["registration_anchor_source"]["evidence_commit"] == "c36500fa4ab554b01c24df7fd0ab603b9504d31e"
     assert out["entry_date"] == "2026-01-05"
     assert out["summary"]["directional_sign_hit_rate"] == 1.0
     assert all(r["prediction_error_bps"] is None for r in out["observations"])
