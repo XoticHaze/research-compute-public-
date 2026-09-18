@@ -48,7 +48,12 @@ CONTRACT_HINT_FIELDS = (
     "localSymbol",
     "tradingClass",
     "lastTradeDateOrContractMonth",
+    "strike",
+    "right",
+    "multiplier",
+    "includeExpired",
 )
+SUPPORTED_READ_SEC_TYPES = {"STK", "FUT", "OPT"}
 
 
 def parse_contract_hints(raw: str) -> dict[str, dict[str, object]]:
@@ -72,12 +77,22 @@ def parse_contract_hints(raw: str) -> dict[str, dict[str, object]]:
         sec_type = str(raw_hint.get("secType") or "").strip().upper()
         if not sec_type:
             raise RuntimeError(f"contract hint secType required for {symbol}")
+        if sec_type not in SUPPORTED_READ_SEC_TYPES:
+            raise RuntimeError(f"contract hint secType unsupported for warm read {symbol}: {sec_type}")
         try:
             con_id = int(raw_hint.get("conId") or 0)
         except (TypeError, ValueError):
             con_id = 0
         if sec_type != "STK" and con_id <= 0:
             raise RuntimeError(f"explicit conId required for non-stock contract {symbol}")
+        if sec_type == "OPT":
+            right = str(raw_hint.get("right") or "").strip().upper()
+            try:
+                strike = float(raw_hint.get("strike"))
+            except (TypeError, ValueError):
+                strike = 0.0
+            if right not in {"C", "P"} or strike <= 0:
+                raise RuntimeError(f"exact option right/strike required for {symbol}")
 
         clean: dict[str, object] = {}
         for field in CONTRACT_HINT_FIELDS:
@@ -220,6 +235,9 @@ def main() -> int:
                         "localSymbol": str(getattr(resolved, "localSymbol", "") or ""),
                         "tradingClass": str(getattr(resolved, "tradingClass", "") or ""),
                         "lastTradeDateOrContractMonth": str(getattr(resolved, "lastTradeDateOrContractMonth", "") or ""),
+                        "strike": float(getattr(resolved, "strike", 0.0) or 0.0),
+                        "right": str(getattr(resolved, "right", "") or ""),
+                        "multiplier": str(getattr(resolved, "multiplier", "") or ""),
                     },
                 }
             )
