@@ -123,6 +123,10 @@ class RemoteSelectedRuntimePaperProofTests(unittest.TestCase):
                 "fills": [],
                 "req_executions_called": True,
                 "broker_mutation_called": False,
+                "cloud_strategy_authority": False,
+                "cloud_execution_policy_authority": False,
+                "live_execution_allowed": False,
+                "global_cancel_allowed": False,
             },
         )]
         sender = FakeSender(responses)
@@ -184,6 +188,10 @@ class RemoteSelectedRuntimePaperProofTests(unittest.TestCase):
                 "total_realized_pnl": 6.0,
                 "req_executions_called": True,
                 "broker_mutation_called": False,
+                "cloud_strategy_authority": False,
+                "cloud_execution_policy_authority": False,
+                "live_execution_allowed": False,
+                "global_cancel_allowed": False,
             },
         )]
         sender = FakeSender(responses)
