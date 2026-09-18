@@ -1,0 +1,3 @@
+MM #504 current forward-identity acceptance request.
+Expected private source: mm-IBKR@7525295980af51dcdffe3dd222bf5e89923e9108
+Purpose: validate current identity fail-closed behavior and Strategy Health binding against exact reviewed Git blobs.
