@@ -30,7 +30,7 @@
     "date": "2026-09-14",
     "rule": "first common market-session close after registration"
   },
-  "forward_sessions": 2,
+  "forward_sessions": 3,
   "frozen_sources": {
     "P426_HEFA": {
       "blob": "8e783a07b78f4f6efee8963c1d05f07792c12bff",
@@ -48,9 +48,9 @@
       "ref": "fe674e9b9cff72e9cf758c8bc6548124c6f8cf53"
     }
   },
-  "generated_at": "2026-09-17T01:43:59.935959+00:00",
-  "latest_common_market_date": "2026-09-15",
-  "market_data_asof": "2026-09-17",
+  "generated_at": "2026-09-18T01:33:37.752250+00:00",
+  "latest_common_market_date": "2026-09-16",
+  "market_data_asof": "2026-09-18",
   "program_id": "DEVELOPED_EXUS_CURRENCY_HEDGE",
   "regime_context": {
     "prior_completed_12m_uup_return": 0.0624905772,
@@ -64,16 +64,16 @@
   "scientific_forward_credit": true,
   "scorecard": {
     "DBEF": {
-      "EFA_return_bps": -42.5127,
-      "gross_return_bps": -29.2024,
-      "matched_excess_if_flattened_now_bps": -36.6897,
-      "net_if_flattened_now_bps": -79.2024
+      "EFA_return_bps": -78.413,
+      "gross_return_bps": -3.6504,
+      "matched_excess_if_flattened_now_bps": 24.7626,
+      "net_if_flattened_now_bps": -53.6504
     },
     "HEFA": {
-      "IEFA_return_bps": -38.508,
-      "gross_return_bps": -2.1566,
-      "matched_excess_if_flattened_now_bps": -13.6485,
-      "net_if_flattened_now_bps": -52.1566
+      "IEFA_return_bps": -71.9496,
+      "gross_return_bps": 2.1557,
+      "matched_excess_if_flattened_now_bps": 24.1054,
+      "net_if_flattened_now_bps": -47.8443
     },
     "cost_interpretation": {
       "entry_cost_bps": 25.0,
@@ -81,15 +81,15 @@
       "reported_net_is_if_flattened_now": true
     },
     "mechanism": {
-      "SPY_return_bps": -45.8678,
-      "both_implementations_positive_vs_matched": false,
-      "mean_matched_excess_if_flattened_now_bps": -25.1691,
-      "mean_net_if_flattened_now_bps": -65.6795,
-      "opportunity_excess_vs_SPY_bps": -19.8117
+      "SPY_return_bps": -89.7647,
+      "both_implementations_positive_vs_matched": true,
+      "mean_matched_excess_if_flattened_now_bps": 24.434,
+      "mean_net_if_flattened_now_bps": -50.7473,
+      "opportunity_excess_vs_SPY_bps": 39.0174
     }
   },
   "source": {
-    "panel_sha256": "5b1db1a4c59eb147e4da5667466ee850e28c069f66e6ea71a151e4d45eb320a8",
+    "panel_sha256": "9b14bee89916130bff6c2ef5cdecc0bfe160be0462dbda7895a4f4e4a0c49bbc",
     "provider": "Yahoo Finance via yfinance; research-only public data",
     "symbols": [
       "HEFA",
