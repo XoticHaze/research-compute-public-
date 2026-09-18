@@ -1,0 +1,20 @@
+name: MR gold miner volatility information B6 20260918
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pandas numpy yfinance
+      - run: python research/mr_gold_miner_volatility_information_b6_20260918.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mr-gold-miner-volatility-information-b6
+          path: research/artifacts/mr_gold_miner_volatility_information_b6_20260918.json
