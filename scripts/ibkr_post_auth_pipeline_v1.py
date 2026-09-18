@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -54,6 +55,78 @@ CONTRACT_HINT_FIELDS = (
     "includeExpired",
 )
 SUPPORTED_READ_SEC_TYPES = {"STK", "FUT", "OPT"}
+BAR_REQUEST_FIELDS = {
+    "source_timeframe",
+    "target_timeframe",
+    "bar_size_setting",
+    "duration_str",
+}
+BAR_SIZE_RE = re.compile(r"^(?:[1-9][0-9]{0,2}) (?:sec|secs|min|mins|hour|hours|day|week|month)$")
+DURATION_RE = re.compile(r"^(?:[1-9][0-9]{0,2}) [DWMY]$")
+MAX_BAR_REQUESTS = 50
+
+
+def _bounded_duration(value: str) -> bool:
+    match = DURATION_RE.fullmatch(str(value or "").strip())
+    if not match:
+        return False
+    count_text, unit = str(value).split()
+    count = int(count_text)
+    limits = {"D": 30, "W": 8, "M": 12, "Y": 7}
+    return 1 <= count <= limits[unit]
+
+
+def parse_bar_requests(raw: str, symbols: list[str]) -> dict[str, list[dict[str, str]]]:
+    """Validate exact MM-supplied history requests without choosing a timeframe."""
+    if not str(raw or "").strip():
+        return {}
+    try:
+        node = json.loads(raw)
+    except Exception as exc:
+        raise RuntimeError("bar requests JSON is invalid") from exc
+    if not isinstance(node, dict):
+        raise RuntimeError("bar requests must be an object keyed by symbol")
+
+    requested_symbols = {str(symbol).strip().upper() for symbol in symbols if str(symbol).strip()}
+    normalized: dict[str, list[dict[str, str]]] = {}
+    total = 0
+    for raw_symbol, rows in node.items():
+        symbol = str(raw_symbol or "").strip().upper()
+        if symbol not in requested_symbols:
+            raise RuntimeError(f"bar requests include unrequested symbol: {symbol or 'blank'}")
+        if not isinstance(rows, list) or not rows:
+            raise RuntimeError(f"bar requests require a non-empty list for {symbol}")
+        clean_rows: list[dict[str, str]] = []
+        seen: set[tuple[str, str, str, str]] = set()
+        for raw_row in rows:
+            if not isinstance(raw_row, dict) or set(raw_row) != BAR_REQUEST_FIELDS:
+                raise RuntimeError(f"bar request field set mismatch for {symbol}")
+            row = {key: str(raw_row.get(key) or "").strip() for key in BAR_REQUEST_FIELDS}
+            if not row["source_timeframe"] or not row["target_timeframe"]:
+                raise RuntimeError(f"bar request timeframe identity missing for {symbol}")
+            if not BAR_SIZE_RE.fullmatch(row["bar_size_setting"]):
+                raise RuntimeError(f"bar request bar size rejected for {symbol}")
+            if not _bounded_duration(row["duration_str"]):
+                raise RuntimeError(f"bar request duration rejected for {symbol}")
+            identity = (
+                row["source_timeframe"],
+                row["target_timeframe"],
+                row["bar_size_setting"],
+                row["duration_str"],
+            )
+            if identity in seen:
+                raise RuntimeError(f"duplicate bar request for {symbol}")
+            seen.add(identity)
+            clean_rows.append(row)
+            total += 1
+            if total > MAX_BAR_REQUESTS:
+                raise RuntimeError("bar request count exceeds safe bound")
+        normalized[symbol] = clean_rows
+
+    missing = sorted(requested_symbols - set(normalized))
+    if missing:
+        raise RuntimeError("bar requests missing requested symbols: " + ",".join(missing))
+    return normalized
 
 
 def parse_contract_hints(raw: str) -> dict[str, dict[str, object]]:
@@ -142,6 +215,7 @@ def main() -> int:
     ap.add_argument("--client-id", type=int, default=78)
     ap.add_argument("--symbols", default="AMAT,APH")
     ap.add_argument("--contracts-json", default="", help="Optional exact MM-selected execution contracts keyed by symbol")
+    ap.add_argument("--bar-requests-json", default="", help="Optional exact MM-owned history requests keyed by symbol")
     ap.add_argument("--output", required=True, help="Sanitized broker/session handoff JSON")
     ap.add_argument("--bars-output", required=True, help="Canonical research.forward_bar.v2 JSONL")
     args = ap.parse_args()
@@ -150,6 +224,7 @@ def main() -> int:
     if not symbols:
         raise SystemExit("at least one symbol is required")
     contract_hints = parse_contract_hints(args.contracts_json)
+    bar_requests = parse_bar_requests(args.bar_requests_json, symbols)
     unexpected_hints = sorted(set(contract_hints) - set(symbols))
     if unexpected_hints:
         raise RuntimeError("contract hints include unrequested symbols: " + ",".join(unexpected_hints))
@@ -193,37 +268,58 @@ def main() -> int:
                 resolved_sec_type = str(getattr(resolved, "secType", "") or "").upper()
                 if requested_sec_type and resolved_sec_type != requested_sec_type:
                     raise RuntimeError(f"qualified contract secType mismatch for {symbol}")
-            bars = ib.reqHistoricalData(
-                resolved,
-                endDateTime="",
-                durationStr="2 D",
-                barSizeSetting="5 mins",
-                whatToShow="TRADES",
-                useRTH=False,
-                formatDate=2,
-                keepUpToDate=False,
-            )
-            if not bars:
-                raise RuntimeError(f"historical data returned no bars for {symbol}")
-            records.extend(
-                ibkr_bar_to_record(
-                    bar,
+            effective_requests = bar_requests.get(symbol) or [{
+                "source_timeframe": "5Min",
+                "target_timeframe": "5Min",
+                "bar_size_setting": "5 mins",
+                "duration_str": "2 D",
+            }]
+            request_receipts: list[dict[str, object]] = []
+            historical_bar_count = 0
+            for bar_request in effective_requests:
+                bar_size = str(bar_request["bar_size_setting"])
+                duration = str(bar_request["duration_str"])
+                bars = ib.reqHistoricalData(
                     resolved,
-                    symbol=symbol,
-                    asset_type=str(getattr(resolved, "secType", "") or contract_request.get("secType") or "STK"),
-                    bar_size="5 mins",
-                    session="all",
-                    source="ibkr",
+                    endDateTime="",
+                    durationStr=duration,
+                    barSizeSetting=bar_size,
+                    whatToShow="TRADES",
+                    useRTH=False,
+                    formatDate=2,
+                    keepUpToDate=False,
                 )
-                for bar in bars
-            )
+                if not bars:
+                    raise RuntimeError(
+                        f"historical data returned no bars for {symbol} "
+                        f"{bar_request['source_timeframe']}"
+                    )
+                historical_bar_count += len(bars)
+                records.extend(
+                    ibkr_bar_to_record(
+                        bar,
+                        resolved,
+                        symbol=symbol,
+                        asset_type=str(getattr(resolved, "secType", "") or contract_request.get("secType") or "STK"),
+                        bar_size=bar_size,
+                        session="all",
+                        source="ibkr",
+                    )
+                    for bar in bars
+                )
+                request_receipts.append({
+                    **dict(bar_request),
+                    "historical_bar_count": len(bars),
+                })
             symbol_receipts.append(
                 {
                     "symbol": symbol,
                     "contract_qualified": True,
                     "contract_id": f"conid:{resolved.conId}" if resolved.conId else (resolved.localSymbol or symbol),
                     "historical_data_ready": True,
-                    "historical_bar_count": len(bars),
+                    "historical_bar_count": historical_bar_count,
+                    "bar_request_source": "mm_exact_bar_requests" if symbol in bar_requests else "compatibility_default_5min",
+                    "bar_requests": request_receipts,
                     "contract_source": contract_request.get("source"),
                     "requested_contract": contract_request,
                     "resolved_contract": {
@@ -266,6 +362,8 @@ def main() -> int:
             "broker_time_readable": current_time is not None,
             "requested_symbols": symbols,
             "contract_hint_symbols": sorted(contract_hints),
+            "bar_request_symbols": sorted(bar_requests),
+            "bar_requests_explicit": bool(bar_requests),
             "symbols": symbol_receipts,
             "forward_bar_contract": ForwardBarContract().schema,
             "forward_bar_count": int(len(frame)),

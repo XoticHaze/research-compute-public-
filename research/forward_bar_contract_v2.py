@@ -51,9 +51,9 @@ def normalize_frame(rows: pd.DataFrame | Iterable[dict], *, relative_ohlc_tolera
         raise ValueError("low invariant failed beyond numeric tolerance")
     if (df["volume"].fillna(0) < 0).any():
         raise ValueError("volume must be nonnegative")
-    if df.duplicated(["symbol", "timestamp", "contract_id"]).any():
+    if df.duplicated(["symbol", "timestamp", "contract_id", "bar_size"]).any():
         raise ValueError("duplicate normalized bars")
-    return df.sort_values(["symbol", "timestamp", "contract_id"]).reset_index(drop=True)
+    return df.sort_values(["symbol", "bar_size", "timestamp", "contract_id"]).reset_index(drop=True)
 
 
 def ibkr_bar_to_record(

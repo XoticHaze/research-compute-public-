@@ -96,6 +96,69 @@ class PostAuthPipelineContractTests(unittest.TestCase):
                 }
             }))
 
+    def test_exact_mm_bar_requests_preserve_source_target_and_ibkr_request(self):
+        requests = mod.parse_bar_requests(json.dumps({
+            "MNQ": [{
+                "source_timeframe": "1Min",
+                "target_timeframe": "12Min",
+                "bar_size_setting": "1 min",
+                "duration_str": "1 D",
+            }],
+            "AMAT": [{
+                "source_timeframe": "15Min",
+                "target_timeframe": "15Min",
+                "bar_size_setting": "15 mins",
+                "duration_str": "2 W",
+            }],
+        }), ["MNQ", "AMAT"])
+        self.assertEqual(requests["MNQ"][0]["source_timeframe"], "1Min")
+        self.assertEqual(requests["MNQ"][0]["target_timeframe"], "12Min")
+        self.assertEqual(requests["MNQ"][0]["bar_size_setting"], "1 min")
+        self.assertEqual(requests["MNQ"][0]["duration_str"], "1 D")
+        self.assertEqual(requests["AMAT"][0]["bar_size_setting"], "15 mins")
+
+    def test_explicit_bar_requests_fail_closed_on_missing_symbol_or_unsafe_window(self):
+        with self.assertRaisesRegex(RuntimeError, "missing requested symbols"):
+            mod.parse_bar_requests(json.dumps({
+                "MNQ": [{
+                    "source_timeframe": "1Min",
+                    "target_timeframe": "12Min",
+                    "bar_size_setting": "1 min",
+                    "duration_str": "1 D",
+                }]
+            }), ["MNQ", "AMAT"])
+
+        with self.assertRaisesRegex(RuntimeError, "duration rejected"):
+            mod.parse_bar_requests(json.dumps({
+                "MNQ": [{
+                    "source_timeframe": "1Min",
+                    "target_timeframe": "12Min",
+                    "bar_size_setting": "1 min",
+                    "duration_str": "99 Y",
+                }]
+            }), ["MNQ"])
+
+    def test_bar_request_parser_rejects_unknown_fields_and_unrequested_symbol(self):
+        with self.assertRaisesRegex(RuntimeError, "field set mismatch"):
+            mod.parse_bar_requests(json.dumps({
+                "MNQ": [{
+                    "source_timeframe": "1Min",
+                    "target_timeframe": "12Min",
+                    "bar_size_setting": "1 min",
+                    "duration_str": "1 D",
+                    "action": "BUY",
+                }]
+            }), ["MNQ"])
+        with self.assertRaisesRegex(RuntimeError, "unrequested symbol"):
+            mod.parse_bar_requests(json.dumps({
+                "MES": [{
+                    "source_timeframe": "1Min",
+                    "target_timeframe": "12Min",
+                    "bar_size_setting": "1 min",
+                    "duration_str": "1 D",
+                }]
+            }), ["MNQ"])
+
     def test_contract_hint_parser_rejects_non_object(self):
         with self.assertRaisesRegex(RuntimeError, "object keyed by symbol"):
             mod.parse_contract_hints("[]")

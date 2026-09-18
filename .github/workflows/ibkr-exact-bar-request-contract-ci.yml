@@ -1,0 +1,44 @@
+name: IBKR Exact Bar Request Contract CI
+
+on:
+  push:
+    branches:
+      - assistant/ibkr-exact-bar-requests-20260918
+    paths:
+      - scripts/ibkr_post_auth_pipeline_v1.py
+      - research/forward_bar_contract_v2.py
+      - tests/test_ibkr_post_auth_pipeline_contracts_v1.py
+      - tests/test_forward_bar_multitimeframe_v2.py
+      - .github/workflows/ibkr-cloudflare-readonly-b1-r1.yml
+      - .github/workflows/ibkr-exact-bar-request-contract-ci.yml
+  pull_request:
+    paths:
+      - scripts/ibkr_post_auth_pipeline_v1.py
+      - research/forward_bar_contract_v2.py
+      - tests/test_ibkr_post_auth_pipeline_contracts_v1.py
+      - tests/test_forward_bar_multitimeframe_v2.py
+      - .github/workflows/ibkr-cloudflare-readonly-b1-r1.yml
+      - .github/workflows/ibkr-exact-bar-request-contract-ci.yml
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install fixed contract dependencies
+        run: python -m pip install --disable-pip-version-check "ib_insync==0.9.86" pandas
+      - name: Compile exact bar request path
+        run: |
+          python -m py_compile scripts/ibkr_post_auth_pipeline_v1.py
+          python -m py_compile research/forward_bar_contract_v2.py
+      - name: Run exact bar request contracts
+        run: |
+          python -m unittest tests.test_ibkr_post_auth_pipeline_contracts_v1 -v
+          python -m unittest tests.test_forward_bar_multitimeframe_v2 -v

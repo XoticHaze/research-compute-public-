@@ -29,6 +29,11 @@ on:
         required: false
         default: '{}'
         type: string
+      bar_requests_json:
+        description: Optional exact MM-owned historical bar requests keyed by requested symbol
+        required: false
+        default: ''
+        type: string
       snapshot_not_before_utc:
         description: Optional UTC instant; readonly detailed snapshot must not be sampled before this boundary
         required: false
@@ -67,6 +72,7 @@ on:
       - 'research/forward_bar_contract_v2.py'
       - 'tests/test_ibkr_b1_auth_contracts_v1.py'
       - 'tests/test_ibkr_post_auth_pipeline_contracts_v1.py'
+      - 'tests/test_forward_bar_multitimeframe_v2.py'
       - 'tests/test_ibkr_b1_warm_state_workflow_v2.py'
       - 'tests/test_ibkr_warm_selected_runtime_activation_v1.py'
       - 'tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py'
@@ -109,6 +115,7 @@ jobs:
             scripts/ibkr_login_window_guard_v1.py \
             scripts/ibkr_post_auth_pipeline_v1.py \
             tests/test_ibkr_post_auth_pipeline_contracts_v1.py \
+            tests/test_forward_bar_multitimeframe_v2.py \
             scripts/ibkr_remote_selected_runtime_command_capsule_v2.py \
             scripts/ibkr_remote_selected_runtime_paper_proof_v1.py \
             scripts/ibkr_remote_selected_runtime_paper_proof_v2.py \
@@ -136,6 +143,7 @@ jobs:
           python -m unittest \
             tests.test_ibkr_b1_auth_contracts_v1 \
             tests.test_ibkr_post_auth_pipeline_contracts_v1 \
+            tests.test_forward_bar_multitimeframe_v2 \
             tests.test_ibkr_b1_warm_state_workflow_v2 \
             tests.test_ibkr_warm_selected_runtime_activation_v1 \
             tests.test_ibkr_remote_selected_runtime_command_capsule_v2 \
@@ -159,6 +167,7 @@ jobs:
       IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
       POST_AUTH_SYMBOLS: ${{ github.event_name == 'workflow_dispatch' && inputs.symbols || 'AMAT,APH' }}
       POST_AUTH_CONTRACTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.contracts_json || '{}' }}
+      POST_AUTH_BAR_REQUESTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.bar_requests_json || '' }}
       IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'readonly' && inputs.read_return_recipient_b64 != '' && inputs.read_return_recipient_key_id != '' && '1' || '0' }}
       IBKR_PAPER_PROOF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' && '1' || '0' }}
       IBKR_PAPER_EXECUTE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_execute' && '1' || '0' }}
@@ -182,6 +191,7 @@ jobs:
             scripts/ibkr_login_window_guard_v1.py \
             scripts/ibkr_post_auth_pipeline_v1.py \
             tests/test_ibkr_post_auth_pipeline_contracts_v1.py \
+            tests/test_forward_bar_multitimeframe_v2.py \
             scripts/ibkr_remote_selected_runtime_command_capsule_v2.py \
             scripts/ibkr_remote_selected_runtime_paper_proof_v1.py \
             scripts/ibkr_remote_selected_runtime_paper_proof_v2.py \
@@ -199,6 +209,7 @@ jobs:
           python -m unittest \
             tests.test_ibkr_b1_auth_contracts_v1 \
             tests.test_ibkr_post_auth_pipeline_contracts_v1 \
+            tests.test_forward_bar_multitimeframe_v2 \
             tests.test_ibkr_warm_selected_runtime_activation_v1 \
             tests.test_ibkr_remote_selected_runtime_command_capsule_v2 \
             tests.test_ibkr_remote_selected_runtime_paper_execute_v1 \
@@ -571,6 +582,7 @@ jobs:
             --client-id 78 \
             --symbols "$POST_AUTH_SYMBOLS" \
             --contracts-json "$POST_AUTH_CONTRACTS_JSON" \
+            --bar-requests-json "$POST_AUTH_BAR_REQUESTS_JSON" \
             --output "$RUNNER_TEMP/ibkr-post-auth-handoff.json" \
             --bars-output "$RUNNER_TEMP/ibkr-forward-bars-v2.jsonl"
           echo 'IBKR_CONSUMER_READY=1'
