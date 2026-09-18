@@ -29,6 +29,11 @@ on:
         required: false
         default: '{}'
         type: string
+      bar_requests_json:
+        description: Optional exact MM-owned historical bar requests keyed by requested symbol
+        required: false
+        default: ''
+        type: string
       snapshot_not_before_utc:
         description: Optional UTC instant; readonly detailed snapshot must not be sampled before this boundary
         required: false
@@ -159,6 +164,7 @@ jobs:
       IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
       POST_AUTH_SYMBOLS: ${{ github.event_name == 'workflow_dispatch' && inputs.symbols || 'AMAT,APH' }}
       POST_AUTH_CONTRACTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.contracts_json || '{}' }}
+      POST_AUTH_BAR_REQUESTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.bar_requests_json || '' }}
       IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'readonly' && inputs.read_return_recipient_b64 != '' && inputs.read_return_recipient_key_id != '' && '1' || '0' }}
       IBKR_PAPER_PROOF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' && '1' || '0' }}
       IBKR_PAPER_EXECUTE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_execute' && '1' || '0' }}
@@ -571,6 +577,7 @@ jobs:
             --client-id 78 \
             --symbols "$POST_AUTH_SYMBOLS" \
             --contracts-json "$POST_AUTH_CONTRACTS_JSON" \
+            --bar-requests-json "$POST_AUTH_BAR_REQUESTS_JSON" \
             --output "$RUNNER_TEMP/ibkr-post-auth-handoff.json" \
             --bars-output "$RUNNER_TEMP/ibkr-forward-bars-v2.jsonl"
           echo 'IBKR_CONSUMER_READY=1'
