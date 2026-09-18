@@ -35,6 +35,7 @@ if str(SCRIPTS_ROOT) not in sys.path:
 
 import ibkr_remote_paper_proof_return_v1 as proof_return
 import ibkr_remote_selected_runtime_command_capsule_v2 as capsule_v2
+import ibkr_remote_selected_runtime_paper_execute_v1 as execute_v1
 import ibkr_remote_selected_runtime_paper_proof_v1 as proof_v1
 import ibkr_remote_selected_runtime_paper_proof_v2 as proof_v2
 from ephemeral_x25519_chunked_v1 import decrypt_assembled_ciphertext
@@ -283,7 +284,13 @@ def materialize_command(
     )
     capsule = capsule_v2.validate_capsule(plaintext)
     runtime = capsule_v2.materialize(capsule, runner_temp=runner_temp)
-    proof_v2.validate_fleet_authority_runtime(runtime)
+    mode = str(runtime.get("mode") or "")
+    if mode == capsule_v2.PROOF_MODE:
+        proof_v2.validate_fleet_authority_runtime(runtime)
+    elif mode == capsule_v2.EXECUTE_MODE:
+        execute_v1.validate_fleet_authority_execute_runtime(runtime)
+    else:
+        raise ActivationError("materialized command mode rejected")
     return runtime
 
 
@@ -381,6 +388,39 @@ def execute_proof(
     return receipt
 
 
+def execute_command(
+    *,
+    runtime: Mapping[str, Any],
+    run_id: str,
+    public_head: str,
+    receipt_path: Path,
+    base_url: str = "http://127.0.0.1:8001",
+) -> dict[str, Any]:
+    mode = str(runtime.get("mode") or "")
+    if mode == capsule_v2.PROOF_MODE:
+        return execute_proof(
+            runtime=runtime,
+            run_id=run_id,
+            public_head=public_head,
+            receipt_path=receipt_path,
+            base_url=base_url,
+        )
+    if mode == capsule_v2.EXECUTE_MODE:
+        request_path = Path(_required_text(runtime.get("request_path"), "runtime.request_path"))
+        request = json.loads(request_path.read_text(encoding="utf-8"))
+        receipt = execute_v1.execute_paper_execute(
+            runtime=runtime,
+            request=request,
+            send=proof_v1._request_sender(base_url),
+            run_id=str(run_id),
+            public_head=str(public_head),
+        )
+        receipt_path.write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        os.chmod(receipt_path, stat.S_IRUSR | stat.S_IWUSR)
+        return receipt
+    raise ActivationError("unsupported selected-runtime command mode")
+
+
 def publish_encrypted_return(
     *,
     token: str,
@@ -441,6 +481,7 @@ def cleanup_private_material(*, image: str | None, runner_temp: Path) -> None:
         "ibkr-command-envelope.json",
         "ibkr-command-ciphertext.bin",
         "ibkr-paper-proof-receipt.json",
+        "ibkr-paper-execute-receipt.json",
         "ibkr-paper-proof-return",
     ):
         path = runner_temp / name
@@ -463,6 +504,11 @@ def main() -> None:
     parser.add_argument("--gateway-host", default="127.0.0.1")
     parser.add_argument("--gateway-port", type=int, default=4002)
     parser.add_argument("--wait-seconds", type=int, default=900)
+    parser.add_argument(
+        "--mode",
+        choices=(capsule_v2.PROOF_MODE, capsule_v2.EXECUTE_MODE),
+        default=capsule_v2.PROOF_MODE,
+    )
     args = parser.parse_args()
 
     run_id = _required_text(args.run_id, "run_id")
@@ -514,8 +560,11 @@ def main() -> None:
             run_id=run_id,
             runner_temp=runner_temp,
         )
+        if str(runtime.get("mode") or "") != str(args.mode):
+            raise ActivationError("workflow mode does not match encrypted command mode")
         print("IBKR_REMOTE_COMMAND_MATERIALIZED=1")
         print("IBKR_REMOTE_COMMAND_ID=" + str(runtime.get("command_id")))
+        print("IBKR_REMOTE_COMMAND_MODE=" + str(runtime.get("mode")))
 
         image, _ = start_canonical_runtime(
             runtime=runtime,
@@ -526,15 +575,19 @@ def main() -> None:
         )
         print("IBKR_REMOTE_CANONICAL_RUNTIME_READY=1")
 
-        receipt_path = runner_temp / "ibkr-paper-proof-receipt.json"
-        receipt = execute_proof(
+        receipt_path = runner_temp / (
+            "ibkr-paper-proof-receipt.json"
+            if runtime.get("mode") == capsule_v2.PROOF_MODE
+            else "ibkr-paper-execute-receipt.json"
+        )
+        receipt = execute_command(
             runtime=runtime,
             run_id=run_id,
             public_head=public_head,
             receipt_path=receipt_path,
         )
-        print("IBKR_REMOTE_PAPER_PROOF_EXECUTED=1")
-        print("IBKR_REMOTE_PAPER_PROOF_STATUS=" + str(receipt.get("status") or ""))
+        print("IBKR_REMOTE_SELECTED_RUNTIME_COMMAND_EXECUTED=1")
+        print("IBKR_REMOTE_SELECTED_RUNTIME_COMMAND_STATUS=" + str(receipt.get("status") or ""))
 
         recipient_return_path = Path(_required_text(runtime.get("return_recipient_path"), "runtime.return_recipient_path"))
         return_recipient = json.loads(recipient_return_path.read_text(encoding="utf-8"))
@@ -554,11 +607,11 @@ def main() -> None:
             output_dir=return_dir,
             envelope=return_envelope,
         )
-        print("IBKR_REMOTE_PROOF_RETURN_PUBLISHED=1")
-        print("IBKR_REMOTE_PROOF_RETURN_PLAINTEXT_PUBLISHED=0")
+        print("IBKR_REMOTE_ENCRYPTED_RETURN_PUBLISHED=1")
+        print("IBKR_REMOTE_RETURN_PLAINTEXT_PUBLISHED=0")
         print("IBKR_REMOTE_GLOBAL_CANCEL_CALLED=0")
         print("IBKR_REMOTE_LIVE_EXECUTION_ALLOWED=0")
-        print("IBKR_REMOTE_PAPER_PROOF_OK=" + ("1" if receipt.get("ok") else "0"))
+        print("IBKR_REMOTE_SELECTED_RUNTIME_COMMAND_OK=" + ("1" if receipt.get("ok") else "0"))
     finally:
         cleanup_private_material(image=image, runner_temp=runner_temp)
 
