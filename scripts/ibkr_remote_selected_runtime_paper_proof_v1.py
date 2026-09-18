@@ -393,6 +393,7 @@ def execute_paper_proof(
         "quote_refresh": {"requested": False, "performed": False, "ok": None},
         "submit": {"called": False, "http_status": None, "ok": False, "broker_order_placed": False, "order_identity": {}},
         "cleanup": {"exact_cancel_called": False, "exact_cancel_ok": None, "flatten_called": False, "flatten_ok": None, "global_cancel_called": False},
+        "completed_execution_reconciliation": {"requested": False, "ok": None, "read_only": True, "broker_mutation_called": False},
         "final_reconciliation": {},
         "authority": {
             "canonical_submit_route": "/strategy/ibkr-paper-order-submit",
@@ -490,8 +491,7 @@ def execute_paper_proof(
         receipt["status"] = "EXACT_CANCEL_RECONCILIATION_FAILED"
         return receipt
 
-    if abs(target_position_after_cancel) > 1e-12:
-        flatten_payload = {
+    flatten_identity: dict[str, Any] = {}\n    if abs(target_position_after_cancel) > 1e-12:\n        flatten_payload = {
             "symbol": symbol,
             "symbols": [symbol],
             "operator_approved": True,
@@ -510,6 +510,7 @@ def execute_paper_proof(
             "flatten_ok": flatten.get("ok") is True,
             "flatten_status": flatten.get("status"),
         })
+        flatten_identity = _extract_order_identity(flatten, symbol)
 
     final_open_status, final_open = send("GET", "/strategy/ibkr-paper-open-orders", params={"symbol": symbol}, timeout=45.0)
     final_pos_status, final_pos = _flatten_snapshot(send, symbol)
@@ -532,8 +533,66 @@ def execute_paper_proof(
         "target_position": target_position_final,
         "zero_baseline_restored": final_ok,
     }
-    receipt["ok"] = final_ok
-    receipt["status"] = "PAPER_PROOF_RECONCILED" if final_ok else "PAPER_PROOF_CLEANUP_INCOMPLETE"
+    execution_identities: list[dict[str, Any]] = []
+    if identity:
+        execution_identities.append({
+            "role": "entry",
+            "order_id": identity.get("order_id"),
+            "perm_id": identity.get("perm_id"),
+            "order_ref": identity.get("order_ref"),
+        })
+    if flatten_identity:
+        execution_identities.append({
+            "role": "cleanup_exit",
+            "order_id": flatten_identity.get("order_id"),
+            "perm_id": flatten_identity.get("perm_id"),
+            "order_ref": flatten_identity.get("order_ref"),
+        })
+    execution_identities = [
+        row for row in execution_identities
+        if any(row.get(name) not in (None, "") for name in ("order_id", "perm_id", "order_ref"))
+    ]
+
+    evidence_ok = True
+    if receipt["submit"].get("broker_order_placed") is True:
+        evidence_ok = False
+        if execution_identities:
+            evidence_status, evidence = send(
+                "POST",
+                "/strategy/ibkr-paper-completed-executions",
+                payload={
+                    "runtime_id": auth["runtime_id"],
+                    "symbol": symbol,
+                    "identities": execution_identities,
+                },
+                timeout=90.0,
+            )
+            evidence_ok = bool(evidence_status == 200 and evidence.get("ok") is True)
+            receipt["completed_execution_reconciliation"] = {
+                **dict(evidence),
+                "requested": True,
+                "http_status": evidence_status,
+                "ok": evidence_ok,
+                "read_only": evidence.get("read_only") is True,
+                "broker_mutation_called": evidence.get("broker_mutation_called") is True,
+            }
+        else:
+            receipt["completed_execution_reconciliation"] = {
+                "requested": True,
+                "http_status": None,
+                "ok": False,
+                "read_only": True,
+                "broker_mutation_called": False,
+                "status": "broker_order_identity_missing_for_completed_execution_reconciliation",
+            }
+
+    receipt["ok"] = bool(final_ok and evidence_ok)
+    if not final_ok:
+        receipt["status"] = "PAPER_PROOF_CLEANUP_INCOMPLETE"
+    elif not evidence_ok:
+        receipt["status"] = "PAPER_PROOF_EXECUTION_EVIDENCE_INCOMPLETE"
+    else:
+        receipt["status"] = "PAPER_PROOF_RECONCILED"
     return receipt
 
 
