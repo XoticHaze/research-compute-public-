@@ -272,6 +272,36 @@ def _validate_selected_runtime_request(request: Mapping[str, Any]) -> dict[str, 
         raise RuntimeError("canonical_payload_symbol_mismatch")
     if not str(payload.get("idempotency_key") or "").strip():
         raise RuntimeError("canonical_payload_idempotency_key_required")
+
+    execution_contract = (
+        dict(authority.get("execution_contract"))
+        if isinstance(authority.get("execution_contract"), Mapping)
+        else {}
+    )
+    if not execution_contract:
+        raise RuntimeError("selected_runtime_execution_contract_required")
+    contract_symbol = str(execution_contract.get("symbol") or "").strip().upper()
+    contract_sec_type = str(execution_contract.get("secType") or "").strip().upper()
+    if contract_symbol != symbol or not contract_sec_type:
+        raise RuntimeError("selected_runtime_execution_contract_identity_mismatch")
+    if contract_sec_type in {"FUT", "CONTFUT", "OPT"}:
+        try:
+            contract_con_id = int(execution_contract.get("conId") or 0)
+        except (TypeError, ValueError):
+            contract_con_id = 0
+        local_symbol = str(execution_contract.get("localSymbol") or "").strip()
+        if contract_con_id <= 0 and not local_symbol:
+            if contract_sec_type in {"FUT", "CONTFUT"} and not str(execution_contract.get("lastTradeDateOrContractMonth") or "").strip():
+                raise RuntimeError("exact_futures_execution_contract_required")
+            if contract_sec_type == "OPT":
+                expiry = str(execution_contract.get("lastTradeDateOrContractMonth") or "").strip()
+                right = str(execution_contract.get("right") or "").strip().upper()
+                try:
+                    strike = float(execution_contract.get("strike") or 0)
+                except (TypeError, ValueError):
+                    strike = 0.0
+                if not expiry or right not in {"C", "P"} or strike <= 0:
+                    raise RuntimeError("exact_option_execution_contract_required")
     return {
         "command_id": command_id,
         "source_ref": source_ref,
@@ -280,6 +310,7 @@ def _validate_selected_runtime_request(request: Mapping[str, Any]) -> dict[str, 
         "runtime_id": runtime_id,
         "symbol": symbol,
         "strategy_spec_digest": spec,
+        "execution_contract": execution_contract,
     }
 
 
@@ -303,11 +334,25 @@ def _validate_authorized_request(runtime: Mapping[str, Any], request: Mapping[st
     authorized = _validate_selected_runtime_request(request)
     return {**authorized, "cleanup": expected_cleanup}
 
-def _flatten_snapshot(send: JsonSender, symbol: str) -> tuple[int, dict[str, Any]]:
+def _flatten_snapshot(
+    send: JsonSender,
+    symbol: str,
+    execution_contract: Mapping[str, Any],
+) -> tuple[int, dict[str, Any]]:
+    exact_contract = dict(execution_contract or {})
     return send(
         "POST",
         "/strategy/ibkr-paper-flatten-preview-suite",
-        payload={"preview_symbols": [symbol], "batch_symbols": [symbol], "candidate_limit": 50, "preview_limit": 1, "batch_limit": 1},
+        payload={
+            "symbol": symbol,
+            "preview_symbols": [symbol],
+            "batch_symbols": [symbol],
+            "candidate_limit": 50,
+            "preview_limit": 1,
+            "batch_limit": 1,
+            "contract": exact_contract,
+            "execution_contract": exact_contract,
+        },
         timeout=60.0,
     )
 
@@ -427,11 +472,12 @@ def execute_paper_proof(
 ) -> dict[str, Any]:
     auth = _validate_authorized_request(runtime, request)
     symbol = auth["symbol"]
+    execution_contract = dict(auth["execution_contract"])
     candidate_lease = _candidate_transport_lease(auth["payload"])
 
     health_status, health = send("GET", "/healthz", timeout=15.0)
     open_status, open_before = send("GET", "/strategy/ibkr-paper-open-orders", params={"symbol": symbol}, timeout=45.0)
-    pos_status, position_before = _flatten_snapshot(send, symbol)
+    pos_status, position_before = _flatten_snapshot(send, symbol, execution_contract)
     global_open_before, target_open_before = _open_counts(open_before, symbol)
     target_position_before = _position_for_symbol(position_before, symbol)
 
@@ -464,6 +510,7 @@ def execute_paper_proof(
             "strategy_spec_digest": auth["strategy_spec_digest"],
             "symbol": symbol,
             "timeframe": auth["authority"].get("timeframe"),
+            "execution_contract": execution_contract,
         },
         "preflight": {
             "health_http_status": health_status,
@@ -536,7 +583,7 @@ def execute_paper_proof(
         return receipt
 
     open_status, open_after_submit = send("GET", "/strategy/ibkr-paper-open-orders", params={"symbol": symbol}, timeout=45.0)
-    pos_status, pos_after_submit = _flatten_snapshot(send, symbol)
+    pos_status, pos_after_submit = _flatten_snapshot(send, symbol, execution_contract)
     _, target_open_after_submit = _open_counts(open_after_submit, symbol)
     target_position_after_submit = _position_for_symbol(pos_after_submit, symbol)
 
@@ -577,7 +624,7 @@ def execute_paper_proof(
         })
 
     open_status, open_after_cancel = send("GET", "/strategy/ibkr-paper-open-orders", params={"symbol": symbol}, timeout=45.0)
-    pos_status, pos_after_cancel = _flatten_snapshot(send, symbol)
+    pos_status, pos_after_cancel = _flatten_snapshot(send, symbol, execution_contract)
     _, target_open_after_cancel = _open_counts(open_after_cancel, symbol)
     target_position_after_cancel = _position_for_symbol(pos_after_cancel, symbol)
     if target_open_after_cancel > 0:
@@ -589,6 +636,8 @@ def execute_paper_proof(
         flatten_payload = {
             "symbol": symbol,
             "symbols": [symbol],
+            "contract": execution_contract,
+            "execution_contract": execution_contract,
             "operator_approved": True,
             "operator_approval": True,
             "ibkr_paper_flatten_ack_13z39": "IBKR_PAPER_FLATTEN_ACK_13Z39",
@@ -608,7 +657,7 @@ def execute_paper_proof(
         flatten_identity = _extract_order_identity(flatten, symbol)
 
     final_open_status, final_open = send("GET", "/strategy/ibkr-paper-open-orders", params={"symbol": symbol}, timeout=45.0)
-    final_pos_status, final_pos = _flatten_snapshot(send, symbol)
+    final_pos_status, final_pos = _flatten_snapshot(send, symbol, execution_contract)
     global_open_final, target_open_final = _open_counts(final_open, symbol)
     target_position_final = _position_for_symbol(final_pos, symbol)
     final_ok = bool(
