@@ -1,0 +1,22 @@
+name: MR Gold Miner Volatility Gate B5 20260918
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/mr_gold_miner_volatility_gate_b5_20260918.py'
+      - '.github/workflows/mr-gold-miner-volatility-gate-b5-20260918.yml'
+  workflow_dispatch:
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet yfinance pandas
+      - run: python research/mr_gold_miner_volatility_gate_b5_20260918.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mr-gold-miner-volatility-gate
+          path: research/artifacts/mr_gold_miner_volatility_gate_b5_20260918.json
