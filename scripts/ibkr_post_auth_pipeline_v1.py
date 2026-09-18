@@ -79,6 +79,7 @@ SAFE_SECONDS_MAX_BAR = {
 }
 SAFE_SECONDS_DURATIONS = set(SAFE_SECONDS_MAX_BAR)
 MAX_BAR_REQUESTS = 50
+HISTORICAL_CHUNK_PACE_SEC = 0.4
 
 
 def _bar_size_seconds(value: str) -> int | None:
@@ -519,7 +520,12 @@ def main() -> int:
                     **dict(bar_request),
                     "historical_bar_count": len(bars),
                     "request_elapsed_ms": request_elapsed_ms,
+                    "maintenance_pacing_sec": (
+                        HISTORICAL_CHUNK_PACE_SEC if end_date_time_utc else 0.0
+                    ),
                 })
+                if end_date_time_utc:
+                    ib.sleep(HISTORICAL_CHUNK_PACE_SEC)
             quote_snapshot = None
             if args.include_quotes:
                 quote_snapshot = sample_exact_contract_quote(ib, resolved)
