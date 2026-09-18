@@ -46,6 +46,8 @@ class WarmReadReturnTests(unittest.TestCase):
             "open_trades": [],
             "broker_time": "2026-09-17T00:00:00+00:00",
             "post_auth_handoff": {"schema": "mmibkr-ibkr-post-auth-handoff-v2"},
+            "requested_symbols": ["AMAT"],
+            "forward_bar_symbols": ["AMAT"],
             "forward_bars": [{"symbol": "AMAT", "close": 151.0}],
             "capabilities": {
                 "account_state": True,
@@ -133,6 +135,49 @@ class WarmReadReturnTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "mutation boundary"):
                 mod.encrypt_snapshot(
                     snapshot=mutable,
+                    recipient_b64=recipient_b64,
+                    recipient_key_id=recipient_key_id,
+                    run_id="12345",
+                    output_dir=Path(td),
+                )
+
+    def test_non_du_account_fails_closed(self):
+        _, recipient_b64, recipient_key_id = self._recipient()
+        snapshot = self._snapshot()
+        snapshot["managed_accounts"] = ["U123456"]
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaisesRegex(RuntimeError, "DU paper-account boundary"):
+                mod.encrypt_snapshot(
+                    snapshot=snapshot,
+                    recipient_b64=recipient_b64,
+                    recipient_key_id=recipient_key_id,
+                    run_id="12345",
+                    output_dir=Path(td),
+                )
+
+    def test_incomplete_forward_bar_coverage_fails_closed(self):
+        _, recipient_b64, recipient_key_id = self._recipient()
+        snapshot = self._snapshot()
+        snapshot["requested_symbols"] = ["AMAT", "APH"]
+        snapshot["forward_bar_symbols"] = ["AMAT"]
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaisesRegex(RuntimeError, "forward-bar coverage mismatch"):
+                mod.encrypt_snapshot(
+                    snapshot=snapshot,
+                    recipient_b64=recipient_b64,
+                    recipient_key_id=recipient_key_id,
+                    run_id="12345",
+                    output_dir=Path(td),
+                )
+
+    def test_missing_required_read_capability_fails_closed(self):
+        _, recipient_b64, recipient_key_id = self._recipient()
+        snapshot = self._snapshot()
+        snapshot["capabilities"]["historical_market_data"] = False
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaisesRegex(RuntimeError, "required capability missing"):
+                mod.encrypt_snapshot(
+                    snapshot=snapshot,
                     recipient_b64=recipient_b64,
                     recipient_key_id=recipient_key_id,
                     run_id="12345",
