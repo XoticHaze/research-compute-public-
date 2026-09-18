@@ -84,6 +84,7 @@ on:
       - 'tests/test_ibkr_remote_selected_runtime_paper_execute_v1.py'
       - 'tests/test_ibkr_remote_paper_proof_return_v1.py'
       - 'tests/test_ibkr_warm_read_return_v1.py'
+      - 'tests/test_ibkr_initial_selected_runtime_backfill_v1.py'
       - 'ibkr_login_trigger.txt'
       - 'config/ibkr_initial_selected_runtime_backfill_v1.json'
 
@@ -136,7 +137,8 @@ jobs:
             tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py \
             tests/test_ibkr_remote_selected_runtime_paper_execute_v1.py \
             tests/test_ibkr_remote_paper_proof_return_v1.py \
-            tests/test_ibkr_warm_read_return_v1.py
+            tests/test_ibkr_warm_read_return_v1.py \
+            tests/test_ibkr_initial_selected_runtime_backfill_v1.py
           python - <<'PY'
           from pathlib import Path
           import yaml
@@ -155,7 +157,8 @@ jobs:
             tests.test_ibkr_remote_selected_runtime_command_capsule_v2 \
             tests.test_ibkr_remote_selected_runtime_paper_execute_v1 \
             tests.test_ibkr_remote_paper_proof_return_v1 \
-            tests.test_ibkr_warm_read_return_v1 -v
+            tests.test_ibkr_warm_read_return_v1 \
+            tests.test_ibkr_initial_selected_runtime_backfill_v1 -v
           echo 'IBKR_BROKER_LOGIN_ATTEMPTED=0'
           echo 'IBKR_BROKER_ORDER_ATTEMPTED=0'
 
@@ -212,7 +215,8 @@ jobs:
             tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py \
             tests/test_ibkr_remote_selected_runtime_paper_execute_v1.py \
             tests/test_ibkr_remote_paper_proof_return_v1.py \
-            tests/test_ibkr_warm_read_return_v1.py
+            tests/test_ibkr_warm_read_return_v1.py \
+            tests/test_ibkr_initial_selected_runtime_backfill_v1.py
           python -m unittest \
             tests.test_ibkr_b1_auth_contracts_v1 \
             tests.test_ibkr_post_auth_pipeline_contracts_v1 \
@@ -221,7 +225,8 @@ jobs:
             tests.test_ibkr_remote_selected_runtime_command_capsule_v2 \
             tests.test_ibkr_remote_selected_runtime_paper_execute_v1 \
             tests.test_ibkr_remote_paper_proof_return_v1 \
-            tests.test_ibkr_warm_read_return_v1 -v
+            tests.test_ibkr_warm_read_return_v1 \
+            tests.test_ibkr_initial_selected_runtime_backfill_v1 -v
           echo "IBKR_PAPER_PROOF_MODE=${IBKR_PAPER_PROOF_MODE}"
 
       - name: Load one-shot selected-runtime initial backfill request
