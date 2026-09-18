@@ -1,0 +1,1 @@
+B8 frozen development-only hypothesis: test whether prior completed-month 6-month UUP weakness adds information to the surviving 6-month USO<0 GDX/GLD research signal beyond equal-participation placebo gates. No broker, runtime, allocation, or protected-holdout authority.
