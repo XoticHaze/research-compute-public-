@@ -48,6 +48,30 @@ class PersistentPaperExecuteTests(unittest.TestCase):
             },
         }
 
+    def request(self):
+        return {
+            "command_id": "sha256:" + "c" * 64,
+            "source_ref": "selected-runtime-candidate:example",
+            "canonical_submit_payload": {
+                "runtime_id": "mnq-runtime",
+                "symbol": "MNQ",
+                "action": "BUY",
+                "quantity": 1,
+                "order_type": "LMT",
+                "idempotency_key": "candidate-1",
+            },
+            "selected_runtime_authority": {
+                "authority_source": "MM-IBKR selected_runtime.execution_policy",
+                "paper_submit_enabled": True,
+                "live_submit_enabled": False,
+                "runtime_id": "mnq-runtime",
+                "strategy_id": "crw_score_multi_mode",
+                "strategy_spec_digest": "spec-1",
+                "symbol": "MNQ",
+                "timeframe": "12Min",
+            },
+        }
+
     def test_runtime_requires_persistent_no_cleanup_contract(self):
         out = mod.validate_fleet_authority_execute_runtime(self.runtime())
         self.assertEqual(out["mode"], "paper_execute")
@@ -56,6 +80,42 @@ class PersistentPaperExecuteTests(unittest.TestCase):
         bad["cleanup"]["flatten_filled_position"] = True
         with self.assertRaisesRegex(RuntimeError, "cleanup_contract_mismatch"):
             mod.validate_fleet_authority_execute_runtime(bad)
+
+    def test_execute_uses_mode_neutral_selected_runtime_request_validator(self):
+        def send(method, path, **kwargs):
+            if path == "/healthz":
+                return 200, {"ok": True}
+            if path == "/strategy/ibkr-paper-open-orders":
+                return 200, {"ok": True, "orders": []}
+            if path == "/strategy/ibkr-paper-order-submit":
+                return 409, {
+                    "ok": False,
+                    "status": "blocked",
+                    "place_order_called": False,
+                    "broker_order_placed": False,
+                    "guards": {"selected_runtime_id": "mnq-runtime"},
+                    "blockers": ["canonical_policy_block"],
+                }
+            raise AssertionError(path)
+
+        with patch.object(mod.proof_v1, "_candidate_transport_lease", return_value={"requested": False, "ok": None}), \
+             patch.object(mod.proof_v1, "_jit_refresh_authorized_lmt_payload", return_value=(self.request()["canonical_submit_payload"], {"requested": False, "performed": False, "ok": None})), \
+             patch.object(mod.proof_v1, "_flatten_snapshot", return_value=(200, {"ok": True})), \
+             patch.object(mod.proof_v1, "_open_counts", return_value=(0, 0)), \
+             patch.object(mod.proof_v1, "_position_for_symbol", return_value=0.0), \
+             patch.object(mod.proof_v1, "_extract_order_identity", return_value={}):
+            receipt = mod.execute_paper_execute(
+                runtime=self.runtime(),
+                request=self.request(),
+                send=send,
+                run_id="123",
+                public_head="d" * 40,
+            )
+
+        self.assertTrue(receipt["ok"])
+        self.assertEqual(receipt["status"], "CANONICAL_SUBMIT_BLOCKED")
+        with self.assertRaisesRegex(RuntimeError, "paper_submit_proof_runtime_required"):
+            mod.proof_v1._validate_authorized_request(self.runtime(), self.request())
 
     def test_existing_position_is_observed_not_zero_baseline_blocked(self):
         calls = []
