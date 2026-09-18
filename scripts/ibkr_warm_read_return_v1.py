@@ -77,9 +77,9 @@ def collect_snapshot(
         if not ib.isConnected():
             raise RuntimeError("IBKR read snapshot connection did not become ready")
 
-        managed_accounts = list(ib.managedAccounts())
-        if not managed_accounts or not any(str(a).upper().startswith("D") for a in managed_accounts):
-            raise RuntimeError("read snapshot is not bound to a paper account")
+        managed_accounts = [str(a) for a in ib.managedAccounts()]
+        if not managed_accounts or any(not str(a).upper().startswith("DU") for a in managed_accounts):
+            raise RuntimeError("read snapshot is not bound exclusively to DU paper accounts")
 
         account_summary = []
         for node in ib.accountSummary():
@@ -131,6 +131,38 @@ def collect_snapshot(
 
         handoff = json.loads(handoff_file.read_text(encoding="utf-8")) if handoff_file.is_file() else {}
         bars = _load_jsonl(bars_file)
+        if not isinstance(handoff, Mapping) or handoff.get("schema") != "mmibkr-ibkr-post-auth-handoff-v2":
+            raise RuntimeError("warm read post-auth handoff schema mismatch")
+        if handoff.get("trading_mode") != "paper" or handoff.get("read_only") is not True:
+            raise RuntimeError("warm read post-auth paper/read-only boundary violated")
+        if handoff.get("paper_account_verified") is not True or handoff.get("consumer_ready") is not True:
+            raise RuntimeError("warm read post-auth consumer is not ready")
+
+        requested_symbols = [
+            str(node.get("symbol") or "").strip().upper()
+            for node in (handoff.get("symbols") or [])
+            if isinstance(node, Mapping) and str(node.get("symbol") or "").strip()
+        ]
+        requested_symbols = list(dict.fromkeys(requested_symbols))
+        if not requested_symbols:
+            raise RuntimeError("warm read requested symbol coverage missing")
+        forward_bar_symbols = sorted({
+            str(node.get("symbol") or "").strip().upper()
+            for node in bars
+            if str(node.get("symbol") or "").strip()
+        })
+        if set(forward_bar_symbols) != set(requested_symbols):
+            raise RuntimeError("warm read forward-bar symbol coverage mismatch")
+        handoff_bar_symbols = sorted(str(item).strip().upper() for item in (handoff.get("forward_bar_symbols") or []) if str(item).strip())
+        if set(handoff_bar_symbols) != set(requested_symbols):
+            raise RuntimeError("warm read post-auth forward-bar coverage mismatch")
+        handoff_caps = handoff.get("capabilities") if isinstance(handoff.get("capabilities"), Mapping) else {}
+        for required in ("account_state", "positions", "open_orders", "historical_market_data", "canonical_forward_bar_materialization"):
+            if handoff_caps.get(required) is not True:
+                raise RuntimeError(f"warm read post-auth capability missing: {required}")
+        if not account_summary:
+            raise RuntimeError("warm read account summary is empty")
+
         snapshot = {
             "schema": SNAPSHOT_SCHEMA,
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -140,12 +172,14 @@ def collect_snapshot(
             "harness": HARNESS,
             "trading_mode": "paper",
             "read_only": True,
-            "managed_accounts": [str(a) for a in managed_accounts],
+            "managed_accounts": managed_accounts,
             "account_summary": account_summary,
             "positions": positions,
             "open_trades": open_trades,
             "broker_time": ib.reqCurrentTime().isoformat(),
             "post_auth_handoff": handoff,
+            "requested_symbols": requested_symbols,
+            "forward_bar_symbols": forward_bar_symbols,
             "forward_bars": bars,
             "capabilities": {
                 "account_state": True,
@@ -187,8 +221,23 @@ def encrypt_snapshot(
 ) -> dict[str, Any]:
     if snapshot.get("schema") != SNAPSHOT_SCHEMA or str(snapshot.get("run_id")) != str(run_id):
         raise RuntimeError("warm read snapshot identity mismatch")
-    if snapshot.get("read_only") is not True or (snapshot.get("capabilities") or {}).get("order_submission") is not False:
+    if snapshot.get("authority") != AUTHORITY or snapshot.get("harness") != HARNESS:
+        raise RuntimeError("warm read snapshot authority mismatch")
+    if snapshot.get("trading_mode") != "paper" or snapshot.get("read_only") is not True:
+        raise RuntimeError("warm read snapshot paper/read-only boundary violated")
+    accounts = [str(item) for item in (snapshot.get("managed_accounts") or [])]
+    if not accounts or any(not item.upper().startswith("DU") for item in accounts):
+        raise RuntimeError("warm read snapshot DU paper-account boundary violated")
+    capabilities = snapshot.get("capabilities") if isinstance(snapshot.get("capabilities"), Mapping) else {}
+    for required in ("account_state", "positions", "open_orders", "historical_market_data"):
+        if capabilities.get(required) is not True:
+            raise RuntimeError(f"warm read snapshot required capability missing: {required}")
+    if capabilities.get("order_submission") is not False or capabilities.get("global_cancel") is not False or capabilities.get("live_execution") is not False:
         raise RuntimeError("warm read snapshot mutation boundary violated")
+    requested_symbols = {str(item).strip().upper() for item in (snapshot.get("requested_symbols") or []) if str(item).strip()}
+    forward_bar_symbols = {str(item).strip().upper() for item in (snapshot.get("forward_bar_symbols") or []) if str(item).strip()}
+    if not requested_symbols or requested_symbols != forward_bar_symbols:
+        raise RuntimeError("warm read snapshot forward-bar coverage mismatch")
     try:
         raw_recipient = base64.b64decode(str(recipient_b64).encode("ascii"), validate=True)
     except Exception as exc:
