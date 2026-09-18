@@ -37,6 +37,43 @@ class PostAuthPipelineContractTests(unittest.TestCase):
         self.assertEqual(contract.exchange, "SMART")
         self.assertEqual(evidence["source"], "public_stock_fallback")
 
+    def test_exact_mm_option_contract_is_preserved(self):
+        hints = mod.parse_contract_hints(json.dumps({
+            "SPY": {
+                "conId": 999001,
+                "symbol": "SPY",
+                "secType": "OPT",
+                "exchange": "SMART",
+                "currency": "USD",
+                "lastTradeDateOrContractMonth": "20261016",
+                "strike": 600.0,
+                "right": "C",
+                "multiplier": "100",
+                "tradingClass": "SPY",
+            }
+        }))
+        contract, evidence = mod.contract_request_for_symbol("SPY", hints)
+        self.assertEqual(contract.conId, 999001)
+        self.assertEqual(contract.secType, "OPT")
+        self.assertEqual(contract.strike, 600.0)
+        self.assertEqual(contract.right, "C")
+        self.assertEqual(contract.multiplier, "100")
+        self.assertEqual(contract.lastTradeDateOrContractMonth, "20261016")
+        self.assertEqual(evidence["source"], "mm_selected_runtime_execution_contract")
+
+    def test_option_hint_requires_exact_right_and_strike(self):
+        with self.assertRaisesRegex(RuntimeError, "option right/strike"):
+            mod.parse_contract_hints(json.dumps({
+                "SPY": {
+                    "conId": 999001,
+                    "symbol": "SPY",
+                    "secType": "OPT",
+                    "exchange": "SMART",
+                    "currency": "USD",
+                    "lastTradeDateOrContractMonth": "20261016",
+                }
+            }))
+
     def test_non_stock_hint_requires_explicit_conid(self):
         with self.assertRaisesRegex(RuntimeError, "explicit conId required"):
             mod.parse_contract_hints(json.dumps({
