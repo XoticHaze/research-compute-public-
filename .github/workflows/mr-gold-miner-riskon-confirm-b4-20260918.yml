@@ -1,0 +1,22 @@
+name: MR Gold Miner Risk-On Confirmation B4 20260918
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/mr_gold_miner_riskon_confirmation_b4_20260918.py'
+      - '.github/workflows/mr-gold-miner-riskon-confirm-b4-20260918.yml'
+  workflow_dispatch:
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet yfinance pandas
+      - run: python research/mr_gold_miner_riskon_confirmation_b4_20260918.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mr-gold-miner-riskon-confirmation
+          path: research/artifacts/mr_gold_miner_riskon_confirmation_b4_20260918.json
