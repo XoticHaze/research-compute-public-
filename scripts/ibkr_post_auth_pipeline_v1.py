@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 import time
@@ -266,6 +267,76 @@ def contract_request_for_symbol(
     }
 
 
+def _positive_float(value):
+    try:
+        number = float(value)
+    except Exception:
+        return None
+    return number if math.isfinite(number) and number > 0 else None
+
+
+def sample_exact_contract_quote(
+    ib: IB,
+    contract: Contract,
+    *,
+    timeout_sec: float = 2.5,
+    poll_interval_sec: float = 0.2,
+) -> dict[str, object]:
+    """Read one exact-contract quote without selecting a route or mutating broker state."""
+    started = time.perf_counter()
+    ticker = None
+    error = None
+    bid = ask = last = market_price = None
+    effective_type = None
+    try:
+        ib.reqMarketDataType(1)
+        ticker = ib.reqMktData(contract, "", False, False)
+        deadline = time.monotonic() + max(0.2, min(float(timeout_sec), 10.0))
+        while time.monotonic() < deadline:
+            remaining = deadline - time.monotonic()
+            ib.sleep(min(max(0.05, float(poll_interval_sec)), max(0.05, remaining)))
+            bid = _positive_float(getattr(ticker, "bid", None))
+            ask = _positive_float(getattr(ticker, "ask", None))
+            last = _positive_float(getattr(ticker, "last", None))
+            try:
+                market_price = _positive_float(ticker.marketPrice())
+            except Exception:
+                market_price = None
+            effective_type = getattr(ticker, "marketDataType", None)
+            if bid is not None and ask is not None:
+                break
+    except Exception as exc:
+        error = repr(exc)
+    finally:
+        if ticker is not None:
+            try:
+                ib.cancelMktData(contract)
+            except Exception:
+                pass
+
+    bid_ask = bool(bid is not None and ask is not None and bid <= ask)
+    executable = bool(bid_ask and effective_type == 1)
+    received = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return {
+        "source": "ibkr_exact_mm_contract_reqMktData",
+        "requested_market_data_type": 1,
+        "effective_market_data_type": effective_type,
+        "bid": bid,
+        "ask": ask,
+        "last": last,
+        "marketPrice": market_price,
+        "bid_ask_available": bid_ask,
+        "executable_quote_available": executable,
+        "quote_received_at_utc": received,
+        "quote_age_at_response_sec": 0.0,
+        "request_error": error,
+        "request_elapsed_ms": round((time.perf_counter() - started) * 1000.0, 3),
+        "route_selected_by_public": False,
+        "contract_selected_by_public": False,
+        "broker_mutation": False,
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
@@ -274,6 +345,7 @@ def main() -> int:
     ap.add_argument("--symbols", default="AMAT,APH")
     ap.add_argument("--contracts-json", default="", help="Optional exact MM-selected execution contracts keyed by symbol")
     ap.add_argument("--bar-requests-json", default="", help="Optional exact MM-owned history requests keyed by symbol")
+    ap.add_argument("--include-quotes", action="store_true", help="Sample exact-contract real-time bid/ask alongside bars")
     ap.add_argument("--output", required=True, help="Sanitized broker/session handoff JSON")
     ap.add_argument("--bars-output", required=True, help="Canonical research.forward_bar.v2 JSONL")
     args = ap.parse_args()
@@ -390,6 +462,9 @@ def main() -> int:
                     "historical_bar_count": len(bars),
                     "request_elapsed_ms": request_elapsed_ms,
                 })
+            quote_snapshot = None
+            if args.include_quotes:
+                quote_snapshot = sample_exact_contract_quote(ib, resolved)
             symbol_receipts.append(
                 {
                     "symbol": symbol,
@@ -399,6 +474,13 @@ def main() -> int:
                     "historical_bar_count": historical_bar_count,
                     "bar_request_source": "mm_exact_bar_requests" if symbol in bar_requests else "compatibility_default_5min",
                     "bar_requests": request_receipts,
+                    "quote_snapshot_requested": bool(args.include_quotes),
+                    "quote_snapshot": quote_snapshot,
+                    "quote_request_elapsed_ms": (
+                        quote_snapshot.get("request_elapsed_ms")
+                        if isinstance(quote_snapshot, dict)
+                        else 0.0
+                    ),
                     "contract_qualification_elapsed_ms": contract_qualification_elapsed_ms,
                     "symbol_elapsed_ms": round((time.perf_counter() - symbol_started) * 1000.0, 3),
                     "contract_source": contract_request.get("source"),
@@ -460,6 +542,7 @@ def main() -> int:
             },
             "completed_trade_evidence_materialized": False,
             "consumer_ready": True,
+            "quote_snapshot_requested": bool(args.include_quotes),
             "latency_ms": {
                 "connect": connect_elapsed_ms,
                 "account_state_and_open_orders": account_state_elapsed_ms,
