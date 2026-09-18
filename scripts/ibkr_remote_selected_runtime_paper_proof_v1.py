@@ -241,23 +241,8 @@ def _position_for_symbol(flatten_preview: Mapping[str, Any], symbol: str) -> flo
     return 0.0
 
 
-def _validate_authorized_request(runtime: Mapping[str, Any], request: Mapping[str, Any]) -> dict[str, Any]:
-    if runtime.get("mode") != MODE:
-        raise RuntimeError("paper_submit_proof_runtime_required")
-    if runtime.get("read_only_api") != "no":
-        raise RuntimeError("paper_submit_proof_requires_read_only_api_no")
-    if runtime.get("paper_only") is not True or runtime.get("live_trading_change") is not False:
-        raise RuntimeError("paper_only_runtime_boundary_required")
-    cleanup = runtime.get("cleanup") if isinstance(runtime.get("cleanup"), Mapping) else {}
-    expected_cleanup = {
-        "cancel_open_order": True,
-        "flatten_filled_position": True,
-        "require_zero_baseline": True,
-        "allow_global_cancel": False,
-    }
-    if dict(cleanup) != expected_cleanup:
-        raise RuntimeError("paper_proof_cleanup_contract_mismatch")
-
+def _validate_selected_runtime_request(request: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate MM-owned selected-runtime intent independent of public execution mode."""
     _reject_live(request)
     command_id = str(request.get("command_id") or "").strip().lower()
     source_ref = str(request.get("source_ref") or "").strip()
@@ -295,9 +280,28 @@ def _validate_authorized_request(runtime: Mapping[str, Any], request: Mapping[st
         "runtime_id": runtime_id,
         "symbol": symbol,
         "strategy_spec_digest": spec,
-        "cleanup": expected_cleanup,
     }
 
+
+def _validate_authorized_request(runtime: Mapping[str, Any], request: Mapping[str, Any]) -> dict[str, Any]:
+    if runtime.get("mode") != MODE:
+        raise RuntimeError("paper_submit_proof_runtime_required")
+    if runtime.get("read_only_api") != "no":
+        raise RuntimeError("paper_submit_proof_requires_read_only_api_no")
+    if runtime.get("paper_only") is not True or runtime.get("live_trading_change") is not False:
+        raise RuntimeError("paper_only_runtime_boundary_required")
+    cleanup = runtime.get("cleanup") if isinstance(runtime.get("cleanup"), Mapping) else {}
+    expected_cleanup = {
+        "cancel_open_order": True,
+        "flatten_filled_position": True,
+        "require_zero_baseline": True,
+        "allow_global_cancel": False,
+    }
+    if dict(cleanup) != expected_cleanup:
+        raise RuntimeError("paper_proof_cleanup_contract_mismatch")
+
+    authorized = _validate_selected_runtime_request(request)
+    return {**authorized, "cleanup": expected_cleanup}
 
 def _flatten_snapshot(send: JsonSender, symbol: str) -> tuple[int, dict[str, Any]]:
     return send(
