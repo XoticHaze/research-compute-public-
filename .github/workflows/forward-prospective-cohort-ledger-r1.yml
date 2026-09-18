@@ -19,7 +19,7 @@ on:
       - '.github/workflows/forward-prospective-cohort-ledger-r1.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: forward-prospective-cohort-ledger-r1
@@ -59,29 +59,9 @@ jobs:
           path: artifacts/forward_prospective_cohort_ledger_r1.json
           if-no-files-found: error
           retention-days: 90
-      - name: Publish current ledger
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+      - name: Preserve single canonical current-bundle owner
         run: |
           set -euo pipefail
-          target=research/current/forward_prospective_cohort_ledger_r1.json
-          mkdir -p research/current
-          cp artifacts/forward_prospective_cohort_ledger_r1.json "$target"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add "$target"
-          if git diff --cached --quiet; then
-            echo 'FORWARD_PROSPECTIVE_LEDGER_UNCHANGED=true'
-            exit 0
-          fi
-          git commit -m 'Forward: publish prospective cohort ledger'
-          for attempt in $(seq 1 5); do
-            git fetch origin main
-            git rebase origin/main
-            if git push origin HEAD:main; then
-              echo "FORWARD_PROSPECTIVE_LEDGER_PUBLISHED attempt=${attempt}"
-              exit 0
-            fi
-            sleep $(( attempt * 2 ))
-          done
-          echo 'FORWARD_PROSPECTIVE_LEDGER_PUBLISH_FAILED' >&2
-          exit 31
+          test -f artifacts/forward_prospective_cohort_ledger_r1.json
+          echo 'CANONICAL_CURRENT_OWNER=forward-market-scoreboard-r1.yml'
+          echo 'STANDALONE_LEDGER_MODE=diagnostic_artifact_only'
