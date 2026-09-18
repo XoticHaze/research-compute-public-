@@ -25,10 +25,10 @@
   },
   "decision_use": "Prospective portfolio-level falsifier: determine whether the replicated developed-ex-US currency hedge improves the actual frozen allocator target beyond both unchanged cash and an equal unhedged developed-ex-US overlay.",
   "entry_date": "2026-09-14",
-  "forward_sessions": 3,
-  "generated_at": "2026-09-17T02:56:34.424124+00:00",
-  "latest_common_market_date": "2026-09-16",
-  "market_data_asof": "2026-09-17",
+  "forward_sessions": 4,
+  "generated_at": "2026-09-18T02:42:58.881209+00:00",
+  "latest_common_market_date": "2026-09-17",
+  "market_data_asof": "2026-09-18",
   "positions": {
     "hedged_challenger": {
       "AVDV": 0.1,
@@ -116,29 +116,29 @@
       "portfolio_roundtrip_cost_bps_if_flattened_now": 2.5
     },
     "hedged_challenger": {
-      "excess_vs_incumbent_bps": -2.5374,
-      "gross_return_bps": -19.1458,
-      "net_if_flattened_now_bps": -21.6458
+      "excess_vs_incumbent_bps": 2.1449,
+      "gross_return_bps": 161.1178,
+      "net_if_flattened_now_bps": 158.6178
     },
-    "incumbent_return_bps": -19.1085,
+    "incumbent_return_bps": 156.473,
     "mechanism_attribution": {
-      "hedged_minus_spy_overlay_bps": 4.4509,
-      "hedged_minus_unhedged_bps": 3.7217,
-      "portfolio_improvement_and_hedge_edge_both_positive": false
+      "hedged_minus_spy_overlay_bps": 3.5146,
+      "hedged_minus_unhedged_bps": 3.5628,
+      "portfolio_improvement_and_hedge_edge_both_positive": true
     },
     "spy_opportunity_control": {
-      "excess_vs_incumbent_bps": -6.9882,
-      "gross_return_bps": -23.5967,
-      "net_if_flattened_now_bps": -26.0967
+      "excess_vs_incumbent_bps": -1.3697,
+      "gross_return_bps": 157.6032,
+      "net_if_flattened_now_bps": 155.1032
     },
     "unhedged_matched_control": {
-      "excess_vs_incumbent_bps": -6.2591,
-      "gross_return_bps": -22.8675,
-      "net_if_flattened_now_bps": -25.3675
+      "excess_vs_incumbent_bps": -1.4179,
+      "gross_return_bps": 157.5551,
+      "net_if_flattened_now_bps": 155.0551
     }
   },
   "source": {
-    "panel_sha256": "3f83065633d26fb694eaa77bbccea551ba7c7384e9cdedeb9dab46cc91b3330c",
+    "panel_sha256": "b659e59c1ea0373f7abb89ee2c3d26a05b28af9169664848414a1d5806d8f31a",
     "provider": "Yahoo Finance via yfinance; research-only public data",
     "symbols": [
       "AVDV",
