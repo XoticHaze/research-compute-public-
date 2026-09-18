@@ -32,33 +32,33 @@
       "program_id": "HOMEBUILDERS",
       "resolution": {
         "common_entry_date": "2026-09-14",
-        "common_market_latest_date": "2026-09-16",
+        "common_market_latest_date": "2026-09-17",
         "observations": [
           {
             "entry_date": "2026-09-14",
             "horizon_sessions": 5,
-            "sessions_completed": 2,
+            "sessions_completed": 3,
             "status": "OPEN",
             "symbol": "CCS"
           },
           {
             "entry_date": "2026-09-14",
             "horizon_sessions": 5,
-            "sessions_completed": 2,
+            "sessions_completed": 3,
             "status": "OPEN",
             "symbol": "MHO"
           },
           {
             "entry_date": "2026-09-14",
             "horizon_sessions": 5,
-            "sessions_completed": 2,
+            "sessions_completed": 3,
             "status": "OPEN",
             "symbol": "HOV"
           },
           {
             "entry_date": "2026-09-14",
             "horizon_sessions": 5,
-            "sessions_completed": 2,
+            "sessions_completed": 3,
             "status": "OPEN",
             "symbol": "BZH"
           }
@@ -107,10 +107,10 @@
       },
       "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
       "resolution": {
-        "common_market_latest_date": "2026-09-16",
+        "common_market_latest_date": "2026-09-17",
         "entry_date": "2026-09-14",
         "horizon_sessions": 20,
-        "sessions_completed": 2
+        "sessions_completed": 3
       },
       "signal_date": "2026-09-11",
       "source_adapter_sha256": "aed8eb43d888d3c4d39c4db940c89e5d2247204567d4a0fcf129e9551f04e333",
@@ -149,7 +149,7 @@
       }
     }
   ],
-  "generated_at": "2026-09-18T01:15:57.376276+00:00",
+  "generated_at": "2026-09-18T05:03:14.234397+00:00",
   "market_data_asof": "2026-09-18",
   "schema": "research.forward_prospective_cohort_ledger_r1",
   "summary": {

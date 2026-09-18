@@ -60,7 +60,7 @@
   "decision_at": "2026-09-10T07:25:00+00:00",
   "forward": {
     "first_close": "2026-09-10",
-    "latest_close": "2026-09-16",
+    "latest_close": "2026-09-17",
     "observations": [
       {
         "cost_detail": {
@@ -117,27 +117,37 @@
         "p249_plus_p266_gross": -0.0005134955387535535,
         "p249_plus_p266_net": -0.0005134955387535535,
         "satellite_increment_net": 0.00011980490058927779
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-09-17",
+        "holding_month": "2026-09",
+        "p249_core_gross": 0.01772202906379242,
+        "p249_core_net": 0.01772202906379242,
+        "p249_plus_p266_gross": 0.020070736186534766,
+        "p249_plus_p266_net": 0.020070736186534766,
+        "satellite_increment_net": 0.002348707122742346
       }
     ],
     "p249_core_net": {
-      "annualized_vol": 0.20170995977019743,
-      "cumulative_return": -0.029896288401801918,
-      "days": 5,
+      "annualized_vol": 0.23697785187523696,
+      "cumulative_return": -0.012704082229965663,
+      "days": 6,
       "max_drawdown": -0.022078057655932626,
-      "sharpe_rf0": -7.479681300382553
+      "sharpe_rf0": -2.1645340289120822
     },
     "p249_plus_p266_net": {
-      "annualized_vol": 0.1912859646749657,
-      "cumulative_return": -0.03187131459411918,
-      "days": 5,
+      "annualized_vol": 0.24227793719834792,
+      "cumulative_return": -0.012440259154720912,
+      "days": 6,
       "max_drawdown": -0.02264400693894264,
-      "sharpe_rf0": -8.429547311825806
+      "sharpe_rf0": -2.0668032221693653
     },
-    "satellite_increment_cumulative": -0.0020601213036255395
+    "satellite_increment_cumulative": 0.00028374719753720967
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-09-18T01:15:28.324693+00:00",
+  "observed_at": "2026-09-18T05:02:40.127063+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_pins": {
