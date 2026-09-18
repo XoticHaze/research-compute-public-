@@ -24,7 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from ib_insync import IB, Stock
+from ib_insync import Contract, IB, Stock
 
 from research.forward_bar_contract_v2 import ForwardBarContract, ibkr_bar_to_record, normalize_frame
 
@@ -38,12 +38,95 @@ def _jsonable(value):
         return value
 
 
+CONTRACT_HINT_FIELDS = (
+    "conId",
+    "symbol",
+    "secType",
+    "exchange",
+    "primaryExchange",
+    "currency",
+    "localSymbol",
+    "tradingClass",
+    "lastTradeDateOrContractMonth",
+)
+
+
+def parse_contract_hints(raw: str) -> dict[str, dict[str, object]]:
+    if not str(raw or "").strip():
+        return {}
+    try:
+        node = json.loads(raw)
+    except Exception as exc:
+        raise RuntimeError("contract hints JSON is invalid") from exc
+    if not isinstance(node, dict):
+        raise RuntimeError("contract hints must be an object keyed by symbol")
+
+    out: dict[str, dict[str, object]] = {}
+    for raw_symbol, raw_hint in node.items():
+        symbol = str(raw_symbol or "").strip().upper()
+        if not symbol or not isinstance(raw_hint, dict):
+            raise RuntimeError("contract hint entry is invalid")
+        hint_symbol = str(raw_hint.get("symbol") or symbol).strip().upper()
+        if hint_symbol != symbol:
+            raise RuntimeError(f"contract hint symbol mismatch for {symbol}")
+        sec_type = str(raw_hint.get("secType") or "").strip().upper()
+        if not sec_type:
+            raise RuntimeError(f"contract hint secType required for {symbol}")
+        try:
+            con_id = int(raw_hint.get("conId") or 0)
+        except (TypeError, ValueError):
+            con_id = 0
+        if sec_type != "STK" and con_id <= 0:
+            raise RuntimeError(f"explicit conId required for non-stock contract {symbol}")
+
+        clean: dict[str, object] = {}
+        for field in CONTRACT_HINT_FIELDS:
+            value = raw_hint.get(field)
+            if value not in (None, ""):
+                clean[field] = value
+        clean["symbol"] = symbol
+        clean["secType"] = sec_type
+        if con_id > 0:
+            clean["conId"] = con_id
+        out[symbol] = clean
+    return out
+
+
+def contract_request_for_symbol(
+    symbol: str,
+    hints: dict[str, dict[str, object]],
+) -> tuple[Contract, dict[str, object]]:
+    symbol = str(symbol or "").strip().upper()
+    hint = hints.get(symbol)
+    if not hint:
+        return Stock(symbol, "SMART", "USD"), {
+            "source": "public_stock_fallback",
+            "symbol": symbol,
+            "secType": "STK",
+            "exchange": "SMART",
+            "currency": "USD",
+        }
+
+    kwargs: dict[str, object] = {}
+    for field in CONTRACT_HINT_FIELDS:
+        value = hint.get(field)
+        if value not in (None, ""):
+            kwargs[field] = value
+    kwargs["symbol"] = symbol
+    kwargs["secType"] = str(hint.get("secType") or "").upper()
+    return Contract(**kwargs), {
+        "source": "mm_selected_runtime_execution_contract",
+        **{k: v for k, v in kwargs.items() if v not in (None, "")},
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=4002)
     ap.add_argument("--client-id", type=int, default=78)
     ap.add_argument("--symbols", default="AMAT,APH")
+    ap.add_argument("--contracts-json", default="", help="Optional exact MM-selected execution contracts keyed by symbol")
     ap.add_argument("--output", required=True, help="Sanitized broker/session handoff JSON")
     ap.add_argument("--bars-output", required=True, help="Canonical research.forward_bar.v2 JSONL")
     args = ap.parse_args()
@@ -51,6 +134,10 @@ def main() -> int:
     symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
     if not symbols:
         raise SystemExit("at least one symbol is required")
+    contract_hints = parse_contract_hints(args.contracts_json)
+    unexpected_hints = sorted(set(contract_hints) - set(symbols))
+    if unexpected_hints:
+        raise RuntimeError("contract hints include unrequested symbols: " + ",".join(unexpected_hints))
 
     ib = IB()
     try:
@@ -61,9 +148,9 @@ def main() -> int:
         managed_accounts = list(ib.managedAccounts())
         if not managed_accounts:
             raise RuntimeError("authenticated session exposed no managed account")
-        paper_accounts = [a for a in managed_accounts if a.upper().startswith("D")]
+        paper_accounts = [a for a in managed_accounts if str(a).upper().startswith("DU")]
         if not paper_accounts:
-            raise RuntimeError("authenticated session is not a paper account")
+            raise RuntimeError("authenticated session is not a DU paper account")
 
         current_time = ib.reqCurrentTime()
         account_summary = list(ib.accountSummary())
@@ -77,11 +164,20 @@ def main() -> int:
         symbol_receipts: list[dict[str, object]] = []
         records: list[dict[str, object]] = []
         for symbol in symbols:
-            contract = Stock(symbol, "SMART", "USD")
+            contract, contract_request = contract_request_for_symbol(symbol, contract_hints)
             qualified = ib.qualifyContracts(contract)
             if not qualified:
                 raise RuntimeError(f"contract qualification failed for {symbol}")
             resolved = qualified[0]
+            if contract_request.get("source") == "mm_selected_runtime_execution_contract":
+                requested_con_id = int(contract_request.get("conId") or 0)
+                resolved_con_id = int(getattr(resolved, "conId", 0) or 0)
+                if requested_con_id > 0 and resolved_con_id != requested_con_id:
+                    raise RuntimeError(f"qualified contract conId mismatch for {symbol}")
+                requested_sec_type = str(contract_request.get("secType") or "").upper()
+                resolved_sec_type = str(getattr(resolved, "secType", "") or "").upper()
+                if requested_sec_type and resolved_sec_type != requested_sec_type:
+                    raise RuntimeError(f"qualified contract secType mismatch for {symbol}")
             bars = ib.reqHistoricalData(
                 resolved,
                 endDateTime="",
@@ -99,7 +195,7 @@ def main() -> int:
                     bar,
                     resolved,
                     symbol=symbol,
-                    asset_type="STK",
+                    asset_type=str(getattr(resolved, "secType", "") or contract_request.get("secType") or "STK"),
                     bar_size="5 mins",
                     session="all",
                     source="ibkr",
@@ -113,6 +209,18 @@ def main() -> int:
                     "contract_id": f"conid:{resolved.conId}" if resolved.conId else (resolved.localSymbol or symbol),
                     "historical_data_ready": True,
                     "historical_bar_count": len(bars),
+                    "contract_source": contract_request.get("source"),
+                    "requested_contract": contract_request,
+                    "resolved_contract": {
+                        "conId": int(getattr(resolved, "conId", 0) or 0),
+                        "symbol": str(getattr(resolved, "symbol", "") or ""),
+                        "secType": str(getattr(resolved, "secType", "") or ""),
+                        "exchange": str(getattr(resolved, "exchange", "") or ""),
+                        "currency": str(getattr(resolved, "currency", "") or ""),
+                        "localSymbol": str(getattr(resolved, "localSymbol", "") or ""),
+                        "tradingClass": str(getattr(resolved, "tradingClass", "") or ""),
+                        "lastTradeDateOrContractMonth": str(getattr(resolved, "lastTradeDateOrContractMonth", "") or ""),
+                    },
                 }
             )
 
@@ -138,6 +246,8 @@ def main() -> int:
             "open_orders_readable": True,
             "open_order_count": len(open_orders),
             "broker_time_readable": current_time is not None,
+            "requested_symbols": symbols,
+            "contract_hint_symbols": sorted(contract_hints),
             "symbols": symbol_receipts,
             "forward_bar_contract": ForwardBarContract().schema,
             "forward_bar_count": int(len(frame)),
