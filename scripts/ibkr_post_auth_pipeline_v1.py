@@ -130,7 +130,7 @@ def contract_request_for_symbol(
     kwargs["symbol"] = symbol
     kwargs["secType"] = str(hint.get("secType") or "").upper()
     return Contract(**kwargs), {
-        "source": "mm_selected_runtime_execution_contract",
+        "source": "mm_exact_contract_hint",
         **{k: v for k, v in kwargs.items() if v not in (None, "")},
     }
 
@@ -184,7 +184,7 @@ def main() -> int:
             if not qualified:
                 raise RuntimeError(f"contract qualification failed for {symbol}")
             resolved = qualified[0]
-            if contract_request.get("source") == "mm_selected_runtime_execution_contract":
+            if contract_request.get("source") == "mm_exact_contract_hint":
                 requested_con_id = int(contract_request.get("conId") or 0)
                 resolved_con_id = int(getattr(resolved, "conId", 0) or 0)
                 if requested_con_id > 0 and resolved_con_id != requested_con_id:
