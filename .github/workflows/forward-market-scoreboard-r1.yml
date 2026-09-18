@@ -60,6 +60,7 @@ jobs:
       - run: python research/forward_challenger_scoreboard_enrichment_r1.py --self-test
       - run: python research/forward_deterministic_allocator_r1.py --self-test
       - run: python research/forward_scoreboard_lineage_r1.py --self-test
+      - run: python -m pip install --disable-pip-version-check pandas==2.3.2
       - run: python research/forward_largecap_transport_observer_r1.py --self-test
 
   p46:
