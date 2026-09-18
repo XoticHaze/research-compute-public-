@@ -1,0 +1,29 @@
+name: MR B8 USD weakness information
+on:
+  push:
+    branches: ['market-research/b8-usd-weakness-information-20260918']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install numpy pandas yfinance
+      - name: Run frozen B8 discriminator
+        shell: bash
+        run: |
+          cp research/mr_gold_miner_gold_trend_information_b7_20260918.py /tmp/b8.py
+          sed -i "s/T=\['GDX','GLD','USO'\]/T=['GDX','GLD','USO','UUP']/" /tmp/b8.py
+          sed -i "s/(m.GLD.pct_change(6,fill_method=None)>0)/(m.UUP.pct_change(6,fill_method=None)<0)/" /tmp/b8.py
+          sed -i 's/gold_trend_information_b7/usd_weakness_information_b8/g' /tmp/b8.py
+          sed -i 's/GOLD_TREND_INFORMATION_SUPPORTED/USD_WEAKNESS_INFORMATION_SUPPORTED/g' /tmp/b8.py
+          python /tmp/b8.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mr-b8-usd-weakness-information
+          path: research/artifacts/*usd_weakness_information_b8*.json
