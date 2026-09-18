@@ -26,14 +26,14 @@ ADAPTER_SCHEMA = "foundry.forward_program_adapter.v1"
 SCOREBOARD_SCHEMA = "research.forward_market_scoreboard_r1"
 PROGRAM_ID = "GENERALIZED_LARGECAP_RIDGE"
 
-# Recovery evidence for the first version of this observer that durably carried a
-# first_registered_at field. This is not model science; it repairs a publication
-# race that temporarily moved the anchor forward. Evidence commit:
-# c36500fa4ab554b01c24df7fd0ab603b9504d31e.
+# Recovery evidence for the earliest durable observer publication. The initial
+# artifact predated the first_registered_at field, so generated_at is the correct
+# registration anchor. This is provenance repair only, not model science.
+# Evidence commit: ae327a88bf02dc55f596416ad563375b0cd076d7.
 RECOVERED_REGISTRATION_ANCHORS = {
     "2026-09-11": {
-        "first_registered_at": "2026-09-18T05:06:08.956014+00:00",
-        "evidence_commit": "c36500fa4ab554b01c24df7fd0ab603b9504d31e",
+        "first_registered_at": "2026-09-18T05:03:20.113496+00:00",
+        "evidence_commit": "ae327a88bf02dc55f596416ad563375b0cd076d7",
     },
 }
 
