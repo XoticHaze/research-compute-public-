@@ -173,6 +173,44 @@ class PersistentPaperExecuteTests(unittest.TestCase):
         self.assertNotIn("/strategy/ibkr-paper-order-cancel-submit", paths)
         self.assertNotIn("/strategy/ibkr-paper-flatten-submit-suite", paths)
 
+    def test_broker_placement_without_exact_identity_fails_execution_evidence(self):
+        def send(method, path, **kwargs):
+            if path == "/healthz":
+                return 200, {"ok": True}
+            if path == "/strategy/ibkr-paper-open-orders":
+                return 200, {"ok": True, "orders": []}
+            if path == "/strategy/ibkr-paper-order-submit":
+                return 200, {
+                    "ok": True,
+                    "status": "submitted",
+                    "place_order_called": True,
+                    "broker_order_placed": True,
+                    "guards": {"selected_runtime_id": "mnq-runtime"},
+                }
+            raise AssertionError(path)
+
+        with patch.object(mod.proof_v1, "_validate_selected_runtime_request", return_value=self.auth()), \
+             patch.object(mod.proof_v1, "_candidate_transport_lease", return_value={"requested": False, "ok": None}), \
+             patch.object(mod.proof_v1, "_jit_refresh_authorized_lmt_payload", return_value=(self.auth()["payload"], {"requested": False, "performed": False, "ok": None})), \
+             patch.object(mod.proof_v1, "_flatten_snapshot", side_effect=[(200, {"ok": True}), (200, {"ok": True})]), \
+             patch.object(mod.proof_v1, "_open_counts", return_value=(0, 0)), \
+             patch.object(mod.proof_v1, "_position_for_symbol", side_effect=[0.0, 1.0]), \
+             patch.object(mod.proof_v1, "_extract_order_identity", return_value={}):
+            receipt = mod.execute_paper_execute(
+                runtime=self.runtime(),
+                request=self.request(),
+                send=send,
+                run_id="123",
+                public_head="d" * 40,
+            )
+
+        self.assertFalse(receipt["ok"])
+        self.assertEqual(receipt["status"], "PAPER_EXECUTE_EXECUTION_EVIDENCE_INCOMPLETE")
+        evidence = receipt["completed_execution_reconciliation"]
+        self.assertTrue(evidence["requested"])
+        self.assertFalse(evidence["ok"])
+        self.assertIn("identity_missing", evidence["status"])
+
     def test_canonical_block_is_retained_as_fail_closed_execution_decision(self):
         def send(method, path, **kwargs):
             if path == "/healthz":
