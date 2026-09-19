@@ -10,6 +10,20 @@
     "MNQ"
   ],
   "contracts": {
+    "AMAT": {
+      "conId": 266093,
+      "symbol": "AMAT",
+      "secType": "STK",
+      "exchange": "SMART",
+      "currency": "USD"
+    },
+    "APH": {
+      "conId": 4493,
+      "symbol": "APH",
+      "secType": "STK",
+      "exchange": "SMART",
+      "currency": "USD"
+    },
     "MNQ": {
       "symbol": "MNQ",
       "secType": "FUT",
@@ -19,7 +33,9 @@
     }
   },
   "contract_notes": {
-    "MNQ": "Read-only signal-history contract after CME equity-index lead-month signal roll. This does not replace the selected runtime execution_contract. Historical 1D chunks end at 21:00 UTC, the maintenance boundary after the 20:59 close, so each explicit chunk covers one full 22:00-20:59 CME session."
+    "MNQ": "Read-only signal-history contract after CME equity-index lead-month signal roll. This does not replace the selected runtime execution_contract.",
+    "AMAT": "Exact selected-runtime stock contract hint; read-only historical acquisition only.",
+    "APH": "Exact selected-runtime stock contract hint; read-only historical acquisition only."
   },
   "required_completed_bars": {
     "AMAT_target_15Min": 400,
@@ -56,21 +72,28 @@
         "target_timeframe": "12Min",
         "bar_size_setting": "1 min",
         "duration_str": "1 D",
-        "end_date_time_utc": "2026-09-17T21:00:00Z"
+        "end_date_time_utc": "2026-09-18T00:00:00Z"
       },
       {
         "source_timeframe": "1Min",
         "target_timeframe": "12Min",
         "bar_size_setting": "1 min",
         "duration_str": "1 D",
-        "end_date_time_utc": "2026-09-16T21:00:00Z"
+        "end_date_time_utc": "2026-09-17T00:00:00Z"
       },
       {
         "source_timeframe": "1Min",
         "target_timeframe": "12Min",
         "bar_size_setting": "1 min",
         "duration_str": "1 D",
-        "end_date_time_utc": "2026-09-15T21:00:00Z"
+        "end_date_time_utc": "2026-09-16T00:00:00Z"
+      },
+      {
+        "source_timeframe": "1Min",
+        "target_timeframe": "12Min",
+        "bar_size_setting": "1 min",
+        "duration_str": "1 D",
+        "end_date_time_utc": "2026-09-15T00:00:00Z"
       }
     ]
   }
