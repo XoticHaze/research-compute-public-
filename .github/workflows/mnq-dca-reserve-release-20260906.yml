@@ -1,0 +1,124 @@
+name: MNQ DCA Reserve Release Encrypted
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/mnq_dca_reserve_release_consumer_v1.py'
+      - 'scripts/mnq_dca_reserve_release_consumer_v2.py'
+      - '.github/workflows/mnq-dca-reserve-release-20260906.yml'
+
+permissions:
+  contents: write
+
+env:
+  RESPONSE_ROOT: rendezvous/responses
+  RECIPIENT_ROOT: rendezvous/recipients
+  EXCHANGE_REF: rendezvous-exchange
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install fixed environment
+        run: python -m pip install --disable-pip-version-check -q cryptography numpy==2.4.6 pandas==3.0.5
+      - name: Compile fixed crypto and DCA consumer
+        run: |
+          python -m py_compile scripts/ephemeral_x25519_chunked_v1.py scripts/mnq_dca_reserve_release_consumer_v1.py scripts/mnq_dca_reserve_release_consumer_v2.py
+      - name: Generate one-run DCA recipient
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import base64,hashlib,json,os
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric import x25519
+          private=x25519.X25519PrivateKey.generate()
+          private_raw=private.private_bytes(serialization.Encoding.Raw,serialization.PrivateFormat.Raw,serialization.NoEncryption())
+          public_raw=private.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)
+          Path(os.environ['RUNNER_TEMP'],'dca-private.b64').write_text(base64.b64encode(private_raw).decode('ascii'))
+          recipient={'schema':'mnq-dca-reserve-release-recipient-v1','run_id':os.environ['GITHUB_RUN_ID'],'recipient_b64':base64.b64encode(public_raw).decode('ascii'),'recipient_key_id':'sha256:'+hashlib.sha256(public_raw).hexdigest()}
+          Path(os.environ['RUNNER_TEMP'],'dca-recipient.json').write_text(json.dumps(recipient,sort_keys=True)+'\n')
+          print('MNQ_DCA_RESERVE_RELEASE_RUN_ID='+os.environ['GITHUB_RUN_ID'])
+          print('MNQ_DCA_RECIPIENT_KEY_ID='+recipient['recipient_key_id'])
+          PY
+      - name: Publish public recipient
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}-mnq-dca-reserve-release.json"
+          payload="$(base64 -w0 "$RUNNER_TEMP/dca-recipient.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json,sys
+          content,branch=sys.argv[1:]
+          print(json.dumps({'message':'rendezvous: publish one-run DCA recipient','content':content,'branch':branch}))
+          PY
+          )"
+          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}" -d "$body" >/dev/null
+          echo "DCA_RECIPIENT_PATH=${path}"
+      - name: Wait for run-bound encrypted DCA envelope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          response_root="${RESPONSE_ROOT}/${GITHUB_RUN_ID}"
+          envelope_path="${response_root}/mnq-dca-reserve-release-envelope.json"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${envelope_path}?ref=${EXCHANGE_REF}"
+          found=0
+          for _ in $(seq 1 120); do
+            if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/dca-envelope.json"; then found=1; break; fi
+            sleep 5
+          done
+          test "$found" = 1 || { echo 'run-bound DCA envelope did not arrive'; exit 42; }
+          echo "DCA_RESPONSE_ROOT=${response_root}" >> "$GITHUB_ENV"
+      - name: Reassemble authenticated ciphertext chunks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64,hashlib,json,os
+          from pathlib import Path
+          from urllib.request import Request,urlopen
+          env=json.loads(Path(os.environ['RUNNER_TEMP'],'dca-envelope.json').read_text())
+          chunks=env.get('chunks')
+          if not isinstance(chunks,list) or not chunks or len(chunks)>64: raise SystemExit('invalid chunk list')
+          prefix=f"rendezvous/responses/{os.environ['GITHUB_RUN_ID']}/"
+          pieces=[]; seen=set()
+          for node in chunks:
+              if set(node)!={'path','sha256','chars'}: raise SystemExit('invalid chunk descriptor')
+              path=str(node['path'])
+              if not path.startswith(prefix) or path in seen or '..' in path.split('/'): raise SystemExit('invalid chunk path')
+              seen.add(path)
+              req=Request(f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/{path}?ref={os.environ['EXCHANGE_REF']}",headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github.raw+json','X-GitHub-Api-Version':'2022-11-28'})
+              raw=urlopen(req,timeout=30).read()
+              if len(raw)!=int(node['chars']) or hashlib.sha256(raw).hexdigest()!=node['sha256']: raise SystemExit('chunk identity mismatch')
+              pieces.append(raw.decode('ascii'))
+          ciphertext=base64.b64decode(''.join(pieces).encode('ascii'),validate=True)
+          if hashlib.sha256(ciphertext).hexdigest()!=env.get('ciphertext_sha256'): raise SystemExit('ciphertext digest mismatch')
+          Path(os.environ['RUNNER_TEMP'],'dca-ciphertext.bin').write_bytes(ciphertext)
+          print('MNQ_DCA_CIPHERTEXT_BYTES='+str(len(ciphertext)))
+          print('MNQ_DCA_CHUNKS='+str(len(chunks)))
+          PY
+      - name: Decrypt privately and execute fixed DCA discriminator
+        run: |
+          set -euo pipefail
+          python scripts/mnq_dca_reserve_release_consumer_v2.py --envelope "$RUNNER_TEMP/dca-envelope.json" --ciphertext "$RUNNER_TEMP/dca-ciphertext.bin" --private-key "$RUNNER_TEMP/dca-private.b64" --run-id "$GITHUB_RUN_ID" --response-root "$DCA_RESPONSE_ROOT" --output mnq-dca-reserve-release-receipt.json
+          python -m json.tool mnq-dca-reserve-release-receipt.json >/dev/null
+          cat mnq-dca-reserve-release-receipt.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain sanitized receipt only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mnq-dca-reserve-release-sanitized-receipt
+          path: mnq-dca-reserve-release-receipt.json
+          retention-days: 30
+          if-no-files-found: error
+      - name: Remove one-run private material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/dca-private.b64" "$RUNNER_TEMP/dca-recipient.json" "$RUNNER_TEMP/dca-envelope.json" "$RUNNER_TEMP/dca-ciphertext.bin"
