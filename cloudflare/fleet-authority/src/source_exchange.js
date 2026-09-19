@@ -42,6 +42,22 @@ const MAX_MANIFEST_BYTES = 65536;
 const ALLOWED_PUBLIC_EVENTS = new Set(['push', 'workflow_dispatch']);
 const ALLOWED_PRIVATE_EVENTS = new Set(['push', 'workflow_dispatch', 'schedule']);
 
+const SOURCE_VAULT_PUBLIC_KEY_SCHEMA = 'mmibkr-source-vault-public-key-v1';
+const SOURCE_VAULT_UNWRAP_SCHEMA = 'mmibkr-source-vault-unwrap-v1';
+const SOURCE_VAULT_RSA_PRIVATE_KEY = 'vault:rsa-oaep:private-jwk';
+const SOURCE_VAULT_RSA_PUBLIC_KEY = 'vault:rsa-oaep:public-jwk';
+const SOURCE_VAULT_RSA_KEY_ID = 'vault:rsa-oaep:key-id';
+
+/*
+ * Exact source snapshots are approved in code only after their encrypted
+ * public snapshot + manifest are created and reviewed. Runtime consumers may
+ * unwrap a snapshot master key only when BOTH source SHA and manifest digest
+ * match an entry here. No public runtime can add approvals dynamically.
+ */
+const APPROVED_SOURCE_SNAPSHOTS = Object.freeze({
+  // '<40-hex-private-source-sha>': '<64-hex-public-manifest-sha256>',
+});
+
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -204,6 +220,8 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role) {
 
 function roleForRequest(method, pathname) {
   if (
+    (method === 'POST' && pathname === '/v1/source-vault/unwrap')
+    ||
     (method === 'POST' && pathname === '/v1/source-exchange/request')
     || (method === 'GET' && /^\/v1\/source-exchange\/response\/\d+$/.test(pathname))
     || (method === 'GET' && /^\/v1\/source-exchange\/response\/\d+\/chunk\/\d+$/.test(pathname))
@@ -231,6 +249,21 @@ function roleForRequest(method, pathname) {
 export async function handleSourceExchange(request, env) {
   if (!env.SOURCE_EXCHANGE) return json({ error: 'source_exchange_not_configured' }, 503);
   const url = new URL(request.url);
+
+  const id = env.SOURCE_EXCHANGE.idFromName('global');
+  const stub = env.SOURCE_EXCHANGE.get(id);
+
+  // The vault public key contains no secret and is intentionally readable
+  // without GitHub OIDC. The private key never leaves the Durable Object.
+  if (request.method === 'GET' && url.pathname === '/v1/source-vault/public-key') {
+    const headers = new Headers();
+    headers.set('x-mmibkr-source-role', 'vault_public');
+    return stub.fetch(new Request(
+      'https://source-exchange.internal/v1/source-vault/public-key',
+      { method: 'GET', headers },
+    ));
+  }
+
   const role = roleForRequest(request.method, url.pathname);
   if (!role) return json({ error: 'not_found' }, 404);
 
@@ -256,8 +289,6 @@ export async function handleSourceExchange(request, env) {
   headers.set('x-mmibkr-oidc-run-id', identity.run_id);
   headers.set('x-mmibkr-oidc-run-attempt', identity.run_attempt);
 
-  const id = env.SOURCE_EXCHANGE.idFromName('global');
-  const stub = env.SOURCE_EXCHANGE.get(id);
   const internalUrl = 'https://source-exchange.internal' + url.pathname + url.search;
   const init = { method: request.method, headers };
   if (!['GET', 'HEAD'].includes(request.method)) init.body = request.body;
@@ -290,7 +321,7 @@ export class SourceExchange {
 
   _internalRole(request) {
     const role = request.headers.get('x-mmibkr-source-role') || '';
-    if (!['consumer', 'producer', 'b1_consumer'].includes(role)) throw new Error('internal_role_rejected');
+    if (!['consumer', 'producer', 'b1_consumer', 'vault_public'].includes(role)) throw new Error('internal_role_rejected');
     return role;
   }
 
@@ -305,10 +336,168 @@ export class SourceExchange {
     };
   }
 
+  async _vaultKeypair() {
+    let privateJwk = await this.ctx.storage.get(SOURCE_VAULT_RSA_PRIVATE_KEY);
+    let publicJwk = await this.ctx.storage.get(SOURCE_VAULT_RSA_PUBLIC_KEY);
+    let keyId = await this.ctx.storage.get(SOURCE_VAULT_RSA_KEY_ID);
+    if (privateJwk && publicJwk && keyId) {
+      return { privateJwk, publicJwk, keyId };
+    }
+
+    const pair = await crypto.subtle.generateKey(
+      {
+        name: 'RSA-OAEP',
+        modulusLength: 3072,
+        publicExponent: new Uint8Array([1, 0, 1]),
+        hash: 'SHA-256',
+      },
+      true,
+      ['encrypt', 'decrypt'],
+    );
+    privateJwk = await crypto.subtle.exportKey('jwk', pair.privateKey);
+    publicJwk = await crypto.subtle.exportKey('jwk', pair.publicKey);
+    const publicIdentity = new TextEncoder().encode(
+      JSON.stringify({
+        kty: publicJwk.kty,
+        n: publicJwk.n,
+        e: publicJwk.e,
+        alg: 'RSA-OAEP-256',
+      }),
+    );
+    keyId = 'sha256:' + await sha256Hex(publicIdentity);
+    await this.ctx.storage.put({
+      [SOURCE_VAULT_RSA_PRIVATE_KEY]: privateJwk,
+      [SOURCE_VAULT_RSA_PUBLIC_KEY]: publicJwk,
+      [SOURCE_VAULT_RSA_KEY_ID]: keyId,
+    });
+    return { privateJwk, publicJwk, keyId };
+  }
+
+  async _vaultPublicKeyResponse() {
+    const { publicJwk, keyId } = await this._vaultKeypair();
+    return {
+      schema: SOURCE_VAULT_PUBLIC_KEY_SCHEMA,
+      ok: true,
+      algorithm: 'RSA-OAEP-256',
+      key_id: keyId,
+      public_jwk: {
+        kty: publicJwk.kty,
+        n: publicJwk.n,
+        e: publicJwk.e,
+        alg: 'RSA-OAEP-256',
+        use: 'enc',
+        key_ops: ['encrypt'],
+        ext: true,
+      },
+      private_key_exported: false,
+      source_approval_is_code_pinned: true,
+    };
+  }
+
+  async _vaultUnwrap(body) {
+    const fields = new Set([
+      'schema',
+      'source_sha',
+      'manifest_sha256',
+      'key_id',
+      'sealed_key_b64',
+    ]);
+    if (
+      !body
+      || Object.keys(body).length !== fields.size
+      || Object.keys(body).some((key) => !fields.has(key))
+      || body.schema !== SOURCE_VAULT_UNWRAP_SCHEMA
+    ) throw new Error('vault_unwrap_field_set_rejected');
+
+    const sourceSha = String(body.source_sha || '').toLowerCase();
+    const manifestSha = String(body.manifest_sha256 || '').toLowerCase();
+    if (!/^[0-9a-f]{40}$/.test(sourceSha)) throw new Error('vault_source_sha_rejected');
+    if (!/^[0-9a-f]{64}$/.test(manifestSha)) throw new Error('vault_manifest_sha_rejected');
+    if (APPROVED_SOURCE_SNAPSHOTS[sourceSha] !== manifestSha) {
+      throw new Error('vault_source_snapshot_not_approved');
+    }
+
+    const { privateJwk, keyId } = await this._vaultKeypair();
+    if (String(body.key_id || '') !== keyId) throw new Error('vault_key_id_rejected');
+
+    let sealedKey;
+    try {
+      sealedKey = b64ToBytes(String(body.sealed_key_b64 || ''));
+    } catch {
+      throw new Error('vault_sealed_key_rejected');
+    }
+    if (sealedKey.length < 128 || sealedKey.length > 1024) {
+      throw new Error('vault_sealed_key_rejected');
+    }
+
+    const privateKey = await crypto.subtle.importKey(
+      'jwk',
+      privateJwk,
+      { name: 'RSA-OAEP', hash: 'SHA-256' },
+      false,
+      ['decrypt'],
+    );
+    let masterKey;
+    try {
+      masterKey = new Uint8Array(await crypto.subtle.decrypt(
+        { name: 'RSA-OAEP' },
+        privateKey,
+        sealedKey,
+      ));
+    } catch {
+      throw new Error('vault_sealed_key_decrypt_rejected');
+    }
+    if (masterKey.length !== 32) throw new Error('vault_master_key_size_rejected');
+
+    return {
+      schema: 'mmibkr-source-vault-unwrapped-key-v1',
+      ok: true,
+      source_sha: sourceSha,
+      manifest_sha256: manifestSha,
+      key_id: keyId,
+      master_key_b64: bytesToB64(masterKey),
+      approved: true,
+      private_source_included: false,
+      live_execution_authority: false,
+    };
+  }
+
   async fetch(request) {
     await this._cleanupExpired();
     const url = new URL(request.url);
     const role = this._internalRole(request);
+
+    if (request.method === 'GET' && url.pathname === '/v1/source-vault/public-key') {
+      if (role !== 'vault_public') return json({ error: 'forbidden' }, 403);
+      try {
+        return json(await this._vaultPublicKeyResponse(), 200);
+      } catch {
+        return json({ error: 'source_vault_key_unavailable' }, 503);
+      }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/v1/source-vault/unwrap') {
+      if (role !== 'consumer') return json({ error: 'forbidden' }, 403);
+      const length = Number(request.headers.get('content-length') || 0);
+      if (Number.isFinite(length) && length > 16384) return json({ error: 'request_too_large' }, 413);
+      let body;
+      try {
+        const text = await request.text();
+        if (text.length > 16384) return json({ error: 'request_too_large' }, 413);
+        body = JSON.parse(text);
+      } catch {
+        return json({ error: 'invalid_json' }, 400);
+      }
+      try {
+        return json(await this._vaultUnwrap(body), 200);
+      } catch (error) {
+        const message = String(error?.message || '');
+        if (message === 'vault_source_snapshot_not_approved') {
+          return json({ error: 'source_snapshot_not_approved' }, 403);
+        }
+        return json({ error: 'source_vault_unwrap_rejected' }, 400);
+      }
+    }
 
     if (request.method === 'POST' && url.pathname === '/v1/source-exchange/request') {
       if (role !== 'consumer') return json({ error: 'forbidden' }, 403);

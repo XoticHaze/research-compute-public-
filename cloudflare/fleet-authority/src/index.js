@@ -245,10 +245,14 @@ export default {
         ok: true,
         service: 'mmibkr-fleet-authority',
         source_exchange_configured: Boolean(env.SOURCE_EXCHANGE),
+        source_vault_configured: Boolean(env.SOURCE_EXCHANGE),
       });
     }
 
-    if (url.pathname.startsWith('/v1/source-exchange/')) {
+    if (
+      url.pathname.startsWith('/v1/source-exchange/')
+      || url.pathname.startsWith('/v1/source-vault/')
+    ) {
       return handleSourceExchange(request, env);
     }
 
