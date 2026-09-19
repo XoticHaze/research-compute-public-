@@ -331,6 +331,16 @@ export class SourceExchange {
     await this.ctx.storage.delete(keys);
   }
 
+  async _deleteWarmGeneration(runId) {
+    const manifest = await this.ctx.storage.get(`b1warm:manifest:${runId}`);
+    const chunkCount = Number(manifest?.chunk_count || 0);
+    const keys = [`b1warm:manifest:${runId}`];
+    for (let i = 0; i < chunkCount; i += 1) {
+      keys.push(`b1warm:chunk:${runId}:${i}`);
+    }
+    await this.ctx.storage.delete(keys);
+  }
+
   async _cleanupExpired() {
     const requests = await this.ctx.storage.list({ prefix: 'req:', limit: 100 });
     const now = Date.now();
@@ -906,6 +916,142 @@ export class SourceExchange {
       for (let i = 0; i < chunkCount; i += 1) keys.push(`relaychunk:${targetRunId}:${i}`);
       await this.ctx.storage.delete(keys);
       return json({ ok: true, status: 'deleted', target_run_id: targetRunId });
+    }
+
+    match = url.pathname.match(/^\/v1\/b1-warm-state\/publish\/(\d+)\/chunk\/(\d+)$/);
+    if (request.method === 'PUT' && match) {
+      if (role !== 'b1_warm') return json({ error: 'forbidden' }, 403);
+      const runId = validRunId(match[1]);
+      if (String(request.headers.get('x-mmibkr-oidc-run-id') || '') !== runId) {
+        return json({ error: 'b1_warm_run_identity_mismatch' }, 403);
+      }
+      const index = Number(match[2]);
+      if (!Number.isInteger(index) || index < 0 || index >= MAX_CHUNKS) {
+        return json({ error: 'chunk_index_rejected' }, 400);
+      }
+      const text = await request.text();
+      if (!text || text.length > MAX_CHUNK_CHARS || !/^[A-Za-z0-9+/=]+$/.test(text)) {
+        return json({ error: 'chunk_rejected' }, 400);
+      }
+      const digest = await sha256Hex(new TextEncoder().encode(text));
+      const expected = String(request.headers.get('x-mmibkr-chunk-sha256') || '');
+      if (!/^[0-9a-f]{64}$/.test(expected) || digest !== expected) {
+        return json({ error: 'chunk_digest_rejected' }, 400);
+      }
+      await this.ctx.storage.put(`b1warm:chunk:${runId}:${index}`, {
+        chars: text.length,
+        sha256: digest,
+        text,
+      });
+      return json({ ok: true, run_id: runId, index, chars: text.length, sha256: digest });
+    }
+
+    match = url.pathname.match(/^\/v1\/b1-warm-state\/publish\/(\d+)\/manifest$/);
+    if (request.method === 'POST' && match) {
+      if (role !== 'b1_warm') return json({ error: 'forbidden' }, 403);
+      const runId = validRunId(match[1]);
+      if (String(request.headers.get('x-mmibkr-oidc-run-id') || '') !== runId) {
+        return json({ error: 'b1_warm_run_identity_mismatch' }, 403);
+      }
+      const raw = await request.text();
+      if (raw.length > MAX_MANIFEST_BYTES) return json({ error: 'manifest_too_large' }, 413);
+      let body;
+      try { body = JSON.parse(raw); } catch { return json({ error: 'invalid_json' }, 400); }
+      try {
+        const required = new Set([
+          'schema', 'run_id', 'envelope_sha256', 'envelope_bytes',
+          'chunk_count', 'chunks', 'generation',
+        ]);
+        if (
+          !body
+          || Object.keys(body).length !== required.size
+          || Object.keys(body).some((key) => !required.has(key))
+          || body.schema !== 'mmibkr.b1_warm_state_manifest.v1'
+          || String(body.run_id) !== runId
+          || String(body.generation) !== runId
+        ) throw new Error('manifest_identity');
+        const envelopeSha = String(body.envelope_sha256 || '');
+        const envelopeBytes = Number(body.envelope_bytes || 0);
+        const count = Number(body.chunk_count || 0);
+        if (!/^[0-9a-f]{64}$/.test(envelopeSha)) throw new Error('envelope_sha');
+        if (!Number.isInteger(envelopeBytes) || envelopeBytes <= 0 || envelopeBytes > 64 * 1024 * 1024) {
+          throw new Error('envelope_bytes');
+        }
+        if (!Number.isInteger(count) || count <= 0 || count > MAX_CHUNKS) throw new Error('chunk_count');
+        if (!Array.isArray(body.chunks) || body.chunks.length !== count) throw new Error('chunks');
+        for (let i = 0; i < count; i += 1) {
+          const desc = body.chunks[i];
+          const stored = await this.ctx.storage.get(`b1warm:chunk:${runId}:${i}`);
+          if (
+            !desc
+            || Number(desc.index) !== i
+            || !/^[0-9a-f]{64}$/.test(String(desc.sha256 || ''))
+            || !stored
+            || stored.sha256 !== desc.sha256
+            || Number(stored.chars) !== Number(desc.chars)
+          ) throw new Error('chunk_missing_or_mismatch');
+        }
+
+        const priorLatest = await this.ctx.storage.get('b1warm:latest');
+        const priorPrevious = await this.ctx.storage.get('b1warm:previous');
+        const manifest = {
+          ...body,
+          producer_identity: this._producerIdentity(request),
+          finalized_at: new Date().toISOString(),
+          encrypted_state_only: true,
+          broker_credentials_included: false,
+        };
+        await this.ctx.storage.put(`b1warm:manifest:${runId}`, manifest);
+        if (priorLatest && String(priorLatest) !== runId) {
+          await this.ctx.storage.put('b1warm:previous', String(priorLatest));
+        }
+        await this.ctx.storage.put('b1warm:latest', runId);
+        if (
+          priorPrevious
+          && String(priorPrevious) !== runId
+          && String(priorPrevious) !== String(priorLatest || '')
+        ) {
+          await this._deleteWarmGeneration(String(priorPrevious));
+        }
+        return json({
+          ok: true,
+          status: 'finalized',
+          run_id: runId,
+          envelope_sha256: envelopeSha,
+          retained_generations: 2,
+        });
+      } catch {
+        return json({ error: 'b1_warm_manifest_rejected' }, 400);
+      }
+    }
+
+    if (request.method === 'GET' && url.pathname === '/v1/b1-warm-state/latest') {
+      if (role !== 'b1_warm') return json({ error: 'forbidden' }, 403);
+      const runId = await this.ctx.storage.get('b1warm:latest');
+      if (!runId) return json({ error: 'warm_state_not_found' }, 404);
+      const manifest = await this.ctx.storage.get(`b1warm:manifest:${runId}`);
+      if (!manifest) return json({ error: 'warm_state_not_found' }, 404);
+      return json({ ok: true, manifest });
+    }
+
+    match = url.pathname.match(/^\/v1\/b1-warm-state\/generation\/(\d+)\/chunk\/(\d+)$/);
+    if (request.method === 'GET' && match) {
+      if (role !== 'b1_warm') return json({ error: 'forbidden' }, 403);
+      const runId = validRunId(match[1]);
+      const index = Number(match[2]);
+      const manifest = await this.ctx.storage.get(`b1warm:manifest:${runId}`);
+      if (!manifest) return json({ error: 'warm_generation_not_found' }, 404);
+      const chunk = await this.ctx.storage.get(`b1warm:chunk:${runId}:${index}`);
+      if (!chunk) return json({ error: 'chunk_not_found' }, 404);
+      return new Response(chunk.text, {
+        status: 200,
+        headers: {
+          'content-type': 'text/plain; charset=us-ascii',
+          'cache-control': 'no-store',
+          'x-content-type-options': 'nosniff',
+          'x-mmibkr-chunk-sha256': chunk.sha256,
+        },
+      });
     }
 
     match = url.pathname.match(/^\/v1\/source-exchange\/response\/(\d+)$/);
