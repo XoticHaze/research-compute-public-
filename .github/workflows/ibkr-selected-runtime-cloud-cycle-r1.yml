@@ -1,0 +1,338 @@
+name: MM-IBKR Selected Runtime Cloud Cycle R1
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Exact private MM-IBKR ref to materialize
+        required: false
+        default: main
+      force_seed:
+        description: Ignore latest checkpoint and rebuild from the proven B1 seed
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: '*/12 * * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - rendezvous/fire/ibkr-selected-runtime-cloud-cycle-r1
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  EXCHANGE_REF: rendezvous-exchange
+  STATE_ROOT: rendezvous/checkpoints/ibkr-selected-runtime-cloud-cycle-r1
+  SEED_ARTIFACT_ID: '10573122460'
+  DEFAULT_SOURCE_REF: main
+
+concurrency:
+  group: mm-ibkr-selected-runtime-cloud-cycle-r1
+  cancel-in-progress: false
+
+jobs:
+  selected-runtime-cloud-cycle:
+    environment: ibkr-paper-runtime-r1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      IBKR_REMOTE_TWS_USERID: ${{ secrets.IBKR_REMOTE_TWS_USERID }}
+      IBKR_REMOTE_TWS_PASSWORD: ${{ secrets.IBKR_REMOTE_TWS_PASSWORD }}
+      IBKR_REMOTE_SOURCE_TOKEN: ${{ secrets.IBKR_REMOTE_SOURCE_TOKEN }}
+      IBKR_REMOTE_EXCHANGE_TOKEN: ${{ secrets.IBKR_REMOTE_EXCHANGE_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-python@a26af69be951213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Install fixed public ingress dependencies
+        run: python -m pip install --disable-pip-version-check cryptography
+
+      - name: Resolve bounded private source ref and seed mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_ref="${DEFAULT_SOURCE_REF}"
+          force_seed=0
+
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            requested='${{ inputs.source_ref }}'
+            if [ -n "$requested" ]; then source_ref="$requested"; fi
+            if [ '${{ inputs.force_seed }}' = 'true' ]; then force_seed=1; fi
+          elif [ "${GITHUB_EVENT_NAME}" = "push" ] && [ -f rendezvous/fire/ibkr-selected-runtime-cloud-cycle-r1 ]; then
+            parsed="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('rendezvous/fire/ibkr-selected-runtime-cloud-cycle-r1')
+          try:
+              node=json.loads(p.read_text())
+          except Exception:
+              node={}
+          print(str(node.get('source_ref') or 'main'))
+          print('1' if node.get('force_seed') is True else '0')
+          PY
+            )"
+            source_ref="$(printf '%s\n' "$parsed" | sed -n '1p')"
+            force_seed="$(printf '%s\n' "$parsed" | sed -n '2p')"
+          fi
+
+          case "$source_ref" in
+            main|assistant/cloud-*|assistant/selected-runtime-*) ;;
+            *) echo "SOURCE_REF_REJECTED=$source_ref"; exit 41 ;;
+          esac
+
+          echo "SOURCE_REF=$source_ref" >> "$GITHUB_ENV"
+          echo "FORCE_SEED=$force_seed" >> "$GITHUB_ENV"
+          echo "SOURCE_REF_SELECTED=$source_ref"
+          echo "FORCE_SEED_SELECTED=$force_seed"
+
+      - name: Validate protected bindings without disclosure
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in IBKR_REMOTE_TWS_USERID IBKR_REMOTE_TWS_PASSWORD IBKR_REMOTE_SOURCE_TOKEN IBKR_REMOTE_EXCHANGE_TOKEN; do
+            if [ -z "${!name:-}" ]; then
+              echo "MISSING_PROTECTED_BINDING=$name"
+              missing=1
+            fi
+          done
+          test "$missing" = 0
+
+      - name: Materialize exact private MM-IBKR ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python scripts/ibkr_remote_paper_direct_secret_v1.py             --runner-temp "$RUNNER_TEMP"             --source-ref "$SOURCE_REF"
+          python - <<'PY' >> "$GITHUB_ENV"
+          import json,os
+          from pathlib import Path
+          node=json.loads(Path(os.environ['RUNNER_TEMP'],'ibkr-runtime.json').read_text())
+          print('MMIBKR_HEAD='+str(node['mmibkr_head']))
+          print('MMIBKR_SOURCE_ROOT='+str(node['source_root']))
+          print('MMIBKR_SOURCE_ARCHIVE_SHA256='+str(node['source_archive_sha256']))
+          PY
+
+      - name: Build exact private bot image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --target bot -t "mmibkr-cloud-cycle:${GITHUB_RUN_ID}" "$MMIBKR_SOURCE_ROOT" >/dev/null
+          mkdir -p "$RUNNER_TEMP/mmibkr-data" "$RUNNER_TEMP/state"
+
+      - name: Restore latest or frozen bootstrap checkpoint
+        id: restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$FORCE_SEED" = "1" ]; then
+            echo "restored=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          found=0
+          for name in latest.tgz bootstrap-v1.tgz; do
+            api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${STATE_ROOT}/${name}?ref=${EXCHANGE_REF}"
+            if curl -fsSL               -H "Authorization: Bearer ${GH_TOKEN}"               -H 'Accept: application/vnd.github.raw+json'               -H 'X-GitHub-Api-Version: 2022-11-28'               "$api" -o "$RUNNER_TEMP/state/checkpoint.tgz" 2>/dev/null; then
+              echo "CHECKPOINT_RESTORE_SOURCE=$name"
+              found=1
+              break
+            fi
+          done
+
+          if [ "$found" = "1" ]; then
+            docker run --rm               -v "$RUNNER_TEMP/mmibkr-data:/app/data"               -v "$RUNNER_TEMP/state:/state:ro"               "mmibkr-cloud-cycle:${GITHUB_RUN_ID}"               python scripts/operator/runtime_market_data_cache_checkpoint_v1.py                 --repo-root /app                 --restore-archive /state/checkpoint.tgz
+            echo "restored=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "restored=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore sanitized processed-boundary ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          ledger_api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${STATE_ROOT}/processed-boundaries.json?ref=${EXCHANGE_REF}"
+          ledger_path="$RUNNER_TEMP/mmibkr-data/strategy_runtime/selected_runtime_cloud_cycle_v1/processed_boundaries.json"
+          mkdir -p "$(dirname "$ledger_path")"
+          if curl -fsSL             -H "Authorization: Bearer ${GH_TOKEN}"             -H 'Accept: application/vnd.github.raw+json'             -H 'X-GitHub-Api-Version: 2022-11-28'             "$ledger_api" -o "$ledger_path" 2>/dev/null; then
+            echo "CLOUD_CYCLE_LEDGER_RESTORED=1"
+          else
+            rm -f "$ledger_path"
+            echo "CLOUD_CYCLE_LEDGER_RESTORED=0"
+          fi
+
+      - name: Seed canonical caches from proven B1 acquisition when needed
+        id: seed
+        if: steps.restore.outputs.restored != '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/seed"
+          curl -fsSL -L             -H "Authorization: Bearer ${GH_TOKEN}"             -H 'Accept: application/vnd.github+json'             -H 'X-GitHub-Api-Version: 2022-11-28'             "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${SEED_ARTIFACT_ID}/zip"             -o "$RUNNER_TEMP/seed/b1.zip"
+          unzip -q "$RUNNER_TEMP/seed/b1.zip" -d "$RUNNER_TEMP/seed/artifact"
+
+          docker run --rm             -v "$RUNNER_TEMP/mmibkr-data:/app/data"             -v "$RUNNER_TEMP/seed/artifact:/seed:ro"             "mmibkr-cloud-cycle:${GITHUB_RUN_ID}"             python scripts/operator/selected_runtime_initial_backfill_ingest_v1.py               --repo-root /app               --data-root /app/data               --bars /seed/ibkr-forward-bars-v2.jsonl               --handoff /seed/ibkr-post-auth-handoff.json               --fleet-receipt /seed/ibkr-cloudflare-envelope-receipt.json               --output /app/data/strategy_runtime/selected_runtime_initial_backfill_v1/runner-output.json
+          echo "seeded=1" >> "$GITHUB_OUTPUT"
+
+      - name: Prove current plan before opening public boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm             -v "$RUNNER_TEMP/mmibkr-data:/app/data"             "mmibkr-cloud-cycle:${GITHUB_RUN_ID}"             python scripts/operator/selected_runtime_cloud_runner_dry_plan_v1.py               --repo-root /app               --data-root /app/data               --output /app/data/strategy_runtime/selected_runtime_cloud_cycle_v1/preflight.json
+
+      - name: Execute one idempotent selected-runtime cloud boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm             -e IBKR_REMOTE_EXCHANGE_TOKEN             -e IBKR_REMOTE_SOURCE_TOKEN             -v "$RUNNER_TEMP/mmibkr-data:/app/data"             "mmibkr-cloud-cycle:${GITHUB_RUN_ID}"             python scripts/operator/selected_runtime_cloud_cycle_v1.py               --repo-root /app               --data-root /app/data               --source-ref "$SOURCE_REF"               --output /app/data/strategy_runtime/selected_runtime_cloud_cycle_v1/latest-cycle.json
+
+      - name: Build sanitized market checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm             -v "$RUNNER_TEMP/mmibkr-data:/app/data"             -v "$RUNNER_TEMP/state:/state"             "mmibkr-cloud-cycle:${GITHUB_RUN_ID}"             python scripts/operator/runtime_market_data_cache_checkpoint_v1.py               --repo-root /app               --data-root /app/data               --manifest-output /state/checkpoint-plan.json               --archive-output /state/latest.tgz
+
+      - name: Sanitize duplicate-prevention ledger and run receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          data=root/'mmibkr-data'
+          state=root/'state'
+
+          ledger_path=data/'strategy_runtime/selected_runtime_cloud_cycle_v1/processed_boundaries.json'
+          node=json.loads(ledger_path.read_text()) if ledger_path.is_file() else {'schema':'mmibkr.selected_runtime_cloud_cycle_ledger.v1','entries':{}}
+          entries={}
+          for key,row in dict(node.get('entries') or {}).items():
+              if not isinstance(row,dict):
+                  continue
+              entries[str(key)]={
+                  'status':row.get('status'),
+                  'terminal':bool(row.get('terminal')),
+                  'recorded_at_utc':row.get('recorded_at_utc'),
+                  'bar_close_at_utc':row.get('bar_close_at_utc'),
+                  'runtime_ids':list(row.get('runtime_ids') or []),
+                  'symbols':list(row.get('symbols') or []),
+                  'run_id':'',
+                  'command_ids':[],
+                  'details':{},
+              }
+          sanitized={'schema':'mmibkr.selected_runtime_cloud_cycle_ledger.v1','entries':entries}
+          (state/'processed-boundaries.json').write_text(json.dumps(sanitized,indent=2,sort_keys=True)+'\n')
+
+          cycle_path=data/'strategy_runtime/selected_runtime_cloud_cycle_v1/latest-cycle.json'
+          cycle=json.loads(cycle_path.read_text())
+          checkpoint=state/'latest.tgz'
+          digest=hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+          receipt={
+              'schema':'mmibkr.selected_runtime_cloud_cycle_public_receipt.v1',
+              'ok':cycle.get('ok') is True,
+              'status':cycle.get('status'),
+              'source_ref':os.environ.get('SOURCE_REF'),
+              'mmibkr_head':os.environ.get('MMIBKR_HEAD'),
+              'bar_close_at_utc':cycle.get('bar_close_at_utc'),
+              'boundary_key':cycle.get('boundary_key'),
+              'acquisition_mode':cycle.get('acquisition_mode'),
+              'candidate_count':cycle.get('candidate_count'),
+              'primary_used_same_snapshot_run':cycle.get('primary_used_same_snapshot_run'),
+              'secondary_execution_count':cycle.get('secondary_execution_count'),
+              'duplicate_boundary_skipped':cycle.get('duplicate_boundary_skipped',False),
+              'live_execution_allowed':False,
+              'checkpoint_sha256':digest,
+              'checkpoint_bytes':checkpoint.stat().st_size,
+              'private_source_published':False,
+              'account_state_published':False,
+              'positions_published':False,
+              'orders_published':False,
+              'credentials_published':False,
+          }
+          (state/'cycle-receipt.json').write_text(json.dumps(receipt,indent=2,sort_keys=True)+'\n')
+          PY
+
+      - name: Publish latest state, frozen bootstrap, ledger, and sanitized receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64,json,os
+          from pathlib import Path
+          from urllib.error import HTTPError
+          from urllib.request import Request,urlopen
+
+          repo=os.environ['GITHUB_REPOSITORY']
+          branch=os.environ['EXCHANGE_REF']
+          token=os.environ['GH_TOKEN']
+          state_root=os.environ['STATE_ROOT']
+          root=Path(os.environ['RUNNER_TEMP'])/'state'
+
+          def get_sha(path):
+              req=Request(
+                  f'https://api.github.com/repos/{repo}/contents/{path}?ref={branch}',
+                  headers={
+                      'Authorization':'Bearer '+token,
+                      'Accept':'application/vnd.github+json',
+                      'X-GitHub-Api-Version':'2022-11-28',
+                  },
+              )
+              try:
+                  with urlopen(req,timeout=30) as resp:
+                      node=json.loads(resp.read().decode())
+                      return str(node.get('sha') or '') or None
+              except HTTPError as exc:
+                  if exc.code == 404:
+                      return None
+                  raise
+
+          def put(path, raw, message, *, create_only=False):
+              existing=get_sha(path)
+              if create_only and existing:
+                  print('PRESERVE_EXISTING='+path)
+                  return
+              body={
+                  'message':message,
+                  'content':base64.b64encode(raw).decode('ascii'),
+                  'branch':branch,
+              }
+              if existing:
+                  body['sha']=existing
+              req=Request(
+                  f'https://api.github.com/repos/{repo}/contents/{path}',
+                  data=json.dumps(body).encode(),
+                  headers={
+                      'Authorization':'Bearer '+token,
+                      'Accept':'application/vnd.github+json',
+                      'X-GitHub-Api-Version':'2022-11-28',
+                      'Content-Type':'application/json',
+                  },
+                  method='PUT',
+              )
+              with urlopen(req,timeout=60) as resp:
+                  if resp.status not in (200,201):
+                      raise SystemExit('state publish failed: '+path)
+
+          latest=(root/'latest.tgz').read_bytes()
+          put(f'{state_root}/latest.tgz',latest,'ibkr cloud cycle: publish latest sanitized market checkpoint')
+          put(f'{state_root}/bootstrap-v1.tgz',latest,'ibkr cloud cycle: freeze recovery bootstrap checkpoint',create_only=True)
+          put(f'{state_root}/processed-boundaries.json',(root/'processed-boundaries.json').read_bytes(),'ibkr cloud cycle: publish sanitized duplicate-prevention ledger')
+          put(f'{state_root}/latest-receipt.json',(root/'cycle-receipt.json').read_bytes(),'ibkr cloud cycle: publish sanitized cycle receipt')
+          print('CLOUD_CYCLE_STATE_PUBLISHED=1')
+          PY
+
+      - name: Destroy private source and transient state
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          docker image rm "mmibkr-cloud-cycle:${GITHUB_RUN_ID}" >/dev/null 2>&1
+          rm -rf             "$RUNNER_TEMP/mm-ibkr-source"             "$RUNNER_TEMP/mm-ibkr-source.tar.gz"             "$RUNNER_TEMP/mmibkr-data"             "$RUNNER_TEMP/seed"             "$RUNNER_TEMP/state"             "$RUNNER_TEMP/ibkr-gateway.env"             "$RUNNER_TEMP/ibkr-submit-request.json"             "$RUNNER_TEMP/ibkr-runtime.json"
