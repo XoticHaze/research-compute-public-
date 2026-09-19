@@ -161,6 +161,85 @@ class PostAuthPipelineContractTests(unittest.TestCase):
         self.assertFalse(requests["MNQ"][0]["allow_empty"])
         self.assertEqual(requests["AMAT"][0]["bar_size_setting"], "15 mins")
 
+    def test_bar_request_can_carry_exact_signal_history_contract_separate_from_quote_contract(self):
+        quote_hints = mod.parse_contract_hints(json.dumps({
+            "MNQ": {
+                "conId": 793356225,
+                "symbol": "MNQ",
+                "secType": "FUT",
+                "exchange": "CME",
+                "currency": "USD",
+                "localSymbol": "MNQU6",
+                "lastTradeDateOrContractMonth": "202609",
+            }
+        }))
+        requests = mod.parse_bar_requests(json.dumps({
+            "MNQ": [{
+                "source_timeframe": "1Min",
+                "target_timeframe": "12Min",
+                "bar_size_setting": "1 min",
+                "duration_str": "120 S",
+                "history_contract": {
+                    "symbol": "MNQ",
+                    "secType": "FUT",
+                    "exchange": "CME",
+                    "currency": "USD",
+                    "lastTradeDateOrContractMonth": "202612",
+                },
+            }],
+        }), ["MNQ"])
+
+        self.assertEqual(quote_hints["MNQ"]["conId"], 793356225)
+        self.assertEqual(
+            quote_hints["MNQ"]["lastTradeDateOrContractMonth"],
+            "202609",
+        )
+        history = requests["MNQ"][0]["history_contract"]
+        self.assertIsInstance(history, dict)
+        self.assertEqual(history["symbol"], "MNQ")
+        self.assertEqual(history["secType"], "FUT")
+        self.assertEqual(history["lastTradeDateOrContractMonth"], "202612")
+        self.assertNotIn("conId", history)
+
+    def test_history_contract_must_be_exact_read_contract_and_never_action_payload(self):
+        with self.assertRaisesRegex(RuntimeError, "exact expiry/exchange/currency"):
+            mod.parse_bar_requests(json.dumps({
+                "MNQ": [{
+                    "source_timeframe": "1Min",
+                    "target_timeframe": "12Min",
+                    "bar_size_setting": "1 min",
+                    "duration_str": "120 S",
+                    "history_contract": {
+                        "symbol": "MNQ",
+                        "secType": "FUT",
+                        "exchange": "CME",
+                        "currency": "USD",
+                    },
+                }],
+            }), ["MNQ"])
+
+        with self.assertRaisesRegex(RuntimeError, "history_contract must be an object"):
+            mod.parse_bar_requests(json.dumps({
+                "MNQ": [{
+                    "source_timeframe": "1Min",
+                    "target_timeframe": "12Min",
+                    "bar_size_setting": "1 min",
+                    "duration_str": "120 S",
+                    "history_contract": "MNQZ6",
+                }],
+            }), ["MNQ"])
+
+    def test_pipeline_routes_historical_bars_and_quotes_through_distinct_contract_objects(self):
+        from pathlib import Path
+        source = Path(mod.__file__).read_text(encoding="utf-8")
+        self.assertIn("history_resolved = resolved", source)
+        self.assertIn("history_qualified = ib.qualifyContracts(history_contract)", source)
+        self.assertIn("ib.reqHistoricalData(\n                    history_resolved,", source)
+        self.assertIn("sample_exact_contract_quote(ib, resolved)", source)
+        self.assertIn('"resolved_history_contract": _contract_receipt(history_resolved)', source)
+        self.assertIn('"resolved_quote_contract": _contract_receipt(resolved)', source)
+        self.assertIn('"history_contract_is_quote_contract": bool(', source)
+
     def test_exact_historical_chunk_end_times_allow_same_request_shape_at_distinct_boundaries(self):
         requests = mod.parse_bar_requests(json.dumps({
             "MNQ": [
