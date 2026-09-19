@@ -1,0 +1,7 @@
+SEMICONDUCTOR_FORWARD_EPHEMERAL_RENDEZVOUS_V2_R1
+research_only=true
+parity_reference=2026-09-04
+parity_float_tolerance=1e-8
+private_source_plaintext_public=false
+private_forecast_plaintext_public=false
+scheduled_operation_requires_private_producer=true
