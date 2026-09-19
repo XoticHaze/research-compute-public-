@@ -3,11 +3,12 @@ name: Fleet Source Exchange Contract CI
 on:
   push:
     branches:
-      - assistant/mmibkr-source-exchange-r1-20260919
+      - 'assistant/fleet-*'
   pull_request:
     branches:
       - main
     paths:
+      - wrangler.jsonc
       - cloudflare/fleet-authority/src/source_exchange.js
       - cloudflare/fleet-authority/src/index.js
       - cloudflare/fleet-authority/wrangler.jsonc
@@ -33,12 +34,48 @@ jobs:
           node --check cloudflare/fleet-authority/src/source_exchange.js
           node --check cloudflare/fleet-authority/src/index.js
 
-      - name: Validate Worker bundle and Durable Object migration
-        working-directory: cloudflare/fleet-authority
+      - name: Require production and local Durable Object declarations to agree
         run: |
           set -euo pipefail
-          npm install --ignore-scripts --no-audit --no-fund
-          npx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/fleet-authority-dry-run"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          def load(path):
+              text = Path(path).read_text(encoding='utf-8')
+              return json.loads(text)
+
+          prod = load('wrangler.jsonc')
+          local = load('cloudflare/fleet-authority/wrangler.jsonc')
+
+          for name, node in [('production', prod), ('local', local)]:
+              bindings = (node.get('durable_objects') or {}).get('bindings') or []
+              source = [b for b in bindings if b.get('name') == 'SOURCE_EXCHANGE']
+              if source != [{'name': 'SOURCE_EXCHANGE', 'class_name': 'SourceExchange'}]:
+                  raise SystemExit(f'{name} SOURCE_EXCHANGE binding mismatch: {source!r}')
+              exports = node.get('exports') or {}
+              expected = {
+                  'type': 'durable-object',
+                  'state': 'created',
+                  'storage': 'sqlite',
+              }
+              if exports.get('SourceExchange') != expected:
+                  raise SystemExit(
+                      f'{name} SourceExchange export mismatch: '
+                      + repr(exports.get('SourceExchange'))
+                  )
+
+          if prod.get('main') != 'cloudflare/fleet-authority/src/index.js':
+              raise SystemExit('production Wrangler main path mismatch')
+          if local.get('main') != 'src/index.js':
+              raise SystemExit('local Wrangler main path mismatch')
+          print('FLEET_WRANGLER_AUTHORITY_PARITY=1')
+          PY
+
+      - name: Validate canonical production Worker bundle
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.131.2 deploy             --dry-run             --config wrangler.jsonc             --outdir "$RUNNER_TEMP/fleet-authority-production-dry-run"
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
