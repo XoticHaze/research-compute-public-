@@ -1,0 +1,7 @@
+{
+  "source_ref": "assistant/cloud-signal-history-split-20260918",
+  "session_seconds": 5400,
+  "max_cycles": 5,
+  "self_handoff": false,
+  "purpose": "finite acceptance before production handoff"
+}
