@@ -1,0 +1,324 @@
+name: MM-IBKR Selected Runtime Cloud R1
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Private MM-IBKR ref to resolve to one exact SHA
+        required: true
+        default: main
+        type: string
+      session_seconds:
+        description: Bounded daemon session length
+        required: true
+        default: '18000'
+        type: string
+      max_cycles:
+        description: Optional cycle cap; 0 means session-time bound only
+        required: true
+        default: '0'
+        type: string
+      self_handoff:
+        description: Dispatch a queued successor after a successful session
+        required: true
+        default: true
+        type: boolean
+  push:
+    branches:
+      - main
+    paths:
+      - rendezvous/fire/mmibkr-selected-runtime-cloud-r1
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/mmibkr-selected-runtime-cloud-r1.yml
+      - scripts/mmibkr_private_source_materialize_v1.py
+      - tests/test_mmibkr_private_source_materialize_v1.py
+
+permissions:
+  contents: write
+  actions: write
+
+env:
+  CHECKPOINT_CACHE_PREFIX: mmibkr-selected-runtime-cloud-checkpoint-v1-
+  EXCHANGE_REF: rendezvous-exchange
+  RECEIPT_ROOT: rendezvous/receipts
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Install fixed source-ingress dependencies
+        run: python -m pip install --disable-pip-version-check cryptography
+
+      - name: Validate brokerless private-source ingress
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/mmibkr_private_source_materialize_v1.py
+          python -m unittest -v tests.test_mmibkr_private_source_materialize_v1
+
+  runtime:
+    if: ${{ github.event_name != 'pull_request' }}
+    needs: contract
+    environment: ibkr-paper-runtime-r1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    concurrency:
+      group: mmibkr-selected-runtime-cloud-r1
+      cancel-in-progress: false
+    env:
+      IBKR_REMOTE_SOURCE_TOKEN: ${{ secrets.IBKR_REMOTE_SOURCE_TOKEN }}
+      IBKR_REMOTE_EXCHANGE_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-python@a26af69be951213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Install fixed source-ingress dependencies
+        run: python -m pip install --disable-pip-version-check cryptography
+
+      - name: Resolve bounded session request
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          event = os.environ['GITHUB_EVENT_NAME']
+          payload = {}
+          if event == 'push':
+              fire = Path('rendezvous/fire/mmibkr-selected-runtime-cloud-r1')
+              if not fire.is_file():
+                  raise SystemExit('push fire request missing')
+              payload = json.loads(fire.read_text())
+          else:
+              event_json = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+              payload = dict(event_json.get('inputs') or {})
+
+          source_ref = str(payload.get('source_ref') or 'main').strip()
+          if not source_ref:
+              raise SystemExit('source_ref required')
+          session_seconds = int(payload.get('session_seconds') or 18000)
+          max_cycles = int(payload.get('max_cycles') or 0)
+          raw_handoff = payload.get('self_handoff', True)
+          self_handoff = (
+              raw_handoff
+              if isinstance(raw_handoff, bool)
+              else str(raw_handoff).strip().lower() in {'1','true','yes','on'}
+          )
+          if session_seconds < 900 or session_seconds > 18000:
+              raise SystemExit('session_seconds must be 900..18000')
+          if max_cycles < 0 or max_cycles > 1000:
+              raise SystemExit('max_cycles must be 0..1000')
+
+          env = Path(os.environ['GITHUB_ENV'])
+          with env.open('a', encoding='utf-8') as fh:
+              fh.write(f'REQUEST_SOURCE_REF={source_ref}\n')
+              fh.write(f'SESSION_SECONDS={session_seconds}\n')
+              fh.write(f'MAX_CYCLES={max_cycles}\n')
+              fh.write(f'SELF_HANDOFF={str(self_handoff).lower()}\n')
+          print(json.dumps({
+              'source_ref': source_ref,
+              'session_seconds': session_seconds,
+              'max_cycles': max_cycles,
+              'self_handoff': self_handoff,
+          }, sort_keys=True))
+          PY
+
+      - name: Validate protected private-source binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${IBKR_REMOTE_SOURCE_TOKEN:-}" || {
+            echo 'MISSING_PROTECTED_BINDING=IBKR_REMOTE_SOURCE_TOKEN'
+            exit 41
+          }
+
+      - name: Materialize exact private MM-IBKR source
+        run: |
+          set -euo pipefail
+          umask 077
+          python scripts/mmibkr_private_source_materialize_v1.py             --runner-temp "$RUNNER_TEMP"             --source-ref "$REQUEST_SOURCE_REF"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          node=json.loads(Path(os.environ['RUNNER_TEMP'],'mmibkr-private-source.json').read_text())
+          with Path(os.environ['GITHUB_ENV']).open('a') as fh:
+              fh.write('PRIVATE_HEAD='+node['mmibkr_head']+'\n')
+              fh.write('PRIVATE_SOURCE_ROOT='+node['source_root']+'\n')
+          print('MMIBKR_PRIVATE_HEAD='+node['mmibkr_head'])
+          print('MMIBKR_SOURCE_ARCHIVE_SHA256='+node['source_archive_sha256'])
+          PY
+
+      - name: Build exact private MM-IBKR bot image
+        run: |
+          set -euo pipefail
+          docker build --target bot             -t "mmibkr-cloud:${GITHUB_RUN_ID}"             "$PRIVATE_SOURCE_ROOT" >/dev/null
+
+      - name: Validate private perpetual-runtime contracts in image
+        run: |
+          set -euo pipefail
+          docker run --rm "mmibkr-cloud:${GITHUB_RUN_ID}"             python -m unittest -v               tests.test_selected_runtime_execution_roll_v1               tests.test_selected_runtime_execution_expiry_guard_v1               tests.test_selected_runtime_futures_roll_maintenance_v1               tests.test_selected_runtime_signal_history_contract_v1               tests.test_runtime_market_data_cache_cursor_v1               tests.test_runtime_market_data_cache_checkpoint_v1               tests.test_selected_runtime_cloud_runner_dry_plan_v1               tests.test_selected_runtime_boundary_snapshot_hydrator_v1               tests.test_selected_runtime_cloud_natural_evaluator_v1               tests.test_selected_runtime_cloud_cycle_v1               tests.test_selected_runtime_cloud_daemon_v1               tests.test_ibkr_remote_warm_read_v1
+
+      - name: Prepare checkpoint restore directory
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/mmibkr-checkpoint" "$RUNNER_TEMP/mmibkr-data"
+
+      - name: Restore latest sanitized checkpoint cache
+        id: restore-cache
+        uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        with:
+          path: ${{ runner.temp }}/mmibkr-checkpoint
+          key: ${{ env.CHECKPOINT_CACHE_PREFIX }}restore-${{ github.run_id }}
+          restore-keys: |
+            ${{ env.CHECKPOINT_CACHE_PREFIX }}
+
+      - name: Restore canonical market-data and terminal-continuity state
+        run: |
+          set -euo pipefail
+          checkpoint="$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+          if [ -s "$checkpoint" ]; then
+            docker run --rm               -v "$RUNNER_TEMP/mmibkr-data:/app/data"               -v "$RUNNER_TEMP/mmibkr-checkpoint:/checkpoint:ro"               "mmibkr-cloud:${GITHUB_RUN_ID}"               python scripts/operator/runtime_market_data_cache_checkpoint_v1.py                 --repo-root /app                 --restore-archive /checkpoint/latest.tgz
+            echo 'MMIBKR_CHECKPOINT_RESTORED=1'
+          else
+            echo 'MMIBKR_CHECKPOINT_RESTORED=0'
+            echo 'No prior cache checkpoint; canonical self-healing bootstrap will be used.'
+          fi
+
+      - name: Run bounded selected-runtime cloud owner
+        run: |
+          set -euo pipefail
+          docker run --rm             -e IBKR_REMOTE_EXCHANGE_TOKEN             -e IBKR_REMOTE_SOURCE_TOKEN             -e ENABLE_LIVE_TRADING=0             -v "$RUNNER_TEMP/mmibkr-data:/app/data"             "mmibkr-cloud:${GITHUB_RUN_ID}"             python scripts/operator/selected_runtime_cloud_daemon_v1.py               --repo-root /app               --data-root /app/data               --source-ref "$PRIVATE_HEAD"               --session-seconds "$SESSION_SECONDS"               --max-cycles "$MAX_CYCLES"               --output /app/data/strategy_runtime/selected_runtime_cloud_daemon_v1/session.json
+
+      - name: Build sanitized successor checkpoint
+        if: ${{ always() }}
+        id: checkpoint
+        shell: bash
+        run: |
+          set +e
+          rm -f "$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+          docker run --rm             -v "$RUNNER_TEMP/mmibkr-data:/app/data"             -v "$RUNNER_TEMP/mmibkr-checkpoint:/checkpoint"             "mmibkr-cloud:${GITHUB_RUN_ID}"             python scripts/operator/runtime_market_data_cache_checkpoint_v1.py               --repo-root /app               --data-root /app/data               --archive-output /checkpoint/latest.tgz               > "$RUNNER_TEMP/checkpoint-build.log" 2>&1
+          code=$?
+          cat "$RUNNER_TEMP/checkpoint-build.log"
+          if [ "$code" -eq 0 ] && [ -s "$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz" ]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+            sha256sum "$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            rm -f "$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+            echo 'Checkpoint unavailable; successor remains able to self-heal from broker history.'
+          fi
+          exit 0
+
+      - name: Save sanitized successor checkpoint cache
+        if: ${{ steps.checkpoint.outputs.ready == 'true' }}
+        uses: actions/cache/save@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        with:
+          path: ${{ runner.temp }}/mmibkr-checkpoint
+          key: ${{ env.CHECKPOINT_CACHE_PREFIX }}${{ github.run_id }}-${{ env.PRIVATE_HEAD }}
+
+      - name: Publish sanitized cloud-session receipt
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          session_path=Path(os.environ['RUNNER_TEMP'],'mmibkr-data','strategy_runtime','selected_runtime_cloud_daemon_v1','session.json')
+          if session_path.is_file():
+              node=json.loads(session_path.read_text())
+              roll=node.get('futures_roll_maintenance') if isinstance(node.get('futures_roll_maintenance'),dict) else {}
+              receipt={
+                  'schema':'mmibkr.selected_runtime_cloud_session_receipt.v1',
+                  'ok':node.get('ok') is True,
+                  'status':node.get('status'),
+                  'run_id':os.environ['GITHUB_RUN_ID'],
+                  'private_head':os.environ.get('PRIVATE_HEAD'),
+                  'cycle_count':node.get('cycle_count'),
+                  'success_count':node.get('success_count'),
+                  'failure_count':node.get('failure_count'),
+                  'checkpoint_handoff_ready':node.get('checkpoint_handoff_ready'),
+                  'last_cycle':node.get('last_cycle'),
+                  'futures_roll_maintenance':roll,
+                  'live_execution_allowed':False,
+                  'public_strategy_authority':False,
+                  'public_execution_policy_authority':False,
+                  'credentials_included':False,
+                  'account_state_included':False,
+                  'positions_included':False,
+                  'orders_included':False,
+              }
+          else:
+              receipt={
+                  'schema':'mmibkr.selected_runtime_cloud_session_receipt.v1',
+                  'ok':False,
+                  'status':'session_receipt_missing_after_runtime_failure',
+                  'run_id':os.environ['GITHUB_RUN_ID'],
+                  'private_head':os.environ.get('PRIVATE_HEAD'),
+                  'live_execution_allowed':False,
+                  'credentials_included':False,
+                  'account_state_included':False,
+                  'positions_included':False,
+                  'orders_included':False,
+              }
+          out=Path(os.environ['RUNNER_TEMP'],'mmibkr-cloud-session-receipt.json')
+          out.write_text(json.dumps(receipt,sort_keys=True)+'\n')
+          PY
+          receipt_path="${RECEIPT_ROOT}/${GITHUB_RUN_ID}-mmibkr-selected-runtime-cloud.json"
+          payload="$(base64 -w0 "$RUNNER_TEMP/mmibkr-cloud-session-receipt.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json,sys
+          content,branch=sys.argv[1:]
+          print(json.dumps({
+              'message':'runtime: publish sanitized MM-IBKR cloud session receipt',
+              'content':content,
+              'branch':branch,
+          }))
+          PY
+          )"
+          curl -fsSL -X PUT             -H "Authorization: Bearer ${GH_TOKEN}"             -H 'Accept: application/vnd.github+json'             -H 'X-GitHub-Api-Version: 2022-11-28'             "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${receipt_path}"             -d "$body" >/dev/null
+          echo "MMIBKR_CLOUD_RECEIPT_PATH=${receipt_path}"
+
+      - name: Queue successor bounded session
+        if: ${{ success() && env.SELF_HANDOFF == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          body="$(python - <<'PY'
+          import json,os
+          print(json.dumps({
+              'ref':'main',
+              'inputs':{
+                  'source_ref':os.environ['REQUEST_SOURCE_REF'],
+                  'session_seconds':os.environ['SESSION_SECONDS'],
+                  'max_cycles':os.environ['MAX_CYCLES'],
+                  'self_handoff':True,
+              },
+          }))
+          PY
+          )"
+          curl -fsSL -X POST             -H "Authorization: Bearer ${GH_TOKEN}"             -H 'Accept: application/vnd.github+json'             -H 'X-GitHub-Api-Version: 2022-11-28'             "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/mmibkr-selected-runtime-cloud-r1.yml/dispatches"             -d "$body"
+          echo 'MMIBKR_CLOUD_SUCCESSOR_QUEUED=1'
+
+      - name: Destroy private runtime material
+        if: ${{ always() }}
+        run: |
+          set +e
+          docker image rm "mmibkr-cloud:${GITHUB_RUN_ID}" >/dev/null 2>&1
+          rm -rf             "$RUNNER_TEMP/mm-ibkr-source"             "$RUNNER_TEMP/mm-ibkr-source.tar.gz"             "$RUNNER_TEMP/mmibkr-private-source.json"             "$RUNNER_TEMP/mmibkr-data"             "$RUNNER_TEMP/mmibkr-checkpoint"
