@@ -384,6 +384,7 @@ def consume(
     source_ref: str,
     destination: Path,
     output: Path,
+    archive_output: Path | None = None,
     timeout_sec: int = 900,
     api: Callable[..., tuple[int, bytes, Mapping[str, str]]] = _api,
     token_factory: Callable[[], str] = _oidc_token,
@@ -485,6 +486,15 @@ def consume(
         recipient_key_id=recipient_key_id,
     )
     source_root = extract_archive(archive, destination)
+    archive_path = None
+    if archive_output is not None:
+        archive_output.parent.mkdir(parents=True, exist_ok=True)
+        archive_output.write_bytes(archive)
+        try:
+            os.chmod(archive_output, 0o600)
+        except OSError:
+            pass
+        archive_path = str(archive_output)
 
     cleanup_status, _, _ = api(
         authority_base,
@@ -505,6 +515,7 @@ def consume(
         "source_root": str(source_root),
         "source_archive_sha256": str(response["plaintext_sha256"]),
         "source_archive_bytes": int(response["archive_bytes"]),
+        "source_archive_path": archive_path,
         "producer_identity": dict(response["producer_identity"]),
         "source_exchange_cleanup_ok": cleanup_ok,
         "private_repository_token_used": False,
@@ -527,6 +538,7 @@ def main() -> int:
     parser.add_argument("--source-ref", required=True)
     parser.add_argument("--destination", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--archive-output", default="")
     parser.add_argument("--timeout-sec", type=int, default=900)
     args = parser.parse_args()
     result = consume(
@@ -535,6 +547,7 @@ def main() -> int:
         source_ref=args.source_ref,
         destination=Path(args.destination),
         output=Path(args.output),
+        archive_output=Path(args.archive_output) if args.archive_output else None,
         timeout_sec=args.timeout_sec,
     )
     print(
