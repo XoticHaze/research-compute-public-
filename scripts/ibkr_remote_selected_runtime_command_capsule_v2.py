@@ -30,7 +30,7 @@ from ibkr_remote_paper_capsule_v1 import (
     HARNESS,
     _fetch_source,
     _safe_extract_tar,
-    _validate_source,
+    _validate_source as _validate_legacy_source,
     _write_private,
 )
 
@@ -130,6 +130,41 @@ def _validate_return_recipient(value: Any) -> dict[str, str]:
     }
 
 
+ATTESTED_SOURCE_FIELDS = {
+    "repository",
+    "head",
+    "archive_sha256",
+    "archive_bytes",
+    "transport",
+}
+ATTESTED_SOURCE_TRANSPORT = "fleet_private_attested_source_v1"
+
+
+def _validate_source(value: Any) -> dict[str, Any]:
+    if isinstance(value, Mapping) and set(value) == ATTESTED_SOURCE_FIELDS:
+        if value.get("repository") != "XoticHaze/mm-IBKR":
+            raise RuntimeError("attested source repository mismatch")
+        head = str(value.get("head") or "").strip().lower()
+        digest = str(value.get("archive_sha256") or "").strip().lower()
+        size = int(value.get("archive_bytes") or 0)
+        if not re.fullmatch(r"[0-9a-f]{40}", head):
+            raise RuntimeError("attested source head invalid")
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise RuntimeError("attested source archive sha256 invalid")
+        if size <= 0 or size > 150_000_000:
+            raise RuntimeError("attested source archive size invalid")
+        if value.get("transport") != ATTESTED_SOURCE_TRANSPORT:
+            raise RuntimeError("attested source transport mismatch")
+        return {
+            "repository": "XoticHaze/mm-IBKR",
+            "head": head,
+            "archive_sha256": digest,
+            "archive_bytes": size,
+            "transport": ATTESTED_SOURCE_TRANSPORT,
+        }
+    return _validate_legacy_source(value)
+
+
 def _validate_request(value: Any) -> dict[str, Any]:
     if not isinstance(value, Mapping) or set(value) != REQUEST_FIELDS:
         raise RuntimeError("selected-runtime command request field set mismatch")
@@ -201,9 +236,24 @@ def validate_capsule(raw: bytes) -> dict[str, Any]:
     }
 
 
-def materialize(capsule: Mapping[str, Any], *, runner_temp: Path) -> dict[str, Any]:
+def materialize(
+    capsule: Mapping[str, Any],
+    *,
+    runner_temp: Path,
+    source_archive_bytes: bytes | None = None,
+) -> dict[str, Any]:
+    source = dict(capsule["source"])
     source_archive = runner_temp / "mm-ibkr-source.tar.gz"
-    source_archive.write_bytes(_fetch_source(dict(capsule["source"])))
+    if source.get("transport") == ATTESTED_SOURCE_TRANSPORT:
+        if source_archive_bytes is None:
+            raise RuntimeError("Fleet-attested source archive bytes required")
+        if len(source_archive_bytes) != int(source.get("archive_bytes") or 0):
+            raise RuntimeError("Fleet-attested source archive byte count mismatch")
+        if hashlib.sha256(source_archive_bytes).hexdigest() != source["archive_sha256"]:
+            raise RuntimeError("Fleet-attested source archive digest mismatch")
+        source_archive.write_bytes(source_archive_bytes)
+    else:
+        source_archive.write_bytes(_fetch_source(source))
     os.chmod(source_archive, 0o600)
     source_root = _safe_extract_tar(source_archive, runner_temp / "mm-ibkr-source")
 
@@ -218,6 +268,8 @@ def materialize(capsule: Mapping[str, Any], *, runner_temp: Path) -> dict[str, A
         "mmibkr_repository": capsule["source"]["repository"],
         "mmibkr_head": capsule["source"]["head"],
         "source_archive_sha256": capsule["source"]["archive_sha256"],
+        "source_transport": capsule["source"].get("transport") or "legacy_github_private_archive",
+        "private_repository_token_used": capsule["source"].get("transport") != ATTESTED_SOURCE_TRANSPORT,
         "source_root": str(source_root),
         "request_path": str(request_path),
         "return_recipient_path": str(return_recipient_path),

@@ -129,6 +129,37 @@ class SelectedRuntimeCommandCapsuleV2Tests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "persistent paper execute cleanup contract mismatch"):
             self.validate(node)
 
+    def test_attested_source_ticket_requires_no_private_bearer_or_url(self):
+        node = self.capsule()
+        node["source"] = {
+            "repository": "XoticHaze/mm-IBKR",
+            "head": "a" * 40,
+            "archive_sha256": "b" * 64,
+            "archive_bytes": 12345,
+            "transport": mod.ATTESTED_SOURCE_TRANSPORT,
+        }
+        out = self.validate(node)
+        self.assertEqual(
+            out["source"]["transport"],
+            "fleet_private_attested_source_v1",
+        )
+        self.assertNotIn("authorization_bearer", out["source"])
+        self.assertNotIn("archive_url", out["source"])
+        self.assertEqual(out["source"]["archive_bytes"], 12345)
+
+    def test_attested_source_ticket_rejects_extra_bearer_capability(self):
+        node = self.capsule()
+        node["source"] = {
+            "repository": "XoticHaze/mm-IBKR",
+            "head": "a" * 40,
+            "archive_sha256": "b" * 64,
+            "archive_bytes": 12345,
+            "transport": mod.ATTESTED_SOURCE_TRANSPORT,
+            "authorization_bearer": "must-not-be-admitted",
+        }
+        with self.assertRaisesRegex(RuntimeError, "source ticket field set mismatch"):
+            self.validate(node)
+
     def test_unknown_command_mode_is_rejected(self):
         node = self.capsule()
         node["mode"] = "paper_magic"
