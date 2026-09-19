@@ -1,0 +1,8 @@
+schema=commandcenter.public_encrypted_compute_request.v1
+role=Continue Release
+harness=foundry341_forward_observer_pytest_v1
+private_authority=XoticHaze/research-foundry
+private_pr=341
+private_head=53931308f798c107ab0aed16da0a1268ec589266
+scope=release_acceptance_only
+live_trading=false
