@@ -66,6 +66,9 @@ BAR_REQUEST_FIELDS = {
 BAR_REQUEST_OPTIONAL_FIELDS = {
     "end_date_time_utc",
     "allow_empty",
+    # Optional MM-owned exact contract used only for this historical request.
+    # Quote/execution-context identity remains --contracts-json.
+    "history_contract",
 }
 BAR_SIZE_RE = re.compile(r"^(?:[1-9][0-9]{0,2}) (?:sec|secs|min|mins|hour|hours|day|week|month)$")
 DURATION_RE = re.compile(r"^(?:[1-9][0-9]{0,5}) [SDWMY]$")
@@ -170,8 +173,13 @@ def _normalize_allow_empty(value: object) -> bool:
     raise RuntimeError("bar request allow_empty must be boolean")
 
 
-def parse_bar_requests(raw: str, symbols: list[str]) -> dict[str, list[dict[str, str]]]:
-    """Validate exact MM-supplied history requests without choosing a timeframe."""
+def parse_bar_requests(raw: str, symbols: list[str]) -> dict[str, list[dict[str, object]]]:
+    """Validate exact MM-supplied history requests without choosing a timeframe.
+
+    An optional history_contract is accepted per request. It is an exact
+    private-supplied read identity only; public compute never selects or rolls
+    the contract. --contracts-json remains the quote/execution-context identity.
+    """
     if not str(raw or "").strip():
         return {}
     try:
@@ -182,7 +190,7 @@ def parse_bar_requests(raw: str, symbols: list[str]) -> dict[str, list[dict[str,
         raise RuntimeError("bar requests must be an object keyed by symbol")
 
     requested_symbols = {str(symbol).strip().upper() for symbol in symbols if str(symbol).strip()}
-    normalized: dict[str, list[dict[str, str]]] = {}
+    normalized: dict[str, list[dict[str, object]]] = {}
     total = 0
     for raw_symbol, rows in node.items():
         symbol = str(raw_symbol or "").strip().upper()
@@ -190,8 +198,8 @@ def parse_bar_requests(raw: str, symbols: list[str]) -> dict[str, list[dict[str,
             raise RuntimeError(f"bar requests include unrequested symbol: {symbol or 'blank'}")
         if not isinstance(rows, list) or not rows:
             raise RuntimeError(f"bar requests require a non-empty list for {symbol}")
-        clean_rows: list[dict[str, str]] = []
-        seen: set[tuple[str, str, str, str, str]] = set()
+        clean_rows: list[dict[str, object]] = []
+        seen: set[tuple[str, str, str, str, str, str, str]] = set()
         for raw_row in rows:
             if not isinstance(raw_row, dict):
                 raise RuntimeError(f"bar request field set mismatch for {symbol}")
@@ -205,6 +213,17 @@ def parse_bar_requests(raw: str, symbols: list[str]) -> dict[str, list[dict[str,
                 raw_row.get("end_date_time_utc")
             )
             row["allow_empty"] = _normalize_allow_empty(raw_row.get("allow_empty"))
+            raw_history_contract = raw_row.get("history_contract")
+            if raw_history_contract in (None, ""):
+                row["history_contract"] = None
+            else:
+                if not isinstance(raw_history_contract, dict):
+                    raise RuntimeError(
+                        f"bar request history_contract must be an object for {symbol}"
+                    )
+                row["history_contract"] = parse_contract_hints(
+                    json.dumps({symbol: raw_history_contract})
+                )[symbol]
             if not row["source_timeframe"] or not row["target_timeframe"]:
                 raise RuntimeError(f"bar request timeframe identity missing for {symbol}")
             if not BAR_SIZE_RE.fullmatch(row["bar_size_setting"]):
@@ -225,6 +244,9 @@ def parse_bar_requests(raw: str, symbols: list[str]) -> dict[str, list[dict[str,
                 row["duration_str"],
                 row["end_date_time_utc"],
                 "1" if row["allow_empty"] else "0",
+                json.dumps(row["history_contract"], sort_keys=True, separators=(",", ":"))
+                if row["history_contract"] is not None
+                else "",
             )
             if identity in seen:
                 raise RuntimeError(f"duplicate bar request for {symbol}")
@@ -331,6 +353,66 @@ def contract_request_for_symbol(
         "source": source,
         **{k: v for k, v in kwargs.items() if v not in (None, "")},
     }
+
+
+def _validate_qualified_contract_identity(
+    symbol: str,
+    contract_request: dict[str, object],
+    resolved: Contract,
+) -> None:
+    """Fail closed if IBKR qualification changes a private-supplied identity."""
+    if contract_request.get("source") not in {
+        "mm_exact_contract_hint",
+        "mm_expiry_qualified_read_contract",
+    }:
+        return
+    requested_con_id = int(contract_request.get("conId") or 0)
+    resolved_con_id = int(getattr(resolved, "conId", 0) or 0)
+    if requested_con_id > 0 and resolved_con_id != requested_con_id:
+        raise RuntimeError(f"qualified contract conId mismatch for {symbol}")
+    requested_sec_type = str(contract_request.get("secType") or "").upper()
+    resolved_sec_type = str(getattr(resolved, "secType", "") or "").upper()
+    if requested_sec_type and resolved_sec_type != requested_sec_type:
+        raise RuntimeError(f"qualified contract secType mismatch for {symbol}")
+    requested_expiry = str(
+        contract_request.get("lastTradeDateOrContractMonth") or ""
+    ).strip()
+    resolved_expiry = str(
+        getattr(resolved, "lastTradeDateOrContractMonth", "") or ""
+    ).strip()
+    if (
+        requested_expiry
+        and resolved_expiry
+        and not resolved_expiry.startswith(requested_expiry[:6])
+    ):
+        raise RuntimeError(f"qualified contract expiry mismatch for {symbol}")
+
+
+def _contract_receipt(contract: Contract) -> dict[str, object]:
+    return {
+        "conId": int(getattr(contract, "conId", 0) or 0),
+        "symbol": str(getattr(contract, "symbol", "") or ""),
+        "secType": str(getattr(contract, "secType", "") or ""),
+        "exchange": str(getattr(contract, "exchange", "") or ""),
+        "currency": str(getattr(contract, "currency", "") or ""),
+        "localSymbol": str(getattr(contract, "localSymbol", "") or ""),
+        "tradingClass": str(getattr(contract, "tradingClass", "") or ""),
+        "lastTradeDateOrContractMonth": str(
+            getattr(contract, "lastTradeDateOrContractMonth", "") or ""
+        ),
+        "strike": float(getattr(contract, "strike", 0.0) or 0.0),
+        "right": str(getattr(contract, "right", "") or ""),
+        "multiplier": str(getattr(contract, "multiplier", "") or ""),
+    }
+
+
+def _contract_id(contract: Contract, fallback_symbol: str) -> str:
+    con_id = int(getattr(contract, "conId", 0) or 0)
+    return (
+        f"conid:{con_id}"
+        if con_id
+        else str(getattr(contract, "localSymbol", "") or fallback_symbol)
+    )
 
 
 def _positive_float(value):
@@ -511,30 +593,7 @@ def main() -> int:
             if not qualified:
                 raise RuntimeError(f"contract qualification failed for {symbol}")
             resolved = qualified[0]
-            if contract_request.get("source") in {
-                "mm_exact_contract_hint",
-                "mm_expiry_qualified_read_contract",
-            }:
-                requested_con_id = int(contract_request.get("conId") or 0)
-                resolved_con_id = int(getattr(resolved, "conId", 0) or 0)
-                if requested_con_id > 0 and resolved_con_id != requested_con_id:
-                    raise RuntimeError(f"qualified contract conId mismatch for {symbol}")
-                requested_sec_type = str(contract_request.get("secType") or "").upper()
-                resolved_sec_type = str(getattr(resolved, "secType", "") or "").upper()
-                if requested_sec_type and resolved_sec_type != requested_sec_type:
-                    raise RuntimeError(f"qualified contract secType mismatch for {symbol}")
-                requested_expiry = str(
-                    contract_request.get("lastTradeDateOrContractMonth") or ""
-                ).strip()
-                resolved_expiry = str(
-                    getattr(resolved, "lastTradeDateOrContractMonth", "") or ""
-                ).strip()
-                if (
-                    requested_expiry
-                    and resolved_expiry
-                    and not resolved_expiry.startswith(requested_expiry[:6])
-                ):
-                    raise RuntimeError(f"qualified contract expiry mismatch for {symbol}")
+            _validate_qualified_contract_identity(symbol, contract_request, resolved)
             effective_requests = bar_requests.get(symbol) or [{
                 "source_timeframe": "5Min",
                 "target_timeframe": "5Min",
@@ -545,15 +604,61 @@ def main() -> int:
             }]
             request_receipts: list[dict[str, object]] = []
             historical_bar_count = 0
+            history_contract_cache: dict[str, tuple[Contract, dict[str, object], float]] = {}
             for bar_request in effective_requests:
                 bar_size = str(bar_request["bar_size_setting"])
                 duration = str(bar_request["duration_str"])
                 end_date_time_utc = str(bar_request.get("end_date_time_utc") or "")
                 allow_empty = bool(bar_request.get("allow_empty"))
                 request_end = _ibkr_history_end(end_date_time_utc)
+
+                history_resolved = resolved
+                history_contract_request = contract_request
+                history_contract_qualification_elapsed_ms = 0.0
+                embedded_history_contract = bar_request.get("history_contract")
+                if isinstance(embedded_history_contract, dict):
+                    cache_key = json.dumps(
+                        embedded_history_contract,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                    cached_history = history_contract_cache.get(cache_key)
+                    if cached_history is None:
+                        history_contract, history_contract_request = contract_request_for_symbol(
+                            symbol,
+                            {symbol: embedded_history_contract},
+                        )
+                        history_qualify_started = time.perf_counter()
+                        history_qualified = ib.qualifyContracts(history_contract)
+                        history_contract_qualification_elapsed_ms = round(
+                            (time.perf_counter() - history_qualify_started) * 1000.0,
+                            3,
+                        )
+                        if not history_qualified:
+                            raise RuntimeError(
+                                f"history contract qualification failed for {symbol}"
+                            )
+                        history_resolved = history_qualified[0]
+                        _validate_qualified_contract_identity(
+                            symbol,
+                            history_contract_request,
+                            history_resolved,
+                        )
+                        cached_history = (
+                            history_resolved,
+                            history_contract_request,
+                            history_contract_qualification_elapsed_ms,
+                        )
+                        history_contract_cache[cache_key] = cached_history
+                    (
+                        history_resolved,
+                        history_contract_request,
+                        history_contract_qualification_elapsed_ms,
+                    ) = cached_history
+
                 request_started = time.perf_counter()
                 bars = ib.reqHistoricalData(
-                    resolved,
+                    history_resolved,
                     endDateTime=request_end,
                     durationStr=duration,
                     barSizeSetting=bar_size,
@@ -572,9 +677,13 @@ def main() -> int:
                 records.extend(
                     ibkr_bar_to_record(
                         bar,
-                        resolved,
+                        history_resolved,
                         symbol=symbol,
-                        asset_type=str(getattr(resolved, "secType", "") or contract_request.get("secType") or "STK"),
+                        asset_type=str(
+                            getattr(history_resolved, "secType", "")
+                            or history_contract_request.get("secType")
+                            or "STK"
+                        ),
                         bar_size=bar_size,
                         session="all",
                         source="ibkr",
@@ -586,14 +695,29 @@ def main() -> int:
                     3,
                 )
                 market_data_elapsed_ms += request_elapsed_ms
-                request_receipts.append({
+                request_receipt = {
                     **dict(bar_request),
                     "historical_bar_count": len(bars),
                     "request_elapsed_ms": request_elapsed_ms,
+                    "history_contract_source": history_contract_request.get("source"),
+                    "history_contract_id": _contract_id(history_resolved, symbol),
+                    "requested_history_contract": history_contract_request,
+                    "resolved_history_contract": _contract_receipt(history_resolved),
+                    "history_contract_qualification_elapsed_ms": (
+                        history_contract_qualification_elapsed_ms
+                    ),
+                    "history_contract_is_quote_contract": bool(
+                        _contract_id(history_resolved, symbol)
+                        == _contract_id(resolved, symbol)
+                    ),
                     "maintenance_pacing_sec": (
                         HISTORICAL_CHUNK_PACE_SEC if end_date_time_utc else 0.0
                     ),
-                })
+                }
+                # Avoid duplicating the nested private-supplied hint in the receipt;
+                # requested_history_contract above is the normalized evidence.
+                request_receipt.pop("history_contract", None)
+                request_receipts.append(request_receipt)
                 if end_date_time_utc:
                     ib.sleep(HISTORICAL_CHUNK_PACE_SEC)
             quote_snapshot = None
@@ -603,7 +727,12 @@ def main() -> int:
                 {
                     "symbol": symbol,
                     "contract_qualified": True,
-                    "contract_id": f"conid:{resolved.conId}" if resolved.conId else (resolved.localSymbol or symbol),
+                    "contract_id": _contract_id(resolved, symbol),
+                    "quote_contract_id": _contract_id(resolved, symbol),
+                    "historical_contracts_distinct_from_quote_contract": any(
+                        not bool(row.get("history_contract_is_quote_contract"))
+                        for row in request_receipts
+                    ),
                     "historical_data_ready": True,
                     "historical_bar_count": historical_bar_count,
                     "bar_request_source": "mm_exact_bar_requests" if symbol in bar_requests else "compatibility_default_5min",
@@ -619,19 +748,8 @@ def main() -> int:
                     "symbol_elapsed_ms": round((time.perf_counter() - symbol_started) * 1000.0, 3),
                     "contract_source": contract_request.get("source"),
                     "requested_contract": contract_request,
-                    "resolved_contract": {
-                        "conId": int(getattr(resolved, "conId", 0) or 0),
-                        "symbol": str(getattr(resolved, "symbol", "") or ""),
-                        "secType": str(getattr(resolved, "secType", "") or ""),
-                        "exchange": str(getattr(resolved, "exchange", "") or ""),
-                        "currency": str(getattr(resolved, "currency", "") or ""),
-                        "localSymbol": str(getattr(resolved, "localSymbol", "") or ""),
-                        "tradingClass": str(getattr(resolved, "tradingClass", "") or ""),
-                        "lastTradeDateOrContractMonth": str(getattr(resolved, "lastTradeDateOrContractMonth", "") or ""),
-                        "strike": float(getattr(resolved, "strike", 0.0) or 0.0),
-                        "right": str(getattr(resolved, "right", "") or ""),
-                        "multiplier": str(getattr(resolved, "multiplier", "") or ""),
-                    },
+                    "resolved_contract": _contract_receipt(resolved),
+                    "resolved_quote_contract": _contract_receipt(resolved),
                 }
             )
 
