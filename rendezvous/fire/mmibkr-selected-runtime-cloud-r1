@@ -4,5 +4,5 @@
   "max_cycles": 5,
   "self_handoff": false,
   "purpose": "finite acceptance before production handoff",
-  "request_nonce": "fleet-attested-r2-20260919"
+  "request_nonce": "fleet-attested-r3-20260919"
 }
