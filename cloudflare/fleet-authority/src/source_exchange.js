@@ -13,6 +13,10 @@ const PRIVATE_MAIN_REF = 'refs/heads/main';
 const PRIVATE_WORKFLOW_PATH =
   'XoticHaze/mm-IBKR/.github/workflows/mmibkr-cloud-source-producer-r1.yml@';
 
+const B1_REF = 'refs/heads/ibkr-b1-authority-v1';
+const B1_WORKFLOW_REF =
+  'XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1';
+
 const REQUEST_SCHEMA = 'mmibkr-cloud-source-request-v1';
 const RESPONSE_SCHEMA = 'mmibkr-cloud-source-x25519-v1';
 const HARNESS = 'mmibkr_cloud_source_exchange_v1';
@@ -156,6 +160,14 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role) {
       || !workflowAllowed
       || !ALLOWED_PRIVATE_EVENTS.has(claims.event_name)
     ) throw new Error('oidc_producer_identity_rejected');
+  } else if (role === 'b1_consumer') {
+    if (
+      claims.repository !== PUBLIC_REPOSITORY
+      || claims.repository_visibility !== 'public'
+      || claims.ref !== B1_REF
+      || claims.workflow_ref !== B1_WORKFLOW_REF
+      || !ALLOWED_PUBLIC_EVENTS.has(claims.event_name)
+    ) throw new Error('oidc_b1_identity_rejected');
   } else {
     throw new Error('source_exchange_role_rejected');
   }
@@ -177,6 +189,9 @@ function roleForRequest(method, pathname) {
     || (method === 'GET' && /^\/v1\/source-exchange\/response\/\d+$/.test(pathname))
     || (method === 'GET' && /^\/v1\/source-exchange\/response\/\d+\/chunk\/\d+$/.test(pathname))
     || (method === 'POST' && /^\/v1\/source-exchange\/cleanup\/\d+$/.test(pathname))
+    || (method === 'POST' && pathname === '/v1/source-exchange/relay/request')
+    || (method === 'PUT' && /^\/v1\/source-exchange\/relay\/response\/\d+\/chunk\/\d+$/.test(pathname))
+    || (method === 'POST' && /^\/v1\/source-exchange\/relay\/response\/\d+\/manifest$/.test(pathname))
   ) return 'consumer';
 
   if (
@@ -185,6 +200,12 @@ function roleForRequest(method, pathname) {
     || (method === 'PUT' && /^\/v1\/source-exchange\/response\/\d+\/chunk\/\d+$/.test(pathname))
     || (method === 'POST' && /^\/v1\/source-exchange\/response\/\d+\/manifest$/.test(pathname))
   ) return 'producer';
+
+  if (
+    (method === 'GET' && /^\/v1\/source-exchange\/b1\/response\/\d+$/.test(pathname))
+    || (method === 'GET' && /^\/v1\/source-exchange\/b1\/response\/\d+\/chunk\/\d+$/.test(pathname))
+    || (method === 'POST' && /^\/v1\/source-exchange\/b1\/cleanup\/\d+$/.test(pathname))
+  ) return 'b1_consumer';
   return null;
 }
 
@@ -250,7 +271,7 @@ export class SourceExchange {
 
   _internalRole(request) {
     const role = request.headers.get('x-mmibkr-source-role') || '';
-    if (!['consumer', 'producer'].includes(role)) throw new Error('internal_role_rejected');
+    if (!['consumer', 'producer', 'b1_consumer'].includes(role)) throw new Error('internal_role_rejected');
     return role;
   }
 
@@ -416,16 +437,243 @@ export class SourceExchange {
             throw new Error('chunk_missing_or_mismatch');
           }
         }
+        const producerIdentity = this._producerIdentity(request);
         const manifest = {
           ...body,
-          producer_identity: this._producerIdentity(request),
+          producer_identity: producerIdentity,
           finalized_at: new Date().toISOString(),
         };
+        const attestationKey = `attest:${body.source_sha}:${body.plaintext_sha256}`;
+        const attestation = {
+          schema: 'mmibkr-cloud-source-private-attestation-v1',
+          source_ref: body.source_ref,
+          source_sha: body.source_sha,
+          plaintext_sha256: body.plaintext_sha256,
+          archive_bytes: Number(body.archive_bytes),
+          producer_identity: producerIdentity,
+          attested_at: new Date().toISOString(),
+        };
+        await this.ctx.storage.put(attestationKey, attestation);
         await this.ctx.storage.put(`resp:${runId}`, manifest);
-        return json({ ok: true, status: 'finalized', run_id: runId, source_sha: body.source_sha });
+        return json({
+          ok: true,
+          status: 'finalized',
+          run_id: runId,
+          source_sha: body.source_sha,
+          private_attestation_stored: true,
+        });
       } catch {
         return json({ error: 'manifest_rejected' }, 400);
       }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/v1/source-exchange/relay/request') {
+      if (role !== 'consumer') return json({ error: 'forbidden' }, 403);
+      let body;
+      try {
+        const text = await request.text();
+        if (text.length > 16384) return json({ error: 'request_too_large' }, 413);
+        body = JSON.parse(text);
+      } catch {
+        return json({ error: 'invalid_json' }, 400);
+      }
+      try {
+        const targetRunId = validRunId(body?.target_run_id);
+        const sourceRef = validSourceRef(body?.source_ref);
+        const sourceSha = String(body?.source_sha || '').toLowerCase();
+        const plaintextSha = String(body?.plaintext_sha256 || '').toLowerCase();
+        const archiveBytes = Number(body?.archive_bytes || 0);
+        const recipientB64 = String(body?.recipient_b64 || '');
+        const recipientKeyId = String(body?.recipient_key_id || '');
+        if (!/^[0-9a-f]{40}$/.test(sourceSha) || !/^[0-9a-f]{64}$/.test(plaintextSha)) {
+          throw new Error('source_identity');
+        }
+        if (!Number.isInteger(archiveBytes) || archiveBytes <= 0 || archiveBytes > 150 * 1024 * 1024) {
+          throw new Error('archive_bytes');
+        }
+        const recipientRaw = b64ToBytes(recipientB64);
+        if (recipientRaw.length !== 32) throw new Error('recipient');
+        const calculated = `sha256:${await sha256Hex(recipientRaw)}`;
+        if (calculated !== recipientKeyId) throw new Error('recipient_key_id');
+        const attestation = await this.ctx.storage.get(`attest:${sourceSha}:${plaintextSha}`);
+        if (
+          !attestation
+          || attestation.source_ref !== sourceRef
+          || Number(attestation.archive_bytes) !== archiveBytes
+        ) {
+          return json({ error: 'private_source_attestation_required' }, 409);
+        }
+        const relayRequest = {
+          schema: 'mmibkr-cloud-source-relay-request-v1',
+          target_run_id: targetRunId,
+          source_ref: sourceRef,
+          source_sha: sourceSha,
+          plaintext_sha256: plaintextSha,
+          archive_bytes: archiveBytes,
+          recipient_b64: recipientB64,
+          recipient_key_id: recipientKeyId,
+          private_attestation: attestation,
+          requested_at: new Date().toISOString(),
+        };
+        const existing = await this.ctx.storage.get(`relayreq:${targetRunId}`);
+        if (existing) {
+          const same =
+            existing.source_ref === relayRequest.source_ref
+            && existing.source_sha === relayRequest.source_sha
+            && existing.plaintext_sha256 === relayRequest.plaintext_sha256
+            && existing.recipient_key_id === relayRequest.recipient_key_id;
+          if (!same) return json({ error: 'relay_request_conflict' }, 409);
+        } else {
+          await this.ctx.storage.put(`relayreq:${targetRunId}`, relayRequest);
+        }
+        return json({
+          ok: true,
+          status: existing ? 'already_requested' : 'requested',
+          target_run_id: targetRunId,
+          private_attestation_verified: true,
+        }, existing ? 200 : 201);
+      } catch {
+        return json({ error: 'relay_request_rejected' }, 400);
+      }
+    }
+
+    match = url.pathname.match(/^\/v1\/source-exchange\/relay\/response\/(\d+)\/chunk\/(\d+)$/);
+    if (request.method === 'PUT' && match) {
+      if (role !== 'consumer') return json({ error: 'forbidden' }, 403);
+      const targetRunId = validRunId(match[1]);
+      const index = Number(match[2]);
+      if (!Number.isInteger(index) || index < 0 || index >= MAX_CHUNKS) {
+        return json({ error: 'chunk_index_rejected' }, 400);
+      }
+      const relayRequest = await this.ctx.storage.get(`relayreq:${targetRunId}`);
+      if (!relayRequest) return json({ error: 'relay_request_not_found' }, 404);
+      if (await this.ctx.storage.get(`relayresp:${targetRunId}`)) {
+        return json({ error: 'relay_response_already_finalized' }, 409);
+      }
+      const text = await request.text();
+      if (!text || text.length > MAX_CHUNK_CHARS || !/^[A-Za-z0-9+/=]+$/.test(text)) {
+        return json({ error: 'chunk_rejected' }, 400);
+      }
+      const digest = await sha256Hex(new TextEncoder().encode(text));
+      const expected = String(request.headers.get('x-mmibkr-chunk-sha256') || '');
+      if (!/^[0-9a-f]{64}$/.test(expected) || digest !== expected) {
+        return json({ error: 'chunk_digest_rejected' }, 400);
+      }
+      await this.ctx.storage.put(`relaychunk:${targetRunId}:${index}`, {
+        chars: text.length,
+        sha256: digest,
+        text,
+      });
+      return json({ ok: true, target_run_id: targetRunId, index, chars: text.length, sha256: digest });
+    }
+
+    match = url.pathname.match(/^\/v1\/source-exchange\/relay\/response\/(\d+)\/manifest$/);
+    if (request.method === 'POST' && match) {
+      if (role !== 'consumer') return json({ error: 'forbidden' }, 403);
+      const targetRunId = validRunId(match[1]);
+      const relayRequest = await this.ctx.storage.get(`relayreq:${targetRunId}`);
+      if (!relayRequest) return json({ error: 'relay_request_not_found' }, 404);
+      const raw = await request.text();
+      if (raw.length > MAX_MANIFEST_BYTES) return json({ error: 'manifest_too_large' }, 413);
+      let body;
+      try { body = JSON.parse(raw); } catch { return json({ error: 'invalid_json' }, 400); }
+      try {
+        const required = new Set([
+          'schema', 'run_id', 'harness', 'source_ref', 'source_sha',
+          'recipient_key_id', 'sender_public_b64', 'salt_b64', 'nonce_b64',
+          'ciphertext_sha256', 'plaintext_sha256', 'archive_bytes',
+          'ciphertext_bytes', 'chunk_count', 'chunks',
+        ]);
+        if (!body || Object.keys(body).length !== required.size || Object.keys(body).some((k) => !required.has(k))) {
+          throw new Error('field_set');
+        }
+        if (body.schema !== RESPONSE_SCHEMA || body.harness !== HARNESS) throw new Error('schema');
+        if (
+          String(body.run_id) !== targetRunId
+          || body.source_ref !== relayRequest.source_ref
+          || body.source_sha !== relayRequest.source_sha
+          || body.plaintext_sha256 !== relayRequest.plaintext_sha256
+          || Number(body.archive_bytes) !== Number(relayRequest.archive_bytes)
+          || body.recipient_key_id !== relayRequest.recipient_key_id
+        ) throw new Error('identity');
+        const count = Number(body.chunk_count);
+        if (!Number.isInteger(count) || count <= 0 || count > MAX_CHUNKS) throw new Error('chunk_count');
+        if (!Array.isArray(body.chunks) || body.chunks.length !== count) throw new Error('chunks');
+        for (let i = 0; i < count; i += 1) {
+          const desc = body.chunks[i];
+          const stored = await this.ctx.storage.get(`relaychunk:${targetRunId}:${i}`);
+          if (
+            !desc
+            || Number(desc.index) !== i
+            || !stored
+            || stored.sha256 !== desc.sha256
+            || Number(stored.chars) !== Number(desc.chars)
+          ) throw new Error('chunk_missing_or_mismatch');
+        }
+        const relayManifest = {
+          ...body,
+          private_attestation: relayRequest.private_attestation,
+          relay_identity: this._producerIdentity(request),
+          finalized_at: new Date().toISOString(),
+        };
+        await this.ctx.storage.put(`relayresp:${targetRunId}`, relayManifest);
+        return json({
+          ok: true,
+          status: 'finalized',
+          target_run_id: targetRunId,
+          private_attestation_verified: true,
+        });
+      } catch {
+        return json({ error: 'relay_manifest_rejected' }, 400);
+      }
+    }
+
+    match = url.pathname.match(/^\/v1\/source-exchange\/b1\/response\/(\d+)$/);
+    if (request.method === 'GET' && match) {
+      if (role !== 'b1_consumer') return json({ error: 'forbidden' }, 403);
+      const targetRunId = validRunId(match[1]);
+      if (String(request.headers.get('x-mmibkr-oidc-run-id') || '') !== targetRunId) {
+        return json({ error: 'b1_run_identity_mismatch' }, 403);
+      }
+      const manifest = await this.ctx.storage.get(`relayresp:${targetRunId}`);
+      if (!manifest) return json({ error: 'response_not_ready' }, 404);
+      return json({ ok: true, response: manifest });
+    }
+
+    match = url.pathname.match(/^\/v1\/source-exchange\/b1\/response\/(\d+)\/chunk\/(\d+)$/);
+    if (request.method === 'GET' && match) {
+      if (role !== 'b1_consumer') return json({ error: 'forbidden' }, 403);
+      const targetRunId = validRunId(match[1]);
+      if (String(request.headers.get('x-mmibkr-oidc-run-id') || '') !== targetRunId) {
+        return json({ error: 'b1_run_identity_mismatch' }, 403);
+      }
+      const index = Number(match[2]);
+      const chunk = await this.ctx.storage.get(`relaychunk:${targetRunId}:${index}`);
+      if (!chunk) return json({ error: 'chunk_not_found' }, 404);
+      return new Response(chunk.text, {
+        status: 200,
+        headers: {
+          'content-type': 'text/plain; charset=us-ascii',
+          'cache-control': 'no-store',
+          'x-content-type-options': 'nosniff',
+          'x-mmibkr-chunk-sha256': chunk.sha256,
+        },
+      });
+    }
+
+    match = url.pathname.match(/^\/v1\/source-exchange\/b1\/cleanup\/(\d+)$/);
+    if (request.method === 'POST' && match) {
+      if (role !== 'b1_consumer') return json({ error: 'forbidden' }, 403);
+      const targetRunId = validRunId(match[1]);
+      if (String(request.headers.get('x-mmibkr-oidc-run-id') || '') !== targetRunId) {
+        return json({ error: 'b1_run_identity_mismatch' }, 403);
+      }
+      const manifest = await this.ctx.storage.get(`relayresp:${targetRunId}`);
+      const chunkCount = Number(manifest?.chunk_count || 0);
+      const keys = [`relayreq:${targetRunId}`, `relayresp:${targetRunId}`];
+      for (let i = 0; i < chunkCount; i += 1) keys.push(`relaychunk:${targetRunId}:${i}`);
+      await this.ctx.storage.delete(keys);
+      return json({ ok: true, status: 'deleted', target_run_id: targetRunId });
     }
 
     match = url.pathname.match(/^\/v1\/source-exchange\/response\/(\d+)$/);
