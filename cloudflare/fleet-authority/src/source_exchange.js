@@ -195,13 +195,24 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role) {
       || !workflowAllowed
       || !ALLOWED_PRIVATE_EVENTS.has(claims.event_name)
     ) throw new Error('oidc_producer_identity_rejected');
-  } else if (role === 'b1_consumer') {
+  } else if (role === 'b1_consumer' || role === 'b1_warm') {
+    const nativeB1 = (
+      claims.repository === 'XoticHaze/research-compute-public-'
+      && claims.ref === B1_REF
+      && claims.workflow_ref === B1_WORKFLOW_REF
+      && !claims.job_workflow_ref
+      && ALLOWED_PUBLIC_EVENTS.has(claims.event_name)
+    );
+    const reusableB1 = (
+      claims.repository === CANONICAL_RUNTIME_IDENTITY.repository
+      && claims.ref === CANONICAL_RUNTIME_IDENTITY.ref
+      && claims.workflow_ref === CANONICAL_RUNTIME_IDENTITY.workflow_ref
+      && claims.job_workflow_ref === B1_WORKFLOW_REF
+      && ALLOWED_PUBLIC_EVENTS.has(claims.event_name)
+    );
     if (
-      claims.repository !== 'XoticHaze/research-compute-public-'
-      || claims.repository_visibility !== 'public'
-      || claims.ref !== B1_REF
-      || claims.workflow_ref !== B1_WORKFLOW_REF
-      || !ALLOWED_PUBLIC_EVENTS.has(claims.event_name)
+      claims.repository_visibility !== 'public'
+      || (!nativeB1 && !reusableB1)
     ) throw new Error('oidc_b1_identity_rejected');
   } else {
     throw new Error('source_exchange_role_rejected');
@@ -212,6 +223,8 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role) {
     ref: claims.ref,
     workflow_ref: claims.workflow_ref,
     workflow_sha: claims.workflow_sha,
+    job_workflow_ref: String(claims.job_workflow_ref || ''),
+    job_workflow_sha: String(claims.job_workflow_sha || ''),
     event_name: claims.event_name,
     run_id: String(claims.run_id),
     run_attempt: String(claims.run_attempt || ''),
@@ -243,6 +256,13 @@ function roleForRequest(method, pathname) {
     || (method === 'GET' && /^\/v1\/source-exchange\/b1\/response\/\d+\/chunk\/\d+$/.test(pathname))
     || (method === 'POST' && /^\/v1\/source-exchange\/b1\/cleanup\/\d+$/.test(pathname))
   ) return 'b1_consumer';
+
+  if (
+    (method === 'GET' && pathname === '/v1/b1-warm-state/latest')
+    || (method === 'GET' && /^\/v1\/b1-warm-state\/generation\/\d+\/chunk\/\d+$/.test(pathname))
+    || (method === 'PUT' && /^\/v1\/b1-warm-state\/publish\/\d+\/chunk\/\d+$/.test(pathname))
+    || (method === 'POST' && /^\/v1\/b1-warm-state\/publish\/\d+\/manifest$/.test(pathname))
+  ) return 'b1_warm';
   return null;
 }
 
@@ -288,6 +308,8 @@ export async function handleSourceExchange(request, env) {
   headers.set('x-mmibkr-oidc-event', identity.event_name);
   headers.set('x-mmibkr-oidc-run-id', identity.run_id);
   headers.set('x-mmibkr-oidc-run-attempt', identity.run_attempt);
+  headers.set('x-mmibkr-oidc-job-workflow-ref', identity.job_workflow_ref || '');
+  headers.set('x-mmibkr-oidc-job-workflow-sha', identity.job_workflow_sha || '');
 
   const internalUrl = 'https://source-exchange.internal' + url.pathname + url.search;
   const init = { method: request.method, headers };
@@ -321,7 +343,7 @@ export class SourceExchange {
 
   _internalRole(request) {
     const role = request.headers.get('x-mmibkr-source-role') || '';
-    if (!['consumer', 'producer', 'b1_consumer', 'vault_public'].includes(role)) throw new Error('internal_role_rejected');
+    if (!['consumer', 'producer', 'b1_consumer', 'b1_warm', 'vault_public'].includes(role)) throw new Error('internal_role_rejected');
     return role;
   }
 
@@ -333,6 +355,8 @@ export class SourceExchange {
       event_name: request.headers.get('x-mmibkr-oidc-event') || '',
       run_id: request.headers.get('x-mmibkr-oidc-run-id') || '',
       run_attempt: request.headers.get('x-mmibkr-oidc-run-attempt') || '',
+      job_workflow_ref: request.headers.get('x-mmibkr-oidc-job-workflow-ref') || '',
+      job_workflow_sha: request.headers.get('x-mmibkr-oidc-job-workflow-sha') || '',
     };
   }
 
