@@ -11,6 +11,11 @@ import argparse
 import json
 import os
 from pathlib import Path
+import sys
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
 from ibkr_remote_paper_capsule_v1 import _safe_extract_tar
 from ibkr_remote_paper_direct_secret_v1 import (
