@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'assistant/fleet-*'
+      - 'assistant/source-snapshot-*'
   pull_request:
     branches:
       - main
@@ -16,6 +17,7 @@ on:
       - cloudflare/fleet-authority/package-lock.json
       - scripts/mmibkr_cloud_source_exchange_consumer_v1.py
       - tests/test_mmibkr_cloud_source_exchange_consumer_v1.py
+      - tests/test_fleet_source_vault_contract_v1.py
       - .github/workflows/fleet-source-exchange-contract-ci.yml
 
 permissions:
@@ -86,4 +88,6 @@ jobs:
           set -euo pipefail
           python -m pip install --disable-pip-version-check cryptography==46.0.1
           python -m py_compile scripts/mmibkr_cloud_source_exchange_consumer_v1.py
-          python -m unittest -v tests.test_mmibkr_cloud_source_exchange_consumer_v1
+          python -m unittest -v \
+            tests.test_mmibkr_cloud_source_exchange_consumer_v1 \
+            tests.test_fleet_source_vault_contract_v1
