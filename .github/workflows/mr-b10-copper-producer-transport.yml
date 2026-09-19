@@ -1,0 +1,23 @@
+name: MR B10 copper producer transport
+on:
+  push:
+    branches: [mr-b10-copper-producer-transport-20260919]
+    paths:
+      - 'research/mr_b10_copper_producer_transport.py'
+      - '.github/workflows/mr-b10-copper-producer-transport.yml'
+  workflow_dispatch:
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pandas numpy yfinance
+      - run: python research/mr_b10_copper_producer_transport.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mr-b10-copper-producer-transport
+          path: mr_b10_copper_producer_transport.json
