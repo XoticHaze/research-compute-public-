@@ -9,6 +9,13 @@ const EXPECTED_AUTHORITY = 'ibkr-paper-readonly';
 const ALLOWED_REF = 'refs/heads/ibkr-b1-authority-v1';
 const ALLOWED_EVENTS = new Set(['push', 'workflow_dispatch']);
 const ALLOWED_WORKFLOW_REF = 'XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1';
+
+const RUNTIME_CALLER_REPOSITORY = 'XoticHaze/mm-ibkr-runtime';
+const RUNTIME_CALLER_REF = 'refs/heads/main';
+const RUNTIME_CALLER_WORKFLOW_REF =
+  'XoticHaze/mm-ibkr-runtime/.github/workflows/mmibkr-selected-runtime-cloud-r1.yml@refs/heads/main';
+const REUSABLE_B1_JOB_WORKFLOW_REF = ALLOWED_WORKFLOW_REF;
+const RUNTIME_CALLER_EVENTS = new Set(['workflow_dispatch', 'schedule']);
 const REQUEST_SCHEMA = 'mmibkr-fleet-authority-seal-request-v1';
 const ENVELOPE_SCHEMA = 'mmibkr-ibkr-readonly-gateway-env-x25519-hkdf-aesgcm-v1';
 
@@ -110,19 +117,34 @@ async function verifyGithubOidc(jwt, requestedRunId) {
 
   const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
   if (claims.iss !== GITHUB_ISSUER || !aud.includes(EXPECTED_AUDIENCE)) throw new Error('oidc_issuer_audience_rejected');
-  if (claims.repository !== EXPECTED_REPOSITORY) throw new Error('oidc_repository_rejected');
   if (claims.repository_visibility !== 'public') throw new Error('oidc_visibility_rejected');
   if (claims.runner_environment !== 'github-hosted') throw new Error('oidc_runner_rejected');
-  if (claims.ref !== ALLOWED_REF) throw new Error('oidc_ref_rejected');
-  if (claims.workflow_ref !== ALLOWED_WORKFLOW_REF) throw new Error('oidc_workflow_ref_rejected');
-  if (!ALLOWED_EVENTS.has(claims.event_name)) throw new Error('oidc_event_rejected');
   if (String(claims.run_id) !== requestedRunId) throw new Error('oidc_run_rejected');
+
+  const nativeB1 = (
+    claims.repository === EXPECTED_REPOSITORY
+    && claims.ref === ALLOWED_REF
+    && claims.workflow_ref === ALLOWED_WORKFLOW_REF
+    && ALLOWED_EVENTS.has(claims.event_name)
+    && !claims.job_workflow_ref
+  );
+  const reusableB1 = (
+    claims.repository === RUNTIME_CALLER_REPOSITORY
+    && claims.ref === RUNTIME_CALLER_REF
+    && claims.workflow_ref === RUNTIME_CALLER_WORKFLOW_REF
+    && claims.job_workflow_ref === REUSABLE_B1_JOB_WORKFLOW_REF
+    && RUNTIME_CALLER_EVENTS.has(claims.event_name)
+  );
+  if (!nativeB1 && !reusableB1) throw new Error('oidc_workload_identity_rejected');
 
   return {
     repository: claims.repository,
     ref: claims.ref,
     workflow_ref: claims.workflow_ref,
     workflow_sha: claims.workflow_sha,
+    job_workflow_ref: String(claims.job_workflow_ref || ''),
+    job_workflow_sha: String(claims.job_workflow_sha || ''),
+    invocation_mode: reusableB1 ? 'reusable_b1_from_mmibkr_runtime' : 'native_b1',
     event_name: claims.event_name,
     run_id: String(claims.run_id),
     run_attempt: String(claims.run_attempt ?? ''),
@@ -229,6 +251,9 @@ async function sealIbkrGatewayEnv(body, env, oidc) {
       ref: oidc.ref,
       workflow_ref: oidc.workflow_ref,
       workflow_sha: oidc.workflow_sha,
+      job_workflow_ref: oidc.job_workflow_ref,
+      job_workflow_sha: oidc.job_workflow_sha,
+      invocation_mode: oidc.invocation_mode,
       event_name: oidc.event_name,
       run_id: oidc.run_id,
       run_attempt: oidc.run_attempt,
