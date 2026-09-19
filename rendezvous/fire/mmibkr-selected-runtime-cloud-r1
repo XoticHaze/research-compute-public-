@@ -3,5 +3,6 @@
   "session_seconds": 5400,
   "max_cycles": 5,
   "self_handoff": false,
-  "purpose": "finite acceptance before production handoff"
+  "purpose": "finite acceptance before production handoff",
+  "request_nonce": "fleet-attested-r2-20260919"
 }
