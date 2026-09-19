@@ -2,10 +2,24 @@ const GITHUB_ISSUER = 'https://token.actions.githubusercontent.com';
 const GITHUB_JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwks';
 const EXPECTED_AUDIENCE = 'mmibkr-fleet-authority';
 
-const PUBLIC_REPOSITORY = 'XoticHaze/research-compute-public-';
-const PUBLIC_REF = 'refs/heads/main';
-const PUBLIC_WORKFLOW_REF =
-  'XoticHaze/research-compute-public-/.github/workflows/mmibkr-selected-runtime-cloud-r1.yml@refs/heads/main';
+const TRANSITIONAL_RUNTIME_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-selected-runtime-cloud-r1.yml@refs/heads/main',
+};
+
+const CANONICAL_RUNTIME_IDENTITY = {
+  repository: 'XoticHaze/mm-ibkr-runtime',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/mm-ibkr-runtime/.github/workflows/mmibkr-selected-runtime-cloud-r1.yml@refs/heads/main',
+};
+
+const ALLOWED_RUNTIME_IDENTITIES = [
+  TRANSITIONAL_RUNTIME_IDENTITY,
+  CANONICAL_RUNTIME_IDENTITY,
+];
 
 const PRIVATE_REPOSITORY = 'XoticHaze/mm-IBKR';
 const PRIVATE_ACCEPTANCE_REF = 'refs/heads/assistant/cloud-signal-history-split-20260918';
@@ -139,11 +153,16 @@ async function verifyJwt(jwt, callerRunId) {
 export async function verifySourceExchangeOidc(jwt, callerRunId, role) {
   const claims = await verifyJwt(jwt, callerRunId);
   if (role === 'consumer') {
+    const matchedRuntime = ALLOWED_RUNTIME_IDENTITIES.some(
+      (identity) => (
+        claims.repository === identity.repository
+        && claims.ref === identity.ref
+        && claims.workflow_ref === identity.workflow_ref
+      ),
+    );
     if (
-      claims.repository !== PUBLIC_REPOSITORY
+      !matchedRuntime
       || claims.repository_visibility !== 'public'
-      || claims.ref !== PUBLIC_REF
-      || claims.workflow_ref !== PUBLIC_WORKFLOW_REF
       || !ALLOWED_PUBLIC_EVENTS.has(claims.event_name)
     ) throw new Error('oidc_consumer_identity_rejected');
   } else if (role === 'producer') {
@@ -162,7 +181,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role) {
     ) throw new Error('oidc_producer_identity_rejected');
   } else if (role === 'b1_consumer') {
     if (
-      claims.repository !== PUBLIC_REPOSITORY
+      claims.repository !== 'XoticHaze/research-compute-public-'
       || claims.repository_visibility !== 'public'
       || claims.ref !== B1_REF
       || claims.workflow_ref !== B1_WORKFLOW_REF
