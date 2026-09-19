@@ -142,7 +142,8 @@ class MmibkrCloudSourceExchangeConsumerTests(unittest.TestCase):
     def test_chunk_tamper_is_rejected_before_decrypt(self):
         archive = self.archive()
         private, key_id, manifest, chunks = self.envelope(archive)
-        chunks[0] = "A" + chunks[0][1:]
+        replacement = "B" if chunks[0].startswith("A") else "A"
+        chunks[0] = replacement + chunks[0][1:]
         with self.assertRaisesRegex(RuntimeError, "chunk_integrity_rejected"):
             mod.decrypt_archive(
                 manifest,
