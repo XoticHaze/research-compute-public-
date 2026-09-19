@@ -1,3 +1,6 @@
+import { SourceExchange, handleSourceExchange } from './source_exchange.js';
+export { SourceExchange } from './source_exchange.js';
+
 const GITHUB_ISSUER = 'https://token.actions.githubusercontent.com';
 const GITHUB_JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwks';
 const EXPECTED_AUDIENCE = 'mmibkr-fleet-authority';
@@ -238,7 +241,15 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === 'GET' && url.pathname === '/healthz') {
-      return json({ ok: true, service: 'mmibkr-fleet-authority' });
+      return json({
+        ok: true,
+        service: 'mmibkr-fleet-authority',
+        source_exchange_configured: Boolean(env.SOURCE_EXCHANGE),
+      });
+    }
+
+    if (url.pathname.startsWith('/v1/source-exchange/')) {
+      return handleSourceExchange(request, env);
     }
 
     if (request.method !== 'POST' || url.pathname !== '/v1/authorities/ibkr-paper/seal') {
