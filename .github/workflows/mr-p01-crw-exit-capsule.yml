@@ -1,0 +1,63 @@
+name: MR P01 CRW EXIT encrypted capsule
+on:
+  push:
+    branches: [mr-p01-crw-exit-capsule-20260919]
+  workflow_dispatch:
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mr-p01-crw-exit-capsule-20260919
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prepare ephemeral recipient
+        run: |
+          pip install cryptography pandas numpy
+          python - <<'PY'
+          import base64, pathlib
+          from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+          from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, PrivateFormat, NoEncryption
+          p=X25519PrivateKey.generate()
+          pathlib.Path('/tmp/p01_private.bin').write_bytes(p.private_bytes(Encoding.Raw,PrivateFormat.Raw,NoEncryption()))
+          pathlib.Path('p01_recipient.txt').write_text(base64.b64encode(p.public_key().public_bytes(Encoding.Raw,PublicFormat.Raw)).decode())
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p01-ephemeral-recipient
+          path: p01_recipient.txt
+      - name: Wait for encrypted private-input envelope
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 90); do
+            git fetch origin mr-p01-crw-exit-capsule-20260919 >/dev/null 2>&1 || true
+            git checkout origin/mr-p01-crw-exit-capsule-20260919 -- private_envelope 2>/dev/null || true
+            if [ -f private_envelope/manifest.json ]; then echo P01_ENVELOPE_FOUND=1; exit 0; fi
+            sleep 6
+          done
+          exit 2
+      - name: Decrypt and execute frozen discriminator
+        run: |
+          python - <<'PY'
+          import base64,json,pathlib,zipfile
+          from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey,X25519PublicKey
+          from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+          from cryptography.hazmat.primitives import hashes
+          from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+          m=json.loads(pathlib.Path('private_envelope/manifest.json').read_text())
+          blob=b''.join(base64.b64decode(pathlib.Path(p).read_text()) for p in m['chunks'])
+          priv=X25519PrivateKey.from_private_bytes(pathlib.Path('/tmp/p01_private.bin').read_bytes())
+          peer=X25519PublicKey.from_public_bytes(base64.b64decode(m['ephemeral_public_key_b64']))
+          key=HKDF(algorithm=hashes.SHA256(),length=32,salt=None,info=b'p01-crw-exit-r1').derive(priv.exchange(peer))
+          plain=ChaCha20Poly1305(key).decrypt(base64.b64decode(m['nonce_b64']),blob,b'p01-crw-exit-r1')
+          pathlib.Path('/tmp/payload.zip').write_bytes(plain)
+          with zipfile.ZipFile('/tmp/payload.zip') as z: z.extractall('/tmp/p01_payload')
+          PY
+          python /tmp/p01_payload/eval.py /tmp/p01_payload/mnq-strategy-backtest-12min.csv > p01_crw_exit_result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p01-crw-exit-result
+          path: p01_crw_exit_result.json
