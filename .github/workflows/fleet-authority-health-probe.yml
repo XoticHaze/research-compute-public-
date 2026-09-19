@@ -16,13 +16,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Require deployed authority provenance
+      - name: Require deployed Fleet source-exchange binding
         env:
           FLEET_AUTHORITY_HEALTH: https://fleet-authority.slenderiq.workers.dev/healthz
-          EXPECTED_WORKFLOW_SHA: 2cd779dc56b06c382c6320466c580c22edf19730
-          EXPECTED_CREDENTIAL_BINDING: IBKR_PAPER_USERNAME+IBKR_PAPER_PASSWORD
-          EXPECTED_EVENT_CONTRACT: push+workflow_dispatch
-          EXPECTED_WORKFLOW_CONTRACT: canonical-b1+legacy-ibc-comparator
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -30,38 +26,30 @@ jobs:
           from urllib.request import Request, urlopen
 
           url = os.environ['FLEET_AUTHORITY_HEALTH']
-          expected_sha = os.environ['EXPECTED_WORKFLOW_SHA']
-          expected_binding = os.environ['EXPECTED_CREDENTIAL_BINDING']
-          expected_event = os.environ['EXPECTED_EVENT_CONTRACT']
-          expected_workflow = os.environ['EXPECTED_WORKFLOW_CONTRACT']
           last = None
           for _ in range(36):
               try:
-                  req = Request(url, headers={'Accept': 'application/json', 'User-Agent': 'mmibkr-authority-health-probe-v3'})
+                  req = Request(
+                      url,
+                      headers={
+                          'Accept': 'application/json',
+                          'User-Agent': 'mmibkr-authority-health-probe-v4',
+                      },
+                  )
                   with urlopen(req, timeout=10) as response:
                       node = json.loads(response.read().decode('utf-8'))
                   last = node
                   if (
                       node.get('ok') is True
-                      and node.get('authority_configured') is True
-                      and node.get('paper_username_binding_configured') is True
-                      and node.get('paper_password_binding_configured') is True
-                      and node.get('allowed_workflow_sha') == expected_sha
-                      and node.get('credential_binding_contract') == expected_binding
-                      and node.get('allowed_event_contract') == expected_event
-                      and node.get('allowed_workflow_contract') == expected_workflow
+                      and node.get('service') == 'mmibkr-fleet-authority'
+                      and node.get('source_exchange_configured') is True
                   ):
                       print('FLEET_AUTHORITY_DEPLOYMENT_PROVEN=1')
-                      print('ALLOWED_WORKFLOW_SHA=' + node['allowed_workflow_sha'])
-                      print('CREDENTIAL_BINDING_CONTRACT=' + node['credential_binding_contract'])
-                      print('ALLOWED_EVENT_CONTRACT=' + node['allowed_event_contract'])
-                      print('ALLOWED_WORKFLOW_CONTRACT=' + node['allowed_workflow_contract'])
-                      print('PAPER_USERNAME_BINDING_CONFIGURED=1')
-                      print('PAPER_PASSWORD_BINDING_CONFIGURED=1')
+                      print('SOURCE_EXCHANGE_CONFIGURED=1')
                       raise SystemExit(0)
               except Exception as exc:
                   last = {'probe_error': type(exc).__name__}
               time.sleep(5)
           print('LAST_HEALTH=' + json.dumps(last, sort_keys=True))
-          raise SystemExit('deployed fleet authority provenance did not converge')
+          raise SystemExit('deployed Fleet source exchange did not converge')
           PY

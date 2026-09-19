@@ -13,12 +13,11 @@
       }
     ]
   },
-  "migrations": [
-    {
-      "tag": "source-exchange-v1",
-      "new_sqlite_classes": [
-        "SourceExchange"
-      ]
+  "exports": {
+    "SourceExchange": {
+      "type": "durable-object",
+      "state": "created",
+      "storage": "sqlite"
     }
-  ]
+  }
 }
