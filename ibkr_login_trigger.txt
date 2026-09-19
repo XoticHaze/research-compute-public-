@@ -8,3 +8,4 @@ Controller-native acceptance: restore into a dedicated GATEWAY_WARM_STATE seed a
 Authority-branch acceptance: verify restored warm reuse through the canonical admitted OIDC workload identity.
 Seed-owner acceptance: prove the restored seed is readable by the pinned controller runtime user before launch, then require warm API/consumer reuse.
 2026-09-18T23:58Z canonical selected-runtime initial backfill trigger
+2026-09-19T00:01Z corrected full-session MNQ initial backfill trigger
