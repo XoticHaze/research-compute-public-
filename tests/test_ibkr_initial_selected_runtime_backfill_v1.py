@@ -49,18 +49,18 @@ class InitialSelectedRuntimeBackfillContractTests(unittest.TestCase):
         self.assertNotIn("conId", contract)
 
         rows = self.request["bar_requests"]["MNQ"]
-        self.assertEqual(len(rows), 5)
+        self.assertEqual(len(rows), 4)
         self.assertEqual(rows[0]["source_timeframe"], "1Min")
         self.assertEqual(rows[0]["target_timeframe"], "12Min")
         self.assertEqual(rows[0]["bar_size_setting"], "1 min")
         self.assertTrue(all(row["duration_str"] == "1 D" for row in rows))
         explicit = [row.get("end_date_time_utc") for row in rows[1:]]
         self.assertEqual(explicit, [
-            "2026-09-18T00:00:00Z",
-            "2026-09-17T00:00:00Z",
-            "2026-09-16T00:00:00Z",
-            "2026-09-15T00:00:00Z",
+            "2026-09-17T21:00:00Z",
+            "2026-09-16T21:00:00Z",
+            "2026-09-15T21:00:00Z",
         ])
+        self.assertTrue(all(str(value).endswith("T21:00:00Z") for value in explicit))
 
     def test_one_shot_loader_does_not_change_normal_push_defaults(self):
         text = self.workflow
