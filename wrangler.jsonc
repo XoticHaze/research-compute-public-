@@ -3,5 +3,21 @@
   "name": "fleet-authority",
   "main": "cloudflare/fleet-authority/src/index.js",
   "compatibility_date": "2026-09-15",
-  "workers_dev": true
+  "workers_dev": true,
+  "keep_vars": true,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SOURCE_EXCHANGE",
+        "class_name": "SourceExchange"
+      }
+    ]
+  },
+  "exports": {
+    "SourceExchange": {
+      "type": "durable-object",
+      "state": "created",
+      "storage": "sqlite"
+    }
+  }
 }
