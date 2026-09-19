@@ -1,0 +1,40 @@
+name: P10 Provider History Robustness
+on:
+  pull_request:
+    paths:
+      - 'research/compute_provider_history_robustness.py'
+      - 'research/p10-provider-history-contract.json'
+      - '.github/workflows/p10-provider-history-robustness.yml'
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.16'
+      - name: Execute robustness gates
+        run: |
+          python research/compute_provider_history_robustness.py \
+            research/p10-provider-history-contract.json \
+            p10-provider-history-robustness.json
+      - name: Validate terminal result
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('p10-provider-history-robustness.json').read_text())
+          assert r['research_only'] and not r['promotion_authority'] and not r['private_data_loaded']
+          print('P10_ROBUSTNESS_CLASSIFICATION='+r['classification'])
+          print('P10_ROBUSTNESS_SUPPORT='+str(r['cross_section_support_slice_count'])+'/'+str(r['eligible_slice_count']))
+          print('P10_ROBUSTNESS_TEMPORAL='+str(r['two_month_temporal_support_slice_count']))
+          print('P10_ROBUSTNESS_PROVIDER_STATE='+json.dumps(r['provider_state'],sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p10-provider-history-robustness
+          path: p10-provider-history-robustness.json
+          retention-days: 30
