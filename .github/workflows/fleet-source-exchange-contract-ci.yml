@@ -1,0 +1,52 @@
+name: Fleet Source Exchange Contract CI
+
+on:
+  push:
+    branches:
+      - assistant/mmibkr-source-exchange-r1-20260919
+  pull_request:
+    branches:
+      - main
+    paths:
+      - cloudflare/fleet-authority/src/source_exchange.js
+      - cloudflare/fleet-authority/src/index.js
+      - cloudflare/fleet-authority/wrangler.jsonc
+      - cloudflare/fleet-authority/package.json
+      - cloudflare/fleet-authority/package-lock.json
+      - scripts/mmibkr_cloud_source_exchange_consumer_v1.py
+      - tests/test_mmibkr_cloud_source_exchange_consumer_v1.py
+      - .github/workflows/fleet-source-exchange-contract-ci.yml
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Validate Worker JavaScript syntax
+        run: |
+          set -euo pipefail
+          node --check cloudflare/fleet-authority/src/source_exchange.js
+          node --check cloudflare/fleet-authority/src/index.js
+
+      - name: Validate Worker bundle and Durable Object migration
+        working-directory: cloudflare/fleet-authority
+        run: |
+          set -euo pipefail
+          npm ci
+          npx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/fleet-authority-dry-run"
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Validate encrypted source consumer contract
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check cryptography==46.0.1
+          python -m py_compile scripts/mmibkr_cloud_source_exchange_consumer_v1.py
+          python -m unittest -v tests.test_mmibkr_cloud_source_exchange_consumer_v1
