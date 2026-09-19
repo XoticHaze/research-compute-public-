@@ -1,0 +1,545 @@
+{
+  "allocation_authority": false,
+  "benchmark": "GDX",
+  "broad_market_alpha_claim_authorized": false,
+  "cutoff": "2026-09-02T13:30:00+00:00",
+  "decision": "REJECT_OR_REARCHITECT",
+  "development_universe": [
+    "NEM",
+    "GOLD",
+    "AEM",
+    "WPM",
+    "FNV",
+    "KGC",
+    "AU",
+    "AGI"
+  ],
+  "external_holdouts_loaded": false,
+  "family": "gold_miners",
+  "family_summary": {
+    "aggregate_primary_states": 8735,
+    "aggregate_sector_substitution50_mean_bps": 16.66887396422797,
+    "aggregate_stock_after25_minus_sector_etf_mean_bps": 41.66887396422797,
+    "aggregate_stock_net25_mean_bps": 237.18268780736398,
+    "benchmark": "GDX",
+    "development_family_gate_pass": false,
+    "development_symbols": [
+      "NEM",
+      "GOLD",
+      "AEM",
+      "WPM",
+      "FNV",
+      "KGC",
+      "AU",
+      "AGI"
+    ],
+    "external_holdouts_loaded": false,
+    "passing_symbols": 4,
+    "required_passing_symbols": 5
+  },
+  "frozen_external_holdouts": [
+    "RGLD",
+    "HMY",
+    "BTG",
+    "PAAS"
+  ],
+  "live_trading_change": false,
+  "next_if_advance": "same-event matched SPY/QQQ, cost stress, fold breadth, concentration; no holdout load until that consumer passes",
+  "per_symbol": [
+    {
+      "benchmark": "GDX",
+      "development_transport_pass": false,
+      "family": "gold_miners",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 244,
+          "sector_substitution50_mean_bps": 119.18880686291898,
+          "stock_after25_minus_sector_etf_mean_bps": 144.188806862919,
+          "stock_net25_mean_bps": 523.1157931145692
+        },
+        {
+          "fold": 3,
+          "primary_states": 196,
+          "sector_substitution50_mean_bps": -134.55652268443166,
+          "stock_after25_minus_sector_etf_mean_bps": -109.55652268443166,
+          "stock_net25_mean_bps": -22.317978750747972
+        },
+        {
+          "fold": 4,
+          "primary_states": 246,
+          "sector_substitution50_mean_bps": -231.96184976103655,
+          "stock_after25_minus_sector_etf_mean_bps": -206.96184976103655,
+          "stock_net25_mean_bps": -71.81021878042115
+        },
+        {
+          "fold": 5,
+          "primary_states": 251,
+          "sector_substitution50_mean_bps": -239.452151431633,
+          "stock_after25_minus_sector_etf_mean_bps": -214.452151431633,
+          "stock_net25_mean_bps": -87.70894286976707
+        },
+        {
+          "fold": 6,
+          "primary_states": 155,
+          "sector_substitution50_mean_bps": 74.92736656851304,
+          "stock_after25_minus_sector_etf_mean_bps": 99.92736656851304,
+          "stock_net25_mean_bps": 290.88564171892193
+        }
+      ],
+      "positive_sector_excess_folds": 2,
+      "positive_stock_net_folds": 2,
+      "primary_states": 1092,
+      "sector_substitution50_mean_bps": -94.17799707328912,
+      "stock_after25_minus_sector_etf_mean_bps": -69.1779970732891,
+      "stock_net25_mean_bps": 117.83236783053671,
+      "symbol": "NEM"
+    },
+    {
+      "benchmark": "GDX",
+      "development_transport_pass": false,
+      "family": "gold_miners",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 243,
+          "sector_substitution50_mean_bps": -255.78882822533262,
+          "stock_after25_minus_sector_etf_mean_bps": -230.78882822533262,
+          "stock_net25_mean_bps": 58.30287508992957
+        },
+        {
+          "fold": 3,
+          "primary_states": 128,
+          "sector_substitution50_mean_bps": 1339.7849722906997,
+          "stock_after25_minus_sector_etf_mean_bps": 1364.7849722906997,
+          "stock_net25_mean_bps": 1155.3603431451584
+        },
+        {
+          "fold": 4,
+          "primary_states": 223,
+          "sector_substitution50_mean_bps": 313.28857683961616,
+          "stock_after25_minus_sector_etf_mean_bps": 338.28857683961616,
+          "stock_net25_mean_bps": 495.6957534629044
+        },
+        {
+          "fold": 5,
+          "primary_states": 257,
+          "sector_substitution50_mean_bps": -239.7487779775491,
+          "stock_after25_minus_sector_etf_mean_bps": -214.7487779775491,
+          "stock_net25_mean_bps": -92.13930076586783
+        },
+        {
+          "fold": 6,
+          "primary_states": 224,
+          "sector_substitution50_mean_bps": -418.6236240040654,
+          "stock_after25_minus_sector_etf_mean_bps": -393.6236240040654,
+          "stock_net25_mean_bps": 138.60564965896535
+        }
+      ],
+      "positive_sector_excess_folds": 2,
+      "positive_stock_net_folds": 4,
+      "primary_states": 1075,
+      "sector_substitution50_mean_bps": 22.15071266283476,
+      "stock_after25_minus_sector_etf_mean_bps": 47.15071266283476,
+      "stock_net25_mean_bps": 260.42952634273587,
+      "symbol": "GOLD"
+    },
+    {
+      "benchmark": "GDX",
+      "development_transport_pass": false,
+      "family": "gold_miners",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 230,
+          "sector_substitution50_mean_bps": 50.91760064868518,
+          "stock_after25_minus_sector_etf_mean_bps": 75.9176006486852,
+          "stock_net25_mean_bps": 548.947273412326
+        },
+        {
+          "fold": 3,
+          "primary_states": 231,
+          "sector_substitution50_mean_bps": -163.008336377133,
+          "stock_after25_minus_sector_etf_mean_bps": -138.008336377133,
+          "stock_net25_mean_bps": -56.09561755301207
+        },
+        {
+          "fold": 4,
+          "primary_states": 243,
+          "sector_substitution50_mean_bps": -46.26908833068203,
+          "stock_after25_minus_sector_etf_mean_bps": -21.26908833068204,
+          "stock_net25_mean_bps": 109.52284011130544
+        },
+        {
+          "fold": 5,
+          "primary_states": 213,
+          "sector_substitution50_mean_bps": 121.36985733531807,
+          "stock_after25_minus_sector_etf_mean_bps": 146.36985733531807,
+          "stock_net25_mean_bps": 193.59086713701723
+        },
+        {
+          "fold": 6,
+          "primary_states": 163,
+          "sector_substitution50_mean_bps": -288.8583610408,
+          "stock_after25_minus_sector_etf_mean_bps": -263.8583610408,
+          "stock_net25_mean_bps": 168.43672700377303
+        }
+      ],
+      "positive_sector_excess_folds": 2,
+      "positive_stock_net_folds": 4,
+      "primary_states": 1080,
+      "sector_substitution50_mean_bps": -54.092036347688435,
+      "stock_after25_minus_sector_etf_mean_bps": -29.09203634768843,
+      "stock_net25_mean_bps": 193.15173757308895,
+      "symbol": "AEM"
+    },
+    {
+      "benchmark": "GDX",
+      "development_transport_pass": true,
+      "family": "gold_miners",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 200,
+          "sector_substitution50_mean_bps": 145.21136596636063,
+          "stock_after25_minus_sector_etf_mean_bps": 170.21136596636063,
+          "stock_net25_mean_bps": 712.163625047577
+        },
+        {
+          "fold": 3,
+          "primary_states": 211,
+          "sector_substitution50_mean_bps": -7.018112130380441,
+          "stock_after25_minus_sector_etf_mean_bps": 17.98188786961956,
+          "stock_net25_mean_bps": 130.35399144440876
+        },
+        {
+          "fold": 4,
+          "primary_states": 247,
+          "sector_substitution50_mean_bps": -47.52372837751682,
+          "stock_after25_minus_sector_etf_mean_bps": -22.523728377516814,
+          "stock_net25_mean_bps": 61.80871375769585
+        },
+        {
+          "fold": 5,
+          "primary_states": 234,
+          "sector_substitution50_mean_bps": 46.13887536132572,
+          "stock_after25_minus_sector_etf_mean_bps": 71.13887536132572,
+          "stock_net25_mean_bps": 173.28523867018657
+        },
+        {
+          "fold": 6,
+          "primary_states": 157,
+          "sector_substitution50_mean_bps": -83.38293096105487,
+          "stock_after25_minus_sector_etf_mean_bps": -58.38293096105486,
+          "stock_net25_mean_bps": 208.2000330526088
+        }
+      ],
+      "positive_sector_excess_folds": 3,
+      "positive_stock_net_folds": 5,
+      "primary_states": 1049,
+      "sector_substitution50_mean_bps": 12.896536985872084,
+      "stock_after25_minus_sector_etf_mean_bps": 37.89653698587209,
+      "stock_net25_mean_bps": 246.36827506245928,
+      "symbol": "WPM"
+    },
+    {
+      "benchmark": "GDX",
+      "development_transport_pass": false,
+      "family": "gold_miners",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 214,
+          "sector_substitution50_mean_bps": 82.42662256273286,
+          "stock_after25_minus_sector_etf_mean_bps": 107.42662256273286,
+          "stock_net25_mean_bps": 486.9774057337809
+        },
+        {
+          "fold": 3,
+          "primary_states": 186,
+          "sector_substitution50_mean_bps": 89.94051138922093,
+          "stock_after25_minus_sector_etf_mean_bps": 114.94051138922093,
+          "stock_net25_mean_bps": 145.32680423907732
+        },
+        {
+          "fold": 4,
+          "primary_states": 262,
+          "sector_substitution50_mean_bps": 2.072581433282499,
+          "stock_after25_minus_sector_etf_mean_bps": 27.072581433282494,
+          "stock_net25_mean_bps": 88.75328277693538
+        },
+        {
+          "fold": 5,
+          "primary_states": 295,
+          "sector_substitution50_mean_bps": -236.39874470972103,
+          "stock_after25_minus_sector_etf_mean_bps": -211.39874470972103,
+          "stock_net25_mean_bps": -83.96477266943612
+        },
+        {
+          "fold": 6,
+          "primary_states": 140,
+          "sector_substitution50_mean_bps": -103.20587051800385,
+          "stock_after25_minus_sector_etf_mean_bps": -78.20587051800386,
+          "stock_net25_mean_bps": 182.65066042849622
+        }
+      ],
+      "positive_sector_excess_folds": 3,
+      "positive_stock_net_folds": 4,
+      "primary_states": 1097,
+      "sector_substitution50_mean_bps": -44.918143007792445,
+      "stock_after25_minus_sector_etf_mean_bps": -19.918143007792438,
+      "stock_net25_mean_bps": 141.56681406158648,
+      "symbol": "FNV"
+    },
+    {
+      "benchmark": "GDX",
+      "development_transport_pass": true,
+      "family": "gold_miners",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 208,
+          "sector_substitution50_mean_bps": 86.73494557686391,
+          "stock_after25_minus_sector_etf_mean_bps": 111.73494557686391,
+          "stock_net25_mean_bps": 600.7114169081832
+        },
+        {
+          "fold": 3,
+          "primary_states": 246,
+          "sector_substitution50_mean_bps": -34.17521087125187,
+          "stock_after25_minus_sector_etf_mean_bps": -9.175210871251874,
+          "stock_net25_mean_bps": 10.296222155021566
+        },
+        {
+          "fold": 4,
+          "primary_states": 249,
+          "sector_substitution50_mean_bps": -106.05885844155934,
+          "stock_after25_minus_sector_etf_mean_bps": -81.05885844155934,
+          "stock_net25_mean_bps": 189.5210547804733
+        },
+        {
+          "fold": 5,
+          "primary_states": 195,
+          "sector_substitution50_mean_bps": 256.10740918245597,
+          "stock_after25_minus_sector_etf_mean_bps": 281.10740918245597,
+          "stock_net25_mean_bps": 517.1794609478857
+        },
+        {
+          "fold": 6,
+          "primary_states": 175,
+          "sector_substitution50_mean_bps": 80.19077922582106,
+          "stock_after25_minus_sector_etf_mean_bps": 105.19077922582106,
+          "stock_net25_mean_bps": 283.4050509005506
+        }
+      ],
+      "positive_sector_excess_folds": 3,
+      "positive_stock_net_folds": 5,
+      "primary_states": 1073,
+      "sector_substitution50_mean_bps": 43.98829655993389,
+      "stock_after25_minus_sector_etf_mean_bps": 68.98829655993387,
+      "stock_net25_mean_bps": 302.9985711088623,
+      "symbol": "KGC"
+    },
+    {
+      "benchmark": "GDX",
+      "development_transport_pass": true,
+      "family": "gold_miners",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 195,
+          "sector_substitution50_mean_bps": 403.77176507585045,
+          "stock_after25_minus_sector_etf_mean_bps": 428.77176507585045,
+          "stock_net25_mean_bps": 918.8649407933208
+        },
+        {
+          "fold": 3,
+          "primary_states": 250,
+          "sector_substitution50_mean_bps": 51.11218173598959,
+          "stock_after25_minus_sector_etf_mean_bps": 76.11218173598958,
+          "stock_net25_mean_bps": 85.06927675870655
+        },
+        {
+          "fold": 4,
+          "primary_states": 243,
+          "sector_substitution50_mean_bps": 256.2972650613117,
+          "stock_after25_minus_sector_etf_mean_bps": 281.29726506131175,
+          "stock_net25_mean_bps": 362.5979564938033
+        },
+        {
+          "fold": 5,
+          "primary_states": 285,
+          "sector_substitution50_mean_bps": 24.0097715314226,
+          "stock_after25_minus_sector_etf_mean_bps": 49.0097715314226,
+          "stock_net25_mean_bps": 92.3285146261988
+        },
+        {
+          "fold": 6,
+          "primary_states": 152,
+          "sector_substitution50_mean_bps": 357.2766029992566,
+          "stock_after25_minus_sector_etf_mean_bps": 382.27660299925657,
+          "stock_net25_mean_bps": 722.9702043787867
+        }
+      ],
+      "positive_sector_excess_folds": 5,
+      "positive_stock_net_folds": 5,
+      "primary_states": 1125,
+      "sector_substitution50_mean_bps": 191.0600920675817,
+      "stock_after25_minus_sector_etf_mean_bps": 216.0600920675817,
+      "stock_net25_mean_bps": 377.5665633834761,
+      "symbol": "AU"
+    },
+    {
+      "benchmark": "GDX",
+      "development_transport_pass": true,
+      "family": "gold_miners",
+      "folds": [
+        {
+          "fold": 2,
+          "primary_states": 211,
+          "sector_substitution50_mean_bps": -179.27974715817479,
+          "stock_after25_minus_sector_etf_mean_bps": -154.27974715817476,
+          "stock_net25_mean_bps": 219.83476581243792
+        },
+        {
+          "fold": 3,
+          "primary_states": 255,
+          "sector_substitution50_mean_bps": 102.32921536417652,
+          "stock_after25_minus_sector_etf_mean_bps": 127.32921536417652,
+          "stock_net25_mean_bps": 140.55394150513683
+        },
+        {
+          "fold": 4,
+          "primary_states": 238,
+          "sector_substitution50_mean_bps": 206.99616604333153,
+          "stock_after25_minus_sector_etf_mean_bps": 231.99616604333153,
+          "stock_net25_mean_bps": 407.91390141438126
+        },
+        {
+          "fold": 5,
+          "primary_states": 248,
+          "sector_substitution50_mean_bps": 188.34503764973118,
+          "stock_after25_minus_sector_etf_mean_bps": 213.34503764973118,
+          "stock_net25_mean_bps": 254.95062280194517
+        },
+        {
+          "fold": 6,
+          "primary_states": 192,
+          "sector_substitution50_mean_bps": -143.6641682389955,
+          "stock_after25_minus_sector_etf_mean_bps": -118.66416823899549,
+          "stock_net25_mean_bps": 252.06039111959046
+        }
+      ],
+      "positive_sector_excess_folds": 3,
+      "positive_stock_net_folds": 5,
+      "primary_states": 1144,
+      "sector_substitution50_mean_bps": 49.5254019414766,
+      "stock_after25_minus_sector_etf_mean_bps": 74.5254019414766,
+      "stock_net25_mean_bps": 254.3122803817315,
+      "symbol": "AGI"
+    }
+  ],
+  "promotion_authority": false,
+  "research_only": true,
+  "runtime_mutation": false,
+  "schema": "industry_stagea_batch8.v1",
+  "source": {
+    "AEM": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "AGI": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "AU": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "CAT": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "COST": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "FNV": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "GDX": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "GOLD": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3136,
+      "start": "2014-03-17T13:30:00+00:00",
+      "status": "OK"
+    },
+    "JPM": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "KGC": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "MSFT": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "NEM": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "QQQ": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "UNH": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "WPM": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    },
+    "XOM": {
+      "end": "2026-09-02T13:30:00+00:00",
+      "rows": 3186,
+      "start": "2014-01-02T14:30:00+00:00",
+      "status": "OK"
+    }
+  },
+  "source_support": "SUFFICIENT"
+}

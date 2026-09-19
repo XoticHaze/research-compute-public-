@@ -1,0 +1,150 @@
+name: Industry Stage-A Batch 8 Broad Robustness
+
+on:
+  push:
+    paths:
+      - '.github/workflows/industry-stagea-batch8-broad-robustness.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - family: freight_transport
+            benchmark: IYT
+            symbols: UNP,CSX,NSC,CNI,CP,JBHT,ODFL,SAIA
+          - family: steel_metals
+            benchmark: SLX
+            symbols: NUE,STLD,CMC,MT,GGB,SID,CLF,RS
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install frozen numerical environment
+        run: python -m pip install --disable-pip-version-check -q numpy==2.4.6 pandas==3.0.5 scikit-learn==1.9.0 scipy==1.17.1
+      - name: Execute same-event broad-market and cost robustness
+        env:
+          FAMILY: ${{ matrix.family }}
+          BENCHMARK: ${{ matrix.benchmark }}
+          SYMBOLS: ${{ matrix.symbols }}
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/XoticHaze/TextConverterToolbox/2d8995ba66502a4de25c64c1c32a67e132b05522/research/run_industry_stagea_public_runner_20260905.py -o /tmp/runner.py
+          test "$(git hash-object /tmp/runner.py)" = 9f7f802469dc6a33abd3431295d5232ebc4289c5
+          python - <<'PY'
+          import importlib.util, json, os
+          import numpy as np
+          import pandas as pd
+
+          spec=importlib.util.spec_from_file_location('r','/tmp/runner.py')
+          r=importlib.util.module_from_spec(spec); spec.loader.exec_module(r)
+          family=os.environ['FAMILY']; benchmark=os.environ['BENCHMARK']; symbols=tuple(os.environ['SYMBOLS'].split(','))
+          costs=(25.0,50.0,100.0)
+
+          # Freeze selection calendar from exact Stage-A information set only.
+          selection_symbols=(*r.TRAIN,*symbols,'QQQ')
+          raw={s:r._load(s) for s in selection_symbols}
+          common=set(raw[selection_symbols[0]].timestamp)
+          for s in selection_symbols[1:]: common &= set(raw[s].timestamp)
+          calendar=pd.DatetimeIndex(sorted(common))
+          cutoff=calendar[-1]
+          if len(calendar)<1500: raise RuntimeError(f'insufficient common selection calendar={len(calendar)}')
+          prices={s:raw[s].set_index('timestamp').price.reindex(calendar) for s in raw}
+          if any(v.isna().any() for v in prices.values()): raise RuntimeError('selection-calendar missing price')
+
+          # Evaluation baselines load only after selection calendar is immutable.
+          baselines={}
+          for s in (benchmark,'SPY'):
+              v=r._load(s).set_index('timestamp').price.reindex(calendar)
+              if v.isna().any(): raise RuntimeError(f'{s}: missing matched baseline rows')
+              baselines[s]=v
+          baselines['QQQ']=prices['QQQ']
+
+          modeled=(*r.TRAIN,*symbols)
+          data=r._engineer(prices,calendar,modeled)
+          folds=r._global_folds(len(calendar))
+          train_states=r._state_frame(r.TRAIN,data,folds)
+          test_states=r._state_frame(symbols,data,folds)
+          events=[]
+          for symbol in symbols:
+              for fold in range(r.EVAL_FIRST_FOLD,r.FOLDS+1):
+                  start,_=folds[fold-1]
+                  train=train_states[train_states.signal_i < start-r.PURGE]
+                  test=test_states[(test_states.symbol==symbol)&(test_states.fold==fold)]
+                  if len(train)<1000: raise RuntimeError(f'{symbol} fold {fold}: insufficient train')
+                  model=r._fit(train)
+                  pred=model.predict(test[r.FEATURES].to_numpy(float))
+                  chosen=test.loc[pred>0].copy()
+                  prior=data[symbol].iloc[:start-r.PURGE].mom20.dropna()
+                  if len(prior)<250: raise RuntimeError(f'{symbol} fold {fold}: threshold support')
+                  threshold=float(prior.quantile(1.0-r.TAIL))
+                  primary=chosen.loc[chosen.mom20 < threshold]
+                  for row in primary.itertuples(index=False):
+                      i=int(row.signal_i); e=i+r.DELAY; x=e+r.HOLD
+                      stock_gross=float(prices[symbol].iloc[x]/prices[symbol].iloc[e]-1.0)*10000.0
+                      rec={'symbol':symbol,'fold':fold,'signal':calendar[i].isoformat(),'entry':calendar[e].isoformat(),'exit':calendar[x].isoformat(),'stock_gross_bps':stock_gross}
+                      for b,v in baselines.items(): rec[f'{b}_gross_bps']=float(v.iloc[x]/v.iloc[e]-1.0)*10000.0
+                      events.append(rec)
+          if not events: raise RuntimeError('no selected events')
+          df=pd.DataFrame(events)
+
+          metrics={}
+          for cost in costs:
+              net=df.stock_gross_bps-cost
+              item={'candidate_net_bps_per_event':float(net.mean()),'event_count':int(len(df)),'baselines':{},'folds':{},'leave_one_symbol_out':{}}
+              for b in (benchmark,'SPY','QQQ'):
+                  base=df[f'{b}_gross_bps']
+                  excess=net-base
+                  fold_means={str(int(f)):float(excess[df.fold==f].mean()) for f in sorted(df.fold.unique())}
+                  item['baselines'][b]={'matched_gross_bps_per_event':float(base.mean()),'excess_bps_per_event':float(excess.mean()),'positive_excess_folds':sum(v>0 for v in fold_means.values()),'fold_count':len(fold_means),'fold_excess_bps':fold_means}
+                  loo={}
+                  for s in symbols:
+                      m=df.symbol!=s
+                      loo[s]=float((net[m]-base[m]).mean()) if m.any() else None
+                  item['leave_one_symbol_out'][b]=loo
+              metrics[str(int(cost))]=item
+
+          # Predeclared broad-robustness gate for opening a separate fresh confirmation later:
+          # positive matched industry excess at 50 bps; >=3/5 positive industry-relative folds at 25 bps;
+          # positive SPY excess at 25 bps with >=3/5 positive folds; all industry LOO means positive at 25 bps.
+          m25=metrics['25']; m50=metrics['50']
+          industry_loo=list(m25['leave_one_symbol_out'][benchmark].values())
+          checks={
+              'industry_excess_positive_50bps':m50['baselines'][benchmark]['excess_bps_per_event']>0,
+              'industry_fold_breadth_25bps':m25['baselines'][benchmark]['positive_excess_folds']>=3,
+              'spy_excess_positive_25bps':m25['baselines']['SPY']['excess_bps_per_event']>0,
+              'spy_fold_breadth_25bps':m25['baselines']['SPY']['positive_excess_folds']>=3,
+              'industry_leave_one_symbol_out_positive_25bps':all(v is not None and v>0 for v in industry_loo),
+          }
+          decision='ELIGIBLE_FOR_SEPARATE_FRESH_CONFIRMATION' if all(checks.values()) else 'DEVELOPMENT_ROBUSTNESS_FAIL_NO_HOLDOUT'
+          receipt={'schema':'industry_stagea_batch8_broad_robustness.v1','family':family,'benchmark':benchmark,'development_universe':list(symbols),
+             'selection_window':{'first_signal':df.signal.min(),'last_exit':df.exit.max(),'source_cutoff':cutoff.isoformat()},
+             'external_holdouts_loaded':False,'metrics_by_stock_round_trip_cost_bps':metrics,'gate_checks':checks,'decision':decision,
+             'qqq_is_opportunity_cost_context_not_gate':True,'research_only':True,'promotion_authority':False,'allocation_authority':False,
+             'runtime_mutation':False,'broker_action':False,'live_trading_change':False}
+          os.makedirs('results',exist_ok=True)
+          path=f'results/{family}-batch8-broad-robustness.json'
+          open(path,'w').write(json.dumps(receipt,sort_keys=True,indent=2)+'\n')
+          print('BATCH8_BROAD_ROBUSTNESS='+json.dumps(receipt,sort_keys=True))
+          PY
+      - name: Persist robustness receipt
+        env:
+          FAMILY: ${{ matrix.family }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "results/${FAMILY}-batch8-broad-robustness.json"
+          git commit -m "research: persist batch8 ${FAMILY} broad robustness"
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"
