@@ -28,8 +28,9 @@ class MmibkrPrivateSourceMaterializeTests(unittest.TestCase):
                 mod,
                 "fetch_private_archive",
                 side_effect=lambda token, head, destination: (
-                    destination.write_bytes(b"archive") or "b" * 64
-                ),
+                    destination.write_bytes(b"archive"),
+                    "b" * 64,
+                )[1],
             ), patch.object(
                 mod,
                 "_safe_extract_tar",
