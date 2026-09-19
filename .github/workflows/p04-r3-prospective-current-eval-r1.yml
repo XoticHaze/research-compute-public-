@@ -1,0 +1,175 @@
+name: P04 R3 Prospective Current Encrypted Evaluation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'rendezvous/requests/p04-r3-prospective-current-*.txt'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/p04_r3_prospective_current_consumer_v1.py'
+      - '.github/workflows/p04-r3-prospective-current-eval-r1.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: p04-r3-prospective-current-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
+env:
+  EXCHANGE_REF: rendezvous-exchange
+  RECIPIENT_ROOT: rendezvous/recipients
+  RESPONSE_ROOT: rendezvous/responses
+
+jobs:
+  self-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install fixed crypto dependency
+        run: python -m pip install --disable-pip-version-check -q cryptography
+      - name: Pin frozen public guard and self-test transport
+        run: |
+          set -euo pipefail
+          test "$(git hash-object scripts/p04_r3_prospective_causal_guard_v1.py)" = "30acfe57130011837758b23f7c32367c717f00a7"
+          python -m py_compile scripts/p04_r3_prospective_causal_guard_v1.py scripts/p04_r3_prospective_current_consumer_v1.py
+          python scripts/p04_r3_prospective_causal_guard_v1.py self-test
+          python scripts/p04_r3_prospective_current_consumer_v1.py self-test
+
+  evaluate:
+    if: github.event_name != 'pull_request'
+    needs: self-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Install fixed crypto dependency
+        run: python -m pip install --disable-pip-version-check -q cryptography
+      - name: Generate one-run recipient
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import base64, hashlib, importlib.util, json, os
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric import x25519
+
+          spec=importlib.util.spec_from_file_location("p04_current","scripts/p04_r3_prospective_current_consumer_v1.py")
+          mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+          private=x25519.X25519PrivateKey.generate()
+          private_raw=private.private_bytes(serialization.Encoding.Raw,serialization.PrivateFormat.Raw,serialization.NoEncryption())
+          recipient=mod.recipient_document(os.environ["GITHUB_RUN_ID"], private)
+          Path(os.environ["RUNNER_TEMP"],"p04-private.bin").write_bytes(private_raw)
+          Path(os.environ["RUNNER_TEMP"],"p04-recipient.json").write_text(json.dumps(recipient,sort_keys=True)+"\n")
+          print("P04_RECIPIENT_KEY_ID="+recipient["recipient_key_id"])
+          PY
+      - name: Publish run-bound recipient
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}-p04-r3-prospective-current.json"
+          payload="$(base64 -w0 "$RUNNER_TEMP/p04-recipient.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json,sys
+          content,branch=sys.argv[1:]
+          print(json.dumps({"message":"rendezvous: publish P04 R3 prospective current recipient","content":content,"branch":branch}))
+          PY
+          )"
+          ok=0
+          for attempt in $(seq 1 12); do
+            code="$(curl -sS -o "$RUNNER_TEMP/publish.json" -w '%{http_code}' -X PUT               -H "Authorization: Bearer ${GH_TOKEN}"               -H 'Accept: application/vnd.github+json'               -H 'X-GitHub-Api-Version: 2022-11-28'               "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}" -d "$body")"
+            if [ "$code" = 201 ]; then ok=1; break; fi
+            if [ "$code" != 409 ]; then cat "$RUNNER_TEMP/publish.json"; exit 43; fi
+            sleep "$attempt"
+          done
+          test "$ok" = 1 || { cat "$RUNNER_TEMP/publish.json"; exit 44; }
+          echo "P04_RECIPIENT_PATH=${path}"
+      - name: Wait for encrypted causal packet
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          root="${RESPONSE_ROOT}/${GITHUB_RUN_ID}"
+          envelope="${root}/p04-r3-prospective-current-envelope.json"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${envelope}?ref=${EXCHANGE_REF}"
+          found=0
+          for _ in $(seq 1 180); do
+            if curl -fsSL               -H "Authorization: Bearer ${GH_TOKEN}"               -H 'Accept: application/vnd.github.raw+json'               -H 'X-GitHub-Api-Version: 2022-11-28'               "$api" -o "$RUNNER_TEMP/p04-envelope.json"; then
+              found=1
+              break
+            fi
+            sleep 5
+          done
+          test "$found" = 1 || { echo "run-bound P04 envelope did not arrive"; exit 42; }
+          echo "P04_RESPONSE_ROOT=${root}" >> "$GITHUB_ENV"
+      - name: Reassemble authenticated ciphertext chunks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64,hashlib,json,os
+          from pathlib import Path
+          from urllib.request import Request,urlopen
+
+          env=json.loads(Path(os.environ["RUNNER_TEMP"],"p04-envelope.json").read_text())
+          chunks=env.get("chunks")
+          prefix=f"rendezvous/responses/{os.environ['GITHUB_RUN_ID']}/"
+          if not isinstance(chunks,list) or not chunks or len(chunks)>32:
+              raise SystemExit("invalid chunk list")
+          pieces=[]; seen=set()
+          for node in chunks:
+              if set(node)!={"path","sha256","chars"}:
+                  raise SystemExit("invalid chunk descriptor")
+              path=str(node["path"])
+              if not path.startswith(prefix) or path in seen or ".." in path.split("/"):
+                  raise SystemExit("invalid chunk path")
+              seen.add(path)
+              req=Request(
+                  f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/{path}?ref={os.environ['EXCHANGE_REF']}",
+                  headers={
+                      "Authorization":"Bearer "+os.environ["GH_TOKEN"],
+                      "Accept":"application/vnd.github.raw+json",
+                      "X-GitHub-Api-Version":"2022-11-28",
+                  },
+              )
+              raw=urlopen(req,timeout=30).read().strip()
+              if len(raw)!=int(node["chars"]) or hashlib.sha256(raw).hexdigest()!=node["sha256"]:
+                  raise SystemExit("chunk identity mismatch")
+              pieces.append(raw.decode("ascii"))
+          ciphertext=base64.b64decode("".join(pieces).encode("ascii"),validate=True)
+          if hashlib.sha256(ciphertext).hexdigest()!=env.get("ciphertext_sha256"):
+              raise SystemExit("ciphertext digest mismatch")
+          Path(os.environ["RUNNER_TEMP"],"p04-ciphertext.bin").write_bytes(ciphertext)
+          print("P04_CIPHERTEXT_BYTES="+str(len(ciphertext)))
+          print("P04_CIPHERTEXT_CHUNKS="+str(len(chunks)))
+          PY
+      - name: Execute frozen prospective causal guard
+        run: |
+          set -euo pipefail
+          test "$(git hash-object scripts/p04_r3_prospective_causal_guard_v1.py)" = "30acfe57130011837758b23f7c32367c717f00a7"
+          python scripts/p04_r3_prospective_current_consumer_v1.py consume             --envelope "$RUNNER_TEMP/p04-envelope.json"             --ciphertext "$RUNNER_TEMP/p04-ciphertext.bin"             --private-key "$RUNNER_TEMP/p04-private.bin"             --run-id "$GITHUB_RUN_ID"             --output p04-r3-prospective-current-receipt.json
+          cat p04-r3-prospective-current-receipt.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain sanitized decision receipt only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p04-r3-prospective-current-sanitized-receipt
+          path: p04-r3-prospective-current-receipt.json
+          retention-days: 30
+          if-no-files-found: error
+      - name: Remove one-run private material
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/p04-private.bin"                 "$RUNNER_TEMP/p04-recipient.json"                 "$RUNNER_TEMP/p04-envelope.json"                 "$RUNNER_TEMP/p04-ciphertext.bin"
