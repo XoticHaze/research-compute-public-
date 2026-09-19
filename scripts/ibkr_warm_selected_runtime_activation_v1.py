@@ -34,6 +34,7 @@ if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
 import ibkr_remote_paper_proof_return_v1 as proof_return
+import mmibkr_b1_attested_source_consumer_v1 as attested_source
 import ibkr_remote_selected_runtime_command_capsule_v2 as capsule_v2
 import ibkr_remote_selected_runtime_paper_execute_v1 as execute_v1
 import ibkr_remote_selected_runtime_paper_proof_v1 as proof_v1
@@ -270,6 +271,7 @@ def materialize_command(
     private_key_path: Path,
     run_id: str,
     runner_temp: Path,
+    fleet_authority_base: str = "https://fleet-authority.slenderiq.workers.dev",
 ) -> dict[str, Any]:
     response_root = f"{RESPONSE_ROOT}/{run_id}"
     plaintext = decrypt_assembled_ciphertext(
@@ -283,7 +285,30 @@ def materialize_command(
         expected_authority=capsule_v2.AUTHORITY,
     )
     capsule = capsule_v2.validate_capsule(plaintext)
-    runtime = capsule_v2.materialize(capsule, runner_temp=runner_temp)
+    source_ticket = (
+        capsule.get("source")
+        if isinstance(capsule.get("source"), Mapping)
+        else {}
+    )
+    source_archive_bytes = None
+    if source_ticket.get("transport") == capsule_v2.ATTESTED_SOURCE_TRANSPORT:
+        source_result = attested_source.consume_attested_source(
+            authority_base=fleet_authority_base,
+            run_id=str(run_id),
+            source_ticket=source_ticket,
+            private_key_path=private_key_path,
+        )
+        if (
+            source_result.get("ok") is not True
+            or source_result.get("private_attestation_verified") is not True
+        ):
+            raise ActivationError("Fleet-attested source materialization failed")
+        source_archive_bytes = source_result["archive"]
+    runtime = capsule_v2.materialize(
+        capsule,
+        runner_temp=runner_temp,
+        source_archive_bytes=source_archive_bytes,
+    )
     mode = str(runtime.get("mode") or "")
     if mode == capsule_v2.PROOF_MODE:
         proof_v2.validate_fleet_authority_runtime(runtime)
@@ -345,7 +370,23 @@ def start_canonical_runtime(
     image = f"{BOT_IMAGE_PREFIX}:{run_id}"
     data_dir = runner_temp / "mmibkr-proof-data"
     data_dir.mkdir(parents=True, exist_ok=True)
-    run(["docker", "build", "--target", "bot", "-t", image, str(source_root)], check=True)
+    dockerfile = source_root / "Dockerfile.bot"
+    if not dockerfile.is_file():
+        raise ActivationError("canonical MM-IBKR Dockerfile.bot missing")
+    run(
+        [
+            "docker",
+            "build",
+            "-f",
+            str(dockerfile),
+            "--target",
+            "bot",
+            "-t",
+            image,
+            str(source_root),
+        ],
+        check=True,
+    )
     run(["docker", "rm", "-f", BOT_CONTAINER], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     run(canonical_runtime_docker_command(
         image=image,
