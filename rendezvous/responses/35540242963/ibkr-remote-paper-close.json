@@ -1,0 +1,1 @@
+{"broker_action": false, "command_intent_present": false, "generated_at_utc": "2026-09-20T22:02:33.874915Z", "live_execution_allowed": false, "public_authority_head": "3209727e0f0e3d4795a079a79f442ffa262b6e11", "reason": "private_cycle_exception_before_primary_execute", "run_id": "35540242963", "schema": "mmibkr.remote_selected_runtime_boundary_close.v1"}
