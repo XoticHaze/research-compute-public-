@@ -281,6 +281,43 @@ jobs:
           path: ${{ runner.temp }}/mmibkr-checkpoint
           key: ${{ env.CHECKPOINT_CACHE_PREFIX }}${{ github.run_id }}-${{ env.PRIVATE_HEAD }}
 
+      - name: Enforce successful selected-runtime cloud session
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          session_path = Path(
+              os.environ['RUNNER_TEMP'],
+              'mmibkr-data',
+              'strategy_runtime',
+              'selected_runtime_cloud_daemon_v1',
+              'session.json',
+          )
+          if not session_path.is_file():
+              raise SystemExit('cloud owner session receipt missing')
+          node = json.loads(session_path.read_text())
+          last_cycle = (
+              node.get('last_cycle')
+              if isinstance(node.get('last_cycle'), dict)
+              else {}
+          )
+          accepted = (
+              node.get('ok') is True
+              and int(node.get('cycle_count') or 0) >= 1
+              and int(node.get('success_count') or 0) >= 1
+              and node.get('checkpoint_handoff_ready') is True
+              and last_cycle.get('ok') is True
+              and node.get('live_execution_allowed') is False
+          )
+          print('MMIBKR_CLOUD_SESSION_ACCEPTED=' + ('1' if accepted else '0'))
+          if not accepted:
+              raise SystemExit(
+                  'cloud owner session did not produce a successful terminal cycle'
+              )
+          PY
+
       - name: Publish sanitized cloud-session receipt
         if: ${{ always() }}
         env:
@@ -305,9 +342,23 @@ jobs:
                   if isinstance(node.get('futures_roll_maintenance'), dict)
                   else {}
               )
+              last_cycle = (
+                  node.get('last_cycle')
+                  if isinstance(node.get('last_cycle'), dict)
+                  else {}
+              )
+              session_accepted = (
+                  node.get('ok') is True
+                  and int(node.get('cycle_count') or 0) >= 1
+                  and int(node.get('success_count') or 0) >= 1
+                  and node.get('checkpoint_handoff_ready') is True
+                  and last_cycle.get('ok') is True
+                  and node.get('live_execution_allowed') is False
+              )
               receipt = {
                   'schema': 'mmibkr.selected_runtime_cloud_session_receipt.v1',
-                  'ok': node.get('ok') is True,
+                  'ok': session_accepted,
+                  'session_accepted': session_accepted,
                   'status': node.get('status'),
                   'run_id': os.environ['GITHUB_RUN_ID'],
                   'private_head': os.environ.get('PRIVATE_HEAD'),
