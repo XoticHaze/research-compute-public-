@@ -75,6 +75,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("06ee6b93f1155a242b846b967fc73df05afcebd9", text)
         self.assertIn("61f0842b2de8709509453cb390310d246ea39ad3", text)
         self.assertIn("1ecb1de8dda1c8797b6fa1af6dba6f6e1765438e", text)
+        self.assertIn("5aeb0370a18c4c941852c7454706ba9ffa28da68", text)
         self.assertIn("/v1/source-vault/private-archive/", text)
         self.assertIn("fleet_authority_oidc_private_archive_stream", text)
         self.assertIn("redirect: 'follow'", text)
