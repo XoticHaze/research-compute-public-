@@ -1,8 +1,10 @@
 {
-  "source_ref": "assistant/cloud-signal-history-split-20260918",
-  "session_seconds": 5400,
-  "max_cycles": 5,
+  "source_ref": "cb28771e5fd3aa610d8fcf2ef683596a1cfabd51",
+  "session_seconds": 3600,
+  "max_cycles": 1,
   "self_handoff": false,
-  "purpose": "finite acceptance retry with explicit private feature producer wake",
-  "acceptance_sequence": 3
+  "purpose": "finite reusable encrypted source-vault owner acceptance",
+  "acceptance_sequence": 4,
+  "live_execution_allowed": false,
+  "natural_candidate_only": true
 }
