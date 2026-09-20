@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       source_ref:
-        description: Private MM-IBKR ref to materialize through Fleet source exchange
+        description: Exact approved private MM-IBKR source SHA to materialize from the reusable encrypted Fleet vault
         required: true
-        default: main
+        default: cb28771e5fd3aa610d8fcf2ef683596a1cfabd51
         type: string
       session_seconds:
         description: Bounded daemon session length
@@ -33,8 +33,8 @@ on:
       - main
     paths:
       - .github/workflows/mmibkr-selected-runtime-cloud-r1.yml
-      - scripts/mmibkr_cloud_source_exchange_consumer_v1.py
-      - tests/test_mmibkr_cloud_source_exchange_consumer_v1.py
+      - scripts/mmibkr_source_vault_consumer_v1.py
+      - tests/test_mmibkr_source_vault_consumer_v1.py
 
 permissions:
   contents: write
@@ -58,14 +58,19 @@ jobs:
         with:
           python-version: '3.11.16'
 
-      - name: Install fixed source-exchange dependency
+      - name: Install fixed source-vault dependency
         run: python -m pip install --disable-pip-version-check cryptography==46.0.1
 
-      - name: Validate encrypted private-source consumer
+      - name: Validate reusable encrypted source-vault consumer
         run: |
           set -euo pipefail
-          python -m py_compile scripts/mmibkr_cloud_source_exchange_consumer_v1.py
-          python -m unittest -v tests.test_mmibkr_cloud_source_exchange_consumer_v1
+          python -m py_compile \
+            scripts/mmibkr_source_vault_consumer_v1.py \
+            tests/test_mmibkr_source_vault_consumer_v1.py \
+            tests/test_mmibkr_cloud_owner_reusable_vault_contract_v1.py
+          python -m unittest -v \
+            tests.test_mmibkr_source_vault_consumer_v1 \
+            tests.test_mmibkr_cloud_owner_reusable_vault_contract_v1
 
   runtime:
     if: ${{ github.event_name != 'pull_request' }}
@@ -85,7 +90,7 @@ jobs:
         with:
           python-version: '3.11.16'
 
-      - name: Install fixed source-exchange dependency
+      - name: Install fixed source-vault dependency
         run: python -m pip install --disable-pip-version-check cryptography==46.0.1
 
       - name: Resolve bounded session request
@@ -106,9 +111,12 @@ jobs:
               event_json = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
               payload = dict(event_json.get('inputs') or {})
 
-          source_ref = str(payload.get('source_ref') or 'main').strip()
-          if not source_ref:
-              raise SystemExit('source_ref required')
+          source_ref = str(
+              payload.get('source_ref')
+              or 'cb28771e5fd3aa610d8fcf2ef683596a1cfabd51'
+          ).strip().lower()
+          if len(source_ref) != 40 or any(ch not in '0123456789abcdef' for ch in source_ref):
+              raise SystemExit('source_ref must be an exact approved 40-hex private source SHA')
           session_seconds = int(payload.get('session_seconds') or 18000)
           max_cycles = int(payload.get('max_cycles') or 0)
           raw_handoff = payload.get('self_handoff', True)
@@ -135,12 +143,20 @@ jobs:
           }, sort_keys=True))
           PY
 
-      - name: Materialize exact private MM-IBKR source through Fleet Authority
+      - name: Materialize exact private MM-IBKR source from reusable encrypted Fleet vault
         run: |
           set -euo pipefail
           umask 077
           mkdir -p "$RUNNER_TEMP/mmibkr-source"
-          python scripts/mmibkr_cloud_source_exchange_consumer_v1.py             --authority-base "$FLEET_AUTHORITY_BASE"             --run-id "$GITHUB_RUN_ID"             --source-ref "$REQUEST_SOURCE_REF"             --destination "$RUNNER_TEMP/mmibkr-source/extracted"             --archive-output "$RUNNER_TEMP/mmibkr-source/mm-ibkr-source.tar.gz"             --output "$RUNNER_TEMP/mmibkr-source/materialization-host.json"             --timeout-sec 900
+          python scripts/mmibkr_source_vault_consumer_v1.py \
+            --authority-base "$FLEET_AUTHORITY_BASE" \
+            --run-id "$GITHUB_RUN_ID" \
+            --source-sha "$REQUEST_SOURCE_REF" \
+            --public-repo XoticHaze/mm-ibkr-runtime \
+            --public-branch mmibkr-source-vault \
+            --destination "$RUNNER_TEMP/mmibkr-source/extracted" \
+            --archive-output "$RUNNER_TEMP/mmibkr-source/mm-ibkr-source.tar.gz" \
+            --output "$RUNNER_TEMP/mmibkr-source/materialization-host.json"
 
           python - <<'PY'
           import json, os
@@ -150,12 +166,16 @@ jobs:
           node = json.loads((root / 'materialization-host.json').read_text())
           if node.get('ok') is not True:
               raise SystemExit('source materialization not ok')
+          if node.get('source_transport') != 'fleet_authority_exact_sha_encrypted_snapshot_vault':
+              raise SystemExit('reusable encrypted source-vault transport required')
           if node.get('private_repository_token_used') is not False:
               raise SystemExit('private repository token unexpectedly used')
           if node.get('broker_credentials_used') is not False:
               raise SystemExit('broker credentials unexpectedly used')
           if node.get('plaintext_emitted') is not False:
               raise SystemExit('plaintext source emission contract violated')
+          if node.get('live_execution_allowed') is not False:
+              raise SystemExit('live execution authority unexpectedly enabled')
 
           archive = root / 'mm-ibkr-source.tar.gz'
           source_root = Path(node['source_root'])
@@ -163,15 +183,17 @@ jobs:
               raise SystemExit('materialized source layout incomplete')
 
           container_node = {
-              'schema': 'mmibkr.attested_source_materialization.v1',
+              'schema': 'mmibkr.attested_source_materialization.v2',
               'source_ref': node['source_ref'],
               'source_sha': node['source_sha'],
               'source_archive_sha256': node['source_archive_sha256'],
               'source_archive_bytes': node['source_archive_bytes'],
               'source_archive_path': '/private-source/mm-ibkr-source.tar.gz',
+              'source_manifest_sha256': node['source_manifest_sha256'],
+              'source_transport': node['source_transport'],
               'fleet_authority_base': os.environ['FLEET_AUTHORITY_BASE'],
               'caller_run_id': os.environ['GITHUB_RUN_ID'],
-              'producer_identity': node['producer_identity'],
+              'vault_attestation_verified': node['vault_attestation_verified'],
               'private_repository_token_used': False,
               'broker_credentials_used': False,
           }
@@ -184,7 +206,8 @@ jobs:
               fh.write('PRIVATE_SOURCE_ROOT=' + str(source_root) + '\n')
           print('MMIBKR_PRIVATE_HEAD=' + node['source_sha'])
           print('MMIBKR_SOURCE_ARCHIVE_SHA256=' + node['source_archive_sha256'])
-          print('MMIBKR_PRIVATE_PRODUCER_RUN=' + str(node['producer_identity'].get('run_id') or ''))
+          print('MMIBKR_SOURCE_MANIFEST_SHA256=' + node['source_manifest_sha256'])
+          print('MMIBKR_SOURCE_TRANSPORT=' + node['source_transport'])
           PY
 
       - name: Build exact private MM-IBKR bot image
@@ -291,7 +314,7 @@ jobs:
                   'checkpoint_handoff_ready': node.get('checkpoint_handoff_ready'),
                   'last_cycle': node.get('last_cycle'),
                   'futures_roll_maintenance': roll,
-                  'source_transport': 'fleet_oidc_x25519_private_attested',
+                  'source_transport': 'fleet_authority_exact_sha_encrypted_snapshot_vault',
                   'private_repository_token_used': False,
                   'live_execution_allowed': False,
                   'public_strategy_authority': False,
@@ -308,7 +331,7 @@ jobs:
                   'status': 'session_receipt_missing_after_runtime_failure',
                   'run_id': os.environ['GITHUB_RUN_ID'],
                   'private_head': os.environ.get('PRIVATE_HEAD'),
-                  'source_transport': 'fleet_oidc_x25519_private_attested',
+                  'source_transport': 'fleet_authority_exact_sha_encrypted_snapshot_vault',
                   'private_repository_token_used': False,
                   'live_execution_allowed': False,
                   'credentials_included': False,
