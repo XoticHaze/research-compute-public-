@@ -3,6 +3,8 @@ import hashlib
 import json
 import os
 import stat
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +14,22 @@ from scripts import ibkr_warm_selected_runtime_activation_v1 as mod
 
 
 class WarmSelectedRuntimeActivationTests(unittest.TestCase):
+    def test_direct_entrypoints_import_repo_package(self):
+        root = Path(__file__).resolve().parents[1]
+        for script in (
+            "scripts/ibkr_warm_selected_runtime_activation_v1.py",
+            "scripts/ibkr_remote_selected_runtime_paper_execute_v1.py",
+        ):
+            proc = subprocess.run(
+                [sys.executable, script, "--help"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("usage:", proc.stdout.lower())
+
     def test_command_recipient_is_run_bound_and_private_key_is_owner_only(self):
         with tempfile.TemporaryDirectory() as td:
             key_path = Path(td) / "recipient-private.b64"
