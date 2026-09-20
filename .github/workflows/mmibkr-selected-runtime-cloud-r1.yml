@@ -64,8 +64,13 @@ jobs:
       - name: Validate reusable encrypted source-vault consumer
         run: |
           set -euo pipefail
-          python -m py_compile scripts/mmibkr_source_vault_consumer_v1.py tests/test_mmibkr_source_vault_consumer_v1.py
-          python -m unittest -v tests.test_mmibkr_source_vault_consumer_v1
+          python -m py_compile \
+            scripts/mmibkr_source_vault_consumer_v1.py \
+            tests/test_mmibkr_source_vault_consumer_v1.py \
+            tests/test_mmibkr_cloud_owner_reusable_vault_contract_v1.py
+          python -m unittest -v \
+            tests.test_mmibkr_source_vault_consumer_v1 \
+            tests.test_mmibkr_cloud_owner_reusable_vault_contract_v1
 
   runtime:
     if: ${{ github.event_name != 'pull_request' }}
