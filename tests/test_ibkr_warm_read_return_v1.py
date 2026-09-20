@@ -139,6 +139,63 @@ class WarmReadReturnTests(unittest.TestCase):
             self.assertEqual(hashlib.sha256(plaintext).hexdigest(), envelope["plaintext_sha256"])
             self.assertEqual(json.loads(plaintext.decode("utf-8")), snapshot)
 
+    def test_encrypt_snapshot_normalizes_nested_nonfinite_broker_values_to_null(self):
+        private, recipient_b64, recipient_key_id = self._recipient()
+        snapshot = self._snapshot()
+        snapshot["post_auth_handoff"]["quote_snapshot"] = {
+            "bid": float("nan"),
+            "ask": float("inf"),
+            "last": float("-inf"),
+            "finite": 123.25,
+        }
+        snapshot["positions"][0]["avg_cost"] = float("nan")
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            envelope = mod.encrypt_snapshot(
+                snapshot=snapshot,
+                recipient_b64=recipient_b64,
+                recipient_key_id=recipient_key_id,
+                run_id="12345",
+                output_dir=root,
+            )
+            ciphertext = base64.b64decode(
+                "".join(
+                    (root / node["local_name"]).read_text(encoding="ascii")
+                    for node in envelope["chunks"]
+                ).encode("ascii"),
+                validate=True,
+            )
+            sender_raw = base64.b64decode(
+                envelope["sender_public_b64"].encode("ascii"),
+                validate=True,
+            )
+            nonce = base64.b64decode(
+                envelope["nonce_b64"].encode("ascii"),
+                validate=True,
+            )
+            aad = mod._aad(run_id="12345", recipient_key_id=recipient_key_id)
+            shared = private.exchange(
+                x25519.X25519PublicKey.from_public_bytes(sender_raw)
+            )
+            key = HKDF(
+                algorithm=hashes.SHA256(),
+                length=32,
+                salt=hashlib.sha256(aad).digest(),
+                info=mod.RETURN_INFO,
+            ).derive(shared)
+            plaintext = ChaCha20Poly1305(key).decrypt(
+                nonce,
+                ciphertext,
+                aad,
+            )
+            decoded = json.loads(plaintext.decode("utf-8"))
+        quote = decoded["post_auth_handoff"]["quote_snapshot"]
+        self.assertIsNone(quote["bid"])
+        self.assertIsNone(quote["ask"])
+        self.assertIsNone(quote["last"])
+        self.assertEqual(quote["finite"], 123.25)
+        self.assertIsNone(decoded["positions"][0]["avg_cost"])
+
     def test_requested_fill_filter_keeps_only_exact_mm_contracts_and_managed_accounts(self):
         amat = {
             "contract": {"conId": 266093, "symbol": "AMAT", "secType": "STK"},
