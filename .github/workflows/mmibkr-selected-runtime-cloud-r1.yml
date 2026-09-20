@@ -6,7 +6,7 @@ on:
       source_ref:
         description: Exact approved private MM-IBKR source SHA to materialize from the reusable encrypted Fleet vault
         required: true
-        default: 61f0842b2de8709509453cb390310d246ea39ad3
+        default: 1ecb1de8dda1c8797b6fa1af6dba6f6e1765438e
         type: string
       session_seconds:
         description: Bounded daemon session length
@@ -116,7 +116,7 @@ jobs:
 
           source_ref = str(
               payload.get('source_ref')
-              or '61f0842b2de8709509453cb390310d246ea39ad3'
+              or '1ecb1de8dda1c8797b6fa1af6dba6f6e1765438e'
           ).strip().lower()
           if len(source_ref) != 40 or any(ch not in '0123456789abcdef' for ch in source_ref):
               raise SystemExit('source_ref must be an exact approved 40-hex private source SHA')
