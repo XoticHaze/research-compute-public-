@@ -47,6 +47,12 @@ const SOURCE_VAULT_UNWRAP_SCHEMA = 'mmibkr-source-vault-unwrap-v2';
 const SOURCE_VAULT_RSA_PRIVATE_KEY = 'vault:rsa-oaep:private-jwk';
 const SOURCE_VAULT_RSA_PUBLIC_KEY = 'vault:rsa-oaep:public-jwk';
 const SOURCE_VAULT_RSA_KEY_ID = 'vault:rsa-oaep:key-id';
+const FLEET_PRIVATE_SOURCE_STREAM_SCHEMA = 'mmibkr-fleet-private-source-stream-v1';
+const FLEET_PRIVATE_SOURCE_ATTEST_SCHEMA = 'mmibkr-fleet-private-source-attest-v1';
+const PRIVATE_SOURCE_STREAM_GRANT_TTL_MS = 60 * 60 * 1000;
+const APPROVED_PRIVATE_SOURCE_STREAMS = new Set([
+  'ca1d97ebfd95a4e23e7be520a4d8a44d49d44251',
+]);
 
 /*
  * Exact source snapshots are approved in code only after their encrypted
@@ -226,6 +232,8 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role) {
 function roleForRequest(method, pathname) {
   if (
     (method === 'POST' && pathname === '/v1/source-vault/unwrap')
+    || (method === 'GET' && /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname))
+    || (method === 'POST' && pathname === '/v1/source-vault/private-archive/attest')
     ||
     (method === 'POST' && pathname === '/v1/source-exchange/request')
     || (method === 'GET' && /^\/v1\/source-exchange\/response\/\d+$/.test(pathname))
@@ -294,6 +302,82 @@ export async function handleSourceExchange(request, env) {
   headers.set('x-mmibkr-oidc-run-id', identity.run_id);
   headers.set('x-mmibkr-oidc-run-attempt', identity.run_attempt);
 
+  const privateArchiveMatch = url.pathname.match(/^\/v1\/source-vault\/private-archive\/([0-9a-f]{40})$/);
+  if (request.method === 'GET' && privateArchiveMatch) {
+    const sourceSha = privateArchiveMatch[1];
+    if (!APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha)) {
+      return json({ error: 'private_source_sha_not_approved' }, 403);
+    }
+    const sourceToken = String(env.MMIBKR_PRIVATE_SOURCE_TOKEN || '');
+    if (!sourceToken || sourceToken.length > 512 || /[\r\n\0]/.test(sourceToken)) {
+      return json({ error: 'private_source_authority_not_configured' }, 503);
+    }
+
+    let upstream;
+    try {
+      upstream = await fetch(
+        `https://api.github.com/repos/${PRIVATE_REPOSITORY}/tarball/${sourceSha}`,
+        {
+          method: 'GET',
+          redirect: 'follow',
+          headers: {
+            Accept: 'application/vnd.github+json',
+            Authorization: `Bearer ${sourceToken}`,
+            'X-GitHub-Api-Version': '2026-03-10',
+            'User-Agent': 'mmibkr-fleet-private-source-stream-v1',
+          },
+        },
+      );
+    } catch {
+      return json({ error: 'private_source_fetch_unavailable' }, 502);
+    }
+    if (!upstream.ok || !upstream.body) {
+      return json({ error: 'private_source_fetch_failed', status: upstream.status }, 502);
+    }
+
+    const expectedArchiveBytes = Number(upstream.headers.get('content-length') || 0);
+    if (
+      Number.isFinite(expectedArchiveBytes)
+      && (expectedArchiveBytes < 0 || expectedArchiveBytes > 150 * 1024 * 1024)
+    ) {
+      return json({ error: 'private_source_archive_size_rejected' }, 413);
+    }
+    const streamId = crypto.randomUUID();
+    const grant = await stub.fetch(new Request(
+      'https://source-exchange.internal/v1/source-vault/private-archive/grant',
+      {
+        method: 'POST',
+        headers: {
+          ...Object.fromEntries(headers.entries()),
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          schema: FLEET_PRIVATE_SOURCE_STREAM_SCHEMA,
+          source_sha: sourceSha,
+          stream_id: streamId,
+          expected_archive_bytes: Number.isFinite(expectedArchiveBytes) ? expectedArchiveBytes : 0,
+        }),
+      },
+    ));
+    if (!grant.ok) {
+      return json({ error: 'private_source_stream_grant_failed' }, 502);
+    }
+
+    const responseHeaders = new Headers();
+    responseHeaders.set('content-type', 'application/gzip');
+    responseHeaders.set('cache-control', 'no-store');
+    responseHeaders.set('content-security-policy', "default-src 'none'");
+    responseHeaders.set('x-content-type-options', 'nosniff');
+    responseHeaders.set('x-mmibkr-source-sha', sourceSha);
+    responseHeaders.set('x-mmibkr-source-stream-id', streamId);
+    responseHeaders.set('x-mmibkr-source-transport', 'fleet_authority_oidc_private_archive_stream');
+    responseHeaders.set('x-mmibkr-private-source-token-exposed', 'false');
+    if (Number.isFinite(expectedArchiveBytes) && expectedArchiveBytes > 0) {
+      responseHeaders.set('x-mmibkr-source-archive-bytes', String(expectedArchiveBytes));
+    }
+    return new Response(upstream.body, { status: 200, headers: responseHeaders });
+  }
+
   const internalUrl = 'https://source-exchange.internal' + url.pathname + url.search;
   const init = { method: request.method, headers };
   if (!['GET', 'HEAD'].includes(request.method)) init.body = request.body;
@@ -321,6 +405,11 @@ export class SourceExchange {
       if (!value || now - Number(value.created_at_ms || 0) <= REQUEST_TTL_MS) continue;
       const runId = key.slice(4);
       await this._deleteRun(runId);
+    }
+    const grants = await this.ctx.storage.list({ prefix: 'streamgrant:', limit: 100 });
+    for (const [key, value] of grants) {
+      if (!value || now - Number(value.created_at_ms || 0) <= PRIVATE_SOURCE_STREAM_GRANT_TTL_MS) continue;
+      await this.ctx.storage.delete(key);
     }
   }
 
@@ -511,6 +600,104 @@ export class SourceExchange {
       } catch {
         return json({ error: 'source_vault_key_unavailable' }, 503);
       }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/v1/source-vault/private-archive/grant') {
+      if (role !== 'consumer') return json({ error: 'forbidden' }, 403);
+      let body;
+      try {
+        const text = await request.text();
+        if (text.length > 4096) return json({ error: 'request_too_large' }, 413);
+        body = JSON.parse(text);
+      } catch {
+        return json({ error: 'invalid_json' }, 400);
+      }
+      const runId = String(request.headers.get('x-mmibkr-oidc-run-id') || '');
+      const sourceSha = String(body?.source_sha || '').toLowerCase();
+      const streamId = String(body?.stream_id || '');
+      const expectedArchiveBytes = Number(body?.expected_archive_bytes || 0);
+      if (
+        body?.schema !== FLEET_PRIVATE_SOURCE_STREAM_SCHEMA
+        || !/^\d{4,24}$/.test(runId)
+        || !APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha)
+        || !/^[0-9a-f-]{36}$/.test(streamId)
+        || !Number.isInteger(expectedArchiveBytes)
+        || expectedArchiveBytes < 0
+        || expectedArchiveBytes > 150 * 1024 * 1024
+      ) {
+        return json({ error: 'private_source_stream_grant_rejected' }, 400);
+      }
+      await this.ctx.storage.put(`streamgrant:${runId}`, {
+        schema: FLEET_PRIVATE_SOURCE_STREAM_SCHEMA,
+        source_sha: sourceSha,
+        stream_id: streamId,
+        expected_archive_bytes: expectedArchiveBytes,
+        runtime_identity: this._producerIdentity(request),
+        created_at_ms: Date.now(),
+      });
+      return json({
+        ok: true,
+        source_sha: sourceSha,
+        stream_id: streamId,
+        expected_archive_bytes: expectedArchiveBytes,
+        private_source_token_exposed: false,
+      }, 201);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/v1/source-vault/private-archive/attest') {
+      if (role !== 'consumer') return json({ error: 'forbidden' }, 403);
+      let body;
+      try {
+        const text = await request.text();
+        if (text.length > 4096) return json({ error: 'request_too_large' }, 413);
+        body = JSON.parse(text);
+      } catch {
+        return json({ error: 'invalid_json' }, 400);
+      }
+      const runId = String(request.headers.get('x-mmibkr-oidc-run-id') || '');
+      const sourceSha = String(body?.source_sha || '').toLowerCase();
+      const streamId = String(body?.stream_id || '');
+      const archiveSha = String(body?.archive_sha256 || '').toLowerCase();
+      const archiveBytes = Number(body?.archive_bytes || 0);
+      const grant = await this.ctx.storage.get(`streamgrant:${runId}`);
+      if (
+        body?.schema !== FLEET_PRIVATE_SOURCE_ATTEST_SCHEMA
+        || !grant
+        || Date.now() - Number(grant.created_at_ms || 0) > PRIVATE_SOURCE_STREAM_GRANT_TTL_MS
+        || grant.source_sha !== sourceSha
+        || grant.stream_id !== streamId
+        || !APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha)
+        || !/^[0-9a-f]{64}$/.test(archiveSha)
+        || !Number.isInteger(archiveBytes)
+        || archiveBytes <= 0
+        || archiveBytes > 150 * 1024 * 1024
+        || (Number(grant.expected_archive_bytes || 0) > 0
+          && Number(grant.expected_archive_bytes) !== archiveBytes)
+      ) {
+        return json({ error: 'private_source_stream_attestation_rejected' }, 409);
+      }
+      const attestation = {
+        schema: 'mmibkr-cloud-source-fleet-stream-attestation-v1',
+        source_ref: sourceSha,
+        source_sha: sourceSha,
+        plaintext_sha256: archiveSha,
+        archive_bytes: archiveBytes,
+        producer_identity: grant.runtime_identity,
+        stream_id: streamId,
+        attested_at: new Date().toISOString(),
+        source_transport: 'fleet_authority_oidc_private_archive_stream',
+      };
+      await this.ctx.storage.put(`attest:${sourceSha}:${archiveSha}`, attestation);
+      await this.ctx.storage.delete(`streamgrant:${runId}`);
+      return json({
+        ok: true,
+        source_sha: sourceSha,
+        archive_sha256: archiveSha,
+        archive_bytes: archiveBytes,
+        private_attestation_stored: true,
+        source_transport: 'fleet_authority_oidc_private_archive_stream',
+        private_source_token_exposed: false,
+      }, 200);
     }
 
     if (request.method === 'POST' && url.pathname === '/v1/source-vault/unwrap') {
