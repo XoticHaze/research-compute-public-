@@ -386,6 +386,28 @@ jobs:
       - name: Destroy private runtime material
         if: ${{ always() }}
         run: |
-          set +e
-          docker image rm "mmibkr-cloud:${GITHUB_RUN_ID}" >/dev/null 2>&1
-          rm -rf             "$RUNNER_TEMP/mmibkr-source"             "$RUNNER_TEMP/mmibkr-data"             "$RUNNER_TEMP/mmibkr-checkpoint"
+          set -euo pipefail
+          uid="$(id -u)"
+          gid="$(id -g)"
+          if docker image inspect "mmibkr-cloud:${GITHUB_RUN_ID}" >/dev/null 2>&1; then
+            docker run --rm \
+              -v "$RUNNER_TEMP/mmibkr-data:/cleanup-data" \
+              -v "$RUNNER_TEMP/mmibkr-checkpoint:/cleanup-checkpoint" \
+              "mmibkr-cloud:${GITHUB_RUN_ID}" \
+              sh -lc "chown -R ${uid}:${gid} /cleanup-data /cleanup-checkpoint"
+          fi
+          rm -rf \
+            "$RUNNER_TEMP/mmibkr-source" \
+            "$RUNNER_TEMP/mmibkr-data" \
+            "$RUNNER_TEMP/mmibkr-checkpoint"
+          docker image rm "mmibkr-cloud:${GITHUB_RUN_ID}" >/dev/null 2>&1 || true
+          for path in \
+            "$RUNNER_TEMP/mmibkr-source" \
+            "$RUNNER_TEMP/mmibkr-data" \
+            "$RUNNER_TEMP/mmibkr-checkpoint"; do
+            if [ -e "$path" ]; then
+              echo "private runtime cleanup residue: $path" >&2
+              exit 1
+            fi
+          done
+          echo 'MMIBKR_PRIVATE_RUNTIME_MATERIAL_DESTROYED=1'

@@ -20,6 +20,17 @@ class CloudOwnerReusableVaultContractTests(unittest.TestCase):
         self.assertNotIn("python scripts/mmibkr_cloud_source_exchange_consumer_v1.py", text)
         self.assertIn("ENABLE_LIVE_TRADING=0", text)
 
+    def test_cleanup_recovers_root_owned_outputs_before_destroy(self):
+        text = (
+            ROOT / ".github/workflows/mmibkr-selected-runtime-cloud-r1.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn('MMIBKR_PRIVATE_RUNTIME_MATERIAL_DESTROYED=1', text)
+        self.assertIn('chown -R ${uid}:${gid} /cleanup-data /cleanup-checkpoint', text)
+        self.assertIn('private runtime cleanup residue', text)
+        self.assertNotIn(
+            'set +e\n          docker image rm "mmibkr-cloud:${GITHUB_RUN_ID}"',
+            text,
+        )
     def test_watchdog_restarts_exact_accepted_source_not_private_main(self):
         text = (ROOT / ".github/workflows/mmibkr-selected-runtime-cloud-watchdog-r1.yml").read_text(encoding="utf-8")
         self.assertIn("'source_ref':'" + SOURCE_SHA + "'", text)
