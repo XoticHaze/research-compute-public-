@@ -43,7 +43,7 @@ const ALLOWED_PUBLIC_EVENTS = new Set(['push', 'workflow_dispatch']);
 const ALLOWED_PRIVATE_EVENTS = new Set(['push', 'workflow_dispatch', 'schedule']);
 
 const SOURCE_VAULT_PUBLIC_KEY_SCHEMA = 'mmibkr-source-vault-public-key-v1';
-const SOURCE_VAULT_UNWRAP_SCHEMA = 'mmibkr-source-vault-unwrap-v1';
+const SOURCE_VAULT_UNWRAP_SCHEMA = 'mmibkr-source-vault-unwrap-v2';
 const SOURCE_VAULT_RSA_PRIVATE_KEY = 'vault:rsa-oaep:private-jwk';
 const SOURCE_VAULT_RSA_PUBLIC_KEY = 'vault:rsa-oaep:public-jwk';
 const SOURCE_VAULT_RSA_KEY_ID = 'vault:rsa-oaep:key-id';
@@ -55,7 +55,12 @@ const SOURCE_VAULT_RSA_KEY_ID = 'vault:rsa-oaep:key-id';
  * match an entry here. No public runtime can add approvals dynamically.
  */
 const APPROVED_SOURCE_SNAPSHOTS = Object.freeze({
-  // '<40-hex-private-source-sha>': '<64-hex-public-manifest-sha256>',
+  // '<40-hex-private-source-sha>': Object.freeze({
+  //   source_ref: '<same exact source sha>',
+  //   manifest_sha256: '<64-hex-public-manifest-sha256>',
+  //   archive_sha256: '<64-hex-private-archive-sha256>',
+  //   archive_bytes: 123,
+  // }),
 });
 
 function json(body, status = 200) {
@@ -399,6 +404,8 @@ export class SourceExchange {
       'schema',
       'source_sha',
       'manifest_sha256',
+      'archive_sha256',
+      'archive_bytes',
       'key_id',
       'sealed_key_b64',
     ]);
@@ -411,9 +418,22 @@ export class SourceExchange {
 
     const sourceSha = String(body.source_sha || '').toLowerCase();
     const manifestSha = String(body.manifest_sha256 || '').toLowerCase();
+    const archiveSha = String(body.archive_sha256 || '').toLowerCase();
+    const archiveBytes = Number(body.archive_bytes || 0);
     if (!/^[0-9a-f]{40}$/.test(sourceSha)) throw new Error('vault_source_sha_rejected');
     if (!/^[0-9a-f]{64}$/.test(manifestSha)) throw new Error('vault_manifest_sha_rejected');
-    if (APPROVED_SOURCE_SNAPSHOTS[sourceSha] !== manifestSha) {
+    if (!/^[0-9a-f]{64}$/.test(archiveSha)) throw new Error('vault_archive_sha_rejected');
+    if (!Number.isInteger(archiveBytes) || archiveBytes <= 0 || archiveBytes > 150 * 1024 * 1024) {
+      throw new Error('vault_archive_bytes_rejected');
+    }
+    const approval = APPROVED_SOURCE_SNAPSHOTS[sourceSha];
+    if (
+      !approval
+      || approval.source_ref !== sourceSha
+      || approval.manifest_sha256 !== manifestSha
+      || approval.archive_sha256 !== archiveSha
+      || Number(approval.archive_bytes) !== archiveBytes
+    ) {
       throw new Error('vault_source_snapshot_not_approved');
     }
 
@@ -449,14 +469,31 @@ export class SourceExchange {
     }
     if (masterKey.length !== 32) throw new Error('vault_master_key_size_rejected');
 
+    const runtimeIdentity = this._producerIdentity(request);
+    const attestation = {
+      schema: 'mmibkr-cloud-source-vault-attestation-v1',
+      source_ref: approval.source_ref,
+      source_sha: sourceSha,
+      plaintext_sha256: archiveSha,
+      archive_bytes: archiveBytes,
+      manifest_sha256: manifestSha,
+      producer_identity: runtimeIdentity,
+      attested_at: new Date().toISOString(),
+      source_transport: 'fleet_authority_exact_sha_encrypted_snapshot_vault',
+    };
+    await this.ctx.storage.put(`attest:${sourceSha}:${archiveSha}`, attestation);
+
     return {
-      schema: 'mmibkr-source-vault-unwrapped-key-v1',
+      schema: 'mmibkr-source-vault-unwrapped-key-v2',
       ok: true,
       source_sha: sourceSha,
       manifest_sha256: manifestSha,
+      archive_sha256: archiveSha,
+      archive_bytes: archiveBytes,
       key_id: keyId,
       master_key_b64: bytesToB64(masterKey),
       approved: true,
+      reusable_attestation_stored: true,
       private_source_included: false,
       live_execution_authority: false,
     };

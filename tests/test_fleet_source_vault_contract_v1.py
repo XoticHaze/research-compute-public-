@@ -14,6 +14,10 @@ class FleetSourceVaultContractTests(unittest.TestCase):
     def test_vault_is_code_approved_and_private_key_never_exposed(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("APPROVED_SOURCE_SNAPSHOTS", text)
+        self.assertIn("manifest_sha256", text)
+        self.assertIn("archive_sha256", text)
+        self.assertIn("archive_bytes", text)
+        self.assertIn("source_ref", text)
         self.assertIn("vault_source_snapshot_not_approved", text)
         self.assertIn("RSA-OAEP", text)
         self.assertIn("modulusLength: 3072", text)
@@ -33,6 +37,16 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         )
         self.assertIn("return 'consumer';", text)
         self.assertIn("role !== 'consumer'", text)
+
+    def test_approved_unwrap_creates_reusable_same_source_attestation(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("mmibkr-source-vault-unwrap-v2", text)
+        self.assertIn("mmibkr-cloud-source-vault-attestation-v1", text)
+        self.assertIn("reusable_attestation_stored: true", text)
+        self.assertIn("source_transport: 'fleet_authority_exact_sha_encrypted_snapshot_vault'", text)
+        self.assertIn("attest:${sourceSha}:${archiveSha}", text)
+        self.assertIn("plaintext_sha256: archiveSha", text)
+        self.assertIn("archive_bytes: archiveBytes", text)
 
     def test_runtime_identity_is_exactly_pinned(self):
         text = SOURCE.read_text(encoding="utf-8")
