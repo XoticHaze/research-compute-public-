@@ -68,6 +68,7 @@ on:
       - 'scripts/ibkr_login_window_guard_v1.py'
       - 'scripts/ibkr_post_auth_pipeline_v1.py'
       - 'scripts/ibkr_remote_selected_runtime_command_capsule_v2.py'
+      - 'scripts/mmibkr_b1_attested_source_consumer_v1.py'
       - 'scripts/ibkr_remote_selected_runtime_paper_proof_v1.py'
       - 'scripts/ibkr_remote_selected_runtime_paper_proof_v2.py'
       - 'scripts/ibkr_remote_selected_runtime_paper_execute_v1.py'
@@ -81,6 +82,8 @@ on:
       - 'tests/test_ibkr_b1_warm_state_workflow_v2.py'
       - 'tests/test_ibkr_warm_selected_runtime_activation_v1.py'
       - 'tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py'
+      - 'tests/test_mmibkr_b1_attested_source_consumer_v1.py'
+      - 'tests/test_ibkr_b1_canonical_dockerfile_v1.py'
       - 'tests/test_ibkr_remote_selected_runtime_paper_execute_v1.py'
       - 'tests/test_ibkr_remote_paper_proof_return_v1.py'
       - 'tests/test_ibkr_warm_read_return_v1.py'
@@ -124,6 +127,7 @@ jobs:
             tests/test_ibkr_post_auth_pipeline_contracts_v1.py \
             tests/test_forward_bar_multitimeframe_v2.py \
             scripts/ibkr_remote_selected_runtime_command_capsule_v2.py \
+            scripts/mmibkr_b1_attested_source_consumer_v1.py \
             scripts/ibkr_remote_selected_runtime_paper_proof_v1.py \
             scripts/ibkr_remote_selected_runtime_paper_proof_v2.py \
             scripts/ibkr_remote_selected_runtime_paper_execute_v1.py \
@@ -135,6 +139,8 @@ jobs:
             tests/test_ibkr_b1_warm_state_workflow_v2.py \
             tests/test_ibkr_warm_selected_runtime_activation_v1.py \
             tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py \
+            tests/test_mmibkr_b1_attested_source_consumer_v1.py \
+            tests/test_ibkr_b1_canonical_dockerfile_v1.py \
             tests/test_ibkr_remote_selected_runtime_paper_execute_v1.py \
             tests/test_ibkr_remote_paper_proof_return_v1.py \
             tests/test_ibkr_warm_read_return_v1.py \
@@ -155,6 +161,8 @@ jobs:
             tests.test_ibkr_b1_warm_state_workflow_v2 \
             tests.test_ibkr_warm_selected_runtime_activation_v1 \
             tests.test_ibkr_remote_selected_runtime_command_capsule_v2 \
+            tests.test_mmibkr_b1_attested_source_consumer_v1 \
+            tests.test_ibkr_b1_canonical_dockerfile_v1 \
             tests.test_ibkr_remote_selected_runtime_paper_execute_v1 \
             tests.test_ibkr_remote_paper_proof_return_v1 \
             tests.test_ibkr_warm_read_return_v1 \
@@ -203,6 +211,7 @@ jobs:
             tests/test_ibkr_post_auth_pipeline_contracts_v1.py \
             tests/test_forward_bar_multitimeframe_v2.py \
             scripts/ibkr_remote_selected_runtime_command_capsule_v2.py \
+            scripts/mmibkr_b1_attested_source_consumer_v1.py \
             scripts/ibkr_remote_selected_runtime_paper_proof_v1.py \
             scripts/ibkr_remote_selected_runtime_paper_proof_v2.py \
             scripts/ibkr_remote_selected_runtime_paper_execute_v1.py \
@@ -213,6 +222,8 @@ jobs:
             tests/test_ibkr_b1_auth_contracts_v1.py \
             tests/test_ibkr_warm_selected_runtime_activation_v1.py \
             tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py \
+            tests/test_mmibkr_b1_attested_source_consumer_v1.py \
+            tests/test_ibkr_b1_canonical_dockerfile_v1.py \
             tests/test_ibkr_remote_selected_runtime_paper_execute_v1.py \
             tests/test_ibkr_remote_paper_proof_return_v1.py \
             tests/test_ibkr_warm_read_return_v1.py \
@@ -223,6 +234,8 @@ jobs:
             tests.test_forward_bar_multitimeframe_v2 \
             tests.test_ibkr_warm_selected_runtime_activation_v1 \
             tests.test_ibkr_remote_selected_runtime_command_capsule_v2 \
+            tests.test_mmibkr_b1_attested_source_consumer_v1 \
+            tests.test_ibkr_b1_canonical_dockerfile_v1 \
             tests.test_ibkr_remote_selected_runtime_paper_execute_v1 \
             tests.test_ibkr_remote_paper_proof_return_v1 \
             tests.test_ibkr_warm_read_return_v1 \
