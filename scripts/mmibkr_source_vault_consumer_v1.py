@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import tarfile
+import time
 from typing import Any, Callable, Mapping
 from urllib.error import HTTPError
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -44,13 +45,25 @@ def _raw_url(repo: str, branch: str, path: str) -> str:
     return f"https://raw.githubusercontent.com/{owner}/{name}/{branch}/{path}"
 
 
-def _fetch(url: str, *, timeout: int = 30) -> bytes:
+def _fetch(
+    url: str,
+    *,
+    timeout: int = 30,
+    retry_404: int = 6,
+    retry_delay_sec: float = 1.0,
+) -> bytes:
     req = Request(url, headers={"User-Agent": "mmibkr-source-vault-consumer-v1"})
-    try:
-        with urlopen(req, timeout=timeout) as response:
-            return response.read()
-    except HTTPError as exc:
-        raise RuntimeError(f"snapshot_fetch_http_{exc.code}") from exc
+    attempts = max(1, int(retry_404) + 1)
+    for attempt in range(attempts):
+        try:
+            with urlopen(req, timeout=timeout) as response:
+                return response.read()
+        except HTTPError as exc:
+            if exc.code == 404 and attempt + 1 < attempts:
+                time.sleep(max(0.0, float(retry_delay_sec)))
+                continue
+            raise RuntimeError(f"snapshot_fetch_http_{exc.code}") from exc
+    raise RuntimeError("snapshot_fetch_retry_exhausted")
 
 
 def _oidc_url(base: str) -> str:
