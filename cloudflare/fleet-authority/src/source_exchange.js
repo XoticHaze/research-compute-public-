@@ -93,6 +93,15 @@ function b64ToBytes(value) {
   return Uint8Array.from(raw, (c) => c.charCodeAt(0));
 }
 
+function bytesToB64(bytes) {
+  const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let raw = '';
+  for (let i = 0; i < view.length; i += 0x8000) {
+    raw += String.fromCharCode(...view.subarray(i, i + 0x8000));
+  }
+  return btoa(raw);
+}
+
 async function sha256Hex(bytes) {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
   return [...digest].map((b) => b.toString(16).padStart(2, '0')).join('');
