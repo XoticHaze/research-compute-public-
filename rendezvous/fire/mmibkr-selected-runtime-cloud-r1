@@ -1,10 +1,10 @@
 {
-  "source_ref": "cb28771e5fd3aa610d8fcf2ef683596a1cfabd51",
+  "source_ref": "06ee6b93f1155a242b846b967fc73df05afcebd9",
   "session_seconds": 3600,
   "max_cycles": 1,
   "self_handoff": false,
-  "purpose": "finite reusable encrypted source-vault owner acceptance",
-  "acceptance_sequence": 4,
+  "purpose": "finite repaired reusable-vault cloud owner acceptance",
+  "acceptance_sequence": 5,
   "live_execution_allowed": false,
   "natural_candidate_only": true
 }
