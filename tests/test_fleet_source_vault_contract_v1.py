@@ -109,3 +109,5 @@ if __name__ == "__main__":
     unittest.main()
 
 # Hashed unwrap diagnostics must remain non-secret.
+
+# source-vault response encoding helper must exist.
