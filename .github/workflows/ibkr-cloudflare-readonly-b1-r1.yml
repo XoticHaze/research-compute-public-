@@ -742,7 +742,13 @@ jobs:
             --gateway-port 4002 \
             --wait-seconds 900 \
             --mode paper_execute
-          echo 'IBKR_WARM_SELECTED_RUNTIME_PAPER_EXECUTE_TRANSPORT_COMPLETE=1'
+          if [ -f "$RUNNER_TEMP/ibkr-no-command-close.json" ]; then
+            echo 'no_command=true' >> "$GITHUB_OUTPUT"
+            echo 'IBKR_WARM_SELECTED_RUNTIME_NO_COMMAND_CLOSE=1'
+          else
+            echo 'no_command=false' >> "$GITHUB_OUTPUT"
+            echo 'IBKR_WARM_SELECTED_RUNTIME_PAPER_EXECUTE_TRANSPORT_COMPLETE=1'
+          fi
 
       - name: Gracefully stop authenticated Gateway before warm-state snapshot
         id: graceful_stop
@@ -826,6 +832,11 @@ jobs:
             echo 'IBKR_WARM_SELECTED_RUNTIME_PAPER_EXECUTE_ACCEPTED=0'
             echo 'Persistent paper execute failed or was blocked; Gateway was stopped and warm state was resealed before surfacing this failure.'
             exit 53
+          fi
+          if [ "${{ steps.paper_execute.outputs.no_command }}" = "true" ]; then
+            echo 'IBKR_WARM_SELECTED_RUNTIME_NO_COMMAND_TERMINAL=1'
+            echo 'IBKR_WARM_SELECTED_RUNTIME_COMMAND_EXECUTED=0'
+            exit 0
           fi
           echo 'IBKR_WARM_SELECTED_RUNTIME_PAPER_EXECUTE_ACCEPTED=1'
 
