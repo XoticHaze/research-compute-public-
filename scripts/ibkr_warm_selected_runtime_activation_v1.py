@@ -30,8 +30,10 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import x25519
 
 SCRIPTS_ROOT = Path(__file__).resolve().parent
-if str(SCRIPTS_ROOT) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_ROOT))
+REPO_ROOT = SCRIPTS_ROOT.parent
+for import_root in (REPO_ROOT, SCRIPTS_ROOT):
+    if str(import_root) not in sys.path:
+        sys.path.insert(0, str(import_root))
 
 import ibkr_remote_paper_proof_return_v1 as proof_return
 import mmibkr_b1_attested_source_consumer_v1 as attested_source
