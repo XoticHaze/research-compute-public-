@@ -182,12 +182,17 @@ class WarmSelectedRuntimeActivationTests(unittest.TestCase):
         self.assertNotIn('"submit"', calls[0]["content"])
 
     def test_wait_for_command_allows_404_then_accepts_envelope(self):
-        state = {"calls": 0}
+        state = {"command_calls": 0, "close_calls": 0}
         expected = {"schema": "x", "chunks": []}
 
         def fetcher(**kwargs):
-            state["calls"] += 1
-            if state["calls"] == 1:
+            path = kwargs["path"]
+            if path.endswith("ibkr-remote-paper-close.json"):
+                state["close_calls"] += 1
+                raise HTTPError("url", 404, "missing", hdrs=None, fp=None)
+            self.assertTrue(path.endswith("ibkr-remote-paper-envelope.json"))
+            state["command_calls"] += 1
+            if state["command_calls"] == 1:
                 raise HTTPError("url", 404, "missing", hdrs=None, fp=None)
             return json.dumps(expected).encode("utf-8")
 
@@ -202,7 +207,8 @@ class WarmSelectedRuntimeActivationTests(unittest.TestCase):
             sleep=lambda _: None,
         )
         self.assertEqual(out, expected)
-        self.assertEqual(state["calls"], 2)
+        self.assertEqual(state["command_calls"], 2)
+        self.assertEqual(state["close_calls"], 1)
 
     def test_wait_for_command_accepts_identity_bound_no_command_close(self):
         run_id = "123"
