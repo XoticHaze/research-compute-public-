@@ -822,7 +822,10 @@ export class SourceExchange {
         if (message === 'vault_source_snapshot_not_approved') {
           return json({ error: 'source_snapshot_not_approved' }, 403);
         }
-        return json({ error: 'source_vault_unwrap_rejected' }, 400);
+        const reasonCode = message
+          ? (await sha256Hex(new TextEncoder().encode(message))).slice(0, 16)
+          : 'none';
+        return json({ error: 'source_vault_unwrap_rejected', reason_code: reasonCode }, 400);
       }
     }
 
