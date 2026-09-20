@@ -54,7 +54,7 @@ jobs:
           payload=json.dumps({
               'ref':'main',
               'inputs':{
-                  'source_ref':'61f0842b2de8709509453cb390310d246ea39ad3',
+                  'source_ref':'1ecb1de8dda1c8797b6fa1af6dba6f6e1765438e',
                   'session_seconds':'18000',
                   'max_cycles':'0',
                   'self_handoff':True,
