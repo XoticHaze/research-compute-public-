@@ -3,7 +3,8 @@ name: B1 Attested Source Contract CI
 on:
   push:
     branches:
-      - assistant/ibkr-b1-source-exchange-r1-20260919
+      - ibkr-b1-authority-v1
+      - assistant/b1-attested-source-release-gate-20260920
   pull_request:
     branches:
       - ibkr-b1-authority-v1
