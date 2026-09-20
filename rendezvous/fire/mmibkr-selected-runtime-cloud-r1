@@ -3,8 +3,8 @@
   "session_seconds": 3600,
   "max_cycles": 1,
   "self_handoff": false,
-  "purpose": "finite no-command-close cloud owner acceptance",
-  "acceptance_sequence": 7,
+  "purpose": "finite no-command-close acceptance after B1 full-suite fixture repair",
+  "acceptance_sequence": 8,
   "live_execution_allowed": false,
   "natural_candidate_only": true
 }
