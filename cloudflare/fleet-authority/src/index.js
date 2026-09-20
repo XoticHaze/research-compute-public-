@@ -246,6 +246,7 @@ export default {
         service: 'mmibkr-fleet-authority',
         source_exchange_configured: Boolean(env.SOURCE_EXCHANGE),
         source_vault_configured: Boolean(env.SOURCE_EXCHANGE),
+        private_source_authority_configured: Boolean(env.MMIBKR_PRIVATE_SOURCE_TOKEN),
       });
     }
 
