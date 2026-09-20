@@ -17,6 +17,10 @@ from scripts import ibkr_warm_read_return_v1 as mod
 
 
 class WarmReadReturnTests(unittest.TestCase):
+    def test_harness_identity_matches_private_mm_warm_read_consumer(self):
+        self.assertEqual(mod.AUTHORITY, "mm_ibkr_paper_runtime")
+        self.assertEqual(mod.HARNESS, "mmibkr_warm_read_gateway_v1")
+
     def _recipient(self):
         private = x25519.X25519PrivateKey.generate()
         public_raw = private.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
