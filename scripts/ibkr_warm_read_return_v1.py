@@ -12,6 +12,7 @@ import argparse
 import base64
 import hashlib
 import json
+import math
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -318,6 +319,18 @@ def collect_snapshot(
             ib.disconnect()
 
 
+def _json_transport_safe(value: Any) -> Any:
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, Mapping):
+        return {str(key): _json_transport_safe(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_json_transport_safe(item) for item in value]
+    if isinstance(value, list):
+        return [_json_transport_safe(item) for item in value]
+    return value
+
+
 def _aad(*, run_id: str, recipient_key_id: str) -> bytes:
     return json.dumps(
         {
@@ -380,7 +393,8 @@ def encrypt_snapshot(
     if computed_key_id != str(recipient_key_id):
         raise RuntimeError("warm read recipient fingerprint mismatch")
 
-    plaintext = json.dumps(dict(snapshot), sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    transport_snapshot = _json_transport_safe(dict(snapshot))
+    plaintext = json.dumps(transport_snapshot, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
     sender = x25519.X25519PrivateKey.generate()
     sender_public = sender.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     aad = _aad(run_id=run_id, recipient_key_id=computed_key_id)
