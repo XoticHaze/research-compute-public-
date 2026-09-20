@@ -48,6 +48,27 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("plaintext_sha256: archiveSha", text)
         self.assertIn("archive_bytes: archiveBytes", text)
 
+    def test_private_source_stream_is_oidc_gated_and_code_pinned(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("MMIBKR_PRIVATE_SOURCE_TOKEN", text)
+        self.assertIn("APPROVED_PRIVATE_SOURCE_STREAMS", text)
+        self.assertIn("ca1d97ebfd95a4e23e7be520a4d8a44d49d44251", text)
+        self.assertIn("/v1/source-vault/private-archive/", text)
+        self.assertIn("fleet_authority_oidc_private_archive_stream", text)
+        self.assertIn("redirect: 'follow'", text)
+        self.assertIn("upstream.body", text)
+        self.assertIn("private_source_token_exposed: false", text)
+
+    def test_stream_attestation_is_bound_to_run_stream_sha_and_size(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("streamgrant:", text)
+        self.assertIn("mmibkr-fleet-private-source-attest-v1", text)
+        self.assertIn("archive_sha256", text)
+        self.assertIn("archive_bytes", text)
+        self.assertIn("private_attestation_stored: true", text)
+        self.assertIn("attest:${sourceSha}:${archiveSha}", text)
+        self.assertIn("plaintext_sha256: archiveSha", text)
+
     def test_runtime_identity_is_exactly_pinned(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("XoticHaze/mm-ibkr-runtime", text)
@@ -62,6 +83,8 @@ class FleetSourceVaultContractTests(unittest.TestCase):
     def test_health_exposes_vault_configuration_only(self):
         text = INDEX.read_text(encoding="utf-8")
         self.assertIn("source_vault_configured", text)
+        self.assertIn("private_source_authority_configured", text)
+        self.assertIn("MMIBKR_PRIVATE_SOURCE_TOKEN", text)
         self.assertNotIn("vault:rsa-oaep:private-jwk", text)
 
 
