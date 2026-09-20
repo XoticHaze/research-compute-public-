@@ -44,7 +44,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("mmibkr-cloud-source-vault-attestation-v1", text)
         self.assertIn("reusable_attestation_stored: true", text)
         self.assertIn("source_transport: 'fleet_authority_exact_sha_encrypted_snapshot_vault'", text)
-        self.assertIn("attest:\\${sourceSha}:\\${archiveSha}", text)
+        self.assertIn("attest:${sourceSha}:${archiveSha}", text)
         self.assertIn("plaintext_sha256: archiveSha", text)
         self.assertIn("archive_bytes: archiveBytes", text)
 
