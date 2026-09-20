@@ -468,8 +468,38 @@ export class SourceExchange {
     return { privateJwk, publicJwk, keyId };
   }
 
+  async _vaultKeypairSelfTest(privateJwk, publicJwk) {
+    const publicKey = await crypto.subtle.importKey(
+      'jwk',
+      publicJwk,
+      { name: 'RSA-OAEP', hash: 'SHA-256' },
+      false,
+      ['encrypt'],
+    );
+    const privateKey = await crypto.subtle.importKey(
+      'jwk',
+      privateJwk,
+      { name: 'RSA-OAEP', hash: 'SHA-256' },
+      false,
+      ['decrypt'],
+    );
+    const probe = crypto.getRandomValues(new Uint8Array(32));
+    const wrapped = await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, publicKey, probe);
+    const unwrapped = new Uint8Array(
+      await crypto.subtle.decrypt({ name: 'RSA-OAEP' }, privateKey, wrapped),
+    );
+    if (
+      unwrapped.length !== probe.length
+      || unwrapped.some((value, index) => value !== probe[index])
+    ) {
+      throw new Error('vault_keypair_self_test_failed');
+    }
+    return true;
+  }
+
   async _vaultPublicKeyResponse() {
-    const { publicJwk, keyId } = await this._vaultKeypair();
+    const { privateJwk, publicJwk, keyId } = await this._vaultKeypair();
+    await this._vaultKeypairSelfTest(privateJwk, publicJwk);
     return {
       schema: SOURCE_VAULT_PUBLIC_KEY_SCHEMA,
       ok: true,
@@ -485,6 +515,7 @@ export class SourceExchange {
         ext: true,
       },
       private_key_exported: false,
+      keypair_self_test: true,
       source_approval_is_code_pinned: true,
       snapshot_manifest_approval: 'static_code_pin_or_fleet_attested_first_use_pin',
     };

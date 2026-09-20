@@ -24,6 +24,8 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("SOURCE_VAULT_RSA_PRIVATE_KEY", text)
         self.assertIn("SOURCE_VAULT_RSA_PUBLIC_KEY", text)
         self.assertIn("private_key_exported: false", text)
+        self.assertIn("keypair_self_test: true", text)
+        self.assertIn("_vaultKeypairSelfTest", text)
         self.assertNotIn("private_jwk:", text)
         self.assertNotIn("privateJwk:", text)
 
