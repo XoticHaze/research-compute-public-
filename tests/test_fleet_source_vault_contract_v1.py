@@ -107,3 +107,5 @@ class FleetSourceVaultContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+# Hashed unwrap diagnostics must remain non-secret.
