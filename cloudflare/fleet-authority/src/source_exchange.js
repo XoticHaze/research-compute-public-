@@ -53,6 +53,7 @@ const SOURCE_VAULT_DYNAMIC_APPROVAL_SCHEMA = 'mmibkr-source-vault-dynamic-approv
 const PRIVATE_SOURCE_STREAM_GRANT_TTL_MS = 60 * 60 * 1000;
 const APPROVED_PRIVATE_SOURCE_STREAMS = new Set([
   'ca1d97ebfd95a4e23e7be520a4d8a44d49d44251',
+  'ec1831181ae49ef75679e103737ac04a9bc8a445',
 ]);
 
 /*
