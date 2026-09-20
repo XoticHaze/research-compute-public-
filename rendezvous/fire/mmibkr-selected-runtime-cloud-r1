@@ -3,8 +3,8 @@
   "session_seconds": 3600,
   "max_cycles": 1,
   "self_handoff": false,
-  "purpose": "finite repaired reusable-vault cloud owner acceptance",
-  "acceptance_sequence": 5,
+  "purpose": "finite repaired reusable-vault cloud owner acceptance after B1 warm-read normalization",
+  "acceptance_sequence": 6,
   "live_execution_allowed": false,
   "natural_candidate_only": true
 }
