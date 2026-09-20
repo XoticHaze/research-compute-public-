@@ -28,7 +28,7 @@ SNAPSHOT_SCHEMA = "mmibkr.ibkr_warm_read_snapshot.v1"
 RETURN_RECIPIENT_SCHEMA = "ibkr-remote-paper-return-recipient-v1"
 RETURN_ENVELOPE_SCHEMA = "ibkr-warm-read-return-x25519-v1"
 AUTHORITY = "mm_ibkr_paper_runtime"
-HARNESS = "mm_ibkr_warm_read_gateway_v1"
+HARNESS = "mmibkr_warm_read_gateway_v1"
 RETURN_INFO = b"mm-ibkr-warm-read-return-v1"
 CHUNK_CHARS = 8000
 
