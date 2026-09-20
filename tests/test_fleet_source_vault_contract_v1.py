@@ -48,6 +48,21 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("plaintext_sha256: archiveSha", text)
         self.assertIn("archive_bytes: archiveBytes", text)
 
+    def test_fleet_attested_source_can_be_first_use_pinned_as_reusable_vault_snapshot(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("mmibkr-source-vault-dynamic-approval-v1", text)
+        self.assertIn("vaultapproval:", text)
+        self.assertIn("fleet_attested_first_use_pin", text)
+        self.assertIn("mmibkr-cloud-source-fleet-stream-attestation-v1", text)
+        self.assertIn("APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha)", text)
+        self.assertIn("snapshot_manifest_approval", text)
+
+    def test_vault_unwrap_receives_request_identity_context(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("async _vaultUnwrap(body, request)", text)
+        self.assertIn("this._vaultUnwrap(body, request)", text)
+        self.assertIn("this._producerIdentity(request)", text)
+
     def test_private_source_stream_is_oidc_gated_and_code_pinned(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("MMIBKR_PRIVATE_SOURCE_TOKEN", text)

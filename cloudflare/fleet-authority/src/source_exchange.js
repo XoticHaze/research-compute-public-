@@ -49,6 +49,7 @@ const SOURCE_VAULT_RSA_PUBLIC_KEY = 'vault:rsa-oaep:public-jwk';
 const SOURCE_VAULT_RSA_KEY_ID = 'vault:rsa-oaep:key-id';
 const FLEET_PRIVATE_SOURCE_STREAM_SCHEMA = 'mmibkr-fleet-private-source-stream-v1';
 const FLEET_PRIVATE_SOURCE_ATTEST_SCHEMA = 'mmibkr-fleet-private-source-attest-v1';
+const SOURCE_VAULT_DYNAMIC_APPROVAL_SCHEMA = 'mmibkr-source-vault-dynamic-approval-v1';
 const PRIVATE_SOURCE_STREAM_GRANT_TTL_MS = 60 * 60 * 1000;
 const APPROVED_PRIVATE_SOURCE_STREAMS = new Set([
   'ca1d97ebfd95a4e23e7be520a4d8a44d49d44251',
@@ -485,10 +486,84 @@ export class SourceExchange {
       },
       private_key_exported: false,
       source_approval_is_code_pinned: true,
+      snapshot_manifest_approval: 'static_code_pin_or_fleet_attested_first_use_pin',
     };
   }
 
-  async _vaultUnwrap(body) {
+  async _resolveVaultSnapshotApproval({
+    sourceSha,
+    manifestSha,
+    archiveSha,
+    archiveBytes,
+  }) {
+    const staticApproval = APPROVED_SOURCE_SNAPSHOTS[sourceSha];
+    if (staticApproval) {
+      if (
+        staticApproval.source_ref !== sourceSha
+        || staticApproval.manifest_sha256 !== manifestSha
+        || staticApproval.archive_sha256 !== archiveSha
+        || Number(staticApproval.archive_bytes) !== archiveBytes
+      ) {
+        throw new Error('vault_source_snapshot_not_approved');
+      }
+      return {
+        ...staticApproval,
+        source_sha: sourceSha,
+        approval_mode: 'static_code_pin',
+      };
+    }
+
+    if (!APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha)) {
+      throw new Error('vault_source_snapshot_not_approved');
+    }
+
+    const approvalKey = `vaultapproval:${sourceSha}`;
+    const existing = await this.ctx.storage.get(approvalKey);
+    if (existing) {
+      if (
+        existing.source_ref !== sourceSha
+        || existing.source_sha !== sourceSha
+        || existing.manifest_sha256 !== manifestSha
+        || existing.archive_sha256 !== archiveSha
+        || Number(existing.archive_bytes) !== archiveBytes
+      ) {
+        throw new Error('vault_source_snapshot_not_approved');
+      }
+      return existing;
+    }
+
+    const streamAttestation = await this.ctx.storage.get(
+      `attest:${sourceSha}:${archiveSha}`,
+    );
+    if (
+      !streamAttestation
+      || streamAttestation.schema !== 'mmibkr-cloud-source-fleet-stream-attestation-v1'
+      || streamAttestation.source_ref !== sourceSha
+      || streamAttestation.source_sha !== sourceSha
+      || streamAttestation.plaintext_sha256 !== archiveSha
+      || Number(streamAttestation.archive_bytes) !== archiveBytes
+      || streamAttestation.source_transport
+        !== 'fleet_authority_oidc_private_archive_stream'
+    ) {
+      throw new Error('vault_source_snapshot_not_approved');
+    }
+
+    const approval = {
+      schema: SOURCE_VAULT_DYNAMIC_APPROVAL_SCHEMA,
+      source_ref: sourceSha,
+      source_sha: sourceSha,
+      manifest_sha256: manifestSha,
+      archive_sha256: archiveSha,
+      archive_bytes: archiveBytes,
+      approval_mode: 'fleet_attested_first_use_pin',
+      private_source_attestation_schema: streamAttestation.schema,
+      approved_at: new Date().toISOString(),
+    };
+    await this.ctx.storage.put(approvalKey, approval);
+    return approval;
+  }
+
+  async _vaultUnwrap(body, request) {
     const fields = new Set([
       'schema',
       'source_sha',
@@ -515,16 +590,12 @@ export class SourceExchange {
     if (!Number.isInteger(archiveBytes) || archiveBytes <= 0 || archiveBytes > 150 * 1024 * 1024) {
       throw new Error('vault_archive_bytes_rejected');
     }
-    const approval = APPROVED_SOURCE_SNAPSHOTS[sourceSha];
-    if (
-      !approval
-      || approval.source_ref !== sourceSha
-      || approval.manifest_sha256 !== manifestSha
-      || approval.archive_sha256 !== archiveSha
-      || Number(approval.archive_bytes) !== archiveBytes
-    ) {
-      throw new Error('vault_source_snapshot_not_approved');
-    }
+    const approval = await this._resolveVaultSnapshotApproval({
+      sourceSha,
+      manifestSha,
+      archiveSha,
+      archiveBytes,
+    });
 
     const { privateJwk, keyId } = await this._vaultKeypair();
     if (String(body.key_id || '') !== keyId) throw new Error('vault_key_id_rejected');
@@ -569,6 +640,7 @@ export class SourceExchange {
       producer_identity: runtimeIdentity,
       attested_at: new Date().toISOString(),
       source_transport: 'fleet_authority_exact_sha_encrypted_snapshot_vault',
+      snapshot_approval_mode: approval.approval_mode,
     };
     await this.ctx.storage.put(`attest:${sourceSha}:${archiveSha}`, attestation);
 
@@ -713,7 +785,7 @@ export class SourceExchange {
         return json({ error: 'invalid_json' }, 400);
       }
       try {
-        return json(await this._vaultUnwrap(body), 200);
+        return json(await this._vaultUnwrap(body, request), 200);
       } catch (error) {
         const message = String(error?.message || '');
         if (message === 'vault_source_snapshot_not_approved') {
