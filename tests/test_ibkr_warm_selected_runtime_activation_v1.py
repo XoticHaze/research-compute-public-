@@ -197,11 +197,77 @@ class WarmSelectedRuntimeActivationTests(unittest.TestCase):
             branch=mod.EXCHANGE_REF,
             run_id="123",
             timeout_sec=5,
+            expected_public_head="a" * 40,
             fetcher=fetcher,
             sleep=lambda _: None,
         )
         self.assertEqual(out, expected)
         self.assertEqual(state["calls"], 2)
+
+    def test_wait_for_command_accepts_identity_bound_no_command_close(self):
+        run_id = "123"
+        public_head = "a" * 40
+        close = {
+            "schema": mod.CLOSE_MARKER_SCHEMA,
+            "run_id": run_id,
+            "public_authority_head": public_head,
+            "reason": "natural_cycle_no_candidate",
+            "command_intent_present": False,
+            "broker_action": False,
+            "live_execution_allowed": False,
+        }
+
+        def fetcher(**kwargs):
+            path = kwargs["path"]
+            if path.endswith("ibkr-remote-paper-envelope.json"):
+                raise HTTPError("url", 404, "missing", hdrs=None, fp=None)
+            if path.endswith("ibkr-remote-paper-close.json"):
+                return json.dumps(close).encode("utf-8")
+            self.fail(path)
+
+        out = mod.wait_for_command_envelope(
+            token="token",
+            repository="repo",
+            branch=mod.EXCHANGE_REF,
+            run_id=run_id,
+            timeout_sec=5,
+            expected_public_head=public_head,
+            fetcher=fetcher,
+            sleep=lambda _: self.fail("close marker should terminate wait"),
+        )
+        self.assertTrue(out["_boundary_closed"])
+        self.assertEqual(out["close_marker"]["reason"], "natural_cycle_no_candidate")
+
+    def test_wait_for_command_rejects_close_marker_head_mismatch(self):
+        run_id = "123"
+        close = {
+            "schema": mod.CLOSE_MARKER_SCHEMA,
+            "run_id": run_id,
+            "public_authority_head": "b" * 40,
+            "command_intent_present": False,
+            "broker_action": False,
+            "live_execution_allowed": False,
+        }
+
+        def fetcher(**kwargs):
+            if kwargs["path"].endswith("ibkr-remote-paper-envelope.json"):
+                raise HTTPError("url", 404, "missing", hdrs=None, fp=None)
+            return json.dumps(close).encode("utf-8")
+
+        with self.assertRaisesRegex(
+            mod.ActivationError,
+            "boundary close marker identity mismatch: public_authority_head",
+        ):
+            mod.wait_for_command_envelope(
+                token="token",
+                repository="repo",
+                branch=mod.EXCHANGE_REF,
+                run_id=run_id,
+                timeout_sec=5,
+                expected_public_head="a" * 40,
+                fetcher=fetcher,
+                sleep=lambda _: None,
+            )
 
     def test_execute_command_delegates_persistent_mode_without_cleanup_policy(self):
         runtime = {"mode": mod.capsule_v2.EXECUTE_MODE, "request_path": "/tmp/request.json"}
