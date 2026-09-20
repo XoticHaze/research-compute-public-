@@ -1,10 +1,10 @@
 {
-  "source_ref": "06ee6b93f1155a242b846b967fc73df05afcebd9",
+  "source_ref": "61f0842b2de8709509453cb390310d246ea39ad3",
   "session_seconds": 3600,
   "max_cycles": 1,
   "self_handoff": false,
-  "purpose": "finite repaired reusable-vault cloud owner acceptance after B1 warm-read normalization",
-  "acceptance_sequence": 6,
+  "purpose": "finite no-command-close cloud owner acceptance",
+  "acceptance_sequence": 7,
   "live_execution_allowed": false,
   "natural_candidate_only": true
 }
