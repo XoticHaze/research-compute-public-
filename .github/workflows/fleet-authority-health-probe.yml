@@ -3,7 +3,7 @@ name: Fleet Authority Health Probe
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, assistant/fleet-private-source-health-20260920]
     paths:
       - 'wrangler.jsonc'
       - 'cloudflare/fleet-authority/**'
@@ -46,6 +46,7 @@ jobs:
                       and node.get('service') == 'mmibkr-fleet-authority'
                       and node.get('source_exchange_configured') is True
                       and node.get('source_vault_configured') is True
+                      and node.get('private_source_authority_configured') is True
                   ):
                       key_req = Request(
                           os.environ['FLEET_SOURCE_VAULT_KEY'],
@@ -71,6 +72,7 @@ jobs:
                       print('FLEET_AUTHORITY_DEPLOYMENT_PROVEN=1')
                       print('SOURCE_EXCHANGE_CONFIGURED=1')
                       print('SOURCE_VAULT_CONFIGURED=1')
+                      print('PRIVATE_SOURCE_AUTHORITY_CONFIGURED=1')
                       print(
                           'SOURCE_VAULT_PUBLIC_KEY='
                           + json.dumps(key_node, sort_keys=True)
