@@ -48,6 +48,7 @@ EXCHANGE_REF = "rendezvous-exchange"
 RECIPIENT_ROOT = "rendezvous/recipients"
 RESPONSE_ROOT = "rendezvous/responses"
 RETURN_ROOT = "rendezvous/returns"
+CLOSE_MARKER_SCHEMA = "mmibkr.remote_selected_runtime_boundary_close.v1"
 BOT_CONTAINER = "mmibkr-warm-selected-runtime-proof"
 BOT_IMAGE_PREFIX = "mmibkr-warm-proof"
 
@@ -208,19 +209,59 @@ def wait_for_command_envelope(
     branch: str,
     run_id: str,
     timeout_sec: int,
+    expected_public_head: str,
     fetcher: Callable[..., bytes] = fetch_raw,
     sleep: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
     path = f"{RESPONSE_ROOT}/{run_id}/ibkr-remote-paper-envelope.json"
+    close_path = f"{RESPONSE_ROOT}/{run_id}/ibkr-remote-paper-close.json"
     deadline = time.monotonic() + max(1, int(timeout_sec))
     while time.monotonic() < deadline:
         try:
             raw = fetcher(token=token, repository=repository, branch=branch, path=path)
         except HTTPError as exc:
-            if exc.code == 404:
-                sleep(2.0)
-                continue
-            raise
+            if exc.code != 404:
+                raise
+            try:
+                close_raw = fetcher(
+                    token=token,
+                    repository=repository,
+                    branch=branch,
+                    path=close_path,
+                )
+            except HTTPError as close_exc:
+                if close_exc.code == 404:
+                    sleep(2.0)
+                    continue
+                raise
+            try:
+                close_node = json.loads(close_raw.decode("utf-8"))
+            except Exception as close_exc:
+                raise ActivationError(
+                    "boundary close marker is not valid JSON"
+                ) from close_exc
+            if not isinstance(close_node, dict):
+                raise ActivationError("boundary close marker must be an object")
+            expected = {
+                "schema": CLOSE_MARKER_SCHEMA,
+                "run_id": str(run_id),
+                "public_authority_head": str(expected_public_head).strip().lower(),
+                "command_intent_present": False,
+                "broker_action": False,
+                "live_execution_allowed": False,
+            }
+            for key, value in expected.items():
+                actual = close_node.get(key)
+                if key == "public_authority_head":
+                    actual = str(actual or "").strip().lower()
+                if actual != value:
+                    raise ActivationError(
+                        f"boundary close marker identity mismatch: {key}"
+                    )
+            return {
+                "_boundary_closed": True,
+                "close_marker": close_node,
+            }
         try:
             node = json.loads(raw.decode("utf-8"))
         except Exception as exc:
@@ -582,7 +623,24 @@ def main() -> None:
             branch=args.exchange_ref,
             run_id=run_id,
             timeout_sec=args.wait_seconds,
+            expected_public_head=public_head,
         )
+        if envelope.get("_boundary_closed") is True:
+            marker = (
+                envelope.get("close_marker")
+                if isinstance(envelope.get("close_marker"), Mapping)
+                else {}
+            )
+            close_path = runner_temp / "ibkr-no-command-close.json"
+            close_path.write_text(
+                json.dumps(dict(marker), sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            print("IBKR_REMOTE_NO_COMMAND_CLOSE_ACCEPTED=1")
+            print("IBKR_REMOTE_SELECTED_RUNTIME_COMMAND_EXECUTED=0")
+            print("IBKR_REMOTE_LIVE_EXECUTION_ALLOWED=0")
+            return
+
         envelope_path = runner_temp / "ibkr-command-envelope.json"
         envelope_path.write_text(json.dumps(envelope, sort_keys=True) + "\n", encoding="utf-8")
         ciphertext = assemble_command_ciphertext(
