@@ -6,7 +6,7 @@ on:
       source_ref:
         description: Exact approved private MM-IBKR source SHA to materialize from the reusable encrypted Fleet vault
         required: true
-        default: cb28771e5fd3aa610d8fcf2ef683596a1cfabd51
+        default: 06ee6b93f1155a242b846b967fc73df05afcebd9
         type: string
       session_seconds:
         description: Bounded daemon session length
@@ -35,6 +35,7 @@ on:
       - .github/workflows/mmibkr-selected-runtime-cloud-r1.yml
       - scripts/mmibkr_source_vault_consumer_v1.py
       - tests/test_mmibkr_source_vault_consumer_v1.py
+      - tests/test_mmibkr_source_vault_fetch_retry_v1.py
 
 permissions:
   contents: write
@@ -67,9 +68,11 @@ jobs:
           python -m py_compile \
             scripts/mmibkr_source_vault_consumer_v1.py \
             tests/test_mmibkr_source_vault_consumer_v1.py \
+            tests/test_mmibkr_source_vault_fetch_retry_v1.py \
             tests/test_mmibkr_cloud_owner_reusable_vault_contract_v1.py
           python -m unittest -v \
             tests.test_mmibkr_source_vault_consumer_v1 \
+            tests.test_mmibkr_source_vault_fetch_retry_v1 \
             tests.test_mmibkr_cloud_owner_reusable_vault_contract_v1
 
   runtime:
@@ -113,7 +116,7 @@ jobs:
 
           source_ref = str(
               payload.get('source_ref')
-              or 'cb28771e5fd3aa610d8fcf2ef683596a1cfabd51'
+              or '06ee6b93f1155a242b846b967fc73df05afcebd9'
           ).strip().lower()
           if len(source_ref) != 40 or any(ch not in '0123456789abcdef' for ch in source_ref):
               raise SystemExit('source_ref must be an exact approved 40-hex private source SHA')
