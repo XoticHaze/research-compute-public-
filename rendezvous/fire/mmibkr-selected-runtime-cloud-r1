@@ -1,10 +1,10 @@
 {
-  "source_ref": "61f0842b2de8709509453cb390310d246ea39ad3",
-  "session_seconds": 3600,
+  "source_ref": "d81df85788ebb6be6d4d69b9b9a537be96f16507",
+  "session_seconds": 1800,
   "max_cycles": 1,
   "self_handoff": false,
-  "purpose": "finite no-command-close acceptance after B1 full-suite fixture repair",
-  "acceptance_sequence": 8,
+  "purpose": "finite d81 private operator-snapshot source promotion acceptance",
+  "acceptance_sequence": 9,
   "live_execution_allowed": false,
   "natural_candidate_only": true
 }
