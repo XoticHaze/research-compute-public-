@@ -41,6 +41,8 @@ on:
       - tests/test_mmibkr_cloud_session_receipt_v1.py
       - tests/test_mmibkr_cloud_session_acceptance_v1.py
       - scripts/mmibkr_cloud_session_acceptance_v1.py
+      - scripts/mmibkr_operator_snapshot_publish_v1.py
+      - tests/test_mmibkr_operator_snapshot_publish_helper_v1.py
 
 permissions:
   contents: write
@@ -80,7 +82,9 @@ jobs:
             tests/test_mmibkr_operator_console_publisher_v1.py \
             tests/test_mmibkr_cloud_session_receipt_v1.py \
             tests/test_mmibkr_cloud_session_acceptance_v1.py \
-            scripts/mmibkr_cloud_session_acceptance_v1.py
+            scripts/mmibkr_cloud_session_acceptance_v1.py \
+            scripts/mmibkr_operator_snapshot_publish_v1.py \
+            tests/test_mmibkr_operator_snapshot_publish_helper_v1.py
           python -m unittest -v \
             tests.test_mmibkr_source_vault_consumer_v1 \
             tests.test_mmibkr_source_vault_fetch_retry_v1 \
@@ -88,7 +92,8 @@ jobs:
             tests.test_mmibkr_cloud_checkpoint_cache_handoff_v1 \
             tests.test_mmibkr_operator_console_publisher_v1 \
             tests.test_mmibkr_cloud_session_receipt_v1 \
-            tests.test_mmibkr_cloud_session_acceptance_v1
+            tests.test_mmibkr_cloud_session_acceptance_v1 \
+            tests.test_mmibkr_operator_snapshot_publish_helper_v1
 
   runtime:
     if: ${{ github.event_name != 'pull_request' }}
@@ -285,9 +290,66 @@ jobs:
           fi
 
       - name: Run bounded selected-runtime cloud owner
+        id: cloud_owner
+        shell: bash
         run: |
           set -euo pipefail
-          docker run --rm             -e IBKR_REMOTE_EXCHANGE_TOKEN             -e ACTIONS_ID_TOKEN_REQUEST_URL             -e ACTIONS_ID_TOKEN_REQUEST_TOKEN             -e ENABLE_LIVE_TRADING=0             -v "$RUNNER_TEMP/mmibkr-data:/app/data"             -v "$RUNNER_TEMP/mmibkr-source:/private-source:ro"             "mmibkr-cloud:${GITHUB_RUN_ID}"             python scripts/operator/selected_runtime_cloud_daemon_v1.py               --repo-root /app               --data-root /app/data               --source-materialization /private-source/source-materialization.json               --session-seconds "$SESSION_SECONDS"               --max-cycles "$MAX_CYCLES"               --output /app/data/strategy_runtime/selected_runtime_cloud_daemon_v1/session.json
+          umask 077
+          owner_container="mmibkr-cloud-owner-${GITHUB_RUN_ID}"
+          snapshot_in_container="/app/data/strategy_runtime/cloud_operator_snapshot_v1/latest.json"
+          snapshot_tmp="$RUNNER_TEMP/mmibkr-operator-snapshot-stream.json"
+          stream_meta="$RUNNER_TEMP/mmibkr-operator-snapshot-stream-meta.json"
+          stream_publish_count=0
+          stream_attempt_count=0
+          last_seen_sha256=''
+          log_pid=''
+
+          cleanup_owner() {
+            rm -f "$snapshot_tmp" "$stream_meta"
+            if docker inspect "$owner_container" >/dev/null 2>&1; then
+              docker rm -f "$owner_container" >/dev/null 2>&1 || true
+            fi
+          }
+          trap cleanup_owner EXIT
+
+          docker run             --name "$owner_container"             -d             -e IBKR_REMOTE_EXCHANGE_TOKEN             -e ACTIONS_ID_TOKEN_REQUEST_URL             -e ACTIONS_ID_TOKEN_REQUEST_TOKEN             -e ENABLE_LIVE_TRADING=0             -v "$RUNNER_TEMP/mmibkr-data:/app/data"             -v "$RUNNER_TEMP/mmibkr-source:/private-source:ro"             "mmibkr-cloud:${GITHUB_RUN_ID}"             python scripts/operator/selected_runtime_cloud_daemon_v1.py               --repo-root /app               --data-root /app/data               --source-materialization /private-source/source-materialization.json               --session-seconds "$SESSION_SECONDS"               --max-cycles "$MAX_CYCLES"               --output /app/data/strategy_runtime/selected_runtime_cloud_daemon_v1/session.json             >/dev/null
+
+          docker logs -f "$owner_container" &
+          log_pid=$!
+
+          while true; do
+            running="$(docker inspect -f '{{.State.Running}}' "$owner_container" 2>/dev/null || printf 'false')"
+            [ "$running" = 'true' ] || break
+
+            if docker exec "$owner_container" test -s "$snapshot_in_container" 2>/dev/null; then
+              if docker exec "$owner_container" cat "$snapshot_in_container" > "$snapshot_tmp" 2>/dev/null; then
+                chmod 600 "$snapshot_tmp"
+                snapshot_sha256="$(sha256sum "$snapshot_tmp" | awk '{print $1}')"
+                if [ "$snapshot_sha256" != "$last_seen_sha256" ]; then
+                  last_seen_sha256="$snapshot_sha256"
+                  stream_attempt_count=$((stream_attempt_count + 1))
+                  rm -f "$stream_meta"
+                  if python scripts/mmibkr_operator_snapshot_publish_v1.py                     --snapshot "$snapshot_tmp"                     --operator-url "$OPERATOR_CONSOLE_URL"                     --caller-run-id "$GITHUB_RUN_ID"                     --output "$stream_meta"                     --mode stream; then
+                    stream_publish_count=$((stream_publish_count + 1))
+                    echo "MMIBKR_OPERATOR_SNAPSHOT_STREAM_ACCEPTED_COUNT=$stream_publish_count"
+                  else
+                    echo "::warning::Operator snapshot stream publish failed; selected-runtime owner continues."
+                  fi
+                fi
+                rm -f "$snapshot_tmp" "$stream_meta"
+              fi
+            fi
+
+            sleep 30
+          done
+
+          owner_exit="$(docker wait "$owner_container")"
+          wait "$log_pid" || true
+          echo "stream_publish_count=$stream_publish_count" >> "$GITHUB_OUTPUT"
+          echo "stream_attempt_count=$stream_attempt_count" >> "$GITHUB_OUTPUT"
+          echo "MMIBKR_OPERATOR_SNAPSHOT_STREAM_PUBLISH_COUNT=$stream_publish_count"
+          echo "MMIBKR_OPERATOR_SNAPSHOT_STREAM_ATTEMPT_COUNT=$stream_attempt_count"
+          exit "$owner_exit"
 
       - name: Build sanitized successor checkpoint
         if: ${{ always() }}
@@ -423,12 +485,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          umask 077
           publish_status='failed'
           runtime_count=''
           positions_count=''
           durable_readback_verified='false'
           snapshot=''
           publish_meta=''
+
           finalize_operator_snapshot_publish() {
             {
               printf 'publish_status=%s\n' "$publish_status"
@@ -442,10 +506,7 @@ jobs:
           trap finalize_operator_snapshot_publish EXIT
 
           snapshot_in_container="/app/data/strategy_runtime/cloud_operator_snapshot_v1/latest.json"
-          if ! docker run --rm \
-            -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro" \
-            "mmibkr-cloud:${GITHUB_RUN_ID}" \
-            test -s "$snapshot_in_container"; then
+          if ! docker run --rm             -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro"             "mmibkr-cloud:${GITHUB_RUN_ID}"             test -s "$snapshot_in_container"; then
             publish_status='not_available_for_runtime_source'
             echo 'MMIBKR_OPERATOR_SNAPSHOT_PUBLISH=not_available_for_runtime_source'
             exit 0
@@ -453,122 +514,23 @@ jobs:
 
           snapshot="$RUNNER_TEMP/mmibkr-operator-snapshot-publish.json"
           publish_meta="$RUNNER_TEMP/mmibkr-operator-snapshot-publish-meta.json"
-          docker run --rm \
-            -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro" \
-            "mmibkr-cloud:${GITHUB_RUN_ID}" \
-            python -c "from pathlib import Path; import sys; sys.stdout.buffer.write(Path('$snapshot_in_container').read_bytes())" \
-            > "$snapshot"
+          docker run --rm             -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro"             "mmibkr-cloud:${GITHUB_RUN_ID}"             python -c "from pathlib import Path; import sys; sys.stdout.buffer.write(Path('$snapshot_in_container').read_bytes())"             > "$snapshot"
           chmod 600 "$snapshot"
-          test -s "$snapshot"
 
-          python - "$snapshot" "$publish_meta" <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
-          from urllib.request import Request, urlopen
+          python scripts/mmibkr_operator_snapshot_publish_v1.py             --snapshot "$snapshot"             --operator-url "$OPERATOR_CONSOLE_URL"             --caller-run-id "$GITHUB_RUN_ID"             --output "$publish_meta"             --mode final
 
-          snapshot_path = Path(__import__('sys').argv[1])
-          node = json.loads(snapshot_path.read_text(encoding='utf-8'))
-          if node.get('schema') != 'mmibkr.cloud_operator_snapshot.v1':
-              raise SystemExit('operator snapshot schema mismatch')
-          privacy = node.get('privacy') if isinstance(node.get('privacy'), dict) else {}
-          authority = node.get('authority') if isinstance(node.get('authority'), dict) else {}
-          if (
-              node.get('mode') != 'paper'
-              or node.get('live_enabled') is not False
-              or privacy.get('private_operator_state') is not True
-              or privacy.get('account_identifiers_included') is not False
-              or privacy.get('credentials_included') is not False
-              or privacy.get('tokens_included') is not False
-              or privacy.get('private_source_included') is not False
-              or privacy.get('execution_authority_included') is not False
-              or authority.get('presentation_projection_only') is not True
-              or authority.get('broker_mutation_authority') is not False
-              or authority.get('live_execution_allowed') is not False
-          ):
-              raise SystemExit('operator snapshot privacy/authority contract failed')
-
-          raw_url = os.environ['ACTIONS_ID_TOKEN_REQUEST_URL']
-          parsed = urlparse(raw_url)
-          query = dict(parse_qsl(parsed.query, keep_blank_values=True))
-          query['audience'] = 'mmibkr-operator-console'
-          oidc_url = urlunparse((
-              parsed.scheme,
-              parsed.netloc,
-              parsed.path,
-              parsed.params,
-              urlencode(query),
-              parsed.fragment,
-          ))
-          oidc_req = Request(
-              oidc_url,
-              headers={
-                  'Authorization': 'Bearer ' + os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN'],
-                  'Accept': 'application/json',
-              },
-          )
-          with urlopen(oidc_req, timeout=20) as response:
-              oidc = json.load(response)
-          token = str(oidc.get('value') or '')
-          if token.count('.') != 2:
-              raise SystemExit('operator snapshot OIDC token invalid')
-
-          body = snapshot_path.read_bytes()
-          req = Request(
-              os.environ['OPERATOR_CONSOLE_URL'].rstrip('/') + '/v1/operator-snapshot',
-              data=body,
-              method='POST',
-              headers={
-                  'Authorization': 'Bearer ' + token,
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json',
-                  'X-MMIBKR-Caller-Run-Id': os.environ['GITHUB_RUN_ID'],
-                  'User-Agent': 'mmibkr-cloud-operator-publisher-v1',
-              },
-          )
-          with urlopen(req, timeout=30) as response:
-              receipt = json.load(response)
-              status = int(response.status)
-          if (
-              status != 201
-              or receipt.get('ok') is not True
-              or receipt.get('durable_readback_verified') is not True
-          ):
-              raise SystemExit('operator snapshot publish/readback not accepted')
-          publish_meta = Path(__import__('sys').argv[2])
-          publish_meta.write_text(json.dumps({
-              'status': 'accepted',
-              'runtime_count': receipt.get('runtime_count'),
-              'positions_count': receipt.get('positions_count'),
-          }, sort_keys=True) + '\n', encoding='utf-8')
-          print('MMIBKR_OPERATOR_SNAPSHOT_PUBLISH=accepted')
-          print('MMIBKR_OPERATOR_SNAPSHOT_RUNTIME_COUNT=' + str(receipt.get('runtime_count')))
-          print('MMIBKR_OPERATOR_SNAPSHOT_POSITIONS_COUNT=' + str(receipt.get('positions_count')))
-          print('MMIBKR_OPERATOR_SNAPSHOT_DURABLE_READBACK_VERIFIED=1')
-          print('MMIBKR_OPERATOR_SNAPSHOT_ACCOUNT_IDENTIFIERS_INCLUDED=0')
-          print('MMIBKR_OPERATOR_SNAPSHOT_CREDENTIALS_INCLUDED=0')
-          print('MMIBKR_OPERATOR_SNAPSHOT_TOKENS_INCLUDED=0')
-          print('MMIBKR_OPERATOR_SNAPSHOT_PRIVATE_SOURCE_INCLUDED=0')
-          print('MMIBKR_OPERATOR_SNAPSHOT_EXECUTION_AUTHORITY_INCLUDED=0')
-          print('MMIBKR_OPERATOR_SNAPSHOT_BROKER_MUTATION_AUTHORITY=0')
-          print('MMIBKR_OPERATOR_SNAPSHOT_LIVE_EXECUTION_ALLOWED=0')
-          PY
-
-          publish_status='accepted'
-          durable_readback_verified='true'
-          runtime_count="$(python - "$publish_meta" <<'PY'
+          read -r publish_status runtime_count positions_count durable_readback_verified < <(
+            python - "$publish_meta" <<'PY'
           import json, sys
           node = json.load(open(sys.argv[1], encoding='utf-8'))
-          print(int(node['runtime_count']))
+          print(
+              node.get('status') or 'failed',
+              int(node.get('runtime_count') or 0),
+              int(node.get('positions_count') or 0),
+              'true' if node.get('durable_readback_verified') is True else 'false',
+          )
           PY
-          )"
-          positions_count="$(python - "$publish_meta" <<'PY'
-          import json, sys
-          node = json.load(open(sys.argv[1], encoding='utf-8'))
-          print(int(node['positions_count']))
-          PY
-          )"
+          )
 
       - name: Publish sanitized cloud-session receipt
         if: ${{ always() }}
@@ -581,6 +543,8 @@ jobs:
           MMIBKR_RECEIPT_CHECKPOINT_CACHE_SAVED: ${{ steps.checkpoint_saved.outputs.saved || 'false' }}
           MMIBKR_RECEIPT_CHECKPOINT_CACHE_SHA256: ${{ steps.checkpoint_saved.outputs.saved_sha256 }}
           MMIBKR_RECEIPT_CHECKPOINT_CACHE_KEY: ${{ steps.checkpoint_saved.outputs.saved_cache_key }}
+          MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_STREAM_COUNT: ${{ steps.cloud_owner.outputs.stream_publish_count || '0' }}
+          MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_STREAM_ATTEMPTS: ${{ steps.cloud_owner.outputs.stream_attempt_count || '0' }}
           MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_PUBLISH: ${{ steps.operator_snapshot.outputs.publish_status }}
           MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_RUNTIME_COUNT: ${{ steps.operator_snapshot.outputs.runtime_count }}
           MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_POSITIONS_COUNT: ${{ steps.operator_snapshot.outputs.positions_count }}
@@ -693,6 +657,12 @@ jobs:
           receipt['checkpoint_cache_key'] = (
               str(os.environ.get('MMIBKR_RECEIPT_CHECKPOINT_CACHE_KEY') or '').strip()
               or None
+          )
+          receipt['operator_snapshot_stream_publish_count'] = (
+              optional_int('MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_STREAM_COUNT') or 0
+          )
+          receipt['operator_snapshot_stream_attempt_count'] = (
+              optional_int('MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_STREAM_ATTEMPTS') or 0
           )
           receipt['operator_snapshot_publish'] = {
               'status': publish_status,
