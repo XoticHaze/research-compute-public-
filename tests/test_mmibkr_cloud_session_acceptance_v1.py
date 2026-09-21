@@ -28,6 +28,20 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
             "checkpoint_cache_saved": True,
             "checkpoint_cache_sha256": "b" * 64,
             "checkpoint_cache_key": "mmibkr-selected-runtime-cloud-checkpoint-v1-current-d81",
+            "initial_backfill_ingest": {
+                "ready": True,
+                "performed_this_run": False,
+                "public_run_id": mod.EXPECTED_INITIAL_BACKFILL_RUN_ID,
+                "artifact_name": mod.EXPECTED_INITIAL_BACKFILL_ARTIFACT,
+                "broker_action": False,
+                "runtime_execution_contract_mutated": False,
+                "live_execution_allowed": False,
+                "preowner_checkpoint_saved": True,
+                "preowner_checkpoint_sha256": "d" * 64,
+                "preowner_checkpoint_cache_key": (
+                    mod.CHECKPOINT_CACHE_PREFIX + "35699999999-d81-initial-backfill-preowner"
+                ),
+            },
             "operator_snapshot_stream_publish_count": 2,
             "operator_snapshot_stream_attempt_count": 2,
             "operator_snapshot_publish": {
@@ -99,6 +113,38 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
                 result = mod.evaluate(node, require_checkpoint_restored=False)
                 self.assertFalse(result["accepted"])
                 self.assertFalse(result["checks"]["operator_safety"])
+
+    def test_rejects_missing_canonical_backfill_checkpoint(self):
+        node = self.good_receipt(restored=False)
+        node["initial_backfill_ingest"]["preowner_checkpoint_saved"] = False
+        result = mod.evaluate(node, require_checkpoint_restored=False)
+        self.assertFalse(result["accepted"])
+        self.assertFalse(result["checks"]["initial_backfill_preowner_checkpoint_saved"])
+
+    def test_rejects_wrong_backfill_run_or_artifact(self):
+        node = self.good_receipt(restored=False)
+        node["initial_backfill_ingest"]["public_run_id"] = "wrong"
+        node["initial_backfill_ingest"]["artifact_name"] = "wrong"
+        result = mod.evaluate(node, require_checkpoint_restored=False)
+        self.assertFalse(result["accepted"])
+        self.assertFalse(result["checks"]["initial_backfill_public_run"])
+        self.assertFalse(result["checks"]["initial_backfill_artifact"])
+
+    def test_legacy_v1_requires_explicit_opt_in(self):
+        node = self.good_receipt(restored=False)
+        node["schema"] = mod.LEGACY_SCHEMA
+        node.pop("initial_backfill_ingest")
+        rejected = mod.evaluate(node, require_checkpoint_restored=False)
+        self.assertFalse(rejected["accepted"])
+        self.assertFalse(rejected["checks"]["schema"])
+
+        accepted = mod.evaluate(
+            node,
+            require_checkpoint_restored=False,
+            allow_legacy_v1=True,
+        )
+        self.assertTrue(accepted["accepted"])
+        self.assertEqual(accepted["receipt_contract"], "legacy_v1")
 
     def test_rejects_missing_cache_persistence(self):
         node = self.good_receipt(restored=True)

@@ -4,9 +4,13 @@ import argparse
 import json
 from pathlib import Path
 
-SCHEMA = "mmibkr.selected_runtime_cloud_session_receipt.v1"
+LEGACY_SCHEMA = "mmibkr.selected_runtime_cloud_session_receipt.v1"
+SCHEMA = "mmibkr.selected_runtime_cloud_session_receipt.v2"
 CANONICAL_PRIVATE_SHA = "d81df85788ebb6be6d4d69b9b9a537be96f16507"
 EXPECTED_RUNTIME_COUNT = 3
+EXPECTED_INITIAL_BACKFILL_RUN_ID = "35407829303"
+EXPECTED_INITIAL_BACKFILL_ARTIFACT = "ibkr-cloudflare-readonly-b1-35407829303"
+CHECKPOINT_CACHE_PREFIX = "mmibkr-selected-runtime-cloud-checkpoint-v1-"
 
 
 def is_hex(value: object, length: int) -> bool:
@@ -33,6 +37,7 @@ def evaluate(
     expected_private_sha: str = CANONICAL_PRIVATE_SHA,
     expected_runtime_count: int = EXPECTED_RUNTIME_COUNT,
     expected_public_sha: str | None = None,
+    allow_legacy_v1: bool = False,
 ) -> dict:
     publish = node.get("operator_snapshot_publish")
     if not isinstance(publish, dict):
@@ -51,9 +56,17 @@ def evaluate(
 
     stream_publish_count = node.get("operator_snapshot_stream_publish_count")
     stream_attempt_count = node.get("operator_snapshot_stream_attempt_count")
+    backfill = node.get("initial_backfill_ingest")
+    if not isinstance(backfill, dict):
+        backfill = {}
+    receipt_schema = str(node.get("schema") or "")
+    schema_ok = receipt_schema == SCHEMA or (
+        allow_legacy_v1 and receipt_schema == LEGACY_SCHEMA
+    )
+    strict_backfill = receipt_schema == SCHEMA
 
     checks = {
-        "schema": node.get("schema") == SCHEMA,
+        "schema": schema_ok,
         "session_accepted": node.get("session_accepted") is True and node.get("ok") is True,
         "public_head_reported": is_hex(node.get("public_head"), 40),
         "private_head": str(node.get("private_head") or "").lower() == expected_private_sha.lower(),
@@ -75,6 +88,33 @@ def evaluate(
         "checkpoint_cache_ready": node.get("checkpoint_cache_ready") is True,
         "checkpoint_cache_saved": node.get("checkpoint_cache_saved") is True,
     }
+    if strict_backfill:
+        checks.update({
+            "initial_backfill_ready": backfill.get("ready") is True,
+            "initial_backfill_public_run": (
+                str(backfill.get("public_run_id") or "") == EXPECTED_INITIAL_BACKFILL_RUN_ID
+            ),
+            "initial_backfill_artifact": (
+                backfill.get("artifact_name") == EXPECTED_INITIAL_BACKFILL_ARTIFACT
+            ),
+            "initial_backfill_no_broker_action": backfill.get("broker_action") is False,
+            "initial_backfill_no_execution_mutation": (
+                backfill.get("runtime_execution_contract_mutated") is False
+            ),
+            "initial_backfill_live_disabled": backfill.get("live_execution_allowed") is False,
+            "initial_backfill_preowner_checkpoint_saved": (
+                backfill.get("preowner_checkpoint_saved") is True
+            ),
+            "initial_backfill_preowner_checkpoint_sha256": (
+                is_sha256(backfill.get("preowner_checkpoint_sha256"))
+            ),
+            "initial_backfill_preowner_checkpoint_cache_key": (
+                isinstance(backfill.get("preowner_checkpoint_cache_key"), str)
+                and backfill.get("preowner_checkpoint_cache_key").startswith(
+                    CHECKPOINT_CACHE_PREFIX
+                )
+            ),
+        })
     if expected_public_sha is not None:
         checks["public_head_expected"] = (
             str(node.get("public_head") or "").lower() == expected_public_sha.lower()
@@ -98,6 +138,7 @@ def evaluate(
                 require_checkpoint_restored=False,
                 expected_private_sha=expected_private_sha,
                 expected_runtime_count=expected_runtime_count,
+                allow_legacy_v1=allow_legacy_v1,
             )
             checks["predecessor_receipt_accepted"] = previous_acceptance["accepted"]
             checks["predecessor_checkpoint_identity"] = (
@@ -118,6 +159,7 @@ def evaluate(
         "private_head": node.get("private_head"),
         "expected_private_head": expected_private_sha,
         "expected_runtime_count": expected_runtime_count,
+        "receipt_contract": "v2_backfill_checkpoint_strict" if receipt_schema == SCHEMA else "legacy_v1",
         "operator_snapshot_stream_publish_count": stream_publish_count,
         "operator_snapshot_stream_attempt_count": stream_attempt_count,
         "operator_snapshot_publish": {
@@ -143,6 +185,11 @@ def main() -> int:
     parser.add_argument("--expected-public-sha")
     parser.add_argument("--expected-private-sha", default=CANONICAL_PRIVATE_SHA)
     parser.add_argument("--expected-runtime-count", type=int, default=EXPECTED_RUNTIME_COUNT)
+    parser.add_argument(
+        "--allow-legacy-v1",
+        action="store_true",
+        help="Allow historical v1 receipts for explicit legacy inspection only.",
+    )
     args = parser.parse_args()
 
     previous = load_receipt(args.previous_receipt) if args.previous_receipt else None
@@ -155,6 +202,7 @@ def main() -> int:
         expected_private_sha=args.expected_private_sha,
         expected_runtime_count=args.expected_runtime_count,
         expected_public_sha=args.expected_public_sha,
+        allow_legacy_v1=args.allow_legacy_v1,
     )
     print("MMIBKR_CLOUD_RECEIPT_ACCEPTANCE=" + json.dumps(result, sort_keys=True))
     return 0 if result["accepted"] else 1
