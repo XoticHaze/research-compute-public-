@@ -18,7 +18,7 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  PRIVATE_SOURCE_SHA: 96a10987d82b53da6e0ebdf838aae4cd8f488cac
+  PRIVATE_SOURCE_SHA: ca0adfa9f07d85b500594bbd334bb002e20b1eb6
 
 jobs:
   exact-private-ui-build:
@@ -226,6 +226,21 @@ jobs:
           print('MM_UI_PRIVATE_SOURCE_TOKEN_EXPOSED=0')
           PY
 
+      - name: Validate operator snapshot runtime integration in exact bot image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build \
+            -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" \
+            --target bot \
+            -t "mmibkr-operator-console-proof:${GITHUB_RUN_ID}" \
+            "$PRIVATE_SOURCE_ROOT" >/dev/null
+          docker run --rm \
+            "mmibkr-operator-console-proof:${GITHUB_RUN_ID}" \
+            python -m unittest -v \
+              tests.test_cloud_operator_snapshot_v1 \
+              tests.test_selected_runtime_cloud_cycle_v1
+          echo 'MMIBKR_OPERATOR_SNAPSHOT_BACKEND_TESTS=PASS'
       - name: Validate Bot Console contract and Vite production build
         shell: bash
         run: |
@@ -260,6 +275,7 @@ jobs:
               'source_archive_sha256': os.environ['PRIVATE_ARCHIVE_SHA256'],
               'source_archive_bytes': int(os.environ['PRIVATE_ARCHIVE_BYTES']),
               'bot_console_acceptance': True,
+              'operator_snapshot_backend_tests': True,
               'vite_production_build': True,
               'dist_index_present': True,
               'dist_file_count': len(files),
@@ -278,7 +294,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf             "$RUNNER_TEMP/mm-ui-private-source"             "$RUNNER_TEMP/mm-ui-private-source.tar.gz"
+          docker image rm "mmibkr-operator-console-proof:${GITHUB_RUN_ID}" >/dev/null 2>&1 || true
+          rm -rf \
+            "$RUNNER_TEMP/mm-ui-private-source" \
+            "$RUNNER_TEMP/mm-ui-private-source.tar.gz"
           test ! -e "$RUNNER_TEMP/mm-ui-private-source"
           test ! -e "$RUNNER_TEMP/mm-ui-private-source.tar.gz"
           echo 'MM_UI_PRIVATE_SOURCE_DESTROYED=1'
