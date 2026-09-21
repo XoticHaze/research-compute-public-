@@ -196,6 +196,43 @@ jobs:
             --config cloudflare/operator-console/wrangler.jsonc
           echo 'MMIBKR_OPERATOR_CONSOLE_WORKER_DEPLOYED=1'
 
+      - name: Prove operator-console health before Access gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, time
+          from urllib.request import Request, urlopen
+
+          base = os.environ['OPERATOR_CONSOLE_URL'].rstrip('/')
+          health = None
+          for _ in range(24):
+              try:
+                  req = Request(
+                      base + '/healthz',
+                      headers={
+                          'Accept':'application/json',
+                          'User-Agent':'mmibkr-operator-console-pre-access-health-r1',
+                      },
+                  )
+                  with urlopen(req, timeout=10) as response:
+                      health = json.load(response)
+                  if (
+                      health.get('ok') is True
+                      and health.get('service') == 'mmibkr-operator-console'
+                  ):
+                      break
+              except Exception:
+                  health = None
+              time.sleep(5)
+
+          if not health:
+              raise SystemExit('operator-console pre-Access health did not converge')
+          if health.get('static_assets_configured') is not True:
+              raise SystemExit('operator-console static assets binding missing')
+          print('MMIBKR_OPERATOR_CONSOLE_PRE_ACCESS_HEALTH=READY')
+          PY
+
       - name: Reconcile exact-email Cloudflare Access application
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -395,36 +432,25 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, os, time
+          import os
           from urllib.error import HTTPError
-          from urllib.request import Request, urlopen
+          from urllib.request import HTTPRedirectHandler, Request, build_opener
 
           base = os.environ['OPERATOR_CONSOLE_URL'].rstrip('/')
-          health = None
-          for _ in range(36):
-              try:
-                  req = Request(base + '/healthz', headers={'Accept':'application/json','User-Agent':'mmibkr-operator-console-deploy-r1'})
-                  with urlopen(req, timeout=10) as response:
-                      health = json.load(response)
-                  if health.get('ok') is True and health.get('service') == 'mmibkr-operator-console':
-                      break
-              except Exception:
-                  health = None
-              time.sleep(5)
-          if not health:
-              raise SystemExit('operator-console health did not converge')
-          if health.get('static_assets_configured') is not True:
-              raise SystemExit('operator-console static assets binding missing')
-
-          from urllib.request import HTTPRedirectHandler, build_opener
 
           class NoRedirect(HTTPRedirectHandler):
               def redirect_request(self, req, fp, code, msg, headers, newurl):
                   return None
 
           opener = build_opener(NoRedirect)
-          for path in ('/', '/api/operator-snapshot'):
-              req = Request(base + path, headers={'Accept':'application/json','User-Agent':'mmibkr-operator-console-deny-proof'})
+          for path in ('/', '/api/operator-snapshot', '/healthz'):
+              req = Request(
+                  base + path,
+                  headers={
+                      'Accept':'application/json',
+                      'User-Agent':'mmibkr-operator-console-deny-proof',
+                  },
+              )
               location = ''
               try:
                   with opener.open(req, timeout=10) as response:
@@ -433,15 +459,31 @@ jobs:
               except HTTPError as exc:
                   status = int(exc.code)
                   location = str(exc.headers.get('location') or '')
-              if status == 200:
-                  raise SystemExit(f'unauthenticated operator-console path became public: {path}:{status}')
-              if status not in {302, 303, 307, 403}:
-                  raise SystemExit(f'unauthenticated operator-console path unexpected status: {path}:{status}')
-              if status in {302, 303, 307} and 'cloudflareaccess.com' not in location:
-                  raise SystemExit(f'unauthenticated redirect is not Cloudflare Access: {path}:{location}')
 
-          print('MMIBKR_OPERATOR_CONSOLE_HEALTH=READY')
-          print('MMIBKR_OPERATOR_CONSOLE_ACCESS_CONFIGURED=' + ('1' if health.get('access_configured') is True else '0'))
+              if status == 200:
+                  raise SystemExit(
+                      f'unauthenticated operator-console path became public: {path}:{status}'
+                  )
+              if status not in {302, 303, 307, 403}:
+                  raise SystemExit(
+                      f'unauthenticated operator-console path unexpected status: {path}:{status}'
+                  )
+              if (
+                  status in {302, 303, 307}
+                  and 'cloudflareaccess.com' not in location
+              ):
+                  raise SystemExit(
+                      f'unauthenticated redirect is not Cloudflare Access: {path}:{location}'
+                  )
+
+          configured = bool(
+              os.environ.get('MMIBKR_ACCESS_AUD')
+              and os.environ.get('MMIBKR_ACCESS_TEAM_DOMAIN')
+          )
+          print(
+              'MMIBKR_OPERATOR_CONSOLE_ACCESS_CONFIGURED='
+              + ('1' if configured else '0')
+          )
           print('MMIBKR_OPERATOR_CONSOLE_UNAUTHENTICATED_DENIED=1')
           PY
 
