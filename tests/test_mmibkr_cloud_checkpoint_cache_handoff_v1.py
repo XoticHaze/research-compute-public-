@@ -31,6 +31,8 @@ class CloudCheckpointCacheHandoffTests(unittest.TestCase):
         self.assertIn("actions/cache/save@", section)
         self.assertIn("steps.checkpoint.outputs.ready == 'true'", section)
         self.assertIn("CHECKPOINT_CACHE_PREFIX", text)
+        self.assertIn("Confirm sanitized successor checkpoint cache saved", text)
+        self.assertIn("MMIBKR_CHECKPOINT_CACHE_SAVED=1", text)
 
     def test_private_runtime_cleanup_still_destroys_checkpoint(self):
         text = WORKFLOW.read_text(encoding="utf-8")
