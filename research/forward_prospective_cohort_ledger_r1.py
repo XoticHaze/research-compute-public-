@@ -15,6 +15,7 @@ import hashlib
 import json
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from time import sleep
 from typing import Any, Callable
 
 import pandas as pd
@@ -154,16 +155,29 @@ def _normalize_series(series: pd.Series) -> pd.Series:
 def _download_close(symbol: str, start: date, end: date) -> pd.Series:
     import yfinance as yf
 
-    frame = yf.download(
-        symbol,
-        start=start.isoformat(),
-        end=(end + timedelta(days=1)).isoformat(),
-        auto_adjust=True,
-        progress=False,
-        threads=False,
-    )
+    frame = pd.DataFrame()
+    failures: list[str] = []
+    for attempt, delay_seconds in enumerate((0, 3, 9), 1):
+        if delay_seconds:
+            sleep(delay_seconds)
+        try:
+            frame = yf.download(
+                symbol,
+                start=start.isoformat(),
+                end=(end + timedelta(days=1)).isoformat(),
+                auto_adjust=True,
+                progress=False,
+                threads=False,
+            )
+        except Exception as exc:
+            failures.append(f"attempt={attempt}:{type(exc).__name__}:{exc}")
+            frame = pd.DataFrame()
+        if not frame.empty:
+            break
+        failures.append(f"attempt={attempt}:empty")
     if frame.empty:
-        raise RuntimeError(f"no market data symbol={symbol}")
+        detail = " | ".join(failures[-6:])
+        raise RuntimeError(f"no market data symbol={symbol} after bounded retries; {detail}")
     close = frame["Close"]
     if isinstance(close, pd.DataFrame):
         if close.shape[1] != 1:
