@@ -284,7 +284,25 @@ export class OperatorState {
         },
       };
       await this.ctx.storage.put('latest', record);
-      return json({ ok: true, stored_at_utc: record.stored_at_utc }, 201);
+      const readback = await this.ctx.storage.get('latest');
+      const readbackVerified = Boolean(
+        readback
+        && readback.schema === record.schema
+        && readback.stored_at_utc === record.stored_at_utc
+        && readback.snapshot?.schema === snapshot.schema
+        && Array.isArray(readback.snapshot?.runtimes)
+        && readback.snapshot.runtimes.length === snapshot.runtimes.length
+        && Array.isArray(readback.snapshot?.positions)
+        && readback.snapshot.positions.length === snapshot.positions.length
+      );
+      if (!readbackVerified) {
+        return json({ error: 'operator_snapshot_readback_failed' }, 502);
+      }
+      return json({
+        ok: true,
+        stored_at_utc: record.stored_at_utc,
+        durable_readback_verified: true,
+      }, 201);
     }
 
     if (request.method === 'GET' && url.pathname === '/latest') {
@@ -354,6 +372,9 @@ export default {
       }));
       if (!stored.ok) return json({ error: 'snapshot_store_failed' }, 502);
       const receipt = await stored.json();
+      if (receipt.durable_readback_verified !== true) {
+        return json({ error: 'snapshot_readback_unverified' }, 502);
+      }
       return json({
         ok: true,
         schema: 'mmibkr.operator_console_publish_receipt.v1',
@@ -361,6 +382,7 @@ export default {
         source_sha: snapshot?.runtime?.source_sha || null,
         runtime_count: snapshot.runtimes.length,
         positions_count: snapshot.positions.length,
+        durable_readback_verified: true,
         credentials_included: false,
         tokens_included: false,
         broker_mutation_authority: false,
