@@ -56,6 +56,7 @@ env:
   RECEIPT_ROOT: rendezvous/receipts
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
   OPERATOR_CONSOLE_URL: https://mmibkr-operator-console.slenderiq.workers.dev
+  MAX_CONSECUTIVE_OWNER_FAILURES: '4'
   INITIAL_BACKFILL_RUN_ID: '35407829303'
   INITIAL_BACKFILL_ARTIFACT: ibkr-cloudflare-readonly-b1-35407829303
 
@@ -446,7 +447,7 @@ jobs:
           }
           trap cleanup_owner EXIT
 
-          docker run             --name "$owner_container"             -d             -e IBKR_REMOTE_EXCHANGE_TOKEN             -e ACTIONS_ID_TOKEN_REQUEST_URL             -e ACTIONS_ID_TOKEN_REQUEST_TOKEN             -e ENABLE_LIVE_TRADING=0             -v "$RUNNER_TEMP/mmibkr-data:/app/data"             -v "$RUNNER_TEMP/mmibkr-source:/private-source:ro"             "mmibkr-cloud:${GITHUB_RUN_ID}"             python scripts/operator/selected_runtime_cloud_daemon_v1.py               --repo-root /app               --data-root /app/data               --source-materialization /private-source/source-materialization.json               --session-seconds "$SESSION_SECONDS"               --max-cycles "$MAX_CYCLES"               --output /app/data/strategy_runtime/selected_runtime_cloud_daemon_v1/session.json             >/dev/null
+          docker run             --name "$owner_container"             -d             -e IBKR_REMOTE_EXCHANGE_TOKEN             -e ACTIONS_ID_TOKEN_REQUEST_URL             -e ACTIONS_ID_TOKEN_REQUEST_TOKEN             -e ENABLE_LIVE_TRADING=0             -v "$RUNNER_TEMP/mmibkr-data:/app/data"             -v "$RUNNER_TEMP/mmibkr-source:/private-source:ro"             "mmibkr-cloud:${GITHUB_RUN_ID}"             python scripts/operator/selected_runtime_cloud_daemon_v1.py               --repo-root /app               --data-root /app/data               --source-materialization /private-source/source-materialization.json               --session-seconds "$SESSION_SECONDS"               --max-consecutive-failures "$MAX_CONSECUTIVE_OWNER_FAILURES"               --max-cycles "$MAX_CYCLES"               --output /app/data/strategy_runtime/selected_runtime_cloud_daemon_v1/session.json             >/dev/null
 
           docker logs -f "$owner_container" &
           log_pid=$!
