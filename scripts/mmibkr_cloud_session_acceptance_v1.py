@@ -20,6 +20,7 @@ def evaluate(
     node: dict,
     *,
     require_checkpoint_restored: bool,
+    previous_receipt: dict | None = None,
     expected_private_sha: str = CANONICAL_PRIVATE_SHA,
     expected_runtime_count: int = EXPECTED_RUNTIME_COUNT,
 ) -> dict:
@@ -57,6 +58,26 @@ def evaluate(
     }
     if require_checkpoint_restored:
         checks["checkpoint_restored"] = node.get("checkpoint_restored") is True
+        checks["checkpoint_restored_identity_reported"] = (
+            isinstance(node.get("checkpoint_restored_sha256"), str)
+            and len(node.get("checkpoint_restored_sha256")) == 64
+            and isinstance(node.get("checkpoint_restored_cache_key"), str)
+            and bool(node.get("checkpoint_restored_cache_key"))
+        )
+        checks["checkpoint_saved_identity_reported"] = (
+            isinstance(node.get("checkpoint_cache_sha256"), str)
+            and len(node.get("checkpoint_cache_sha256")) == 64
+            and isinstance(node.get("checkpoint_cache_key"), str)
+            and bool(node.get("checkpoint_cache_key"))
+        )
+        if previous_receipt is not None:
+            checks["predecessor_checkpoint_identity"] = (
+                previous_receipt.get("checkpoint_cache_saved") is True
+                and node.get("checkpoint_restored_sha256")
+                    == previous_receipt.get("checkpoint_cache_sha256")
+                and node.get("checkpoint_restored_cache_key")
+                    == previous_receipt.get("checkpoint_cache_key")
+            )
 
     accepted = all(checks.values())
     return {
@@ -86,13 +107,18 @@ def main() -> int:
         choices=("first-post-fix", "steady-state"),
         default="first-post-fix",
     )
+    parser.add_argument("--previous-receipt", type=Path)
     parser.add_argument("--expected-private-sha", default=CANONICAL_PRIVATE_SHA)
     parser.add_argument("--expected-runtime-count", type=int, default=EXPECTED_RUNTIME_COUNT)
     args = parser.parse_args()
 
+    previous = load_receipt(args.previous_receipt) if args.previous_receipt else None
+    if args.mode == "steady-state" and previous is None:
+        raise SystemExit("--previous-receipt is required in steady-state mode")
     result = evaluate(
         load_receipt(args.receipt),
         require_checkpoint_restored=args.mode == "steady-state",
+        previous_receipt=previous,
         expected_private_sha=args.expected_private_sha,
         expected_runtime_count=args.expected_runtime_count,
     )
