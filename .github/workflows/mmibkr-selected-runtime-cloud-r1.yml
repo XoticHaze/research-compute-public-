@@ -311,6 +311,10 @@ jobs:
           path: ${{ runner.temp }}/mmibkr-checkpoint
           key: ${{ env.CHECKPOINT_CACHE_PREFIX }}${{ github.run_id }}-${{ env.PRIVATE_HEAD }}
 
+      - name: Confirm sanitized successor checkpoint cache saved
+        if: ${{ steps.checkpoint.outputs.ready == 'true' }}
+        run: echo 'MMIBKR_CHECKPOINT_CACHE_SAVED=1'
+
       - name: Enforce successful selected-runtime cloud session
         run: |
           set -euo pipefail
