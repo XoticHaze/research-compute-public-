@@ -31,6 +31,17 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
             text,
         )
 
+    def test_publisher_path_is_specific_bypass_with_worker_oidc_gate(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("MM-IBKR Operator Snapshot Publisher", text)
+        self.assertIn("MM-IBKR operator snapshot OIDC ingress", text)
+        self.assertIn("publisher_domain = hostname + '/v1/operator-snapshot'", text)
+        self.assertIn("'decision': 'bypass'", text)
+        self.assertIn("'include': [{'everyone': {}}]", text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_PUBLISHER_INGRESS=OIDC_WORKER_GATED", text)
+        self.assertIn("publisher_status != 401", text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_PUBLISHER_UNAUTHENTICATED_DENIED=1", text)
+
     def test_worker_verifier_secrets_are_bound_after_access_app_exists(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("ACCESS_TEAM_DOMAIN", text)
