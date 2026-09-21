@@ -76,6 +76,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("61f0842b2de8709509453cb390310d246ea39ad3", text)
         self.assertIn("1ecb1de8dda1c8797b6fa1af6dba6f6e1765438e", text)
         self.assertIn("5aeb0370a18c4c941852c7454706ba9ffa28da68", text)
+        self.assertIn("d81df85788ebb6be6d4d69b9b9a537be96f16507", text)
         self.assertIn("/v1/source-vault/private-archive/", text)
         self.assertIn("fleet_authority_oidc_private_archive_stream", text)
         self.assertIn("redirect: 'follow'", text)
@@ -96,12 +97,23 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("UI_BUILD_PRIVATE_ARCHIVE_EXPIRES_AT", text)
         self.assertIn("2026-09-23T12:00:00Z", text)
         self.assertIn("isPrivateSourceStreamApproved", text)
-        self.assertIn("uiBuildPathAllowed", text)
+        self.assertIn("privateArchivePathAllowed", text)
         self.assertIn("/v1/source-vault/private-archive/attest", text)
         self.assertIn(
             "/^\\/v1\\/source-vault\\/private-archive\\/[0-9a-f]{40}$/",
             text,
         )
+
+    def test_runtime_bootstrap_identity_is_private_archive_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("SOURCE_VAULT_BOOTSTRAP_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-source-vault-bootstrap-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn("matchedBootstrap", text)
+        self.assertIn("privateArchivePathAllowed", text)
+        self.assertIn("(matchedBootstrap && privateArchivePathAllowed)", text)
 
     def test_stream_attestation_is_bound_to_run_stream_sha_and_size(self):
         text = SOURCE.read_text(encoding="utf-8")

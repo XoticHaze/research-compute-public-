@@ -27,6 +27,13 @@ const UI_BUILD_VALIDATION_IDENTITY = {
   workflow_ref:
     'XoticHaze/research-compute-public-/.github/workflows/mm-ui-react-exact-build-r1.yml@refs/heads/main',
 };
+
+const SOURCE_VAULT_BOOTSTRAP_IDENTITY = {
+  repository: 'XoticHaze/mm-ibkr-runtime',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/mm-ibkr-runtime/.github/workflows/mmibkr-source-vault-bootstrap-r1.yml@refs/heads/main',
+};
 const UI_BUILD_PRIVATE_ARCHIVE_SOURCE =
   'ca0adfa9f07d85b500594bbd334bb002e20b1eb6';
 const UI_BUILD_PRIVATE_ARCHIVE_EXPIRES_AT =
@@ -70,6 +77,7 @@ const APPROVED_PRIVATE_SOURCE_STREAMS = new Set([
   '61f0842b2de8709509453cb390310d246ea39ad3',
   '1ecb1de8dda1c8797b6fa1af6dba6f6e1765438e',
   '5aeb0370a18c4c941852c7454706ba9ffa28da68',
+  'd81df85788ebb6be6d4d69b9b9a537be96f16507',
 ]);
 
 function matchesIdentity(identity, expected) {
@@ -229,12 +237,17 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
       (identity) => matchesIdentity(claims, identity),
     );
     const matchedUiBuild = matchesIdentity(claims, UI_BUILD_VALIDATION_IDENTITY);
-    const uiBuildPathAllowed = (
+    const matchedBootstrap = matchesIdentity(claims, SOURCE_VAULT_BOOTSTRAP_IDENTITY);
+    const privateArchivePathAllowed = (
       /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname)
       || pathname === '/v1/source-vault/private-archive/attest'
     );
     if (
-      !(matchedRuntime || (matchedUiBuild && uiBuildPathAllowed))
+      !(
+        matchedRuntime
+        || (matchedUiBuild && privateArchivePathAllowed)
+        || (matchedBootstrap && privateArchivePathAllowed)
+      )
       || claims.repository_visibility !== 'public'
       || !ALLOWED_PUBLIC_EVENTS.has(claims.event_name)
     ) throw new Error('oidc_consumer_identity_rejected');
