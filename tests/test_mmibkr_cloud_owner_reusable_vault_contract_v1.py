@@ -62,6 +62,17 @@ class CloudOwnerReusableVaultContractTests(unittest.TestCase):
         self.assertNotIn("'source_ref': os.environ['REQUEST_SOURCE_REF']", successor)
         self.assertIn("'session_seconds': os.environ['SESSION_SECONDS']", successor)
 
+    def test_owner_allows_one_extra_nonexecuting_boundary_failure(self):
+        text = (
+            ROOT / ".github/workflows/mmibkr-selected-runtime-cloud-r1.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("MAX_CONSECUTIVE_OWNER_FAILURES: '4'", text)
+        self.assertIn(
+            '--max-consecutive-failures "$MAX_CONSECUTIVE_OWNER_FAILURES"',
+            text,
+        )
+        self.assertIn("ENABLE_LIVE_TRADING=0", text)
+
 
 if __name__ == "__main__":
     unittest.main()
