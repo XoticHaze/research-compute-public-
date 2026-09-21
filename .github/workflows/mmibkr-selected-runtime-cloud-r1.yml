@@ -36,6 +36,7 @@ on:
       - scripts/mmibkr_source_vault_consumer_v1.py
       - tests/test_mmibkr_source_vault_consumer_v1.py
       - tests/test_mmibkr_source_vault_fetch_retry_v1.py
+      - tests/test_mmibkr_cloud_checkpoint_cache_handoff_v1.py
 
 permissions:
   contents: write
@@ -70,11 +71,13 @@ jobs:
             scripts/mmibkr_source_vault_consumer_v1.py \
             tests/test_mmibkr_source_vault_consumer_v1.py \
             tests/test_mmibkr_source_vault_fetch_retry_v1.py \
-            tests/test_mmibkr_cloud_owner_reusable_vault_contract_v1.py
+            tests/test_mmibkr_cloud_owner_reusable_vault_contract_v1.py \
+            tests/test_mmibkr_cloud_checkpoint_cache_handoff_v1.py
           python -m unittest -v \
             tests.test_mmibkr_source_vault_consumer_v1 \
             tests.test_mmibkr_source_vault_fetch_retry_v1 \
-            tests.test_mmibkr_cloud_owner_reusable_vault_contract_v1
+            tests.test_mmibkr_cloud_owner_reusable_vault_contract_v1 \
+            tests.test_mmibkr_cloud_checkpoint_cache_handoff_v1
 
   runtime:
     if: ${{ github.event_name != 'pull_request' }}
@@ -269,16 +272,31 @@ jobs:
         shell: bash
         run: |
           set +e
-          rm -f "$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+          uid="$(id -u)"
+          gid="$(id -g)"
+          checkpoint="$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+          rm -f "$checkpoint"
           docker run --rm             -v "$RUNNER_TEMP/mmibkr-data:/app/data"             -v "$RUNNER_TEMP/mmibkr-checkpoint:/checkpoint"             "mmibkr-cloud:${GITHUB_RUN_ID}"             python scripts/operator/runtime_market_data_cache_checkpoint_v1.py               --repo-root /app               --data-root /app/data               --archive-output /checkpoint/latest.tgz               > "$RUNNER_TEMP/checkpoint-build.log" 2>&1
           code=$?
           cat "$RUNNER_TEMP/checkpoint-build.log"
-          if [ "$code" -eq 0 ] && [ -s "$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz" ]; then
-            echo 'ready=true' >> "$GITHUB_OUTPUT"
-            sha256sum "$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+          if [ "$code" -eq 0 ] && [ -s "$checkpoint" ]; then
+            docker run --rm \
+              -v "$RUNNER_TEMP/mmibkr-checkpoint:/checkpoint" \
+              "mmibkr-cloud:${GITHUB_RUN_ID}" \
+              sh -lc "chown ${uid}:${gid} /checkpoint/latest.tgz && chmod 600 /checkpoint/latest.tgz"
+            ownership_code=$?
+            if [ "$ownership_code" -eq 0 ] && [ -r "$checkpoint" ]; then
+              echo 'ready=true' >> "$GITHUB_OUTPUT"
+              sha256sum "$checkpoint"
+              echo 'MMIBKR_CHECKPOINT_CACHE_READY=1'
+            else
+              echo 'ready=false' >> "$GITHUB_OUTPUT"
+              rm -f "$checkpoint"
+              echo 'Checkpoint ownership normalization failed; successor remains able to self-heal from broker history.'
+            fi
           else
             echo 'ready=false' >> "$GITHUB_OUTPUT"
-            rm -f "$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+            rm -f "$checkpoint"
             echo 'Checkpoint unavailable; successor remains able to self-heal from broker history.'
           fi
           exit 0
