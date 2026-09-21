@@ -270,6 +270,9 @@ jobs:
           hostname = 'mmibkr-operator-console.slenderiq.workers.dev'
           app_name = 'MM-IBKR Operator Console'
           policy_name = 'MM-IBKR approved operators'
+          publisher_app_name = 'MM-IBKR Operator Snapshot Publisher'
+          publisher_policy_name = 'MM-IBKR operator snapshot OIDC ingress'
+          publisher_domain = hostname + '/v1/operator-snapshot'
 
           emails = []
           for raw in os.environ['ACCESS_ALLOWED_EMAILS'].split(','):
@@ -363,6 +366,36 @@ jobs:
           if not policy_id:
               raise SystemExit('Cloudflare Access policy id missing')
 
+          existing_publisher_policy = next(
+              (
+                  row for row in policies
+                  if isinstance(row, dict)
+                  and row.get('name') == publisher_policy_name
+              ),
+              None,
+          )
+          publisher_policy_body = {
+              'name': publisher_policy_name,
+              'decision': 'bypass',
+              'include': [{'everyone': {}}],
+          }
+          if existing_publisher_policy:
+              publisher_policy_id = str(existing_publisher_policy.get('id') or '')
+              publisher_policy = api(
+                  'PUT',
+                  f'/accounts/{account}/access/policies/{publisher_policy_id}',
+                  publisher_policy_body,
+              )
+          else:
+              publisher_policy = api(
+                  'POST',
+                  f'/accounts/{account}/access/policies',
+                  publisher_policy_body,
+              )
+          publisher_policy_id = str((publisher_policy or {}).get('id') or '')
+          if not publisher_policy_id:
+              raise SystemExit('Cloudflare publisher bypass policy id missing')
+
           apps = api(
               'GET',
               f'/accounts/{account}/access/apps?'
@@ -413,6 +446,46 @@ jobs:
           if not app_id or not audience:
               raise SystemExit('Cloudflare Access app id/audience missing')
 
+          existing_publisher_app = next(
+              (
+                  row for row in apps
+                  if isinstance(row, dict)
+                  and (
+                      row.get('name') == publisher_app_name
+                      or row.get('domain') == publisher_domain
+                  )
+              ),
+              None,
+          )
+          publisher_app_body = {
+              'name': publisher_app_name,
+              'domain': publisher_domain,
+              'type': 'self_hosted',
+              'session_duration': '24h',
+              'app_launcher_visible': False,
+              'policies': [{
+                  'id': publisher_policy_id,
+                  'account_id': account,
+                  'precedence': 1,
+              }],
+          }
+          if existing_publisher_app:
+              publisher_app_id = str(existing_publisher_app.get('id') or '')
+              publisher_app = api(
+                  'PUT',
+                  f'/accounts/{account}/access/apps/{publisher_app_id}',
+                  publisher_app_body,
+              )
+          else:
+              publisher_app = api(
+                  'POST',
+                  f'/accounts/{account}/access/apps',
+                  publisher_app_body,
+              )
+          publisher_app_id = str((publisher_app or {}).get('id') or '')
+          if not publisher_app_id:
+              raise SystemExit('Cloudflare publisher path app id missing')
+
           env_path = Path(os.environ['GITHUB_ENV'])
           with env_path.open('a', encoding='utf-8') as fh:
               fh.write('MMIBKR_ACCESS_TEAM_DOMAIN=' + auth_domain + '\n')
@@ -421,6 +494,8 @@ jobs:
           print('MMIBKR_OPERATOR_CONSOLE_ACCESS_APP_ID=' + app_id)
           print('MMIBKR_OPERATOR_CONSOLE_ACCESS_POLICY_ID=' + policy_id)
           print('MMIBKR_OPERATOR_CONSOLE_ACCESS_EMAIL_COUNT=' + str(len(emails)))
+          print('MMIBKR_OPERATOR_CONSOLE_PUBLISHER_INGRESS=OIDC_WORKER_GATED')
+          print('MMIBKR_OPERATOR_CONSOLE_PUBLISHER_PATH=/v1/operator-snapshot')
           PY
 
       - name: Bind Worker defense-in-depth Access verifier
@@ -493,11 +568,33 @@ jobs:
               os.environ.get('MMIBKR_ACCESS_AUD')
               and os.environ.get('MMIBKR_ACCESS_TEAM_DOMAIN')
           )
+          publisher_req = Request(
+              base + '/v1/operator-snapshot',
+              data=b'{}',
+              method='POST',
+              headers={
+                  'Content-Type':'application/json',
+                  'Accept':'application/json',
+                  'User-Agent':'mmibkr-operator-console-publisher-deny-proof',
+              },
+          )
+          try:
+              with opener.open(publisher_req, timeout=10) as response:
+                  publisher_status = int(response.status)
+          except HTTPError as exc:
+              publisher_status = int(exc.code)
+          if publisher_status != 401:
+              raise SystemExit(
+                  'unauthenticated publisher path did not reach Worker OIDC gate: '
+                  + str(publisher_status)
+              )
+
           print(
               'MMIBKR_OPERATOR_CONSOLE_ACCESS_CONFIGURED='
               + ('1' if configured else '0')
           )
           print('MMIBKR_OPERATOR_CONSOLE_UNAUTHENTICATED_DENIED=1')
+          print('MMIBKR_OPERATOR_CONSOLE_PUBLISHER_UNAUTHENTICATED_DENIED=1')
           PY
 
       - name: Destroy private deployment source
