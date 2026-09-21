@@ -262,15 +262,24 @@ jobs:
 
       - name: Restore canonical market-data and terminal-continuity state
         id: restore_checkpoint
+        env:
+          RESTORED_CACHE_KEY: ${{ steps.restore-cache.outputs.cache-matched-key }}
         run: |
           set -euo pipefail
           checkpoint="$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
           if [ -s "$checkpoint" ]; then
-            docker run --rm               -v "$RUNNER_TEMP/mmibkr-data:/app/data"               -v "$RUNNER_TEMP/mmibkr-checkpoint:/checkpoint:ro"               "mmibkr-cloud:${GITHUB_RUN_ID}"               python scripts/operator/runtime_market_data_cache_checkpoint_v1.py                 --repo-root /app                 --restore-archive /checkpoint/latest.tgz
+            restored_sha256="$(sha256sum "$checkpoint" | awk '{print $1}')"
             echo 'restored=true' >> "$GITHUB_OUTPUT"
+            echo "restored_sha256=$restored_sha256" >> "$GITHUB_OUTPUT"
+            echo "restored_cache_key=$RESTORED_CACHE_KEY" >> "$GITHUB_OUTPUT"
+            docker run --rm               -v "$RUNNER_TEMP/mmibkr-data:/app/data"               -v "$RUNNER_TEMP/mmibkr-checkpoint:/checkpoint:ro"               "mmibkr-cloud:${GITHUB_RUN_ID}"               python scripts/operator/runtime_market_data_cache_checkpoint_v1.py                 --repo-root /app                 --restore-archive /checkpoint/latest.tgz
+            echo "MMIBKR_CHECKPOINT_RESTORED_SHA256=$restored_sha256"
+            echo "MMIBKR_CHECKPOINT_RESTORED_CACHE_KEY=$RESTORED_CACHE_KEY"
             echo 'MMIBKR_CHECKPOINT_RESTORED=1'
           else
             echo 'restored=false' >> "$GITHUB_OUTPUT"
+            echo 'restored_sha256=' >> "$GITHUB_OUTPUT"
+            echo 'restored_cache_key=' >> "$GITHUB_OUTPUT"
             echo 'MMIBKR_CHECKPOINT_RESTORED=0'
             echo 'No prior cache checkpoint; canonical self-healing bootstrap will be used.'
           fi
@@ -344,6 +353,7 @@ jobs:
         env:
           EXPECTED_CHECKPOINT_SHA256: ${{ steps.checkpoint.outputs.sha256 }}
           CHECKPOINT_CACHE_HIT: ${{ steps.verify_checkpoint_cache.outputs.cache-hit }}
+          CHECKPOINT_CACHE_KEY: ${{ env.CHECKPOINT_CACHE_PREFIX }}${{ github.run_id }}-${{ env.PRIVATE_HEAD }}
         run: |
           set +e
           checkpoint="$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
@@ -357,9 +367,13 @@ jobs:
           fi
           echo "saved=$saved" >> "$GITHUB_OUTPUT"
           if [ "$saved" = 'true' ]; then
+            echo "saved_sha256=$actual_sha256" >> "$GITHUB_OUTPUT"
+            echo "saved_cache_key=$CHECKPOINT_CACHE_KEY" >> "$GITHUB_OUTPUT"
             echo "MMIBKR_CHECKPOINT_CACHE_ROUNDTRIP_SHA256=$actual_sha256"
             echo 'MMIBKR_CHECKPOINT_CACHE_SAVED=1'
           else
+            echo 'saved_sha256=' >> "$GITHUB_OUTPUT"
+            echo 'saved_cache_key=' >> "$GITHUB_OUTPUT"
             echo 'MMIBKR_CHECKPOINT_CACHE_SAVED=0'
             echo 'Checkpoint cache round-trip unavailable; successor may self-heal from broker/history.'
           fi
@@ -553,8 +567,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           MMIBKR_RECEIPT_CHECKPOINT_RESTORED: ${{ steps.restore_checkpoint.outputs.restored }}
+          MMIBKR_RECEIPT_CHECKPOINT_RESTORED_SHA256: ${{ steps.restore_checkpoint.outputs.restored_sha256 }}
+          MMIBKR_RECEIPT_CHECKPOINT_RESTORED_CACHE_KEY: ${{ steps.restore_checkpoint.outputs.restored_cache_key }}
           MMIBKR_RECEIPT_CHECKPOINT_CACHE_READY: ${{ steps.checkpoint.outputs.ready }}
           MMIBKR_RECEIPT_CHECKPOINT_CACHE_SAVED: ${{ steps.checkpoint_saved.outputs.saved || 'false' }}
+          MMIBKR_RECEIPT_CHECKPOINT_CACHE_SHA256: ${{ steps.checkpoint_saved.outputs.saved_sha256 }}
+          MMIBKR_RECEIPT_CHECKPOINT_CACHE_KEY: ${{ steps.checkpoint_saved.outputs.saved_cache_key }}
           MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_PUBLISH: ${{ steps.operator_snapshot.outputs.publish_status }}
           MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_RUNTIME_COUNT: ${{ steps.operator_snapshot.outputs.runtime_count }}
           MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_POSITIONS_COUNT: ${{ steps.operator_snapshot.outputs.positions_count }}
@@ -643,11 +661,27 @@ jobs:
           receipt['checkpoint_restored'] = (
               os.environ.get('MMIBKR_RECEIPT_CHECKPOINT_RESTORED') == 'true'
           )
+          receipt['checkpoint_restored_sha256'] = (
+              str(os.environ.get('MMIBKR_RECEIPT_CHECKPOINT_RESTORED_SHA256') or '').strip()
+              or None
+          )
+          receipt['checkpoint_restored_cache_key'] = (
+              str(os.environ.get('MMIBKR_RECEIPT_CHECKPOINT_RESTORED_CACHE_KEY') or '').strip()
+              or None
+          )
           receipt['checkpoint_cache_ready'] = (
               os.environ.get('MMIBKR_RECEIPT_CHECKPOINT_CACHE_READY') == 'true'
           )
           receipt['checkpoint_cache_saved'] = (
               os.environ.get('MMIBKR_RECEIPT_CHECKPOINT_CACHE_SAVED') == 'true'
+          )
+          receipt['checkpoint_cache_sha256'] = (
+              str(os.environ.get('MMIBKR_RECEIPT_CHECKPOINT_CACHE_SHA256') or '').strip()
+              or None
+          )
+          receipt['checkpoint_cache_key'] = (
+              str(os.environ.get('MMIBKR_RECEIPT_CHECKPOINT_CACHE_KEY') or '').strip()
+              or None
           )
           receipt['operator_snapshot_publish'] = {
               'status': publish_status,
