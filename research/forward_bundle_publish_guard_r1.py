@@ -10,7 +10,8 @@ prospective registration timestamps from moving forward for the same frozen sign
 import argparse
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,26 @@ def _date_text(value: Any) -> str | None:
     return None if value in (None, "") else str(value)[:10]
 
 
+def _expected_completed_weekday(generated_at: Any) -> str | None:
+    """Fail-closed freshness candidate for the scheduled US-equity scoreboard.
+
+    This is deliberately only a weekday heuristic, not exchange-calendar authority.
+    On an exchange holiday it may hold publication until a later run, which is safer
+    than silently labeling an older tape current. IBKR/cloud session authority can
+    supersede this heuristic when wired into the scoreboard.
+    """
+    stamp = _dt(generated_at)
+    if stamp is None:
+        return None
+    local = stamp.astimezone(ZoneInfo("America/New_York"))
+    candidate = local.date()
+    if local.hour < 18:
+        candidate -= timedelta(days=1)
+    while candidate.weekday() >= 5:
+        candidate -= timedelta(days=1)
+    return candidate.isoformat()
+
+
 def decide(
     incoming_score: dict[str, Any],
     incoming_largecap: dict[str, Any],
@@ -40,6 +61,14 @@ def decide(
     current_largecap: dict[str, Any] | None,
 ) -> dict[str, Any]:
     reasons: list[str] = []
+
+    expected = _expected_completed_weekday(incoming_score.get("generated_at"))
+    reported_common = _date_text(
+        (incoming_score.get("freshness") or {}).get("common_market_data_asof")
+        or (((incoming_score.get("coverage") or {}).get("prospective_ledger") or {}).get("market_data_asof"))
+    )
+    if expected and reported_common and reported_common < expected:
+        reasons.append("EXPECTED_SESSION_FRESHNESS_GAP")
 
     if current_score:
         inc_gen = _dt(incoming_score.get("generated_at"))
@@ -74,6 +103,9 @@ def decide(
         "publish_allowed": not reasons,
         "reasons": reasons,
         "incoming_scoreboard_generated_at": incoming_score.get("generated_at"),
+        "expected_completed_weekday_candidate": expected,
+        "incoming_common_market_data_asof": reported_common,
+        "freshness_candidate_authority": "WEEKDAY_HEURISTIC_FAIL_CLOSED_UNTIL_IBKR_CLOUD_SESSION_AUTHORITY",
         "current_scoreboard_generated_at": None if current_score is None else current_score.get("generated_at"),
         "incoming_largecap_asof": incoming_largecap.get("market_data_asof"),
         "current_largecap_asof": None if current_largecap is None else current_largecap.get("market_data_asof"),
@@ -109,6 +141,23 @@ def self_test() -> None:
 
     allowed = decide(score_new, large_old, score_old, large_old)
     assert allowed["publish_allowed"] is True
+
+    friday_stale = {
+        "generated_at": "2026-09-19T01:08:48+00:00",
+        "freshness": {"common_market_data_asof": "2026-09-17"},
+        "coverage": {"prospective_ledger": {"market_data_asof": "2026-09-17"}},
+    }
+    freshness_block = decide(friday_stale, large_old, None, None)
+    assert freshness_block["publish_allowed"] is False
+    assert freshness_block["expected_completed_weekday_candidate"] == "2026-09-18"
+    assert "EXPECTED_SESSION_FRESHNESS_GAP" in freshness_block["reasons"]
+
+    friday_current = {
+        **friday_stale,
+        "freshness": {"common_market_data_asof": "2026-09-18"},
+        "coverage": {"prospective_ledger": {"market_data_asof": "2026-09-18"}},
+    }
+    assert decide(friday_current, large_old, None, None)["publish_allowed"] is True
     print("FORWARD_BUNDLE_PUBLISH_GUARD_SELF_TEST=PASS")
 
 
