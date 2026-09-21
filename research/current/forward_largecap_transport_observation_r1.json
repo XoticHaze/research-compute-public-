@@ -17,7 +17,7 @@
   "evaluation_date": "2026-09-18",
   "execution_delay_sessions": 1,
   "first_registered_at": "2026-09-18T05:03:20.113496+00:00",
-  "generated_at": "2026-09-21T05:54:11.388396+00:00",
+  "generated_at": "2026-09-21T06:00:26.467793+00:00",
   "holding_horizon_sessions": 20,
   "interpretation": {
     "current_mark_before_horizon_is_not_terminal_accuracy": true,
