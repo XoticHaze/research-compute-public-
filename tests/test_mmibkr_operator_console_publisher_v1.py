@@ -27,6 +27,10 @@ class OperatorConsolePublisherContractTests(unittest.TestCase):
         self.assertIn("presentation_projection_only", text)
         self.assertIn("broker_mutation_authority", text)
         self.assertIn("live_execution_allowed", text)
+        self.assertIn("mmibkr-operator-snapshot-publish.json", text)
+        self.assertIn("docker run --rm", text)
+        self.assertIn("/app/data/strategy_runtime/cloud_operator_snapshot_v1/latest.json", text)
+        self.assertIn("chmod 600", text)
 
     def test_console_publish_is_nonblocking_for_trading_owner(self):
         text = WORKFLOW.read_text(encoding="utf-8")
