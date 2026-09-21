@@ -1,9 +1,0 @@
-{
-  "schema": "mmibkr.initial_backfill_ingest_fire.v1",
-  "source_public_run_id": "35407829303",
-  "source_artifact": "ibkr-cloudflare-readonly-b1-35407829303",
-  "private_source_ref": "d81df85788ebb6be6d4d69b9b9a537be96f16507",
-  "purpose": "consume_proven_initial_backfill_into_canonical_forward_checkpoint",
-  "broker_acquisition": false,
-  "live_execution_allowed": false
-}
