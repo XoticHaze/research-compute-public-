@@ -6,7 +6,7 @@ on:
       source_ref:
         description: Exact approved private MM-IBKR source SHA to materialize from the reusable encrypted Fleet vault
         required: true
-        default: 1ecb1de8dda1c8797b6fa1af6dba6f6e1765438e
+        default: 5aeb0370a18c4c941852c7454706ba9ffa28da68
         type: string
       session_seconds:
         description: Bounded daemon session length
@@ -86,6 +86,7 @@ jobs:
       cancel-in-progress: false
     env:
       IBKR_REMOTE_EXCHANGE_TOKEN: ${{ github.token }}
+      CANONICAL_SOURCE_REF: 5aeb0370a18c4c941852c7454706ba9ffa28da68
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -114,12 +115,19 @@ jobs:
               event_json = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
               payload = dict(event_json.get('inputs') or {})
 
-          source_ref = str(
+          canonical_source_ref = os.environ['CANONICAL_SOURCE_REF'].strip().lower()
+          requested_source_ref = str(
               payload.get('source_ref')
-              or '1ecb1de8dda1c8797b6fa1af6dba6f6e1765438e'
+              or canonical_source_ref
           ).strip().lower()
-          if len(source_ref) != 40 or any(ch not in '0123456789abcdef' for ch in source_ref):
+          if len(requested_source_ref) != 40 or any(ch not in '0123456789abcdef' for ch in requested_source_ref):
               raise SystemExit('source_ref must be an exact approved 40-hex private source SHA')
+          if len(canonical_source_ref) != 40 or any(ch not in '0123456789abcdef' for ch in canonical_source_ref):
+              raise SystemExit('canonical source_ref must be an exact approved 40-hex private source SHA')
+          source_ref = canonical_source_ref
+          if requested_source_ref != canonical_source_ref:
+              print('MMIBKR_CLOUD_SOURCE_REFRESHED_FROM=' + requested_source_ref)
+              print('MMIBKR_CLOUD_SOURCE_REFRESHED_TO=' + canonical_source_ref)
           session_seconds = int(payload.get('session_seconds') or 18000)
           max_cycles = int(payload.get('max_cycles') or 0)
           raw_handoff = payload.get('self_handoff', True)
@@ -423,7 +431,6 @@ jobs:
           print(json.dumps({
               'ref': 'main',
               'inputs': {
-                  'source_ref': os.environ['REQUEST_SOURCE_REF'],
                   'session_seconds': os.environ['SESSION_SECONDS'],
                   'max_cycles': os.environ['MAX_CYCLES'],
                   'self_handoff': True,
