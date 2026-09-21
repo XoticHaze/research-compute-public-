@@ -5,7 +5,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_SHA = "1ecb1de8dda1c8797b6fa1af6dba6f6e1765438e"
+SOURCE_SHA = "5aeb0370a18c4c941852c7454706ba9ffa28da68"
 
 
 class CloudOwnerReusableVaultContractTests(unittest.TestCase):
@@ -45,6 +45,22 @@ class CloudOwnerReusableVaultContractTests(unittest.TestCase):
         text = (ROOT / ".github/workflows/mmibkr-selected-runtime-cloud-watchdog-r1.yml").read_text(encoding="utf-8")
         self.assertIn("'source_ref':'" + SOURCE_SHA + "'", text)
         self.assertNotIn("'source_ref':'main'", text)
+
+    def test_owner_refreshes_stale_handoff_to_current_promoted_source(self):
+        text = (ROOT / ".github/workflows/mmibkr-selected-runtime-cloud-r1.yml").read_text(encoding="utf-8")
+        self.assertIn("CANONICAL_SOURCE_REF: " + SOURCE_SHA, text)
+        self.assertIn("requested_source_ref = str(", text)
+        self.assertIn("source_ref = canonical_source_ref", text)
+        self.assertIn("MMIBKR_CLOUD_SOURCE_REFRESHED_FROM=", text)
+        self.assertIn("MMIBKR_CLOUD_SOURCE_REFRESHED_TO=", text)
+
+    def test_successor_does_not_perpetuate_stale_source_identity(self):
+        text = (ROOT / ".github/workflows/mmibkr-selected-runtime-cloud-r1.yml").read_text(encoding="utf-8")
+        marker = "      - name: Queue successor bounded session"
+        start = text.index(marker)
+        successor = text[start:]
+        self.assertNotIn("'source_ref': os.environ['REQUEST_SOURCE_REF']", successor)
+        self.assertIn("'session_seconds': os.environ['SESSION_SECONDS']", successor)
 
 
 if __name__ == "__main__":
