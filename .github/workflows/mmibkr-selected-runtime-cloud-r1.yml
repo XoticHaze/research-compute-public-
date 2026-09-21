@@ -39,6 +39,8 @@ on:
       - tests/test_mmibkr_cloud_checkpoint_cache_handoff_v1.py
       - tests/test_mmibkr_operator_console_publisher_v1.py
       - tests/test_mmibkr_cloud_session_receipt_v1.py
+      - tests/test_mmibkr_cloud_session_acceptance_v1.py
+      - scripts/mmibkr_cloud_session_acceptance_v1.py
 
 permissions:
   contents: write
@@ -76,14 +78,17 @@ jobs:
             tests/test_mmibkr_cloud_owner_reusable_vault_contract_v1.py \
             tests/test_mmibkr_cloud_checkpoint_cache_handoff_v1.py \
             tests/test_mmibkr_operator_console_publisher_v1.py \
-            tests/test_mmibkr_cloud_session_receipt_v1.py
+            tests/test_mmibkr_cloud_session_receipt_v1.py \
+            tests/test_mmibkr_cloud_session_acceptance_v1.py \
+            scripts/mmibkr_cloud_session_acceptance_v1.py
           python -m unittest -v \
             tests.test_mmibkr_source_vault_consumer_v1 \
             tests.test_mmibkr_source_vault_fetch_retry_v1 \
             tests.test_mmibkr_cloud_owner_reusable_vault_contract_v1 \
             tests.test_mmibkr_cloud_checkpoint_cache_handoff_v1 \
             tests.test_mmibkr_operator_console_publisher_v1 \
-            tests.test_mmibkr_cloud_session_receipt_v1
+            tests.test_mmibkr_cloud_session_receipt_v1 \
+            tests.test_mmibkr_cloud_session_acceptance_v1
 
   runtime:
     if: ${{ github.event_name != 'pull_request' }}
