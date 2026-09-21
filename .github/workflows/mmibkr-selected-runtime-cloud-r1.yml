@@ -47,6 +47,7 @@ env:
   EXCHANGE_REF: rendezvous-exchange
   RECEIPT_ROOT: rendezvous/receipts
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
+  OPERATOR_CONSOLE_URL: https://mmibkr-operator-console.slenderiq.workers.dev
 
 jobs:
   contract:
@@ -324,6 +325,95 @@ jobs:
               raise SystemExit(
                   'cloud owner session did not produce a successful terminal cycle'
               )
+          PY
+
+      - name: Publish private operator snapshot
+        if: ${{ success() }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot="$RUNNER_TEMP/mmibkr-data/strategy_runtime/cloud_operator_snapshot_v1/latest.json"
+          if [ ! -s "$snapshot" ]; then
+            echo 'MMIBKR_OPERATOR_SNAPSHOT_PUBLISH=not_available_for_runtime_source'
+            exit 0
+          fi
+          python - "$snapshot" <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+          from urllib.request import Request, urlopen
+
+          snapshot_path = Path(__import__('sys').argv[1])
+          node = json.loads(snapshot_path.read_text(encoding='utf-8'))
+          if node.get('schema') != 'mmibkr.cloud_operator_snapshot.v1':
+              raise SystemExit('operator snapshot schema mismatch')
+          privacy = node.get('privacy') if isinstance(node.get('privacy'), dict) else {}
+          authority = node.get('authority') if isinstance(node.get('authority'), dict) else {}
+          if (
+              node.get('mode') != 'paper'
+              or node.get('live_enabled') is not False
+              or privacy.get('private_operator_state') is not True
+              or privacy.get('account_identifiers_included') is not False
+              or privacy.get('credentials_included') is not False
+              or privacy.get('tokens_included') is not False
+              or privacy.get('private_source_included') is not False
+              or privacy.get('execution_authority_included') is not False
+              or authority.get('presentation_projection_only') is not True
+              or authority.get('broker_mutation_authority') is not False
+              or authority.get('live_execution_allowed') is not False
+          ):
+              raise SystemExit('operator snapshot privacy/authority contract failed')
+
+          raw_url = os.environ['ACTIONS_ID_TOKEN_REQUEST_URL']
+          parsed = urlparse(raw_url)
+          query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+          query['audience'] = 'mmibkr-operator-console'
+          oidc_url = urlunparse((
+              parsed.scheme,
+              parsed.netloc,
+              parsed.path,
+              parsed.params,
+              urlencode(query),
+              parsed.fragment,
+          ))
+          oidc_req = Request(
+              oidc_url,
+              headers={
+                  'Authorization': 'Bearer ' + os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN'],
+                  'Accept': 'application/json',
+              },
+          )
+          with urlopen(oidc_req, timeout=20) as response:
+              oidc = json.load(response)
+          token = str(oidc.get('value') or '')
+          if token.count('.') != 2:
+              raise SystemExit('operator snapshot OIDC token invalid')
+
+          body = snapshot_path.read_bytes()
+          req = Request(
+              os.environ['OPERATOR_CONSOLE_URL'].rstrip('/') + '/v1/operator-snapshot',
+              data=body,
+              method='POST',
+              headers={
+                  'Authorization': 'Bearer ' + token,
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'X-MMIBKR-Caller-Run-Id': os.environ['GITHUB_RUN_ID'],
+                  'User-Agent': 'mmibkr-cloud-operator-publisher-v1',
+              },
+          )
+          with urlopen(req, timeout=30) as response:
+              receipt = json.load(response)
+              status = int(response.status)
+          if status != 201 or receipt.get('ok') is not True:
+              raise SystemExit('operator snapshot publish not accepted')
+          print('MMIBKR_OPERATOR_SNAPSHOT_PUBLISH=accepted')
+          print('MMIBKR_OPERATOR_SNAPSHOT_RUNTIME_COUNT=' + str(receipt.get('runtime_count')))
+          print('MMIBKR_OPERATOR_SNAPSHOT_POSITIONS_COUNT=' + str(receipt.get('positions_count')))
+          print('MMIBKR_OPERATOR_SNAPSHOT_CREDENTIALS_INCLUDED=0')
+          print('MMIBKR_OPERATOR_SNAPSHOT_LIVE_EXECUTION_ALLOWED=0')
           PY
 
       - name: Publish sanitized cloud-session receipt
