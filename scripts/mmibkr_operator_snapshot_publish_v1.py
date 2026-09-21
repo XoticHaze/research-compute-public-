@@ -84,13 +84,15 @@ def validate_publish_receipt(
     runtime_count: int,
     positions_count: int,
 ) -> dict[str, Any]:
-    stored_runtime_count = receipt.get("runtime_count")
+    legacy_runtime_count = receipt.get("runtime_count")
     received_runtime_count = receipt.get("received_runtime_count")
+    stored_runtime_count = receipt.get("stored_runtime_count")
     if (
         receipt.get("ok") is not True
         or receipt.get("schema") != "mmibkr.operator_console_publish_receipt.v1"
         or receipt.get("durable_readback_verified") is not True
         or received_runtime_count != runtime_count
+        or legacy_runtime_count != runtime_count
         or not isinstance(stored_runtime_count, int)
         or stored_runtime_count < runtime_count
         or stored_runtime_count > 100
