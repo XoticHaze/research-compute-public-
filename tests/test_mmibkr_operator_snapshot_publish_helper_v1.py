@@ -66,7 +66,9 @@ class OperatorSnapshotPublishHelperTests(unittest.TestCase):
         receipt = {
             "ok": True,
             "schema": "mmibkr.operator_console_publish_receipt.v1",
+            "received_runtime_count": 3,
             "runtime_count": 3,
+            "runtime_merge_applied": False,
             "positions_count": 1,
             "durable_readback_verified": True,
             "credentials_included": False,
@@ -76,9 +78,26 @@ class OperatorSnapshotPublishHelperTests(unittest.TestCase):
         }
         result = mod.validate_publish_receipt(receipt, runtime_count=3, positions_count=1)
         self.assertEqual(result["status"], "accepted")
+        self.assertEqual(result["received_runtime_count"], 3)
+        self.assertEqual(result["runtime_count"], 3)
+        self.assertFalse(result["runtime_merge_applied"])
         self.assertTrue(result["durable_readback_verified"])
 
+        merged = dict(receipt)
+        merged["received_runtime_count"] = 1
+        merged["runtime_count"] = 3
+        merged["runtime_merge_applied"] = True
+        merged_result = mod.validate_publish_receipt(
+            merged,
+            runtime_count=1,
+            positions_count=1,
+        )
+        self.assertEqual(merged_result["received_runtime_count"], 1)
+        self.assertEqual(merged_result["runtime_count"], 3)
+        self.assertTrue(merged_result["runtime_merge_applied"])
+
         for key, value in (
+            ("received_runtime_count", 2),
             ("runtime_count", 2),
             ("positions_count", 0),
             ("durable_readback_verified", False),
@@ -105,6 +124,27 @@ class OperatorSnapshotPublishHelperTests(unittest.TestCase):
             huge.write_bytes(b"{" + b"x" * mod.MAX_SNAPSHOT_BYTES + b"}")
             with self.assertRaises(RuntimeError):
                 mod.load_snapshot(huge)
+
+    def test_publish_receipt_rejects_stored_runtime_count_below_received(self):
+        receipt = {
+            "ok": True,
+            "schema": "mmibkr.operator_console_publish_receipt.v1",
+            "received_runtime_count": 3,
+            "runtime_count": 2,
+            "runtime_merge_applied": True,
+            "positions_count": 1,
+            "durable_readback_verified": True,
+            "credentials_included": False,
+            "tokens_included": False,
+            "broker_mutation_authority": False,
+            "live_execution_allowed": False,
+        }
+        with self.assertRaises(RuntimeError):
+            mod.validate_publish_receipt(
+                receipt,
+                runtime_count=3,
+                positions_count=1,
+            )
 
 
 if __name__ == "__main__":
