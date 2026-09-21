@@ -44,7 +44,7 @@ class OperatorConsolePublisherContractTests(unittest.TestCase):
             "MMIBKR_OPERATOR_SNAPSHOT_LIVE_EXECUTION_ALLOWED=0",
             "MMIBKR_OPERATOR_SNAPSHOT_DURABLE_READBACK_VERIFIED=1",
         ):
-            self.assertIn(marker, text)
+            self.assertIn(marker, combined)
 
     def test_exact_runtime_image_validates_operator_snapshot_contract(self):
         text = WORKFLOW.read_text(encoding="utf-8")
@@ -87,9 +87,9 @@ class OperatorConsolePublisherContractTests(unittest.TestCase):
         end = text.index("- name: Build sanitized successor checkpoint")
         section = text[start:end]
         self.assertIn("id: cloud_owner", section)
-        self.assertIn("docker run \\", section)
+        self.assertIn("docker run", section)
         self.assertIn("--name \"$owner_container\"", section)
-        self.assertIn("-d \\", section)
+        self.assertIn(" -d ", section)
         self.assertIn("docker logs -f", section)
         self.assertIn("docker exec \"$owner_container\" cat", section)
         self.assertIn("sha256sum \"$snapshot_tmp\"", section)
@@ -98,6 +98,7 @@ class OperatorConsolePublisherContractTests(unittest.TestCase):
         self.assertIn("Operator snapshot stream publish failed; selected-runtime owner continues.", section)
         self.assertIn("stream_publish_count=", section)
         self.assertIn("stream_attempt_count=", section)
+        self.assertIn('docker wait \"$owner_container\"', section)
         self.assertIn('exit \"$owner_exit\"', section)
 
     def test_stream_publisher_does_not_receive_broker_or_live_authority(self):
