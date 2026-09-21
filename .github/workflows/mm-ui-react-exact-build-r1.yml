@@ -18,7 +18,7 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  PRIVATE_SOURCE_SHA: d6ec5e7452d02190edaf002dea0feb254e6bcbc4
+  PRIVATE_SOURCE_SHA: 96a10987d82b53da6e0ebdf838aae4cd8f488cac
 
 jobs:
   exact-private-ui-build:

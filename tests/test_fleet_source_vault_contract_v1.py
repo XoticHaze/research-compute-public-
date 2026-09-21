@@ -90,7 +90,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            "d6ec5e7452d02190edaf002dea0feb254e6bcbc4",
+            "96a10987d82b53da6e0ebdf838aae4cd8f488cac",
             text,
         )
         self.assertIn("UI_BUILD_PRIVATE_ARCHIVE_EXPIRES_AT", text)
