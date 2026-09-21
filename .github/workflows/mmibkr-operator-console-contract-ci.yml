@@ -1,0 +1,52 @@
+name: MM-IBKR Operator Console Contract CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'cloudflare/operator-console/**'
+      - 'tests/test_mmibkr_operator_console_worker_v1.py'
+      - 'tests/test_mmibkr_operator_console_publisher_v1.py'
+      - '.github/workflows/mmibkr-selected-runtime-cloud-r1.yml'
+      - '.github/workflows/mmibkr-operator-console-contract-ci.yml'
+  push:
+    branches:
+      - 'assistant/mmibkr-operator-console-*'
+    paths:
+      - 'cloudflare/operator-console/**'
+      - 'tests/test_mmibkr_operator_console_worker_v1.py'
+      - '.github/workflows/mmibkr-operator-console-contract-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Validate Worker JavaScript syntax
+        run: |
+          set -euo pipefail
+          node --check cloudflare/operator-console/src/index.js
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Validate private operator-console contracts
+        run: |
+          set -euo pipefail
+          python -m unittest -v \
+            tests.test_mmibkr_operator_console_worker_v1 \
+            tests.test_mmibkr_operator_console_publisher_v1
+
+      - name: Dry-run canonical Worker bundle
+        run: |
+          set -euo pipefail
+          mkdir -p cloudflare/operator-console/dist
+          printf '%s\n' '<!doctype html><title>MM-IBKR operator console placeholder</title>' > cloudflare/operator-console/dist/index.html
+          npx --yes wrangler@4.131.2 deploy             --dry-run             --config cloudflare/operator-console/wrangler.jsonc             --outdir "$RUNNER_TEMP/mmibkr-operator-console-dry-run"

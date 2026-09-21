@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mmibkr-operator-console",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-21",
+  "workers_dev": true,
+  "keep_vars": true,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "OPERATOR_STATE",
+        "class_name": "OperatorState"
+      }
+    ]
+  },
+  "exports": {
+    "OperatorState": {
+      "type": "durable-object",
+      "state": "created",
+      "storage": "sqlite"
+    }
+  },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "single-page-application"
+  }
+}
