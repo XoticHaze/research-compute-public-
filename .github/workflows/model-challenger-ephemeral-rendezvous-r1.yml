@@ -13,7 +13,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: model-challenger-ephemeral-rendezvous-r1
+  group: model-challenger-ephemeral-rendezvous-r1-${{ github.sha }}
   cancel-in-progress: false
 
 env:
