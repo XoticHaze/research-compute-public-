@@ -1,0 +1,268 @@
+name: MM-IBKR Operator Console Deploy R1
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact accepted private MM-IBKR source SHA containing the Bot Console
+        required: true
+        default: d81df85788ebb6be6d4d69b9b9a537be96f16507
+        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - 'rendezvous/fire/mmibkr-operator-console-deploy-r1'
+      - '.github/workflows/mmibkr-operator-console-deploy-r1.yml'
+      - 'cloudflare/operator-console/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/mmibkr-operator-console-deploy-r1.yml'
+      - 'cloudflare/operator-console/**'
+      - 'tests/test_mmibkr_operator_console_worker_v1.py'
+      - 'tests/test_fleet_source_vault_contract_v1.py'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: mmibkr-operator-console-deploy-r1
+  cancel-in-progress: false
+
+env:
+  FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
+  CANONICAL_PRIVATE_SOURCE_SHA: d81df85788ebb6be6d4d69b9b9a537be96f16507
+  OPERATOR_CONSOLE_URL: https://mmibkr-operator-console.slenderiq.workers.dev
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Validate Worker and deploy contracts
+        run: |
+          set -euo pipefail
+          node --check cloudflare/operator-console/src/index.js
+          python -m unittest -v \
+            tests.test_mmibkr_operator_console_worker_v1 \
+            tests.test_fleet_source_vault_contract_v1
+          mkdir -p cloudflare/operator-console/dist
+          printf '%s\n' '<!doctype html><title>MM-IBKR locked operator console</title>' > cloudflare/operator-console/dist/index.html
+          npx --yes wrangler@4.131.2 deploy \
+            --dry-run \
+            --config cloudflare/operator-console/wrangler.jsonc \
+            --outdir "$RUNNER_TEMP/mmibkr-operator-console-dry-run"
+
+  deploy:
+    if: ${{ github.event_name != 'pull_request' }}
+    needs: contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+
+      - name: Resolve accepted console source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          canonical = os.environ['CANONICAL_PRIVATE_SOURCE_SHA'].strip().lower()
+          if os.environ['GITHUB_EVENT_NAME'] == 'push':
+              fire = Path('rendezvous/fire/mmibkr-operator-console-deploy-r1')
+              if not fire.is_file():
+                  raise SystemExit('operator-console deployment fire request missing')
+              node = json.loads(fire.read_text(encoding='utf-8'))
+              requested = str(node.get('source_sha') or '').strip().lower()
+          else:
+              event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+              requested = str((event.get('inputs') or {}).get('source_sha') or '').strip().lower()
+
+          if requested != canonical:
+              raise SystemExit('operator-console deployment source must equal canonical accepted SHA')
+          if len(canonical) != 40 or any(ch not in '0123456789abcdef' for ch in canonical):
+              raise SystemExit('canonical source SHA invalid')
+          with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
+              fh.write('REQUEST_SOURCE_SHA=' + canonical + '\n')
+          print('MMIBKR_OPERATOR_CONSOLE_SOURCE=' + canonical)
+          PY
+
+      - name: Materialize accepted private source from reusable encrypted vault
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python -m pip install --disable-pip-version-check cryptography==46.0.1
+          mkdir -p "$RUNNER_TEMP/mmibkr-operator-console-source"
+          python scripts/mmibkr_source_vault_consumer_v1.py \
+            --authority-base "$FLEET_AUTHORITY_BASE" \
+            --run-id "$GITHUB_RUN_ID" \
+            --source-sha "$REQUEST_SOURCE_SHA" \
+            --public-repo XoticHaze/mm-ibkr-runtime \
+            --public-branch mmibkr-source-vault \
+            --destination "$RUNNER_TEMP/mmibkr-operator-console-source/extracted" \
+            --archive-output "$RUNNER_TEMP/mmibkr-operator-console-source/source.tar.gz" \
+            --output "$RUNNER_TEMP/mmibkr-operator-console-source/materialization.json"
+
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'mmibkr-operator-console-source'
+          node = json.loads((root / 'materialization.json').read_text(encoding='utf-8'))
+          if node.get('ok') is not True:
+              raise SystemExit('operator-console source materialization not ok')
+          if node.get('source_sha') != os.environ['REQUEST_SOURCE_SHA']:
+              raise SystemExit('operator-console source SHA mismatch')
+          if node.get('source_transport') != 'fleet_authority_exact_sha_encrypted_snapshot_vault':
+              raise SystemExit('encrypted reusable source vault required')
+          if node.get('private_repository_token_used') is not False:
+              raise SystemExit('private repository token unexpectedly used')
+          if node.get('broker_credentials_used') is not False:
+              raise SystemExit('broker credentials unexpectedly used')
+          if node.get('plaintext_emitted') is not False:
+              raise SystemExit('plaintext emission contract violated')
+          if node.get('live_execution_allowed') is not False:
+              raise SystemExit('live execution authority unexpectedly enabled')
+          source_root = Path(node['source_root'])
+          ui = source_root / 'ui-react'
+          if not (ui / 'package.json').is_file() or not (ui / 'package-lock.json').is_file():
+              raise SystemExit('private ui-react source incomplete')
+          with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
+              fh.write('PRIVATE_SOURCE_ROOT=' + str(source_root) + '\n')
+              fh.write('PRIVATE_UI_ROOT=' + str(ui) + '\n')
+          print('MMIBKR_OPERATOR_CONSOLE_VAULT_SOURCE=PASS')
+          print('MMIBKR_OPERATOR_CONSOLE_SOURCE_MANIFEST=' + str(node['source_manifest_sha256']))
+          PY
+
+      - name: Build exact private Bot Console
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PRIVATE_UI_ROOT"
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run verify:bot-console
+          npm run build
+          test -s dist/index.html
+          rm -rf "$GITHUB_WORKSPACE/cloudflare/operator-console/dist"
+          mkdir -p "$GITHUB_WORKSPACE/cloudflare/operator-console/dist"
+          cp -R dist/. "$GITHUB_WORKSPACE/cloudflare/operator-console/dist/"
+          if find "$GITHUB_WORKSPACE/cloudflare/operator-console/dist" -type f -name '*.map' | grep -q .; then
+            echo 'source maps are not allowed in operator-console deployment'
+            exit 41
+          fi
+          echo 'MMIBKR_OPERATOR_CONSOLE_BUILD=PASS'
+
+      - name: Require Cloudflare deploy credential
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo 'MMIBKR_OPERATOR_CONSOLE_CLOUDFLARE_CREDENTIALS_MISSING=1'
+            exit 42
+          fi
+          echo 'MMIBKR_OPERATOR_CONSOLE_CLOUDFLARE_CREDENTIALS_PRESENT=1'
+
+      - name: Deploy locked operator-console Worker and private static assets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.131.2 deploy \
+            --config cloudflare/operator-console/wrangler.jsonc
+          echo 'MMIBKR_OPERATOR_CONSOLE_WORKER_DEPLOYED=1'
+
+      - name: Configure Access verification when approved values are present
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ACCESS_TEAM_DOMAIN: ${{ secrets.MMIBKR_ACCESS_TEAM_DOMAIN }}
+          ACCESS_AUD: ${{ secrets.MMIBKR_ACCESS_AUD }}
+          ACCESS_ALLOWED_EMAILS: ${{ secrets.MMIBKR_ACCESS_ALLOWED_EMAILS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$ACCESS_TEAM_DOMAIN" ] || [ -z "$ACCESS_AUD" ]; then
+            echo 'MMIBKR_OPERATOR_CONSOLE_ACCESS_BINDING=LOCKED_UNCONFIGURED'
+            exit 0
+          fi
+          printf '%s' "$ACCESS_TEAM_DOMAIN" | npx --yes wrangler@4.131.2 secret put ACCESS_TEAM_DOMAIN --config cloudflare/operator-console/wrangler.jsonc >/dev/null
+          printf '%s' "$ACCESS_AUD" | npx --yes wrangler@4.131.2 secret put ACCESS_AUD --config cloudflare/operator-console/wrangler.jsonc >/dev/null
+          if [ -n "$ACCESS_ALLOWED_EMAILS" ]; then
+            printf '%s' "$ACCESS_ALLOWED_EMAILS" | npx --yes wrangler@4.131.2 secret put ACCESS_ALLOWED_EMAILS --config cloudflare/operator-console/wrangler.jsonc >/dev/null
+          fi
+          echo 'MMIBKR_OPERATOR_CONSOLE_ACCESS_BINDING=CONFIGURED'
+
+      - name: Prove unauthenticated surface fails closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, time
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+
+          base = os.environ['OPERATOR_CONSOLE_URL'].rstrip('/')
+          health = None
+          for _ in range(36):
+              try:
+                  req = Request(base + '/healthz', headers={'Accept':'application/json','User-Agent':'mmibkr-operator-console-deploy-r1'})
+                  with urlopen(req, timeout=10) as response:
+                      health = json.load(response)
+                  if health.get('ok') is True and health.get('service') == 'mmibkr-operator-console':
+                      break
+              except Exception:
+                  health = None
+              time.sleep(5)
+          if not health:
+              raise SystemExit('operator-console health did not converge')
+          if health.get('static_assets_configured') is not True:
+              raise SystemExit('operator-console static assets binding missing')
+
+          for path in ('/', '/api/operator-snapshot'):
+              req = Request(base + path, headers={'Accept':'application/json','User-Agent':'mmibkr-operator-console-deny-proof'})
+              try:
+                  with urlopen(req, timeout=10) as response:
+                      status = int(response.status)
+              except HTTPError as exc:
+                  status = int(exc.code)
+              if status != 403:
+                  raise SystemExit(f'unauthenticated operator-console path did not fail closed: {path}:{status}')
+
+          print('MMIBKR_OPERATOR_CONSOLE_HEALTH=READY')
+          print('MMIBKR_OPERATOR_CONSOLE_ACCESS_CONFIGURED=' + ('1' if health.get('access_configured') is True else '0'))
+          print('MMIBKR_OPERATOR_CONSOLE_UNAUTHENTICATED_DENIED=1')
+          PY
+
+      - name: Destroy private deployment source
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf \
+            "$RUNNER_TEMP/mmibkr-operator-console-source" \
+            "$GITHUB_WORKSPACE/cloudflare/operator-console/dist"
+          echo 'MMIBKR_OPERATOR_CONSOLE_PRIVATE_SOURCE_DESTROYED=1'
