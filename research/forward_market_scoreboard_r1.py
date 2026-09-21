@@ -168,6 +168,7 @@ def _p249(x: dict[str, Any] | None) -> dict[str, Any]:
             "p249_plus_p266_annualized_vol": combo.get("annualized_vol"),
         },
         "validation_grade": _grade(days),
+        "source_health": x.get("source_health", {}),
         "decision_use": (
             "This is not a price target. Weights are the frozen portfolio expression. "
             "Use prospective return, drawdown and the P266 incremental result to decide whether the construction adds value."
@@ -276,8 +277,12 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
                 compact[key] = resolution.get(key)
         if resolution.get("summary") is not None:
             compact["summary"] = resolution.get("summary")
+        if resolution.get("current_mark_metrics") is not None:
+            compact["current_mark_metrics"] = resolution.get("current_mark_metrics")
         if compact:
             out["current_resolution"] = compact
+        if current.get("source_health") is not None:
+            out["source_health"] = current.get("source_health")
     return out
 
 
@@ -449,6 +454,30 @@ def build(root: Path) -> dict[str, Any]:
             })
 
     missing = [p for p in EXPECTED_PRIVATE_ADAPTERS if p not in native]
+    p249_lane = next((x for x in lanes if x.get("program_id") == "P249_P266"), {})
+    p249_health = p249_lane.get("source_health") or {}
+    ledger_freshness = {} if ledger is None else (ledger.get("freshness") or {})
+    market_data_dates = [
+        str(value)[:10]
+        for value in (
+            p249_health.get("latest_scored_common_session"),
+            None if ledger is None else ledger.get("market_data_asof"),
+        )
+        if value
+    ]
+    common_asof = min(market_data_dates) if market_data_dates else None
+    freshness = {
+        "common_market_data_asof": common_asof,
+        "p249_p266_source_health": p249_health,
+        "prospective_ledger": ledger_freshness,
+        "freshness_gap_visible": bool(
+            p249_health.get("common_session_lags_source_max")
+            or ledger_freshness.get("freshness_gap_visible")
+            or p249_health.get("lagging_symbols_vs_source_max")
+            or ledger_freshness.get("lagging_symbols_by_program")
+        ),
+        "rule": "A successful workflow is not sufficient freshness proof. Consumers must compare the common market-data date with the expected completed exchange session and inspect per-symbol source health.",
+    }
     return {
         "schema": SCHEMA,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -456,6 +485,7 @@ def build(root: Path) -> dict[str, Any]:
         "lanes": lanes,
         "market_decision_context": actionable_context,
         "decision_chain": _decision_chain(lanes),
+        "freshness": freshness,
         "coverage": {
             "scored_now": [x.get("program_id") for x in lanes if x.get("signal")],
             "adapter_contracts_ready": list(EXPECTED_PRIVATE_ADAPTERS),
@@ -489,6 +519,7 @@ def self_test() -> None:
         }))
         (root / "forward_p249_p266_shadow_r1.json").write_text(json.dumps({
             "current_state": {"p249_core": {"SOXX": 0.4}, "p266": {"XBI": 1.0}, "p249_plus_p266": {"SOXX": 0.3, "XBI": 0.1}},
+            "source_health": {"source_max_date": "2026-09-13", "latest_scored_common_session": "2026-09-12", "lagging_symbols_vs_source_max": ["XBI"], "common_session_lags_source_max": True},
             "forward": {"p249_core_net": {"cumulative_return": 0.01}, "p249_plus_p266_net": {"cumulative_return": 0.009, "days": 2}, "satellite_increment_cumulative": -0.001},
         }))
         semi = {
@@ -526,6 +557,7 @@ def self_test() -> None:
         (root / "forward_prospective_cohort_ledger_r1.json").write_text(json.dumps({
             "schema": LEDGER_SCHEMA,
             "market_data_asof": "2026-09-13",
+            "freshness": {"freshness_gap_visible": False, "lagging_symbols_by_program": {}},
             "cohorts": [
                 {"cohort_id": "HOMEBUILDERS:2026-09-10:test", "program_id": "HOMEBUILDERS", "signal_date": "2026-09-10", "first_registered_at": "2026-09-11T00:00:00+00:00", "status": "OPEN", "resolution": {"entry_date": "2026-09-11", "sessions_completed": 1}},
                 {"cohort_id": "SEMICONDUCTOR_SHARED_RIDGE:2026-09-10:test", "program_id": "SEMICONDUCTOR_SHARED_RIDGE", "signal_date": "2026-09-10", "first_registered_at": "2026-09-11T00:00:00+00:00", "status": "AWAITING_ENTRY_SESSION", "resolution": None},
@@ -559,6 +591,8 @@ def self_test() -> None:
         assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["evidence_grade"] == "PROSPECTIVE_AWAITING_ENTRY_SESSION"
         assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["validation_grade"] == "PROSPECTIVE_SIGNAL_READY"
         assert out["coverage"]["prospective_ledger"]["present"] is True
+        assert out["freshness"]["freshness_gap_visible"] is True
+        assert out["freshness"]["p249_p266_source_health"]["lagging_symbols_vs_source_max"] == ["XBI"]
         assert out["interpretation"]["daily_score_does_not_imply_daily_turnover"] is True
         assert out["interpretation"]["prospective_evidence_does_not_grant_allocation_authority"] is True
     print("FORWARD_MARKET_SCOREBOARD_SELF_TEST=PASS")
