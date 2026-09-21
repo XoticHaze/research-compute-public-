@@ -32,6 +32,14 @@ class OperatorConsolePublisherContractTests(unittest.TestCase):
         self.assertIn("/app/data/strategy_runtime/cloud_operator_snapshot_v1/latest.json", text)
         self.assertIn("chmod 600", text)
 
+    def test_exact_runtime_image_validates_operator_snapshot_contract(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("tests.test_cloud_operator_snapshot_v1", text)
+        self.assertLess(
+            text.index("Validate private hostless/runtime contracts in exact image"),
+            text.index("Run bounded selected-runtime cloud owner"),
+        )
+
     def test_console_publish_is_nonblocking_for_trading_owner(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         marker = "- name: Publish private operator snapshot"
