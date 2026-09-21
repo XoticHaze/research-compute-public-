@@ -28,6 +28,8 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
             "checkpoint_cache_saved": True,
             "checkpoint_cache_sha256": "b" * 64,
             "checkpoint_cache_key": "mmibkr-selected-runtime-cloud-checkpoint-v1-current-d81",
+            "operator_snapshot_stream_publish_count": 2,
+            "operator_snapshot_stream_attempt_count": 2,
             "operator_snapshot_publish": {
                 "status": "accepted",
                 "runtime_count": 3,
@@ -171,6 +173,22 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         result = mod.evaluate(node, require_checkpoint_restored=False)
         self.assertFalse(result["accepted"])
         self.assertFalse(result["checks"]["operator_durable_readback"])
+
+    def test_rejects_session_without_successful_cycle_snapshot_stream(self):
+        node = self.good_receipt(restored=False)
+        node["operator_snapshot_stream_publish_count"] = 0
+        node["operator_snapshot_stream_attempt_count"] = 3
+        result = mod.evaluate(node, require_checkpoint_restored=False)
+        self.assertFalse(result["accepted"])
+        self.assertFalse(result["checks"]["operator_stream_publish"])
+
+    def test_rejects_impossible_stream_attempt_accounting(self):
+        node = self.good_receipt(restored=False)
+        node["operator_snapshot_stream_publish_count"] = 3
+        node["operator_snapshot_stream_attempt_count"] = 2
+        result = mod.evaluate(node, require_checkpoint_restored=False)
+        self.assertFalse(result["accepted"])
+        self.assertFalse(result["checks"]["operator_stream_attempts"])
 
 
 if __name__ == "__main__":
