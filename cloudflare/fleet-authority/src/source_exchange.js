@@ -21,6 +21,17 @@ const ALLOWED_RUNTIME_IDENTITIES = [
   CANONICAL_RUNTIME_IDENTITY,
 ];
 
+const UI_BUILD_VALIDATION_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mm-ui-react-exact-build-r1.yml@refs/heads/main',
+};
+const UI_BUILD_PRIVATE_ARCHIVE_SOURCE =
+  'd6ec5e7452d02190edaf002dea0feb254e6bcbc4';
+const UI_BUILD_PRIVATE_ARCHIVE_EXPIRES_AT =
+  Date.parse('2026-09-23T12:00:00Z');
+
 const PRIVATE_REPOSITORY = 'XoticHaze/mm-IBKR';
 const PRIVATE_ACCEPTANCE_REF = 'refs/heads/assistant/cloud-signal-history-split-20260918';
 const PRIVATE_MAIN_REF = 'refs/heads/main';
@@ -60,6 +71,24 @@ const APPROVED_PRIVATE_SOURCE_STREAMS = new Set([
   '1ecb1de8dda1c8797b6fa1af6dba6f6e1765438e',
   '5aeb0370a18c4c941852c7454706ba9ffa28da68',
 ]);
+
+function matchesIdentity(identity, expected) {
+  return Boolean(
+    identity
+    && identity.repository === expected.repository
+    && identity.ref === expected.ref
+    && identity.workflow_ref === expected.workflow_ref
+  );
+}
+
+function isPrivateSourceStreamApproved(sourceSha, identity = null) {
+  if (APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha)) return true;
+  return (
+    sourceSha === UI_BUILD_PRIVATE_ARCHIVE_SOURCE
+    && Date.now() <= UI_BUILD_PRIVATE_ARCHIVE_EXPIRES_AT
+    && matchesIdentity(identity, UI_BUILD_VALIDATION_IDENTITY)
+  );
+}
 
 /*
  * Exact source snapshots are approved in code only after their encrypted
@@ -193,18 +222,19 @@ async function verifyJwt(jwt, callerRunId) {
   return claims;
 }
 
-export async function verifySourceExchangeOidc(jwt, callerRunId, role) {
+export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname = '') {
   const claims = await verifyJwt(jwt, callerRunId);
   if (role === 'consumer') {
     const matchedRuntime = ALLOWED_RUNTIME_IDENTITIES.some(
-      (identity) => (
-        claims.repository === identity.repository
-        && claims.ref === identity.ref
-        && claims.workflow_ref === identity.workflow_ref
-      ),
+      (identity) => matchesIdentity(claims, identity),
+    );
+    const matchedUiBuild = matchesIdentity(claims, UI_BUILD_VALIDATION_IDENTITY);
+    const uiBuildPathAllowed = (
+      /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname)
+      || pathname === '/v1/source-vault/private-archive/attest'
     );
     if (
-      !matchedRuntime
+      !(matchedRuntime || (matchedUiBuild && uiBuildPathAllowed))
       || claims.repository_visibility !== 'public'
       || !ALLOWED_PUBLIC_EVENTS.has(claims.event_name)
     ) throw new Error('oidc_consumer_identity_rejected');
@@ -303,7 +333,12 @@ export async function handleSourceExchange(request, env) {
   }
   let identity;
   try {
-    identity = await verifySourceExchangeOidc(auth.slice(7), callerRunId, role);
+    identity = await verifySourceExchangeOidc(
+      auth.slice(7),
+      callerRunId,
+      role,
+      url.pathname,
+    );
   } catch {
     return json({ error: 'unauthorized' }, 401);
   }
@@ -321,7 +356,7 @@ export async function handleSourceExchange(request, env) {
   const privateArchiveMatch = url.pathname.match(/^\/v1\/source-vault\/private-archive\/([0-9a-f]{40})$/);
   if (request.method === 'GET' && privateArchiveMatch) {
     const sourceSha = privateArchiveMatch[1];
-    if (!APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha)) {
+    if (!isPrivateSourceStreamApproved(sourceSha, identity)) {
       return json({ error: 'private_source_sha_not_approved' }, 403);
     }
     const sourceToken = String(env.MMIBKR_PRIVATE_SOURCE_TOKEN || '');
@@ -734,10 +769,11 @@ export class SourceExchange {
       const sourceSha = String(body?.source_sha || '').toLowerCase();
       const streamId = String(body?.stream_id || '');
       const expectedArchiveBytes = Number(body?.expected_archive_bytes || 0);
+      const runtimeIdentity = this._producerIdentity(request);
       if (
         body?.schema !== FLEET_PRIVATE_SOURCE_STREAM_SCHEMA
         || !/^\d{4,24}$/.test(runId)
-        || !APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha)
+        || !isPrivateSourceStreamApproved(sourceSha, runtimeIdentity)
         || !/^[0-9a-f-]{36}$/.test(streamId)
         || !Number.isInteger(expectedArchiveBytes)
         || expectedArchiveBytes < 0
@@ -750,7 +786,7 @@ export class SourceExchange {
         source_sha: sourceSha,
         stream_id: streamId,
         expected_archive_bytes: expectedArchiveBytes,
-        runtime_identity: this._producerIdentity(request),
+        runtime_identity: runtimeIdentity,
         created_at_ms: Date.now(),
       });
       return json({
@@ -784,7 +820,7 @@ export class SourceExchange {
         || Date.now() - Number(grant.created_at_ms || 0) > PRIVATE_SOURCE_STREAM_GRANT_TTL_MS
         || grant.source_sha !== sourceSha
         || grant.stream_id !== streamId
-        || !APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha)
+        || !isPrivateSourceStreamApproved(sourceSha, grant.runtime_identity)
         || !/^[0-9a-f]{64}$/.test(archiveSha)
         || !Number.isInteger(archiveBytes)
         || archiveBytes <= 0
