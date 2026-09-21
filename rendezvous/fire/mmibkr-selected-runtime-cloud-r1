@@ -3,7 +3,8 @@
   "session_seconds": "900",
   "max_cycles": "0",
   "self_handoff": false,
-  "requested_by": "assistant-initial-backfill-canonical-ingest",
+  "requested_by": "assistant-preowner-checkpoint-v2-acceptance",
   "source_public_run_id": "35407829303",
-  "purpose": "consume_proven_backfill_and_persist_canonical_checkpoint"
+  "expected_public_head": "f8096f0e55dbccfa819417794c79e52eaccac270",
+  "purpose": "prove_backfill_preowner_checkpoint_roundtrip_before_forward_owner"
 }
