@@ -67,6 +67,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
             previous_receipt=previous,
         )
         self.assertTrue(accepted["accepted"])
+        self.assertTrue(accepted["checks"]["predecessor_receipt_accepted"])
         self.assertTrue(accepted["checks"]["predecessor_checkpoint_identity"])
 
     def test_rejects_wrong_runtime_count_or_source(self):
@@ -114,6 +115,37 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         )
         self.assertFalse(result["accepted"])
         self.assertFalse(result["checks"]["predecessor_checkpoint_identity"])
+
+    def test_steady_state_rejects_unaccepted_predecessor_receipt(self):
+        current = self.good_receipt(restored=True)
+        previous = self.good_receipt(restored=False)
+        previous["checkpoint_cache_sha256"] = current["checkpoint_restored_sha256"]
+        previous["checkpoint_cache_key"] = current["checkpoint_restored_cache_key"]
+        previous["operator_snapshot_publish"]["status"] = "failed"
+        result = mod.evaluate(
+            current,
+            require_checkpoint_restored=True,
+            previous_receipt=previous,
+        )
+        self.assertFalse(result["accepted"])
+        self.assertFalse(result["checks"]["predecessor_receipt_accepted"])
+        self.assertTrue(result["checks"]["predecessor_checkpoint_identity"])
+
+    def test_rejects_nonhex_checkpoint_digest_identity(self):
+        current = self.good_receipt(restored=True)
+        current["checkpoint_restored_sha256"] = "z" * 64
+        current["checkpoint_cache_sha256"] = "y" * 64
+        previous = self.good_receipt(restored=False)
+        previous["checkpoint_cache_sha256"] = current["checkpoint_restored_sha256"]
+        previous["checkpoint_cache_key"] = current["checkpoint_restored_cache_key"]
+        result = mod.evaluate(
+            current,
+            require_checkpoint_restored=True,
+            previous_receipt=previous,
+        )
+        self.assertFalse(result["accepted"])
+        self.assertFalse(result["checks"]["checkpoint_restored_identity_reported"])
+        self.assertFalse(result["checks"]["checkpoint_saved_identity_reported"])
 
 
 if __name__ == "__main__":
