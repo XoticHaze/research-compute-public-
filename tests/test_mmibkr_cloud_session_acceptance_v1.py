@@ -14,6 +14,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
             "ok": True,
             "session_accepted": True,
             "run_id": "35699999999",
+            "public_head": "1" * 40,
             "private_head": mod.CANONICAL_PRIVATE_SHA,
             "live_execution_allowed": False,
             "credentials_included": False,
@@ -146,6 +147,22 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         self.assertFalse(result["accepted"])
         self.assertFalse(result["checks"]["checkpoint_restored_identity_reported"])
         self.assertFalse(result["checks"]["checkpoint_saved_identity_reported"])
+
+    def test_optional_public_head_expectation_fail_closes(self):
+        node = self.good_receipt(restored=False)
+        accepted = mod.evaluate(
+            node,
+            require_checkpoint_restored=False,
+            expected_public_sha="1" * 40,
+        )
+        self.assertTrue(accepted["accepted"])
+        rejected = mod.evaluate(
+            node,
+            require_checkpoint_restored=False,
+            expected_public_sha="2" * 40,
+        )
+        self.assertFalse(rejected["accepted"])
+        self.assertFalse(rejected["checks"]["public_head_expected"])
 
 
 if __name__ == "__main__":
