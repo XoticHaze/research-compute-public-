@@ -307,7 +307,7 @@ def self_test() -> None:
     assert "research/run_homebuilders_adaptive_duration_forward_20260905.py" in HARNESS_SPECS["homebuilders_adaptive_duration_v1"]["files"]
     assert HARNESS_SPECS["generalized_largecap_ridge_v1"]["program_id"] == "GENERALIZED_LARGECAP_RIDGE"
     assert HARNESS_SPECS["semiconductor_matched_residual_ridge_challenger_v1"]["result_only"] is True
-    assert HARNESS_SPECS["semiconductor_matched_residual_ridge_challenger_v1"]["source_ref"] == "db4e43e59fae847f79dc8ae2ae2542379e48196f"
+    assert HARNESS_SPECS["semiconductor_matched_residual_ridge_challenger_v1"]["source_ref"] == "1774274240e919998684115fc7f86b77dd4621bf"
     print("FORWARD_NATIVE_EPHEMERAL_CONSUMER_SELF_TEST=PASS")
 
 
