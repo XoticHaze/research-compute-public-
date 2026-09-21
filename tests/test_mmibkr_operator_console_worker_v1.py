@@ -111,7 +111,8 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertIn("stored_runtime_count: snapshot.runtimes.length", text)
         self.assertIn("runtime_merge_applied: merged.runtimeMergeApplied", text)
         self.assertIn("received_runtime_count: receipt.received_runtime_count", text)
-        self.assertIn("runtime_count: receipt.runtime_count", text)
+        self.assertIn("runtime_count: receipt.received_runtime_count", text)
+        self.assertIn("stored_runtime_count: receipt.runtime_count", text)
 
     def test_source_change_fails_closed_to_incoming_runtime_set(self):
         text = SOURCE.read_text(encoding="utf-8")
@@ -122,6 +123,12 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         incoming_return = text.index("snapshot: incomingSnapshot", source_change)
         merge_map = text.index("const merged = new Map()", source_change)
         self.assertLess(incoming_return, merge_map)
+
+    def test_external_publish_receipt_keeps_runtime_count_legacy_compatible(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("runtime_count: receipt.received_runtime_count", text)
+        self.assertIn("stored_runtime_count: receipt.runtime_count", text)
+        self.assertIn("received_runtime_count: receipt.received_runtime_count", text)
 
 
 if __name__ == "__main__":
