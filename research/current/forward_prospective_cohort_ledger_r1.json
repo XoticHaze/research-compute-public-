@@ -32,33 +32,91 @@
       "program_id": "HOMEBUILDERS",
       "resolution": {
         "common_entry_date": "2026-09-14",
-        "common_market_latest_date": "2026-09-17",
+        "common_market_latest_date": "2026-09-18",
+        "current_mark_metrics": {
+          "calibration_intercept_bps": 67.965,
+          "calibration_slope": -0.400052,
+          "count": 4,
+          "mean_matched_excess_vs_itb_bps": 78.3438,
+          "net_positive_hit_rate": 0.25,
+          "nonterminal": true,
+          "prediction_mae_bps": 634.8714,
+          "rank_ic_spearman": -0.8
+        },
         "observations": [
           {
+            "admission_score_fixed20_net25_bps": 612.5651121271583,
+            "current_mark": {
+              "gross_return_bps": -52.5883,
+              "itb_return_bps": -211.2078,
+              "mark_date": "2026-09-18",
+              "matched_excess_vs_itb_bps": 133.6196,
+              "net_if_flattened_now_bps": -77.5883,
+              "net_positive": false,
+              "nonterminal": true,
+              "opportunity_excess_vs_qqq_bps": -250.6053,
+              "qqq_return_bps": 173.017
+            },
             "entry_date": "2026-09-14",
             "horizon_sessions": 5,
-            "sessions_completed": 3,
+            "sessions_completed": 4,
             "status": "OPEN",
             "symbol": "CCS"
           },
           {
+            "admission_score_fixed20_net25_bps": 430.5558276760162,
+            "current_mark": {
+              "gross_return_bps": -125.8804,
+              "itb_return_bps": -211.2078,
+              "mark_date": "2026-09-18",
+              "matched_excess_vs_itb_bps": 60.3274,
+              "net_if_flattened_now_bps": -150.8804,
+              "net_positive": false,
+              "nonterminal": true,
+              "opportunity_excess_vs_qqq_bps": -323.8974,
+              "qqq_return_bps": 173.017
+            },
             "entry_date": "2026-09-14",
             "horizon_sessions": 5,
-            "sessions_completed": 3,
+            "sessions_completed": 4,
             "status": "OPEN",
             "symbol": "MHO"
           },
           {
+            "admission_score_fixed20_net25_bps": 807.2166569371602,
+            "current_mark": {
+              "gross_return_bps": -280.0716,
+              "itb_return_bps": -211.2078,
+              "mark_date": "2026-09-18",
+              "matched_excess_vs_itb_bps": -93.8637,
+              "net_if_flattened_now_bps": -305.0716,
+              "net_positive": false,
+              "nonterminal": true,
+              "opportunity_excess_vs_qqq_bps": -478.0886,
+              "qqq_return_bps": 173.017
+            },
             "entry_date": "2026-09-14",
             "horizon_sessions": 5,
-            "sessions_completed": 3,
+            "sessions_completed": 4,
             "status": "OPEN",
             "symbol": "HOV"
           },
           {
+            "admission_score_fixed20_net25_bps": 157.6918231870078,
+            "current_mark": {
+              "gross_return_bps": 27.084,
+              "itb_return_bps": -211.2078,
+              "mark_date": "2026-09-18",
+              "matched_excess_vs_itb_bps": 213.2918,
+              "net_if_flattened_now_bps": 2.084,
+              "net_positive": true,
+              "nonterminal": true,
+              "opportunity_excess_vs_qqq_bps": -170.933,
+              "qqq_return_bps": 173.017
+            },
             "entry_date": "2026-09-14",
             "horizon_sessions": 5,
-            "sessions_completed": 3,
+            "sessions_completed": 4,
             "status": "OPEN",
             "symbol": "BZH"
           }
@@ -67,6 +125,20 @@
       },
       "signal_date": "2026-09-11",
       "source_adapter_sha256": "00435d369ddcc3a3d8adbedb91a9662f047b292ff64fe6af6901bfd112466a59",
+      "source_health": {
+        "all_symbols_share_latest_date": true,
+        "lagging_symbols_vs_source_max": [],
+        "latest_by_symbol": {
+          "BZH": "2026-09-18",
+          "CCS": "2026-09-18",
+          "HOV": "2026-09-18",
+          "ITB": "2026-09-18",
+          "MHO": "2026-09-18",
+          "QQQ": "2026-09-18"
+        },
+        "provider": "yfinance_adjusted_close",
+        "source_max_date": "2026-09-18"
+      },
       "source_ref": "100e356239b2399c054c1a41a18e4e9a5d07d33a",
       "status": "OPEN",
       "stock_round_trip_cost_bps": 25.0,
@@ -107,13 +179,147 @@
       },
       "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
       "resolution": {
-        "common_market_latest_date": "2026-09-17",
+        "common_market_latest_date": "2026-09-18",
+        "current_mark_metrics": {
+          "calibration_intercept_bps": -19.0955,
+          "calibration_interpretation": "partial-horizon diagnostic only; terminal fixed20 calibration remains authoritative",
+          "calibration_slope": 0.957357,
+          "count": 13,
+          "equal_weight_universe_return_bps": 519.9213,
+          "mark_date": "2026-09-18",
+          "nonterminal": true,
+          "prediction_mae_bps": 267.8305,
+          "qqq_return_bps": 173.017,
+          "rank_ic_spearman": 0.60989,
+          "smh_return_bps": 581.7175,
+          "ticker_book_excess_vs_equal_weight_universe_bps": -105.6995,
+          "ticker_book_matched_excess_vs_smh_bps": -167.4957,
+          "ticker_book_net_if_flattened_now_bps": 414.2217,
+          "ticker_book_opportunity_excess_vs_qqq_bps": 241.2047,
+          "ticker_positive_hit_rate": 0.923077
+        },
+        "current_ticker_marks": {
+          "ADI": {
+            "gross_return_bps": 407.18,
+            "net_if_flattened_now_bps": 382.18,
+            "partial_prediction_error_bps_nonterminal": 163.409,
+            "predicted_fixed20_net_value_bps": 218.77104353915175,
+            "sign_hit_current": true
+          },
+          "AMAT": {
+            "gross_return_bps": 479.9514,
+            "net_if_flattened_now_bps": 454.9514,
+            "partial_prediction_error_bps_nonterminal": -364.0333,
+            "predicted_fixed20_net_value_bps": 818.9846080097676,
+            "sign_hit_current": true
+          },
+          "AMD": {
+            "gross_return_bps": 1345.9395,
+            "net_if_flattened_now_bps": 1320.9395,
+            "partial_prediction_error_bps_nonterminal": 543.126,
+            "predicted_fixed20_net_value_bps": 777.8135296533924,
+            "sign_hit_current": true
+          },
+          "APH": {
+            "gross_return_bps": -127.3074,
+            "net_if_flattened_now_bps": -152.3074,
+            "partial_prediction_error_bps_nonterminal": -375.0957,
+            "predicted_fixed20_net_value_bps": 222.7882890439323,
+            "sign_hit_current": false
+          },
+          "AVGO": {
+            "gross_return_bps": 373.9262,
+            "net_if_flattened_now_bps": 348.9262,
+            "partial_prediction_error_bps_nonterminal": -110.4108,
+            "predicted_fixed20_net_value_bps": 459.3369995461853,
+            "sign_hit_current": true
+          },
+          "KLAC": {
+            "gross_return_bps": 467.2074,
+            "net_if_flattened_now_bps": 442.2074,
+            "partial_prediction_error_bps_nonterminal": -257.7558,
+            "predicted_fixed20_net_value_bps": 699.963189765575,
+            "sign_hit_current": true
+          },
+          "LRCX": {
+            "gross_return_bps": 534.5715,
+            "net_if_flattened_now_bps": 509.5715,
+            "partial_prediction_error_bps_nonterminal": -211.4143,
+            "predicted_fixed20_net_value_bps": 720.9858048249403,
+            "sign_hit_current": true
+          },
+          "MCHP": {
+            "gross_return_bps": 250.4187,
+            "net_if_flattened_now_bps": 225.4187,
+            "partial_prediction_error_bps_nonterminal": -148.7302,
+            "predicted_fixed20_net_value_bps": 374.14896443764127,
+            "sign_hit_current": true
+          },
+          "MRVL": {
+            "gross_return_bps": 1162.142,
+            "net_if_flattened_now_bps": 1137.142,
+            "partial_prediction_error_bps_nonterminal": 315.7856,
+            "predicted_fixed20_net_value_bps": 821.3564577322178,
+            "sign_hit_current": true
+          },
+          "MU": {
+            "gross_return_bps": 993.1491,
+            "net_if_flattened_now_bps": 968.1491,
+            "partial_prediction_error_bps_nonterminal": -90.2208,
+            "predicted_fixed20_net_value_bps": 1058.369846656083,
+            "sign_hit_current": true
+          },
+          "NVDA": {
+            "gross_return_bps": 536.1205,
+            "net_if_flattened_now_bps": 511.1205,
+            "partial_prediction_error_bps_nonterminal": 445.6366,
+            "predicted_fixed20_net_value_bps": 65.48382868127038,
+            "sign_hit_current": true
+          },
+          "NXPI": {
+            "gross_return_bps": 213.4394,
+            "net_if_flattened_now_bps": 188.4394,
+            "partial_prediction_error_bps_nonterminal": -189.3635,
+            "predicted_fixed20_net_value_bps": 377.802871441368,
+            "sign_hit_current": true
+          },
+          "TXN": {
+            "gross_return_bps": 122.2383,
+            "net_if_flattened_now_bps": 97.2383,
+            "partial_prediction_error_bps_nonterminal": -266.8148,
+            "predicted_fixed20_net_value_bps": 364.0531406251399,
+            "sign_hit_current": true
+          }
+        },
         "entry_date": "2026-09-14",
         "horizon_sessions": 20,
-        "sessions_completed": 3
+        "sessions_completed": 4
       },
       "signal_date": "2026-09-11",
       "source_adapter_sha256": "aed8eb43d888d3c4d39c4db940c89e5d2247204567d4a0fcf129e9551f04e333",
+      "source_health": {
+        "all_symbols_share_latest_date": true,
+        "lagging_symbols_vs_source_max": [],
+        "latest_by_symbol": {
+          "ADI": "2026-09-18",
+          "AMAT": "2026-09-18",
+          "AMD": "2026-09-18",
+          "APH": "2026-09-18",
+          "AVGO": "2026-09-18",
+          "KLAC": "2026-09-18",
+          "LRCX": "2026-09-18",
+          "MCHP": "2026-09-18",
+          "MRVL": "2026-09-18",
+          "MU": "2026-09-18",
+          "NVDA": "2026-09-18",
+          "NXPI": "2026-09-18",
+          "QQQ": "2026-09-18",
+          "SMH": "2026-09-18",
+          "TXN": "2026-09-18"
+        },
+        "provider": "yfinance_adjusted_close",
+        "source_max_date": "2026-09-18"
+      },
       "source_ref": "e73ec9b15180e208de541ce5d5304888e5550433",
       "status": "OPEN",
       "stock_round_trip_cost_bps": 25.0,
@@ -149,9 +355,55 @@
       }
     }
   ],
-  "generated_at": "2026-09-19T01:08:45.000992+00:00",
-  "market_data_asof": "2026-09-17",
-  "requested_market_data_asof": "2026-09-19",
+  "freshness": {
+    "freshness_gap_note": "A requested/observed gap may be a non-session day; consumers must compare against the expected completed exchange session before classifying stale data.",
+    "freshness_gap_visible": true,
+    "lagging_symbols_by_program": {},
+    "observed_common_asof": "2026-09-18",
+    "requested_asof": "2026-09-21",
+    "source_health_by_program": {
+      "HOMEBUILDERS": {
+        "all_symbols_share_latest_date": true,
+        "lagging_symbols_vs_source_max": [],
+        "latest_by_symbol": {
+          "BZH": "2026-09-18",
+          "CCS": "2026-09-18",
+          "HOV": "2026-09-18",
+          "ITB": "2026-09-18",
+          "MHO": "2026-09-18",
+          "QQQ": "2026-09-18"
+        },
+        "provider": "yfinance_adjusted_close",
+        "source_max_date": "2026-09-18"
+      },
+      "SEMICONDUCTOR_SHARED_RIDGE": {
+        "all_symbols_share_latest_date": true,
+        "lagging_symbols_vs_source_max": [],
+        "latest_by_symbol": {
+          "ADI": "2026-09-18",
+          "AMAT": "2026-09-18",
+          "AMD": "2026-09-18",
+          "APH": "2026-09-18",
+          "AVGO": "2026-09-18",
+          "KLAC": "2026-09-18",
+          "LRCX": "2026-09-18",
+          "MCHP": "2026-09-18",
+          "MRVL": "2026-09-18",
+          "MU": "2026-09-18",
+          "NVDA": "2026-09-18",
+          "NXPI": "2026-09-18",
+          "QQQ": "2026-09-18",
+          "SMH": "2026-09-18",
+          "TXN": "2026-09-18"
+        },
+        "provider": "yfinance_adjusted_close",
+        "source_max_date": "2026-09-18"
+      }
+    }
+  },
+  "generated_at": "2026-09-21T05:54:04.843555+00:00",
+  "market_data_asof": "2026-09-18",
+  "requested_market_data_asof": "2026-09-21",
   "schema": "research.forward_prospective_cohort_ledger_r1",
   "summary": {
     "HOMEBUILDERS": {
