@@ -51,15 +51,17 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
             text,
         )
 
-    def test_health_is_proved_before_access_gate_and_then_gated(self):
+    def test_worker_control_plane_is_proved_before_access_gate(self):
         text = WORKFLOW.read_text(encoding="utf-8")
-        health_step = "Prove operator-console health before Access gate"
+        control_plane_step = "Prove deployed Worker through Cloudflare control plane"
         access_step = "Reconcile exact-email Cloudflare Access application"
-        self.assertIn(health_step, text)
-        self.assertIn("MMIBKR_OPERATOR_CONSOLE_PRE_ACCESS_HEALTH=READY", text)
-        self.assertLess(text.index(health_step), text.index(access_step))
+        self.assertIn(control_plane_step, text)
+        self.assertIn("/workers/scripts/", text)
+        self.assertIn("/settings", text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_CONTROL_PLANE=READY", text)
+        self.assertLess(text.index(control_plane_step), text.index(access_step))
         self.assertIn("for path in ('/', '/api/operator-snapshot', '/healthz'):", text)
-        self.assertNotIn("operator-console health did not converge", text)
+        self.assertNotIn("operator-console pre-Access health did not converge", text)
 
     def test_unauthenticated_acceptance_rejects_public_200(self):
         text = WORKFLOW.read_text(encoding="utf-8")
