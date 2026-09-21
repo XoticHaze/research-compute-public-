@@ -373,7 +373,6 @@ jobs:
           PY
 
       - name: Bind Worker defense-in-depth Access verifier
-        if: ${{ env.MMIBKR_ACCESS_AUD != '' }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -381,6 +380,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [ -z "${MMIBKR_ACCESS_AUD:-}" ] || [ -z "${MMIBKR_ACCESS_TEAM_DOMAIN:-}" ]; then
+            echo 'MMIBKR_OPERATOR_CONSOLE_ACCESS_BINDING=LOCKED_UNCONFIGURED'
+            exit 0
+          fi
           printf '%s' "$MMIBKR_ACCESS_TEAM_DOMAIN" | npx --yes wrangler@4.131.2 secret put ACCESS_TEAM_DOMAIN --config cloudflare/operator-console/wrangler.jsonc >/dev/null
           printf '%s' "$MMIBKR_ACCESS_AUD" | npx --yes wrangler@4.131.2 secret put ACCESS_AUD --config cloudflare/operator-console/wrangler.jsonc >/dev/null
           printf '%s' "$ACCESS_ALLOWED_EMAILS" | npx --yes wrangler@4.131.2 secret put ACCESS_ALLOWED_EMAILS --config cloudflare/operator-console/wrangler.jsonc >/dev/null
