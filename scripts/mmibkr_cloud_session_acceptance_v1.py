@@ -49,6 +49,9 @@ def evaluate(
     )
     safety_ok = all(publish.get(key) is False for key in safety_keys)
 
+    stream_publish_count = node.get("operator_snapshot_stream_publish_count")
+    stream_attempt_count = node.get("operator_snapshot_stream_attempt_count")
+
     checks = {
         "schema": node.get("schema") == SCHEMA,
         "session_accepted": node.get("session_accepted") is True and node.get("ok") is True,
@@ -59,6 +62,10 @@ def evaluate(
         "no_position_payload": node.get("positions_included") is False,
         "no_order_payload": node.get("orders_included") is False,
         "no_credentials": node.get("credentials_included") is False,
+        "operator_stream_publish": isinstance(stream_publish_count, int)
+            and stream_publish_count >= 1,
+        "operator_stream_attempts": isinstance(stream_attempt_count, int)
+            and stream_attempt_count >= stream_publish_count,
         "operator_publish_accepted": publish.get("status") == "accepted",
         "operator_runtime_count": publish.get("runtime_count") == expected_runtime_count,
         "operator_positions_count_reported": isinstance(publish.get("positions_count"), int)
@@ -111,6 +118,8 @@ def evaluate(
         "private_head": node.get("private_head"),
         "expected_private_head": expected_private_sha,
         "expected_runtime_count": expected_runtime_count,
+        "operator_snapshot_stream_publish_count": stream_publish_count,
+        "operator_snapshot_stream_attempt_count": stream_attempt_count,
         "operator_snapshot_publish": {
             "status": publish.get("status"),
             "runtime_count": publish.get("runtime_count"),
