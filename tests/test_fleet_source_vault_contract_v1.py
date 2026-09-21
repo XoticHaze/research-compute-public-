@@ -97,12 +97,23 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("UI_BUILD_PRIVATE_ARCHIVE_EXPIRES_AT", text)
         self.assertIn("2026-09-23T12:00:00Z", text)
         self.assertIn("isPrivateSourceStreamApproved", text)
-        self.assertIn("uiBuildPathAllowed", text)
+        self.assertIn("privateArchivePathAllowed", text)
         self.assertIn("/v1/source-vault/private-archive/attest", text)
         self.assertIn(
             "/^\\/v1\\/source-vault\\/private-archive\\/[0-9a-f]{40}$/",
             text,
         )
+
+    def test_runtime_bootstrap_identity_is_private_archive_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("SOURCE_VAULT_BOOTSTRAP_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-source-vault-bootstrap-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn("matchedBootstrap", text)
+        self.assertIn("privateArchivePathAllowed", text)
+        self.assertIn("(matchedBootstrap && privateArchivePathAllowed)", text)
 
     def test_stream_attestation_is_bound_to_run_stream_sha_and_size(self):
         text = SOURCE.read_text(encoding="utf-8")
