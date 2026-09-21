@@ -333,11 +333,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          snapshot="$RUNNER_TEMP/mmibkr-data/strategy_runtime/cloud_operator_snapshot_v1/latest.json"
-          if [ ! -s "$snapshot" ]; then
+          snapshot_in_container="/app/data/strategy_runtime/cloud_operator_snapshot_v1/latest.json"
+          if ! docker run --rm \
+            -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro" \
+            "mmibkr-cloud:${GITHUB_RUN_ID}" \
+            test -s "$snapshot_in_container"; then
             echo 'MMIBKR_OPERATOR_SNAPSHOT_PUBLISH=not_available_for_runtime_source'
             exit 0
           fi
+
+          snapshot="$RUNNER_TEMP/mmibkr-operator-snapshot-publish.json"
+          trap 'rm -f "$snapshot"' EXIT
+          docker run --rm \
+            -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro" \
+            "mmibkr-cloud:${GITHUB_RUN_ID}" \
+            python -c "from pathlib import Path; import sys; sys.stdout.buffer.write(Path('$snapshot_in_container').read_bytes())" \
+            > "$snapshot"
+          chmod 600 "$snapshot"
+          test -s "$snapshot"
+
           python - "$snapshot" <<'PY'
           import json
           import os
