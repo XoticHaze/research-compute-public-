@@ -20,9 +20,14 @@ class CloudSessionReceiptTests(unittest.TestCase):
             "MMIBKR_RECEIPT_CHECKPOINT_RESTORED",
             "MMIBKR_RECEIPT_CHECKPOINT_CACHE_READY",
             "MMIBKR_RECEIPT_CHECKPOINT_CACHE_SAVED",
+            "'public_head': os.environ.get('GITHUB_SHA')",
             "receipt['checkpoint_restored']",
+            "receipt['checkpoint_restored_sha256']",
+            "receipt['checkpoint_restored_cache_key']",
             "receipt['checkpoint_cache_ready']",
             "receipt['checkpoint_cache_saved']",
+            "receipt['checkpoint_cache_sha256']",
+            "receipt['checkpoint_cache_key']",
         ):
             self.assertIn(marker, self.text)
 
