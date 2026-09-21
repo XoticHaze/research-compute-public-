@@ -164,6 +164,17 @@ def main() -> None:
     if close.empty:
         raise RuntimeError("no price data returned")
 
+    latest_by_symbol = {}
+    for symbol in ALL:
+        valid = close[symbol].dropna()
+        latest_by_symbol[symbol] = None if valid.empty else pd.Timestamp(valid.index.max()).date().isoformat()
+    dated = [value for value in latest_by_symbol.values() if value]
+    source_max_date = max(dated) if dated else None
+    lagging_symbols = sorted(
+        symbol for symbol, value in latest_by_symbol.items()
+        if source_max_date is not None and value != source_max_date
+    )
+
     decision_date = DECISION_AT.tz_convert(None).normalize()
     ret = close.pct_change()
     forward_ix = ret.index[ret.index >= decision_date]
@@ -219,6 +230,15 @@ def main() -> None:
         "decision_at": DECISION_AT.isoformat(),
         "observed_at": now.isoformat(),
         "status": "FORWARD_OBSERVING" if len(rows) else "BASELINE_FROZEN_NO_FORWARD_CLOSES",
+        "source_health": {
+            "provider": "yfinance_adjusted_close",
+            "source_max_date": source_max_date,
+            "latest_by_symbol": latest_by_symbol,
+            "lagging_symbols_vs_source_max": lagging_symbols,
+            "all_symbols_share_latest_date": not lagging_symbols and len(dated) == len(ALL),
+            "latest_scored_common_session": rows[-1]["date"] if rows else None,
+            "common_session_lags_source_max": bool(rows and source_max_date and rows[-1]["date"] < source_max_date),
+        },
         "contract": {
             "p249_core": "fixed equal-third small-value/P64/P36 primitive stack",
             "p266_satellite": "fixed 12-1 top-3 industry momentum",
