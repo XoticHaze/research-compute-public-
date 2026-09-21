@@ -34,7 +34,7 @@ class OperatorConsolePublisherContractTests(unittest.TestCase):
         start = text.index(marker)
         section = text[start : start + 800]
         self.assertIn("continue-on-error: true", section)
-        self.assertIn("if: \${{ success() }}", section)
+        self.assertIn("if: ${{ success() }}", section)
 
     def test_publisher_uses_github_oidc_not_persistent_console_secret(self):
         text = WORKFLOW.read_text(encoding="utf-8")
