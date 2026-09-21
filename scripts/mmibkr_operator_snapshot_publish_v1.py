@@ -186,23 +186,23 @@ def publish_snapshot(
         except OSError:
             pass
 
-    prefix = (
-        "MMIBKR_OPERATOR_SNAPSHOT_STREAM"
-        if marker_mode == "stream"
-        else "MMIBKR_OPERATOR_SNAPSHOT"
-    )
-    print(prefix + "_PUBLISH=accepted")
-    print(prefix + "_RUNTIME_COUNT=" + str(runtime_count))
-    print(prefix + "_POSITIONS_COUNT=" + str(positions_count))
-    print(prefix + "_DURABLE_READBACK_VERIFIED=1")
-    if marker_mode != "stream":
-        print(prefix + "_ACCOUNT_IDENTIFIERS_INCLUDED=0")
-        print(prefix + "_CREDENTIALS_INCLUDED=0")
-        print(prefix + "_TOKENS_INCLUDED=0")
-        print(prefix + "_PRIVATE_SOURCE_INCLUDED=0")
-        print(prefix + "_EXECUTION_AUTHORITY_INCLUDED=0")
-        print(prefix + "_BROKER_MUTATION_AUTHORITY=0")
-        print(prefix + "_LIVE_EXECUTION_ALLOWED=0")
+    if marker_mode == "stream":
+        print("MMIBKR_OPERATOR_SNAPSHOT_STREAM_PUBLISH=accepted")
+        print("MMIBKR_OPERATOR_SNAPSHOT_STREAM_RUNTIME_COUNT=" + str(runtime_count))
+        print("MMIBKR_OPERATOR_SNAPSHOT_STREAM_POSITIONS_COUNT=" + str(positions_count))
+        print("MMIBKR_OPERATOR_SNAPSHOT_STREAM_DURABLE_READBACK_VERIFIED=1")
+    else:
+        print("MMIBKR_OPERATOR_SNAPSHOT_PUBLISH=accepted")
+        print("MMIBKR_OPERATOR_SNAPSHOT_RUNTIME_COUNT=" + str(runtime_count))
+        print("MMIBKR_OPERATOR_SNAPSHOT_POSITIONS_COUNT=" + str(positions_count))
+        print("MMIBKR_OPERATOR_SNAPSHOT_DURABLE_READBACK_VERIFIED=1")
+        print("MMIBKR_OPERATOR_SNAPSHOT_ACCOUNT_IDENTIFIERS_INCLUDED=0")
+        print("MMIBKR_OPERATOR_SNAPSHOT_CREDENTIALS_INCLUDED=0")
+        print("MMIBKR_OPERATOR_SNAPSHOT_TOKENS_INCLUDED=0")
+        print("MMIBKR_OPERATOR_SNAPSHOT_PRIVATE_SOURCE_INCLUDED=0")
+        print("MMIBKR_OPERATOR_SNAPSHOT_EXECUTION_AUTHORITY_INCLUDED=0")
+        print("MMIBKR_OPERATOR_SNAPSHOT_BROKER_MUTATION_AUTHORITY=0")
+        print("MMIBKR_OPERATOR_SNAPSHOT_LIVE_EXECUTION_ALLOWED=0")
     return result
 
 
