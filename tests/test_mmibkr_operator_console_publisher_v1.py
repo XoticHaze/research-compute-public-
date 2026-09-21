@@ -115,6 +115,15 @@ class OperatorConsolePublisherContractTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, publisher)
 
+    def test_publisher_distinguishes_received_and_stored_runtime_counts(self):
+        publisher = PUBLISHER.read_text(encoding="utf-8")
+        self.assertIn('"received_runtime_count": runtime_count', publisher)
+        self.assertIn('"runtime_count": stored_runtime_count', publisher)
+        self.assertIn("MMIBKR_OPERATOR_SNAPSHOT_STREAM_RECEIVED_RUNTIME_COUNT=", publisher)
+        self.assertIn("MMIBKR_OPERATOR_SNAPSHOT_STREAM_RUNTIME_COUNT=", publisher)
+        self.assertIn("MMIBKR_OPERATOR_SNAPSHOT_RECEIVED_RUNTIME_COUNT=", publisher)
+        self.assertIn("MMIBKR_OPERATOR_SNAPSHOT_RUNTIME_COUNT=", publisher)
+
 
 if __name__ == "__main__":
     unittest.main()
