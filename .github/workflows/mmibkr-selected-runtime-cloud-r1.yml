@@ -295,8 +295,10 @@ jobs:
               sh -lc "chown ${uid}:${gid} /checkpoint/latest.tgz && chmod 600 /checkpoint/latest.tgz"
             ownership_code=$?
             if [ "$ownership_code" -eq 0 ] && [ -r "$checkpoint" ]; then
+              checkpoint_sha256="$(sha256sum "$checkpoint" | awk '{print $1}')"
               echo 'ready=true' >> "$GITHUB_OUTPUT"
-              sha256sum "$checkpoint"
+              echo "sha256=$checkpoint_sha256" >> "$GITHUB_OUTPUT"
+              echo "$checkpoint_sha256  $checkpoint"
               echo 'MMIBKR_CHECKPOINT_CACHE_READY=1'
             else
               echo 'ready=false' >> "$GITHUB_OUTPUT"
@@ -317,10 +319,35 @@ jobs:
           path: ${{ runner.temp }}/mmibkr-checkpoint
           key: ${{ env.CHECKPOINT_CACHE_PREFIX }}${{ github.run_id }}-${{ env.PRIVATE_HEAD }}
 
+      - name: Remove local checkpoint before cache round-trip proof
+        if: ${{ steps.checkpoint.outputs.ready == 'true' }}
+        run: rm -f "$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+
+      - name: Restore just-saved checkpoint cache for round-trip proof
+        id: verify_checkpoint_cache
+        if: ${{ steps.checkpoint.outputs.ready == 'true' }}
+        uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        with:
+          path: ${{ runner.temp }}/mmibkr-checkpoint
+          key: ${{ env.CHECKPOINT_CACHE_PREFIX }}${{ github.run_id }}-${{ env.PRIVATE_HEAD }}
+          fail-on-cache-miss: true
+
       - name: Confirm sanitized successor checkpoint cache saved
         id: checkpoint_saved
         if: ${{ steps.checkpoint.outputs.ready == 'true' }}
-        run: echo 'MMIBKR_CHECKPOINT_CACHE_SAVED=1'
+        env:
+          EXPECTED_CHECKPOINT_SHA256: ${{ steps.checkpoint.outputs.sha256 }}
+          CHECKPOINT_CACHE_HIT: ${{ steps.verify_checkpoint_cache.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          checkpoint="$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+          test "$CHECKPOINT_CACHE_HIT" = 'true'
+          test -n "$EXPECTED_CHECKPOINT_SHA256"
+          test -r "$checkpoint"
+          actual_sha256="$(sha256sum "$checkpoint" | awk '{print $1}')"
+          test "$actual_sha256" = "$EXPECTED_CHECKPOINT_SHA256"
+          echo "MMIBKR_CHECKPOINT_CACHE_ROUNDTRIP_SHA256=$actual_sha256"
+          echo 'MMIBKR_CHECKPOINT_CACHE_SAVED=1'
 
       - name: Enforce successful selected-runtime cloud session
         run: |
