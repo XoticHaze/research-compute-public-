@@ -41,6 +41,7 @@ on:
       - tests/test_mmibkr_cloud_session_receipt_v1.py
       - tests/test_mmibkr_cloud_session_acceptance_v1.py
       - tests/test_mmibkr_initial_backfill_ingest_workflow_v1.py
+      - tests/test_mmibkr_initial_backfill_preowner_checkpoint_v1.py
       - scripts/mmibkr_cloud_session_acceptance_v1.py
       - scripts/mmibkr_operator_snapshot_publish_v1.py
       - tests/test_mmibkr_operator_snapshot_publish_helper_v1.py
@@ -87,6 +88,7 @@ jobs:
             tests/test_mmibkr_cloud_session_receipt_v1.py \
             tests/test_mmibkr_cloud_session_acceptance_v1.py \
             tests/test_mmibkr_initial_backfill_ingest_workflow_v1.py \
+            tests/test_mmibkr_initial_backfill_preowner_checkpoint_v1.py \
             scripts/mmibkr_cloud_session_acceptance_v1.py \
             scripts/mmibkr_operator_snapshot_publish_v1.py \
             tests/test_mmibkr_operator_snapshot_publish_helper_v1.py
@@ -99,6 +101,7 @@ jobs:
             tests.test_mmibkr_cloud_session_receipt_v1 \
             tests.test_mmibkr_cloud_session_acceptance_v1 \
             tests.test_mmibkr_initial_backfill_ingest_workflow_v1 \
+            tests.test_mmibkr_initial_backfill_preowner_checkpoint_v1 \
             tests.test_mmibkr_operator_snapshot_publish_helper_v1
 
   runtime:
@@ -424,6 +427,80 @@ jobs:
           echo "MMIBKR_INITIAL_BACKFILL_MNQ_SOURCE_ROWS=$MNQ_SOURCE_ROWS"
           echo "MMIBKR_INITIAL_BACKFILL_MNQ_TARGET_ROWS=$MNQ_TARGET_ROWS"
 
+      - name: Build canonical initial-backfill checkpoint before owner
+        id: initial_backfill_checkpoint
+        if: ${{ steps.initial_backfill.outputs.ready == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          uid="$(id -u)"
+          gid="$(id -g)"
+          checkpoint="$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+          rm -f "$checkpoint"
+
+          docker run --rm \
+            -v "$RUNNER_TEMP/mmibkr-data:/app/data" \
+            -v "$RUNNER_TEMP/mmibkr-checkpoint:/checkpoint" \
+            "mmibkr-cloud:${GITHUB_RUN_ID}" \
+            python scripts/operator/runtime_market_data_cache_checkpoint_v1.py \
+              --repo-root /app \
+              --data-root /app/data \
+              --archive-output /checkpoint/latest.tgz
+
+          docker run --rm \
+            -v "$RUNNER_TEMP/mmibkr-checkpoint:/checkpoint" \
+            "mmibkr-cloud:${GITHUB_RUN_ID}" \
+            sh -lc "chown ${uid}:${gid} /checkpoint/latest.tgz && chmod 600 /checkpoint/latest.tgz"
+
+          test -r "$checkpoint"
+          checkpoint_sha256="$(sha256sum "$checkpoint" | awk '{print $1}')"
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+          echo "sha256=$checkpoint_sha256" >> "$GITHUB_OUTPUT"
+          echo 'MMIBKR_INITIAL_BACKFILL_PREOWNER_CHECKPOINT_READY=1'
+          echo "MMIBKR_INITIAL_BACKFILL_PREOWNER_CHECKPOINT_SHA256=$checkpoint_sha256"
+
+      - name: Save canonical initial-backfill checkpoint before owner
+        if: ${{ steps.initial_backfill_checkpoint.outputs.ready == 'true' }}
+        uses: actions/cache/save@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        with:
+          path: ${{ runner.temp }}/mmibkr-checkpoint
+          key: ${{ env.CHECKPOINT_CACHE_PREFIX }}${{ github.run_id }}-${{ env.PRIVATE_HEAD }}-initial-backfill-preowner
+
+      - name: Remove local initial-backfill checkpoint before round-trip proof
+        if: ${{ steps.initial_backfill_checkpoint.outputs.ready == 'true' }}
+        run: rm -f "$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+
+      - name: Restore exact initial-backfill checkpoint before owner
+        id: verify_initial_backfill_checkpoint
+        if: ${{ steps.initial_backfill_checkpoint.outputs.ready == 'true' }}
+        uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        with:
+          path: ${{ runner.temp }}/mmibkr-checkpoint
+          key: ${{ env.CHECKPOINT_CACHE_PREFIX }}${{ github.run_id }}-${{ env.PRIVATE_HEAD }}-initial-backfill-preowner
+          fail-on-cache-miss: true
+
+      - name: Enforce exact initial-backfill checkpoint round-trip before owner
+        id: initial_backfill_checkpoint_saved
+        if: ${{ steps.initial_backfill_checkpoint.outputs.ready == 'true' }}
+        env:
+          EXPECTED_SHA256: ${{ steps.initial_backfill_checkpoint.outputs.sha256 }}
+          CACHE_HIT: ${{ steps.verify_initial_backfill_checkpoint.outputs.cache-hit }}
+          CACHE_KEY: ${{ env.CHECKPOINT_CACHE_PREFIX }}${{ github.run_id }}-${{ env.PRIVATE_HEAD }}-initial-backfill-preowner
+        shell: bash
+        run: |
+          set -euo pipefail
+          checkpoint="$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+          test "$CACHE_HIT" = 'true'
+          test -r "$checkpoint"
+          actual_sha256="$(sha256sum "$checkpoint" | awk '{print $1}')"
+          test "$actual_sha256" = "$EXPECTED_SHA256"
+
+          echo 'saved=true' >> "$GITHUB_OUTPUT"
+          echo "saved_sha256=$actual_sha256" >> "$GITHUB_OUTPUT"
+          echo "saved_cache_key=$CACHE_KEY" >> "$GITHUB_OUTPUT"
+          echo 'MMIBKR_INITIAL_BACKFILL_PREOWNER_CHECKPOINT_SAVED=1'
+          echo "MMIBKR_INITIAL_BACKFILL_PREOWNER_CHECKPOINT_ROUNDTRIP_SHA256=$actual_sha256"
+
       - name: Run bounded selected-runtime cloud owner
         id: cloud_owner
         shell: bash
@@ -685,6 +762,9 @@ jobs:
           MMIBKR_RECEIPT_INITIAL_BACKFILL_APH_TARGET_ROWS: ${{ steps.initial_backfill.outputs.aph_target_rows }}
           MMIBKR_RECEIPT_INITIAL_BACKFILL_MNQ_SOURCE_ROWS: ${{ steps.initial_backfill.outputs.mnq_source_rows }}
           MMIBKR_RECEIPT_INITIAL_BACKFILL_MNQ_TARGET_ROWS: ${{ steps.initial_backfill.outputs.mnq_target_rows }}
+          MMIBKR_RECEIPT_INITIAL_BACKFILL_PREOWNER_CHECKPOINT_SAVED: ${{ steps.initial_backfill_checkpoint_saved.outputs.saved || 'false' }}
+          MMIBKR_RECEIPT_INITIAL_BACKFILL_PREOWNER_CHECKPOINT_SHA256: ${{ steps.initial_backfill_checkpoint_saved.outputs.saved_sha256 }}
+          MMIBKR_RECEIPT_INITIAL_BACKFILL_PREOWNER_CHECKPOINT_CACHE_KEY: ${{ steps.initial_backfill_checkpoint_saved.outputs.saved_cache_key }}
           MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_STREAM_COUNT: ${{ steps.cloud_owner.outputs.stream_publish_count || '0' }}
           MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_STREAM_ATTEMPTS: ${{ steps.cloud_owner.outputs.stream_attempt_count || '0' }}
           MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_PUBLISH: ${{ steps.operator_snapshot.outputs.publish_status }}
@@ -725,7 +805,7 @@ jobs:
                   and node.get('live_execution_allowed') is False
               )
               receipt = {
-                  'schema': 'mmibkr.selected_runtime_cloud_session_receipt.v1',
+                  'schema': 'mmibkr.selected_runtime_cloud_session_receipt.v2',
                   'ok': session_accepted,
                   'session_accepted': session_accepted,
                   'status': node.get('status'),
@@ -750,7 +830,7 @@ jobs:
               }
           else:
               receipt = {
-                  'schema': 'mmibkr.selected_runtime_cloud_session_receipt.v1',
+                  'schema': 'mmibkr.selected_runtime_cloud_session_receipt.v2',
                   'ok': False,
                   'status': 'session_receipt_missing_after_runtime_failure',
                   'run_id': os.environ['GITHUB_RUN_ID'],
@@ -825,6 +905,27 @@ jobs:
               'broker_action': False,
               'runtime_execution_contract_mutated': False,
               'live_execution_allowed': False,
+              'preowner_checkpoint_saved': (
+                  os.environ.get(
+                      'MMIBKR_RECEIPT_INITIAL_BACKFILL_PREOWNER_CHECKPOINT_SAVED'
+                  ) == 'true'
+              ),
+              'preowner_checkpoint_sha256': (
+                  str(
+                      os.environ.get(
+                          'MMIBKR_RECEIPT_INITIAL_BACKFILL_PREOWNER_CHECKPOINT_SHA256'
+                      ) or ''
+                  ).strip()
+                  or None
+              ),
+              'preowner_checkpoint_cache_key': (
+                  str(
+                      os.environ.get(
+                          'MMIBKR_RECEIPT_INITIAL_BACKFILL_PREOWNER_CHECKPOINT_CACHE_KEY'
+                      ) or ''
+                  ).strip()
+                  or None
+              ),
           }
           receipt['operator_snapshot_stream_publish_count'] = (
               optional_int('MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_STREAM_COUNT') or 0
