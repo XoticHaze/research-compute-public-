@@ -33,6 +33,15 @@ class CloudCheckpointCacheHandoffTests(unittest.TestCase):
         self.assertIn("CHECKPOINT_CACHE_PREFIX", text)
         self.assertIn("Confirm sanitized successor checkpoint cache saved", text)
         self.assertIn("MMIBKR_CHECKPOINT_CACHE_SAVED=1", text)
+        self.assertIn("sha256=$checkpoint_sha256", text)
+        self.assertIn("Remove local checkpoint before cache round-trip proof", text)
+        self.assertIn("Restore just-saved checkpoint cache for round-trip proof", text)
+        self.assertIn("fail-on-cache-miss: true", text)
+        self.assertIn("steps.verify_checkpoint_cache.outputs.cache-hit", text)
+        self.assertIn("EXPECTED_CHECKPOINT_SHA256", text)
+        self.assertIn("test \"$CHECKPOINT_CACHE_HIT\" = 'true'", text)
+        self.assertIn("test \"$actual_sha256\" = \"$EXPECTED_CHECKPOINT_SHA256\"", text)
+        self.assertIn("MMIBKR_CHECKPOINT_CACHE_ROUNDTRIP_SHA256=", text)
 
     def test_private_runtime_cleanup_still_destroys_checkpoint(self):
         text = WORKFLOW.read_text(encoding="utf-8")
