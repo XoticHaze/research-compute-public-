@@ -148,6 +148,24 @@ def build(
     required = symbols + ["SPY", "QQQ"]
     start = date.fromisoformat(signal_date) - timedelta(days=10)
     prices = {s: loader(s, start, asof) for s in dict.fromkeys(required)}
+    latest_by_symbol = {
+        symbol: (None if prices[symbol].empty else pd.Timestamp(prices[symbol].index.max()).date().isoformat())
+        for symbol in required
+    }
+    dated = [value for value in latest_by_symbol.values() if value]
+    source_max_date = max(dated) if dated else None
+    source_health = {
+        "provider": "yfinance_adjusted_close",
+        "source_max_date": source_max_date,
+        "latest_by_symbol": latest_by_symbol,
+        "lagging_symbols_vs_source_max": sorted(
+            symbol for symbol, value in latest_by_symbol.items()
+            if source_max_date is not None and value != source_max_date
+        ),
+    }
+    source_health["all_symbols_share_latest_date"] = (
+        not source_health["lagging_symbols_vs_source_max"] and len(dated) == len(required)
+    )
     calendar = _common_calendar(prices, required)
 
     entry = _first_entry(calendar, signal_date, delay)
@@ -161,6 +179,7 @@ def build(
             "first_registered_at": first_registered_at,
             "registration_anchor_source": registration_anchor_source,
             "state": "AWAITING_ENTRY_SESSION",
+            "source_health": source_health,
             "execution_delay_sessions": delay,
             "holding_horizon_sessions": horizon,
             "symbols": symbols,
@@ -188,6 +207,7 @@ def build(
             "first_registered_at": first_registered_at,
             "registration_anchor_source": registration_anchor_source,
             "state": "LATE_REGISTRATION_REJECTED",
+            "source_health": source_health,
             "entry_date": entry_ts.date().isoformat(),
             "execution_delay_sessions": delay,
             "holding_horizon_sessions": horizon,
@@ -254,6 +274,11 @@ def build(
         "first_registered_at": first_registered_at,
         "registration_anchor_source": registration_anchor_source,
         "state": "RESOLVED" if terminal else "PROSPECTIVE_OPEN",
+        "source_health": {
+            **source_health,
+            "latest_common_session": calendar[-1].date().isoformat() if len(calendar) else None,
+            "common_session_lags_source_max": bool(len(calendar) and source_max_date and calendar[-1].date().isoformat() < source_max_date),
+        },
         "entry_date": entry_ts.date().isoformat(),
         "evaluation_date": eval_ts.date().isoformat(),
         "execution_delay_sessions": delay,
@@ -318,6 +343,7 @@ def enrich_scoreboard(
         "generated_at": observation.get("generated_at"),
         "market_data_asof": observation.get("market_data_asof"),
         "sessions_completed": observation.get("sessions_completed"),
+        "source_health": observation.get("source_health"),
         "sha256": observation_sha256,
     }
     scoreboard.setdefault("interpretation", {})["largecap_transport_observation_does_not_grant_allocation_authority"] = True
@@ -376,6 +402,7 @@ def self_test() -> None:
     assert recovered["registration_anchor_source"]["evidence_commit"] == "ae327a88bf02dc55f596416ad563375b0cd076d7"
     assert out["entry_date"] == "2026-01-05"
     assert out["summary"]["directional_sign_hit_rate"] == 1.0
+    assert out["source_health"]["all_symbols_share_latest_date"] is True
     assert all(r["prediction_error_bps"] is None for r in out["observations"])
     continued = build(adapter, date(2026, 1, 9), "2026-01-10T00:00:00+00:00", loader, prior=out)
     assert continued["first_registered_at"] == out["first_registered_at"]
