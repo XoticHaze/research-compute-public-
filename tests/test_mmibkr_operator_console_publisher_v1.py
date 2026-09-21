@@ -31,6 +31,16 @@ class OperatorConsolePublisherContractTests(unittest.TestCase):
         self.assertIn("docker run --rm", text)
         self.assertIn("/app/data/strategy_runtime/cloud_operator_snapshot_v1/latest.json", text)
         self.assertIn("chmod 600", text)
+        for marker in (
+            "MMIBKR_OPERATOR_SNAPSHOT_ACCOUNT_IDENTIFIERS_INCLUDED=0",
+            "MMIBKR_OPERATOR_SNAPSHOT_CREDENTIALS_INCLUDED=0",
+            "MMIBKR_OPERATOR_SNAPSHOT_TOKENS_INCLUDED=0",
+            "MMIBKR_OPERATOR_SNAPSHOT_PRIVATE_SOURCE_INCLUDED=0",
+            "MMIBKR_OPERATOR_SNAPSHOT_EXECUTION_AUTHORITY_INCLUDED=0",
+            "MMIBKR_OPERATOR_SNAPSHOT_BROKER_MUTATION_AUTHORITY=0",
+            "MMIBKR_OPERATOR_SNAPSHOT_LIVE_EXECUTION_ALLOWED=0",
+        ):
+            self.assertIn(marker, text)
 
     def test_exact_runtime_image_validates_operator_snapshot_contract(self):
         text = WORKFLOW.read_text(encoding="utf-8")
