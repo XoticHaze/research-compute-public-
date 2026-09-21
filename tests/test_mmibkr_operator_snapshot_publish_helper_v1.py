@@ -68,6 +68,7 @@ class OperatorSnapshotPublishHelperTests(unittest.TestCase):
             "schema": "mmibkr.operator_console_publish_receipt.v1",
             "received_runtime_count": 3,
             "runtime_count": 3,
+            "stored_runtime_count": 3,
             "runtime_merge_applied": False,
             "positions_count": 1,
             "durable_readback_verified": True,
@@ -85,7 +86,8 @@ class OperatorSnapshotPublishHelperTests(unittest.TestCase):
 
         merged = dict(receipt)
         merged["received_runtime_count"] = 1
-        merged["runtime_count"] = 3
+        merged["runtime_count"] = 1
+        merged["stored_runtime_count"] = 3
         merged["runtime_merge_applied"] = True
         merged_result = mod.validate_publish_receipt(
             merged,
@@ -99,6 +101,7 @@ class OperatorSnapshotPublishHelperTests(unittest.TestCase):
         for key, value in (
             ("received_runtime_count", 2),
             ("runtime_count", 2),
+            ("stored_runtime_count", 2),
             ("positions_count", 0),
             ("durable_readback_verified", False),
             ("credentials_included", True),
@@ -130,7 +133,8 @@ class OperatorSnapshotPublishHelperTests(unittest.TestCase):
             "ok": True,
             "schema": "mmibkr.operator_console_publish_receipt.v1",
             "received_runtime_count": 3,
-            "runtime_count": 2,
+            "runtime_count": 3,
+            "stored_runtime_count": 2,
             "runtime_merge_applied": True,
             "positions_count": 1,
             "durable_readback_verified": True,
@@ -144,6 +148,28 @@ class OperatorSnapshotPublishHelperTests(unittest.TestCase):
                 receipt,
                 runtime_count=3,
                 positions_count=1,
+            )
+
+    def test_publish_receipt_rejects_legacy_runtime_count_mismatch(self):
+        receipt = {
+            "ok": True,
+            "schema": "mmibkr.operator_console_publish_receipt.v1",
+            "received_runtime_count": 1,
+            "runtime_count": 3,
+            "stored_runtime_count": 3,
+            "runtime_merge_applied": True,
+            "positions_count": 0,
+            "durable_readback_verified": True,
+            "credentials_included": False,
+            "tokens_included": False,
+            "broker_mutation_authority": False,
+            "live_execution_allowed": False,
+        }
+        with self.assertRaises(RuntimeError):
+            mod.validate_publish_receipt(
+                receipt,
+                runtime_count=1,
+                positions_count=0,
             )
 
 
