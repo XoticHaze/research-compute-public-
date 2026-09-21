@@ -119,6 +119,8 @@ class OperatorConsolePublisherContractTests(unittest.TestCase):
         publisher = PUBLISHER.read_text(encoding="utf-8")
         self.assertIn('"received_runtime_count": runtime_count', publisher)
         self.assertIn('"runtime_count": stored_runtime_count', publisher)
+        self.assertIn('legacy_runtime_count = receipt.get("runtime_count")', publisher)
+        self.assertIn('stored_runtime_count = receipt.get("stored_runtime_count")', publisher)
         self.assertIn("MMIBKR_OPERATOR_SNAPSHOT_STREAM_RECEIVED_RUNTIME_COUNT=", publisher)
         self.assertIn("MMIBKR_OPERATOR_SNAPSHOT_STREAM_RUNTIME_COUNT=", publisher)
         self.assertIn("MMIBKR_OPERATOR_SNAPSHOT_RECEIVED_RUNTIME_COUNT=", publisher)
