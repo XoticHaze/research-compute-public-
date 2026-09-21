@@ -7,6 +7,8 @@ on:
     paths:
       - 'cloudflare/operator-console/**'
       - 'tests/test_mmibkr_operator_console_worker_v1.py'
+      - 'tests/test_mmibkr_operator_console_publisher_v1.py'
+      - '.github/workflows/mmibkr-selected-runtime-cloud-r1.yml'
       - '.github/workflows/mmibkr-operator-console-contract-ci.yml'
   push:
     branches:
@@ -38,7 +40,9 @@ jobs:
       - name: Validate private operator-console contracts
         run: |
           set -euo pipefail
-          python -m unittest -v tests.test_mmibkr_operator_console_worker_v1
+          python -m unittest -v \
+            tests.test_mmibkr_operator_console_worker_v1 \
+            tests.test_mmibkr_operator_console_publisher_v1
 
       - name: Dry-run canonical Worker bundle
         run: |
