@@ -6,7 +6,7 @@ on:
       source_ref:
         description: Exact approved private MM-IBKR source SHA to materialize from the reusable encrypted Fleet vault
         required: true
-        default: 5aeb0370a18c4c941852c7454706ba9ffa28da68
+        default: d81df85788ebb6be6d4d69b9b9a537be96f16507
         type: string
       session_seconds:
         description: Bounded daemon session length
@@ -87,7 +87,7 @@ jobs:
       cancel-in-progress: false
     env:
       IBKR_REMOTE_EXCHANGE_TOKEN: ${{ github.token }}
-      CANONICAL_SOURCE_REF: 5aeb0370a18c4c941852c7454706ba9ffa28da68
+      CANONICAL_SOURCE_REF: d81df85788ebb6be6d4d69b9b9a537be96f16507
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
