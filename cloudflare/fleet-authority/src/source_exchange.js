@@ -28,7 +28,7 @@ const UI_BUILD_VALIDATION_IDENTITY = {
     'XoticHaze/research-compute-public-/.github/workflows/mm-ui-react-exact-build-r1.yml@refs/heads/main',
 };
 const UI_BUILD_PRIVATE_ARCHIVE_SOURCE =
-  '96a10987d82b53da6e0ebdf838aae4cd8f488cac';
+  'ca0adfa9f07d85b500594bbd334bb002e20b1eb6';
 const UI_BUILD_PRIVATE_ARCHIVE_EXPIRES_AT =
   Date.parse('2026-09-23T12:00:00Z');
 
