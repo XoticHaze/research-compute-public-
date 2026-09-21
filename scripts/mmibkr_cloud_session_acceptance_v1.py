@@ -63,6 +63,7 @@ def evaluate(
         "operator_runtime_count": publish.get("runtime_count") == expected_runtime_count,
         "operator_positions_count_reported": isinstance(publish.get("positions_count"), int)
             and publish.get("positions_count") >= 0,
+        "operator_durable_readback": publish.get("durable_readback_verified") is True,
         "operator_safety": safety_ok,
         "checkpoint_cache_ready": node.get("checkpoint_cache_ready") is True,
         "checkpoint_cache_saved": node.get("checkpoint_cache_saved") is True,

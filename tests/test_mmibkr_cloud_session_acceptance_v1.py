@@ -32,6 +32,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
                 "status": "accepted",
                 "runtime_count": 3,
                 "positions_count": 1,
+                "durable_readback_verified": True,
                 "account_identifiers_included": False,
                 "credentials_included": False,
                 "tokens_included": False,
@@ -163,6 +164,13 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         )
         self.assertFalse(rejected["accepted"])
         self.assertFalse(rejected["checks"]["public_head_expected"])
+
+    def test_rejects_unverified_operator_durable_readback(self):
+        node = self.good_receipt(restored=False)
+        node["operator_snapshot_publish"]["durable_readback_verified"] = False
+        result = mod.evaluate(node, require_checkpoint_restored=False)
+        self.assertFalse(result["accepted"])
+        self.assertFalse(result["checks"]["operator_durable_readback"])
 
 
 if __name__ == "__main__":

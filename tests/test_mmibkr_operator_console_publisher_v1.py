@@ -39,12 +39,14 @@ class OperatorConsolePublisherContractTests(unittest.TestCase):
             "MMIBKR_OPERATOR_SNAPSHOT_EXECUTION_AUTHORITY_INCLUDED=0",
             "MMIBKR_OPERATOR_SNAPSHOT_BROKER_MUTATION_AUTHORITY=0",
             "MMIBKR_OPERATOR_SNAPSHOT_LIVE_EXECUTION_ALLOWED=0",
+            "MMIBKR_OPERATOR_SNAPSHOT_DURABLE_READBACK_VERIFIED=1",
         ):
             self.assertIn(marker, text)
 
     def test_exact_runtime_image_validates_operator_snapshot_contract(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("tests.test_cloud_operator_snapshot_v1", text)
+        self.assertIn("durable_readback_verified", text)
         self.assertLess(
             text.index("Validate private hostless/runtime contracts in exact image"),
             text.index("Run bounded selected-runtime cloud owner"),

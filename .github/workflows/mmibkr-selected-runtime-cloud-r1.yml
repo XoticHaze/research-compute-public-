@@ -426,6 +426,7 @@ jobs:
           publish_status='failed'
           runtime_count=''
           positions_count=''
+          durable_readback_verified='false'
           snapshot=''
           publish_meta=''
           finalize_operator_snapshot_publish() {
@@ -433,6 +434,7 @@ jobs:
               printf 'publish_status=%s\n' "$publish_status"
               printf 'runtime_count=%s\n' "$runtime_count"
               printf 'positions_count=%s\n' "$positions_count"
+              printf 'durable_readback_verified=%s\n' "$durable_readback_verified"
             } >> "$GITHUB_OUTPUT"
             [ -z "$snapshot" ] || rm -f "$snapshot"
             [ -z "$publish_meta" ] || rm -f "$publish_meta"
@@ -528,8 +530,12 @@ jobs:
           with urlopen(req, timeout=30) as response:
               receipt = json.load(response)
               status = int(response.status)
-          if status != 201 or receipt.get('ok') is not True:
-              raise SystemExit('operator snapshot publish not accepted')
+          if (
+              status != 201
+              or receipt.get('ok') is not True
+              or receipt.get('durable_readback_verified') is not True
+          ):
+              raise SystemExit('operator snapshot publish/readback not accepted')
           publish_meta = Path(__import__('sys').argv[2])
           publish_meta.write_text(json.dumps({
               'status': 'accepted',
@@ -539,6 +545,7 @@ jobs:
           print('MMIBKR_OPERATOR_SNAPSHOT_PUBLISH=accepted')
           print('MMIBKR_OPERATOR_SNAPSHOT_RUNTIME_COUNT=' + str(receipt.get('runtime_count')))
           print('MMIBKR_OPERATOR_SNAPSHOT_POSITIONS_COUNT=' + str(receipt.get('positions_count')))
+          print('MMIBKR_OPERATOR_SNAPSHOT_DURABLE_READBACK_VERIFIED=1')
           print('MMIBKR_OPERATOR_SNAPSHOT_ACCOUNT_IDENTIFIERS_INCLUDED=0')
           print('MMIBKR_OPERATOR_SNAPSHOT_CREDENTIALS_INCLUDED=0')
           print('MMIBKR_OPERATOR_SNAPSHOT_TOKENS_INCLUDED=0')
@@ -549,6 +556,7 @@ jobs:
           PY
 
           publish_status='accepted'
+          durable_readback_verified='true'
           runtime_count="$(python - "$publish_meta" <<'PY'
           import json, sys
           node = json.load(open(sys.argv[1], encoding='utf-8'))
@@ -576,6 +584,7 @@ jobs:
           MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_PUBLISH: ${{ steps.operator_snapshot.outputs.publish_status }}
           MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_RUNTIME_COUNT: ${{ steps.operator_snapshot.outputs.runtime_count }}
           MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_POSITIONS_COUNT: ${{ steps.operator_snapshot.outputs.positions_count }}
+          MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_DURABLE_READBACK: ${{ steps.operator_snapshot.outputs.durable_readback_verified }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -692,6 +701,10 @@ jobs:
               ),
               'positions_count': optional_int(
                   'MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_POSITIONS_COUNT'
+              ),
+              'durable_readback_verified': (
+                  os.environ.get('MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_DURABLE_READBACK')
+                  == 'true'
               ),
               'account_identifiers_included': False if publish_accepted else None,
               'credentials_included': False if publish_accepted else None,

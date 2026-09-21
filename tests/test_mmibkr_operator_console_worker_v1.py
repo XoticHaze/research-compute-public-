@@ -51,6 +51,14 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertIn("snapshot_privacy_contract_rejected", text)
         self.assertIn("snapshot_authority_contract_rejected", text)
 
+    def test_publish_201_requires_durable_object_readback(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("await this.ctx.storage.put('latest', record)", text)
+        self.assertIn("await this.ctx.storage.get('latest')", text)
+        self.assertIn("operator_snapshot_readback_failed", text)
+        self.assertIn("snapshot_readback_unverified", text)
+        self.assertIn("durable_readback_verified: true", text)
+
     def test_static_assets_run_through_worker_first(self):
         config = json.loads(WRANGLER.read_text(encoding="utf-8"))
         assets = config["assets"]
