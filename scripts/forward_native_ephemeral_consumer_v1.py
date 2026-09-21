@@ -56,6 +56,18 @@ HARNESS_SPECS: dict[str, dict[str, Any]] = {
             "research/run_semiconductor_external_forward_snapshot_20260902.py",
         },
     },
+    "semiconductor_matched_residual_ridge_challenger_v1": {
+        "program_id": "SEMICONDUCTOR_MATCHED_RESIDUAL_RIDGE_CHALLENGER",
+        "source_ref": "884bd418f9f98567348dbabd7e574282880a0ce5",
+        "files": {
+            "research/semiconductor_matched_residual_ridge_challenger_20260921.py",
+            "research/run_survivor_entry_value_20260902.py",
+            "research/run_survivor_entry_external_transport_20260902.py",
+            "research/run_survivor_fixed10_vs20_capital_20260902.py",
+            "model_forward/challengers/model_improvement_protocol_20260921.v1.json",
+        },
+        "result_only": True,
+    },
 }
 
 
@@ -155,7 +167,7 @@ def _run(cmd: list[str], root: Path, timeout: int = 1200) -> None:
         raise RuntimeError(f"private native harness failed rc={run.returncode}")
 
 
-def _execute(root: Path, harness: str, adapter_script: Path) -> tuple[Path, Path | None, Path]:
+def _execute(root: Path, harness: str, adapter_script: Path) -> tuple[Path, Path | None, Path | None]:
     spec = HARNESS_SPECS[harness]
     adapter = root / "artifacts" / f"forward_program_adapter_{spec['program_id'].lower()}.json"
     adapter.parent.mkdir(parents=True, exist_ok=True)
@@ -197,10 +209,21 @@ def _execute(root: Path, harness: str, adapter_script: Path) -> tuple[Path, Path
         _run([sys.executable, "-m", "research.run_generalized_largecap_forward_snapshot_20260902"], root)
         _run([sys.executable, str(adapter_script), "--program", "GENERALIZED_LARGECAP_RIDGE", "--input", str(native), "--output", str(adapter)], root)
         return native, None, adapter
+    if harness == "semiconductor_matched_residual_ridge_challenger_v1":
+        native = root / "research/results/semiconductor_matched_residual_ridge_challenger_20260921.json"
+        native.parent.mkdir(parents=True, exist_ok=True)
+        _run([
+            sys.executable,
+            "-m",
+            "research.semiconductor_matched_residual_ridge_challenger_20260921",
+            "--output",
+            str(native.relative_to(root)),
+        ], root)
+        return native, None, None
     raise RuntimeError(f"unsupported harness {harness}")
 
 
-def _return_tar(native: Path, book: Path | None, adapter: Path, receipt: dict) -> bytes:
+def _return_tar(native: Path, book: Path | None, adapter: Path | None, receipt: dict) -> bytes:
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz", format=tarfile.PAX_FORMAT) as tf:
         for name, path in (("native.json", native), ("paper-book.json", book), ("adapter.json", adapter)):
@@ -264,8 +287,9 @@ def consume(envelope_path: Path, private_key_path: Path, run_id: str, harness: s
             "program_id": HARNESS_SPECS[harness]["program_id"],
             "source_ref": HARNESS_SPECS[harness]["source_ref"],
             "native_sha256": _sha(native.read_bytes()),
-            "adapter_sha256": _sha(adapter.read_bytes()),
+            "adapter_sha256": _sha(adapter.read_bytes()) if adapter and adapter.is_file() else None,
             "book_sha256": _sha(book.read_bytes()) if book and book.is_file() else None,
+            "result_only": bool(HARNESS_SPECS[harness].get("result_only")),
             "private_source_persisted": False,
             "private_stdout_exposed": False,
             "private_stderr_exposed": False,
@@ -280,10 +304,13 @@ def self_test() -> None:
         "semiconductor_shared_ridge_three_book_v1",
         "homebuilders_adaptive_duration_v1",
         "generalized_largecap_ridge_v1",
+        "semiconductor_matched_residual_ridge_challenger_v1",
     }
     assert HARNESS_SPECS["homebuilders_adaptive_duration_v1"]["source_ref"] == "b2f933b57efbbf4297620492aa415d0fcd2f613c"
     assert "research/run_homebuilders_adaptive_duration_forward_20260905.py" in HARNESS_SPECS["homebuilders_adaptive_duration_v1"]["files"]
     assert HARNESS_SPECS["generalized_largecap_ridge_v1"]["program_id"] == "GENERALIZED_LARGECAP_RIDGE"
+    assert HARNESS_SPECS["semiconductor_matched_residual_ridge_challenger_v1"]["result_only"] is True
+    assert HARNESS_SPECS["semiconductor_matched_residual_ridge_challenger_v1"]["source_ref"] == "884bd418f9f98567348dbabd7e574282880a0ce5"
     print("FORWARD_NATIVE_EPHEMERAL_CONSUMER_SELF_TEST=PASS")
 
 
