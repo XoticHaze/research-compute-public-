@@ -34,6 +34,13 @@ const SOURCE_VAULT_BOOTSTRAP_IDENTITY = {
   workflow_ref:
     'XoticHaze/mm-ibkr-runtime/.github/workflows/mmibkr-source-vault-bootstrap-r1.yml@refs/heads/main',
 };
+
+const OPERATOR_CONSOLE_DEPLOY_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-operator-console-deploy-r1.yml@refs/heads/main',
+};
 const UI_BUILD_PRIVATE_ARCHIVE_SOURCE =
   'ca0adfa9f07d85b500594bbd334bb002e20b1eb6';
 const UI_BUILD_PRIVATE_ARCHIVE_EXPIRES_AT =
@@ -238,15 +245,18 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     );
     const matchedUiBuild = matchesIdentity(claims, UI_BUILD_VALIDATION_IDENTITY);
     const matchedBootstrap = matchesIdentity(claims, SOURCE_VAULT_BOOTSTRAP_IDENTITY);
+    const matchedOperatorDeploy = matchesIdentity(claims, OPERATOR_CONSOLE_DEPLOY_IDENTITY);
     const privateArchivePathAllowed = (
       /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname)
       || pathname === '/v1/source-vault/private-archive/attest'
     );
+    const operatorDeployPathAllowed = pathname === '/v1/source-vault/unwrap';
     if (
       !(
         matchedRuntime
         || (matchedUiBuild && privateArchivePathAllowed)
         || (matchedBootstrap && privateArchivePathAllowed)
+        || (matchedOperatorDeploy && operatorDeployPathAllowed)
       )
       || claims.repository_visibility !== 'public'
       || !ALLOWED_PUBLIC_EVENTS.has(claims.event_name)

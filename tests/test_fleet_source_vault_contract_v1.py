@@ -115,6 +115,21 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("privateArchivePathAllowed", text)
         self.assertIn("(matchedBootstrap && privateArchivePathAllowed)", text)
 
+    def test_operator_console_deploy_identity_is_vault_unwrap_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("OPERATOR_CONSOLE_DEPLOY_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-operator-console-deploy-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn("matchedOperatorDeploy", text)
+        self.assertIn("operatorDeployPathAllowed", text)
+        self.assertIn("pathname === '/v1/source-vault/unwrap'", text)
+        self.assertIn(
+            "(matchedOperatorDeploy && operatorDeployPathAllowed)",
+            text,
+        )
+
     def test_stream_attestation_is_bound_to_run_stream_sha_and_size(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("streamgrant:", text)

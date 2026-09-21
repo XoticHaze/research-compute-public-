@@ -1,0 +1,8 @@
+{
+  "schema": "mmibkr-operator-console-deploy-fire-v1",
+  "source_sha": "d81df85788ebb6be6d4d69b9b9a537be96f16507",
+  "mode": "locked_private",
+  "access_required": true,
+  "public_fallback_allowed": false,
+  "live_execution_allowed": false
+}
