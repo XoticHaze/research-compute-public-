@@ -38,6 +38,7 @@ on:
       - tests/test_mmibkr_source_vault_fetch_retry_v1.py
       - tests/test_mmibkr_cloud_checkpoint_cache_handoff_v1.py
       - tests/test_mmibkr_operator_console_publisher_v1.py
+      - tests/test_mmibkr_cloud_session_receipt_v1.py
 
 permissions:
   contents: write
@@ -74,13 +75,15 @@ jobs:
             tests/test_mmibkr_source_vault_fetch_retry_v1.py \
             tests/test_mmibkr_cloud_owner_reusable_vault_contract_v1.py \
             tests/test_mmibkr_cloud_checkpoint_cache_handoff_v1.py \
-            tests/test_mmibkr_operator_console_publisher_v1.py
+            tests/test_mmibkr_operator_console_publisher_v1.py \
+            tests/test_mmibkr_cloud_session_receipt_v1.py
           python -m unittest -v \
             tests.test_mmibkr_source_vault_consumer_v1 \
             tests.test_mmibkr_source_vault_fetch_retry_v1 \
             tests.test_mmibkr_cloud_owner_reusable_vault_contract_v1 \
             tests.test_mmibkr_cloud_checkpoint_cache_handoff_v1 \
-            tests.test_mmibkr_operator_console_publisher_v1
+            tests.test_mmibkr_operator_console_publisher_v1 \
+            tests.test_mmibkr_cloud_session_receipt_v1
 
   runtime:
     if: ${{ github.event_name != 'pull_request' }}
@@ -253,13 +256,16 @@ jobs:
             ${{ env.CHECKPOINT_CACHE_PREFIX }}
 
       - name: Restore canonical market-data and terminal-continuity state
+        id: restore_checkpoint
         run: |
           set -euo pipefail
           checkpoint="$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
           if [ -s "$checkpoint" ]; then
             docker run --rm               -v "$RUNNER_TEMP/mmibkr-data:/app/data"               -v "$RUNNER_TEMP/mmibkr-checkpoint:/checkpoint:ro"               "mmibkr-cloud:${GITHUB_RUN_ID}"               python scripts/operator/runtime_market_data_cache_checkpoint_v1.py                 --repo-root /app                 --restore-archive /checkpoint/latest.tgz
+            echo 'restored=true' >> "$GITHUB_OUTPUT"
             echo 'MMIBKR_CHECKPOINT_RESTORED=1'
           else
+            echo 'restored=false' >> "$GITHUB_OUTPUT"
             echo 'MMIBKR_CHECKPOINT_RESTORED=0'
             echo 'No prior cache checkpoint; canonical self-healing bootstrap will be used.'
           fi
@@ -312,6 +318,7 @@ jobs:
           key: ${{ env.CHECKPOINT_CACHE_PREFIX }}${{ github.run_id }}-${{ env.PRIVATE_HEAD }}
 
       - name: Confirm sanitized successor checkpoint cache saved
+        id: checkpoint_saved
         if: ${{ steps.checkpoint.outputs.ready == 'true' }}
         run: echo 'MMIBKR_CHECKPOINT_CACHE_SAVED=1'
 
@@ -353,22 +360,40 @@ jobs:
           PY
 
       - name: Publish private operator snapshot
+        id: operator_snapshot
         if: ${{ success() }}
         continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
+          publish_status='failed'
+          runtime_count=''
+          positions_count=''
+          snapshot=''
+          publish_meta=''
+          finalize_operator_snapshot_publish() {
+            {
+              printf 'publish_status=%s\n' "$publish_status"
+              printf 'runtime_count=%s\n' "$runtime_count"
+              printf 'positions_count=%s\n' "$positions_count"
+            } >> "$GITHUB_OUTPUT"
+            [ -z "$snapshot" ] || rm -f "$snapshot"
+            [ -z "$publish_meta" ] || rm -f "$publish_meta"
+          }
+          trap finalize_operator_snapshot_publish EXIT
+
           snapshot_in_container="/app/data/strategy_runtime/cloud_operator_snapshot_v1/latest.json"
           if ! docker run --rm \
             -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro" \
             "mmibkr-cloud:${GITHUB_RUN_ID}" \
             test -s "$snapshot_in_container"; then
+            publish_status='not_available_for_runtime_source'
             echo 'MMIBKR_OPERATOR_SNAPSHOT_PUBLISH=not_available_for_runtime_source'
             exit 0
           fi
 
           snapshot="$RUNNER_TEMP/mmibkr-operator-snapshot-publish.json"
-          trap 'rm -f "$snapshot"' EXIT
+          publish_meta="$RUNNER_TEMP/mmibkr-operator-snapshot-publish-meta.json"
           docker run --rm \
             -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro" \
             "mmibkr-cloud:${GITHUB_RUN_ID}" \
@@ -377,7 +402,7 @@ jobs:
           chmod 600 "$snapshot"
           test -s "$snapshot"
 
-          python - "$snapshot" <<'PY'
+          python - "$snapshot" "$publish_meta" <<'PY'
           import json
           import os
           from pathlib import Path
@@ -448,6 +473,12 @@ jobs:
               status = int(response.status)
           if status != 201 or receipt.get('ok') is not True:
               raise SystemExit('operator snapshot publish not accepted')
+          publish_meta = Path(__import__('sys').argv[2])
+          publish_meta.write_text(json.dumps({
+              'status': 'accepted',
+              'runtime_count': receipt.get('runtime_count'),
+              'positions_count': receipt.get('positions_count'),
+          }, sort_keys=True) + '\n', encoding='utf-8')
           print('MMIBKR_OPERATOR_SNAPSHOT_PUBLISH=accepted')
           print('MMIBKR_OPERATOR_SNAPSHOT_RUNTIME_COUNT=' + str(receipt.get('runtime_count')))
           print('MMIBKR_OPERATOR_SNAPSHOT_POSITIONS_COUNT=' + str(receipt.get('positions_count')))
@@ -460,10 +491,30 @@ jobs:
           print('MMIBKR_OPERATOR_SNAPSHOT_LIVE_EXECUTION_ALLOWED=0')
           PY
 
+          publish_status='accepted'
+          runtime_count="$(python - "$publish_meta" <<'PY'
+          import json, sys
+          node = json.load(open(sys.argv[1], encoding='utf-8'))
+          print(int(node['runtime_count']))
+          PY
+          )"
+          positions_count="$(python - "$publish_meta" <<'PY'
+          import json, sys
+          node = json.load(open(sys.argv[1], encoding='utf-8'))
+          print(int(node['positions_count']))
+          PY
+          )"
+
       - name: Publish sanitized cloud-session receipt
         if: ${{ always() }}
         env:
           GH_TOKEN: ${{ github.token }}
+          MMIBKR_RECEIPT_CHECKPOINT_RESTORED: ${{ steps.restore_checkpoint.outputs.restored }}
+          MMIBKR_RECEIPT_CHECKPOINT_CACHE_READY: ${{ steps.checkpoint.outputs.ready }}
+          MMIBKR_RECEIPT_CHECKPOINT_CACHE_SAVED: ${{ steps.checkpoint_saved.outcome == 'success' && 'true' || 'false' }}
+          MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_PUBLISH: ${{ steps.operator_snapshot.outputs.publish_status }}
+          MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_RUNTIME_COUNT: ${{ steps.operator_snapshot.outputs.runtime_count }}
+          MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_POSITIONS_COUNT: ${{ steps.operator_snapshot.outputs.positions_count }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -535,6 +586,43 @@ jobs:
                   'positions_included': False,
                   'orders_included': False,
               }
+          def optional_int(name):
+              raw = str(os.environ.get(name) or '').strip()
+              try:
+                  return int(raw)
+              except ValueError:
+                  return None
+
+          publish_status = str(
+              os.environ.get('MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_PUBLISH') or 'not_run'
+          ).strip()
+          publish_accepted = publish_status == 'accepted'
+          receipt['checkpoint_restored'] = (
+              os.environ.get('MMIBKR_RECEIPT_CHECKPOINT_RESTORED') == 'true'
+          )
+          receipt['checkpoint_cache_ready'] = (
+              os.environ.get('MMIBKR_RECEIPT_CHECKPOINT_CACHE_READY') == 'true'
+          )
+          receipt['checkpoint_cache_saved'] = (
+              os.environ.get('MMIBKR_RECEIPT_CHECKPOINT_CACHE_SAVED') == 'true'
+          )
+          receipt['operator_snapshot_publish'] = {
+              'status': publish_status,
+              'runtime_count': optional_int(
+                  'MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_RUNTIME_COUNT'
+              ),
+              'positions_count': optional_int(
+                  'MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_POSITIONS_COUNT'
+              ),
+              'account_identifiers_included': False if publish_accepted else None,
+              'credentials_included': False if publish_accepted else None,
+              'tokens_included': False if publish_accepted else None,
+              'private_source_included': False if publish_accepted else None,
+              'execution_authority_included': False if publish_accepted else None,
+              'broker_mutation_authority': False if publish_accepted else None,
+              'live_execution_allowed': False if publish_accepted else None,
+          }
+
           out = Path(os.environ['RUNNER_TEMP'], 'mmibkr-cloud-session-receipt.json')
           out.write_text(json.dumps(receipt, sort_keys=True) + '\n')
           PY
