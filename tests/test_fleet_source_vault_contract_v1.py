@@ -82,6 +82,27 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("upstream.body", text)
         self.assertIn("private_source_token_exposed: false", text)
 
+    def test_ui_build_private_stream_is_exact_sha_scoped_and_expires(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("UI_BUILD_VALIDATION_IDENTITY", text)
+        self.assertIn(
+            "mm-ui-react-exact-build-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn(
+            "d6ec5e7452d02190edaf002dea0feb254e6bcbc4",
+            text,
+        )
+        self.assertIn("UI_BUILD_PRIVATE_ARCHIVE_EXPIRES_AT", text)
+        self.assertIn("2026-09-23T12:00:00Z", text)
+        self.assertIn("isPrivateSourceStreamApproved", text)
+        self.assertIn("uiBuildPathAllowed", text)
+        self.assertIn("/v1/source-vault/private-archive/attest", text)
+        self.assertIn(
+            "/^\\/v1\\/source-vault\\/private-archive\\/[0-9a-f]{40}$/",
+            text,
+        )
+
     def test_stream_attestation_is_bound_to_run_stream_sha_and_size(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("streamgrant:", text)
