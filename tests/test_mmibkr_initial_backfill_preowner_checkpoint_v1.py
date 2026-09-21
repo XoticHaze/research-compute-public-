@@ -43,7 +43,7 @@ class InitialBackfillPreownerCheckpointTests(unittest.TestCase):
             section,
         )
         self.assertIn(
-            "CHECKPOINT_CACHE_PREFIX }}\${{ github.run_id }}-\${{ env.PRIVATE_HEAD }}-initial-backfill-preowner",
+            "CHECKPOINT_CACHE_PREFIX }}${{ github.run_id }}-${{ env.PRIVATE_HEAD }}-initial-backfill-preowner",
             section,
         )
         self.assertIn("fail-on-cache-miss: true", section)
