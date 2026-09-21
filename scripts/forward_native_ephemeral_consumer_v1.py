@@ -58,12 +58,9 @@ HARNESS_SPECS: dict[str, dict[str, Any]] = {
     },
     "semiconductor_matched_residual_ridge_challenger_v1": {
         "program_id": "SEMICONDUCTOR_MATCHED_RESIDUAL_RIDGE_CHALLENGER",
-        "source_ref": "db4e43e59fae847f79dc8ae2ae2542379e48196f",
+        "source_ref": "1774274240e919998684115fc7f86b77dd4621bf",
         "files": {
             "research/semiconductor_matched_residual_ridge_challenger_20260921.py",
-            "research/run_survivor_entry_value_20260902.py",
-            "research/run_survivor_entry_external_transport_20260902.py",
-            "research/run_survivor_fixed10_vs20_capital_20260902.py",
             "model_forward/challengers/model_improvement_protocol_20260921.v1.json",
         },
         "result_only": True,
