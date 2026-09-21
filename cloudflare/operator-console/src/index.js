@@ -195,6 +195,58 @@ async function verifyAccess(request, env) {
   };
 }
 
+function snapshotSourceSha(node) {
+  return String(node?.runtime?.source_sha || '').trim().toLowerCase();
+}
+
+function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
+  const previous = previousRecord?.snapshot;
+  if (!previous || typeof previous !== 'object' || Array.isArray(previous)) {
+    return {
+      snapshot: incomingSnapshot,
+      runtimeMergeApplied: false,
+      previousRuntimeCount: 0,
+    };
+  }
+
+  const previousSource = snapshotSourceSha(previous);
+  const incomingSource = snapshotSourceSha(incomingSnapshot);
+  if (!previousSource || !incomingSource || previousSource !== incomingSource) {
+    return {
+      snapshot: incomingSnapshot,
+      runtimeMergeApplied: false,
+      previousRuntimeCount: Array.isArray(previous.runtimes)
+        ? previous.runtimes.length
+        : 0,
+    };
+  }
+
+  const previousRuntimes = Array.isArray(previous.runtimes) ? previous.runtimes : [];
+  const incomingRuntimes = Array.isArray(incomingSnapshot.runtimes)
+    ? incomingSnapshot.runtimes
+    : [];
+  const merged = new Map();
+  for (const row of previousRuntimes) {
+    const runtimeId = String(row?.runtime_id || '').trim();
+    if (runtimeId) merged.set(runtimeId, row);
+  }
+  for (const row of incomingRuntimes) {
+    const runtimeId = String(row?.runtime_id || '').trim();
+    if (runtimeId) merged.set(runtimeId, row);
+  }
+
+  const runtimes = Array.from(merged.values());
+  const snapshot = validateSnapshot({
+    ...incomingSnapshot,
+    runtimes,
+  });
+  return {
+    snapshot,
+    runtimeMergeApplied: runtimes.length > incomingRuntimes.length,
+    previousRuntimeCount: previousRuntimes.length,
+  };
+}
+
 function validateSnapshot(node) {
   if (!node || typeof node !== 'object' || Array.isArray(node)) {
     throw new Error('snapshot_object_required');
@@ -270,7 +322,10 @@ export class OperatorState {
 
     if (request.method === 'POST' && url.pathname === '/store') {
       const body = await request.json();
-      const snapshot = validateSnapshot(body.snapshot);
+      const incomingSnapshot = validateSnapshot(body.snapshot);
+      const previousRecord = await this.ctx.storage.get('latest');
+      const merged = mergeRuntimeProjection(previousRecord, incomingSnapshot);
+      const snapshot = merged.snapshot;
       const transport = body.transport && typeof body.transport === 'object'
         ? body.transport
         : {};
@@ -281,6 +336,9 @@ export class OperatorState {
         transport: {
           publisher: transport.publisher || {},
           published_at_utc: transport.published_at_utc || null,
+          received_runtime_count: incomingSnapshot.runtimes.length,
+          stored_runtime_count: snapshot.runtimes.length,
+          runtime_merge_applied: merged.runtimeMergeApplied,
         },
       };
       await this.ctx.storage.put('latest', record);
@@ -302,6 +360,10 @@ export class OperatorState {
         ok: true,
         stored_at_utc: record.stored_at_utc,
         durable_readback_verified: true,
+        received_runtime_count: incomingSnapshot.runtimes.length,
+        runtime_count: snapshot.runtimes.length,
+        previous_runtime_count: merged.previousRuntimeCount,
+        runtime_merge_applied: merged.runtimeMergeApplied,
       }, 201);
     }
 
@@ -380,7 +442,10 @@ export default {
         schema: 'mmibkr.operator_console_publish_receipt.v1',
         stored_at_utc: receipt.stored_at_utc,
         source_sha: snapshot?.runtime?.source_sha || null,
-        runtime_count: snapshot.runtimes.length,
+        received_runtime_count: receipt.received_runtime_count,
+        runtime_count: receipt.runtime_count,
+        previous_runtime_count: receipt.previous_runtime_count,
+        runtime_merge_applied: receipt.runtime_merge_applied === true,
         positions_count: snapshot.positions.length,
         durable_readback_verified: true,
         credentials_included: false,

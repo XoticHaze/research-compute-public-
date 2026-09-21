@@ -91,6 +91,38 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         for marker in forbidden:
             self.assertNotIn(marker, text)
 
+    def test_same_source_partial_runtime_projection_preserves_prior_runtime_rows(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("function mergeRuntimeProjection(previousRecord, incomingSnapshot)", text)
+        self.assertIn("const previousSource = snapshotSourceSha(previous)", text)
+        self.assertIn("const incomingSource = snapshotSourceSha(incomingSnapshot)", text)
+        self.assertIn("previousSource !== incomingSource", text)
+        self.assertIn("const merged = new Map()", text)
+        self.assertIn("for (const row of previousRuntimes)", text)
+        self.assertIn("for (const row of incomingRuntimes)", text)
+        self.assertIn("merged.set(runtimeId, row)", text)
+        self.assertIn("...incomingSnapshot", text)
+        self.assertIn("runtimes,", text)
+        self.assertIn("runtimeMergeApplied: runtimes.length > incomingRuntimes.length", text)
+
+    def test_runtime_union_receipt_distinguishes_received_and_stored_counts(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("received_runtime_count: incomingSnapshot.runtimes.length", text)
+        self.assertIn("stored_runtime_count: snapshot.runtimes.length", text)
+        self.assertIn("runtime_merge_applied: merged.runtimeMergeApplied", text)
+        self.assertIn("received_runtime_count: receipt.received_runtime_count", text)
+        self.assertIn("runtime_count: receipt.runtime_count", text)
+
+    def test_source_change_fails_closed_to_incoming_runtime_set(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("if (!previousSource || !incomingSource || previousSource !== incomingSource)", text)
+        source_change = text.index(
+            "if (!previousSource || !incomingSource || previousSource !== incomingSource)"
+        )
+        incoming_return = text.index("snapshot: incomingSnapshot", source_change)
+        merge_map = text.index("const merged = new Map()", source_change)
+        self.assertLess(incoming_return, merge_map)
+
 
 if __name__ == "__main__":
     unittest.main()

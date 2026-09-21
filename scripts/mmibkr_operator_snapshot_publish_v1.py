@@ -84,11 +84,16 @@ def validate_publish_receipt(
     runtime_count: int,
     positions_count: int,
 ) -> dict[str, Any]:
+    stored_runtime_count = receipt.get("runtime_count")
+    received_runtime_count = receipt.get("received_runtime_count")
     if (
         receipt.get("ok") is not True
         or receipt.get("schema") != "mmibkr.operator_console_publish_receipt.v1"
         or receipt.get("durable_readback_verified") is not True
-        or receipt.get("runtime_count") != runtime_count
+        or received_runtime_count != runtime_count
+        or not isinstance(stored_runtime_count, int)
+        or stored_runtime_count < runtime_count
+        or stored_runtime_count > 100
         or receipt.get("positions_count") != positions_count
         or receipt.get("credentials_included") is not False
         or receipt.get("tokens_included") is not False
@@ -100,8 +105,10 @@ def validate_publish_receipt(
         "status": "accepted",
         "stored_at_utc": receipt.get("stored_at_utc"),
         "source_sha": receipt.get("source_sha"),
-        "runtime_count": runtime_count,
+        "received_runtime_count": runtime_count,
+        "runtime_count": stored_runtime_count,
         "positions_count": positions_count,
+        "runtime_merge_applied": receipt.get("runtime_merge_applied") is True,
         "durable_readback_verified": True,
         "account_identifiers_included": False,
         "credentials_included": False,
@@ -186,14 +193,25 @@ def publish_snapshot(
         except OSError:
             pass
 
+    stored_runtime_count = int(result["runtime_count"])
     if marker_mode == "stream":
         print("MMIBKR_OPERATOR_SNAPSHOT_STREAM_PUBLISH=accepted")
-        print("MMIBKR_OPERATOR_SNAPSHOT_STREAM_RUNTIME_COUNT=" + str(runtime_count))
+        print("MMIBKR_OPERATOR_SNAPSHOT_STREAM_RECEIVED_RUNTIME_COUNT=" + str(runtime_count))
+        print("MMIBKR_OPERATOR_SNAPSHOT_STREAM_RUNTIME_COUNT=" + str(stored_runtime_count))
+        print(
+            "MMIBKR_OPERATOR_SNAPSHOT_STREAM_RUNTIME_MERGE_APPLIED="
+            + ("1" if result["runtime_merge_applied"] else "0")
+        )
         print("MMIBKR_OPERATOR_SNAPSHOT_STREAM_POSITIONS_COUNT=" + str(positions_count))
         print("MMIBKR_OPERATOR_SNAPSHOT_STREAM_DURABLE_READBACK_VERIFIED=1")
     else:
         print("MMIBKR_OPERATOR_SNAPSHOT_PUBLISH=accepted")
-        print("MMIBKR_OPERATOR_SNAPSHOT_RUNTIME_COUNT=" + str(runtime_count))
+        print("MMIBKR_OPERATOR_SNAPSHOT_RECEIVED_RUNTIME_COUNT=" + str(runtime_count))
+        print("MMIBKR_OPERATOR_SNAPSHOT_RUNTIME_COUNT=" + str(stored_runtime_count))
+        print(
+            "MMIBKR_OPERATOR_SNAPSHOT_RUNTIME_MERGE_APPLIED="
+            + ("1" if result["runtime_merge_applied"] else "0")
+        )
         print("MMIBKR_OPERATOR_SNAPSHOT_POSITIONS_COUNT=" + str(positions_count))
         print("MMIBKR_OPERATOR_SNAPSHOT_DURABLE_READBACK_VERIFIED=1")
         print("MMIBKR_OPERATOR_SNAPSHOT_ACCOUNT_IDENTIFIERS_INCLUDED=0")
