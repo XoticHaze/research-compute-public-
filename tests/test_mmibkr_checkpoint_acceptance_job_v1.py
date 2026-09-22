@@ -1,0 +1,91 @@
+from __future__ import annotations
+
+from pathlib import Path
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW = ROOT / ".github" / "workflows" / "mmibkr-selected-runtime-cloud-r1.yml"
+
+
+class CheckpointAcceptanceJobTests(unittest.TestCase):
+    def test_acceptance_fire_path_is_distinct_from_owner_fire_path(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn(
+            "rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1",
+            text,
+        )
+        self.assertIn("checkpoint_acceptance:", text)
+        self.assertIn(
+            "group: mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1",
+            text,
+        )
+        self.assertIn(
+            "group: mmibkr-selected-runtime-cloud-r1",
+            text,
+        )
+
+    def test_owner_job_skips_checkpoint_acceptance_fire(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        runtime_start = text.index("  runtime:")
+        acceptance_start = text.index("  checkpoint_acceptance:")
+        runtime = text[runtime_start:acceptance_start]
+        self.assertIn(
+            "rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1",
+            runtime,
+        )
+        self.assertIn("github.event.head_commit.added", runtime)
+        self.assertIn("github.event.head_commit.modified", runtime)
+
+    def test_acceptance_proves_exact_backfill_checkpoint_roundtrip_without_owner(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        section = text[text.index("  checkpoint_acceptance:"):]
+        self.assertIn(
+            "scripts/operator/selected_runtime_initial_backfill_ingest_v1.py",
+            section,
+        )
+        self.assertIn(
+            "scripts/operator/runtime_market_data_cache_checkpoint_v1.py",
+            section,
+        )
+        self.assertIn("- name: Save checkpoint", section)
+        self.assertIn("- name: Delete local checkpoint copy", section)
+        self.assertIn("- name: Restore exact saved checkpoint", section)
+        self.assertIn("- name: Verify exact restored SHA256", section)
+        self.assertIn('test "$CACHE_HIT" = \'true\'', section)
+        self.assertIn('test "$actual" = "$EXPECTED_SHA256"', section)
+        self.assertIn("'paper_owner_started': False", section)
+        self.assertNotIn("selected_runtime_cloud_daemon_v1.py", section)
+
+    def test_acceptance_is_exact_source_exact_artifact_and_fail_closed(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        section = text[text.index("  checkpoint_acceptance:"):]
+        self.assertIn(
+            "CANONICAL_SOURCE_REF: d81df85788ebb6be6d4d69b9b9a537be96f16507",
+            section,
+        )
+        self.assertIn('gh run download "$INITIAL_BACKFILL_RUN_ID"', section)
+        self.assertIn("--name \"$INITIAL_BACKFILL_ARTIFACT\"", section)
+        self.assertIn("AMAT_TARGET_ROWS", section)
+        self.assertIn("APH_TARGET_ROWS", section)
+        self.assertIn("MNQ_SOURCE_ROWS", section)
+        self.assertIn("MNQ_TARGET_ROWS", section)
+        self.assertIn("broker action boundary violated", section)
+        self.assertIn("execution contract mutation boundary violated", section)
+        self.assertIn("live execution boundary violated", section)
+
+    def test_receipt_is_sanitized_and_durable(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        section = text[text.index("  checkpoint_acceptance:"):]
+        self.assertIn("mmibkr.backfill_checkpoint_acceptance.v1", section)
+        self.assertIn("'exact_saved_checkpoint_restored': True", section)
+        self.assertIn("'exact_sha256_verified': True", section)
+        self.assertIn("'broker_action': False", section)
+        self.assertIn("'paper_owner_started': False", section)
+        self.assertIn("'live_execution_allowed': False", section)
+        self.assertIn("'credentials_included': False", section)
+        self.assertIn("'private_source_included': False", section)
+
+
+if __name__ == "__main__":
+    unittest.main()
