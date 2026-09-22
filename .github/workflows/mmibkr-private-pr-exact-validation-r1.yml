@@ -256,15 +256,37 @@ jobs:
           set -e
           log_sha="$(sha256sum "$log" | awk '{print $1}')"
           log_bytes="$(wc -c < "$log")"
-          rm -f "$log"
           if [ "$rc" -ne 0 ]; then
+            python - "$log" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          safe = []
+          for raw in Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").splitlines():
+              line = raw.strip()
+              if re.match(r"^test_[A-Za-z0-9_]+ \([^)]*\) \.\.\. (ok|FAIL|ERROR)$", line):
+                  safe.append(line)
+              elif re.match(r"^(FAIL|ERROR): test_[A-Za-z0-9_]+ \([^)]*\)$", line):
+                  safe.append(line)
+              elif re.match(r"^Ran [0-9]+ tests? in ", line):
+                  safe.append(re.sub(r" in .*$", "", line))
+              elif line.startswith("FAILED (") or line == "OK":
+                  safe.append(line)
+              elif re.match(r"^[A-Za-z][A-Za-z0-9_]*(Error|Exception):", line):
+                  safe.append(line.split(":", 1)[0])
+          for item in safe[-40:]:
+              print("MMIBKR_PRIVATE_PR_SAFE_DIAGNOSTIC=" + item)
+          PY
             echo "MMIBKR_PRIVATE_PR_EXACT_VALIDATION_STATUS=FAIL"
             echo "MMIBKR_PRIVATE_PR_VALIDATION_SCOPE=pr665_position_state"
             echo "MMIBKR_PRIVATE_PR_VALIDATION_LOG_SHA256=$log_sha"
             echo "MMIBKR_PRIVATE_PR_VALIDATION_LOG_BYTES=$log_bytes"
             echo "MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0"
+            rm -f "$log"
             exit "$rc"
           fi
+          rm -f "$log"
           echo "MMIBKR_PRIVATE_PR_EXACT_VALIDATION_STATUS=PASS"
           echo "MMIBKR_PRIVATE_PR_VALIDATION_SCOPE=pr665_position_state"
           echo "MMIBKR_PRIVATE_PR_VALIDATION_LOG_SHA256=$log_sha"
