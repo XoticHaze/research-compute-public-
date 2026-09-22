@@ -189,6 +189,42 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
 
+    def test_private_pr671_validation_is_isolated_exact_sha_expiring_and_archive_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("PRIVATE_PR671_EXACT_VALIDATION_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-private-pr671-forward-evidence-validation-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn(
+            "23233724fa4f84c16b5b92467070931a6e9c6e50",
+            text,
+        )
+        self.assertIn("PRIVATE_PR671_EXACT_VALIDATION_EXPIRES_AT", text)
+        self.assertIn("matchedPrivatePr671Validation", text)
+        self.assertIn(
+            "(matchedPrivatePr671Validation && privateArchivePathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedPrivatePr671Validation && operatorDeployPathAllowed)",
+            text,
+        )
+
+        workflow = (
+            ROOT
+            / ".github"
+            / "workflows"
+            / "mmibkr-private-pr671-forward-evidence-validation-r1.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("PRIVATE_SOURCE_SHA: 23233724fa4f84c16b5b92467070931a6e9c6e50", workflow)
+        self.assertIn("tests.test_cloud_forward_performance_v1", workflow)
+        self.assertIn("tests.test_cloud_operator_snapshot_v1", workflow)
+        self.assertIn("BotConsolePage.acceptance.test.mjs", workflow)
+        self.assertIn("npm run build", workflow)
+        self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
+        self.assertNotIn('cat "$log"', workflow)
+
     def test_runtime_bootstrap_identity_is_private_archive_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("SOURCE_VAULT_BOOTSTRAP_IDENTITY", text)
