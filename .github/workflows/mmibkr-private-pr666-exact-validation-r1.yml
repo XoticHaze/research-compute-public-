@@ -4,22 +4,17 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['.github/workflows/mmibkr-private-pr666-exact-validation-r1.yml']
+    paths:
+      - '.github/workflows/mmibkr-private-pr666-exact-validation-r1.yml'
+
 permissions:
   contents: write
   id-token: write
+
 concurrency:
   group: b1-p01-crw-canonical-replay-r1
   cancel-in-progress: false
-env:
-  FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  PRIVATE_SOURCE_SHA: 5c261f6252dd332806908d9f9a8ba0ac839f1b63
-  CORPUS_SHA256: c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e
-  CORPUS_BYTES: '18026715'
-  EXCHANGE_REF: rendezvous-exchange
-  RECIPIENT_ROOT: rendezvous/recipients
-  RESPONSE_ROOT: rendezvous/responses
-  HARNESS: b1_p01_crw_canonical_replay_r1
+
 jobs:
   canonical-replay:
     runs-on: ubuntu-24.04
@@ -27,130 +22,20 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with: {python-version: '3.11.16'}
-      - run: python -m pip install --disable-pip-version-check cryptography
-      - name: Materialize exact private canonical source through bounded Fleet stream
-        shell: bash
-        run: |
-          set -euo pipefail; umask 077
-          python - <<'PY'
-          import hashlib,json,os,shutil,tarfile,time
-          from pathlib import Path
-          from urllib.error import HTTPError
-          from urllib.parse import parse_qsl,urlencode,urlparse,urlunparse
-          from urllib.request import Request,urlopen
-          audience='mmibkr-fleet-authority'; base=os.environ['FLEET_AUTHORITY_BASE'].rstrip('/'); source_sha=os.environ['PRIVATE_SOURCE_SHA']; run_id=os.environ['GITHUB_RUN_ID']; temp=Path(os.environ['RUNNER_TEMP']); archive=temp/'source.tar.gz'; extract=temp/'source'
-          def token():
-              p=urlparse(os.environ['ACTIONS_ID_TOKEN_REQUEST_URL']); q=dict(parse_qsl(p.query,keep_blank_values=True)); q['audience']=audience; u=urlunparse((p.scheme,p.netloc,p.path,p.params,urlencode(q),p.fragment)); r=Request(u,headers={'Authorization':'Bearer '+os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN'],'Accept':'application/json'})
-              with urlopen(r,timeout=20) as x: t=str(json.load(x).get('value') or '')
-              if t.count('.')!=2: raise SystemExit('oidc invalid')
-              return t
-          headers={'Authorization':'Bearer '+token(),'Accept':'application/gzip','User-Agent':'b1-p01-crw-canonical-replay-r1','X-MMIBKR-Caller-Run-Id':run_id}; url=f'{base}/v1/source-vault/private-archive/{source_sha}'; rh=None
-          for _ in range(72):
-              try:
-                  with urlopen(Request(url,headers=headers),timeout=60) as r:
-                      rh=dict(r.headers.items())
-                      with archive.open('wb') as out: shutil.copyfileobj(r,out,1024*1024)
-                  break
-              except HTTPError as e:
-                  if e.code not in {401,403,502,503}: raise
-                  time.sleep(5)
-          else: raise SystemExit('source admission timeout')
-          n={str(k).lower():str(v) for k,v in (rh or {}).items()}
-          if n.get('x-mmibkr-source-sha')!=source_sha or n.get('x-mmibkr-private-source-token-exposed')!='false': raise SystemExit('source identity rejected')
-          stream=n.get('x-mmibkr-source-stream-id',''); digest=hashlib.sha256(archive.read_bytes()).hexdigest(); size=archive.stat().st_size; att={'schema':'mmibkr-fleet-private-source-attest-v1','source_sha':source_sha,'stream_id':stream,'archive_sha256':digest,'archive_bytes':size}; req=Request(base+'/v1/source-vault/private-archive/attest',data=json.dumps(att,sort_keys=True,separators=(',',':')).encode(),method='POST',headers={'Authorization':'Bearer '+token(),'Accept':'application/json','Content-Type':'application/json','User-Agent':'b1-p01-crw-canonical-replay-r1','X-MMIBKR-Caller-Run-Id':run_id})
-          with urlopen(req,timeout=30) as r: a=json.load(r)
-          if a.get('ok') is not True or a.get('source_sha')!=source_sha: raise SystemExit('source attestation failed')
-          extract.mkdir(parents=True,exist_ok=True)
-          with tarfile.open(archive,'r:gz') as tf:
-              ms=tf.getmembers(); tops={Path(m.name).parts[0] for m in ms if Path(m.name).parts}
-              if len(tops)!=1: raise SystemExit('archive root rejected')
-              root=(extract/next(iter(tops))).resolve()
-              for m in ms:
-                  p=Path(m.name); target=(extract/p).resolve()
-                  if p.is_absolute() or '..' in p.parts or m.issym() or m.islnk() or m.isdev() or (target!=root and root not in target.parents): raise SystemExit('unsafe archive')
-                  if m.isdir(): target.mkdir(parents=True,exist_ok=True); continue
-                  if not m.isfile(): raise SystemExit('archive member rejected')
-                  h=tf.extractfile(m); target.parent.mkdir(parents=True,exist_ok=True)
-                  with target.open('wb') as out: shutil.copyfileobj(h,out,1024*1024)
-          w=root/'scripts/operator/crw_backtest_summary_13z.py'
-          if hashlib.sha1(w.read_bytes()).hexdigest()!='df215b2b6c8bc0ba2b6652e010862e789dbe2c4c': raise SystemExit('canonical workload mismatch')
-          with Path(os.environ['GITHUB_ENV']).open('a') as f: f.write('PRIVATE_SOURCE_ROOT='+str(root)+'\n')
-          print('B1_PRIVATE_SOURCE_SHA='+source_sha); print('B1_CRW_WORKLOAD_BLOB_SHA1=df215b2b6c8bc0ba2b6652e010862e789dbe2c4c'); print('B1_PRIVATE_SOURCE_TOKEN_EXPOSED=0')
-          PY
-      - name: Publish one-run corpus recipient
-        env: {GH_TOKEN: '${{ github.token }}'}
-        shell: bash
-        run: |
-          set -euo pipefail; umask 077
-          python - <<'PY'
-          import base64,hashlib,json,os
-          from pathlib import Path
-          from cryptography.hazmat.primitives import serialization
-          from cryptography.hazmat.primitives.asymmetric import x25519
-          k=x25519.X25519PrivateKey.generate(); priv=k.private_bytes(serialization.Encoding.Raw,serialization.PrivateFormat.Raw,serialization.NoEncryption()); pub=k.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw); Path(os.environ['RUNNER_TEMP'],'private.b64').write_text(base64.b64encode(priv).decode()); d={'schema':'b1-p01-crw-recipient-v1','run_id':os.environ['GITHUB_RUN_ID'],'recipient_b64':base64.b64encode(pub).decode(),'recipient_key_id':'sha256:'+hashlib.sha256(pub).hexdigest(),'corpus_sha256':os.environ['CORPUS_SHA256'],'corpus_bytes':int(os.environ['CORPUS_BYTES'])}; Path(os.environ['RUNNER_TEMP'],'recipient.json').write_text(json.dumps(d,sort_keys=True)+'\n')
-          PY
-          remote="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}-b1-p01-crw.json"; api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${remote}"
-          python - "$RUNNER_TEMP/recipient.json" "$EXCHANGE_REF" <<'PY' > "$RUNNER_TEMP/body.json"
-          import base64,json,sys
-          p,b=sys.argv[1:]; print(json.dumps({'message':'rendezvous: publish B1 P01 CRW recipient','content':base64.b64encode(open(p,'rb').read()).decode(),'branch':b},separators=(',',':')))
-          PY
-          curl -fsSL -X PUT -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' "$api" -d @"$RUNNER_TEMP/body.json" >/dev/null
-      - name: Wait for encrypted frozen development corpus
-        env: {GH_TOKEN: '${{ github.token }}'}
-        shell: bash
-        run: |
-          set -euo pipefail; root="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/b1-p01-crw"; api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${root}/envelope.json?ref=${EXCHANGE_REF}"; found=0
-          for _ in $(seq 1 300); do if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/envelope.json"; then found=1; break; fi; sleep 5; done
-          test "$found" = 1 || exit 42; echo "B1_RESPONSE_ROOT=${root}" >> "$GITHUB_ENV"
-      - name: Decrypt and verify exact frozen corpus
-        env: {GH_TOKEN: '${{ github.token }}'}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import base64,gzip,hashlib,json,os
-          from pathlib import Path
-          from urllib.request import Request,urlopen
-          from cryptography.hazmat.primitives import hashes
-          from cryptography.hazmat.primitives.asymmetric import x25519
-          from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-          from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-          e=json.loads(Path(os.environ['RUNNER_TEMP'],'envelope.json').read_text()); r=json.loads(Path(os.environ['RUNNER_TEMP'],'recipient.json').read_text())
-          if e.get('schema')!='b1-p01-crw-ephemeral-x25519-v1' or str(e.get('run_id'))!=os.environ['GITHUB_RUN_ID'] or e.get('harness')!=os.environ['HARNESS'] or e.get('recipient_key_id')!=r['recipient_key_id']: raise SystemExit('envelope rejected')
-          parts=[]
-          for n in e['chunks']:
-              p=n['path']
-              if not p.startswith(os.environ['B1_RESPONSE_ROOT'].rstrip('/')+'/'): raise SystemExit('chunk path rejected')
-              u=f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/{p}?ref={os.environ['EXCHANGE_REF']}"; raw=urlopen(Request(u,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github.raw+json'}),timeout=30).read()
-              if hashlib.sha256(raw).hexdigest()!=n['sha256'] or len(raw)!=int(n['chars']): raise SystemExit('chunk mismatch')
-              parts.append(raw.decode())
-          ct=base64.b64decode(''.join(parts),validate=True)
-          if hashlib.sha256(ct).hexdigest()!=e['ciphertext_sha256']: raise SystemExit('ciphertext mismatch')
-          priv=x25519.X25519PrivateKey.from_private_bytes(base64.b64decode(Path(os.environ['RUNNER_TEMP'],'private.b64').read_text(),validate=True)); sender=x25519.X25519PublicKey.from_public_bytes(base64.b64decode(e['sender_public_b64'],validate=True)); shared=priv.exchange(sender); key=HKDF(algorithm=hashes.SHA256(),length=32,salt=None,info=(os.environ['HARNESS']+':'+os.environ['GITHUB_RUN_ID']).encode()).derive(shared); nonce=base64.b64decode(e['nonce_b64'],validate=True); aad=(os.environ['HARNESS']+':'+os.environ['GITHUB_RUN_ID']+':'+os.environ['CORPUS_SHA256']).encode(); plain=gzip.decompress(ChaCha20Poly1305(key).decrypt(nonce,ct,aad))
-          if hashlib.sha256(plain).hexdigest()!=os.environ['CORPUS_SHA256'] or len(plain)!=int(os.environ['CORPUS_BYTES']): raise SystemExit('corpus identity mismatch')
-          Path(os.environ['RUNNER_TEMP'],'corpus.csv').write_bytes(plain); print('B1_CORPUS_SHA256='+hashlib.sha256(plain).hexdigest()); print('B1_CORPUS_BYTES='+str(len(plain)))
-          PY
-      - name: Build exact private source image
-        shell: bash
-        run: |
-          set -euo pipefail; log="$RUNNER_TEMP/build.log"; set +e; docker build -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" --target bot -t "b1-crw:$GITHUB_RUN_ID" "$PRIVATE_SOURCE_ROOT" >"$log" 2>&1; rc=$?; set -e; echo "B1_BUILD_LOG_SHA256=$(sha256sum "$log"|awk '{print $1}')"; rm -f "$log"; test "$rc" = 0
-      - name: Execute finite canonical CRW replay
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat > "$RUNNER_TEMP/request.json" <<'JSON'
-          {"strategy_id":"crw_score_multi_mode","symbols":["MNQ"],"timeframe":"12Min","asset_type":"futures","params":{"STRATEGY_TYPE":"Extreme","SCORE_TYPE":"Classic Z","WINDOW":96,"ENTRY_EXTREME":-2.52,"EXIT_EXTREME":4.5,"ENABLE_LONGS":true,"DCA_ENABLED":false,"commission_per_share":0.0,"min_commission":0.0,"slippage_bps":0.0,"spread_bps":0.0,"session_filter_applied":false},"_verified_source_paths":{"MNQ":"/exchange/corpus.csv"},"paper_only":true,"live_allowed":false}
-          JSON
-          log="$RUNNER_TEMP/replay.json"; set +e; docker run --rm -e ENABLE_LIVE_TRADING=0 -v "$RUNNER_TEMP:/exchange:ro" "b1-crw:$GITHUB_RUN_ID" python -m scripts.operator.crw_backtest_summary_13z --request-json /exchange/request.json >"$log" 2>&1; rc=$?; set -e; test "$rc" = 0 || { echo "B1_CANONICAL_REPLAY_STATUS=FAIL"; echo "B1_REPLAY_LOG_SHA256=$(sha256sum "$log"|awk '{print $1}')"; exit "$rc"; }
-          python - <<'PY'
-          import hashlib,json,os
-          from pathlib import Path
-          p=Path(os.environ['RUNNER_TEMP'],'replay.json'); r=json.loads(p.read_text()); s={'schema':'b1-p01-crw-canonical-replay-receipt-v1','run_id':os.environ['GITHUB_RUN_ID'],'public_head':os.environ['GITHUB_SHA'],'private_source_sha':os.environ['PRIVATE_SOURCE_SHA'],'workload_blob_sha1':'df215b2b6c8bc0ba2b6652e010862e789dbe2c4c','corpus_sha256':os.environ['CORPUS_SHA256'],'corpus_bytes':int(os.environ['CORPUS_BYTES']),'parameters':{'symbol':'MNQ','timeframe':'12Min','window':96,'entry_extreme':-2.52,'exit_extreme':4.5,'dca_enabled':False},'terminal_status':r.get('status'),'ok':r.get('ok'),'total_trades':r.get('total_trades'),'net_pnl':r.get('net_pnl'),'profit_factor':r.get('profit_factor'),'max_drawdown':r.get('max_drawdown'),'data_coverage':r.get('data_coverage'),'raw_result_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'raw_result_bytes':p.stat().st_size,'protected_holdout_read':False}; out=Path('b1-p01-crw-canonical-replay-receipt.json'); out.write_text(json.dumps(s,sort_keys=True,indent=2)+'\n'); print('B1_CANONICAL_REPLAY_STATUS='+str(s['terminal_status'])); print('B1_CANONICAL_REPLAY_OK='+str(s['ok']).lower()); print('B1_SANITIZED_RECEIPT_SHA256='+hashlib.sha256(out.read_bytes()).hexdigest())
-          PY
-          rm -f "$log"
+        with:
+          python-version: '3.11.16'
+      - name: Install transport dependency
+        run: python -m pip install --disable-pip-version-check cryptography
+      - name: Execute exact private workload against encrypted frozen development corpus
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/b1_p01_crw_canonical_replay_harness_v1.py
       - uses: actions/upload-artifact@v4
-        with: {name: b1-p01-crw-canonical-replay-receipt, path: b1-p01-crw-canonical-replay-receipt.json, if-no-files-found: error, retention-days: 7}
+        with:
+          name: b1-p01-crw-canonical-replay-receipt
+          path: b1-p01-crw-canonical-replay-receipt.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Remove one-run private material
         if: always()
-        run: rm -rf "$RUNNER_TEMP/source" "$RUNNER_TEMP/source.tar.gz" "$RUNNER_TEMP/private.b64" "$RUNNER_TEMP/recipient.json" "$RUNNER_TEMP/body.json" "$RUNNER_TEMP/envelope.json" "$RUNNER_TEMP/corpus.csv" "$RUNNER_TEMP/request.json" "$RUNNER_TEMP/replay.json" "$RUNNER_TEMP/build.log"
+        run: rm -rf "$RUNNER_TEMP/source" "$RUNNER_TEMP/source.tar.gz" "$RUNNER_TEMP/corpus.csv" "$RUNNER_TEMP/request.json" "$RUNNER_TEMP/replay.json" "$RUNNER_TEMP/build.log"
