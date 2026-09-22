@@ -6,14 +6,14 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/mmibkr-private-pr671-forward-lifecycle-validation-r1.yml'
+      - '.github/workflows/mmibkr-private-pr671-forward-evidence-validation-r1.yml'
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: mmibkr-private-pr671-forward-lifecycle-validation-r1
+  group: mmibkr-private-pr671-forward-evidence-validation-r1
   cancel-in-progress: false
 
 env:
@@ -74,7 +74,7 @@ jobs:
           headers = {
               'Authorization': 'Bearer ' + oidc(),
               'Accept': 'application/gzip',
-              'User-Agent': 'mmibkr-private-pr671-forward-lifecycle-validation-r1',
+              'User-Agent': 'mmibkr-private-pr671-forward-evidence-validation-r1',
               'X-MMIBKR-Caller-Run-Id': run_id,
           }
           url = f'{base}/v1/source-vault/private-archive/{source_sha}'
@@ -127,7 +127,7 @@ jobs:
                   'Authorization': 'Bearer ' + oidc(),
                   'Accept': 'application/json',
                   'Content-Type': 'application/json',
-                  'User-Agent': 'mmibkr-private-pr671-forward-lifecycle-validation-r1',
+                  'User-Agent': 'mmibkr-private-pr671-forward-evidence-validation-r1',
                   'X-MMIBKR-Caller-Run-Id': run_id,
               },
           )
