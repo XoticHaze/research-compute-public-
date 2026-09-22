@@ -41,6 +41,13 @@ const OPERATOR_CONSOLE_DEPLOY_IDENTITY = {
   workflow_ref:
     'XoticHaze/research-compute-public-/.github/workflows/mmibkr-operator-console-deploy-r1.yml@refs/heads/main',
 };
+
+const MISSED_TRADE_AUDIT_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-selected-runtime-missed-trade-audit-r1.yml@refs/heads/main',
+};
 const UI_BUILD_PRIVATE_ARCHIVE_SOURCE =
   'ca0adfa9f07d85b500594bbd334bb002e20b1eb6';
 const UI_BUILD_PRIVATE_ARCHIVE_EXPIRES_AT =
@@ -246,6 +253,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     const matchedUiBuild = matchesIdentity(claims, UI_BUILD_VALIDATION_IDENTITY);
     const matchedBootstrap = matchesIdentity(claims, SOURCE_VAULT_BOOTSTRAP_IDENTITY);
     const matchedOperatorDeploy = matchesIdentity(claims, OPERATOR_CONSOLE_DEPLOY_IDENTITY);
+    const matchedMissedTradeAudit = matchesIdentity(claims, MISSED_TRADE_AUDIT_IDENTITY);
     const privateArchivePathAllowed = (
       /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname)
       || pathname === '/v1/source-vault/private-archive/attest'
@@ -257,6 +265,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
         || (matchedUiBuild && privateArchivePathAllowed)
         || (matchedBootstrap && privateArchivePathAllowed)
         || (matchedOperatorDeploy && operatorDeployPathAllowed)
+        || (matchedMissedTradeAudit && operatorDeployPathAllowed)
       )
       || claims.repository_visibility !== 'public'
       || !ALLOWED_PUBLIC_EVENTS.has(claims.event_name)
