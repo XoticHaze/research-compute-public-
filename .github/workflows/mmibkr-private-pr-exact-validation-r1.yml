@@ -20,7 +20,7 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  PRIVATE_SOURCE_SHA: 0ecc00f4114c361751546bf48e9b18e0066d17a9
+  PRIVATE_SOURCE_SHA: 468a4d5ca3d235c5ae89547f2d906103ebf9bcf8
 
 jobs:
   exact-private-validation:
@@ -237,7 +237,7 @@ jobs:
             "$PRIVATE_SOURCE_ROOT" >/dev/null
           echo 'MMIBKR_PRIVATE_PR_EXACT_IMAGE_READY=1'
 
-      - name: Validate strategy-inventory ownership contracts
+      - name: Validate stock position-state and ownership contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -248,6 +248,7 @@ jobs:
               tests.test_selected_runtime_strategy_inventory_v1 \
               tests.test_selected_runtime_position_ownership_integration_v1 \
               tests.test_selected_runtime_cloud_natural_evaluator_v1 \
+              tests.test_strategy_registry_position_state_forwarding_v1 \
               tests.test_selected_runtime_cloud_cycle_v1 \
               tests.test_runtime_market_data_cache_checkpoint_v1 \
               tests.test_cloud_operator_snapshot_v1 \
