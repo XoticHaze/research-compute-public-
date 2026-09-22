@@ -50,6 +50,27 @@ class SuccessorRestoreAcceptanceJobTests(unittest.TestCase):
         self.assertIn("restored checkpoint symbol coverage incomplete", section)
         self.assertIn("signal_history_contract_index_included", section)
 
+    def test_terminal_continuity_is_required_before_successor_acceptance(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        section = text[text.index("  successor_restore_acceptance:"):]
+        self.assertIn("- name: Validate restored predecessor terminal continuity", section)
+        self.assertIn(
+            "mmibkr.selected_runtime_cloud_cycle_terminal_ledger.v1",
+            section,
+        )
+        self.assertIn("restored predecessor terminal continuity missing", section)
+        self.assertIn(
+            "restored predecessor terminal continuity contains nonterminal entry",
+            section,
+        )
+        self.assertIn("terminal_boundary_continuity_included", section)
+        self.assertIn(
+            "restored terminal-boundary continuity missing from checkpoint plan",
+            section,
+        )
+        self.assertIn("'terminal_boundary_continuity_validated': True", section)
+        self.assertIn("'terminal_boundary_entry_count':", section)
+
     def test_signal_history_identity_is_validated_without_owner(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         section = text[text.index("  successor_restore_acceptance:"):]
