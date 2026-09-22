@@ -80,11 +80,11 @@ class CloudCheckpointCacheHandoffTests(unittest.TestCase):
         section = text[exact:restore]
         self.assertLess(exact, latest)
         self.assertIn(
-            "if: \${{ env.EXPECTED_PREDECESSOR_CHECKPOINT_KEY != '' }}",
+            "if: ${{ env.EXPECTED_PREDECESSOR_CHECKPOINT_KEY != '' }}",
             section,
         )
         self.assertIn(
-            "if: \${{ env.EXPECTED_PREDECESSOR_CHECKPOINT_KEY == '' }}",
+            "if: ${{ env.EXPECTED_PREDECESSOR_CHECKPOINT_KEY == '' }}",
             section,
         )
 
