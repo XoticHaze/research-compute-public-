@@ -104,6 +104,11 @@ const PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_SOURCE =
 const PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_EXPIRES_AT =
   Date.parse('2026-09-23T12:00:00Z');
 
+const OPERATOR_CONSOLE_PROMOTION_BOOTSTRAP_SOURCE =
+  '1eadfe97304bb78a7e0fabf571e73dfcf0060909';
+const OPERATOR_CONSOLE_PROMOTION_BOOTSTRAP_EXPIRES_AT =
+  Date.parse('2026-09-23T12:00:00Z');
+
 const UI_BUILD_PRIVATE_ARCHIVE_SOURCE =
   'ca0adfa9f07d85b500594bbd334bb002e20b1eb6';
 const UI_BUILD_PRIVATE_ARCHIVE_EXPIRES_AT =
@@ -193,6 +198,11 @@ function isPrivateSourceStreamApproved(sourceSha, identity = null) {
     && Date.now() <= PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_EXPIRES_AT
     && matchesIdentity(identity, PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_IDENTITY)
   );
+  const operatorConsolePromotionBootstrapApproved = (
+    sourceSha === OPERATOR_CONSOLE_PROMOTION_BOOTSTRAP_SOURCE
+    && Date.now() <= OPERATOR_CONSOLE_PROMOTION_BOOTSTRAP_EXPIRES_AT
+    && matchesIdentity(identity, SOURCE_VAULT_BOOTSTRAP_IDENTITY)
+  );
   return (
     uiBuildApproved
     || privatePrValidationApproved
@@ -200,6 +210,7 @@ function isPrivateSourceStreamApproved(sourceSha, identity = null) {
     || privatePr670ValidationApproved
     || privatePr671ValidationApproved
     || privatePromotionReviewValidationApproved
+    || operatorConsolePromotionBootstrapApproved
   );
 }
 
