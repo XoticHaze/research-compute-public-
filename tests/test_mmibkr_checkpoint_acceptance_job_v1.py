@@ -25,17 +25,29 @@ class CheckpointAcceptanceJobTests(unittest.TestCase):
             text,
         )
 
-    def test_owner_job_skips_checkpoint_acceptance_fire(self):
+    def test_route_job_resolves_checkpoint_acceptance_from_exact_git_diff(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        route_start = text.index("  route:")
+        contract_start = text.index("  contract:")
+        route = text[route_start:contract_start]
+        self.assertIn("fetch-depth: 2", route)
+        self.assertIn("git diff-tree --no-commit-id --name-only -r HEAD^ HEAD", route)
+        self.assertIn(
+            "rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1",
+            route,
+        )
+        self.assertIn('mode="checkpoint_acceptance"', route)
+
+    def test_owner_and_acceptance_jobs_use_route_output(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         runtime_start = text.index("  runtime:")
         acceptance_start = text.index("  checkpoint_acceptance:")
         runtime = text[runtime_start:acceptance_start]
-        self.assertIn(
-            "rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1",
-            runtime,
-        )
-        self.assertIn("github.event.head_commit.added", runtime)
-        self.assertIn("github.event.head_commit.modified", runtime)
+        acceptance = text[acceptance_start:]
+        self.assertIn("needs.route.outputs.mode == 'owner'", runtime)
+        self.assertIn("- route", runtime)
+        self.assertIn("needs.route.outputs.mode == 'checkpoint_acceptance'", acceptance)
+        self.assertIn("- route", acceptance)
 
     def test_acceptance_proves_exact_backfill_checkpoint_roundtrip_without_owner(self):
         text = WORKFLOW.read_text(encoding="utf-8")
