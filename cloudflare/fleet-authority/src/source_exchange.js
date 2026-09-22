@@ -28,6 +28,13 @@ const UI_BUILD_VALIDATION_IDENTITY = {
     'XoticHaze/research-compute-public-/.github/workflows/mm-ui-react-exact-build-r1.yml@refs/heads/main',
 };
 
+const PRIVATE_SOURCE_CONTRACT_TEST_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-source-contract-test-r1.yml@refs/heads/main',
+};
+
 const SOURCE_VAULT_BOOTSTRAP_IDENTITY = {
   repository: 'XoticHaze/mm-ibkr-runtime',
   ref: 'refs/heads/main',
@@ -44,6 +51,11 @@ const OPERATOR_CONSOLE_DEPLOY_IDENTITY = {
 const UI_BUILD_PRIVATE_ARCHIVE_SOURCE =
   'ca0adfa9f07d85b500594bbd334bb002e20b1eb6';
 const UI_BUILD_PRIVATE_ARCHIVE_EXPIRES_AT =
+  Date.parse('2026-09-23T12:00:00Z');
+
+const PRIVATE_SOURCE_CONTRACT_TEST_SHA =
+  '0ecc00f4114c361751546bf48e9b18e0066d17a9';
+const PRIVATE_SOURCE_CONTRACT_TEST_EXPIRES_AT =
   Date.parse('2026-09-23T12:00:00Z');
 
 const PRIVATE_REPOSITORY = 'XoticHaze/mm-IBKR';
@@ -98,10 +110,15 @@ function matchesIdentity(identity, expected) {
 
 function isPrivateSourceStreamApproved(sourceSha, identity = null) {
   if (APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha)) return true;
-  return (
+  if (
     sourceSha === UI_BUILD_PRIVATE_ARCHIVE_SOURCE
     && Date.now() <= UI_BUILD_PRIVATE_ARCHIVE_EXPIRES_AT
     && matchesIdentity(identity, UI_BUILD_VALIDATION_IDENTITY)
+  ) return true;
+  return (
+    sourceSha === PRIVATE_SOURCE_CONTRACT_TEST_SHA
+    && Date.now() <= PRIVATE_SOURCE_CONTRACT_TEST_EXPIRES_AT
+    && matchesIdentity(identity, PRIVATE_SOURCE_CONTRACT_TEST_IDENTITY)
   );
 }
 
@@ -244,6 +261,10 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
       (identity) => matchesIdentity(claims, identity),
     );
     const matchedUiBuild = matchesIdentity(claims, UI_BUILD_VALIDATION_IDENTITY);
+    const matchedPrivateSourceContractTest = matchesIdentity(
+      claims,
+      PRIVATE_SOURCE_CONTRACT_TEST_IDENTITY,
+    );
     const matchedBootstrap = matchesIdentity(claims, SOURCE_VAULT_BOOTSTRAP_IDENTITY);
     const matchedOperatorDeploy = matchesIdentity(claims, OPERATOR_CONSOLE_DEPLOY_IDENTITY);
     const privateArchivePathAllowed = (
@@ -255,6 +276,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
       !(
         matchedRuntime
         || (matchedUiBuild && privateArchivePathAllowed)
+        || (matchedPrivateSourceContractTest && privateArchivePathAllowed)
         || (matchedBootstrap && privateArchivePathAllowed)
         || (matchedOperatorDeploy && operatorDeployPathAllowed)
       )
