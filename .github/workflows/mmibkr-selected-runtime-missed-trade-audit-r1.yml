@@ -243,7 +243,7 @@ jobs:
       - name: Destroy plaintext audit working material
         if: always()
         run: |
-          rm -rf \
+          sudo rm -rf \
             "$RUNNER_TEMP/mmibkr-audit" \
             "$RUNNER_TEMP/mmibkr-audit-encrypted" \
             "$RUNNER_TEMP/mmibkr-data" \

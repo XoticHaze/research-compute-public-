@@ -24,7 +24,7 @@ import json
 import math
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -229,33 +229,49 @@ def _candidate_data_paths(
     return out
 
 
-def _load_frame(
-    *,
+def _source_cache_candidates(
     data_root: Path,
     binding: Mapping[str, Any],
-    explicit_path: str | None,
-):
-    import pandas as pd
-
-    candidates = _candidate_data_paths(data_root, binding, explicit_path)
-    source: Path | None = None
-    frame = None
-    for path in candidates:
-        if not path.is_file():
-            continue
-        loaded = pd.read_csv(path)
-        if loaded is None or loaded.empty:
-            continue
-        source = path
-        frame = loaded
-        break
-    if source is None or frame is None:
-        raise FileNotFoundError(
-            "target_frame_missing:"
-            + str(binding.get("runtime_id"))
-            + ":"
-            + ",".join(str(path) for path in candidates)
+    source_timeframe: str,
+) -> list[Path]:
+    symbol = str(binding.get("symbol") or "").upper()
+    asset = _asset_folder(binding)
+    instrument = str(binding.get("instrument_class") or "").upper()
+    candidates: list[Path] = []
+    if instrument == "FUT":
+        contract = (
+            binding.get("execution_contract")
+            if isinstance(binding.get("execution_contract"), Mapping)
+            else {}
         )
+        month = str(contract.get("lastTradeDateOrContractMonth") or "").strip()[:6]
+        if len(month) == 6 and month.isdigit():
+            candidates.extend(
+                [
+                    data_root / asset / f"{symbol}-{month}" / f"{source_timeframe}.features.csv",
+                    data_root / asset / f"{symbol}-{month}" / f"{source_timeframe}.csv",
+                ]
+            )
+    candidates.extend(
+        [
+            data_root / asset / symbol / f"{source_timeframe}.features.csv",
+            data_root / asset / symbol / f"{source_timeframe}.csv",
+            data_root / asset / symbol.lower() / f"{source_timeframe}.features.csv",
+            data_root / asset / symbol.lower() / f"{source_timeframe}.csv",
+        ]
+    )
+    out: list[Path] = []
+    seen: set[str] = set()
+    for path in candidates:
+        key = str(path)
+        if key not in seen:
+            seen.add(key)
+            out.append(path)
+    return out
+
+
+def _normalize_frame(frame, *, source: Path):
+    import pandas as pd
 
     timestamp_col = next(
         (
@@ -290,16 +306,109 @@ def _load_frame(
     frame = frame.reset_index(drop=True)
     if frame.empty:
         raise ValueError(f"target_frame_no_valid_timestamps:{source}")
+    return frame
+
+
+def _load_frame(
+    *,
+    data_root: Path,
+    binding: Mapping[str, Any],
+    explicit_path: str | None,
+):
+    import pandas as pd
+    from timeframe_adapters import resolve_timeframe_adapter, resample_ohlcv
+
+    candidates = _candidate_data_paths(data_root, binding, explicit_path)
+    source: Path | None = None
+    frame = None
+    direct_target = False
+    for path in candidates:
+        if not path.is_file():
+            continue
+        loaded = pd.read_csv(path)
+        if loaded is None or loaded.empty:
+            continue
+        source = path
+        frame = loaded
+        direct_target = True
+        break
+
+    adapter_spec = None
+    source_candidates: list[Path] = []
+    source_rows = None
+    if source is None or frame is None:
+        target_timeframe = str(binding.get("timeframe") or "")
+        native_timeframes = (
+            "1Min", "2Min", "3Min", "5Min", "15Min", "30Min",
+            "1Hour", "2Hour", "4Hour", "1Day", "1W", "1M",
+        )
+        adapter_spec = resolve_timeframe_adapter(
+            target_timeframe,
+            native_timeframes=native_timeframes,
+            default_minute_source="1Min",
+        )
+        if not adapter_spec.is_custom:
+            raise FileNotFoundError(
+                "target_frame_missing:"
+                + str(binding.get("runtime_id"))
+                + ":"
+                + ",".join(str(path) for path in candidates)
+            )
+        source_candidates = _source_cache_candidates(
+            data_root,
+            binding,
+            adapter_spec.source_timeframe,
+        )
+        for path in source_candidates:
+            if not path.is_file():
+                continue
+            loaded = pd.read_csv(path)
+            if loaded is None or loaded.empty:
+                continue
+            source = path
+            frame = _normalize_frame(loaded, source=path)
+            source_rows = int(len(frame))
+            frame = resample_ohlcv(frame, adapter_spec.target_timeframe)
+            if frame is None or frame.empty:
+                continue
+            frame = _normalize_frame(frame, source=path)
+            break
+
+    if source is None or frame is None or frame.empty:
+        all_candidates = [*candidates, *source_candidates]
+        raise FileNotFoundError(
+            "target_or_source_frame_missing:"
+            + str(binding.get("runtime_id"))
+            + ":"
+            + ",".join(str(path) for path in all_candidates)
+        )
+
+    if direct_target:
+        frame = _normalize_frame(frame, source=source)
 
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
-    return frame, {
+    authority = {
         "path": str(source),
         "sha256": digest,
         "rows": int(len(frame)),
         "first_timestamp_utc": str(frame.iloc[0]["timestamp"]),
         "last_timestamp_utc": str(frame.iloc[-1]["timestamp"]),
         "authority": "restored_canonical_checkpoint_cache",
+        "target_materialization": (
+            "direct_persisted_target"
+            if direct_target
+            else "canonical_timeframe_adapter_resample_ohlcv"
+        ),
     }
+    if adapter_spec is not None:
+        authority.update(
+            {
+                "source_rows": int(source_rows or 0),
+                "adapter": adapter_spec.to_dict(),
+                "target_rows": int(len(frame)),
+            }
+        )
+    return frame, authority
 
 
 def _terminal_entries(data_root: Path) -> dict[str, dict[str, Any]]:
@@ -725,7 +834,15 @@ async def run_audit(
                 ts = ts.replace(tzinfo=timezone.utc)
             else:
                 ts = ts.astimezone(timezone.utc)
-            if ts < start or ts > end:
+            from timeframe_adapters import timeframe_minutes
+
+            target_minutes = timeframe_minutes(timeframe)
+            if target_minutes is None:
+                raise RuntimeError(
+                    f"audit_target_timeframe_minutes_unavailable:{runtime_id}:{timeframe}"
+                )
+            boundary_ts = ts + timedelta(minutes=int(target_minutes))
+            if boundary_ts < start or boundary_ts > end:
                 continue
 
             upto = frame.iloc[: index + 1].copy()
@@ -789,13 +906,14 @@ async def run_audit(
             terminal_match = _terminal_match(
                 terminal,
                 runtime_id=runtime_id,
-                timestamp_utc=ts,
+                timestamp_utc=boundary_ts,
             )
             owner_present = True if terminal_match else False
 
             rows.append(
                 {
-                    "timestamp_utc": _iso(ts),
+                    "timestamp_utc": _iso(boundary_ts),
+                    "bar_timestamp_utc": _iso(ts),
                     "runtime_id": runtime_id,
                     "strategy_id": binding.get("strategy_id"),
                     "strategy_spec_digest": binding.get("strategy_spec_digest"),
