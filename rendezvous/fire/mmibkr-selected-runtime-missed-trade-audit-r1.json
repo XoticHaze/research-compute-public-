@@ -1,0 +1,18 @@
+{
+  "schema": "mmibkr.selected_runtime_missed_trade_audit_request.v1",
+  "audit_id": "dot4-to-cloud-conservative-gap-20260922",
+  "private_source_sha": "d81df85788ebb6be6d4d69b9b9a537be96f16507",
+  "expected_checkpoint_cache_key": "mmibkr-selected-runtime-cloud-checkpoint-v1-35692649864-d81df85788ebb6be6d4d69b9b9a537be96f16507",
+  "expected_checkpoint_sha256": "abe941335b8c2ac03ae16b26210fba07877e06622b1f5f2cd9b45eb6b8706e0f",
+  "window_start_utc": "2026-09-20T07:38:42Z",
+  "window_end_utc": "2026-09-22T06:00:00Z",
+  "window_start_authority": "first durable project handoff observation stating physical .4 host is gone (2026-09-20T07:38:42Z)",
+  "window_end_authority": "decisive successful one-cycle successor boundary run 35692649864",
+  "window_semantics": "conservative_confirmed_offline_through_decisive_cloud_successor",
+  "inventory_by_runtime": {},
+  "data_paths": {},
+  "return_schema": "mmibkr.readonly_audit_return_request.v1",
+  "request_id": "mmibkr_gap_audit_20260922_ca0fbb8d2c9c",
+  "recipient_b64": "La5Gjj7cS0OOlQKVWsy7ykrCSvd5/RWLByT0ZlvQ5Vw=",
+  "recipient_key_id": "sha256:f25113fa9cdedda1337b7b807c1a5bc00da44b06f2afb64e54ebaeea312b21e4"
+}
