@@ -51,6 +51,7 @@ on:
       - rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1
       - rendezvous/fire/mmibkr-selected-runtime-cloud-successor-restore-acceptance-r1
       - rendezvous/fire/mmibkr-selected-runtime-cloud-signal-history-reconciliation-r1
+      - rendezvous/fire/mmibkr-selected-runtime-missed-trade-audit-r1.json
   pull_request:
     branches:
       - main
@@ -74,6 +75,10 @@ on:
       - scripts/mmibkr_signal_history_metadata_reconcile_v1.py
       - scripts/mmibkr_operator_snapshot_publish_v1.py
       - tests/test_mmibkr_operator_snapshot_publish_helper_v1.py
+      - scripts/mmibkr_selected_runtime_missed_trade_audit_v1.py
+      - scripts/mmibkr_readonly_audit_encrypted_return_v1.py
+      - tests/test_mmibkr_selected_runtime_missed_trade_audit_v1.py
+      - tests/test_mmibkr_readonly_audit_encrypted_return_v1.py
 
 permissions:
   contents: write
@@ -134,7 +139,9 @@ jobs:
           )"
           else
             changed="$(git diff-tree --no-commit-id --name-only -r HEAD^ HEAD)"
-            if printf '%s\n' "$changed" | grep -Fxq 'rendezvous/fire/mmibkr-selected-runtime-cloud-signal-history-reconciliation-r1'; then
+            if printf '%s\n' "$changed" | grep -Fxq 'rendezvous/fire/mmibkr-selected-runtime-missed-trade-audit-r1.json'; then
+              mode="missed_trade_audit"
+            elif printf '%s\n' "$changed" | grep -Fxq 'rendezvous/fire/mmibkr-selected-runtime-cloud-signal-history-reconciliation-r1'; then
               mode="signal_history_reconciliation"
             elif printf '%s\n' "$changed" | grep -Fxq 'rendezvous/fire/mmibkr-selected-runtime-cloud-successor-restore-acceptance-r1'; then
               mode="successor_restore_acceptance"
@@ -193,7 +200,11 @@ jobs:
             scripts/mmibkr_cloud_session_acceptance_v1.py \
             scripts/mmibkr_signal_history_metadata_reconcile_v1.py \
             scripts/mmibkr_operator_snapshot_publish_v1.py \
-            tests/test_mmibkr_operator_snapshot_publish_helper_v1.py
+            tests/test_mmibkr_operator_snapshot_publish_helper_v1.py \
+            scripts/mmibkr_selected_runtime_missed_trade_audit_v1.py \
+            scripts/mmibkr_readonly_audit_encrypted_return_v1.py \
+            tests/test_mmibkr_selected_runtime_missed_trade_audit_v1.py \
+            tests/test_mmibkr_readonly_audit_encrypted_return_v1.py
           python -m unittest -v \
             tests.test_mmibkr_source_vault_consumer_v1 \
             tests.test_mmibkr_source_vault_fetch_retry_v1 \
@@ -209,7 +220,9 @@ jobs:
             tests.test_mmibkr_signal_history_metadata_reconcile_v1 \
             tests.test_mmibkr_signal_history_reconciliation_job_v1 \
             tests.test_mmibkr_owner_cycle_budget_guard_v1 \
-            tests.test_mmibkr_operator_snapshot_publish_helper_v1
+            tests.test_mmibkr_operator_snapshot_publish_helper_v1 \
+            tests.test_mmibkr_selected_runtime_missed_trade_audit_v1 \
+            tests.test_mmibkr_readonly_audit_encrypted_return_v1
 
   runtime:
     if: ${{ github.event_name != 'pull_request' && needs.route.outputs.mode == 'owner' }}
@@ -2731,3 +2744,214 @@ jobs:
             fi
           done
           echo 'MMIBKR_SIGNAL_HISTORY_RECONCILIATION_PRIVATE_RUNTIME_MATERIAL_DESTROYED=1'
+
+  missed_trade_audit:
+    if: ${{ github.event_name == 'push' && needs.route.outputs.mode == 'missed_trade_audit' }}
+    needs:
+      - contract
+      - route
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      AUDIT_REQUEST_PATH: rendezvous/fire/mmibkr-selected-runtime-missed-trade-audit-r1.json
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Install fixed source-vault and return crypto dependency
+        run: python -m pip install --disable-pip-version-check cryptography==46.0.1
+
+      - name: Validate exact read-only audit request
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$AUDIT_REQUEST_PATH"
+          python - <<'PY'
+          import base64
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path(os.environ["AUDIT_REQUEST_PATH"])
+          node = json.loads(path.read_text(encoding="utf-8"))
+          if node.get("schema") != "mmibkr.selected_runtime_missed_trade_audit_request.v1":
+              raise SystemExit("missed-trade audit request schema mismatch")
+          source = str(node.get("private_source_sha") or "").strip().lower()
+          if not re.fullmatch(r"[0-9a-f]{40}", source):
+              raise SystemExit("exact private source SHA required")
+          key = str(node.get("expected_checkpoint_cache_key") or "").strip()
+          sha = str(node.get("expected_checkpoint_sha256") or "").strip().lower()
+          if not key.startswith("mmibkr-selected-runtime-cloud-checkpoint-v1-"):
+              raise SystemExit("canonical exact checkpoint key required")
+          if not re.fullmatch(r"[0-9a-f]{64}", sha):
+              raise SystemExit("exact checkpoint SHA256 required")
+          if node.get("return_schema") != "mmibkr.readonly_audit_return_request.v1":
+              raise SystemExit("encrypted return contract required")
+          request_id = str(node.get("request_id") or "")
+          if not re.fullmatch(r"[A-Za-z0-9_-]{12,96}", request_id):
+              raise SystemExit("request id rejected")
+          recipient = base64.b64decode(
+              str(node.get("recipient_b64") or "").encode("ascii"),
+              validate=True,
+          )
+          if len(recipient) != 32:
+              raise SystemExit("X25519 recipient must be 32 bytes")
+          expected = "sha256:" + hashlib.sha256(recipient).hexdigest()
+          if node.get("recipient_key_id") != expected:
+              raise SystemExit("recipient fingerprint mismatch")
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as fh:
+              fh.write("AUDIT_PRIVATE_SOURCE_SHA=" + source + "\n")
+              fh.write("AUDIT_CHECKPOINT_CACHE_KEY=" + key + "\n")
+              fh.write("AUDIT_CHECKPOINT_SHA256=" + sha + "\n")
+              fh.write("AUDIT_REQUEST_ID=" + request_id + "\n")
+          print("MMIBKR_MISSED_TRADE_AUDIT_REQUEST_VALID=1")
+          print("MMIBKR_MISSED_TRADE_AUDIT_PRIVATE_SOURCE_SHA=" + source)
+          print("MMIBKR_MISSED_TRADE_AUDIT_REQUEST_ID=" + request_id)
+          PY
+
+      - name: Materialize exact private source for read-only audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/mmibkr-audit-source"
+          python scripts/mmibkr_source_vault_consumer_v1.py \
+            --authority-base "$FLEET_AUTHORITY_BASE" \
+            --run-id "$GITHUB_RUN_ID" \
+            --source-sha "$AUDIT_PRIVATE_SOURCE_SHA" \
+            --public-repo XoticHaze/mm-ibkr-runtime \
+            --public-branch mmibkr-source-vault \
+            --destination "$RUNNER_TEMP/mmibkr-audit-source/extracted" \
+            --archive-output "$RUNNER_TEMP/mmibkr-audit-source/mm-ibkr-source.tar.gz" \
+            --output "$RUNNER_TEMP/mmibkr-audit-source/materialization-host.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "mmibkr-audit-source"
+          node = json.loads((root / "materialization-host.json").read_text(encoding="utf-8"))
+          expected = os.environ["AUDIT_PRIVATE_SOURCE_SHA"]
+          if node.get("ok") is not True or node.get("source_sha") != expected:
+              raise SystemExit("exact private source materialization rejected")
+          if node.get("source_transport") != "fleet_authority_exact_sha_encrypted_snapshot_vault":
+              raise SystemExit("encrypted exact-source vault required")
+          if node.get("private_repository_token_used") is not False:
+              raise SystemExit("private repository token unexpectedly used")
+          if node.get("broker_credentials_used") is not False:
+              raise SystemExit("broker credentials unexpectedly used")
+          if node.get("live_execution_allowed") is not False:
+              raise SystemExit("live execution unexpectedly enabled")
+          source_root = Path(node["source_root"])
+          if not (source_root / "Dockerfile.bot").is_file():
+              raise SystemExit("materialized source layout incomplete")
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as fh:
+              fh.write("AUDIT_PRIVATE_SOURCE_ROOT=" + str(source_root) + "\n")
+          print("MMIBKR_MISSED_TRADE_AUDIT_SOURCE_MATERIALIZED=1")
+          PY
+
+      - name: Build exact private read-only audit image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build \
+            -f "$AUDIT_PRIVATE_SOURCE_ROOT/Dockerfile.bot" \
+            --target bot \
+            -t "mmibkr-missed-trade-audit:${GITHUB_RUN_ID}" \
+            "$AUDIT_PRIVATE_SOURCE_ROOT" >/dev/null
+          echo 'MMIBKR_MISSED_TRADE_AUDIT_EXACT_IMAGE_READY=1'
+
+      - name: Restore exact canonical audit checkpoint cache
+        id: audit_checkpoint_restore
+        uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        with:
+          path: ${{ runner.temp }}/mmibkr-audit-checkpoint
+          key: ${{ env.AUDIT_CHECKPOINT_CACHE_KEY }}
+          fail-on-cache-miss: true
+
+      - name: Validate and restore canonical audit cache state
+        shell: bash
+        run: |
+          set -euo pipefail
+          checkpoint="$RUNNER_TEMP/mmibkr-audit-checkpoint/latest.tgz"
+          test "${{ steps.audit_checkpoint_restore.outputs.cache-hit }}" = 'true'
+          test -s "$checkpoint"
+          actual="$(sha256sum "$checkpoint" | awk '{print $1}')"
+          test "$actual" = "$AUDIT_CHECKPOINT_SHA256"
+          mkdir -p "$RUNNER_TEMP/mmibkr-audit-data"
+          docker run --rm \
+            -v "$RUNNER_TEMP/mmibkr-audit-data:/app/data" \
+            -v "$RUNNER_TEMP/mmibkr-audit-checkpoint:/checkpoint:ro" \
+            "mmibkr-missed-trade-audit:${GITHUB_RUN_ID}" \
+            python scripts/operator/runtime_market_data_cache_checkpoint_v1.py \
+              --repo-root /app \
+              --restore-archive /checkpoint/latest.tgz
+          echo "MMIBKR_MISSED_TRADE_AUDIT_CHECKPOINT_SHA256=$actual"
+          echo 'MMIBKR_MISSED_TRADE_AUDIT_CHECKPOINT_RESTORED=1'
+
+      - name: Run canonical read-only missed-trade replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/mmibkr-missed-trade-audit"
+          docker run --rm \
+            -e "MMIBKR_PRIVATE_HEAD=$AUDIT_PRIVATE_SOURCE_SHA" \
+            -e ENABLE_LIVE_TRADING=0 \
+            -e PYTHONPATH=/app \
+            -v "$RUNNER_TEMP/mmibkr-audit-data:/app/data:ro" \
+            -v "$GITHUB_WORKSPACE/scripts:/audit-scripts:ro" \
+            -v "$GITHUB_WORKSPACE/$AUDIT_REQUEST_PATH:/audit-request.json:ro" \
+            -v "$RUNNER_TEMP/mmibkr-missed-trade-audit:/audit-output" \
+            "mmibkr-missed-trade-audit:${GITHUB_RUN_ID}" \
+            python /audit-scripts/mmibkr_selected_runtime_missed_trade_audit_v1.py \
+              --repo-root /app \
+              --data-root /app/data \
+              --request /audit-request.json \
+              --output /audit-output/missed-trade-audit.json \
+              --public-summary-output /audit-output/public-summary.json
+          test -s "$RUNNER_TEMP/mmibkr-missed-trade-audit/missed-trade-audit.json"
+          test -s "$RUNNER_TEMP/mmibkr-missed-trade-audit/public-summary.json"
+          cat "$RUNNER_TEMP/mmibkr-missed-trade-audit/public-summary.json"
+          echo 'MMIBKR_MISSED_TRADE_AUDIT_BROKER_ACTION=0'
+          echo 'MMIBKR_MISSED_TRADE_AUDIT_LIVE_EXECUTION_ALLOWED=0'
+
+      - name: Encrypt detailed audit to one-time recipient
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/mmibkr-missed-trade-audit-encrypted"
+          python scripts/mmibkr_readonly_audit_encrypted_return_v1.py \
+            --audit "$RUNNER_TEMP/mmibkr-missed-trade-audit/missed-trade-audit.json" \
+            --request "$AUDIT_REQUEST_PATH" \
+            --output "$RUNNER_TEMP/mmibkr-missed-trade-audit-encrypted/audit-envelope.json"
+          rm -f "$RUNNER_TEMP/mmibkr-missed-trade-audit/missed-trade-audit.json"
+          test -s "$RUNNER_TEMP/mmibkr-missed-trade-audit-encrypted/audit-envelope.json"
+          echo 'MMIBKR_MISSED_TRADE_AUDIT_DETAIL_PLAINTEXT_PUBLISHED=0'
+
+      - name: Upload ciphertext-only audit return
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mmibkr-selected-runtime-missed-trade-audit-encrypted-${{ github.run_id }}
+          path: ${{ runner.temp }}/mmibkr-missed-trade-audit-encrypted/audit-envelope.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Destroy read-only audit working material
+        if: always()
+        shell: bash
+        run: |
+          rm -rf \
+            "$RUNNER_TEMP/mmibkr-missed-trade-audit" \
+            "$RUNNER_TEMP/mmibkr-missed-trade-audit-encrypted" \
+            "$RUNNER_TEMP/mmibkr-audit-data" \
+            "$RUNNER_TEMP/mmibkr-audit-checkpoint" \
+            "$RUNNER_TEMP/mmibkr-audit-source"
+          echo 'MMIBKR_MISSED_TRADE_AUDIT_PLAINTEXT_DESTROYED=1'
+
