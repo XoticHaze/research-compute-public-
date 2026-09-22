@@ -10,6 +10,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  statuses: write
 
 concurrency:
   group: mmibkr-private-promotion-review-validation-r1
@@ -275,6 +276,36 @@ jobs:
               'selected_runtime_write': False,
               'live_trading_allowed': False,
           }, sort_keys=True))
+          PY
+
+      - name: Publish sanitized commit status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, urllib.request
+          payload = json.dumps({
+              'state': 'success',
+              'context': 'mmibkr/private-promotion-review-validation',
+              'description': 'Exact private promotion review validation passed',
+          }).encode()
+          request = urllib.request.Request(
+              f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}/statuses/{os.environ['GITHUB_SHA']}",
+              data=payload,
+              method='POST',
+              headers={
+                  'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                  'Accept': 'application/vnd.github+json',
+                  'Content-Type': 'application/json',
+                  'X-GitHub-Api-Version': '2022-11-28',
+              },
+          )
+          with urllib.request.urlopen(request, timeout=20) as response:
+              if int(response.status) not in {200, 201}:
+                  raise SystemExit('commit status publication failed')
+          print('MMIBKR_PROMOTION_REVIEW_COMMIT_STATUS=SUCCESS')
           PY
 
       - name: Destroy one-run private source
