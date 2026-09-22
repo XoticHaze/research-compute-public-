@@ -2273,7 +2273,8 @@ jobs:
             "$RUNNER_TEMP/mmibkr-seed-data" \
             "$RUNNER_TEMP/mmibkr-checkpoint" \
             "$RUNNER_TEMP/mmibkr-reconcile-input" \
-            "$RUNNER_TEMP/mmibkr-reconcile-verify"
+            "$RUNNER_TEMP/mmibkr-reconcile-verify" \
+            "$RUNNER_TEMP/mmibkr-reconcile-diagnostic"
 
       - name: Restore exact terminal-aware predecessor checkpoint
         id: reconcile_restore
@@ -2399,6 +2400,7 @@ jobs:
             -v "$RUNNER_TEMP/mmibkr-seed-data:/seed-data:ro" \
             -v "$RUNNER_TEMP/mmibkr-reconcile-input:/input:ro" \
             -v "$RUNNER_TEMP/mmibkr-reconcile-expected:/expected:ro" \
+            -v "$RUNNER_TEMP/mmibkr-reconcile-diagnostic:/diagnostic" \
             -v "$GITHUB_WORKSPACE/scripts/mmibkr_signal_history_metadata_reconcile_v1.py:/public/mmibkr_signal_history_metadata_reconcile_v1.py:ro" \
             "mmibkr-signal-reconcile:$GITHUB_RUN_ID" \
             python /public/mmibkr_signal_history_metadata_reconcile_v1.py \
@@ -2410,6 +2412,7 @@ jobs:
               --seed-index /seed-data/strategy_runtime/selected_runtime_signal_history_contracts_v1/latest.json \
               --expected-public-run-id "$INITIAL_BACKFILL_RUN_ID" \
               --expected-conflicts-json /expected/expected-conflicts.json \
+              --conflicts-output /diagnostic/conflicts.json \
               --output /app/data/strategy_runtime/selected_runtime_signal_history_reconciliation_v1/latest.json
 
           docker run --rm \
@@ -2457,6 +2460,70 @@ jobs:
           PY
         env:
           EXPECTED_CONFLICT_COUNT: ${{ steps.reconcile_request.outputs.expected_conflict_count }}
+
+      - name: Publish sanitized signal-history conflict diagnostic
+        if: ${{ always() }}
+        env:
+          DIAGNOSTIC_ROOT: rendezvous/diagnostics
+        run: |
+          set -euo pipefail
+          diagnostic="$RUNNER_TEMP/mmibkr-reconcile-diagnostic/conflicts.json"
+          if [ ! -s "$diagnostic" ]; then
+            echo 'MMIBKR_SIGNAL_HISTORY_CONFLICT_DIAGNOSTIC=not_available'
+            exit 0
+          fi
+
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          path = Path(os.environ['RUNNER_TEMP']) / 'mmibkr-reconcile-diagnostic' / 'conflicts.json'
+          node = json.loads(path.read_text(encoding='utf-8'))
+          if node.get('schema') != 'mmibkr.signal_history_conflict_diagnostic.v1':
+              raise SystemExit('signal-history conflict diagnostic schema mismatch')
+          for key in (
+              'market_data_cache_mutated',
+              'artifact_bars_written_to_real_cache',
+              'execution_authority_mutated',
+              'broker_action',
+              'paper_owner_started',
+              'live_execution_allowed',
+              'credentials_included',
+              'account_state_included',
+              'positions_included',
+              'orders_included',
+          ):
+              if node.get(key) is not False:
+                  raise SystemExit('signal-history conflict diagnostic safety boundary:' + key)
+          print('MMIBKR_SIGNAL_HISTORY_CONFLICT_COUNT=' + str(int(node.get('conflict_count') or 0)))
+          print(
+              'MMIBKR_SIGNAL_HISTORY_CONFLICT_SET_MATCH='
+              + str(bool(node.get('expected_conflict_set_match'))).lower()
+          )
+          print(
+              'MMIBKR_SIGNAL_HISTORY_CONFLICTS_BY_SYMBOL='
+              + json.dumps(node.get('conflicts_by_symbol') or {}, sort_keys=True)
+          )
+          PY
+
+          payload="$(base64 -w0 "$diagnostic")"
+          path="$DIAGNOSTIC_ROOT/$GITHUB_RUN_ID-mmibkr-signal-history-conflicts.json"
+          body="$(python - "$payload" <<'PY'
+          import json, sys
+          print(json.dumps({
+              'message': 'runtime: publish sanitized MM-IBKR signal-history conflict diagnostic',
+              'content': sys.argv[1],
+              'branch': 'rendezvous-exchange',
+          }))
+          PY
+          )"
+          curl -fsSL -X PUT \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/contents/$path" \
+            -d "$body" >/dev/null
+          echo "MMIBKR_SIGNAL_HISTORY_CONFLICT_DIAGNOSTIC_PATH=$path"
 
       - name: Build reconciled terminal-plus-signal checkpoint
         id: reconciled_checkpoint
@@ -2638,6 +2705,7 @@ jobs:
             "$RUNNER_TEMP/mmibkr-checkpoint" \
             "$RUNNER_TEMP/mmibkr-reconcile-input" \
             "$RUNNER_TEMP/mmibkr-reconcile-verify" \
+            "$RUNNER_TEMP/mmibkr-reconcile-diagnostic" \
             "$RUNNER_TEMP/mmibkr-reconcile-expected" \
             "$RUNNER_TEMP/mmibkr-reconcile-terminal.env" \
             "$RUNNER_TEMP/mmibkr-signal-history-reconciliation.json" \
@@ -2650,7 +2718,8 @@ jobs:
             "$RUNNER_TEMP/mmibkr-seed-data" \
             "$RUNNER_TEMP/mmibkr-checkpoint" \
             "$RUNNER_TEMP/mmibkr-reconcile-input" \
-            "$RUNNER_TEMP/mmibkr-reconcile-verify"; do
+            "$RUNNER_TEMP/mmibkr-reconcile-verify" \
+            "$RUNNER_TEMP/mmibkr-reconcile-diagnostic"; do
             if [ -e "$path" ]; then
               echo "signal-history reconciliation cleanup residue: $path" >&2
               exit 1
