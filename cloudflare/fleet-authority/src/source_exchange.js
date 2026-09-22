@@ -115,6 +115,7 @@ const APPROVED_PRIVATE_SOURCE_STREAMS = new Set([
   '5aeb0370a18c4c941852c7454706ba9ffa28da68',
   'd81df85788ebb6be6d4d69b9b9a537be96f16507',
   '8a82107be253c3facd3b090cf752bc51b3a8ef8d',
+  '5c261f6252dd332806908d9f9a8ba0ac839f1b63',
 ]);
 
 function matchesIdentity(identity, expected) {
