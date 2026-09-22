@@ -112,7 +112,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            "0ecc00f4114c361751546bf48e9b18e0066d17a9",
+            "468a4d5ca3d235c5ae89547f2d906103ebf9bcf8",
             text,
         )
         self.assertIn("PRIVATE_PR_EXACT_VALIDATION_EXPIRES_AT", text)
@@ -126,6 +126,15 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             "(matchedPrivatePrValidation && operatorDeployPathAllowed)",
             text,
         )
+
+    def test_private_pr_validation_uses_exact_hostless_suite_without_public_test_log(self):
+        workflow = (ROOT / ".github" / "workflows" / "mmibkr-private-pr-exact-validation-r1.yml").read_text(encoding="utf-8")
+        self.assertIn("Validate exact private Hostless Runtime Normal Fetch contract", workflow)
+        self.assertIn("tests.test_strategy_registry_position_state_forwarding_v1", workflow)
+        self.assertIn("tests.test_snapshot_ib_adapter_position_state_v1", workflow)
+        self.assertIn('>"$log" 2>&1', workflow)
+        self.assertIn('rm -f "$log"', workflow)
+        self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
 
     def test_runtime_bootstrap_identity_is_private_archive_only(self):
         text = SOURCE.read_text(encoding="utf-8")
