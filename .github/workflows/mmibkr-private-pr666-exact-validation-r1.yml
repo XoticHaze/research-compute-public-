@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: b1-p01-crw-canonical-replay-r1
+  group: b1-p01-crw-canonical-replay-r2
   cancel-in-progress: false
 
 jobs:
