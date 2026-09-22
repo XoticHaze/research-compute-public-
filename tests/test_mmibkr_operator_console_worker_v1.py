@@ -59,6 +59,31 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertIn("snapshot_readback_unverified", text)
         self.assertIn("durable_readback_verified: true", text)
 
+    def test_machine_snapshot_read_is_oidc_bound_and_read_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        route = "url.pathname === '/v1/operator-snapshot-read'"
+        self.assertIn(route, text)
+        start = text.index(route)
+        end = text.index("await verifyAccess(request, env)", start)
+        section = text[start:end]
+        self.assertIn("verifyPublisher(request)", section)
+        self.assertIn("operator-state.internal/latest", section)
+        self.assertIn("validateSnapshot(record.snapshot)", section)
+        self.assertIn("mmibkr.operator_console_machine_read.v1", section)
+        self.assertIn("broker_mutation_authority: false", section)
+        self.assertIn("live_execution_allowed: false", section)
+        self.assertNotIn("storage.put(", section)
+        self.assertNotIn("placeOrder", section)
+        self.assertNotIn("/submit", section)
+        self.assertNotIn("/flatten", section)
+        self.assertNotIn("/cancel", section)
+
+    def test_machine_snapshot_read_precedes_human_access_gate(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        machine = text.index("url.pathname === '/v1/operator-snapshot-read'")
+        access = text.index("await verifyAccess(request, env)")
+        self.assertLess(machine, access)
+
     def test_static_assets_run_through_worker_first(self):
         config = json.loads(WRANGLER.read_text(encoding="utf-8"))
         assets = config["assets"]
