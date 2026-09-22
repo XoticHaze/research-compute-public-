@@ -35,7 +35,7 @@ class SignalHistoryReconciliationJobTests(unittest.TestCase):
         self.assertIn('test "$CACHE_HIT" = \'true\'', section)
         self.assertIn('test "$RESTORED_CACHE_KEY" = "$EXPECTED_CACHE_KEY"', section)
         self.assertIn('test "$actual" = "$EXPECTED_SHA256"', section)
-        self.assertIn("--expected-conflicts-json /input/expected-conflicts.json", section)
+        self.assertIn("--expected-conflicts-json /expected/expected-conflicts.json", section)
 
     def test_expected_conflicts_use_separate_read_only_mount(self):
         text = WORKFLOW.read_text(encoding="utf-8")
