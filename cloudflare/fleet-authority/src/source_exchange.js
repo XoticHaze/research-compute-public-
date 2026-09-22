@@ -64,10 +64,10 @@ const PRIVATE_PR666_EXACT_VALIDATION_IDENTITY = {
   repository: 'XoticHaze/research-compute-public-',
   ref: 'refs/heads/main',
   workflow_ref:
-    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-pr666-exact-validation-r1.yml@refs/heads/main',
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-pr666-ownership-final-validation-r1.yml@refs/heads/main',
 };
 const PRIVATE_PR666_EXACT_VALIDATION_SOURCE =
-  '553197599239f1efd0a302642872a5a064a1da32';
+  'a303718aade958c98bc12d5e812de870eb6f229d';
 const PRIVATE_PR666_EXACT_VALIDATION_EXPIRES_AT =
   Date.parse('2026-09-23T12:00:00Z');
 
