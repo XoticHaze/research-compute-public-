@@ -75,5 +75,48 @@ class CloudOwnerReusableVaultContractTests(unittest.TestCase):
         self.assertIn("ENABLE_LIVE_TRADING=0", text)
 
 
+    def test_missed_trade_audit_uses_authorized_owner_identity_without_owner_runtime(self):
+        text = (
+            ROOT / ".github/workflows/mmibkr-selected-runtime-cloud-r1.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "rendezvous/fire/mmibkr-selected-runtime-missed-trade-audit-r1.json",
+            text,
+        )
+        self.assertIn('mode="missed_trade_audit"', text)
+        self.assertIn(
+            "needs.route.outputs.mode == 'missed_trade_audit'",
+            text,
+        )
+        self.assertIn(
+            "needs.route.outputs.mode == 'owner'",
+            text,
+        )
+        start = text.index("\n  missed_trade_audit:\n")
+        audit = text[start:]
+        self.assertNotIn("environment: ibkr-paper-runtime-r1", audit)
+        self.assertNotIn("secrets.", audit)
+        self.assertNotIn("IBKR_REMOTE_EXCHANGE_TOKEN", audit)
+        self.assertIn("ENABLE_LIVE_TRADING=0", audit)
+        self.assertIn("broker_credentials_used", audit)
+        self.assertIn("live_execution_allowed", audit)
+        self.assertIn("actions/cache/restore@", audit)
+        self.assertIn("fail-on-cache-miss: true", audit)
+        self.assertIn("mmibkr_source_vault_consumer_v1.py", audit)
+        self.assertIn("mmibkr_selected_runtime_missed_trade_audit_v1.py", audit)
+        self.assertIn("mmibkr_readonly_audit_encrypted_return_v1.py", audit)
+        self.assertIn("retention-days: 1", audit)
+
+    def test_standalone_audit_workflow_cannot_fire_live_audit(self):
+        text = (
+            ROOT / ".github/workflows/mmibkr-selected-runtime-missed-trade-audit-r1.yml"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn(
+            "push:\n    branches:\n      - main\n    paths:\n      - rendezvous/fire/mmibkr-selected-runtime-missed-trade-audit-r1.json",
+            text,
+        )
+        self.assertIn("if: ${{ false }}", text)
+
+
 if __name__ == "__main__":
     unittest.main()
