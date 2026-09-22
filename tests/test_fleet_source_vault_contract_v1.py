@@ -112,7 +112,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            "468a4d5ca3d235c5ae89547f2d906103ebf9bcf8",
+            "6f3e63e244100afc69cac7ba605e8a5cb9b1c366",
             text,
         )
         self.assertIn("PRIVATE_PR_EXACT_VALIDATION_EXPIRES_AT", text)
@@ -127,15 +127,17 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
 
-    def test_private_pr_validation_uses_exact_pr665_suite_without_public_test_log(self):
+    def test_private_pr_validation_uses_exact_pr662_suite_without_public_test_log(self):
         workflow = (ROOT / ".github" / "workflows" / "mmibkr-private-pr-exact-validation-r1.yml").read_text(encoding="utf-8")
-        self.assertIn("Validate exact private PR 665 position-state contracts", workflow)
-        self.assertIn("MMIBKR_PRIVATE_PR665_EXACT_IMAGE_READY=1", workflow)
+        self.assertIn("Build exact private bot image for PR 662 validation", workflow)
+        self.assertIn("Validate exact private PR 662 operator backend contracts", workflow)
+        self.assertIn("Validate exact private PR 662 Bot Console acceptance and production build", workflow)
+        self.assertIn("MMIBKR_PRIVATE_PR662_EXACT_IMAGE_READY=1", workflow)
         self.assertIn("ENABLE_LIVE_TRADING=0", workflow)
-        self.assertIn("tests.test_strategy_registry_position_state_forwarding_v1", workflow)
-        self.assertIn("tests.test_snapshot_ib_adapter_position_state_v1", workflow)
-        self.assertIn('>"$log" 2>&1', workflow)
-        self.assertIn('rm -f "$log"', workflow)
+        self.assertIn("tests.test_cloud_operator_snapshot_v1", workflow)
+        self.assertIn("tests.test_crw_operator_context_projection_v1", workflow)
+        self.assertIn("npm run verify:bot-console", workflow)
+        self.assertIn("npm run build", workflow)
         self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
         self.assertIn("MMIBKR_PRIVATE_PR_SAFE_DIAGNOSTIC=", workflow)
         self.assertNotIn('cat "$log"', workflow)
