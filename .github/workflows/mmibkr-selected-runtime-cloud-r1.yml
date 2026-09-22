@@ -2186,7 +2186,9 @@ jobs:
               if node.get(key_name) is not False:
                   raise SystemExit('reconciliation safety boundary violated:' + key_name)
 
-          conflict_path = Path(os.environ['RUNNER_TEMP']) / 'mmibkr-reconcile-expected-conflicts.json'
+          conflict_dir = Path(os.environ['RUNNER_TEMP']) / 'mmibkr-reconcile-expected'
+          conflict_dir.mkdir(parents=True, exist_ok=True)
+          conflict_path = conflict_dir / 'expected-conflicts.json'
           conflict_path.write_text(
               json.dumps(conflicts, sort_keys=True) + '\n',
               encoding='utf-8',
@@ -2396,7 +2398,7 @@ jobs:
             -v "$RUNNER_TEMP/mmibkr-data:/app/data" \
             -v "$RUNNER_TEMP/mmibkr-seed-data:/seed-data:ro" \
             -v "$RUNNER_TEMP/mmibkr-reconcile-input:/input:ro" \
-            -v "$RUNNER_TEMP/mmibkr-reconcile-expected-conflicts.json:/input/expected-conflicts.json:ro" \
+            -v "$RUNNER_TEMP/mmibkr-reconcile-expected:/expected:ro" \
             -v "$GITHUB_WORKSPACE/scripts/mmibkr_signal_history_metadata_reconcile_v1.py:/public/mmibkr_signal_history_metadata_reconcile_v1.py:ro" \
             "mmibkr-signal-reconcile:$GITHUB_RUN_ID" \
             python /public/mmibkr_signal_history_metadata_reconcile_v1.py \
@@ -2407,7 +2409,7 @@ jobs:
               --seed-ingest /seed-data/strategy_runtime/selected_runtime_initial_backfill_v1/latest.json \
               --seed-index /seed-data/strategy_runtime/selected_runtime_signal_history_contracts_v1/latest.json \
               --expected-public-run-id "$INITIAL_BACKFILL_RUN_ID" \
-              --expected-conflicts-json /input/expected-conflicts.json \
+              --expected-conflicts-json /expected/expected-conflicts.json \
               --output /app/data/strategy_runtime/selected_runtime_signal_history_reconciliation_v1/latest.json
 
           docker run --rm \
@@ -2636,7 +2638,7 @@ jobs:
             "$RUNNER_TEMP/mmibkr-checkpoint" \
             "$RUNNER_TEMP/mmibkr-reconcile-input" \
             "$RUNNER_TEMP/mmibkr-reconcile-verify" \
-            "$RUNNER_TEMP/mmibkr-reconcile-expected-conflicts.json" \
+            "$RUNNER_TEMP/mmibkr-reconcile-expected" \
             "$RUNNER_TEMP/mmibkr-reconcile-terminal.env" \
             "$RUNNER_TEMP/mmibkr-signal-history-reconciliation.json" \
             "$RUNNER_TEMP/mmibkr-signal-history-reconciliation-receipt.json"
