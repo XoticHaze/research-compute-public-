@@ -225,6 +225,43 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
         self.assertNotIn('cat "$log"', workflow)
 
+    def test_private_promotion_review_validation_is_exact_sha_expiring_and_archive_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-private-promotion-review-validation-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn(
+            "492743d4d0bf2ed9b051218b2c689122ed369735",
+            text,
+        )
+        self.assertIn("PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_EXPIRES_AT", text)
+        self.assertIn("2026-09-23T12:00:00Z", text)
+        self.assertIn("matchedPrivatePromotionReviewValidation", text)
+        self.assertIn(
+            "(matchedPrivatePromotionReviewValidation && privateArchivePathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedPrivatePromotionReviewValidation && operatorDeployPathAllowed)",
+            text,
+        )
+
+        workflow = (
+            ROOT
+            / ".github"
+            / "workflows"
+            / "mmibkr-private-promotion-review-validation-r1.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("PRIVATE_SOURCE_SHA: 492743d4d0bf2ed9b051218b2c689122ed369735", workflow)
+        self.assertIn("tests.test_promotion_review_decision_v1", workflow)
+        self.assertIn("npm run verify:promotion-review", workflow)
+        self.assertIn("npm run build", workflow)
+        self.assertIn("ENABLE_LIVE_TRADING=0", workflow)
+        self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
+        self.assertNotIn('cat "$log"', workflow)
+
     def test_runtime_bootstrap_identity_is_private_archive_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("SOURCE_VAULT_BOOTSTRAP_IDENTITY", text)
