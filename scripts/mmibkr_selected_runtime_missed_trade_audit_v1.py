@@ -135,6 +135,10 @@ def validate_request(node: Mapping[str, Any]) -> dict[str, Any]:
             if isinstance(node.get("data_paths"), Mapping)
             else {}
         ),
+        "historical_seed_run_id": str(node.get("historical_seed_run_id") or "").strip() or None,
+        "historical_seed_bars_sha256": str(
+            node.get("historical_seed_bars_sha256") or ""
+        ).strip().lower() or None,
     }
 
 
@@ -309,11 +313,90 @@ def _normalize_frame(frame, *, source: Path):
     return frame
 
 
+def _load_seed_rows(
+    path: str | Path | None,
+    *,
+    expected_sha256: str | None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    if not path:
+        if expected_sha256:
+            raise ValueError("historical_seed_bars_path_required")
+        return [], {"used": False, "row_count": 0}
+    source = Path(path)
+    if not source.is_file():
+        raise FileNotFoundError(f"historical_seed_bars_missing:{source}")
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    if expected_sha256 and digest != expected_sha256:
+        raise ValueError(
+            f"historical_seed_bars_sha256_mismatch:{digest}:{expected_sha256}"
+        )
+    rows: list[dict[str, Any]] = []
+    for line_no, raw in enumerate(source.read_text(encoding="utf-8").splitlines(), 1):
+        if not raw.strip():
+            continue
+        node = json.loads(raw)
+        if not isinstance(node, dict):
+            raise ValueError(f"historical_seed_non_object_row:{line_no}")
+        rows.append(node)
+    return rows, {
+        "used": True,
+        "path": str(source),
+        "sha256": digest,
+        "row_count": len(rows),
+    }
+
+
+def _prepend_seed_history(
+    frame,
+    *,
+    seed_rows: list[dict[str, Any]],
+    symbol: str,
+    source_timeframe: str,
+    source: Path,
+):
+    import pandas as pd
+    from market_data_request_contract import historical_request_for_timeframe
+
+    if frame is None or frame.empty or not seed_rows:
+        return frame, 0
+    expected_bar_size = str(
+        historical_request_for_timeframe(source_timeframe)["bar_size_setting"]
+    )
+    selected = [
+        dict(row)
+        for row in seed_rows
+        if str(row.get("symbol") or "").strip().upper() == symbol
+        and str(row.get("bar_size") or "").strip() == expected_bar_size
+    ]
+    if not selected:
+        return frame, 0
+    seed = pd.DataFrame(selected).rename(
+        columns={"wap": "average", "bar_count": "barCount"}
+    )
+    keep = [
+        column
+        for column in (
+            "timestamp", "open", "high", "low", "close", "volume",
+            "average", "barCount",
+        )
+        if column in seed.columns
+    ]
+    seed = _normalize_frame(seed[keep], source=source)
+    first_current = frame["timestamp"].iloc[0]
+    missing_prefix = seed.loc[seed["timestamp"] < first_current].copy()
+    if missing_prefix.empty:
+        return frame, 0
+    combined = pd.concat([missing_prefix, frame], ignore_index=True)
+    combined = _normalize_frame(combined, source=source)
+    return combined, int(len(missing_prefix))
+
+
 def _load_frame(
     *,
     data_root: Path,
     binding: Mapping[str, Any],
     explicit_path: str | None,
+    seed_rows: list[dict[str, Any]] | None = None,
 ):
     import pandas as pd
     from timeframe_adapters import resolve_timeframe_adapter, resample_ohlcv
@@ -336,6 +419,16 @@ def _load_frame(
     adapter_spec = None
     source_candidates: list[Path] = []
     source_rows = None
+    seed_rows_prepended = 0
+    if source is not None and frame is not None:
+        frame = _normalize_frame(frame, source=source)
+        frame, seed_rows_prepended = _prepend_seed_history(
+            frame,
+            seed_rows=list(seed_rows or []),
+            symbol=str(binding.get("symbol") or "").upper(),
+            source_timeframe=str(binding.get("timeframe") or ""),
+            source=source,
+        )
     if source is None or frame is None:
         target_timeframe = str(binding.get("timeframe") or "")
         native_timeframes = (
@@ -367,6 +460,13 @@ def _load_frame(
                 continue
             source = path
             frame = _normalize_frame(loaded, source=path)
+            frame, seed_rows_prepended = _prepend_seed_history(
+                frame,
+                seed_rows=list(seed_rows or []),
+                symbol=str(binding.get("symbol") or "").upper(),
+                source_timeframe=adapter_spec.source_timeframe,
+                source=path,
+            )
             source_rows = int(len(frame))
             frame = resample_ohlcv(frame, adapter_spec.target_timeframe)
             if frame is None or frame.empty:
@@ -399,6 +499,8 @@ def _load_frame(
             if direct_target
             else "canonical_timeframe_adapter_resample_ohlcv"
         ),
+        "historical_seed_rows_prepended": int(seed_rows_prepended),
+        "overlap_policy": "preserve_restored_checkpoint_overlap",
     }
     if adapter_spec is not None:
         authority.update(
@@ -720,6 +822,12 @@ def _summary(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
                 "prequote_paper_eligible": 0,
                 "cloud_observed": 0,
                 "no_cloud_owner_evidence": 0,
+                "runtime_filtered_latest_stale": 0,
+                "latest_bar_signal_filter_blocked": 0,
+                "latest_bar_entry_candidates": 0,
+                "latest_bar_exit_candidates": 0,
+                "latest_bar_dca_candidates": 0,
+                "latest_bar_prequote_paper_eligible": 0,
             },
         )
         node["boundaries"] += 1
@@ -739,6 +847,21 @@ def _summary(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
             node["cloud_observed"] += 1
         elif row.get("actual_owner_present") is False:
             node["no_cloud_owner_evidence"] += 1
+        if (row.get("filter_latest_bar_truth") or {}).get(
+            "runtime_filtered_latest_is_stale"
+        ) is True:
+            node["runtime_filtered_latest_stale"] += 1
+        latest_decision = str(row.get("latest_bar_decision") or "")
+        latest_mapping = {
+            "SIGNAL_FILTER_BLOCKED": "latest_bar_signal_filter_blocked",
+            "ENTRY_CANDIDATE": "latest_bar_entry_candidates",
+            "EXIT_CANDIDATE": "latest_bar_exit_candidates",
+            "DCA_CANDIDATE": "latest_bar_dca_candidates",
+        }
+        if latest_decision in latest_mapping:
+            node[latest_mapping[latest_decision]] += 1
+        if row.get("latest_bar_would_have_reached_paper_quote_stage") is True:
+            node["latest_bar_prequote_paper_eligible"] += 1
     return by_runtime
 
 
@@ -747,6 +870,7 @@ async def run_audit(
     repo_root: str | Path,
     data_root: str | Path,
     request: Mapping[str, Any],
+    historical_seed_bars: str | Path | None = None,
 ) -> dict[str, Any]:
     req = validate_request(request)
     root = Path(repo_root).resolve()
@@ -761,6 +885,13 @@ async def run_audit(
         raise RuntimeError(
             f"private_source_identity_mismatch:{source_head}:{req['private_source_sha']}"
         )
+
+    seed_rows, seed_evidence = _load_seed_rows(
+        historical_seed_bars,
+        expected_sha256=req.get("historical_seed_bars_sha256"),
+    )
+    seed_evidence["public_run_id"] = req.get("historical_seed_run_id")
+    seed_evidence["overlap_policy"] = "preserve_restored_checkpoint_overlap"
 
     sys.path.insert(0, str(root))
     from filters import Filters
@@ -816,6 +947,7 @@ async def run_audit(
             data_root=data,
             binding=binding,
             explicit_path=explicit,
+            seed_rows=seed_rows,
         )
         data_authorities[runtime_id] = authority
         inventory = _inventory_state(req, runtime_id)
@@ -859,9 +991,25 @@ async def run_audit(
             generic_filter_blocked = False
             generic_filter_error = None
             filtered_rows = None
+            latest_gate_passed: bool | None = None
+            latest_gate_error = None
 
             if warmup_ready:
                 if instrument == "STK":
+                    try:
+                        latest_filtered = await filters.apply_filters_async(
+                            upto.tail(1).copy(),
+                            timeframe=timeframe,
+                            asset_type="stocks",
+                            symbol=symbol,
+                        )
+                        latest_gate_passed = bool(
+                            latest_filtered is not None
+                            and not getattr(latest_filtered, "empty", True)
+                        )
+                    except Exception as exc:
+                        latest_gate_passed = None
+                        latest_gate_error = repr(exc)
                     try:
                         filtered = await filters.apply_filters_async(
                             upto,
@@ -898,9 +1046,43 @@ async def run_audit(
                 evaluation if isinstance(evaluation, Mapping) else diagnostic
             )
             condition_projection = _condition_projection(condition_source)
+            diagnostic_projection = _condition_projection(diagnostic)
+            runtime_filtered_timestamp = (
+                str(evaluation.get("last_bar_timestamp") or "")
+                if isinstance(evaluation, Mapping)
+                else None
+            )
+            raw_latest_timestamp = (
+                str(diagnostic.get("last_bar_timestamp") or "")
+                if isinstance(diagnostic, Mapping)
+                else None
+            )
+            stale_filtered_latest = bool(
+                runtime_filtered_timestamp
+                and raw_latest_timestamp
+                and runtime_filtered_timestamp != raw_latest_timestamp
+            )
+            latest_evaluation = (
+                diagnostic
+                if instrument != "STK" or latest_gate_passed is True
+                else None
+            )
+            latest_bar_decision = classify_decision(
+                evaluation=latest_evaluation,
+                diagnostic_evaluation=diagnostic,
+                generic_filter_blocked=bool(
+                    instrument == "STK" and latest_gate_passed is False
+                ),
+                warmup_ready=warmup_ready,
+            )
             eligibility = deterministic_paper_eligibility(
                 binding=binding,
                 evaluation=evaluation,
+                inventory=inventory,
+            )
+            latest_eligibility = deterministic_paper_eligibility(
+                binding=binding,
+                evaluation=latest_evaluation,
                 inventory=inventory,
             )
             terminal_match = _terminal_match(
@@ -922,6 +1104,16 @@ async def run_audit(
                     "instrument_class": instrument,
                     "input_data_authority": authority,
                     "crw": condition_projection,
+                    "raw_latest_crw": diagnostic_projection,
+                    "filter_latest_bar_truth": {
+                        "latest_gate_passed": latest_gate_passed,
+                        "latest_gate_error": latest_gate_error,
+                        "raw_latest_timestamp": raw_latest_timestamp,
+                        "raw_latest_close": diagnostic_projection.get("close"),
+                        "runtime_filtered_latest_timestamp": runtime_filtered_timestamp,
+                        "runtime_filtered_latest_close": condition_projection.get("close"),
+                        "runtime_filtered_latest_is_stale": stale_filtered_latest,
+                    },
                     "signal": (
                         evaluation.get("signal")
                         if isinstance(evaluation, Mapping)
@@ -930,6 +1122,7 @@ async def run_audit(
                         else None
                     ),
                     "decision": decision,
+                    "latest_bar_decision": latest_bar_decision,
                     "generic_filter_blocked": generic_filter_blocked,
                     "generic_filter_error": generic_filter_error,
                     "filtered_row_count": filtered_rows,
@@ -938,8 +1131,12 @@ async def run_audit(
                     "available_target_rows_at_boundary": int(len(upto)),
                     "bot_inventory": inventory,
                     "paper_eligibility": eligibility,
+                    "latest_bar_paper_eligibility": latest_eligibility,
                     "would_have_reached_paper_quote_stage": (
                         eligibility.get("eligible") is True
+                    ),
+                    "latest_bar_would_have_reached_paper_quote_stage": (
+                        latest_eligibility.get("eligible") is True
                     ),
                     "would_have_generated_paper_order": None,
                     "would_have_traded": None,
@@ -985,6 +1182,23 @@ async def run_audit(
     owner_gap_candidates = [
         row for row in candidate_rows if row.get("actual_owner_present") is False
     ]
+    latest_candidate_rows = [
+        row
+        for row in rows
+        if row.get("latest_bar_decision")
+        in {
+            "SIGNAL_FILTER_BLOCKED",
+            "ENTRY_CANDIDATE",
+            "EXIT_CANDIDATE",
+            "DCA_CANDIDATE",
+            "ACTIONABLE_CANDIDATE",
+        }
+    ]
+    latest_owner_gap_candidates = [
+        row
+        for row in latest_candidate_rows
+        if row.get("actual_owner_present") is False
+    ]
 
     return {
         "schema": SCHEMA,
@@ -1009,8 +1223,11 @@ async def run_audit(
         "row_count": len(rows),
         "candidate_row_count": len(candidate_rows),
         "owner_gap_candidate_count": len(owner_gap_candidates),
+        "latest_bar_candidate_row_count": len(latest_candidate_rows),
+        "latest_bar_owner_gap_candidate_count": len(latest_owner_gap_candidates),
         "summary": summary,
         "data_authorities": data_authorities,
+        "historical_seed": seed_evidence,
         "rows": rows,
         "safety": {
             "read_only": True,
@@ -1055,7 +1272,12 @@ def render_public_summary(payload: Mapping[str, Any]) -> dict[str, Any]:
         "row_count": payload.get("row_count"),
         "candidate_row_count": payload.get("candidate_row_count"),
         "owner_gap_candidate_count": payload.get("owner_gap_candidate_count"),
+        "latest_bar_candidate_row_count": payload.get("latest_bar_candidate_row_count"),
+        "latest_bar_owner_gap_candidate_count": payload.get(
+            "latest_bar_owner_gap_candidate_count"
+        ),
         "summary": payload.get("summary"),
+        "historical_seed": payload.get("historical_seed"),
         "safety": payload.get("safety"),
         "detailed_rows_published": False,
     }
@@ -1066,6 +1288,7 @@ def main() -> int:
     parser.add_argument("--repo-root", required=True)
     parser.add_argument("--data-root", required=True)
     parser.add_argument("--request", required=True)
+    parser.add_argument("--historical-seed-bars", default="")
     parser.add_argument("--output", required=True)
     parser.add_argument("--public-summary-output", required=True)
     args = parser.parse_args()
@@ -1076,6 +1299,7 @@ def main() -> int:
             repo_root=args.repo_root,
             data_root=args.data_root,
             request=request,
+            historical_seed_bars=args.historical_seed_bars or None,
         )
     )
     write_json(args.output, payload)
