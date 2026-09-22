@@ -251,41 +251,335 @@ jobs:
           fi
           echo 'MMIBKR_PRIVATE_PR666_BUILD_STATUS=PASS'
 
-      - name: Validate PR666 strategy-inventory ownership contracts without public test log
+      - name: Validate PR666 module 01 without public test log
+        id: test_01
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          log="$RUNNER_TEMP/mmibkr-private-pr666-tests.log"
+          module='tests.test_selected_runtime_strategy_inventory_v1'
+          label='01'
+          log="$RUNNER_TEMP/mmibkr-private-pr666-test-${label}.log"
           set +e
           docker run --rm \
             -e ENABLE_LIVE_TRADING=0 \
             -e PYTHONDONTWRITEBYTECODE=1 \
             "mmibkr-private-pr666-validation:$GITHUB_RUN_ID" \
-            python -m unittest -v \
-              tests.test_selected_runtime_strategy_inventory_v1 \
-              tests.test_selected_runtime_position_ownership_integration_v1 \
-              tests.test_selected_runtime_cloud_natural_evaluator_v1 \
-              tests.test_selected_runtime_cloud_cycle_v1 \
-              tests.test_runtime_market_data_cache_checkpoint_v1 \
-              tests.test_cloud_operator_snapshot_v1 \
-              tests.test_selected_runtime_submit_authority \
-              tests.test_snapshot_ib_adapter_position_state_v1 \
-              tests.test_selected_runtime_account_sizing_submit_hook_14th31lg \
-              tests.test_strategy_identity_guarded_submit_continuity_14th31hv \
-              >"$log" 2>&1
+            python -m unittest -v "$module" >"$log" 2>&1
           rc=$?
           set -e
           log_sha="$(sha256sum "$log" | awk '{print $1}')"
           log_bytes="$(wc -c < "$log")"
           rm -f "$log"
-          echo "MMIBKR_PRIVATE_PR666_TEST_LOG_SHA256=$log_sha"
-          echo "MMIBKR_PRIVATE_PR666_TEST_LOG_BYTES=$log_bytes"
-          echo "MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_MODULE=$module"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_SHA256=$log_sha"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_BYTES=$log_bytes"
+          echo 'MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0'
           if [ "$rc" -ne 0 ]; then
-            echo "MMIBKR_PRIVATE_PR666_TEST_STATUS=FAIL"
+            echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=FAIL"
             exit "$rc"
           fi
-          echo 'MMIBKR_PRIVATE_PR666_TEST_STATUS=PASS'
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=PASS"
+
+      - name: Validate PR666 module 02 without public test log
+        id: test_02
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          module='tests.test_selected_runtime_position_ownership_integration_v1'
+          label='02'
+          log="$RUNNER_TEMP/mmibkr-private-pr666-test-${label}.log"
+          set +e
+          docker run --rm \
+            -e ENABLE_LIVE_TRADING=0 \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            "mmibkr-private-pr666-validation:$GITHUB_RUN_ID" \
+            python -m unittest -v "$module" >"$log" 2>&1
+          rc=$?
+          set -e
+          log_sha="$(sha256sum "$log" | awk '{print $1}')"
+          log_bytes="$(wc -c < "$log")"
+          rm -f "$log"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_MODULE=$module"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_SHA256=$log_sha"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_BYTES=$log_bytes"
+          echo 'MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0'
+          if [ "$rc" -ne 0 ]; then
+            echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=FAIL"
+            exit "$rc"
+          fi
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=PASS"
+
+      - name: Validate PR666 module 03 without public test log
+        id: test_03
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          module='tests.test_selected_runtime_cloud_natural_evaluator_v1'
+          label='03'
+          log="$RUNNER_TEMP/mmibkr-private-pr666-test-${label}.log"
+          set +e
+          docker run --rm \
+            -e ENABLE_LIVE_TRADING=0 \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            "mmibkr-private-pr666-validation:$GITHUB_RUN_ID" \
+            python -m unittest -v "$module" >"$log" 2>&1
+          rc=$?
+          set -e
+          log_sha="$(sha256sum "$log" | awk '{print $1}')"
+          log_bytes="$(wc -c < "$log")"
+          rm -f "$log"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_MODULE=$module"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_SHA256=$log_sha"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_BYTES=$log_bytes"
+          echo 'MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0'
+          if [ "$rc" -ne 0 ]; then
+            echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=FAIL"
+            exit "$rc"
+          fi
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=PASS"
+
+      - name: Validate PR666 module 04 without public test log
+        id: test_04
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          module='tests.test_selected_runtime_cloud_cycle_v1'
+          label='04'
+          log="$RUNNER_TEMP/mmibkr-private-pr666-test-${label}.log"
+          set +e
+          docker run --rm \
+            -e ENABLE_LIVE_TRADING=0 \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            "mmibkr-private-pr666-validation:$GITHUB_RUN_ID" \
+            python -m unittest -v "$module" >"$log" 2>&1
+          rc=$?
+          set -e
+          log_sha="$(sha256sum "$log" | awk '{print $1}')"
+          log_bytes="$(wc -c < "$log")"
+          rm -f "$log"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_MODULE=$module"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_SHA256=$log_sha"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_BYTES=$log_bytes"
+          echo 'MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0'
+          if [ "$rc" -ne 0 ]; then
+            echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=FAIL"
+            exit "$rc"
+          fi
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=PASS"
+
+      - name: Validate PR666 module 05 without public test log
+        id: test_05
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          module='tests.test_runtime_market_data_cache_checkpoint_v1'
+          label='05'
+          log="$RUNNER_TEMP/mmibkr-private-pr666-test-${label}.log"
+          set +e
+          docker run --rm \
+            -e ENABLE_LIVE_TRADING=0 \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            "mmibkr-private-pr666-validation:$GITHUB_RUN_ID" \
+            python -m unittest -v "$module" >"$log" 2>&1
+          rc=$?
+          set -e
+          log_sha="$(sha256sum "$log" | awk '{print $1}')"
+          log_bytes="$(wc -c < "$log")"
+          rm -f "$log"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_MODULE=$module"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_SHA256=$log_sha"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_BYTES=$log_bytes"
+          echo 'MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0'
+          if [ "$rc" -ne 0 ]; then
+            echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=FAIL"
+            exit "$rc"
+          fi
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=PASS"
+
+      - name: Validate PR666 module 06 without public test log
+        id: test_06
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          module='tests.test_cloud_operator_snapshot_v1'
+          label='06'
+          log="$RUNNER_TEMP/mmibkr-private-pr666-test-${label}.log"
+          set +e
+          docker run --rm \
+            -e ENABLE_LIVE_TRADING=0 \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            "mmibkr-private-pr666-validation:$GITHUB_RUN_ID" \
+            python -m unittest -v "$module" >"$log" 2>&1
+          rc=$?
+          set -e
+          log_sha="$(sha256sum "$log" | awk '{print $1}')"
+          log_bytes="$(wc -c < "$log")"
+          rm -f "$log"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_MODULE=$module"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_SHA256=$log_sha"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_BYTES=$log_bytes"
+          echo 'MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0'
+          if [ "$rc" -ne 0 ]; then
+            echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=FAIL"
+            exit "$rc"
+          fi
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=PASS"
+
+      - name: Validate PR666 module 07 without public test log
+        id: test_07
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          module='tests.test_selected_runtime_submit_authority'
+          label='07'
+          log="$RUNNER_TEMP/mmibkr-private-pr666-test-${label}.log"
+          set +e
+          docker run --rm \
+            -e ENABLE_LIVE_TRADING=0 \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            "mmibkr-private-pr666-validation:$GITHUB_RUN_ID" \
+            python -m unittest -v "$module" >"$log" 2>&1
+          rc=$?
+          set -e
+          log_sha="$(sha256sum "$log" | awk '{print $1}')"
+          log_bytes="$(wc -c < "$log")"
+          rm -f "$log"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_MODULE=$module"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_SHA256=$log_sha"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_BYTES=$log_bytes"
+          echo 'MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0'
+          if [ "$rc" -ne 0 ]; then
+            echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=FAIL"
+            exit "$rc"
+          fi
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=PASS"
+
+      - name: Validate PR666 module 08 without public test log
+        id: test_08
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          module='tests.test_snapshot_ib_adapter_position_state_v1'
+          label='08'
+          log="$RUNNER_TEMP/mmibkr-private-pr666-test-${label}.log"
+          set +e
+          docker run --rm \
+            -e ENABLE_LIVE_TRADING=0 \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            "mmibkr-private-pr666-validation:$GITHUB_RUN_ID" \
+            python -m unittest -v "$module" >"$log" 2>&1
+          rc=$?
+          set -e
+          log_sha="$(sha256sum "$log" | awk '{print $1}')"
+          log_bytes="$(wc -c < "$log")"
+          rm -f "$log"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_MODULE=$module"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_SHA256=$log_sha"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_BYTES=$log_bytes"
+          echo 'MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0'
+          if [ "$rc" -ne 0 ]; then
+            echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=FAIL"
+            exit "$rc"
+          fi
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=PASS"
+
+      - name: Validate PR666 module 09 without public test log
+        id: test_09
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          module='tests.test_selected_runtime_account_sizing_submit_hook_14th31lg'
+          label='09'
+          log="$RUNNER_TEMP/mmibkr-private-pr666-test-${label}.log"
+          set +e
+          docker run --rm \
+            -e ENABLE_LIVE_TRADING=0 \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            "mmibkr-private-pr666-validation:$GITHUB_RUN_ID" \
+            python -m unittest -v "$module" >"$log" 2>&1
+          rc=$?
+          set -e
+          log_sha="$(sha256sum "$log" | awk '{print $1}')"
+          log_bytes="$(wc -c < "$log")"
+          rm -f "$log"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_MODULE=$module"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_SHA256=$log_sha"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_BYTES=$log_bytes"
+          echo 'MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0'
+          if [ "$rc" -ne 0 ]; then
+            echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=FAIL"
+            exit "$rc"
+          fi
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=PASS"
+
+      - name: Validate PR666 module 10 without public test log
+        id: test_10
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          module='tests.test_strategy_identity_guarded_submit_continuity_14th31hv'
+          label='10'
+          log="$RUNNER_TEMP/mmibkr-private-pr666-test-${label}.log"
+          set +e
+          docker run --rm \
+            -e ENABLE_LIVE_TRADING=0 \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            "mmibkr-private-pr666-validation:$GITHUB_RUN_ID" \
+            python -m unittest -v "$module" >"$log" 2>&1
+          rc=$?
+          set -e
+          log_sha="$(sha256sum "$log" | awk '{print $1}')"
+          log_bytes="$(wc -c < "$log")"
+          rm -f "$log"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_MODULE=$module"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_SHA256=$log_sha"
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_LOG_BYTES=$log_bytes"
+          echo 'MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0'
+          if [ "$rc" -ne 0 ]; then
+            echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=FAIL"
+            exit "$rc"
+          fi
+          echo "MMIBKR_PRIVATE_PR666_TEST_${label}_STATUS=PASS"
+
+      - name: Enforce PR666 grouped validation result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          failed=0
+          check() {
+            label="$1"
+            outcome="$2"
+            echo "MMIBKR_PRIVATE_PR666_TEST_${label}_OUTCOME=$outcome"
+            if [ "$outcome" != 'success' ]; then
+              failed=1
+            fi
+          }
+          check '01' '${{ steps.test_01.outcome }}'
+          check '02' '${{ steps.test_02.outcome }}'
+          check '03' '${{ steps.test_03.outcome }}'
+          check '04' '${{ steps.test_04.outcome }}'
+          check '05' '${{ steps.test_05.outcome }}'
+          check '06' '${{ steps.test_06.outcome }}'
+          check '07' '${{ steps.test_07.outcome }}'
+          check '08' '${{ steps.test_08.outcome }}'
+          check '09' '${{ steps.test_09.outcome }}'
+          check '10' '${{ steps.test_10.outcome }}'
+          if [ "$failed" -ne 0 ]; then
+            echo 'MMIBKR_PRIVATE_PR666_GROUPED_TEST_STATUS=FAIL'
+            exit 1
+          fi
+          echo 'MMIBKR_PRIVATE_PR666_GROUPED_TEST_STATUS=PASS'
 
       - name: Emit sanitized PR666 validation receipt
         shell: bash
@@ -322,7 +616,8 @@ jobs:
             "$RUNNER_TEMP/mmibkr-private-pr666-validation" \
             "$RUNNER_TEMP/mmibkr-private-pr666-validation.tar.gz" \
             "$RUNNER_TEMP/mmibkr-private-pr666-build.log" \
-            "$RUNNER_TEMP/mmibkr-private-pr666-tests.log"
+            "$RUNNER_TEMP/mmibkr-private-pr666-tests.log" \
+            $RUNNER_TEMP/mmibkr-private-pr666-test-*.log
           test ! -e "$RUNNER_TEMP/mmibkr-private-pr666-validation"
           test ! -e "$RUNNER_TEMP/mmibkr-private-pr666-validation.tar.gz"
           echo 'MMIBKR_PRIVATE_PR666_PLAINTEXT_DESTROYED=1'
