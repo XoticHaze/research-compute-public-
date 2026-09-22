@@ -20,7 +20,7 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  PRIVATE_SOURCE_SHA: 468a4d5ca3d235c5ae89547f2d906103ebf9bcf8
+  PRIVATE_SOURCE_SHA: 6f3e63e244100afc69cac7ba605e8a5cb9b1c366
 
 jobs:
   exact-private-validation:
@@ -226,31 +226,30 @@ jobs:
           print('MMIBKR_PRIVATE_SOURCE_TOKEN_EXPOSED=0')
           PY
 
-      - name: Build exact private bot image for PR 665 validation
+      - name: Build exact private bot image for PR 662 validation
         shell: bash
         run: |
           set -euo pipefail
           docker build \
             -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" \
             --target bot \
-            -t "mmibkr-private-pr665-validation:$GITHUB_RUN_ID" \
+            -t "mmibkr-private-pr662-validation:$GITHUB_RUN_ID" \
             "$PRIVATE_SOURCE_ROOT" >/dev/null
-          echo "MMIBKR_PRIVATE_PR665_EXACT_IMAGE_READY=1"
+          echo "MMIBKR_PRIVATE_PR662_EXACT_IMAGE_READY=1"
 
-      - name: Validate exact private PR 665 position-state contracts
+      - name: Validate exact private PR 662 operator backend contracts
         shell: bash
         run: |
           set -euo pipefail
-          log="$RUNNER_TEMP/mmibkr-private-pr-validation.log"
+          log="$RUNNER_TEMP/mmibkr-private-pr662-backend.log"
           set +e
           docker run --rm \
             -e PYTHONDONTWRITEBYTECODE=1 \
             -e ENABLE_LIVE_TRADING=0 \
-            "mmibkr-private-pr665-validation:$GITHUB_RUN_ID" \
+            "mmibkr-private-pr662-validation:$GITHUB_RUN_ID" \
             python -m unittest -v \
-              tests.test_selected_runtime_cloud_natural_evaluator_v1 \
-              tests.test_snapshot_ib_adapter_position_state_v1 \
-              tests.test_strategy_registry_position_state_forwarding_v1 \
+              tests.test_cloud_operator_snapshot_v1 \
+              tests.test_crw_operator_context_projection_v1 \
             >"$log" 2>&1
           rc=$?
           set -e
@@ -279,7 +278,7 @@ jobs:
               print("MMIBKR_PRIVATE_PR_SAFE_DIAGNOSTIC=" + item)
           PY
             echo "MMIBKR_PRIVATE_PR_EXACT_VALIDATION_STATUS=FAIL"
-            echo "MMIBKR_PRIVATE_PR_VALIDATION_SCOPE=pr665_position_state_exact_bot_image"
+            echo "MMIBKR_PRIVATE_PR_VALIDATION_SCOPE=pr662_operator_backend_exact_bot_image"
             echo "MMIBKR_PRIVATE_PR_VALIDATION_LOG_SHA256=$log_sha"
             echo "MMIBKR_PRIVATE_PR_VALIDATION_LOG_BYTES=$log_bytes"
             echo "MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0"
@@ -287,10 +286,40 @@ jobs:
             exit "$rc"
           fi
           rm -f "$log"
-          echo "MMIBKR_PRIVATE_PR_EXACT_VALIDATION_STATUS=PASS"
-          echo "MMIBKR_PRIVATE_PR_VALIDATION_SCOPE=pr665_position_state_exact_bot_image"
-          echo "MMIBKR_PRIVATE_PR_VALIDATION_LOG_SHA256=$log_sha"
-          echo "MMIBKR_PRIVATE_PR_VALIDATION_LOG_BYTES=$log_bytes"
+          echo "MMIBKR_PRIVATE_PR662_BACKEND_STATUS=PASS"
+          echo "MMIBKR_PRIVATE_PR662_BACKEND_LOG_SHA256=$log_sha"
+          echo "MMIBKR_PRIVATE_PR662_BACKEND_LOG_BYTES=$log_bytes"
+
+      - name: Validate exact private PR 662 Bot Console acceptance and production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/mmibkr-private-pr662-ui.log"
+          ui="$PRIVATE_SOURCE_ROOT/ui-react"
+          set +e
+          (
+            cd "$ui"
+            npm ci --ignore-scripts --no-audit --no-fund
+            npm run verify:bot-console
+            npm run build
+            test -s dist/index.html
+          ) >"$log" 2>&1
+          rc=$?
+          set -e
+          log_sha="$(sha256sum "$log" | awk '{print $1}')"
+          log_bytes="$(wc -c < "$log")"
+          rm -f "$log"
+          if [ "$rc" -ne 0 ]; then
+            echo "MMIBKR_PRIVATE_PR_EXACT_VALIDATION_STATUS=FAIL"
+            echo "MMIBKR_PRIVATE_PR_VALIDATION_SCOPE=pr662_bot_console_ui"
+            echo "MMIBKR_PRIVATE_PR_VALIDATION_LOG_SHA256=$log_sha"
+            echo "MMIBKR_PRIVATE_PR_VALIDATION_LOG_BYTES=$log_bytes"
+            echo "MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0"
+            exit "$rc"
+          fi
+          echo "MMIBKR_PRIVATE_PR662_UI_STATUS=PASS"
+          echo "MMIBKR_PRIVATE_PR662_UI_LOG_SHA256=$log_sha"
+          echo "MMIBKR_PRIVATE_PR662_UI_LOG_BYTES=$log_bytes"
           echo "MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0"
 
       - name: Emit sanitized validation receipt
@@ -306,9 +335,10 @@ jobs:
               'source_sha': os.environ['PRIVATE_SOURCE_SHA'],
               'source_archive_sha256': os.environ['PRIVATE_ARCHIVE_SHA256'],
               'source_archive_bytes': int(os.environ['PRIVATE_ARCHIVE_BYTES']),
-              'pr665_position_state_contracts': True,
+              'pr662_operator_backend_contracts': True,
+              'pr662_bot_console_acceptance': True,
+              'vite_production_build': True,
               'exact_bot_image': True,
-              'stock_position_state_forwarding_test': True,
               'private_source_token_exposed': False,
               'private_plaintext_published': False,
               'broker_credentials_used': False,
@@ -325,7 +355,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker image rm "mmibkr-private-pr665-validation:$GITHUB_RUN_ID" >/dev/null 2>&1 || true
+          docker image rm "mmibkr-private-pr662-validation:$GITHUB_RUN_ID" >/dev/null 2>&1 || true
           sudo rm -rf \
             "$RUNNER_TEMP/mmibkr-private-pr-validation" \
             "$RUNNER_TEMP/mmibkr-private-pr-validation.tar.gz"
