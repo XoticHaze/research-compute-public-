@@ -55,6 +55,26 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertIn("reader_status != 401", text)
         self.assertIn("MMIBKR_OPERATOR_CONSOLE_READER_UNAUTHENTICATED_DENIED=1", text)
 
+    def test_promotion_machine_paths_are_specific_bypasses_with_worker_oidc_gates(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("MM-IBKR Promotion Candidate Publisher", text)
+        self.assertIn("promotion_publisher_domain = hostname + '/v1/promotion-candidates'", text)
+        self.assertIn("promotion_publisher_app_body = {", text)
+        self.assertIn("'id': publisher_policy_id", text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_PROMOTION_PUBLISHER_INGRESS=OIDC_WORKER_GATED", text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_PROMOTION_PUBLISHER_PATH=/v1/promotion-candidates", text)
+        self.assertIn("promotion_publisher_status != 401", text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_PROMOTION_PUBLISHER_UNAUTHENTICATED_DENIED=1", text)
+
+        self.assertIn("MM-IBKR Promotion Review Reader", text)
+        self.assertIn("promotion_reader_domain = hostname + '/v1/promotion-review-read'", text)
+        self.assertIn("promotion_reader_app_body = {", text)
+        self.assertIn("'id': reader_policy_id", text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_PROMOTION_READER_INGRESS=OIDC_WORKER_GATED", text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_PROMOTION_READER_PATH=/v1/promotion-review-read", text)
+        self.assertIn("promotion_reader_status != 401", text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_PROMOTION_READER_UNAUTHENTICATED_DENIED=1", text)
+
     def test_worker_verifier_secrets_are_bound_after_access_app_exists(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("ACCESS_TEAM_DOMAIN", text)
