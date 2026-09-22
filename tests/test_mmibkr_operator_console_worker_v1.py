@@ -132,6 +132,29 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertIn("selected_runtime_write: false", contract)
         self.assertIn("live_execution_allowed: false", contract)
 
+    def test_promotion_candidate_publisher_is_separate_from_snapshot_publisher(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("const ALLOWED_PROMOTION_PUBLISHERS", text)
+        self.assertIn("mmibkr-promotion-candidate-publisher-r1.yml@refs/heads/main", text)
+        self.assertIn("async function verifyPromotionPublisher(request)", text)
+
+        candidate_start = text.index("url.pathname === '/v1/promotion-candidates'")
+        candidate_end = text.index("url.pathname === '/v1/promotion-review-read'", candidate_start)
+        candidate_section = text[candidate_start:candidate_end]
+        self.assertIn("verifyPromotionPublisher(request)", candidate_section)
+        self.assertNotIn("verifyPublisher(request)", candidate_section)
+
+        snapshot_start = text.index("url.pathname === '/v1/operator-snapshot'")
+        snapshot_end = text.index("url.pathname === '/v1/promotion-candidates'", snapshot_start)
+        snapshot_section = text[snapshot_start:snapshot_end]
+        self.assertIn("verifyPublisher(request)", snapshot_section)
+        self.assertNotIn("verifyPromotionPublisher(request)", snapshot_section)
+
+        reader_start = text.index("async function verifySnapshotReader(request)")
+        reader_end = text.index("function normalizeTeamDomain", reader_start)
+        reader_section = text[reader_start:reader_end]
+        self.assertNotIn("ALLOWED_PROMOTION_PUBLISHERS", reader_section)
+
     def test_promotion_candidate_publish_and_machine_read_are_oidc_gated(self):
         text = SOURCE.read_text(encoding="utf-8")
         publish = text.index("url.pathname === '/v1/promotion-candidates'")
