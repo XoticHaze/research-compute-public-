@@ -29,6 +29,26 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertNotIn("private_jwk:", text)
         self.assertNotIn("privateJwk:", text)
 
+    def test_promotion_review_snapshot_is_exactly_code_pinned_after_bootstrap(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn(
+            "'1eadfe97304bb78a7e0fabf571e73dfcf0060909': Object.freeze({",
+            text,
+        )
+        self.assertIn(
+            "source_ref: '1eadfe97304bb78a7e0fabf571e73dfcf0060909'",
+            text,
+        )
+        self.assertIn(
+            "manifest_sha256: 'b908a6bdd827c3111d4bb66e23449037d31bbfa1b36f22d868357b15abd99c9b'",
+            text,
+        )
+        self.assertIn(
+            "archive_sha256: '72a6b205fa7d601162d8e9c79bb888fcc8f475c74f0b4b67229189b5fae58597'",
+            text,
+        )
+        self.assertIn("archive_bytes: 66322824", text)
+
     def test_public_key_is_public_but_unwrap_requires_runtime_oidc(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("/v1/source-vault/public-key", text)
