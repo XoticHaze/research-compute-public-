@@ -279,17 +279,20 @@ jobs:
           PY
 
       - name: Publish sanitized commit status
+        if: always()
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          VALIDATION_JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
           python - <<'PY'
           import json, os, urllib.request
+          passed = os.environ.get('VALIDATION_JOB_STATUS') == 'success'
           payload = json.dumps({
-              'state': 'success',
+              'state': 'success' if passed else 'failure',
               'context': 'mmibkr/private-promotion-review-validation',
-              'description': 'Exact private promotion review validation passed',
+              'description': 'Exact private promotion review validation passed' if passed else 'Exact private promotion review validation failed',
           }).encode()
           request = urllib.request.Request(
               f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}/statuses/{os.environ['GITHUB_SHA']}",
@@ -305,7 +308,7 @@ jobs:
           with urllib.request.urlopen(request, timeout=20) as response:
               if int(response.status) not in {200, 201}:
                   raise SystemExit('commit status publication failed')
-          print('MMIBKR_PROMOTION_REVIEW_COMMIT_STATUS=SUCCESS')
+          print('MMIBKR_PROMOTION_REVIEW_COMMIT_STATUS=' + ('SUCCESS' if passed else 'FAILURE'))
           PY
 
       - name: Destroy one-run private source
