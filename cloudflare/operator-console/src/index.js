@@ -21,11 +21,11 @@ const ALLOWED_PUBLISHERS = Object.freeze([
 
 const ALLOWED_MACHINE_READERS = Object.freeze([
   Object.freeze({
-    repository: 'XoticHaze/mm-IBKR',
+    repository: 'XoticHaze/research-compute-public-',
     ref: 'refs/heads/main',
     workflow_ref:
-      'XoticHaze/mm-IBKR/.github/workflows/mmibkr-operator-snapshot-bridge-r1.yml@refs/heads/main',
-    repository_visibility: 'private',
+      'XoticHaze/research-compute-public-/.github/workflows/mmibkr-operator-snapshot-read-bridge-r1.yml@refs/heads/main',
+    repository_visibility: 'public',
   }),
 ]);
 
@@ -173,9 +173,8 @@ async function verifySnapshotReader(request) {
     claims.repository_visibility === 'public'
     && ALLOWED_PUBLISHERS.some((identity) => identityMatches(claims, identity))
   );
-  const trustedPrivateBridge = Boolean(
-    claims.repository_visibility === 'private'
-    && ALLOWED_MACHINE_READERS.some((identity) => (
+  const trustedMachineReader = Boolean(
+    ALLOWED_MACHINE_READERS.some((identity) => (
       identityMatches(claims, identity)
       && claims.repository_visibility === identity.repository_visibility
     ))
@@ -186,7 +185,7 @@ async function verifySnapshotReader(request) {
     || claims.runner_environment !== 'github-hosted'
     || !['push', 'workflow_dispatch'].includes(String(claims.event_name || ''))
     || String(claims.run_id || '') !== callerRunId
-    || (!trustedPublisherReader && !trustedPrivateBridge)
+    || (!trustedPublisherReader && !trustedMachineReader)
   ) {
     throw new Error('reader_identity_rejected');
   }
