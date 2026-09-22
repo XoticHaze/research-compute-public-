@@ -19,6 +19,16 @@ const ALLOWED_PUBLISHERS = Object.freeze([
   }),
 ]);
 
+const ALLOWED_MACHINE_READERS = Object.freeze([
+  Object.freeze({
+    repository: 'XoticHaze/mm-IBKR',
+    ref: 'refs/heads/main',
+    workflow_ref:
+      'XoticHaze/mm-IBKR/.github/workflows/mmibkr-operator-snapshot-bridge-r1.yml@refs/heads/main',
+    repository_visibility: 'private',
+  }),
+]);
+
 function json(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
     status,
@@ -141,6 +151,49 @@ async function verifyPublisher(request) {
 
   return {
     repository: claims.repository,
+    ref: claims.ref,
+    workflow_ref: claims.workflow_ref,
+    workflow_sha: claims.workflow_sha,
+    event_name: claims.event_name,
+    run_id: callerRunId,
+    run_attempt: String(claims.run_attempt || ''),
+  };
+}
+
+async function verifySnapshotReader(request) {
+  const auth = String(request.headers.get('authorization') || '');
+  if (!auth.startsWith('Bearer ') || auth.length > 16384) {
+    throw new Error('reader_unauthorized');
+  }
+  const callerRunId = String(request.headers.get('x-mmibkr-caller-run-id') || '');
+  if (!/^\d{4,24}$/.test(callerRunId)) throw new Error('reader_run_id_rejected');
+
+  const claims = await verifyRs256Jwt(auth.slice(7), GITHUB_JWKS);
+  const trustedPublisherReader = Boolean(
+    claims.repository_visibility === 'public'
+    && ALLOWED_PUBLISHERS.some((identity) => identityMatches(claims, identity))
+  );
+  const trustedPrivateBridge = Boolean(
+    claims.repository_visibility === 'private'
+    && ALLOWED_MACHINE_READERS.some((identity) => (
+      identityMatches(claims, identity)
+      && claims.repository_visibility === identity.repository_visibility
+    ))
+  );
+  if (
+    claims.iss !== GITHUB_ISSUER
+    || !claimAudience(claims).includes(GITHUB_AUDIENCE)
+    || claims.runner_environment !== 'github-hosted'
+    || !['push', 'workflow_dispatch'].includes(String(claims.event_name || ''))
+    || String(claims.run_id || '') !== callerRunId
+    || (!trustedPublisherReader && !trustedPrivateBridge)
+  ) {
+    throw new Error('reader_identity_rejected');
+  }
+
+  return {
+    repository: claims.repository,
+    repository_visibility: claims.repository_visibility,
     ref: claims.ref,
     workflow_ref: claims.workflow_ref,
     workflow_sha: claims.workflow_sha,
@@ -459,7 +512,7 @@ export default {
     if (request.method === 'GET' && url.pathname === '/v1/operator-snapshot-read') {
       let reader;
       try {
-        reader = await verifyPublisher(request);
+        reader = await verifySnapshotReader(request);
       } catch {
         return json({ error: 'unauthorized' }, 401);
       }
@@ -484,6 +537,7 @@ export default {
         snapshot,
         reader: {
           repository: reader.repository,
+          repository_visibility: reader.repository_visibility,
           workflow_ref: reader.workflow_ref,
           run_id: reader.run_id,
         },
