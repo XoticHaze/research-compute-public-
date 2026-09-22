@@ -18,7 +18,7 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  PRIVATE_SOURCE_SHA: cfb18a0b6ff02f3aa35823d23223b029fa770be4
+  PRIVATE_SOURCE_SHA: d7b468ea22740df65c4b350dc15b74b0c377280f
 
 jobs:
   exact-private-promotion-review-validation:
@@ -273,4 +273,4 @@ jobs:
           sudo rm -rf "$RUNNER_TEMP/mmibkr-promotion-review" "$RUNNER_TEMP/mmibkr-promotion-review.tar.gz" "$RUNNER_TEMP"/promotion-review-*.log
           echo 'MMIBKR_PROMOTION_REVIEW_PRIVATE_SOURCE_DESTROYED=1'
 
-# exact-validation-trigger-20260922-r4
+# exact-validation-trigger-20260922-r5
