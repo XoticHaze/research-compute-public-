@@ -1,4 +1,5 @@
 name: MM-IBKR Private PR671 Forward Evidence Exact Validation R1
+# Exact-source validation trigger for private PR #671.
 
 on:
   workflow_dispatch:
