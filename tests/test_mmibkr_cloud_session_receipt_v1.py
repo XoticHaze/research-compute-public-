@@ -31,6 +31,17 @@ class CloudSessionReceiptTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.text)
 
+    def test_receipt_carries_predecessor_terminal_continuity_proof(self):
+        for marker in (
+            "MMIBKR_RECEIPT_PREDECESSOR_TERMINAL_CONTINUITY_REQUIRED",
+            "MMIBKR_RECEIPT_PREDECESSOR_TERMINAL_CONTINUITY_READY",
+            "MMIBKR_RECEIPT_PREDECESSOR_TERMINAL_CONTINUITY_ENTRY_COUNT",
+            "receipt['predecessor_terminal_continuity_required']",
+            "receipt['predecessor_terminal_continuity_ready']",
+            "receipt['predecessor_terminal_continuity_entry_count']",
+        ):
+            self.assertIn(marker, self.text)
+
     def test_receipt_carries_sanitized_operator_publish_acceptance(self):
         for marker in (
             "id: operator_snapshot",
