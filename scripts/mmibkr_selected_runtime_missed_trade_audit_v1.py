@@ -355,13 +355,26 @@ def _prepend_seed_history(
     source: Path,
 ):
     import pandas as pd
-    from market_data_request_contract import historical_request_for_timeframe
 
     if frame is None or frame.empty or not seed_rows:
         return frame, 0
-    expected_bar_size = str(
-        historical_request_for_timeframe(source_timeframe)["bar_size_setting"]
-    )
+    bar_size_by_timeframe = {
+        "1Min": "1 min",
+        "2Min": "2 mins",
+        "3Min": "3 mins",
+        "5Min": "5 mins",
+        "15Min": "15 mins",
+        "30Min": "30 mins",
+        "1Hour": "1 hour",
+        "2Hour": "2 hours",
+        "4Hour": "4 hours",
+        "1Day": "1 day",
+    }
+    expected_bar_size = bar_size_by_timeframe.get(str(source_timeframe))
+    if not expected_bar_size:
+        raise ValueError(
+            f"historical_seed_bar_size_mapping_missing:{source_timeframe}"
+        )
     selected = [
         dict(row)
         for row in seed_rows
