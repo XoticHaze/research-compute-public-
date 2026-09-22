@@ -146,6 +146,41 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         self.assertTrue(accepted["accepted"])
         self.assertEqual(accepted["receipt_contract"], "legacy_v1")
 
+    def test_declared_expected_predecessor_must_match_actual_restore(self):
+        node = self.good_receipt(restored=True)
+        node["expected_predecessor_checkpoint_cache_key"] = (
+            mod.CHECKPOINT_CACHE_PREFIX + "35677937156-d81-backfill-checkpoint-acceptance"
+        )
+        node["expected_predecessor_checkpoint_sha256"] = "a" * 64
+        node["expected_predecessor_checkpoint_match"] = True
+        node["checkpoint_restored_cache_key"] = node[
+            "expected_predecessor_checkpoint_cache_key"
+        ]
+        node["checkpoint_restored_sha256"] = node[
+            "expected_predecessor_checkpoint_sha256"
+        ]
+
+        accepted = mod.evaluate(node, require_checkpoint_restored=False)
+        self.assertTrue(accepted["accepted"])
+        self.assertTrue(accepted["checks"]["expected_predecessor_identity_reported"])
+        self.assertTrue(accepted["checks"]["expected_predecessor_restore_match"])
+
+        node["checkpoint_restored_sha256"] = "b" * 64
+        rejected = mod.evaluate(node, require_checkpoint_restored=False)
+        self.assertFalse(rejected["accepted"])
+        self.assertFalse(rejected["checks"]["expected_predecessor_restore_match"])
+
+    def test_declared_expected_predecessor_requires_key_and_sha(self):
+        node = self.good_receipt(restored=True)
+        node["expected_predecessor_checkpoint_cache_key"] = (
+            mod.CHECKPOINT_CACHE_PREFIX + "expected"
+        )
+        node["expected_predecessor_checkpoint_sha256"] = ""
+        node["expected_predecessor_checkpoint_match"] = True
+        result = mod.evaluate(node, require_checkpoint_restored=False)
+        self.assertFalse(result["accepted"])
+        self.assertFalse(result["checks"]["expected_predecessor_identity_reported"])
+
     def test_rejects_missing_cache_persistence(self):
         node = self.good_receipt(restored=True)
         node["checkpoint_cache_saved"] = False
