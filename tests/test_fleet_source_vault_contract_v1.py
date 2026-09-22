@@ -104,6 +104,29 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
 
+    def test_private_pr_validation_stream_is_exact_sha_expiring_and_archive_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("PRIVATE_PR_EXACT_VALIDATION_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-private-pr-exact-validation-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn(
+            "0ecc00f4114c361751546bf48e9b18e0066d17a9",
+            text,
+        )
+        self.assertIn("PRIVATE_PR_EXACT_VALIDATION_EXPIRES_AT", text)
+        self.assertIn("2026-09-23T12:00:00Z", text)
+        self.assertIn("matchedPrivatePrValidation", text)
+        self.assertIn(
+            "(matchedPrivatePrValidation && privateArchivePathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedPrivatePrValidation && operatorDeployPathAllowed)",
+            text,
+        )
+
     def test_runtime_bootstrap_identity_is_private_archive_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("SOURCE_VAULT_BOOTSTRAP_IDENTITY", text)
