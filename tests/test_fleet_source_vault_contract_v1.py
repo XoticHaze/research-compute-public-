@@ -233,7 +233,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            "cfb18a0b6ff02f3aa35823d23223b029fa770be4",
+            "d7b468ea22740df65c4b350dc15b74b0c377280f",
             text,
         )
         self.assertIn("PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_EXPIRES_AT", text)
@@ -254,7 +254,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             / "workflows"
             / "mmibkr-private-promotion-review-validation-r1.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("PRIVATE_SOURCE_SHA: cfb18a0b6ff02f3aa35823d23223b029fa770be4", workflow)
+        self.assertIn("PRIVATE_SOURCE_SHA: d7b468ea22740df65c4b350dc15b74b0c377280f", workflow)
         self.assertIn("npm run verify:promotion-review", workflow)
         self.assertIn("npm run build", workflow)
         self.assertIn("ENABLE_LIVE_TRADING=0", workflow)
