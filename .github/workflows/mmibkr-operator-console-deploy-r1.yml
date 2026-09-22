@@ -22,6 +22,7 @@ on:
       - '.github/workflows/mmibkr-operator-console-deploy-r1.yml'
       - 'cloudflare/operator-console/**'
       - 'tests/test_mmibkr_operator_console_worker_v1.py'
+      - 'tests/test_mmibkr_operator_console_access_reconcile_v1.py'
       - 'tests/test_fleet_source_vault_contract_v1.py'
 
 permissions:
@@ -273,6 +274,9 @@ jobs:
           publisher_app_name = 'MM-IBKR Operator Snapshot Publisher'
           publisher_policy_name = 'MM-IBKR operator snapshot OIDC ingress'
           publisher_domain = hostname + '/v1/operator-snapshot'
+          reader_app_name = 'MM-IBKR Operator Snapshot Reader'
+          reader_policy_name = 'MM-IBKR operator snapshot read OIDC ingress'
+          reader_domain = hostname + '/v1/operator-snapshot-read'
 
           emails = []
           for raw in os.environ['ACCESS_ALLOWED_EMAILS'].split(','):
@@ -396,6 +400,36 @@ jobs:
           if not publisher_policy_id:
               raise SystemExit('Cloudflare publisher bypass policy id missing')
 
+          existing_reader_policy = next(
+              (
+                  row for row in policies
+                  if isinstance(row, dict)
+                  and row.get('name') == reader_policy_name
+              ),
+              None,
+          )
+          reader_policy_body = {
+              'name': reader_policy_name,
+              'decision': 'bypass',
+              'include': [{'everyone': {}}],
+          }
+          if existing_reader_policy:
+              reader_policy_id = str(existing_reader_policy.get('id') or '')
+              reader_policy = api(
+                  'PUT',
+                  f'/accounts/{account}/access/policies/{reader_policy_id}',
+                  reader_policy_body,
+              )
+          else:
+              reader_policy = api(
+                  'POST',
+                  f'/accounts/{account}/access/policies',
+                  reader_policy_body,
+              )
+          reader_policy_id = str((reader_policy or {}).get('id') or '')
+          if not reader_policy_id:
+              raise SystemExit('Cloudflare reader bypass policy id missing')
+
           apps = api(
               'GET',
               f'/accounts/{account}/access/apps?'
@@ -486,6 +520,46 @@ jobs:
           if not publisher_app_id:
               raise SystemExit('Cloudflare publisher path app id missing')
 
+          existing_reader_app = next(
+              (
+                  row for row in apps
+                  if isinstance(row, dict)
+                  and (
+                      row.get('name') == reader_app_name
+                      or row.get('domain') == reader_domain
+                  )
+              ),
+              None,
+          )
+          reader_app_body = {
+              'name': reader_app_name,
+              'domain': reader_domain,
+              'type': 'self_hosted',
+              'session_duration': '24h',
+              'app_launcher_visible': False,
+              'policies': [{
+                  'id': reader_policy_id,
+                  'account_id': account,
+                  'precedence': 1,
+              }],
+          }
+          if existing_reader_app:
+              reader_app_id = str(existing_reader_app.get('id') or '')
+              reader_app = api(
+                  'PUT',
+                  f'/accounts/{account}/access/apps/{reader_app_id}',
+                  reader_app_body,
+              )
+          else:
+              reader_app = api(
+                  'POST',
+                  f'/accounts/{account}/access/apps',
+                  reader_app_body,
+              )
+          reader_app_id = str((reader_app or {}).get('id') or '')
+          if not reader_app_id:
+              raise SystemExit('Cloudflare reader path app id missing')
+
           env_path = Path(os.environ['GITHUB_ENV'])
           with env_path.open('a', encoding='utf-8') as fh:
               fh.write('MMIBKR_ACCESS_TEAM_DOMAIN=' + auth_domain + '\n')
@@ -496,6 +570,8 @@ jobs:
           print('MMIBKR_OPERATOR_CONSOLE_ACCESS_EMAIL_COUNT=' + str(len(emails)))
           print('MMIBKR_OPERATOR_CONSOLE_PUBLISHER_INGRESS=OIDC_WORKER_GATED')
           print('MMIBKR_OPERATOR_CONSOLE_PUBLISHER_PATH=/v1/operator-snapshot')
+          print('MMIBKR_OPERATOR_CONSOLE_READER_INGRESS=OIDC_WORKER_GATED')
+          print('MMIBKR_OPERATOR_CONSOLE_READER_PATH=/v1/operator-snapshot-read')
           PY
 
       - name: Bind Worker defense-in-depth Access verifier
@@ -589,12 +665,32 @@ jobs:
                   + str(publisher_status)
               )
 
+          reader_req = Request(
+              base + '/v1/operator-snapshot-read',
+              method='GET',
+              headers={
+                  'Accept':'application/json',
+                  'User-Agent':'mmibkr-operator-console-reader-deny-proof',
+              },
+          )
+          try:
+              with opener.open(reader_req, timeout=10) as response:
+                  reader_status = int(response.status)
+          except HTTPError as exc:
+              reader_status = int(exc.code)
+          if reader_status != 401:
+              raise SystemExit(
+                  'unauthenticated reader path did not reach Worker OIDC gate: '
+                  + str(reader_status)
+              )
+
           print(
               'MMIBKR_OPERATOR_CONSOLE_ACCESS_CONFIGURED='
               + ('1' if configured else '0')
           )
           print('MMIBKR_OPERATOR_CONSOLE_UNAUTHENTICATED_DENIED=1')
           print('MMIBKR_OPERATOR_CONSOLE_PUBLISHER_UNAUTHENTICATED_DENIED=1')
+          print('MMIBKR_OPERATOR_CONSOLE_READER_UNAUTHENTICATED_DENIED=1')
           PY
 
       - name: Destroy private deployment source

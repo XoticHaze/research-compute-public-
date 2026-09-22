@@ -89,6 +89,7 @@ jobs:
           set -euo pipefail
           umask 077
           raw="$RUNNER_TEMP/mmibkr-operator-machine-read.json"
+          headers="$RUNNER_TEMP/mmibkr-operator-machine-read.headers"
           oidc_url="$ACTIONS_ID_TOKEN_REQUEST_URL"
           if [[ "$oidc_url" == *"?"* ]]; then
             oidc_url="${oidc_url}&audience=mmibkr-operator-console"
@@ -101,15 +102,47 @@ jobs:
             "$oidc_url")"
           oidc_token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$oidc_json")"
           unset oidc_json
-          curl --fail-with-body --silent --show-error \
+          http_status="$(curl --silent --show-error \
+            -D "$headers" \
+            -o "$raw" \
+            -w '%{http_code}' \
             -H "Authorization: Bearer $oidc_token" \
             -H 'Accept: application/json' \
             -H "X-MMIBKR-Caller-Run-Id: $CALLER_RUN_ID" \
-            "$OPERATOR_CONSOLE_URL/v1/operator-snapshot-read" \
-            > "$raw"
+            "$OPERATOR_CONSOLE_URL/v1/operator-snapshot-read")"
           unset oidc_token
-          chmod 600 "$raw"
-          echo "MMIBKR_OPERATOR_MACHINE_READ_BYTES=$(wc -c < "$raw")"
+          chmod 600 "$raw" "$headers"
+          content_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{gsub("\\r",""); sub(/^[^:]+:[[:space:]]*/,""); print; exit}' "$headers")"
+          body_bytes="$(wc -c < "$raw")"
+          body_sha256="$(sha256sum "$raw" | awk '{print $1}')"
+          echo "MMIBKR_OPERATOR_MACHINE_READ_HTTP_STATUS=$http_status"
+          echo "MMIBKR_OPERATOR_MACHINE_READ_CONTENT_TYPE=${content_type:-missing}"
+          echo "MMIBKR_OPERATOR_MACHINE_READ_BYTES=$body_bytes"
+          echo "MMIBKR_OPERATOR_MACHINE_READ_SHA256=$body_sha256"
+          if [ "$http_status" != '200' ]; then
+            echo 'operator machine read did not return HTTP 200' >&2
+            exit 61
+          fi
+          case "${content_type,,}" in
+            application/json*|application/*+json*) ;;
+            *)
+              echo 'operator machine read did not return JSON' >&2
+              exit 62
+              ;;
+          esac
+          python - "$raw" <<'PY'
+          import json, sys
+          from pathlib import Path
+          path=Path(sys.argv[1])
+          try:
+              node=json.loads(path.read_text(encoding="utf-8"))
+          except Exception as exc:
+              raise SystemExit("operator machine read body is not valid JSON") from exc
+          if not isinstance(node, dict):
+              raise SystemExit("operator machine read body must be an object")
+          print("MMIBKR_OPERATOR_MACHINE_READ_JSON_VALID=1")
+          PY
+          rm -f "$headers"
 
       - name: Encrypt snapshot to one-time ChatGPT recipient
         run: |
@@ -176,5 +209,6 @@ jobs:
         run: |
           rm -rf \
             "$RUNNER_TEMP/mmibkr-operator-machine-read.json" \
+            "$RUNNER_TEMP/mmibkr-operator-machine-read.headers" \
             "$RUNNER_TEMP/mmibkr-operator-encrypted-return"
           echo 'MMIBKR_OPERATOR_BRIDGE_PLAINTEXT_DESTROYED=1'
