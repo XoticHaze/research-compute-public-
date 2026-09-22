@@ -53,6 +53,8 @@ jobs:
         run: |
           set -euo pipefail
           node --check cloudflare/operator-console/src/index.js
+          node --check cloudflare/operator-console/src/promotion_review_state.js
+          node tests/promotion_review_state_contract.mjs
           python -m unittest -v \
             tests.test_mmibkr_operator_console_worker_v1 \
             tests.test_mmibkr_operator_console_access_reconcile_v1 \
