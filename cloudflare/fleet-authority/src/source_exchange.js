@@ -70,6 +70,18 @@ const PRIVATE_PR666_EXACT_VALIDATION_SOURCE =
   'e5bf10c9f1203f951b72910c8291d302f610e2c4';
 const PRIVATE_PR666_EXACT_VALIDATION_EXPIRES_AT =
   Date.parse('2026-09-23T12:00:00Z');
+
+const PRIVATE_PR670_EXACT_VALIDATION_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-pr670-forward-lifecycle-validation-r1.yml@refs/heads/main',
+};
+const PRIVATE_PR670_EXACT_VALIDATION_SOURCE =
+  '7e6c9fba036f26c05022896ada6f98fb79b1e560';
+const PRIVATE_PR670_EXACT_VALIDATION_EXPIRES_AT =
+  Date.parse('2026-09-23T12:00:00Z');
+
 const UI_BUILD_PRIVATE_ARCHIVE_SOURCE =
   'ca0adfa9f07d85b500594bbd334bb002e20b1eb6';
 const UI_BUILD_PRIVATE_ARCHIVE_EXPIRES_AT =
@@ -144,7 +156,17 @@ function isPrivateSourceStreamApproved(sourceSha, identity = null) {
     && Date.now() <= PRIVATE_PR666_EXACT_VALIDATION_EXPIRES_AT
     && matchesIdentity(identity, PRIVATE_PR666_EXACT_VALIDATION_IDENTITY)
   );
-  return uiBuildApproved || privatePrValidationApproved || privatePr666ValidationApproved;
+  const privatePr670ValidationApproved = (
+    sourceSha === PRIVATE_PR670_EXACT_VALIDATION_SOURCE
+    && Date.now() <= PRIVATE_PR670_EXACT_VALIDATION_EXPIRES_AT
+    && matchesIdentity(identity, PRIVATE_PR670_EXACT_VALIDATION_IDENTITY)
+  );
+  return (
+    uiBuildApproved
+    || privatePrValidationApproved
+    || privatePr666ValidationApproved
+    || privatePr670ValidationApproved
+  );
 }
 
 /*
@@ -291,6 +313,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     const matchedMissedTradeAudit = matchesIdentity(claims, MISSED_TRADE_AUDIT_IDENTITY);
     const matchedPrivatePrValidation = matchesIdentity(claims, PRIVATE_PR_EXACT_VALIDATION_IDENTITY);
     const matchedPrivatePr666Validation = matchesIdentity(claims, PRIVATE_PR666_EXACT_VALIDATION_IDENTITY);
+    const matchedPrivatePr670Validation = matchesIdentity(claims, PRIVATE_PR670_EXACT_VALIDATION_IDENTITY);
     const privateArchivePathAllowed = (
       /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname)
       || pathname === '/v1/source-vault/private-archive/attest'
@@ -305,6 +328,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
         || (matchedMissedTradeAudit && operatorDeployPathAllowed)
         || (matchedPrivatePrValidation && privateArchivePathAllowed)
         || (matchedPrivatePr666Validation && privateArchivePathAllowed)
+        || (matchedPrivatePr670Validation && privateArchivePathAllowed)
       )
       || claims.repository_visibility !== 'public'
       || !ALLOWED_PUBLIC_EVENTS.has(claims.event_name)
