@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   id-token: write
 
 env:
@@ -191,6 +192,26 @@ jobs:
           echo "MMIBKR_AUDIT_CHECKPOINT_SHA256=$actual"
           echo 'MMIBKR_AUDIT_CHECKPOINT_RESTORED=1'
 
+      - name: Restore validated historical seed artifact for audit warmup only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/mmibkr-historical-seed"
+          mkdir -p "$RUNNER_TEMP/mmibkr-historical-seed"
+          gh run download 35407829303 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "ibkr-cloudflare-readonly-b1-35407829303" \
+            --dir "$RUNNER_TEMP/mmibkr-historical-seed"
+          bars="$RUNNER_TEMP/mmibkr-historical-seed/ibkr-forward-bars-v2.jsonl"
+          test -s "$bars"
+          actual="$(sha256sum "$bars" | awk '{print $1}')"
+          expected="88bdec3035d3b40dcf721cccd3a412439cc5b900e7465838774b2de3bfe2b013"
+          test "$actual" = "$expected"
+          echo "MMIBKR_AUDIT_HISTORICAL_SEED_SHA256=$actual"
+          echo 'MMIBKR_AUDIT_HISTORICAL_SEED_OVERLAP_POLICY=preserve_restored_checkpoint_overlap'
+
       - name: Run canonical read-only missed-trade audit
         shell: bash
         run: |
@@ -204,12 +225,14 @@ jobs:
             -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro" \
             -v "$GITHUB_WORKSPACE/scripts:/audit-scripts:ro" \
             -v "$GITHUB_WORKSPACE/$REQUEST_PATH:/audit-request.json:ro" \
+            -v "$RUNNER_TEMP/mmibkr-historical-seed:/historical-seed:ro" \
             -v "$RUNNER_TEMP/mmibkr-audit:/audit-output" \
             "mmibkr-audit:${GITHUB_RUN_ID}" \
             python /audit-scripts/mmibkr_selected_runtime_missed_trade_audit_v1.py \
               --repo-root /app \
               --data-root /app/data \
               --request /audit-request.json \
+              --historical-seed-bars /historical-seed/ibkr-forward-bars-v2.jsonl \
               --output /audit-output/missed-trade-audit.json \
               --public-summary-output /audit-output/public-summary.json
           test -s "$RUNNER_TEMP/mmibkr-audit/missed-trade-audit.json"
@@ -248,5 +271,6 @@ jobs:
             "$RUNNER_TEMP/mmibkr-audit-encrypted" \
             "$RUNNER_TEMP/mmibkr-data" \
             "$RUNNER_TEMP/mmibkr-checkpoint" \
+            "$RUNNER_TEMP/mmibkr-historical-seed" \
             "$RUNNER_TEMP/mmibkr-source"
           echo 'MMIBKR_AUDIT_PLAINTEXT_DESTROYED=1'
