@@ -20,7 +20,7 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  PRIVATE_SOURCE_SHA: 8a92c1165a3e7d70033e8a12e0a9c1a12eee31f5
+  PRIVATE_SOURCE_SHA: 553197599239f1efd0a302642872a5a064a1da32
 
 jobs:
   exact-private-pr666-validation:
