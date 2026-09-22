@@ -205,16 +205,46 @@ jobs:
           if max_cycles < 0 or max_cycles > 1000:
               raise SystemExit('max_cycles must be 0..1000')
 
+          expected_checkpoint_key = str(
+              payload.get('expected_checkpoint_cache_key') or ''
+          ).strip()
+          expected_checkpoint_sha256 = str(
+              payload.get('expected_checkpoint_sha256') or ''
+          ).strip().lower()
+          if bool(expected_checkpoint_key) != bool(expected_checkpoint_sha256):
+              raise SystemExit(
+                  'expected_checkpoint_cache_key and expected_checkpoint_sha256 must be supplied together'
+              )
+          if expected_checkpoint_key:
+              prefix = str(os.environ['CHECKPOINT_CACHE_PREFIX'])
+              if not expected_checkpoint_key.startswith(prefix):
+                  raise SystemExit('expected predecessor checkpoint key must use canonical prefix')
+              if any(ch in expected_checkpoint_key for ch in ('\n', '\r')):
+                  raise SystemExit('expected predecessor checkpoint key contains newline')
+              if (
+                  len(expected_checkpoint_sha256) != 64
+                  or any(ch not in '0123456789abcdef' for ch in expected_checkpoint_sha256)
+              ):
+                  raise SystemExit('expected predecessor checkpoint SHA256 must be 64 lowercase hex')
+
           with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
               fh.write(f'REQUEST_SOURCE_REF={source_ref}\n')
               fh.write(f'SESSION_SECONDS={session_seconds}\n')
               fh.write(f'MAX_CYCLES={max_cycles}\n')
               fh.write(f'SELF_HANDOFF={str(self_handoff).lower()}\n')
+              fh.write(f'EXPECTED_PREDECESSOR_CHECKPOINT_KEY={expected_checkpoint_key}\n')
+              fh.write(
+                  f'EXPECTED_PREDECESSOR_CHECKPOINT_SHA256={expected_checkpoint_sha256}\n'
+              )
           print(json.dumps({
               'source_ref': source_ref,
               'session_seconds': session_seconds,
               'max_cycles': max_cycles,
               'self_handoff': self_handoff,
+              'expected_predecessor_checkpoint_key': expected_checkpoint_key or None,
+              'expected_predecessor_checkpoint_sha256': (
+                  expected_checkpoint_sha256 or None
+              ),
           }, sort_keys=True))
           PY
 
@@ -300,8 +330,18 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/mmibkr-checkpoint" "$RUNNER_TEMP/mmibkr-data"
 
+      - name: Restore exact expected predecessor checkpoint cache
+        id: restore-expected-cache
+        if: ${{ env.EXPECTED_PREDECESSOR_CHECKPOINT_KEY != '' }}
+        uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        with:
+          path: ${{ runner.temp }}/mmibkr-checkpoint
+          key: ${{ env.EXPECTED_PREDECESSOR_CHECKPOINT_KEY }}
+          fail-on-cache-miss: true
+
       - name: Restore latest sanitized checkpoint cache
         id: restore-cache
+        if: ${{ env.EXPECTED_PREDECESSOR_CHECKPOINT_KEY == '' }}
         uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57
         with:
           path: ${{ runner.temp }}/mmibkr-checkpoint
@@ -312,15 +352,23 @@ jobs:
       - name: Restore canonical market-data and terminal-continuity state
         id: restore_checkpoint
         env:
-          RESTORED_CACHE_KEY: ${{ steps.restore-cache.outputs.cache-matched-key }}
+          RESTORED_CACHE_KEY: ${{ steps.restore-expected-cache.outputs.cache-matched-key || steps.restore-cache.outputs.cache-matched-key }}
+          EXPECTED_CHECKPOINT_KEY: ${{ env.EXPECTED_PREDECESSOR_CHECKPOINT_KEY }}
+          EXPECTED_CHECKPOINT_SHA256: ${{ env.EXPECTED_PREDECESSOR_CHECKPOINT_SHA256 }}
         run: |
           set -euo pipefail
           checkpoint="$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
           if [ -s "$checkpoint" ]; then
             restored_sha256="$(sha256sum "$checkpoint" | awk '{print $1}')"
+            if [ -n "$EXPECTED_CHECKPOINT_KEY" ]; then
+              test "$RESTORED_CACHE_KEY" = "$EXPECTED_CHECKPOINT_KEY"
+              test "$restored_sha256" = "$EXPECTED_CHECKPOINT_SHA256"
+              echo 'MMIBKR_EXPECTED_PREDECESSOR_CHECKPOINT_MATCH=1'
+            fi
             echo 'restored=true' >> "$GITHUB_OUTPUT"
             echo "restored_sha256=$restored_sha256" >> "$GITHUB_OUTPUT"
             echo "restored_cache_key=$RESTORED_CACHE_KEY" >> "$GITHUB_OUTPUT"
+            echo "expected_predecessor_match=$([ -z "$EXPECTED_CHECKPOINT_KEY" ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
             docker run --rm               -v "$RUNNER_TEMP/mmibkr-data:/app/data"               -v "$RUNNER_TEMP/mmibkr-checkpoint:/checkpoint:ro"               "mmibkr-cloud:${GITHUB_RUN_ID}"               python scripts/operator/runtime_market_data_cache_checkpoint_v1.py                 --repo-root /app                 --restore-archive /checkpoint/latest.tgz
             echo "MMIBKR_CHECKPOINT_RESTORED_SHA256=$restored_sha256"
             echo "MMIBKR_CHECKPOINT_RESTORED_CACHE_KEY=$RESTORED_CACHE_KEY"
@@ -329,7 +377,12 @@ jobs:
             echo 'restored=false' >> "$GITHUB_OUTPUT"
             echo 'restored_sha256=' >> "$GITHUB_OUTPUT"
             echo 'restored_cache_key=' >> "$GITHUB_OUTPUT"
+            echo 'expected_predecessor_match=false' >> "$GITHUB_OUTPUT"
             echo 'MMIBKR_CHECKPOINT_RESTORED=0'
+            if [ -n "$EXPECTED_CHECKPOINT_KEY" ]; then
+              echo 'expected predecessor checkpoint was required but no archive was restored' >&2
+              exit 1
+            fi
             echo 'No prior cache checkpoint; canonical self-healing bootstrap will be used.'
           fi
 
@@ -788,6 +841,9 @@ jobs:
           MMIBKR_RECEIPT_CHECKPOINT_RESTORED: ${{ steps.restore_checkpoint.outputs.restored }}
           MMIBKR_RECEIPT_CHECKPOINT_RESTORED_SHA256: ${{ steps.restore_checkpoint.outputs.restored_sha256 }}
           MMIBKR_RECEIPT_CHECKPOINT_RESTORED_CACHE_KEY: ${{ steps.restore_checkpoint.outputs.restored_cache_key }}
+          MMIBKR_RECEIPT_EXPECTED_PREDECESSOR_CHECKPOINT_KEY: ${{ env.EXPECTED_PREDECESSOR_CHECKPOINT_KEY }}
+          MMIBKR_RECEIPT_EXPECTED_PREDECESSOR_CHECKPOINT_SHA256: ${{ env.EXPECTED_PREDECESSOR_CHECKPOINT_SHA256 }}
+          MMIBKR_RECEIPT_EXPECTED_PREDECESSOR_MATCH: ${{ steps.restore_checkpoint.outputs.expected_predecessor_match }}
           MMIBKR_RECEIPT_CHECKPOINT_CACHE_READY: ${{ steps.checkpoint.outputs.ready }}
           MMIBKR_RECEIPT_CHECKPOINT_CACHE_SAVED: ${{ steps.checkpoint_saved.outputs.saved || 'false' }}
           MMIBKR_RECEIPT_CHECKPOINT_CACHE_SHA256: ${{ steps.checkpoint_saved.outputs.saved_sha256 }}
@@ -902,6 +958,25 @@ jobs:
           receipt['checkpoint_restored_cache_key'] = (
               str(os.environ.get('MMIBKR_RECEIPT_CHECKPOINT_RESTORED_CACHE_KEY') or '').strip()
               or None
+          )
+          receipt['expected_predecessor_checkpoint_cache_key'] = (
+              str(
+                  os.environ.get(
+                      'MMIBKR_RECEIPT_EXPECTED_PREDECESSOR_CHECKPOINT_KEY'
+                  ) or ''
+              ).strip()
+              or None
+          )
+          receipt['expected_predecessor_checkpoint_sha256'] = (
+              str(
+                  os.environ.get(
+                      'MMIBKR_RECEIPT_EXPECTED_PREDECESSOR_CHECKPOINT_SHA256'
+                  ) or ''
+              ).strip()
+              or None
+          )
+          receipt['expected_predecessor_checkpoint_match'] = (
+              os.environ.get('MMIBKR_RECEIPT_EXPECTED_PREDECESSOR_MATCH') == 'true'
           )
           receipt['checkpoint_cache_ready'] = (
               os.environ.get('MMIBKR_RECEIPT_CHECKPOINT_CACHE_READY') == 'true'
