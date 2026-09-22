@@ -1,0 +1,497 @@
+{
+  "account_state_included": false,
+  "artifact_bars_written_to_real_cache": false,
+  "broker_action": false,
+  "conflict_count": 27,
+  "conflict_policy": "preserve_existing_canonical_forward_cache",
+  "conflict_tokens": [
+    "AMAT@2026-09-18T08:00:00+00:00",
+    "AMAT@2026-09-18T09:15:00+00:00",
+    "AMAT@2026-09-18T11:15:00+00:00",
+    "AMAT@2026-09-18T12:30:00+00:00",
+    "AMAT@2026-09-18T13:30:00+00:00",
+    "AMAT@2026-09-18T14:15:00+00:00",
+    "AMAT@2026-09-18T15:00:00+00:00",
+    "AMAT@2026-09-18T16:00:00+00:00",
+    "AMAT@2026-09-18T18:30:00+00:00",
+    "AMAT@2026-09-18T18:45:00+00:00",
+    "AMAT@2026-09-18T19:45:00+00:00",
+    "AMAT@2026-09-18T20:15:00+00:00",
+    "AMAT@2026-09-18T20:45:00+00:00",
+    "AMAT@2026-09-18T21:00:00+00:00",
+    "AMAT@2026-09-18T23:30:00+00:00",
+    "AMAT@2026-09-18T23:45:00+00:00",
+    "APH@2026-09-18T12:30:00+00:00",
+    "APH@2026-09-18T14:15:00+00:00",
+    "APH@2026-09-18T16:15:00+00:00",
+    "APH@2026-09-18T17:15:00+00:00",
+    "APH@2026-09-18T17:45:00+00:00",
+    "APH@2026-09-18T19:45:00+00:00",
+    "APH@2026-09-18T21:45:00+00:00",
+    "APH@2026-09-18T23:15:00+00:00",
+    "APH@2026-09-18T23:45:00+00:00",
+    "MNQ@2026-09-16T16:59:00+00:00",
+    "MNQ@2026-09-17T16:59:00+00:00"
+  ],
+  "conflicts": [
+    {
+      "fields": {
+        "close": {
+          "canonical_forward": 29468.25,
+          "seed_minus_canonical": 0.25,
+          "validated_seed": 29468.5
+        },
+        "low": {
+          "canonical_forward": 29468.25,
+          "seed_minus_canonical": -0.25,
+          "validated_seed": 29468
+        },
+        "volume": {
+          "canonical_forward": 890,
+          "seed_minus_canonical": 37.0,
+          "validated_seed": 927
+        }
+      },
+      "runtime_id": "crw_mnq_12m_proven_exec",
+      "symbol": "MNQ",
+      "timestamp": "2026-09-16T16:59:00+00:00"
+    },
+    {
+      "fields": {
+        "close": {
+          "canonical_forward": 29741,
+          "seed_minus_canonical": -0.25,
+          "validated_seed": 29740.75
+        },
+        "volume": {
+          "canonical_forward": 3101,
+          "seed_minus_canonical": 17.0,
+          "validated_seed": 3118
+        }
+      },
+      "runtime_id": "crw_mnq_12m_proven_exec",
+      "symbol": "MNQ",
+      "timestamp": "2026-09-17T16:59:00+00:00"
+    },
+    {
+      "fields": {
+        "volume": {
+          "canonical_forward": 20858,
+          "seed_minus_canonical": -103.0,
+          "validated_seed": 20755
+        }
+      },
+      "runtime_id": "crw_amat_15m_selected",
+      "symbol": "AMAT",
+      "timestamp": "2026-09-18T08:00:00+00:00"
+    },
+    {
+      "fields": {
+        "high": {
+          "canonical_forward": 422.64,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 422.63
+        }
+      },
+      "runtime_id": "crw_amat_15m_selected",
+      "symbol": "AMAT",
+      "timestamp": "2026-09-18T09:15:00+00:00"
+    },
+    {
+      "fields": {
+        "open": {
+          "canonical_forward": 419.39,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 419.38
+        }
+      },
+      "runtime_id": "crw_amat_15m_selected",
+      "symbol": "AMAT",
+      "timestamp": "2026-09-18T11:15:00+00:00"
+    },
+    {
+      "fields": {
+        "close": {
+          "canonical_forward": 419.27,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 419.26
+        },
+        "high": {
+          "canonical_forward": 419.27,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 419.26
+        }
+      },
+      "runtime_id": "crw_amat_15m_selected",
+      "symbol": "AMAT",
+      "timestamp": "2026-09-18T12:30:00+00:00"
+    },
+    {
+      "fields": {
+        "volume": {
+          "canonical_forward": 1326496,
+          "seed_minus_canonical": -12092.0,
+          "validated_seed": 1314404
+        }
+      },
+      "runtime_id": "crw_amat_15m_selected",
+      "symbol": "AMAT",
+      "timestamp": "2026-09-18T13:30:00+00:00"
+    },
+    {
+      "fields": {
+        "close": {
+          "canonical_forward": 431.66,
+          "seed_minus_canonical": -0.010000000000047748,
+          "validated_seed": 431.65
+        }
+      },
+      "runtime_id": "crw_amat_15m_selected",
+      "symbol": "AMAT",
+      "timestamp": "2026-09-18T14:15:00+00:00"
+    },
+    {
+      "fields": {
+        "close": {
+          "canonical_forward": 432.49,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 432.48
+        }
+      },
+      "runtime_id": "crw_amat_15m_selected",
+      "symbol": "AMAT",
+      "timestamp": "2026-09-18T15:00:00+00:00"
+    },
+    {
+      "fields": {
+        "volume": {
+          "canonical_forward": 84682,
+          "seed_minus_canonical": -2023.0,
+          "validated_seed": 82659
+        }
+      },
+      "runtime_id": "crw_amat_15m_selected",
+      "symbol": "AMAT",
+      "timestamp": "2026-09-18T16:00:00+00:00"
+    },
+    {
+      "fields": {
+        "close": {
+          "canonical_forward": 434.94,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 434.93
+        },
+        "open": {
+          "canonical_forward": 434.8,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 434.79
+        }
+      },
+      "runtime_id": "crw_amat_15m_selected",
+      "symbol": "AMAT",
+      "timestamp": "2026-09-18T18:30:00+00:00"
+    },
+    {
+      "fields": {
+        "close": {
+          "canonical_forward": 435.42,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 435.41
+        },
+        "open": {
+          "canonical_forward": 434.94,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 434.93
+        }
+      },
+      "runtime_id": "crw_amat_15m_selected",
+      "symbol": "AMAT",
+      "timestamp": "2026-09-18T18:45:00+00:00"
+    },
+    {
+      "fields": {
+        "close": {
+          "canonical_forward": 444.47,
+          "seed_minus_canonical": 0.15999999999996817,
+          "validated_seed": 444.63
+        },
+        "volume": {
+          "canonical_forward": 962026,
+          "seed_minus_canonical": -15522.0,
+          "validated_seed": 946504
+        }
+      },
+      "runtime_id": "crw_amat_15m_selected",
+      "symbol": "AMAT",
+      "timestamp": "2026-09-18T19:45:00+00:00"
+    },
+    {
+      "fields": {
+        "close": {
+          "canonical_forward": 445.62,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 445.61
+        }
+      },
+      "runtime_id": "crw_amat_15m_selected",
+      "symbol": "AMAT",
+      "timestamp": "2026-09-18T20:15:00+00:00"
+    },
+    {
+      "fields": {
+        "close": {
+          "canonical_forward": 442.84,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 442.83
+        }
+      },
+      "runtime_id": "crw_amat_15m_selected",
+      "symbol": "AMAT",
+      "timestamp": "2026-09-18T20:45:00+00:00"
+    },
+    {
+      "fields": {
+        "open": {
+          "canonical_forward": 443.34,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 443.33
+        }
+      },
+      "runtime_id": "crw_amat_15m_selected",
+      "symbol": "AMAT",
+      "timestamp": "2026-09-18T21:00:00+00:00"
+    },
+    {
+      "fields": {
+        "high": {
+          "canonical_forward": 443.83,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 443.82
+        }
+      },
+      "runtime_id": "crw_amat_15m_selected",
+      "symbol": "AMAT",
+      "timestamp": "2026-09-18T23:30:00+00:00"
+    },
+    {
+      "fields": {
+        "close": {
+          "canonical_forward": 443.61,
+          "seed_minus_canonical": -0.060000000000002274,
+          "validated_seed": 443.55
+        },
+        "high": {
+          "canonical_forward": 444.25,
+          "seed_minus_canonical": -0.6999999999999886,
+          "validated_seed": 443.55
+        },
+        "low": {
+          "canonical_forward": 443.45,
+          "seed_minus_canonical": 0.05000000000001137,
+          "validated_seed": 443.5
+        },
+        "volume": {
+          "canonical_forward": 1808,
+          "seed_minus_canonical": -1698.0,
+          "validated_seed": 110
+        }
+      },
+      "runtime_id": "crw_amat_15m_selected",
+      "symbol": "AMAT",
+      "timestamp": "2026-09-18T23:45:00+00:00"
+    },
+    {
+      "fields": {
+        "high": {
+          "canonical_forward": 78.14,
+          "seed_minus_canonical": -0.010000000000005116,
+          "validated_seed": 78.13
+        }
+      },
+      "runtime_id": "crw_aph_15m_selected",
+      "symbol": "APH",
+      "timestamp": "2026-09-18T12:30:00+00:00"
+    },
+    {
+      "fields": {
+        "close": {
+          "canonical_forward": 78.83,
+          "seed_minus_canonical": -0.010000000000005116,
+          "validated_seed": 78.82
+        },
+        "open": {
+          "canonical_forward": 78.64,
+          "seed_minus_canonical": 0.010000000000005116,
+          "validated_seed": 78.65
+        }
+      },
+      "runtime_id": "crw_aph_15m_selected",
+      "symbol": "APH",
+      "timestamp": "2026-09-18T14:15:00+00:00"
+    },
+    {
+      "fields": {
+        "close": {
+          "canonical_forward": 78.85,
+          "seed_minus_canonical": 0.010000000000005116,
+          "validated_seed": 78.86
+        }
+      },
+      "runtime_id": "crw_aph_15m_selected",
+      "symbol": "APH",
+      "timestamp": "2026-09-18T16:15:00+00:00"
+    },
+    {
+      "fields": {
+        "close": {
+          "canonical_forward": 78.36,
+          "seed_minus_canonical": 0.010000000000005116,
+          "validated_seed": 78.37
+        },
+        "high": {
+          "canonical_forward": 78.45,
+          "seed_minus_canonical": -0.010000000000005116,
+          "validated_seed": 78.44
+        }
+      },
+      "runtime_id": "crw_aph_15m_selected",
+      "symbol": "APH",
+      "timestamp": "2026-09-18T17:15:00+00:00"
+    },
+    {
+      "fields": {
+        "open": {
+          "canonical_forward": 78.46,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 78.45
+        }
+      },
+      "runtime_id": "crw_aph_15m_selected",
+      "symbol": "APH",
+      "timestamp": "2026-09-18T17:45:00+00:00"
+    },
+    {
+      "fields": {
+        "volume": {
+          "canonical_forward": 3092315,
+          "seed_minus_canonical": 52835.0,
+          "validated_seed": 3145150
+        }
+      },
+      "runtime_id": "crw_aph_15m_selected",
+      "symbol": "APH",
+      "timestamp": "2026-09-18T19:45:00+00:00"
+    },
+    {
+      "fields": {
+        "close": {
+          "canonical_forward": 77.94,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 77.93
+        },
+        "high": {
+          "canonical_forward": 77.94,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 77.93
+        },
+        "open": {
+          "canonical_forward": 77.94,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 77.93
+        }
+      },
+      "runtime_id": "crw_aph_15m_selected",
+      "symbol": "APH",
+      "timestamp": "2026-09-18T21:45:00+00:00"
+    },
+    {
+      "fields": {
+        "high": {
+          "canonical_forward": 77.66,
+          "seed_minus_canonical": -0.009999999999990905,
+          "validated_seed": 77.65
+        }
+      },
+      "runtime_id": "crw_aph_15m_selected",
+      "symbol": "APH",
+      "timestamp": "2026-09-18T23:15:00+00:00"
+    },
+    {
+      "fields": {
+        "close": {
+          "canonical_forward": 77.69,
+          "seed_minus_canonical": 0.3299999999999983,
+          "validated_seed": 78.02
+        },
+        "high": {
+          "canonical_forward": 77.69,
+          "seed_minus_canonical": 0.3299999999999983,
+          "validated_seed": 78.02
+        },
+        "low": {
+          "canonical_forward": 77.6,
+          "seed_minus_canonical": 0.4200000000000017,
+          "validated_seed": 78.02
+        },
+        "open": {
+          "canonical_forward": 77.6,
+          "seed_minus_canonical": 0.4200000000000017,
+          "validated_seed": 78.02
+        },
+        "volume": {
+          "canonical_forward": 392,
+          "seed_minus_canonical": -392.0,
+          "validated_seed": 0
+        }
+      },
+      "runtime_id": "crw_aph_15m_selected",
+      "symbol": "APH",
+      "timestamp": "2026-09-18T23:45:00+00:00"
+    }
+  ],
+  "conflicts_by_symbol": {
+    "AMAT": 16,
+    "APH": 9,
+    "MNQ": 2
+  },
+  "credentials_included": false,
+  "execution_authority_mutated": false,
+  "expected_conflict_set_match": true,
+  "expected_conflict_tokens": [
+    "AMAT@2026-09-18T08:00:00+00:00",
+    "AMAT@2026-09-18T09:15:00+00:00",
+    "AMAT@2026-09-18T11:15:00+00:00",
+    "AMAT@2026-09-18T12:30:00+00:00",
+    "AMAT@2026-09-18T13:30:00+00:00",
+    "AMAT@2026-09-18T14:15:00+00:00",
+    "AMAT@2026-09-18T15:00:00+00:00",
+    "AMAT@2026-09-18T16:00:00+00:00",
+    "AMAT@2026-09-18T18:30:00+00:00",
+    "AMAT@2026-09-18T18:45:00+00:00",
+    "AMAT@2026-09-18T19:45:00+00:00",
+    "AMAT@2026-09-18T20:15:00+00:00",
+    "AMAT@2026-09-18T20:45:00+00:00",
+    "AMAT@2026-09-18T21:00:00+00:00",
+    "AMAT@2026-09-18T23:30:00+00:00",
+    "AMAT@2026-09-18T23:45:00+00:00",
+    "APH@2026-09-18T12:30:00+00:00",
+    "APH@2026-09-18T14:15:00+00:00",
+    "APH@2026-09-18T16:15:00+00:00",
+    "APH@2026-09-18T17:15:00+00:00",
+    "APH@2026-09-18T17:45:00+00:00",
+    "APH@2026-09-18T19:45:00+00:00",
+    "APH@2026-09-18T21:45:00+00:00",
+    "APH@2026-09-18T23:15:00+00:00",
+    "APH@2026-09-18T23:45:00+00:00",
+    "MNQ@2026-09-16T16:59:00+00:00",
+    "MNQ@2026-09-17T16:59:00+00:00"
+  ],
+  "live_execution_allowed": false,
+  "market_data_cache_mutated": false,
+  "ok": true,
+  "orders_included": false,
+  "paper_owner_started": false,
+  "positions_included": false,
+  "schema": "mmibkr.signal_history_conflict_diagnostic.v1",
+  "source_public_run_id": "35407829303"
+}
