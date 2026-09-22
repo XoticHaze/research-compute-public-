@@ -93,8 +93,8 @@ class CloudCheckpointCacheHandoffTests(unittest.TestCase):
         self.assertIn("expected_checkpoint_cache_key:", text)
         self.assertIn("expected_checkpoint_sha256:", text)
         self.assertIn("allow_unpinned_bootstrap:", text)
-        self.assertIn('print("unpinned_dispatch_rejected")', text)
-        self.assertIn('print("invalid_dispatch")', text)
+        self.assertIn("print('unpinned_dispatch_rejected')", text)
+        self.assertIn("print('invalid_dispatch')", text)
         self.assertIn("reject_unpinned_dispatch:", text)
         self.assertIn(
             "Reject unpinned or invalid workflow dispatch before owner concurrency",
