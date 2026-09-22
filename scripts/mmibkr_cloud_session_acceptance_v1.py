@@ -141,6 +141,22 @@ def evaluate(
             and node.get("checkpoint_restored_sha256") == expected_predecessor_sha256
         )
 
+    predecessor_terminal_required = (
+        node.get("predecessor_terminal_continuity_required") is True
+    )
+    if predecessor_terminal_required:
+        entry_count = node.get("predecessor_terminal_continuity_entry_count")
+        checks["predecessor_terminal_continuity_ready"] = (
+            node.get("predecessor_terminal_continuity_ready") is True
+            and isinstance(entry_count, int)
+            and entry_count >= 1
+        )
+        checks["predecessor_terminal_continuity_has_exact_restore"] = (
+            expected_predecessor_declared
+            and node.get("expected_predecessor_checkpoint_match") is True
+            and node.get("checkpoint_restored") is True
+        )
+
     if require_checkpoint_restored:
         checks["checkpoint_restored"] = node.get("checkpoint_restored") is True
         checks["checkpoint_restored_identity_reported"] = (

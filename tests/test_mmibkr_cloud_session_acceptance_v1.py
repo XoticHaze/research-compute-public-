@@ -181,6 +181,50 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         self.assertFalse(result["accepted"])
         self.assertFalse(result["checks"]["expected_predecessor_identity_reported"])
 
+    def test_required_terminal_continuity_must_be_ready_and_nonempty(self):
+        node = self.good_receipt(restored=True)
+        node["expected_predecessor_checkpoint_cache_key"] = (
+            mod.CHECKPOINT_CACHE_PREFIX + "successor"
+        )
+        node["expected_predecessor_checkpoint_sha256"] = "a" * 64
+        node["expected_predecessor_checkpoint_match"] = True
+        node["checkpoint_restored_cache_key"] = node[
+            "expected_predecessor_checkpoint_cache_key"
+        ]
+        node["checkpoint_restored_sha256"] = node[
+            "expected_predecessor_checkpoint_sha256"
+        ]
+        node["predecessor_terminal_continuity_required"] = True
+        node["predecessor_terminal_continuity_ready"] = True
+        node["predecessor_terminal_continuity_entry_count"] = 5
+
+        accepted = mod.evaluate(node, require_checkpoint_restored=False)
+        self.assertTrue(accepted["accepted"])
+        self.assertTrue(
+            accepted["checks"]["predecessor_terminal_continuity_ready"]
+        )
+        self.assertTrue(
+            accepted["checks"]["predecessor_terminal_continuity_has_exact_restore"]
+        )
+
+        node["predecessor_terminal_continuity_entry_count"] = 0
+        rejected = mod.evaluate(node, require_checkpoint_restored=False)
+        self.assertFalse(rejected["accepted"])
+        self.assertFalse(
+            rejected["checks"]["predecessor_terminal_continuity_ready"]
+        )
+
+    def test_required_terminal_continuity_rejects_unmatched_predecessor(self):
+        node = self.good_receipt(restored=True)
+        node["predecessor_terminal_continuity_required"] = True
+        node["predecessor_terminal_continuity_ready"] = True
+        node["predecessor_terminal_continuity_entry_count"] = 1
+        result = mod.evaluate(node, require_checkpoint_restored=False)
+        self.assertFalse(result["accepted"])
+        self.assertFalse(
+            result["checks"]["predecessor_terminal_continuity_has_exact_restore"]
+        )
+
     def test_rejects_missing_cache_persistence(self):
         node = self.good_receipt(restored=True)
         node["checkpoint_cache_saved"] = False

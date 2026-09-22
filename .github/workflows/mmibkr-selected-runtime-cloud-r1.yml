@@ -33,6 +33,11 @@ on:
         required: false
         default: false
         type: boolean
+      require_terminal_continuity:
+        description: Require sanitized terminal-boundary continuity in the exact predecessor before starting a successor paper owner
+        required: false
+        default: false
+        type: boolean
       self_handoff:
         description: Dispatch a queued successor after a successful session
         required: true
@@ -266,9 +271,19 @@ jobs:
           expected_checkpoint_sha256 = str(
               payload.get('expected_checkpoint_sha256') or ''
           ).strip().lower()
+          raw_require_terminal = payload.get('require_terminal_continuity', False)
+          require_terminal_continuity = (
+              raw_require_terminal
+              if isinstance(raw_require_terminal, bool)
+              else str(raw_require_terminal).strip().lower() in {'1', 'true', 'yes', 'on'}
+          )
           if bool(expected_checkpoint_key) != bool(expected_checkpoint_sha256):
               raise SystemExit(
                   'expected_checkpoint_cache_key and expected_checkpoint_sha256 must be supplied together'
+              )
+          if require_terminal_continuity and not expected_checkpoint_key:
+              raise SystemExit(
+                  'require_terminal_continuity requires an exact predecessor checkpoint identity'
               )
           if expected_checkpoint_key:
               prefix = str(os.environ['CHECKPOINT_CACHE_PREFIX'])
@@ -291,6 +306,11 @@ jobs:
               fh.write(
                   f'EXPECTED_PREDECESSOR_CHECKPOINT_SHA256={expected_checkpoint_sha256}\n'
               )
+              fh.write(
+                  'REQUIRE_PREDECESSOR_TERMINAL_CONTINUITY='
+                  + str(require_terminal_continuity).lower()
+                  + '\n'
+              )
           print(json.dumps({
               'source_ref': source_ref,
               'session_seconds': session_seconds,
@@ -300,6 +320,7 @@ jobs:
               'expected_predecessor_checkpoint_sha256': (
                   expected_checkpoint_sha256 or None
               ),
+              'require_predecessor_terminal_continuity': require_terminal_continuity,
           }, sort_keys=True))
           PY
 
@@ -440,6 +461,64 @@ jobs:
             fi
             echo 'No prior cache checkpoint; canonical self-healing bootstrap will be used.'
           fi
+
+      - name: Enforce predecessor terminal continuity before owner
+        id: predecessor_terminal_continuity
+        if: ${{ env.REQUIRE_PREDECESSOR_TERMINAL_CONTINUITY == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -i \
+            -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro" \
+            "mmibkr-cloud:$GITHUB_RUN_ID" \
+            python - <<'PY' > "$RUNNER_TEMP/mmibkr-terminal-continuity.env"
+          import json
+          from pathlib import Path
+
+          path = Path(
+              '/app/data/strategy_runtime/selected_runtime_cloud_cycle_v1/terminal_boundaries.json'
+          )
+          if not path.is_file():
+              raise SystemExit('required predecessor terminal continuity missing')
+          node = json.loads(path.read_text(encoding='utf-8'))
+          if node.get('schema') != 'mmibkr.selected_runtime_cloud_cycle_terminal_ledger.v1':
+              raise SystemExit('predecessor terminal continuity schema mismatch')
+          entries = node.get('entries') if isinstance(node.get('entries'), dict) else {}
+          if not entries:
+              raise SystemExit('predecessor terminal continuity has no terminal entries')
+          for key in (
+              'account_state_included',
+              'positions_included',
+              'orders_included',
+              'credentials_included',
+              'execution_authority_included',
+          ):
+              if node.get(key) is not False:
+                  raise SystemExit(
+                      'predecessor terminal continuity safety boundary violated:' + key
+                  )
+          if not all(
+              isinstance(row, dict)
+              and row.get('terminal') is True
+              for row in entries.values()
+          ):
+              raise SystemExit('predecessor terminal continuity contains nonterminal entry')
+          print('READY=true')
+          print('ENTRY_COUNT=' + str(len(entries)))
+          PY
+
+          cat "$RUNNER_TEMP/mmibkr-terminal-continuity.env"
+          while IFS='=' read -r key value; do
+            case "$key" in
+              READY)
+                echo "ready=$value" >> "$GITHUB_OUTPUT"
+                ;;
+              ENTRY_COUNT)
+                echo "entry_count=$value" >> "$GITHUB_OUTPUT"
+                ;;
+            esac
+          done < "$RUNNER_TEMP/mmibkr-terminal-continuity.env"
+          echo 'MMIBKR_PREDECESSOR_TERMINAL_CONTINUITY_READY=1'
 
       - name: Consume proven initial selected-runtime backfill through canonical ingest
         id: initial_backfill
@@ -899,6 +978,9 @@ jobs:
           MMIBKR_RECEIPT_EXPECTED_PREDECESSOR_CHECKPOINT_KEY: ${{ env.EXPECTED_PREDECESSOR_CHECKPOINT_KEY }}
           MMIBKR_RECEIPT_EXPECTED_PREDECESSOR_CHECKPOINT_SHA256: ${{ env.EXPECTED_PREDECESSOR_CHECKPOINT_SHA256 }}
           MMIBKR_RECEIPT_EXPECTED_PREDECESSOR_MATCH: ${{ steps.restore_checkpoint.outputs.expected_predecessor_match }}
+          MMIBKR_RECEIPT_PREDECESSOR_TERMINAL_CONTINUITY_REQUIRED: ${{ env.REQUIRE_PREDECESSOR_TERMINAL_CONTINUITY }}
+          MMIBKR_RECEIPT_PREDECESSOR_TERMINAL_CONTINUITY_READY: ${{ steps.predecessor_terminal_continuity.outputs.ready || 'false' }}
+          MMIBKR_RECEIPT_PREDECESSOR_TERMINAL_CONTINUITY_ENTRY_COUNT: ${{ steps.predecessor_terminal_continuity.outputs.entry_count || '0' }}
           MMIBKR_RECEIPT_CHECKPOINT_CACHE_READY: ${{ steps.checkpoint.outputs.ready }}
           MMIBKR_RECEIPT_CHECKPOINT_CACHE_SAVED: ${{ steps.checkpoint_saved.outputs.saved || 'false' }}
           MMIBKR_RECEIPT_CHECKPOINT_CACHE_SHA256: ${{ steps.checkpoint_saved.outputs.saved_sha256 }}
@@ -1032,6 +1114,21 @@ jobs:
           )
           receipt['expected_predecessor_checkpoint_match'] = (
               os.environ.get('MMIBKR_RECEIPT_EXPECTED_PREDECESSOR_MATCH') == 'true'
+          )
+          receipt['predecessor_terminal_continuity_required'] = (
+              os.environ.get(
+                  'MMIBKR_RECEIPT_PREDECESSOR_TERMINAL_CONTINUITY_REQUIRED'
+              ) == 'true'
+          )
+          receipt['predecessor_terminal_continuity_ready'] = (
+              os.environ.get(
+                  'MMIBKR_RECEIPT_PREDECESSOR_TERMINAL_CONTINUITY_READY'
+              ) == 'true'
+          )
+          receipt['predecessor_terminal_continuity_entry_count'] = (
+              optional_int(
+                  'MMIBKR_RECEIPT_PREDECESSOR_TERMINAL_CONTINUITY_ENTRY_COUNT'
+              ) or 0
           )
           receipt['checkpoint_cache_ready'] = (
               os.environ.get('MMIBKR_RECEIPT_CHECKPOINT_CACHE_READY') == 'true'
@@ -1172,6 +1269,7 @@ jobs:
                   'expected_checkpoint_cache_key': os.environ['SUCCESSOR_CHECKPOINT_CACHE_KEY'],
                   'expected_checkpoint_sha256': os.environ['SUCCESSOR_CHECKPOINT_SHA256'],
                   'allow_unpinned_bootstrap': False,
+                  'require_terminal_continuity': True,
                   'self_handoff': True,
               },
           }))

@@ -123,6 +123,37 @@ class CloudCheckpointCacheHandoffTests(unittest.TestCase):
         self.assertIn("'expected_checkpoint_sha256':", section)
         self.assertIn("'allow_unpinned_bootstrap': False", section)
 
+    def test_successor_terminal_continuity_is_fail_closed_before_owner(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("require_terminal_continuity:", text)
+        self.assertIn(
+            "require_terminal_continuity requires an exact predecessor checkpoint identity",
+            text,
+        )
+        terminal = text.index("- name: Enforce predecessor terminal continuity before owner")
+        ingest = text.index(
+            "- name: Consume proven initial selected-runtime backfill through canonical ingest"
+        )
+        owner = text.index("- name: Run bounded selected-runtime cloud owner")
+        self.assertLess(terminal, ingest)
+        self.assertLess(terminal, owner)
+        section = text[terminal:ingest]
+        self.assertIn("docker run --rm -i", section)
+        self.assertIn("terminal_boundaries.json", section)
+        self.assertIn(
+            "mmibkr.selected_runtime_cloud_cycle_terminal_ledger.v1",
+            section,
+        )
+        self.assertIn("predecessor terminal continuity has no terminal entries", section)
+        self.assertIn("MMIBKR_PREDECESSOR_TERMINAL_CONTINUITY_READY=1", section)
+
+    def test_healthy_self_handoff_requires_terminal_continuity_recursively(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        start = text.index("- name: Queue successor bounded session")
+        end = text.index("- name: Destroy private runtime material")
+        section = text[start:end]
+        self.assertIn("'require_terminal_continuity': True", section)
+
     def test_private_runtime_cleanup_still_destroys_checkpoint(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         cleanup = text[text.index("- name: Destroy private runtime material") :]
