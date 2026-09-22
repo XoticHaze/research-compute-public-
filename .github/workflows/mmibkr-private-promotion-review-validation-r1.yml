@@ -319,3 +319,5 @@ jobs:
           docker image rm "mmibkr-promotion-review:$GITHUB_RUN_ID" >/dev/null 2>&1 || true
           sudo rm -rf "$RUNNER_TEMP/mmibkr-promotion-review" "$RUNNER_TEMP/mmibkr-promotion-review.tar.gz" "$RUNNER_TEMP"/promotion-review-*.log
           echo 'MMIBKR_PROMOTION_REVIEW_PRIVATE_SOURCE_DESTROYED=1'
+
+# exact-validation-trigger-20260922-r1
