@@ -116,6 +116,38 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertEqual(assets["not_found_handling"], "single-page-application")
         self.assertEqual(config["name"], "mmibkr-operator-console")
 
+    def test_promotion_review_is_access_gated_and_durable_object_backed(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        contract = (ROOT / "cloudflare" / "operator-console" / "src" / "promotion_review_state.js").read_text(encoding="utf-8")
+        self.assertIn("/api/promotion-review", text)
+        self.assertIn("/api/promotion-review/decision", text)
+        self.assertIn("accessIdentity", text)
+        self.assertIn("operator-state.internal/promotion/latest", text)
+        self.assertIn("operator-state.internal/promotion/decision", text)
+        self.assertIn("promotion:decision-index", contract)
+        self.assertIn("promotion:decision:", contract)
+        self.assertIn("durable_readback_verified: true", contract)
+        self.assertIn("live_enable_is_separate_manual_authority", contract)
+        self.assertIn("broker_mutation_authority: false", contract)
+        self.assertIn("selected_runtime_write: false", contract)
+        self.assertIn("live_execution_allowed: false", contract)
+
+    def test_promotion_candidate_publish_and_machine_read_are_oidc_gated(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        publish = text.index("url.pathname === '/v1/promotion-candidates'")
+        machine = text.index("url.pathname === '/v1/promotion-review-read'")
+        access = text.index("let accessIdentity", machine)
+        publish_section = text[publish:machine]
+        machine_section = text[machine:access]
+        self.assertIn("verifyPublisher(request)", publish_section)
+        self.assertIn("validatePromotionCandidateSnapshot", publish_section)
+        self.assertIn("broker_mutation_authority: false", publish_section)
+        self.assertIn("live_execution_allowed: false", publish_section)
+        self.assertIn("verifySnapshotReader(request)", machine_section)
+        self.assertIn("machinePromotionProjection", machine_section)
+        self.assertNotIn("verifyAccess(request, env)", publish_section)
+        self.assertNotIn("verifyAccess(request, env)", machine_section)
+
     def test_private_snapshot_state_is_durable_object_backed(self):
         config = json.loads(WRANGLER.read_text(encoding="utf-8"))
         bindings = config["durable_objects"]["bindings"]
