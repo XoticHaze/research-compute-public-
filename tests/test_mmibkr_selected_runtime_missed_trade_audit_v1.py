@@ -86,6 +86,23 @@ class MissedTradeAuditContractTests(unittest.TestCase):
         self.assertFalse(result["eligible"])
         self.assertEqual(result["state"], "BOT_INVENTORY_AUTHORITY_REQUIRED")
 
+    def test_futures_source_cache_candidate_uses_execution_month(self):
+        paths = audit._source_cache_candidates(
+            Path("/tmp/data"),
+            {
+                "instrument_class": "FUT",
+                "symbol": "MNQ",
+                "execution_contract": {
+                    "lastTradeDateOrContractMonth": "20261218",
+                },
+            },
+            "1Min",
+        )
+        self.assertIn(
+            Path("/tmp/data/futures/MNQ-202612/1Min.csv"),
+            paths,
+        )
+
     def test_public_summary_excludes_rows(self):
         summary = audit.render_public_summary(
             {
