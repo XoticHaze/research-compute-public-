@@ -1,0 +1,180 @@
+name: MM-IBKR Operator Snapshot Read Bridge R1
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - rendezvous/fire/mmibkr-operator-snapshot-read-bridge-r1.json
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/mmibkr-operator-snapshot-read-bridge-r1.yml
+      - scripts/mmibkr_operator_snapshot_read_bridge_v1.py
+      - tests/test_mmibkr_operator_snapshot_read_bridge_v1.py
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  OPERATOR_CONSOLE_URL: https://mmibkr-operator-console.slenderiq.workers.dev
+  REQUEST_PATH: rendezvous/fire/mmibkr-operator-snapshot-read-bridge-r1.json
+  EXCHANGE_REF: rendezvous-exchange
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Validate encrypted bridge
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check cryptography==46.0.1
+          python -m py_compile scripts/mmibkr_operator_snapshot_read_bridge_v1.py tests/test_mmibkr_operator_snapshot_read_bridge_v1.py
+          python -m unittest -v tests.test_mmibkr_operator_snapshot_read_bridge_v1
+
+  bridge:
+    if: ${{ github.event_name != 'pull_request' }}
+    needs:
+      - contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CALLER_RUN_ID: ${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Install fixed crypto dependency
+        run: python -m pip install --disable-pip-version-check cryptography==46.0.1
+
+      - name: Validate one-time recipient request
+        run: |
+          set -euo pipefail
+          test -s "$REQUEST_PATH"
+          python - <<'PY'
+          import base64, hashlib, json, os, re
+          from pathlib import Path
+
+          node=json.loads(Path(os.environ["REQUEST_PATH"]).read_text(encoding="utf-8"))
+          if node.get("schema") != "mmibkr.operator_snapshot_read_bridge_request.v1":
+              raise SystemExit("operator bridge request schema mismatch")
+          request_id=str(node.get("request_id") or "")
+          if not re.fullmatch(r"[A-Za-z0-9_-]{12,96}", request_id):
+              raise SystemExit("operator bridge request id rejected")
+          raw=base64.b64decode(str(node.get("recipient_b64") or "").encode("ascii"), validate=True)
+          if len(raw) != 32:
+              raise SystemExit("operator bridge recipient key length rejected")
+          expected="sha256:"+hashlib.sha256(raw).hexdigest()
+          if node.get("recipient_key_id") != expected:
+              raise SystemExit("operator bridge recipient key fingerprint mismatch")
+          print("MMIBKR_OPERATOR_BRIDGE_REQUEST_ID="+request_id)
+          PY
+
+      - name: Read sanitized Cloudflare snapshot with GitHub OIDC
+        run: |
+          set -euo pipefail
+          umask 077
+          raw="$RUNNER_TEMP/mmibkr-operator-machine-read.json"
+          oidc_url="$ACTIONS_ID_TOKEN_REQUEST_URL"
+          if [[ "$oidc_url" == *"?"* ]]; then
+            oidc_url="${oidc_url}&audience=mmibkr-operator-console"
+          else
+            oidc_url="${oidc_url}?audience=mmibkr-operator-console"
+          fi
+          oidc_json="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            -H 'Accept: application/json' \
+            "$oidc_url")"
+          oidc_token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$oidc_json")"
+          unset oidc_json
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $oidc_token" \
+            -H 'Accept: application/json' \
+            -H "X-MMIBKR-Caller-Run-Id: $CALLER_RUN_ID" \
+            "$OPERATOR_CONSOLE_URL/v1/operator-snapshot-read" \
+            > "$raw"
+          unset oidc_token
+          chmod 600 "$raw"
+          echo "MMIBKR_OPERATOR_MACHINE_READ_BYTES=$(wc -c < "$raw")"
+
+      - name: Encrypt snapshot to one-time ChatGPT recipient
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/mmibkr-operator-encrypted-return"
+          python scripts/mmibkr_operator_snapshot_read_bridge_v1.py \
+            --machine-read "$RUNNER_TEMP/mmibkr-operator-machine-read.json" \
+            --request "$REQUEST_PATH" \
+            --output-dir "$RUNNER_TEMP/mmibkr-operator-encrypted-return"
+          rm -f "$RUNNER_TEMP/mmibkr-operator-machine-read.json"
+
+      - name: Publish ciphertext-only return to rendezvous exchange
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/mmibkr-operator-encrypted-return"
+          envelope="$root/operator-snapshot-envelope.json"
+          test -s "$envelope"
+          python - "$envelope" "$root" <<'PY'
+          import base64, json, os, subprocess, sys
+          from pathlib import Path
+
+          envelope_path=Path(sys.argv[1])
+          root=Path(sys.argv[2])
+          node=json.loads(envelope_path.read_text(encoding="utf-8"))
+          repo=os.environ["GITHUB_REPOSITORY"]
+          branch=os.environ["EXCHANGE_REF"]
+          files=[]
+          for chunk in node.get("chunks") or []:
+              path=str(chunk.get("path") or "")
+              local=str(chunk.get("local_name") or "")
+              if not path.startswith("rendezvous/returns/mmibkr-operator-snapshot/"):
+                  raise SystemExit("operator bridge return path rejected")
+              if ".." in path.split("/") or "/" in local:
+                  raise SystemExit("operator bridge return local/path rejected")
+              files.append((path, root/local))
+          response_root="/".join(str((node.get("chunks") or [{}])[0].get("path") or "").split("/")[:-1])
+          if not response_root:
+              raise SystemExit("operator bridge response root missing")
+          files.append((response_root+"/operator-snapshot-envelope.json", envelope_path))
+          for path, local_path in files:
+              encoded=base64.b64encode(local_path.read_bytes()).decode("ascii")
+              existing=subprocess.run(
+                  ["gh","api",f"/repos/{repo}/contents/{path}?ref={branch}"],
+                  text=True,capture_output=True,
+              )
+              if existing.returncode == 0:
+                  raise SystemExit("operator bridge response path already exists")
+              subprocess.run(
+                  [
+                      "gh","api","--method","PUT",f"/repos/{repo}/contents/{path}",
+                      "-f","message=operator: publish encrypted snapshot bridge return",
+                      "-f",f"content={encoded}",
+                      "-f",f"branch={branch}",
+                  ],
+                  check=True,
+                  stdout=subprocess.DEVNULL,
+              )
+          print("MMIBKR_OPERATOR_ENCRYPTED_RETURN_PUBLISHED=1")
+          print("MMIBKR_OPERATOR_PLAINTEXT_PUBLISHED=0")
+          PY
+
+      - name: Destroy plaintext working material
+        if: always()
+        run: |
+          rm -rf \
+            "$RUNNER_TEMP/mmibkr-operator-machine-read.json" \
+            "$RUNNER_TEMP/mmibkr-operator-encrypted-return"
+          echo 'MMIBKR_OPERATOR_BRIDGE_PLAINTEXT_DESTROYED=1'
