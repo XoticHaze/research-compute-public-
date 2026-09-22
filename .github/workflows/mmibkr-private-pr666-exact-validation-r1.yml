@@ -29,7 +29,7 @@ jobs:
       - name: Execute exact private workload against encrypted frozen development corpus
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python scripts/b1_p01_crw_canonical_replay_harness_v1.py
+        run: python scripts/b1_p01_crw_canonical_replay_harness_v2.py
       - uses: actions/upload-artifact@v4
         with:
           name: b1-p01-crw-canonical-replay-receipt
