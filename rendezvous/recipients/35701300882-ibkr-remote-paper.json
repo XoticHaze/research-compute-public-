@@ -1,0 +1,1 @@
+{"authority": "mm_ibkr_paper_runtime", "harness": "mm_ibkr_remote_paper_runtime_v1", "recipient_b64": "ic9sVgWz5GDBo9feTqcdSItc5kO9nnm5FGRbQKiKd3g=", "recipient_key_id": "sha256:f7a61e91619e5fc98d18a9234d67c7e86dd68794a746c72c809168c67c1a96a1", "run_id": "35701300882", "schema": "ibkr-remote-paper-recipient-v1"}
