@@ -162,7 +162,8 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         access = text.index("let accessIdentity", machine)
         publish_section = text[publish:machine]
         machine_section = text[machine:access]
-        self.assertIn("verifyPublisher(request)", publish_section)
+        self.assertIn("verifyPromotionPublisher(request)", publish_section)
+        self.assertNotIn("verifyPublisher(request)", publish_section)
         self.assertIn("validatePromotionCandidateSnapshot", publish_section)
         self.assertIn("broker_mutation_authority: false", publish_section)
         self.assertIn("live_execution_allowed: false", publish_section)
