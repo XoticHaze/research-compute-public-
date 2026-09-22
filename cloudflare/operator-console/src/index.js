@@ -649,8 +649,9 @@ export default {
       }, 200);
     }
 
+    let accessIdentity;
     try {
-      await verifyAccess(request, env);
+      accessIdentity = await verifyAccess(request, env);
     } catch {
       return json({ error: 'access_denied' }, 403);
     }
@@ -663,12 +664,6 @@ export default {
     }
 
     if (request.method === 'POST' && url.pathname === '/api/promotion-review/decision') {
-      let operator;
-      try {
-        operator = await verifyAccess(request, env);
-      } catch {
-        return json({ error: 'access_denied' }, 403);
-      }
       let decision;
       try {
         const raw = await request.text();
@@ -683,7 +678,7 @@ export default {
         new Request('https://operator-state.internal/promotion/decision', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ decision, operator }),
+          body: JSON.stringify({ decision, operator: accessIdentity }),
         }),
       );
       return stored;
