@@ -1831,6 +1831,53 @@ jobs:
               --repo-root /app \
               --restore-archive /checkpoint/latest.tgz
 
+      - name: Validate restored predecessor terminal continuity
+        id: terminal_continuity
+        run: |
+          set -euo pipefail
+          docker run --rm -i \
+            -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro" \
+            "mmibkr-successor-restore-acceptance:$GITHUB_RUN_ID" \
+            python - <<'PY' > "$RUNNER_TEMP/mmibkr-restore-terminal-continuity.env"
+          import json
+          from pathlib import Path
+
+          path = Path(
+              '/app/data/strategy_runtime/selected_runtime_cloud_cycle_v1/terminal_boundaries.json'
+          )
+          if not path.is_file():
+              raise SystemExit('restored predecessor terminal continuity missing')
+          node = json.loads(path.read_text(encoding='utf-8'))
+          if node.get('schema') != 'mmibkr.selected_runtime_cloud_cycle_terminal_ledger.v1':
+              raise SystemExit('restored predecessor terminal continuity schema mismatch')
+          entries = node.get('entries') if isinstance(node.get('entries'), dict) else {}
+          if not entries:
+              raise SystemExit('restored predecessor terminal continuity has no entries')
+          if not all(
+              isinstance(row, dict) and row.get('terminal') is True
+              for row in entries.values()
+          ):
+              raise SystemExit('restored predecessor terminal continuity contains nonterminal entry')
+          for key in (
+              'account_state_included',
+              'positions_included',
+              'orders_included',
+              'credentials_included',
+              'execution_authority_included',
+          ):
+              if node.get(key) is not False:
+                  raise SystemExit(
+                      'restored predecessor terminal continuity safety boundary violated:' + key
+                  )
+          print('ENTRY_COUNT=' + str(len(entries)))
+          PY
+
+          cat "$RUNNER_TEMP/mmibkr-restore-terminal-continuity.env"
+          entry_count="$(sed -n 's/^ENTRY_COUNT=//p' "$RUNNER_TEMP/mmibkr-restore-terminal-continuity.env")"
+          test -n "$entry_count"
+          echo "entry_count=$entry_count" >> "$GITHUB_OUTPUT"
+          echo "MMIBKR_SUCCESSOR_RESTORE_TERMINAL_ENTRY_COUNT=$entry_count"
+
       - name: Rebuild canonical checkpoint plan from restored state
         id: restored_plan
         run: |
@@ -1864,6 +1911,8 @@ jobs:
               raise SystemExit('restored checkpoint plan incomplete')
           if node.get('signal_history_contract_index_included') is not True:
               raise SystemExit('restored signal-history index missing')
+          if node.get('terminal_boundary_continuity_included') is not True:
+              raise SystemExit('restored terminal-boundary continuity missing from checkpoint plan')
           if node.get('missing_required_files') not in ([], None):
               raise SystemExit('restored checkpoint has missing required files')
           files = [row for row in (node.get('files') or []) if isinstance(row, dict)]
@@ -1967,6 +2016,7 @@ jobs:
           FILE_COUNT: ${{ steps.restored_plan.outputs.file_count }}
           SIGNAL_PUBLIC_RUN_ID: ${{ steps.signal_history.outputs.public_run_id }}
           SIGNAL_RUNTIME_COUNT: ${{ steps.signal_history.outputs.runtime_count }}
+          TERMINAL_ENTRY_COUNT: ${{ steps.terminal_continuity.outputs.entry_count }}
         run: |
           set -euo pipefail
           receipt="$RUNNER_TEMP/mmibkr-successor-restore-acceptance-receipt.json"
@@ -1991,6 +2041,8 @@ jobs:
               'canonical_restore_executed': True,
               'canonical_checkpoint_plan_rebuilt': True,
               'signal_history_index_validated': True,
+              'terminal_boundary_continuity_validated': True,
+              'terminal_boundary_entry_count': int(os.environ['TERMINAL_ENTRY_COUNT']),
               'warmup_ready': True,
               'broker_action': False,
               'paper_owner_started': False,
@@ -2037,6 +2089,7 @@ jobs:
             "$RUNNER_TEMP/mmibkr-checkpoint" \
             "$RUNNER_TEMP/mmibkr-verify" \
             "$RUNNER_TEMP/mmibkr-restore-signal-history.env" \
+            "$RUNNER_TEMP/mmibkr-restore-terminal-continuity.env" \
             "$RUNNER_TEMP/mmibkr-successor-restore-acceptance-receipt.json"
           docker image rm "mmibkr-successor-restore-acceptance:$GITHUB_RUN_ID" >/dev/null 2>&1 || true
 
