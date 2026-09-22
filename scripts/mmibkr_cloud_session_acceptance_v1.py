@@ -120,6 +120,27 @@ def evaluate(
             str(node.get("public_head") or "").lower() == expected_public_sha.lower()
         )
 
+    expected_predecessor_key = str(
+        node.get("expected_predecessor_checkpoint_cache_key") or ""
+    ).strip()
+    expected_predecessor_sha256 = str(
+        node.get("expected_predecessor_checkpoint_sha256") or ""
+    ).strip().lower()
+    expected_predecessor_declared = bool(
+        expected_predecessor_key or expected_predecessor_sha256
+    )
+    if expected_predecessor_declared:
+        checks["expected_predecessor_identity_reported"] = (
+            expected_predecessor_key.startswith(CHECKPOINT_CACHE_PREFIX)
+            and is_sha256(expected_predecessor_sha256)
+        )
+        checks["expected_predecessor_restore_match"] = (
+            node.get("expected_predecessor_checkpoint_match") is True
+            and node.get("checkpoint_restored") is True
+            and node.get("checkpoint_restored_cache_key") == expected_predecessor_key
+            and node.get("checkpoint_restored_sha256") == expected_predecessor_sha256
+        )
+
     if require_checkpoint_restored:
         checks["checkpoint_restored"] = node.get("checkpoint_restored") is True
         checks["checkpoint_restored_identity_reported"] = (
