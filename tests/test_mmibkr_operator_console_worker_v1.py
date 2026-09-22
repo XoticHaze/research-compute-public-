@@ -66,7 +66,7 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         start = text.index(route)
         end = text.index("await verifyAccess(request, env)", start)
         section = text[start:end]
-        self.assertIn("verifyPublisher(request)", section)
+        self.assertIn("verifySnapshotReader(request)", section)
         self.assertIn("operator-state.internal/latest", section)
         self.assertIn("validateSnapshot(record.snapshot)", section)
         self.assertIn("mmibkr.operator_console_machine_read.v1", section)
@@ -77,6 +77,26 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertNotIn("/submit", section)
         self.assertNotIn("/flatten", section)
         self.assertNotIn("/cancel", section)
+
+    def test_private_mmibkr_bridge_is_read_only_oidc_reader_not_publisher(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("const ALLOWED_MACHINE_READERS", text)
+        self.assertIn("repository: 'XoticHaze/mm-IBKR'", text)
+        self.assertIn(
+            "XoticHaze/mm-IBKR/.github/workflows/mmibkr-operator-snapshot-bridge-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn("repository_visibility: 'private'", text)
+        publisher_start = text.index("async function verifyPublisher(request)")
+        reader_start = text.index("async function verifySnapshotReader(request)")
+        publisher_section = text[publisher_start:reader_start]
+        self.assertIn("claims.repository_visibility !== 'public'", publisher_section)
+        self.assertNotIn("ALLOWED_MACHINE_READERS", publisher_section)
+        read_route = text.index("url.pathname === '/v1/operator-snapshot-read'")
+        access_gate = text.index("await verifyAccess(request, env)", read_route)
+        read_section = text[read_route:access_gate]
+        self.assertIn("verifySnapshotReader(request)", read_section)
+        self.assertNotIn("verifyPublisher(request)", read_section)
 
     def test_machine_snapshot_read_precedes_human_access_gate(self):
         text = SOURCE.read_text(encoding="utf-8")
