@@ -345,7 +345,7 @@ jobs:
           rm -rf "$input_dir"
           mkdir -p "$input_dir"
 
-          if docker run --rm \
+          if docker run --rm -i \
             -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro" \
             "mmibkr-cloud:${GITHUB_RUN_ID}" \
             python - <<'PY'
@@ -403,7 +403,7 @@ jobs:
               --output /app/data/strategy_runtime/selected_runtime_initial_backfill_v1/latest.json
 
           eval "$(
-            docker run --rm \
+            docker run --rm -i \
               -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro" \
               "mmibkr-cloud:${GITHUB_RUN_ID}" \
               python - <<'PY'
@@ -1191,7 +1191,7 @@ jobs:
               --fleet-receipt /input/ibkr-cloudflare-envelope-receipt.json \
               --output /app/data/strategy_runtime/selected_runtime_initial_backfill_v1/latest.json
 
-          docker run --rm \
+          docker run --rm -i \
             -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro" \
             "mmibkr-checkpoint-acceptance:${GITHUB_RUN_ID}" \
             python - <<'PY' > "$RUNNER_TEMP/mmibkr-checkpoint-acceptance.env"

@@ -49,6 +49,16 @@ class InitialBackfillCanonicalIngestWorkflowTests(unittest.TestCase):
             text.index("- name: Run bounded selected-runtime cloud owner"),
         )
 
+    def test_container_python_heredoc_probes_keep_stdin_attached(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        start = text.index(
+            "- name: Consume proven initial selected-runtime backfill through canonical ingest"
+        )
+        end = text.index("- name: Run bounded selected-runtime cloud owner")
+        section = text[start:end]
+        self.assertGreaterEqual(section.count("docker run --rm -i"), 2)
+        self.assertNotIn("docker run --rm \\\n            -v \"$RUNNER_TEMP/mmibkr-data:/app/data:ro\"", section)
+
     def test_warmup_and_authority_guards_are_fail_closed(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         start = text.index(

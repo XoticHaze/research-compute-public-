@@ -49,6 +49,12 @@ class CheckpointAcceptanceJobTests(unittest.TestCase):
         self.assertIn("needs.route.outputs.mode == 'checkpoint_acceptance'", acceptance)
         self.assertIn("- route", acceptance)
 
+    def test_acceptance_validation_heredoc_keeps_stdin_attached(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        section = text[text.index("  checkpoint_acceptance:"):]
+        self.assertIn("docker run --rm -i", section)
+        self.assertIn("python - <<'PY' > \"$RUNNER_TEMP/mmibkr-checkpoint-acceptance.env\"", section)
+
     def test_acceptance_proves_exact_backfill_checkpoint_roundtrip_without_owner(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         section = text[text.index("  checkpoint_acceptance:"):]
