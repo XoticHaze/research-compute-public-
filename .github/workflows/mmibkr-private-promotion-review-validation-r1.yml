@@ -156,7 +156,7 @@ jobs:
                   with target.open('wb') as out:
                       shutil.copyfileobj(handle, out, length=1024 * 1024)
 
-          for required in ('Dockerfile.bot', 'promotion_review_decision_v1.py', 'status_server.py', 'ui-react/package.json'):
+          for required in ('ui-react/package.json', 'ui-react/src/pages/PromotionReviewPage.jsx', 'ui-react/src/lib/promotionReview.mjs'):
               if not (root / required).is_file():
                   raise SystemExit(f'required private source missing: {required}')
           with Path(os.environ['GITHUB_ENV']).open('a') as fh:
@@ -273,4 +273,4 @@ jobs:
           sudo rm -rf "$RUNNER_TEMP/mmibkr-promotion-review" "$RUNNER_TEMP/mmibkr-promotion-review.tar.gz" "$RUNNER_TEMP"/promotion-review-*.log
           echo 'MMIBKR_PROMOTION_REVIEW_PRIVATE_SOURCE_DESTROYED=1'
 
-# exact-validation-trigger-20260922-r3
+# exact-validation-trigger-20260922-r4
