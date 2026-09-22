@@ -12,7 +12,9 @@
   "inventory_by_runtime": {},
   "data_paths": {},
   "return_schema": "mmibkr.readonly_audit_return_request.v1",
-  "request_id": "mmibkr_gap_audit_20260922_4de8605ec2ab",
-  "recipient_b64": "oD/PjwWfCs7rrzsl9FKZWYJ7vmvysWYDq7rTgJGusFs=",
-  "recipient_key_id": "sha256:aa078399c5cee36bd15ac9bc09394b9059041aea91d45ac02eed00bbdd3412a0"
+  "request_id": "mmibkr_gap_audit_20260922_37a62ce0d956",
+  "recipient_b64": "6BqzMicdRUDngBIlMfmgiJAmp9lCIAmNx4xjMGOrSAc=",
+  "recipient_key_id": "sha256:dd59fc2edc2877bfaa229649ca11a0ece2fb4edd4574a8c9933c2e38d8281cbf",
+  "historical_seed_run_id": "35407829303",
+  "historical_seed_bars_sha256": "88bdec3035d3b40dcf721cccd3a412439cc5b900e7465838774b2de3bfe2b013"
 }
