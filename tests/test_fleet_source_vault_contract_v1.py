@@ -130,6 +130,8 @@ class FleetSourceVaultContractTests(unittest.TestCase):
     def test_private_pr_validation_uses_exact_pr665_suite_without_public_test_log(self):
         workflow = (ROOT / ".github" / "workflows" / "mmibkr-private-pr-exact-validation-r1.yml").read_text(encoding="utf-8")
         self.assertIn("Validate exact private PR 665 position-state contracts", workflow)
+        self.assertIn("MMIBKR_PRIVATE_PR665_EXACT_IMAGE_READY=1", workflow)
+        self.assertIn("ENABLE_LIVE_TRADING=0", workflow)
         self.assertIn("tests.test_strategy_registry_position_state_forwarding_v1", workflow)
         self.assertIn("tests.test_snapshot_ib_adapter_position_state_v1", workflow)
         self.assertIn('>"$log" 2>&1', workflow)
