@@ -1,14 +1,14 @@
 {
   "source_ref": "d81df85788ebb6be6d4d69b9b9a537be96f16507",
-  "session_seconds": "1800",
-  "max_cycles": "1",
-  "self_handoff": false,
-  "requested_by": "assistant-reconciled-terminal-signal-successor-proof-r2",
+  "session_seconds": "18000",
+  "max_cycles": "0",
+  "self_handoff": true,
+  "requested_by": "assistant-resume-steady-paper-forward-after-continuity-proof",
   "source_public_run_id": "35407829303",
-  "expected_checkpoint_cache_key": "mmibkr-selected-runtime-cloud-checkpoint-v1-35692127554-d81df85788ebb6be6d4d69b9b9a537be96f16507-signal-history-reconciled",
-  "expected_checkpoint_sha256": "093672be02bd98a8d5b6e2d7cae8056ca290d18b22d5224cf42564d892230a90",
+  "expected_checkpoint_cache_key": "mmibkr-selected-runtime-cloud-checkpoint-v1-35692649864-d81df85788ebb6be6d4d69b9b9a537be96f16507",
+  "expected_checkpoint_sha256": "abe941335b8c2ac03ae16b26210fba07877e06622b1f5f2cd9b45eb6b8706e0f",
   "require_terminal_continuity": true,
-  "expected_signal_history_reconciliation_run": "35692127554",
-  "purpose": "restore_reconciled_terminal_plus_signal_checkpoint_and_run_one_paper_cycle_with_valid_cycle_budget",
-  "minimum_cycle_budget_note": "daemon default min cycle budget is 1200s; session is intentionally 1800s"
+  "predecessor_proof_run": "35692649864",
+  "predecessor_v2_receipt_accepted": true,
+  "purpose": "resume_normal_long_running_paper_forward_owner_from_proven_v2_successor_checkpoint"
 }
