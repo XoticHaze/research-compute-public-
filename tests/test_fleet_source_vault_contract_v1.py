@@ -136,7 +136,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn('rm -f "$log"', workflow)
         self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
         self.assertIn("MMIBKR_PRIVATE_PR_SAFE_DIAGNOSTIC=", workflow)
-        self.assertNotIn("cat \\"$log\\"", workflow)
+        self.assertNotIn('cat "$log"', workflow)
 
     def test_private_pr666_validation_is_isolated_exact_sha_expiring_and_archive_only(self):
         text = SOURCE.read_text(encoding="utf-8")
