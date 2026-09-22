@@ -8,8 +8,9 @@
     "MNQ@2026-09-16T16:59:00+00:00",
     "MNQ@2026-09-17T16:59:00+00:00"
   ],
-  "requested_by": "assistant-signal-history-metadata-reconciliation",
+  "requested_by": "assistant-signal-history-metadata-reconciliation-r2",
   "purpose": "preserve_forward_bars_and_add_validated_signal_history_metadata",
+  "attempt": "r2-isolated-conflict-mount",
   "broker_action": false,
   "paper_owner_started": false,
   "live_execution_allowed": false,
