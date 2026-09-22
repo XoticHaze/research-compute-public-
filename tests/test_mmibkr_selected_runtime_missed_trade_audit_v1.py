@@ -103,6 +103,66 @@ class MissedTradeAuditContractTests(unittest.TestCase):
             paths,
         )
 
+    def test_seed_prefix_preserves_restored_overlap(self):
+        import pandas as pd
+
+        restored = pd.DataFrame({
+            "timestamp": pd.to_datetime(
+                ["2026-09-16T00:02:00Z", "2026-09-16T00:03:00Z"],
+                utc=True,
+            ),
+            "open": [20.0, 30.0],
+            "high": [21.0, 31.0],
+            "low": [19.0, 29.0],
+            "close": [20.5, 30.5],
+            "volume": [200, 300],
+        })
+        seed = [
+            {
+                "symbol": "MNQ",
+                "bar_size": "1 min",
+                "timestamp": "2026-09-16T00:00:00Z",
+                "open": 1.0, "high": 2.0, "low": 0.5, "close": 1.5, "volume": 10,
+            },
+            {
+                "symbol": "MNQ",
+                "bar_size": "1 min",
+                "timestamp": "2026-09-16T00:02:00Z",
+                "open": 999.0, "high": 999.0, "low": 999.0, "close": 999.0, "volume": 999,
+            },
+        ]
+        combined, count = audit._prepend_seed_history(
+            restored,
+            seed_rows=seed,
+            symbol="MNQ",
+            source_timeframe="1Min",
+            source=Path("/tmp/seed.jsonl"),
+        )
+        self.assertEqual(count, 1)
+        self.assertEqual(len(combined), 3)
+        overlap = combined.loc[
+            combined["timestamp"] == pd.Timestamp("2026-09-16T00:02:00Z"),
+            "close",
+        ].iloc[0]
+        self.assertEqual(float(overlap), 20.5)
+
+    def test_summary_reports_stale_runtime_filter_latest(self):
+        summary = audit._summary([
+            {
+                "runtime_id": "crw_amat_15m_selected",
+                "decision": "NO_SIGNAL",
+                "latest_bar_decision": "SIGNAL_FILTER_BLOCKED",
+                "filter_latest_bar_truth": {
+                    "runtime_filtered_latest_is_stale": True,
+                },
+                "latest_bar_would_have_reached_paper_quote_stage": False,
+                "actual_owner_present": False,
+            }
+        ])
+        node = summary["crw_amat_15m_selected"]
+        self.assertEqual(node["runtime_filtered_latest_stale"], 1)
+        self.assertEqual(node["latest_bar_signal_filter_blocked"], 1)
+
     def test_public_summary_excludes_rows(self):
         summary = audit.render_public_summary(
             {
