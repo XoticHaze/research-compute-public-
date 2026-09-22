@@ -57,6 +57,22 @@ class CloudSessionReceiptTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.text)
 
+    def test_v2_receipt_is_self_enforced_before_successor_queue(self):
+        start = self.text.index("- name: Publish sanitized cloud-session receipt")
+        enforce = self.text.index(
+            "- name: Enforce sanitized v2 cloud-session receipt acceptance"
+        )
+        queue = self.text.index("- name: Queue successor bounded session")
+        self.assertLess(start, enforce)
+        self.assertLess(enforce, queue)
+        section = self.text[enforce:queue]
+        self.assertIn("scripts/mmibkr_cloud_session_acceptance_v1.py", section)
+        self.assertIn("--receipt \"$RUNNER_TEMP/mmibkr-cloud-session-receipt.json\"", section)
+        self.assertIn("--mode first-post-fix", section)
+        self.assertIn("--expected-public-sha \"$GITHUB_SHA\"", section)
+        self.assertIn("--expected-private-sha \"$PRIVATE_HEAD\"", section)
+        self.assertIn("MMIBKR_CLOUD_V2_RECEIPT_ACCEPTED=1", section)
+
     def test_durable_receipt_remains_sanitized(self):
         start = self.text.index("- name: Publish sanitized cloud-session receipt")
         end = self.text.index("- name: Queue successor bounded session")
