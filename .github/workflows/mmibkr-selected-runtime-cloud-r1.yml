@@ -28,6 +28,7 @@ on:
       - main
     paths:
       - rendezvous/fire/mmibkr-selected-runtime-cloud-r1
+      - rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1
   pull_request:
     branches:
       - main
@@ -42,6 +43,7 @@ on:
       - tests/test_mmibkr_cloud_session_acceptance_v1.py
       - tests/test_mmibkr_initial_backfill_ingest_workflow_v1.py
       - tests/test_mmibkr_initial_backfill_preowner_checkpoint_v1.py
+      - tests/test_mmibkr_checkpoint_acceptance_job_v1.py
       - scripts/mmibkr_cloud_session_acceptance_v1.py
       - scripts/mmibkr_operator_snapshot_publish_v1.py
       - tests/test_mmibkr_operator_snapshot_publish_helper_v1.py
@@ -89,6 +91,7 @@ jobs:
             tests/test_mmibkr_cloud_session_acceptance_v1.py \
             tests/test_mmibkr_initial_backfill_ingest_workflow_v1.py \
             tests/test_mmibkr_initial_backfill_preowner_checkpoint_v1.py \
+            tests/test_mmibkr_checkpoint_acceptance_job_v1.py \
             scripts/mmibkr_cloud_session_acceptance_v1.py \
             scripts/mmibkr_operator_snapshot_publish_v1.py \
             tests/test_mmibkr_operator_snapshot_publish_helper_v1.py
@@ -102,10 +105,11 @@ jobs:
             tests.test_mmibkr_cloud_session_acceptance_v1 \
             tests.test_mmibkr_initial_backfill_ingest_workflow_v1 \
             tests.test_mmibkr_initial_backfill_preowner_checkpoint_v1 \
+            tests.test_mmibkr_checkpoint_acceptance_job_v1 \
             tests.test_mmibkr_operator_snapshot_publish_helper_v1
 
   runtime:
-    if: ${{ github.event_name != 'pull_request' }}
+    if: ${{ github.event_name != 'pull_request' && !(github.event_name == 'push' && (contains(github.event.head_commit.added, 'rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1') || contains(github.event.head_commit.modified, 'rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1'))) }}
     needs: contract
     environment: ibkr-paper-runtime-r1
     runs-on: ubuntu-24.04
@@ -1022,3 +1026,349 @@ jobs:
             fi
           done
           echo 'MMIBKR_PRIVATE_RUNTIME_MATERIAL_DESTROYED=1'
+
+
+  checkpoint_acceptance:
+    if: ${{ github.event_name == 'push' && (contains(github.event.head_commit.added, 'rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1') || contains(github.event.head_commit.modified, 'rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1')) }}
+    needs: contract
+    environment: ibkr-paper-runtime-r1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    concurrency:
+      group: mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CANONICAL_SOURCE_REF: d81df85788ebb6be6d4d69b9b9a537be96f16507
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Install fixed source-vault dependency
+        run: python -m pip install --disable-pip-version-check cryptography==46.0.1
+
+      - name: Materialize exact private MM-IBKR source for finite checkpoint acceptance
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/mmibkr-source"
+          python scripts/mmibkr_source_vault_consumer_v1.py \
+            --authority-base "$FLEET_AUTHORITY_BASE" \
+            --run-id "$GITHUB_RUN_ID" \
+            --source-sha "$CANONICAL_SOURCE_REF" \
+            --public-repo XoticHaze/mm-ibkr-runtime \
+            --public-branch mmibkr-source-vault \
+            --destination "$RUNNER_TEMP/mmibkr-source/extracted" \
+            --archive-output "$RUNNER_TEMP/mmibkr-source/mm-ibkr-source.tar.gz" \
+            --output "$RUNNER_TEMP/mmibkr-source/materialization-host.json"
+
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          root = Path(os.environ['RUNNER_TEMP']) / 'mmibkr-source'
+          node = json.loads((root / 'materialization-host.json').read_text(encoding='utf-8'))
+          if node.get('ok') is not True:
+              raise SystemExit('source materialization not ok')
+          if node.get('source_sha') != os.environ['CANONICAL_SOURCE_REF']:
+              raise SystemExit('private source SHA mismatch')
+          if node.get('source_transport') != 'fleet_authority_exact_sha_encrypted_snapshot_vault':
+              raise SystemExit('reusable encrypted source-vault transport required')
+          if node.get('private_repository_token_used') is not False:
+              raise SystemExit('private repository token unexpectedly used')
+          if node.get('broker_credentials_used') is not False:
+              raise SystemExit('broker credentials unexpectedly used')
+          if node.get('plaintext_emitted') is not False:
+              raise SystemExit('plaintext source emission contract violated')
+          if node.get('live_execution_allowed') is not False:
+              raise SystemExit('live execution authority unexpectedly enabled')
+
+          source_root = Path(node['source_root'])
+          if not (source_root / 'Dockerfile.bot').is_file():
+              raise SystemExit('materialized source layout incomplete')
+          with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
+              fh.write('PRIVATE_HEAD=' + node['source_sha'] + '\n')
+              fh.write('PRIVATE_SOURCE_ROOT=' + str(source_root) + '\n')
+          print('MMIBKR_CHECKPOINT_ACCEPTANCE_PRIVATE_HEAD=' + node['source_sha'])
+          PY
+
+      - name: Build exact private MM-IBKR image for finite checkpoint acceptance
+        run: |
+          set -euo pipefail
+          docker build \
+            -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" \
+            --target bot \
+            -t "mmibkr-checkpoint-acceptance:${GITHUB_RUN_ID}" \
+            "$PRIVATE_SOURCE_ROOT" >/dev/null
+
+      - name: Validate exact private ingest and checkpoint owners
+        run: |
+          set -euo pipefail
+          docker run --rm "mmibkr-checkpoint-acceptance:${GITHUB_RUN_ID}" \
+            python -m unittest -v \
+              tests.test_selected_runtime_initial_backfill_ingest_v1 \
+              tests.test_selected_runtime_signal_history_contract_v1 \
+              tests.test_runtime_market_data_cache_checkpoint_v1
+
+      - name: Prepare finite acceptance directories
+        run: |
+          set -euo pipefail
+          mkdir -p \
+            "$RUNNER_TEMP/mmibkr-data" \
+            "$RUNNER_TEMP/mmibkr-checkpoint" \
+            "$RUNNER_TEMP/mmibkr-initial-backfill"
+
+      - name: Download exact proven B1 coverage artifact
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/mmibkr-initial-backfill"
+          gh run download "$INITIAL_BACKFILL_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$INITIAL_BACKFILL_ARTIFACT" \
+            --dir "$input"
+          for name in \
+            ibkr-cloudflare-envelope-receipt.json \
+            ibkr-post-auth-handoff.json \
+            ibkr-forward-bars-v2.jsonl; do
+            test -s "$input/$name"
+          done
+          echo "MMIBKR_CHECKPOINT_ACCEPTANCE_ARTIFACT_DOWNLOADED=1"
+
+      - name: Apply exact historical artifact through canonical private ingest
+        id: acceptance_ingest
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/mmibkr-initial-backfill"
+          docker run --rm \
+            -v "$RUNNER_TEMP/mmibkr-data:/app/data" \
+            -v "$input:/input:ro" \
+            "mmibkr-checkpoint-acceptance:${GITHUB_RUN_ID}" \
+            python scripts/operator/selected_runtime_initial_backfill_ingest_v1.py \
+              --repo-root /app \
+              --data-root /app/data \
+              --bars /input/ibkr-forward-bars-v2.jsonl \
+              --handoff /input/ibkr-post-auth-handoff.json \
+              --fleet-receipt /input/ibkr-cloudflare-envelope-receipt.json \
+              --output /app/data/strategy_runtime/selected_runtime_initial_backfill_v1/latest.json
+
+          docker run --rm \
+            -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro" \
+            "mmibkr-checkpoint-acceptance:${GITHUB_RUN_ID}" \
+            python - <<'PY' > "$RUNNER_TEMP/mmibkr-checkpoint-acceptance.env"
+          import json
+          from pathlib import Path
+
+          node = json.loads(
+              Path('/app/data/strategy_runtime/selected_runtime_initial_backfill_v1/latest.json')
+              .read_text(encoding='utf-8')
+          )
+          if node.get('schema') != 'mmibkr.selected_runtime_initial_backfill_ingest.v1':
+              raise SystemExit('initial backfill ingest schema mismatch')
+          if node.get('ok') is not True or node.get('all_warmups_ready') is not True:
+              raise SystemExit('initial backfill warmup incomplete')
+          artifact = node.get('artifact') if isinstance(node.get('artifact'), dict) else {}
+          if str(artifact.get('public_run_id') or '') != '35407829303':
+              raise SystemExit('initial backfill public run mismatch')
+          symbols = node.get('symbols') if isinstance(node.get('symbols'), dict) else {}
+          if set(symbols) != {'AMAT', 'APH', 'MNQ'}:
+              raise SystemExit('initial backfill symbol coverage mismatch')
+          requirements = {
+              'AMAT': ('target_rows', 400),
+              'APH': ('target_rows', 400),
+              'MNQ': ('source_rows', 4800),
+          }
+          for symbol, (field, minimum) in requirements.items():
+              if int(symbols[symbol].get(field) or 0) < minimum:
+                  raise SystemExit(f'{symbol} {field} below required warmup')
+              warmup = symbols[symbol].get('warmup')
+              if not isinstance(warmup, dict) or warmup.get('ready') is not True:
+                  raise SystemExit(f'{symbol} warmup not ready')
+          if int(symbols['MNQ'].get('target_rows') or 0) < 400:
+              raise SystemExit('MNQ target_rows below required warmup')
+          if node.get('broker_action') is not False:
+              raise SystemExit('broker action boundary violated')
+          if node.get('runtime_execution_contract_mutated') is not False:
+              raise SystemExit('execution contract mutation boundary violated')
+          if node.get('live_execution_allowed') is not False:
+              raise SystemExit('live execution boundary violated')
+
+          print('AMAT_TARGET_ROWS=' + str(int(symbols['AMAT'].get('target_rows') or 0)))
+          print('APH_TARGET_ROWS=' + str(int(symbols['APH'].get('target_rows') or 0)))
+          print('MNQ_SOURCE_ROWS=' + str(int(symbols['MNQ'].get('source_rows') or 0)))
+          print('MNQ_TARGET_ROWS=' + str(int(symbols['MNQ'].get('target_rows') or 0)))
+          print('BARS_SHA256=' + str(artifact.get('bars_sha256') or ''))
+          PY
+
+          cat "$RUNNER_TEMP/mmibkr-checkpoint-acceptance.env"
+          while IFS='=' read -r key value; do
+            case "$key" in
+              AMAT_TARGET_ROWS|APH_TARGET_ROWS|MNQ_SOURCE_ROWS|MNQ_TARGET_ROWS|BARS_SHA256)
+                echo "${key,,}=$value" >> "$GITHUB_OUTPUT"
+                ;;
+            esac
+          done < "$RUNNER_TEMP/mmibkr-checkpoint-acceptance.env"
+          echo 'MMIBKR_CHECKPOINT_ACCEPTANCE_CANONICAL_INGEST=accepted'
+
+      - name: Build sanitized successor checkpoint
+        id: acceptance_checkpoint
+        run: |
+          set -euo pipefail
+          uid="$(id -u)"
+          gid="$(id -g)"
+          checkpoint="$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+          rm -f "$checkpoint"
+
+          docker run --rm \
+            -v "$RUNNER_TEMP/mmibkr-data:/app/data" \
+            -v "$RUNNER_TEMP/mmibkr-checkpoint:/checkpoint" \
+            "mmibkr-checkpoint-acceptance:${GITHUB_RUN_ID}" \
+            python scripts/operator/runtime_market_data_cache_checkpoint_v1.py \
+              --repo-root /app \
+              --data-root /app/data \
+              --archive-output /checkpoint/latest.tgz
+
+          docker run --rm \
+            -v "$RUNNER_TEMP/mmibkr-checkpoint:/checkpoint" \
+            "mmibkr-checkpoint-acceptance:${GITHUB_RUN_ID}" \
+            sh -lc "chown ${uid}:${gid} /checkpoint/latest.tgz && chmod 600 /checkpoint/latest.tgz"
+
+          test -r "$checkpoint"
+          sha256="$(sha256sum "$checkpoint" | awk '{print $1}')"
+          echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
+          echo "MMIBKR_CHECKPOINT_ACCEPTANCE_BUILT_SHA256=$sha256"
+
+      - name: Save checkpoint
+        uses: actions/cache/save@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        with:
+          path: ${{ runner.temp }}/mmibkr-checkpoint
+          key: ${{ env.CHECKPOINT_CACHE_PREFIX }}${{ github.run_id }}-${{ env.PRIVATE_HEAD }}-backfill-checkpoint-acceptance
+
+      - name: Delete local checkpoint copy
+        run: |
+          set -euo pipefail
+          rm -f "$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+          test ! -e "$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+          echo "MMIBKR_CHECKPOINT_ACCEPTANCE_LOCAL_COPY_DELETED=1"
+
+      - name: Restore exact saved checkpoint
+        id: acceptance_restore
+        uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        with:
+          path: ${{ runner.temp }}/mmibkr-checkpoint
+          key: ${{ env.CHECKPOINT_CACHE_PREFIX }}${{ github.run_id }}-${{ env.PRIVATE_HEAD }}-backfill-checkpoint-acceptance
+          fail-on-cache-miss: true
+
+      - name: Verify exact restored SHA256
+        id: acceptance_verify
+        env:
+          EXPECTED_SHA256: ${{ steps.acceptance_checkpoint.outputs.sha256 }}
+          CACHE_HIT: ${{ steps.acceptance_restore.outputs.cache-hit }}
+          CACHE_KEY: ${{ env.CHECKPOINT_CACHE_PREFIX }}${{ github.run_id }}-${{ env.PRIVATE_HEAD }}-backfill-checkpoint-acceptance
+        run: |
+          set -euo pipefail
+          checkpoint="$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+          test "$CACHE_HIT" = 'true'
+          test -r "$checkpoint"
+          actual="$(sha256sum "$checkpoint" | awk '{print $1}')"
+          test "$actual" = "$EXPECTED_SHA256"
+          echo "sha256=$actual" >> "$GITHUB_OUTPUT"
+          echo "cache_key=$CACHE_KEY" >> "$GITHUB_OUTPUT"
+          echo "MMIBKR_CHECKPOINT_ACCEPTANCE_RESTORED_SHA256=$actual"
+          echo "MMIBKR_CHECKPOINT_ACCEPTANCE_EXACT_ROUNDTRIP=1"
+
+      - name: Publish sanitized checkpoint acceptance receipt
+        env:
+          CHECKPOINT_SHA256: ${{ steps.acceptance_verify.outputs.sha256 }}
+          CHECKPOINT_CACHE_KEY: ${{ steps.acceptance_verify.outputs.cache_key }}
+          AMAT_TARGET_ROWS: ${{ steps.acceptance_ingest.outputs.amat_target_rows }}
+          APH_TARGET_ROWS: ${{ steps.acceptance_ingest.outputs.aph_target_rows }}
+          MNQ_SOURCE_ROWS: ${{ steps.acceptance_ingest.outputs.mnq_source_rows }}
+          MNQ_TARGET_ROWS: ${{ steps.acceptance_ingest.outputs.mnq_target_rows }}
+          BARS_SHA256: ${{ steps.acceptance_ingest.outputs.bars_sha256 }}
+        run: |
+          set -euo pipefail
+          receipt="$RUNNER_TEMP/mmibkr-checkpoint-acceptance-receipt.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          node = {
+              'schema': 'mmibkr.backfill_checkpoint_acceptance.v1',
+              'ok': True,
+              'run_id': os.environ['GITHUB_RUN_ID'],
+              'public_head': os.environ['GITHUB_SHA'],
+              'private_head': os.environ['PRIVATE_HEAD'],
+              'source_public_run_id': os.environ['INITIAL_BACKFILL_RUN_ID'],
+              'source_artifact': os.environ['INITIAL_BACKFILL_ARTIFACT'],
+              'bars_sha256': os.environ['BARS_SHA256'],
+              'coverage': {
+                  'AMAT': {'target_rows': int(os.environ['AMAT_TARGET_ROWS'])},
+                  'APH': {'target_rows': int(os.environ['APH_TARGET_ROWS'])},
+                  'MNQ': {
+                      'source_rows': int(os.environ['MNQ_SOURCE_ROWS']),
+                      'target_rows': int(os.environ['MNQ_TARGET_ROWS']),
+                  },
+              },
+              'checkpoint_cache_key': os.environ['CHECKPOINT_CACHE_KEY'],
+              'checkpoint_sha256': os.environ['CHECKPOINT_SHA256'],
+              'local_copy_deleted_before_restore': True,
+              'exact_saved_checkpoint_restored': True,
+              'exact_sha256_verified': True,
+              'broker_action': False,
+              'paper_owner_started': False,
+              'runtime_execution_contract_mutated': False,
+              'live_execution_allowed': False,
+              'credentials_included': False,
+              'private_source_included': False,
+          }
+          Path(os.environ['RUNNER_TEMP'], 'mmibkr-checkpoint-acceptance-receipt.json').write_text(
+              json.dumps(node, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+
+          content="$(base64 -w0 "$receipt")"
+          path="${RECEIPT_ROOT}/${GITHUB_RUN_ID}-mmibkr-backfill-checkpoint-acceptance.json"
+          gh api --method PUT "/repos/${GITHUB_REPOSITORY}/contents/${path}" \
+            -f "message=runtime: publish sanitized backfill checkpoint acceptance receipt" \
+            -f "content=${content}" \
+            -f "branch=${EXCHANGE_REF}" >/dev/null
+          echo "MMIBKR_CHECKPOINT_ACCEPTANCE_RECEIPT_PATH=$path"
+
+      - name: Destroy finite acceptance private runtime material
+        if: always()
+        run: |
+          set +e
+          uid="$(id -u)"
+          gid="$(id -g)"
+          if docker image inspect "mmibkr-checkpoint-acceptance:${GITHUB_RUN_ID}" >/dev/null 2>&1; then
+            docker run --rm \
+              -v "$RUNNER_TEMP/mmibkr-data:/cleanup-data" \
+              -v "$RUNNER_TEMP/mmibkr-checkpoint:/cleanup-checkpoint" \
+              "mmibkr-checkpoint-acceptance:${GITHUB_RUN_ID}" \
+              sh -lc "chown -R ${uid}:${gid} /cleanup-data /cleanup-checkpoint" \
+              >/dev/null 2>&1 || true
+          fi
+          rm -rf \
+            "$RUNNER_TEMP/mmibkr-source" \
+            "$RUNNER_TEMP/mmibkr-data" \
+            "$RUNNER_TEMP/mmibkr-checkpoint" \
+            "$RUNNER_TEMP/mmibkr-initial-backfill" \
+            "$RUNNER_TEMP/mmibkr-checkpoint-acceptance.env" \
+            "$RUNNER_TEMP/mmibkr-checkpoint-acceptance-receipt.json"
+          docker image rm "mmibkr-checkpoint-acceptance:${GITHUB_RUN_ID}" >/dev/null 2>&1 || true
+
+          for path in \
+            "$RUNNER_TEMP/mmibkr-source" \
+            "$RUNNER_TEMP/mmibkr-data" \
+            "$RUNNER_TEMP/mmibkr-checkpoint" \
+            "$RUNNER_TEMP/mmibkr-initial-backfill"; do
+            if [ -e "$path" ]; then
+              echo "checkpoint acceptance cleanup residue: $path" >&2
+              exit 1
+            fi
+          done
+          echo "MMIBKR_CHECKPOINT_ACCEPTANCE_PRIVATE_RUNTIME_MATERIAL_DESTROYED=1"
