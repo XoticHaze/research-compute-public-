@@ -69,6 +69,7 @@ on:
       - tests/test_mmibkr_successor_restore_acceptance_job_v1.py
       - tests/test_mmibkr_signal_history_metadata_reconcile_v1.py
       - tests/test_mmibkr_signal_history_reconciliation_job_v1.py
+      - tests/test_mmibkr_owner_cycle_budget_guard_v1.py
       - scripts/mmibkr_cloud_session_acceptance_v1.py
       - scripts/mmibkr_signal_history_metadata_reconcile_v1.py
       - scripts/mmibkr_operator_snapshot_publish_v1.py
@@ -188,6 +189,7 @@ jobs:
             tests/test_mmibkr_successor_restore_acceptance_job_v1.py \
             tests/test_mmibkr_signal_history_metadata_reconcile_v1.py \
             tests/test_mmibkr_signal_history_reconciliation_job_v1.py \
+            tests/test_mmibkr_owner_cycle_budget_guard_v1.py \
             scripts/mmibkr_cloud_session_acceptance_v1.py \
             scripts/mmibkr_signal_history_metadata_reconcile_v1.py \
             scripts/mmibkr_operator_snapshot_publish_v1.py \
@@ -206,6 +208,7 @@ jobs:
             tests.test_mmibkr_successor_restore_acceptance_job_v1 \
             tests.test_mmibkr_signal_history_metadata_reconcile_v1 \
             tests.test_mmibkr_signal_history_reconciliation_job_v1 \
+            tests.test_mmibkr_owner_cycle_budget_guard_v1 \
             tests.test_mmibkr_operator_snapshot_publish_helper_v1
 
   runtime:
@@ -271,8 +274,10 @@ jobs:
               if isinstance(raw_handoff, bool)
               else str(raw_handoff).strip().lower() in {'1', 'true', 'yes', 'on'}
           )
-          if session_seconds < 900 or session_seconds > 18000:
-              raise SystemExit('session_seconds must be 900..18000')
+          if session_seconds < 1200 or session_seconds > 18000:
+              raise SystemExit(
+                  'session_seconds must be 1200..18000 so the private daemon can enter at least one cycle'
+              )
           if max_cycles < 0 or max_cycles > 1000:
               raise SystemExit('max_cycles must be 0..1000')
 
