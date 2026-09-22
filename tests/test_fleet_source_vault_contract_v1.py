@@ -113,7 +113,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            "6f3e63e244100afc69cac7ba605e8a5cb9b1c366",
+            "aac81518231e776c28c646d974473c631d6e3a05",
             text,
         )
         self.assertIn("PRIVATE_PR_EXACT_VALIDATION_EXPIRES_AT", text)
@@ -128,12 +128,12 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
 
-    def test_private_pr_validation_uses_exact_pr662_suite_without_public_test_log(self):
+    def test_private_pr_validation_uses_exact_pr668_suite_without_public_test_log(self):
         workflow = (ROOT / ".github" / "workflows" / "mmibkr-private-pr-exact-validation-r1.yml").read_text(encoding="utf-8")
-        self.assertIn("Build exact private bot image for PR 662 validation", workflow)
-        self.assertIn("Validate exact private PR 662 operator backend contracts", workflow)
-        self.assertIn("Validate exact private PR 662 Bot Console acceptance and production build", workflow)
-        self.assertIn("MMIBKR_PRIVATE_PR662_EXACT_IMAGE_READY=1", workflow)
+        self.assertIn("Build exact private bot image for PR 668 validation", workflow)
+        self.assertIn("Validate exact private PR 668 operator backend contracts", workflow)
+        self.assertIn("Validate exact private PR 668 Bot Console acceptance and production build", workflow)
+        self.assertIn("MMIBKR_PRIVATE_PR668_EXACT_IMAGE_READY=1", workflow)
         self.assertIn("ENABLE_LIVE_TRADING=0", workflow)
         self.assertIn("tests.test_cloud_operator_snapshot_v1", workflow)
         self.assertIn("tests.test_crw_operator_context_projection_v1", workflow)
