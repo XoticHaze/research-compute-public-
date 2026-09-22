@@ -57,6 +57,56 @@ def _conflict_token(symbol: str, timestamp: str) -> str:
     return f"{str(symbol).strip().upper()}@{str(timestamp).strip()}"
 
 
+def write_conflict_diagnostic(
+    *,
+    conflicts: list[dict[str, Any]],
+    expected_tokens: list[str],
+    expected_public_run_id: str,
+    output_path: str | Path | None,
+) -> dict[str, Any] | None:
+    if not output_path:
+        return None
+    path = Path(output_path).resolve()
+    tokens = sorted(
+        {
+            _conflict_token(row.get("symbol") or "", row.get("timestamp") or "")
+            for row in conflicts
+        }
+    )
+    expected = sorted(
+        {str(value).strip() for value in expected_tokens if str(value).strip()}
+    )
+    by_symbol: dict[str, int] = {}
+    for row in conflicts:
+        symbol = str(row.get("symbol") or "").strip().upper()
+        by_symbol[symbol] = by_symbol.get(symbol, 0) + 1
+    node = {
+        "schema": "mmibkr.signal_history_conflict_diagnostic.v1",
+        "ok": True,
+        "source_public_run_id": str(expected_public_run_id),
+        "conflict_count": len(conflicts),
+        "conflict_tokens": tokens,
+        "expected_conflict_tokens": expected,
+        "expected_conflict_set_match": set(tokens) == set(expected),
+        "conflicts_by_symbol": by_symbol,
+        "conflicts": conflicts,
+        "conflict_policy": "preserve_existing_canonical_forward_cache",
+        "market_data_cache_mutated": False,
+        "artifact_bars_written_to_real_cache": False,
+        "execution_authority_mutated": False,
+        "broker_action": False,
+        "paper_owner_started": False,
+        "live_execution_allowed": False,
+        "credentials_included": False,
+        "account_state_included": False,
+        "positions_included": False,
+        "orders_included": False,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(node, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return node
+
+
 def validate_expected_conflicts(
     conflicts: list[dict[str, Any]],
     expected_tokens: list[str],
@@ -114,6 +164,7 @@ def reconcile(
     expected_public_run_id: str,
     expected_conflicts: list[str],
     output_path: str | Path,
+    conflicts_output_path: str | Path | None = None,
 ) -> dict[str, Any]:
     # Private imports are lazy by design so public CI can compile/test this helper
     # without carrying private runtime modules.
@@ -392,6 +443,12 @@ def reconcile(
             "signal_history_contract_public_run_id": str(expected_public_run_id),
         }
 
+    write_conflict_diagnostic(
+        conflicts=conflicts,
+        expected_tokens=expected_conflicts,
+        expected_public_run_id=str(expected_public_run_id),
+        output_path=conflicts_output_path,
+    )
     validate_expected_conflicts(conflicts, expected_conflicts)
 
     target_index = real_data / RELATIVE_PATH
@@ -475,6 +532,11 @@ def main() -> int:
         help="Optional JSON file containing the exact conflict-token list.",
     )
     parser.add_argument("--output", required=True)
+    parser.add_argument(
+        "--conflicts-output",
+        default="",
+        help="Optional JSON diagnostic written before the exact conflict-set gate.",
+    )
     args = parser.parse_args()
 
     expected_conflicts = list(args.expected_conflict or [])
@@ -494,6 +556,7 @@ def main() -> int:
         expected_public_run_id=args.expected_public_run_id,
         expected_conflicts=expected_conflicts,
         output_path=args.output,
+        conflicts_output_path=args.conflicts_output or None,
     )
     print("MMIBKR_SIGNAL_HISTORY_RECONCILIATION=" + json.dumps(result, sort_keys=True))
     return 0 if result.get("ok") is True else 2
