@@ -93,6 +93,10 @@ jobs:
               raise SystemExit("canonical exact checkpoint key required")
           if not re.fullmatch(r"[0-9a-f]{64}", sha):
               raise SystemExit("exact checkpoint SHA256 required")
+          if str(node.get("historical_seed_run_id") or "") != "35407829303":
+              raise SystemExit("validated historical seed run identity required")
+          if str(node.get("historical_seed_bars_sha256") or "").lower() != "88bdec3035d3b40dcf721cccd3a412439cc5b900e7465838774b2de3bfe2b013":
+              raise SystemExit("validated historical seed bars SHA256 required")
           if node.get("return_schema") != "mmibkr.readonly_audit_return_request.v1":
               raise SystemExit("encrypted return contract required")
           request_id=str(node.get("request_id") or "")
