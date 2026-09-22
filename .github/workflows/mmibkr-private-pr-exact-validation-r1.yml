@@ -226,38 +226,93 @@ jobs:
           print('MMIBKR_PRIVATE_SOURCE_TOKEN_EXPOSED=0')
           PY
 
-      - name: Build exact private bot image
+      - name: Validate exact private Hostless Runtime Normal Fetch contract
         shell: bash
         run: |
           set -euo pipefail
-          docker build \
-            -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" \
-            --target bot \
-            -t "mmibkr-private-pr-validation:$GITHUB_RUN_ID" \
-            "$PRIVATE_SOURCE_ROOT" >/dev/null
-          echo 'MMIBKR_PRIVATE_PR_EXACT_IMAGE_READY=1'
-
-      - name: Validate stock position-state and ownership contracts
-        shell: bash
-        run: |
-          set -euo pipefail
+          log="$RUNNER_TEMP/mmibkr-private-pr-validation.log"
+          set +e
           docker run --rm \
-            -e ENABLE_LIVE_TRADING=0 \
-            "mmibkr-private-pr-validation:$GITHUB_RUN_ID" \
-            python -m unittest -v \
-              tests.test_selected_runtime_strategy_inventory_v1 \
-              tests.test_selected_runtime_position_ownership_integration_v1 \
-              tests.test_selected_runtime_cloud_natural_evaluator_v1 \
-              tests.test_strategy_registry_position_state_forwarding_v1 \
-              tests.test_selected_runtime_cloud_cycle_v1 \
-              tests.test_runtime_market_data_cache_checkpoint_v1 \
-              tests.test_cloud_operator_snapshot_v1 \
-              tests.test_selected_runtime_submit_authority \
-              tests.test_snapshot_ib_adapter_position_state_v1 \
-              tests.test_selected_runtime_account_sizing_submit_hook_14th31lg \
-              tests.test_strategy_identity_guarded_submit_continuity_14th31hv \
-              tests.test_selected_runtime_dca_position_cap_14th31ju
-          echo 'MMIBKR_PRIVATE_PR_OWNERSHIP_TESTS=PASS'
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            -v "$PRIVATE_SOURCE_ROOT:/workspace:ro" \
+            -w /workspace \
+            python:3.11.16-slim-bookworm \
+            sh -lc '
+              set -eu
+              python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt >/dev/null
+              python -m py_compile \
+                market_data_incremental_window.py \
+                market_data_request_contract.py \
+                data_manager.py \
+                futures_manager.py \
+                bot_selected_runtime_candidate_materialization_14th27b.py \
+                bot_selected_runtime_quote_freshness_idempotency_14th27c.py \
+                snapshot_ib_adapter_v1.py \
+                strategy.py \
+                selected_runtime_boundary_snapshot_hydrator_v1.py \
+                scripts/operator/ibkr_remote_warm_read_v1.py \
+                scripts/operator/ibkr_remote_selected_runtime_paper_proof_ingress_v1.py \
+                scripts/operator/ibkr_remote_selected_runtime_paper_execute_slot_v1.py \
+                scripts/operator/ibkr_remote_selected_runtime_boundary_slot_v1.py \
+                scripts/operator/runtime_market_data_cache_cursor_v1.py \
+                scripts/operator/runtime_market_data_cache_checkpoint_v1.py \
+                scripts/operator/selected_runtime_signal_history_contract_v1.py \
+                scripts/operator/selected_runtime_initial_backfill_ingest_v1.py \
+                scripts/operator/selected_runtime_cloud_bar_clock_v1.py \
+                scripts/operator/selected_runtime_cloud_runner_dry_plan_v1.py \
+                scripts/operator/selected_runtime_cloud_natural_evaluator_v1.py \
+                scripts/operator/selected_runtime_cloud_cycle_v1.py \
+                scripts/operator/selected_runtime_cloud_daemon_v1.py \
+                scripts/operator/mmibkr_cloud_source_producer_v1.py \
+                scripts/operator/mmibkr_cloud_source_relay_v1.py \
+                scripts/operator/selected_runtime_futures_roll_maintenance_v1.py \
+                scripts/operator/selected_runtime_legacy_compat_config_v1.py
+              python -m unittest \
+                tests.test_market_data_incremental_window_v1 \
+                tests.test_market_data_request_contract_v1 \
+                tests.test_market_data_cache_delta_runtime_v1 \
+                tests.test_runtime_market_data_cache_cursor_v1 \
+                tests.test_runtime_market_data_cache_checkpoint_v1 \
+                tests.test_selected_runtime_signal_history_contract_v1 \
+                tests.test_selected_runtime_execution_roll_v1 \
+                tests.test_selected_runtime_initial_backfill_ingest_v1 \
+                tests.test_selected_runtime_execution_expiry_guard_v1 \
+                tests.test_selected_runtime_boundary_snapshot_hydrator_v1 \
+                tests.test_selected_runtime_cloud_bar_clock_v1 \
+                tests.test_selected_runtime_cloud_natural_evaluator_v1 \
+                tests.test_strategy_registry_position_state_forwarding_v1 \
+                tests.test_selected_runtime_cloud_runner_dry_plan_v1 \
+                tests.test_cloud_boundary_idempotency_v1 \
+                tests.test_snapshot_ib_adapter_position_state_v1 \
+                tests.test_selected_mnq_dca_spec_authority_v1 \
+                tests.test_ibkr_remote_warm_read_v1 \
+                tests.test_ibkr_remote_selected_runtime_paper_proof_ingress_v1 \
+                tests.test_ibkr_remote_selected_runtime_paper_execute_slot_v1 \
+                tests.test_ibkr_remote_selected_runtime_boundary_slot_v1 \
+                tests.test_selected_runtime_legacy_compat_config_v1 \
+                tests.test_selected_runtime_cloud_cycle_v1 \
+                tests.test_selected_runtime_cloud_daemon_v1 \
+                tests.test_mmibkr_cloud_source_producer_v1 \
+                tests.test_mmibkr_cloud_source_relay_v1 \
+                tests.test_selected_runtime_futures_roll_maintenance_v1 \
+                -v
+            ' >"$log" 2>&1
+          rc=$?
+          set -e
+          log_sha="$(sha256sum "$log" | awk '{print $1}')"
+          log_bytes="$(wc -c < "$log")"
+          rm -f "$log"
+          if [ "$rc" -ne 0 ]; then
+            echo "MMIBKR_PRIVATE_PR_EXACT_VALIDATION_STATUS=FAIL"
+            echo "MMIBKR_PRIVATE_PR_VALIDATION_LOG_SHA256=$log_sha"
+            echo "MMIBKR_PRIVATE_PR_VALIDATION_LOG_BYTES=$log_bytes"
+            echo "MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0"
+            exit "$rc"
+          fi
+          echo "MMIBKR_PRIVATE_PR_EXACT_VALIDATION_STATUS=PASS"
+          echo "MMIBKR_PRIVATE_PR_VALIDATION_LOG_SHA256=$log_sha"
+          echo "MMIBKR_PRIVATE_PR_VALIDATION_LOG_BYTES=$log_bytes"
+          echo "MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0"
 
       - name: Emit sanitized validation receipt
         shell: bash
@@ -272,7 +327,8 @@ jobs:
               'source_sha': os.environ['PRIVATE_SOURCE_SHA'],
               'source_archive_sha256': os.environ['PRIVATE_ARCHIVE_SHA256'],
               'source_archive_bytes': int(os.environ['PRIVATE_ARCHIVE_BYTES']),
-              'strategy_inventory_ownership_tests': True,
+              'hostless_runtime_normal_fetch_v1': True,
+              'stock_position_state_forwarding_test': True,
               'private_source_token_exposed': False,
               'private_plaintext_published': False,
               'broker_credentials_used': False,
@@ -289,7 +345,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker image rm "mmibkr-private-pr-validation:$GITHUB_RUN_ID" >/dev/null 2>&1 || true
           sudo rm -rf \
             "$RUNNER_TEMP/mmibkr-private-pr-validation" \
             "$RUNNER_TEMP/mmibkr-private-pr-validation.tar.gz"
