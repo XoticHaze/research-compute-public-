@@ -221,12 +221,12 @@ function isPrivateSourceStreamApproved(sourceSha, identity = null) {
  * match an entry here. No public runtime can add approvals dynamically.
  */
 const APPROVED_SOURCE_SNAPSHOTS = Object.freeze({
-  // '<40-hex-private-source-sha>': Object.freeze({
-  //   source_ref: '<same exact source sha>',
-  //   manifest_sha256: '<64-hex-public-manifest-sha256>',
-  //   archive_sha256: '<64-hex-private-archive-sha256>',
-  //   archive_bytes: 123,
-  // }),
+  '1eadfe97304bb78a7e0fabf571e73dfcf0060909': Object.freeze({
+    source_ref: '1eadfe97304bb78a7e0fabf571e73dfcf0060909',
+    manifest_sha256: 'b908a6bdd827c3111d4bb66e23449037d31bbfa1b36f22d868357b15abd99c9b',
+    archive_sha256: '72a6b205fa7d601162d8e9c79bb888fcc8f475c74f0b4b67229189b5fae58597',
+    archive_bytes: 66322824,
+  }),
 });
 
 function json(body, status = 200) {
