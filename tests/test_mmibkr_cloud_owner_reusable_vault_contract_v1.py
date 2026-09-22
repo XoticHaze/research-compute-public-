@@ -60,6 +60,7 @@ class CloudOwnerReusableVaultContractTests(unittest.TestCase):
         start = text.index(marker)
         successor = text[start:]
         self.assertNotIn("'source_ref': os.environ['REQUEST_SOURCE_REF']", successor)
+        self.assertIn("'source_ref': os.environ['PRIVATE_HEAD']", successor)
         self.assertIn("'session_seconds': os.environ['SESSION_SECONDS']", successor)
 
     def test_owner_allows_one_extra_nonexecuting_boundary_failure(self):
