@@ -28,6 +28,15 @@ const ALLOWED_PUBLISHERS = Object.freeze([
   }),
 ]);
 
+const ALLOWED_PROMOTION_PUBLISHERS = Object.freeze([
+  Object.freeze({
+    repository: 'XoticHaze/research-compute-public-',
+    ref: 'refs/heads/main',
+    workflow_ref:
+      'XoticHaze/research-compute-public-/.github/workflows/mmibkr-promotion-candidate-publisher-r1.yml@refs/heads/main',
+  }),
+]);
+
 const ALLOWED_MACHINE_READERS = Object.freeze([
   Object.freeze({
     repository: 'XoticHaze/research-compute-public-',
@@ -156,6 +165,38 @@ async function verifyPublisher(request) {
     || !ALLOWED_PUBLISHERS.some((identity) => identityMatches(claims, identity))
   ) {
     throw new Error('publisher_identity_rejected');
+  }
+
+  return {
+    repository: claims.repository,
+    ref: claims.ref,
+    workflow_ref: claims.workflow_ref,
+    workflow_sha: claims.workflow_sha,
+    event_name: claims.event_name,
+    run_id: callerRunId,
+    run_attempt: String(claims.run_attempt || ''),
+  };
+}
+
+async function verifyPromotionPublisher(request) {
+  const auth = String(request.headers.get('authorization') || '');
+  if (!auth.startsWith('Bearer ') || auth.length > 16384) {
+    throw new Error('promotion_publisher_unauthorized');
+  }
+  const callerRunId = String(request.headers.get('x-mmibkr-caller-run-id') || '');
+  if (!/^\d{4,24}$/.test(callerRunId)) throw new Error('promotion_publisher_run_id_rejected');
+
+  const claims = await verifyRs256Jwt(auth.slice(7), GITHUB_JWKS);
+  if (
+    claims.iss !== GITHUB_ISSUER
+    || !claimAudience(claims).includes(GITHUB_AUDIENCE)
+    || claims.repository_visibility !== 'public'
+    || claims.runner_environment !== 'github-hosted'
+    || !['push', 'workflow_dispatch'].includes(String(claims.event_name || ''))
+    || String(claims.run_id || '') !== callerRunId
+    || !ALLOWED_PROMOTION_PUBLISHERS.some((identity) => identityMatches(claims, identity))
+  ) {
+    throw new Error('promotion_publisher_identity_rejected');
   }
 
   return {
@@ -563,7 +604,7 @@ export default {
 
       let publisher;
       try {
-        publisher = await verifyPublisher(request);
+        publisher = await verifyPromotionPublisher(request);
       } catch {
         return json({ error: 'unauthorized' }, 401);
       }

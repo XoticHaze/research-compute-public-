@@ -257,7 +257,8 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("PRIVATE_SOURCE_SHA: d7b468ea22740df65c4b350dc15b74b0c377280f", workflow)
         self.assertIn("npm run verify:promotion-review", workflow)
         self.assertIn("npm run build", workflow)
-        self.assertIn("ENABLE_LIVE_TRADING=0", workflow)
+        self.assertIn("'broker_action': False", workflow)
+        self.assertIn("'live_trading_allowed': False", workflow)
         self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
         self.assertNotIn('cat "$log"', workflow)
 

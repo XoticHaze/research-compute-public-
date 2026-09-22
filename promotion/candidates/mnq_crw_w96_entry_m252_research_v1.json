@@ -1,0 +1,84 @@
+{
+  "schema": "mmibkr.promotion_candidate_snapshot.v1",
+  "generated_at_utc": "2026-09-22T21:24:00Z",
+  "candidates": [
+    {
+      "candidate_id": "autotuner:mnq-crw-w96-entry-m252:3680e21e3bdbc38a",
+      "candidate_kind": "strategy",
+      "candidate_digest": "3680e21e3bdbc38a1729cc38fd0c9d42d66242d970cce1617bbdd71c761a1ac6",
+      "evidence_digest": "9f4e88c69e787ee0a4b87d3349498b73acb4b79e",
+      "source": "AUTOTUNER",
+      "label": "MNQ CRW W96 · Entry -2.52 challenger",
+      "symbol": "MNQ",
+      "timeframe": "12Min",
+      "current_stage": "RESEARCH",
+      "proposed_stage": "ARENA",
+      "review_ready": false,
+      "sample": {
+        "historical_chronology_trades": 86,
+        "fold_count": 6,
+        "positive_folds": 5,
+        "required_fresh_holdout_after_utc": "2026-02-19T02:12:00Z",
+        "prospective_holdout_complete": false
+      },
+      "metrics": {
+        "profit_factor": 2.2182521727425617,
+        "sortino": 0.32328928352327124,
+        "excess_return": 0.03488631604470216,
+        "baseline": "MNQ CRW W96 · Entry -2.80 incumbent",
+        "candidate_net_points": 37559.75,
+        "baseline_net_points": 36293.6,
+        "net_delta_points": 1266.15,
+        "max_fold_drawdown_points": 11571.7,
+        "baseline_max_fold_drawdown_points": 11444.95,
+        "max_fold_drawdown_delta_pct": 0.01107475349389908
+      },
+      "risk": {
+        "dca_policy": "current_corrected_tier_order",
+        "max_dca_adds": 2,
+        "max_contracts": 3,
+        "base_qty": 1,
+        "candidate_mutates_dca": false,
+        "existing_dca_mechanics_reopen_required": false,
+        "risk_caution": "candidate improves matched chronology return/PF/Sortino but max-fold drawdown worsens 1.11%"
+      },
+      "execution": {
+        "view": "simulated_next_bar_open",
+        "fee_points_per_contract_side": 0.3,
+        "broker_paper_evidence": false
+      },
+      "health": {
+        "status": "FRESH_HOLDOUT_REQUIRED",
+        "research_disposition": "CONTINUE_FRESH_HOLDOUT",
+        "automatic_promotion": false
+      },
+      "provenance": {
+        "private_repository": "XoticHaze/mm-IBKR",
+        "evidence_commit": "d59f321679ff687fa7f5f8c3b8e77fea017cbc77",
+        "evidence_path": "research/mnq_crw_autotuner_entry_m252_oos_20260904.json",
+        "evidence_git_blob_sha1": "9f4e88c69e787ee0a4b87d3349498b73acb4b79e",
+        "strategy_spec_digest": "3680e21e3bdbc38a1729cc38fd0c9d42d66242d970cce1617bbdd71c761a1ac6",
+        "foundry_run_id": 33724144266,
+        "foundry_artifact_id": 9881343496,
+        "dataset_sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e",
+        "dataset_rows": 192553,
+        "dataset_last_timestamp": "2026-02-19T02:12:00Z"
+      },
+      "reasons": [
+        "Matched-cost chronology improves net points by 1,266.15 (+3.49%) versus the frozen W96 / -2.80 incumbent.",
+        "Profit factor and Sortino improve with the same 86-trade sample and the same 5/6 positive-fold breadth.",
+        "The candidate is a single entry-threshold mutation; WINDOW, EXIT, DCA, execution view, and costs remain frozen."
+      ],
+      "warnings": [
+        "This is not promotion evidence yet: the candidate was discovered on the same historical corpus and still requires the frozen fresh post-2026-02-19 holdout.",
+        "2022 and 2023 chronology are slightly worse than the incumbent.",
+        "Maximum fold drawdown worsens by 126.75 points (+1.11%)."
+      ]
+    }
+  ],
+  "safety": {
+    "broker_mutation_authority": false,
+    "live_execution_allowed": false,
+    "selected_runtime_write": false
+  }
+}
