@@ -262,6 +262,25 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
         self.assertNotIn('cat "$log"', workflow)
 
+    def test_promotion_review_merged_source_bootstrap_is_exact_sha_expiring_and_bootstrap_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("OPERATOR_CONSOLE_PROMOTION_BOOTSTRAP_SOURCE", text)
+        self.assertIn(
+            "1eadfe97304bb78a7e0fabf571e73dfcf0060909",
+            text,
+        )
+        self.assertIn("OPERATOR_CONSOLE_PROMOTION_BOOTSTRAP_EXPIRES_AT", text)
+        self.assertIn("2026-09-23T12:00:00Z", text)
+        self.assertIn("operatorConsolePromotionBootstrapApproved", text)
+        self.assertIn(
+            "matchesIdentity(identity, SOURCE_VAULT_BOOTSTRAP_IDENTITY)",
+            text,
+        )
+        self.assertNotIn(
+            "matchesIdentity(identity, OPERATOR_CONSOLE_DEPLOY_IDENTITY)\n  );\n  const operatorConsolePromotionBootstrapApproved",
+            text,
+        )
+
     def test_runtime_bootstrap_identity_is_private_archive_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("SOURCE_VAULT_BOOTSTRAP_IDENTITY", text)
