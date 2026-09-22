@@ -298,6 +298,7 @@ jobs:
           ui="$PRIVATE_SOURCE_ROOT/ui-react"
           set +e
           (
+            set -euo pipefail
             cd "$ui"
             npm ci --ignore-scripts --no-audit --no-fund
             npm run verify:bot-console
