@@ -18,7 +18,7 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  PRIVATE_SOURCE_SHA: 492743d4d0bf2ed9b051218b2c689122ed369735
+  PRIVATE_SOURCE_SHA: cfb18a0b6ff02f3aa35823d23223b029fa770be4
 
 jobs:
   exact-private-promotion-review-validation:
@@ -167,52 +167,6 @@ jobs:
           print('MMIBKR_PRIVATE_SOURCE_TOKEN_EXPOSED=0')
           PY
 
-      - name: Build exact private bot image
-        shell: bash
-        run: |
-          set -euo pipefail
-          log="$RUNNER_TEMP/promotion-review-build.log"
-          set +e
-          docker build -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" --target bot -t "mmibkr-promotion-review:$GITHUB_RUN_ID" "$PRIVATE_SOURCE_ROOT" >"$log" 2>&1
-          rc=$?
-          set -e
-          echo "MMIBKR_PROMOTION_REVIEW_BUILD_LOG_SHA256=$(sha256sum "$log" | awk '{print $1}')"
-          echo "MMIBKR_PROMOTION_REVIEW_BUILD_LOG_BYTES=$(wc -c < "$log")"
-          rm -f "$log"
-          if [ "$rc" -ne 0 ]; then exit "$rc"; fi
-          echo 'MMIBKR_PROMOTION_REVIEW_BUILD_STATUS=PASS'
-
-      - name: Validate promotion decision contract and status syntax
-        shell: bash
-        run: |
-          set -euo pipefail
-          log="$RUNNER_TEMP/promotion-review-python.log"
-          set +e
-          docker run --rm -e ENABLE_LIVE_TRADING=0 -e PYTHONDONTWRITEBYTECODE=1 "mmibkr-promotion-review:$GITHUB_RUN_ID"             sh -lc 'python -m py_compile promotion_review_decision_v1.py status_server.py && python -m unittest -v tests.test_promotion_review_decision_v1'             >"$log" 2>&1
-          rc=$?
-          set -e
-          sha="$(sha256sum "$log" | awk '{print $1}')"
-          bytes="$(wc -c < "$log")"
-          if [ "$rc" -ne 0 ]; then
-            python - "$log" <<'PY'
-          import re, sys
-          from pathlib import Path
-          for raw in Path(sys.argv[1]).read_text(errors='replace').splitlines():
-              line = raw.strip()
-              if re.match(r'^test_[A-Za-z0-9_]+ .* \.\.\. (ok|FAIL|ERROR)$', line) or line.startswith('FAILED (') or line == 'OK':
-                  print('MMIBKR_PROMOTION_REVIEW_SAFE_DIAGNOSTIC=' + line)
-          PY
-            echo "MMIBKR_PROMOTION_REVIEW_PYTHON_STATUS=FAIL"
-            echo "MMIBKR_PROMOTION_REVIEW_PYTHON_LOG_SHA256=$sha"
-            echo "MMIBKR_PROMOTION_REVIEW_PYTHON_LOG_BYTES=$bytes"
-            rm -f "$log"
-            exit "$rc"
-          fi
-          rm -f "$log"
-          echo 'MMIBKR_PROMOTION_REVIEW_PYTHON_STATUS=PASS'
-          echo "MMIBKR_PROMOTION_REVIEW_PYTHON_LOG_SHA256=$sha"
-          echo "MMIBKR_PROMOTION_REVIEW_PYTHON_LOG_BYTES=$bytes"
-
       - name: Validate Promotion Review UI and build
         shell: bash
         run: |
@@ -263,8 +217,7 @@ jobs:
               'source_sha': os.environ['PRIVATE_SOURCE_SHA'],
               'source_archive_sha256': os.environ['PRIVATE_ARCHIVE_SHA256'],
               'source_archive_bytes': int(os.environ['PRIVATE_ARCHIVE_BYTES']),
-              'promotion_decision_tests': True,
-              'status_server_compile': True,
+              'durable_review_authority': 'operator_console_durable_object',
               'ui_promotion_contract_tests': True,
               'ui_production_build': True,
               'private_source_token_exposed': False,
@@ -317,8 +270,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker image rm "mmibkr-promotion-review:$GITHUB_RUN_ID" >/dev/null 2>&1 || true
           sudo rm -rf "$RUNNER_TEMP/mmibkr-promotion-review" "$RUNNER_TEMP/mmibkr-promotion-review.tar.gz" "$RUNNER_TEMP"/promotion-review-*.log
           echo 'MMIBKR_PROMOTION_REVIEW_PRIVATE_SOURCE_DESTROYED=1'
 
-# exact-validation-trigger-20260922-r2
+# exact-validation-trigger-20260922-r3
