@@ -136,6 +136,28 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn('rm -f "$log"', workflow)
         self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
 
+    def test_private_pr666_validation_is_isolated_exact_sha_expiring_and_archive_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("PRIVATE_PR666_EXACT_VALIDATION_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-private-pr666-exact-validation-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn(
+            "e5bf10c9f1203f951b72910c8291d302f610e2c4",
+            text,
+        )
+        self.assertIn("PRIVATE_PR666_EXACT_VALIDATION_EXPIRES_AT", text)
+        self.assertIn("matchedPrivatePr666Validation", text)
+        self.assertIn(
+            "(matchedPrivatePr666Validation && privateArchivePathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedPrivatePr666Validation && operatorDeployPathAllowed)",
+            text,
+        )
+
     def test_runtime_bootstrap_identity_is_private_archive_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("SOURCE_VAULT_BOOTSTRAP_IDENTITY", text)
