@@ -88,6 +88,41 @@ class CloudCheckpointCacheHandoffTests(unittest.TestCase):
             section,
         )
 
+    def test_workflow_dispatch_rejects_unpinned_successor_before_concurrency(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("expected_checkpoint_cache_key:", text)
+        self.assertIn("expected_checkpoint_sha256:", text)
+        self.assertIn("allow_unpinned_bootstrap:", text)
+        self.assertIn("print('unpinned_dispatch_rejected')", text)
+        self.assertIn("print('invalid_dispatch')", text)
+        self.assertIn("reject_unpinned_dispatch:", text)
+        self.assertIn(
+            "Reject unpinned or invalid workflow dispatch before owner concurrency",
+            text,
+        )
+        reject = text.index("  reject_unpinned_dispatch:")
+        runtime = text.index("  runtime:")
+        self.assertLess(reject, runtime)
+
+    def test_healthy_self_handoff_carries_new_saved_checkpoint_identity(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        start = text.index("- name: Queue successor bounded session")
+        end = text.index("- name: Destroy private runtime material")
+        section = text[start:end]
+        self.assertIn(
+            "SUCCESSOR_CHECKPOINT_CACHE_KEY: ${{ steps.checkpoint_saved.outputs.saved_cache_key }}",
+            section,
+        )
+        self.assertIn(
+            "SUCCESSOR_CHECKPOINT_SHA256: ${{ steps.checkpoint_saved.outputs.saved_sha256 }}",
+            section,
+        )
+        self.assertIn('test -n "$SUCCESSOR_CHECKPOINT_CACHE_KEY"', section)
+        self.assertIn('test -n "$SUCCESSOR_CHECKPOINT_SHA256"', section)
+        self.assertIn("'expected_checkpoint_cache_key':", section)
+        self.assertIn("'expected_checkpoint_sha256':", section)
+        self.assertIn("'allow_unpinned_bootstrap': False", section)
+
     def test_private_runtime_cleanup_still_destroys_checkpoint(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         cleanup = text[text.index("- name: Destroy private runtime material") :]

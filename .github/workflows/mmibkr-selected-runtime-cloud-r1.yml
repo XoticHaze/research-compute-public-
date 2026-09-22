@@ -18,6 +18,21 @@ on:
         required: true
         default: '0'
         type: string
+      expected_checkpoint_cache_key:
+        description: Exact predecessor checkpoint cache key required for steady-state restore
+        required: false
+        default: ''
+        type: string
+      expected_checkpoint_sha256:
+        description: Exact predecessor checkpoint SHA256 required with the cache key
+        required: false
+        default: ''
+        type: string
+      allow_unpinned_bootstrap:
+        description: Explicitly permit a workflow-dispatch bootstrap without predecessor identity
+        required: false
+        default: false
+        type: boolean
       self_handoff:
         description: Dispatch a queued successor after a successful session
         required: true
@@ -83,7 +98,30 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             mode="pr"
           elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            mode="owner"
+            mode="$(python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+          inputs = event.get('inputs') if isinstance(event.get('inputs'), dict) else {}
+          key = str(inputs.get('expected_checkpoint_cache_key') or '').strip()
+          sha = str(inputs.get('expected_checkpoint_sha256') or '').strip().lower()
+          raw_allow = inputs.get('allow_unpinned_bootstrap', False)
+          allow = (
+              raw_allow
+              if isinstance(raw_allow, bool)
+              else str(raw_allow).strip().lower() in {'1', 'true', 'yes', 'on'}
+          )
+          if bool(key) != bool(sha):
+              print('invalid_dispatch')
+          elif key and sha:
+              print('owner')
+          elif allow:
+              print('owner')
+          else:
+              print('unpinned_dispatch_rejected')
+          PY
+          )"
           else
             changed="$(git diff-tree --no-commit-id --name-only -r HEAD^ HEAD)"
             if printf '%s\n' "$changed" | grep -Fxq 'rendezvous/fire/mmibkr-selected-runtime-cloud-successor-restore-acceptance-r1'; then
@@ -96,6 +134,17 @@ jobs:
           fi
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "MMIBKR_SELECTED_RUNTIME_CLOUD_ROUTE=$mode"
+
+  reject_unpinned_dispatch:
+    if: ${{ needs.route.outputs.mode == 'unpinned_dispatch_rejected' || needs.route.outputs.mode == 'invalid_dispatch' }}
+    needs:
+      - route
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Reject unpinned or invalid workflow dispatch before owner concurrency
+        run: |
+          echo "MMIBKR_SELECTED_RUNTIME_DISPATCH_REJECTED=${{ needs.route.outputs.mode }}" >&2
+          exit 1
 
   contract:
     runs-on: ubuntu-24.04
@@ -1106,15 +1155,23 @@ jobs:
         if: ${{ success() && env.SELF_HANDOFF == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
+          SUCCESSOR_CHECKPOINT_CACHE_KEY: ${{ steps.checkpoint_saved.outputs.saved_cache_key }}
+          SUCCESSOR_CHECKPOINT_SHA256: ${{ steps.checkpoint_saved.outputs.saved_sha256 }}
         run: |
           set -euo pipefail
+          test -n "$SUCCESSOR_CHECKPOINT_CACHE_KEY"
+          test -n "$SUCCESSOR_CHECKPOINT_SHA256"
           body="$(python - <<'PY'
           import json, os
           print(json.dumps({
               'ref': 'main',
               'inputs': {
+                  'source_ref': os.environ['PRIVATE_HEAD'],
                   'session_seconds': os.environ['SESSION_SECONDS'],
                   'max_cycles': os.environ['MAX_CYCLES'],
+                  'expected_checkpoint_cache_key': os.environ['SUCCESSOR_CHECKPOINT_CACHE_KEY'],
+                  'expected_checkpoint_sha256': os.environ['SUCCESSOR_CHECKPOINT_SHA256'],
+                  'allow_unpinned_bootstrap': False,
                   'self_handoff': True,
               },
           }))
