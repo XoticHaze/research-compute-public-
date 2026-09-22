@@ -56,7 +56,7 @@ const PRIVATE_PR_EXACT_VALIDATION_IDENTITY = {
     'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-pr-exact-validation-r1.yml@refs/heads/main',
 };
 const PRIVATE_PR_EXACT_VALIDATION_SOURCE =
-  '6f3e63e244100afc69cac7ba605e8a5cb9b1c366';
+  'aac81518231e776c28c646d974473c631d6e3a05';
 const PRIVATE_PR_EXACT_VALIDATION_EXPIRES_AT =
   Date.parse('2026-09-23T12:00:00Z');
 
