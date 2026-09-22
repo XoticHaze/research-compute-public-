@@ -100,7 +100,7 @@ const PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_IDENTITY = {
     'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-promotion-review-validation-r1.yml@refs/heads/main',
 };
 const PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_SOURCE =
-  'cfb18a0b6ff02f3aa35823d23223b029fa770be4';
+  'd7b468ea22740df65c4b350dc15b74b0c377280f';
 const PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_EXPIRES_AT =
   Date.parse('2026-09-23T12:00:00Z');
 
