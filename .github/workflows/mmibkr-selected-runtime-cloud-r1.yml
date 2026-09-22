@@ -1166,7 +1166,7 @@ jobs:
           print(json.dumps({
               'ref': 'main',
               'inputs': {
-                  'source_ref': os.environ['REQUEST_SOURCE_REF'],
+                  'source_ref': os.environ['PRIVATE_HEAD'],
                   'session_seconds': os.environ['SESSION_SECONDS'],
                   'max_cycles': os.environ['MAX_CYCLES'],
                   'expected_checkpoint_cache_key': os.environ['SUCCESSOR_CHECKPOINT_CACHE_KEY'],
