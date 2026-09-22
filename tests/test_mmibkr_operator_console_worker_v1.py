@@ -78,20 +78,24 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertNotIn("/flatten", section)
         self.assertNotIn("/cancel", section)
 
-    def test_private_mmibkr_bridge_is_read_only_oidc_reader_not_publisher(self):
+    def test_encrypted_public_bridge_is_read_only_oidc_reader_not_publisher(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("const ALLOWED_MACHINE_READERS", text)
-        self.assertIn("repository: 'XoticHaze/mm-IBKR'", text)
+        self.assertIn("repository: 'XoticHaze/research-compute-public-'", text)
         self.assertIn(
-            "XoticHaze/mm-IBKR/.github/workflows/mmibkr-operator-snapshot-bridge-r1.yml@refs/heads/main",
+            "XoticHaze/research-compute-public-/.github/workflows/mmibkr-operator-snapshot-read-bridge-r1.yml@refs/heads/main",
             text,
         )
-        self.assertIn("repository_visibility: 'private'", text)
+        self.assertIn("repository_visibility: 'public'", text)
         publisher_start = text.index("async function verifyPublisher(request)")
         reader_start = text.index("async function verifySnapshotReader(request)")
         publisher_section = text[publisher_start:reader_start]
         self.assertIn("claims.repository_visibility !== 'public'", publisher_section)
         self.assertNotIn("ALLOWED_MACHINE_READERS", publisher_section)
+        reader_end = text.index("function normalizeTeamDomain", reader_start)
+        reader_section = text[reader_start:reader_end]
+        self.assertIn("trustedMachineReader", reader_section)
+        self.assertIn("identity.repository_visibility", reader_section)
         read_route = text.index("url.pathname === '/v1/operator-snapshot-read'")
         access_gate = text.index("await verifyAccess(request, env)", read_route)
         read_section = text[read_route:access_gate]
