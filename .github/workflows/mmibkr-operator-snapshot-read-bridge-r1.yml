@@ -154,6 +154,14 @@ jobs:
             --output-dir "$RUNNER_TEMP/mmibkr-operator-encrypted-return"
           rm -f "$RUNNER_TEMP/mmibkr-operator-machine-read.json"
 
+      - name: Upload ciphertext-only return artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mmibkr-operator-snapshot-encrypted-${{ github.run_id }}
+          path: ${{ runner.temp }}/mmibkr-operator-encrypted-return
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Publish ciphertext-only return to rendezvous exchange
         run: |
           set -euo pipefail
