@@ -68,6 +68,7 @@ on:
       - tests/test_mmibkr_checkpoint_acceptance_job_v1.py
       - tests/test_mmibkr_successor_restore_acceptance_job_v1.py
       - tests/test_mmibkr_signal_history_metadata_reconcile_v1.py
+      - tests/test_mmibkr_signal_history_reconciliation_job_v1.py
       - scripts/mmibkr_cloud_session_acceptance_v1.py
       - scripts/mmibkr_signal_history_metadata_reconcile_v1.py
       - scripts/mmibkr_operator_snapshot_publish_v1.py
@@ -186,6 +187,7 @@ jobs:
             tests/test_mmibkr_checkpoint_acceptance_job_v1.py \
             tests/test_mmibkr_successor_restore_acceptance_job_v1.py \
             tests/test_mmibkr_signal_history_metadata_reconcile_v1.py \
+            tests/test_mmibkr_signal_history_reconciliation_job_v1.py \
             scripts/mmibkr_cloud_session_acceptance_v1.py \
             scripts/mmibkr_signal_history_metadata_reconcile_v1.py \
             scripts/mmibkr_operator_snapshot_publish_v1.py \
@@ -203,6 +205,7 @@ jobs:
             tests.test_mmibkr_checkpoint_acceptance_job_v1 \
             tests.test_mmibkr_successor_restore_acceptance_job_v1 \
             tests.test_mmibkr_signal_history_metadata_reconcile_v1 \
+            tests.test_mmibkr_signal_history_reconciliation_job_v1 \
             tests.test_mmibkr_operator_snapshot_publish_helper_v1
 
   runtime:
