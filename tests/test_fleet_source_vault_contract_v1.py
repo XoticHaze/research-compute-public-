@@ -139,6 +139,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("tests.test_crw_operator_context_projection_v1", workflow)
         self.assertIn("npm run verify:bot-console", workflow)
         self.assertIn("npm run build", workflow)
+        self.assertIn('(\\n            set -euo pipefail\\n            cd "$ui"', workflow)
         self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
         self.assertIn("MMIBKR_PRIVATE_PR_SAFE_DIAGNOSTIC=", workflow)
         self.assertNotIn('cat "$log"', workflow)
