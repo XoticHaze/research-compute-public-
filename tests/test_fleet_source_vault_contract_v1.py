@@ -130,6 +130,20 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
 
+    def test_missed_trade_audit_identity_is_vault_unwrap_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("MISSED_TRADE_AUDIT_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-selected-runtime-missed-trade-audit-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn("matchedMissedTradeAudit", text)
+        self.assertIn("operatorDeployPathAllowed", text)
+        self.assertIn(
+            "(matchedMissedTradeAudit && operatorDeployPathAllowed)",
+            text,
+        )
+
     def test_stream_attestation_is_bound_to_run_stream_sha_and_size(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("streamgrant:", text)
