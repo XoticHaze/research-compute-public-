@@ -3,12 +3,12 @@
   "session_seconds": "900",
   "max_cycles": "0",
   "self_handoff": false,
-  "requested_by": "assistant-final-hardened-successor-proof",
+  "requested_by": "assistant-terminal-aware-successor-sentinel",
   "source_public_run_id": "35407829303",
   "expected_checkpoint_acceptance_run": "35677937156",
   "expected_checkpoint_cache_key": "mmibkr-selected-runtime-cloud-checkpoint-v1-35677937156-d81df85788ebb6be6d4d69b9b9a537be96f16507-backfill-checkpoint-acceptance",
   "expected_checkpoint_sha256": "714a99663d392704146b229cefcfc78498dfdfcd34fa3c634940867dc99d3646",
   "expected_successor_restore_acceptance_run": "35680119748",
-  "expected_guard_merge": "55ef608e095bd9f51c7d19aeba08bde74914c991",
-  "purpose": "restore_exact_checkpoint_run_bounded_owner_self_enforce_v2_and_block_legacy_handoff"
+  "require_terminal_continuity": true,
+  "purpose": "fail_closed_if_seed_lacks_terminal_continuity_until_active_owner_checkpoint_is_available"
 }
