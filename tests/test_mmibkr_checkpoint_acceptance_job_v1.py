@@ -56,6 +56,8 @@ class CheckpointAcceptanceJobTests(unittest.TestCase):
             "scripts/operator/selected_runtime_initial_backfill_ingest_v1.py",
             section,
         )
+        self.assertIn("-w /app", section)
+        self.assertIn("-e PYTHONPATH=/app", section)
         self.assertIn(
             "scripts/operator/runtime_market_data_cache_checkpoint_v1.py",
             section,

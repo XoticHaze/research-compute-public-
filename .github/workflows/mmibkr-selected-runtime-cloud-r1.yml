@@ -389,6 +389,8 @@ jobs:
           done
 
           docker run --rm \
+            -w /app \
+            -e PYTHONPATH=/app \
             -v "$RUNNER_TEMP/mmibkr-data:/app/data" \
             -v "$input_dir:/input:ro" \
             "mmibkr-cloud:${GITHUB_RUN_ID}" \
@@ -1176,6 +1178,8 @@ jobs:
           set -euo pipefail
           input="$RUNNER_TEMP/mmibkr-initial-backfill"
           docker run --rm \
+            -w /app \
+            -e PYTHONPATH=/app \
             -v "$RUNNER_TEMP/mmibkr-data:/app/data" \
             -v "$input:/input:ro" \
             "mmibkr-checkpoint-acceptance:${GITHUB_RUN_ID}" \

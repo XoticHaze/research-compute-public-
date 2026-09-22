@@ -31,6 +31,8 @@ class InitialBackfillCanonicalIngestWorkflowTests(unittest.TestCase):
             "scripts/operator/selected_runtime_initial_backfill_ingest_v1.py",
             section,
         )
+        self.assertIn("-w /app", section)
+        self.assertIn("-e PYTHONPATH=/app", section)
         self.assertIn("--data-root /app/data", section)
         self.assertIn("--bars /input/ibkr-forward-bars-v2.jsonl", section)
         self.assertIn("--handoff /input/ibkr-post-auth-handoff.json", section)
