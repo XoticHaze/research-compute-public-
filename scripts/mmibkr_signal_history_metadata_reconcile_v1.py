@@ -469,8 +469,20 @@ def main() -> int:
         default=[],
         help="Exact SYMBOL@ISO_TIMESTAMP conflict token; repeat for every expected conflict.",
     )
+    parser.add_argument(
+        "--expected-conflicts-json",
+        default="",
+        help="Optional JSON file containing the exact conflict-token list.",
+    )
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
+
+    expected_conflicts = list(args.expected_conflict or [])
+    if args.expected_conflicts_json:
+        node = json.loads(Path(args.expected_conflicts_json).read_text(encoding="utf-8"))
+        if not isinstance(node, list) or not all(isinstance(value, str) for value in node):
+            raise SystemExit("expected conflicts JSON must be a list of strings")
+        expected_conflicts.extend(node)
 
     result = reconcile(
         repo_root=args.repo_root,
@@ -480,7 +492,7 @@ def main() -> int:
         seed_ingest_path=args.seed_ingest,
         seed_index_path=args.seed_index,
         expected_public_run_id=args.expected_public_run_id,
-        expected_conflicts=list(args.expected_conflict or []),
+        expected_conflicts=expected_conflicts,
         output_path=args.output,
     )
     print("MMIBKR_SIGNAL_HISTORY_RECONCILIATION=" + json.dumps(result, sort_keys=True))
