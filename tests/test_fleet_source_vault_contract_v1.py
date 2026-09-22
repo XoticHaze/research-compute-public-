@@ -127,6 +127,15 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
 
+    def test_private_pr_validation_uses_exact_hostless_suite_without_public_test_log(self):
+        workflow = (ROOT / ".github" / "workflows" / "mmibkr-private-pr-exact-validation-r1.yml").read_text(encoding="utf-8")
+        self.assertIn("Validate exact private Hostless Runtime Normal Fetch contract", workflow)
+        self.assertIn("tests.test_strategy_registry_position_state_forwarding_v1", workflow)
+        self.assertIn("tests.test_snapshot_ib_adapter_position_state_v1", workflow)
+        self.assertIn('>"$log" 2>&1', workflow)
+        self.assertIn('rm -f "$log"', workflow)
+        self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
+
     def test_runtime_bootstrap_identity_is_private_archive_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("SOURCE_VAULT_BOOTSTRAP_IDENTITY", text)
