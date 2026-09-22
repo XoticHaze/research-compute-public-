@@ -64,6 +64,35 @@ env:
   INITIAL_BACKFILL_ARTIFACT: ibkr-cloudflare-readonly-b1-35407829303
 
 jobs:
+  route:
+    runs-on: ubuntu-24.04
+    outputs:
+      mode: ${{ steps.route.outputs.mode }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 2
+
+      - name: Resolve workflow route
+        id: route
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            mode="pr"
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            mode="owner"
+          else
+            changed="$(git diff-tree --no-commit-id --name-only -r HEAD^ HEAD)"
+            if printf '%s\n' "$changed" | grep -Fxq 'rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1'; then
+              mode="checkpoint_acceptance"
+            else
+              mode="owner"
+            fi
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "MMIBKR_SELECTED_RUNTIME_CLOUD_ROUTE=$mode"
+
   contract:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -109,8 +138,10 @@ jobs:
             tests.test_mmibkr_operator_snapshot_publish_helper_v1
 
   runtime:
-    if: ${{ github.event_name != 'pull_request' && !(github.event_name == 'push' && (contains(github.event.head_commit.added, 'rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1') || contains(github.event.head_commit.modified, 'rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1'))) }}
-    needs: contract
+    if: ${{ github.event_name != 'pull_request' && needs.route.outputs.mode == 'owner' }}
+    needs:
+      - contract
+      - route
     environment: ibkr-paper-runtime-r1
     runs-on: ubuntu-24.04
     timeout-minutes: 355
@@ -1029,8 +1060,10 @@ jobs:
 
 
   checkpoint_acceptance:
-    if: ${{ github.event_name == 'push' && (contains(github.event.head_commit.added, 'rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1') || contains(github.event.head_commit.modified, 'rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1')) }}
-    needs: contract
+    if: ${{ github.event_name == 'push' && needs.route.outputs.mode == 'checkpoint_acceptance' }}
+    needs:
+      - contract
+      - route
     environment: ibkr-paper-runtime-r1
     runs-on: ubuntu-24.04
     timeout-minutes: 60
