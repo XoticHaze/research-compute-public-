@@ -1,8 +1,17 @@
+import {
+  machinePromotionProjection,
+  readPromotionState,
+  recordPromotionDecision,
+  storePromotionCandidates,
+  validatePromotionCandidateSnapshot,
+} from './promotion_review_state.js';
+
 const GITHUB_ISSUER = 'https://token.actions.githubusercontent.com';
 const GITHUB_JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwks';
 const GITHUB_AUDIENCE = 'mmibkr-operator-console';
 const SNAPSHOT_SCHEMA = 'mmibkr.cloud_operator_snapshot.v1';
 const MAX_SNAPSHOT_BYTES = 2 * 1024 * 1024;
+const MAX_PROMOTION_BYTES = 2 * 1024 * 1024;
 
 const ALLOWED_PUBLISHERS = Object.freeze([
   Object.freeze({
@@ -425,6 +434,44 @@ export class OperatorState {
       return json(record, 200);
     }
 
+    if (request.method === 'POST' && url.pathname === '/promotion/candidates') {
+      const body = await request.json();
+      try {
+        const receipt = await storePromotionCandidates(
+          this.ctx.storage,
+          body.snapshot,
+          body.publisher || {},
+        );
+        return json(receipt, 201);
+      } catch (error) {
+        return json({
+          error: 'promotion_candidates_rejected',
+          reason: String(error?.message || 'invalid'),
+        }, 400);
+      }
+    }
+
+    if (request.method === 'GET' && url.pathname === '/promotion/latest') {
+      return json(await readPromotionState(this.ctx.storage), 200);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/promotion/decision') {
+      const body = await request.json();
+      try {
+        const receipt = await recordPromotionDecision(
+          this.ctx.storage,
+          body.decision,
+          body.operator || {},
+        );
+        return json(receipt, 201);
+      } catch (error) {
+        return json({
+          error: 'promotion_decision_rejected',
+          reason: String(error?.message || 'invalid'),
+        }, 409);
+      }
+    }
+
     return json({ error: 'not_found' }, 404);
   }
 }
@@ -508,6 +555,63 @@ export default {
       }, 201);
     }
 
+    if (request.method === 'POST' && url.pathname === '/v1/promotion-candidates') {
+      const length = Number(request.headers.get('content-length') || 0);
+      if (Number.isFinite(length) && length > MAX_PROMOTION_BYTES) {
+        return json({ error: 'promotion_payload_too_large' }, 413);
+      }
+
+      let publisher;
+      try {
+        publisher = await verifyPublisher(request);
+      } catch {
+        return json({ error: 'unauthorized' }, 401);
+      }
+
+      let snapshot;
+      try {
+        const raw = await request.text();
+        if (new TextEncoder().encode(raw).length > MAX_PROMOTION_BYTES) {
+          return json({ error: 'promotion_payload_too_large' }, 413);
+        }
+        snapshot = validatePromotionCandidateSnapshot(JSON.parse(raw));
+      } catch (error) {
+        return json({
+          error: 'promotion_candidates_rejected',
+          reason: String(error?.message || 'invalid'),
+        }, 400);
+      }
+
+      const stored = await stateStub(env).fetch(
+        new Request('https://operator-state.internal/promotion/candidates', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ snapshot, publisher }),
+        }),
+      );
+      if (!stored.ok) return stored;
+      const receipt = await stored.json();
+      return json({
+        ...receipt,
+        private_source_included: false,
+        broker_mutation_authority: false,
+        live_execution_allowed: false,
+      }, 201);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/v1/promotion-review-read') {
+      try {
+        await verifySnapshotReader(request);
+      } catch {
+        return json({ error: 'unauthorized' }, 401);
+      }
+      const stored = await stateStub(env).fetch(
+        new Request('https://operator-state.internal/promotion/latest'),
+      );
+      if (!stored.ok) return stored;
+      return json(machinePromotionProjection(await stored.json()), 200);
+    }
+
     if (request.method === 'GET' && url.pathname === '/v1/operator-snapshot-read') {
       let reader;
       try {
@@ -549,6 +653,40 @@ export default {
       await verifyAccess(request, env);
     } catch {
       return json({ error: 'access_denied' }, 403);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/promotion-review') {
+      const stored = await stateStub(env).fetch(
+        new Request('https://operator-state.internal/promotion/latest'),
+      );
+      return stored;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/promotion-review/decision') {
+      let operator;
+      try {
+        operator = await verifyAccess(request, env);
+      } catch {
+        return json({ error: 'access_denied' }, 403);
+      }
+      let decision;
+      try {
+        const raw = await request.text();
+        if (new TextEncoder().encode(raw).length > 64 * 1024) {
+          return json({ error: 'promotion_decision_too_large' }, 413);
+        }
+        decision = JSON.parse(raw);
+      } catch {
+        return json({ error: 'invalid_json' }, 400);
+      }
+      const stored = await stateStub(env).fetch(
+        new Request('https://operator-state.internal/promotion/decision', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ decision, operator }),
+        }),
+      );
+      return stored;
     }
 
     if (request.method === 'GET' && url.pathname === '/api/operator-snapshot') {
