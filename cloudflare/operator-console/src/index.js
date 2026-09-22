@@ -456,6 +456,42 @@ export default {
       }, 201);
     }
 
+    if (request.method === 'GET' && url.pathname === '/v1/operator-snapshot-read') {
+      let reader;
+      try {
+        reader = await verifyPublisher(request);
+      } catch {
+        return json({ error: 'unauthorized' }, 401);
+      }
+
+      const stored = await stateStub(env).fetch(
+        new Request('https://operator-state.internal/latest'),
+      );
+      if (!stored.ok) return stored;
+
+      const record = await stored.json();
+      let snapshot;
+      try {
+        snapshot = validateSnapshot(record.snapshot);
+      } catch {
+        return json({ error: 'operator_snapshot_state_invalid' }, 502);
+      }
+
+      return json({
+        ok: true,
+        schema: 'mmibkr.operator_console_machine_read.v1',
+        stored_at_utc: record.stored_at_utc || null,
+        snapshot,
+        reader: {
+          repository: reader.repository,
+          workflow_ref: reader.workflow_ref,
+          run_id: reader.run_id,
+        },
+        broker_mutation_authority: false,
+        live_execution_allowed: false,
+      }, 200);
+    }
+
     try {
       await verifyAccess(request, env);
     } catch {
