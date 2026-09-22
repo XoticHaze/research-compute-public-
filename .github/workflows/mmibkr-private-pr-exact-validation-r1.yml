@@ -226,7 +226,7 @@ jobs:
           print('MMIBKR_PRIVATE_SOURCE_TOKEN_EXPOSED=0')
           PY
 
-      - name: Validate exact private Hostless Runtime Normal Fetch contract
+      - name: Validate exact private PR 665 position-state contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -241,61 +241,16 @@ jobs:
               set -eu
               python -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt >/dev/null
               python -m py_compile \
-                market_data_incremental_window.py \
-                market_data_request_contract.py \
-                data_manager.py \
-                futures_manager.py \
-                bot_selected_runtime_candidate_materialization_14th27b.py \
-                bot_selected_runtime_quote_freshness_idempotency_14th27c.py \
                 snapshot_ib_adapter_v1.py \
                 strategy.py \
-                selected_runtime_boundary_snapshot_hydrator_v1.py \
-                scripts/operator/ibkr_remote_warm_read_v1.py \
-                scripts/operator/ibkr_remote_selected_runtime_paper_proof_ingress_v1.py \
-                scripts/operator/ibkr_remote_selected_runtime_paper_execute_slot_v1.py \
-                scripts/operator/ibkr_remote_selected_runtime_boundary_slot_v1.py \
-                scripts/operator/runtime_market_data_cache_cursor_v1.py \
-                scripts/operator/runtime_market_data_cache_checkpoint_v1.py \
-                scripts/operator/selected_runtime_signal_history_contract_v1.py \
-                scripts/operator/selected_runtime_initial_backfill_ingest_v1.py \
-                scripts/operator/selected_runtime_cloud_bar_clock_v1.py \
-                scripts/operator/selected_runtime_cloud_runner_dry_plan_v1.py \
                 scripts/operator/selected_runtime_cloud_natural_evaluator_v1.py \
-                scripts/operator/selected_runtime_cloud_cycle_v1.py \
-                scripts/operator/selected_runtime_cloud_daemon_v1.py \
-                scripts/operator/mmibkr_cloud_source_producer_v1.py \
-                scripts/operator/mmibkr_cloud_source_relay_v1.py \
-                scripts/operator/selected_runtime_futures_roll_maintenance_v1.py \
-                scripts/operator/selected_runtime_legacy_compat_config_v1.py
-              python -m unittest \
-                tests.test_market_data_incremental_window_v1 \
-                tests.test_market_data_request_contract_v1 \
-                tests.test_market_data_cache_delta_runtime_v1 \
-                tests.test_runtime_market_data_cache_cursor_v1 \
-                tests.test_runtime_market_data_cache_checkpoint_v1 \
-                tests.test_selected_runtime_signal_history_contract_v1 \
-                tests.test_selected_runtime_execution_roll_v1 \
-                tests.test_selected_runtime_initial_backfill_ingest_v1 \
-                tests.test_selected_runtime_execution_expiry_guard_v1 \
-                tests.test_selected_runtime_boundary_snapshot_hydrator_v1 \
-                tests.test_selected_runtime_cloud_bar_clock_v1 \
+                tests/test_selected_runtime_cloud_natural_evaluator_v1.py \
+                tests/test_snapshot_ib_adapter_position_state_v1.py \
+                tests/test_strategy_registry_position_state_forwarding_v1.py
+              python -m unittest -v \
                 tests.test_selected_runtime_cloud_natural_evaluator_v1 \
-                tests.test_strategy_registry_position_state_forwarding_v1 \
-                tests.test_selected_runtime_cloud_runner_dry_plan_v1 \
-                tests.test_cloud_boundary_idempotency_v1 \
                 tests.test_snapshot_ib_adapter_position_state_v1 \
-                tests.test_selected_mnq_dca_spec_authority_v1 \
-                tests.test_ibkr_remote_warm_read_v1 \
-                tests.test_ibkr_remote_selected_runtime_paper_proof_ingress_v1 \
-                tests.test_ibkr_remote_selected_runtime_paper_execute_slot_v1 \
-                tests.test_ibkr_remote_selected_runtime_boundary_slot_v1 \
-                tests.test_selected_runtime_legacy_compat_config_v1 \
-                tests.test_selected_runtime_cloud_cycle_v1 \
-                tests.test_selected_runtime_cloud_daemon_v1 \
-                tests.test_mmibkr_cloud_source_producer_v1 \
-                tests.test_mmibkr_cloud_source_relay_v1 \
-                tests.test_selected_runtime_futures_roll_maintenance_v1 \
-                -v
+                tests.test_strategy_registry_position_state_forwarding_v1
             ' >"$log" 2>&1
           rc=$?
           set -e
@@ -304,12 +259,14 @@ jobs:
           rm -f "$log"
           if [ "$rc" -ne 0 ]; then
             echo "MMIBKR_PRIVATE_PR_EXACT_VALIDATION_STATUS=FAIL"
+            echo "MMIBKR_PRIVATE_PR_VALIDATION_SCOPE=pr665_position_state"
             echo "MMIBKR_PRIVATE_PR_VALIDATION_LOG_SHA256=$log_sha"
             echo "MMIBKR_PRIVATE_PR_VALIDATION_LOG_BYTES=$log_bytes"
             echo "MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0"
             exit "$rc"
           fi
           echo "MMIBKR_PRIVATE_PR_EXACT_VALIDATION_STATUS=PASS"
+          echo "MMIBKR_PRIVATE_PR_VALIDATION_SCOPE=pr665_position_state"
           echo "MMIBKR_PRIVATE_PR_VALIDATION_LOG_SHA256=$log_sha"
           echo "MMIBKR_PRIVATE_PR_VALIDATION_LOG_BYTES=$log_bytes"
           echo "MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0"
@@ -327,7 +284,7 @@ jobs:
               'source_sha': os.environ['PRIVATE_SOURCE_SHA'],
               'source_archive_sha256': os.environ['PRIVATE_ARCHIVE_SHA256'],
               'source_archive_bytes': int(os.environ['PRIVATE_ARCHIVE_BYTES']),
-              'hostless_runtime_normal_fetch_v1': True,
+              'pr665_position_state_contracts': True,
               'stock_position_state_forwarding_test': True,
               'private_source_token_exposed': False,
               'private_plaintext_published': False,
