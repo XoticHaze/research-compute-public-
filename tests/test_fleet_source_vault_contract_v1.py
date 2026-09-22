@@ -149,11 +149,11 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("PRIVATE_PR666_EXACT_VALIDATION_IDENTITY", text)
         self.assertIn(
-            "mmibkr-private-pr666-exact-validation-r1.yml@refs/heads/main",
+            "mmibkr-private-pr666-ownership-final-validation-r1.yml@refs/heads/main",
             text,
         )
         self.assertIn(
-            "553197599239f1efd0a302642872a5a064a1da32",
+            "a303718aade958c98bc12d5e812de870eb6f229d",
             text,
         )
         self.assertIn("PRIVATE_PR666_EXACT_VALIDATION_EXPIRES_AT", text)
