@@ -1,0 +1,27 @@
+{
+  "broker_mutation_authority": false,
+  "chunks": [
+    {
+      "chars": 8000,
+      "local_name": "operator-snapshot-000.txt",
+      "path": "rendezvous/returns/mmibkr-operator-snapshot/chatread_20260921_2258_r1/operator-snapshot-000.txt",
+      "sha256": "5f7789619b7de41a3c12d3a1407777c1ba4acfc8523ebe314af70faf537c546c"
+    },
+    {
+      "chars": 7820,
+      "local_name": "operator-snapshot-001.txt",
+      "path": "rendezvous/returns/mmibkr-operator-snapshot/chatread_20260921_2258_r1/operator-snapshot-001.txt",
+      "sha256": "b3698f2ca991ebd49ef78a7b24023b881bdc20474b0479631a1902e527a029d8"
+    }
+  ],
+  "ciphertext_sha256": "2a6035a35498019400279a85c3ef83474b511a79ad1e3d99bb8739a582a17a99",
+  "generated_at_utc": "2026-09-22T04:04:09.504495Z",
+  "live_execution_allowed": false,
+  "nonce_b64": "3CtVW3VDkZzpBtaf",
+  "plaintext_published": false,
+  "plaintext_sha256": "078e01d40813739edb8a807c8851b771e4ac605f0ff6f1519d1c4fe6471a0cf8",
+  "recipient_key_id": "sha256:f0e56eecee14ed5681a4d388bc71b33d8edc04d7de97509aaa32486a3e6b7780",
+  "request_id": "chatread_20260921_2258_r1",
+  "schema": "mmibkr.operator_snapshot_encrypted_return_x25519.v1",
+  "sender_public_b64": "a5h+KAyMFwSFEbkcB5KAytd8Vj8FrhI/ERk5QksjzSY="
+}
