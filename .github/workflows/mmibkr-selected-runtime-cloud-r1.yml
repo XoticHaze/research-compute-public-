@@ -29,6 +29,7 @@ on:
     paths:
       - rendezvous/fire/mmibkr-selected-runtime-cloud-r1
       - rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1
+      - rendezvous/fire/mmibkr-selected-runtime-cloud-successor-restore-acceptance-r1
   pull_request:
     branches:
       - main
@@ -44,6 +45,7 @@ on:
       - tests/test_mmibkr_initial_backfill_ingest_workflow_v1.py
       - tests/test_mmibkr_initial_backfill_preowner_checkpoint_v1.py
       - tests/test_mmibkr_checkpoint_acceptance_job_v1.py
+      - tests/test_mmibkr_successor_restore_acceptance_job_v1.py
       - scripts/mmibkr_cloud_session_acceptance_v1.py
       - scripts/mmibkr_operator_snapshot_publish_v1.py
       - tests/test_mmibkr_operator_snapshot_publish_helper_v1.py
@@ -84,7 +86,9 @@ jobs:
             mode="owner"
           else
             changed="$(git diff-tree --no-commit-id --name-only -r HEAD^ HEAD)"
-            if printf '%s\n' "$changed" | grep -Fxq 'rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1'; then
+            if printf '%s\n' "$changed" | grep -Fxq 'rendezvous/fire/mmibkr-selected-runtime-cloud-successor-restore-acceptance-r1'; then
+              mode="successor_restore_acceptance"
+            elif printf '%s\n' "$changed" | grep -Fxq 'rendezvous/fire/mmibkr-selected-runtime-cloud-checkpoint-acceptance-r1'; then
               mode="checkpoint_acceptance"
             else
               mode="owner"
@@ -121,6 +125,7 @@ jobs:
             tests/test_mmibkr_initial_backfill_ingest_workflow_v1.py \
             tests/test_mmibkr_initial_backfill_preowner_checkpoint_v1.py \
             tests/test_mmibkr_checkpoint_acceptance_job_v1.py \
+            tests/test_mmibkr_successor_restore_acceptance_job_v1.py \
             scripts/mmibkr_cloud_session_acceptance_v1.py \
             scripts/mmibkr_operator_snapshot_publish_v1.py \
             tests/test_mmibkr_operator_snapshot_publish_helper_v1.py
@@ -135,6 +140,7 @@ jobs:
             tests.test_mmibkr_initial_backfill_ingest_workflow_v1 \
             tests.test_mmibkr_initial_backfill_preowner_checkpoint_v1 \
             tests.test_mmibkr_checkpoint_acceptance_job_v1 \
+            tests.test_mmibkr_successor_restore_acceptance_job_v1 \
             tests.test_mmibkr_operator_snapshot_publish_helper_v1
 
   runtime:
@@ -1484,3 +1490,398 @@ jobs:
             fi
           done
           echo "MMIBKR_CHECKPOINT_ACCEPTANCE_PRIVATE_RUNTIME_MATERIAL_DESTROYED=1"
+
+
+  successor_restore_acceptance:
+    if: ${{ github.event_name == 'push' && needs.route.outputs.mode == 'successor_restore_acceptance' }}
+    needs:
+      - contract
+      - route
+    environment: ibkr-paper-runtime-r1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    concurrency:
+      group: mmibkr-selected-runtime-cloud-successor-restore-acceptance-r1
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CANONICAL_SOURCE_REF: d81df85788ebb6be6d4d69b9b9a537be96f16507
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Install fixed source-vault dependency
+        run: python -m pip install --disable-pip-version-check cryptography==46.0.1
+
+      - name: Resolve exact successor restore request
+        id: restore_request
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          path = Path(
+              'rendezvous/fire/mmibkr-selected-runtime-cloud-successor-restore-acceptance-r1'
+          )
+          node = json.loads(path.read_text(encoding='utf-8'))
+          if node.get('schema') != 'mmibkr.selected_runtime_cloud_successor_restore_acceptance_fire.v1':
+              raise SystemExit('successor restore acceptance fire schema mismatch')
+          if str(node.get('source_ref') or '').lower() != os.environ['CANONICAL_SOURCE_REF']:
+              raise SystemExit('successor restore private source mismatch')
+
+          key = str(node.get('expected_checkpoint_cache_key') or '').strip()
+          sha = str(node.get('expected_checkpoint_sha256') or '').strip().lower()
+          prefix = os.environ['CHECKPOINT_CACHE_PREFIX']
+          if not key.startswith(prefix):
+              raise SystemExit('successor restore checkpoint key must use canonical prefix')
+          if len(sha) != 64 or any(ch not in '0123456789abcdef' for ch in sha):
+              raise SystemExit('successor restore checkpoint SHA256 invalid')
+          if str(node.get('source_public_run_id') or '') != os.environ['INITIAL_BACKFILL_RUN_ID']:
+              raise SystemExit('successor restore source public run mismatch')
+          if node.get('broker_action') is not False:
+              raise SystemExit('successor restore broker boundary violated')
+          if node.get('paper_owner_started') is not False:
+              raise SystemExit('successor restore paper owner boundary violated')
+          if node.get('live_execution_allowed') is not False:
+              raise SystemExit('successor restore live boundary violated')
+
+          with Path(os.environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as fh:
+              fh.write('checkpoint_key=' + key + '\n')
+              fh.write('checkpoint_sha256=' + sha + '\n')
+          print('MMIBKR_SUCCESSOR_RESTORE_EXPECTED_CACHE_KEY=' + key)
+          print('MMIBKR_SUCCESSOR_RESTORE_EXPECTED_SHA256=' + sha)
+          PY
+
+      - name: Materialize exact private MM-IBKR source for successor restore acceptance
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/mmibkr-source"
+          python scripts/mmibkr_source_vault_consumer_v1.py \
+            --authority-base "$FLEET_AUTHORITY_BASE" \
+            --run-id "$GITHUB_RUN_ID" \
+            --source-sha "$CANONICAL_SOURCE_REF" \
+            --public-repo XoticHaze/mm-ibkr-runtime \
+            --public-branch mmibkr-source-vault \
+            --destination "$RUNNER_TEMP/mmibkr-source/extracted" \
+            --archive-output "$RUNNER_TEMP/mmibkr-source/mm-ibkr-source.tar.gz" \
+            --output "$RUNNER_TEMP/mmibkr-source/materialization-host.json"
+
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          root = Path(os.environ['RUNNER_TEMP']) / 'mmibkr-source'
+          node = json.loads((root / 'materialization-host.json').read_text(encoding='utf-8'))
+          if node.get('ok') is not True:
+              raise SystemExit('source materialization not ok')
+          if node.get('source_sha') != os.environ['CANONICAL_SOURCE_REF']:
+              raise SystemExit('private source SHA mismatch')
+          if node.get('source_transport') != 'fleet_authority_exact_sha_encrypted_snapshot_vault':
+              raise SystemExit('reusable encrypted source-vault transport required')
+          if node.get('private_repository_token_used') is not False:
+              raise SystemExit('private repository token unexpectedly used')
+          if node.get('broker_credentials_used') is not False:
+              raise SystemExit('broker credentials unexpectedly used')
+          if node.get('plaintext_emitted') is not False:
+              raise SystemExit('plaintext source emission contract violated')
+          if node.get('live_execution_allowed') is not False:
+              raise SystemExit('live execution authority unexpectedly enabled')
+          source_root = Path(node['source_root'])
+          if not (source_root / 'Dockerfile.bot').is_file():
+              raise SystemExit('materialized source layout incomplete')
+          with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
+              fh.write('PRIVATE_HEAD=' + node['source_sha'] + '\n')
+              fh.write('PRIVATE_SOURCE_ROOT=' + str(source_root) + '\n')
+          print('MMIBKR_SUCCESSOR_RESTORE_PRIVATE_HEAD=' + node['source_sha'])
+          PY
+
+      - name: Build exact private MM-IBKR image for successor restore acceptance
+        run: |
+          set -euo pipefail
+          docker build \
+            -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" \
+            --target bot \
+            -t "mmibkr-successor-restore-acceptance:$GITHUB_RUN_ID" \
+            "$PRIVATE_SOURCE_ROOT" >/dev/null
+
+      - name: Validate exact private checkpoint restore owners
+        run: |
+          set -euo pipefail
+          docker run --rm "mmibkr-successor-restore-acceptance:$GITHUB_RUN_ID" \
+            python -m unittest -v \
+              tests.test_selected_runtime_signal_history_contract_v1 \
+              tests.test_runtime_market_data_cache_checkpoint_v1
+
+      - name: Prepare successor restore directories
+        run: |
+          set -euo pipefail
+          mkdir -p \
+            "$RUNNER_TEMP/mmibkr-data" \
+            "$RUNNER_TEMP/mmibkr-checkpoint" \
+            "$RUNNER_TEMP/mmibkr-verify"
+
+      - name: Restore exact accepted predecessor checkpoint cache
+        id: restore_exact_predecessor
+        uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        with:
+          path: ${{ runner.temp }}/mmibkr-checkpoint
+          key: ${{ steps.restore_request.outputs.checkpoint_key }}
+          fail-on-cache-miss: true
+
+      - name: Verify accepted predecessor archive identity
+        id: verify_predecessor
+        env:
+          EXPECTED_SHA256: ${{ steps.restore_request.outputs.checkpoint_sha256 }}
+          EXPECTED_CACHE_KEY: ${{ steps.restore_request.outputs.checkpoint_key }}
+          RESTORED_CACHE_KEY: ${{ steps.restore_exact_predecessor.outputs.cache-matched-key }}
+          CACHE_HIT: ${{ steps.restore_exact_predecessor.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          checkpoint="$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
+          test "$CACHE_HIT" = 'true'
+          test "$RESTORED_CACHE_KEY" = "$EXPECTED_CACHE_KEY"
+          test -r "$checkpoint"
+          actual="$(sha256sum "$checkpoint" | awk '{print $1}')"
+          test "$actual" = "$EXPECTED_SHA256"
+          echo "checkpoint_sha256=$actual" >> "$GITHUB_OUTPUT"
+          echo "checkpoint_cache_key=$RESTORED_CACHE_KEY" >> "$GITHUB_OUTPUT"
+          echo "MMIBKR_SUCCESSOR_RESTORE_ARCHIVE_SHA256=$actual"
+          echo "MMIBKR_SUCCESSOR_RESTORE_EXACT_CACHE_HIT=1"
+
+      - name: Restore canonical market-data state from accepted predecessor
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$RUNNER_TEMP/mmibkr-data:/app/data" \
+            -v "$RUNNER_TEMP/mmibkr-checkpoint:/checkpoint:ro" \
+            "mmibkr-successor-restore-acceptance:$GITHUB_RUN_ID" \
+            python scripts/operator/runtime_market_data_cache_checkpoint_v1.py \
+              --repo-root /app \
+              --restore-archive /checkpoint/latest.tgz
+
+      - name: Rebuild canonical checkpoint plan from restored state
+        id: restored_plan
+        run: |
+          set -euo pipefail
+          uid="$(id -u)"
+          gid="$(id -g)"
+          docker run --rm \
+            -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro" \
+            -v "$RUNNER_TEMP/mmibkr-verify:/verify" \
+            "mmibkr-successor-restore-acceptance:$GITHUB_RUN_ID" \
+            python scripts/operator/runtime_market_data_cache_checkpoint_v1.py \
+              --repo-root /app \
+              --data-root /app/data \
+              --manifest-output /verify/restored-plan.json \
+              --archive-output /verify/rebuilt.tgz
+
+          docker run --rm \
+            -v "$RUNNER_TEMP/mmibkr-verify:/verify" \
+            "mmibkr-successor-restore-acceptance:$GITHUB_RUN_ID" \
+            sh -lc "chown -R $uid:$gid /verify"
+
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          path = Path(os.environ['RUNNER_TEMP']) / 'mmibkr-verify' / 'restored-plan.json'
+          node = json.loads(path.read_text(encoding='utf-8'))
+          if node.get('schema') != 'mmibkr.runtime_market_data_cache_checkpoint.v1':
+              raise SystemExit('restored checkpoint plan schema mismatch')
+          if node.get('ok') is not True:
+              raise SystemExit('restored checkpoint plan incomplete')
+          if node.get('signal_history_contract_index_included') is not True:
+              raise SystemExit('restored signal-history index missing')
+          if node.get('missing_required_files') not in ([], None):
+              raise SystemExit('restored checkpoint has missing required files')
+          files = [row for row in (node.get('files') or []) if isinstance(row, dict)]
+          symbols = {
+              str(row.get('symbol') or '')
+              for row in files
+              if row.get('kind') == 'source_cache'
+          }
+          if not {'AMAT', 'APH', 'MNQ'}.issubset(symbols):
+              raise SystemExit('restored checkpoint symbol coverage incomplete')
+          forbidden = (
+              'account_state_included',
+              'positions_included',
+              'orders_included',
+              'credentials_included',
+              'execution_authority_included',
+          )
+          if any(node.get(key) is not False for key in forbidden):
+              raise SystemExit('restored checkpoint privacy boundary violated')
+          print('MMIBKR_SUCCESSOR_RESTORE_FILE_COUNT=' + str(int(node.get('file_count') or 0)))
+          print('MMIBKR_SUCCESSOR_RESTORE_SYMBOLS=' + ','.join(sorted(symbols)))
+          PY
+
+          rebuilt="$RUNNER_TEMP/mmibkr-verify/rebuilt.tgz"
+          test -r "$rebuilt"
+          rebuilt_sha="$(sha256sum "$rebuilt" | awk '{print $1}')"
+          file_count="$(python - <<'PY'
+          import json, os
+          from pathlib import Path
+          node = json.loads(
+              (Path(os.environ['RUNNER_TEMP']) / 'mmibkr-verify' / 'restored-plan.json')
+              .read_text(encoding='utf-8')
+          )
+          print(int(node.get('file_count') or 0))
+          PY
+          )"
+          echo "rebuilt_sha256=$rebuilt_sha" >> "$GITHUB_OUTPUT"
+          echo "file_count=$file_count" >> "$GITHUB_OUTPUT"
+
+      - name: Validate restored signal-history identity
+        id: signal_history
+        run: |
+          set -euo pipefail
+          docker run --rm -i \
+            -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro" \
+            "mmibkr-successor-restore-acceptance:$GITHUB_RUN_ID" \
+            python - <<'PY' > "$RUNNER_TEMP/mmibkr-restore-signal-history.env"
+          import json
+          from pathlib import Path
+
+          path = Path(
+              '/app/data/strategy_runtime/selected_runtime_signal_history_contracts_v1/latest.json'
+          )
+          node = json.loads(path.read_text(encoding='utf-8'))
+          rows = node.get('runtimes') if isinstance(node.get('runtimes'), dict) else {}
+          if node.get('schema') != 'mmibkr.selected_runtime_signal_history_contracts.v1':
+              raise SystemExit('restored signal-history schema mismatch')
+          if node.get('ok') is not True:
+              raise SystemExit('restored signal-history not ok')
+          if str(node.get('public_run_id') or '') != '35407829303':
+              raise SystemExit('restored signal-history public run mismatch')
+          if int(node.get('runtime_count') or 0) != 3 or len(rows) != 3:
+              raise SystemExit('restored signal-history runtime count mismatch')
+          if not all(
+              isinstance(row, dict) and row.get('warmup_ready') is True
+              for row in rows.values()
+          ):
+              raise SystemExit('restored signal-history warmup not ready')
+          for key in (
+              'execution_authority_included',
+              'execution_contract_values_included',
+              'account_state_included',
+              'positions_included',
+              'orders_included',
+              'credentials_included',
+              'broker_action',
+          ):
+              if node.get(key) is not False:
+                  raise SystemExit('restored signal-history safety boundary violated:' + key)
+          print('PUBLIC_RUN_ID=' + str(node.get('public_run_id')))
+          print('RUNTIME_COUNT=' + str(int(node.get('runtime_count') or 0)))
+          PY
+
+          cat "$RUNNER_TEMP/mmibkr-restore-signal-history.env"
+          while IFS='=' read -r key value; do
+            case "$key" in
+              PUBLIC_RUN_ID)
+                echo "public_run_id=$value" >> "$GITHUB_OUTPUT"
+                ;;
+              RUNTIME_COUNT)
+                echo "runtime_count=$value" >> "$GITHUB_OUTPUT"
+                ;;
+            esac
+          done < "$RUNNER_TEMP/mmibkr-restore-signal-history.env"
+
+      - name: Publish sanitized successor restore acceptance receipt
+        env:
+          CHECKPOINT_CACHE_KEY: ${{ steps.verify_predecessor.outputs.checkpoint_cache_key }}
+          CHECKPOINT_SHA256: ${{ steps.verify_predecessor.outputs.checkpoint_sha256 }}
+          REBUILT_SHA256: ${{ steps.restored_plan.outputs.rebuilt_sha256 }}
+          FILE_COUNT: ${{ steps.restored_plan.outputs.file_count }}
+          SIGNAL_PUBLIC_RUN_ID: ${{ steps.signal_history.outputs.public_run_id }}
+          SIGNAL_RUNTIME_COUNT: ${{ steps.signal_history.outputs.runtime_count }}
+        run: |
+          set -euo pipefail
+          receipt="$RUNNER_TEMP/mmibkr-successor-restore-acceptance-receipt.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          node = {
+              'schema': 'mmibkr.successor_restore_acceptance.v1',
+              'ok': True,
+              'run_id': os.environ['GITHUB_RUN_ID'],
+              'public_head': os.environ['GITHUB_SHA'],
+              'private_head': os.environ['PRIVATE_HEAD'],
+              'source_public_run_id': os.environ['SIGNAL_PUBLIC_RUN_ID'],
+              'runtime_count': int(os.environ['SIGNAL_RUNTIME_COUNT']),
+              'checkpoint_cache_key': os.environ['CHECKPOINT_CACHE_KEY'],
+              'checkpoint_sha256': os.environ['CHECKPOINT_SHA256'],
+              'restored_checkpoint_plan_file_count': int(os.environ['FILE_COUNT']),
+              'restored_checkpoint_rebuild_sha256': os.environ['REBUILT_SHA256'],
+              'exact_cache_key_restored': True,
+              'exact_sha256_verified_before_restore': True,
+              'canonical_restore_executed': True,
+              'canonical_checkpoint_plan_rebuilt': True,
+              'signal_history_index_validated': True,
+              'warmup_ready': True,
+              'broker_action': False,
+              'paper_owner_started': False,
+              'runtime_execution_contract_mutated': False,
+              'live_execution_allowed': False,
+              'credentials_included': False,
+              'private_source_included': False,
+              'account_state_included': False,
+              'positions_included': False,
+              'orders_included': False,
+          }
+          Path(
+              os.environ['RUNNER_TEMP'],
+              'mmibkr-successor-restore-acceptance-receipt.json',
+          ).write_text(json.dumps(node, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+
+          content="$(base64 -w0 "$receipt")"
+          path="$RECEIPT_ROOT/$GITHUB_RUN_ID-mmibkr-successor-restore-acceptance.json"
+          gh api --method PUT "/repos/$GITHUB_REPOSITORY/contents/$path" \
+            -f "message=runtime: publish sanitized successor restore acceptance receipt" \
+            -f "content=$content" \
+            -f "branch=$EXCHANGE_REF" >/dev/null
+          echo "MMIBKR_SUCCESSOR_RESTORE_ACCEPTANCE_RECEIPT_PATH=$path"
+
+      - name: Destroy successor restore private runtime material
+        if: always()
+        run: |
+          set +e
+          uid="$(id -u)"
+          gid="$(id -g)"
+          if docker image inspect "mmibkr-successor-restore-acceptance:$GITHUB_RUN_ID" >/dev/null 2>&1; then
+            docker run --rm \
+              -v "$RUNNER_TEMP/mmibkr-data:/cleanup-data" \
+              -v "$RUNNER_TEMP/mmibkr-checkpoint:/cleanup-checkpoint" \
+              -v "$RUNNER_TEMP/mmibkr-verify:/cleanup-verify" \
+              "mmibkr-successor-restore-acceptance:$GITHUB_RUN_ID" \
+              sh -lc "chown -R $uid:$gid /cleanup-data /cleanup-checkpoint /cleanup-verify" \
+              >/dev/null 2>&1 || true
+          fi
+          rm -rf \
+            "$RUNNER_TEMP/mmibkr-source" \
+            "$RUNNER_TEMP/mmibkr-data" \
+            "$RUNNER_TEMP/mmibkr-checkpoint" \
+            "$RUNNER_TEMP/mmibkr-verify" \
+            "$RUNNER_TEMP/mmibkr-restore-signal-history.env" \
+            "$RUNNER_TEMP/mmibkr-successor-restore-acceptance-receipt.json"
+          docker image rm "mmibkr-successor-restore-acceptance:$GITHUB_RUN_ID" >/dev/null 2>&1 || true
+
+          for path in \
+            "$RUNNER_TEMP/mmibkr-source" \
+            "$RUNNER_TEMP/mmibkr-data" \
+            "$RUNNER_TEMP/mmibkr-checkpoint" \
+            "$RUNNER_TEMP/mmibkr-verify"; do
+            if [ -e "$path" ]; then
+              echo "successor restore cleanup residue: $path" >&2
+              exit 1
+            fi
+          done
+          echo "MMIBKR_SUCCESSOR_RESTORE_PRIVATE_RUNTIME_MATERIAL_DESTROYED=1"
