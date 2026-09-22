@@ -171,6 +171,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export ENABLE_LIVE_TRADING=0
           ui="$PRIVATE_SOURCE_ROOT/ui-react"
           install_log="$RUNNER_TEMP/promotion-review-npm-install.log"
           test_log="$RUNNER_TEMP/promotion-review-ui-test.log"
