@@ -28,6 +28,13 @@ const UI_BUILD_VALIDATION_IDENTITY = {
     'XoticHaze/research-compute-public-/.github/workflows/mm-ui-react-exact-build-r1.yml@refs/heads/main',
 };
 
+const EXACT_PRIVATE_VALIDATION_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-exact-private-validation-r1.yml@refs/heads/main',
+};
+
 const SOURCE_VAULT_BOOTSTRAP_IDENTITY = {
   repository: 'XoticHaze/mm-ibkr-runtime',
   ref: 'refs/heads/main',
@@ -48,6 +55,11 @@ const MISSED_TRADE_AUDIT_IDENTITY = {
   workflow_ref:
     'XoticHaze/research-compute-public-/.github/workflows/mmibkr-selected-runtime-missed-trade-audit-r1.yml@refs/heads/main',
 };
+const EXACT_PRIVATE_VALIDATION_SOURCE =
+  '468a4d5ca3d235c5ae89547f2d906103ebf9bcf8';
+const EXACT_PRIVATE_VALIDATION_EXPIRES_AT =
+  Date.parse('2026-09-24T12:00:00Z');
+
 const UI_BUILD_PRIVATE_ARCHIVE_SOURCE =
   'ca0adfa9f07d85b500594bbd334bb002e20b1eb6';
 const UI_BUILD_PRIVATE_ARCHIVE_EXPIRES_AT =
@@ -105,6 +117,11 @@ function matchesIdentity(identity, expected) {
 
 function isPrivateSourceStreamApproved(sourceSha, identity = null) {
   if (APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha)) return true;
+  if (
+    sourceSha === EXACT_PRIVATE_VALIDATION_SOURCE
+    && Date.now() <= EXACT_PRIVATE_VALIDATION_EXPIRES_AT
+    && matchesIdentity(identity, EXACT_PRIVATE_VALIDATION_IDENTITY)
+  ) return true;
   return (
     sourceSha === UI_BUILD_PRIVATE_ARCHIVE_SOURCE
     && Date.now() <= UI_BUILD_PRIVATE_ARCHIVE_EXPIRES_AT
@@ -251,6 +268,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
       (identity) => matchesIdentity(claims, identity),
     );
     const matchedUiBuild = matchesIdentity(claims, UI_BUILD_VALIDATION_IDENTITY);
+    const matchedExactPrivateValidation = matchesIdentity(claims, EXACT_PRIVATE_VALIDATION_IDENTITY);
     const matchedBootstrap = matchesIdentity(claims, SOURCE_VAULT_BOOTSTRAP_IDENTITY);
     const matchedOperatorDeploy = matchesIdentity(claims, OPERATOR_CONSOLE_DEPLOY_IDENTITY);
     const matchedMissedTradeAudit = matchesIdentity(claims, MISSED_TRADE_AUDIT_IDENTITY);
@@ -263,6 +281,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
       !(
         matchedRuntime
         || (matchedUiBuild && privateArchivePathAllowed)
+        || (matchedExactPrivateValidation && privateArchivePathAllowed)
         || (matchedBootstrap && privateArchivePathAllowed)
         || (matchedOperatorDeploy && operatorDeployPathAllowed)
         || (matchedMissedTradeAudit && operatorDeployPathAllowed)
