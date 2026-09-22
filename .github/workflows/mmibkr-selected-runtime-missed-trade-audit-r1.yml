@@ -1,11 +1,6 @@
 name: MM-IBKR Selected Runtime Missed-Trade Audit R1
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - rendezvous/fire/mmibkr-selected-runtime-missed-trade-audit-r1.json
   pull_request:
     branches:
       - main
@@ -49,7 +44,7 @@ jobs:
             tests.test_mmibkr_readonly_audit_encrypted_return_v1
 
   audit:
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ false }}
     needs:
       - contract
     runs-on: ubuntu-24.04
