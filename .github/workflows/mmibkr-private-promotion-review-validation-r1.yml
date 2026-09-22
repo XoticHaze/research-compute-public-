@@ -293,6 +293,7 @@ jobs:
               'state': 'success' if passed else 'failure',
               'context': 'mmibkr/private-promotion-review-validation',
               'description': 'Exact private promotion review validation passed' if passed else 'Exact private promotion review validation failed',
+              'target_url': f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
           }).encode()
           request = urllib.request.Request(
               f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}/statuses/{os.environ['GITHUB_SHA']}",
@@ -320,4 +321,4 @@ jobs:
           sudo rm -rf "$RUNNER_TEMP/mmibkr-promotion-review" "$RUNNER_TEMP/mmibkr-promotion-review.tar.gz" "$RUNNER_TEMP"/promotion-review-*.log
           echo 'MMIBKR_PROMOTION_REVIEW_PRIVATE_SOURCE_DESTROYED=1'
 
-# exact-validation-trigger-20260922-r1
+# exact-validation-trigger-20260922-r2
