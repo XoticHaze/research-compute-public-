@@ -83,6 +83,20 @@ SAFE_SECONDS_MAX_BAR = {
 SAFE_SECONDS_DURATIONS = set(SAFE_SECONDS_MAX_BAR)
 MAX_BAR_REQUESTS = 50
 HISTORICAL_CHUNK_PACE_SEC = 0.4
+HISTORICAL_SESSION_CONFLICT_CODE = 162
+HISTORICAL_SESSION_CONFLICT_TEXT = "trading tws session is connected from a different ip address"
+
+
+def _is_historical_session_conflict(error_code: object, error_string: object) -> bool:
+    try:
+        code = int(error_code)
+    except (TypeError, ValueError):
+        return False
+    message = str(error_string or "").strip().lower()
+    return (
+        code == HISTORICAL_SESSION_CONFLICT_CODE
+        and HISTORICAL_SESSION_CONFLICT_TEXT in message
+    )
 
 
 def _bar_size_seconds(value: str) -> int | None:
@@ -657,16 +671,43 @@ def main() -> int:
                     ) = cached_history
 
                 request_started = time.perf_counter()
-                bars = ib.reqHistoricalData(
-                    history_resolved,
-                    endDateTime=request_end,
-                    durationStr=duration,
-                    barSizeSetting=bar_size,
-                    whatToShow="TRADES",
-                    useRTH=False,
-                    formatDate=2,
-                    keepUpToDate=False,
-                )
+                historical_session_conflicts: list[dict[str, object]] = []
+
+                def _capture_historical_session_conflict(
+                    req_id: object,
+                    error_code: object,
+                    error_string: object,
+                    contract: object,
+                ) -> None:
+                    if _is_historical_session_conflict(error_code, error_string):
+                        historical_session_conflicts.append({
+                            "req_id": req_id,
+                            "error_code": int(error_code),
+                        })
+
+                ib.errorEvent += _capture_historical_session_conflict
+                try:
+                    bars = ib.reqHistoricalData(
+                        history_resolved,
+                        endDateTime=request_end,
+                        durationStr=duration,
+                        barSizeSetting=bar_size,
+                        whatToShow="TRADES",
+                        useRTH=False,
+                        formatDate=2,
+                        keepUpToDate=False,
+                    )
+                finally:
+                    ib.errorEvent -= _capture_historical_session_conflict
+
+                if historical_session_conflicts:
+                    print("IBKR_HISTORICAL_SESSION_CONFLICT=DIFFERENT_IP")
+                    print("IBKR_OPERATOR_ACTION=CLOSE_COMPETING_IBKR_SESSION")
+                    raise RuntimeError(
+                        f"IBKR historical data session conflict for {symbol} "
+                        f"{bar_request['source_timeframe']}: competing TWS/Gateway "
+                        "session is connected from a different IP address"
+                    )
                 if not bars and not allow_empty:
                     raise RuntimeError(
                         f"historical data returned no bars for {symbol} "
