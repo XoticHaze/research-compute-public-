@@ -380,8 +380,8 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         )
         self.assertIn("matchedP01CrwDca && p01CrwDcaSourcePathAllowed", text)
         self.assertIn("pathname === '/v1/source-exchange/request'", text)
-        self.assertIn("/v1/source-exchange/response", text)
-        self.assertIn("/v1/source-exchange/cleanup", text)
+        self.assertIn("source-exchange\\\\/response", text)
+        self.assertIn("source-exchange\\\\/cleanup", text)
         self.assertNotIn(
             "matchedP01CrwDca && privateArchivePathAllowed",
             text,
