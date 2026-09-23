@@ -22,7 +22,8 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 RECEIPT_SCHEMA = "mmibkr.remote_selected_runtime_paper_proof_receipt.v1"
 EXECUTE_RECEIPT_SCHEMA = "mmibkr.remote_selected_runtime_paper_execute_receipt.v1"
-RECEIPT_SCHEMAS = {RECEIPT_SCHEMA, EXECUTE_RECEIPT_SCHEMA}
+HYGIENE_RECEIPT_SCHEMA = "mmibkr.remote_paper_account_hygiene_receipt.v1"
+RECEIPT_SCHEMAS = {RECEIPT_SCHEMA, EXECUTE_RECEIPT_SCHEMA, HYGIENE_RECEIPT_SCHEMA}
 RETURN_RECIPIENT_SCHEMA = "ibkr-remote-paper-return-recipient-v1"
 RETURN_ENVELOPE_SCHEMA = "ibkr-remote-paper-proof-return-x25519-v1"
 AUTHORITY = "mm_ibkr_paper_runtime"
@@ -48,7 +49,14 @@ def _aad(*, run_id: str, recipient_key_id: str) -> bytes:
 def validate_receipt(receipt: Any, runtime: Mapping[str, Any], *, run_id: str) -> dict[str, Any]:
     if not isinstance(receipt, Mapping) or receipt.get("schema") not in RECEIPT_SCHEMAS:
         raise RuntimeError("selected-runtime encrypted return receipt schema mismatch")
-    expected_schema = RECEIPT_SCHEMA if runtime.get("mode") == "paper_submit_proof" else EXECUTE_RECEIPT_SCHEMA
+    mode = str(runtime.get("mode") or "")
+    expected_schema = (
+        RECEIPT_SCHEMA
+        if mode == "paper_submit_proof"
+        else HYGIENE_RECEIPT_SCHEMA
+        if mode == "paper_account_hygiene"
+        else EXECUTE_RECEIPT_SCHEMA
+    )
     if receipt.get("schema") != expected_schema:
         raise RuntimeError("selected-runtime encrypted return mode/receipt schema mismatch")
     if str((receipt.get("github") or {}).get("run_id") or "") != str(run_id):

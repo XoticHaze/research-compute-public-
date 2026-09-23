@@ -106,10 +106,12 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         self.assertIn('default: readonly', self.text)
         self.assertIn('- paper_submit_proof', self.text)
         self.assertIn('- paper_execute', self.text)
+        self.assertIn('- paper_account_hygiene', self.text)
         self.assertIn("IBKR_PAPER_PROOF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' && '1' || '0' }}", self.text)
         self.assertIn("IBKR_PAPER_EXECUTE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_execute' && '1' || '0' }}", self.text)
+        self.assertIn("IBKR_PAPER_ACCOUNT_HYGIENE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_account_hygiene' && '1' || '0' }}", self.text)
         self.assertIn('api_read_only=yes', self.text)
-        self.assertIn('if [ "$IBKR_PAPER_PROOF_MODE" = "1" ] || [ "$IBKR_PAPER_EXECUTE_MODE" = "1" ]; then', self.text)
+        self.assertIn('if [ "$IBKR_PAPER_PROOF_MODE" = "1" ] || [ "$IBKR_PAPER_EXECUTE_MODE" = "1" ] || [ "$IBKR_PAPER_ACCOUNT_HYGIENE_MODE" = "1" ]; then', self.text)
         self.assertIn('api_read_only=no', self.text)
         self.assertIn('-e READ_ONLY_API="$api_read_only"', self.text)
         self.assertNotIn('-e READ_ONLY_API=no', self.text)
@@ -137,7 +139,7 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         self.assertLess(restore, require)
         self.assertLess(require, auth)
         guard = self.text[require:auth]
-        self.assertIn("env.IBKR_PAPER_PROOF_MODE == '1' || env.IBKR_PAPER_EXECUTE_MODE == '1'", guard)
+        self.assertIn("env.IBKR_PAPER_PROOF_MODE == '1' || env.IBKR_PAPER_EXECUTE_MODE == '1' || env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE == '1'", guard)
         self.assertIn('steps.restore.outputs.restored', guard)
         self.assertIn('IBKR_PAPER_MUTATION_WARM_STATE_REQUIRED=1', guard)
 
@@ -152,6 +154,28 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         self.assertIn('--mode paper_execute', block)
         self.assertIn('id: paper_execute', block)
         self.assertIn('continue-on-error: true', block)
+
+    def test_account_hygiene_uses_same_warm_job_and_is_assessed_after_reseal(self):
+        post_auth = self.text.index('name: Materialize canonical post-auth broker and forward-data handoff')
+        hygiene = self.text.index('name: Execute one encrypted operator-authorized paper account hygiene command')
+        stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
+        seal = self.text.index('name: Seal authenticated Gateway warm state')
+        publish = self.text.index('name: Publish reusable encrypted warm state')
+        assess = self.text.index('name: Enforce paper account hygiene result after warm-state persistence')
+        cleanup = self.text.index('name: Destroy private runtime material')
+        self.assertLess(post_auth, hygiene)
+        self.assertLess(hygiene, stop)
+        self.assertLess(stop, seal)
+        self.assertLess(seal, publish)
+        self.assertLess(publish, assess)
+        self.assertLess(assess, cleanup)
+        block = self.text[hygiene:stop]
+        self.assertIn("inputs.mode == 'paper_account_hygiene'", block)
+        self.assertIn('--mode paper_account_hygiene', block)
+        self.assertIn('id: account_hygiene', block)
+        self.assertIn('continue-on-error: true', block)
+        self.assertIn('steps.account_hygiene.outcome', self.text[assess:cleanup])
+        self.assertIn('IBKR_WARM_PAPER_ACCOUNT_HYGIENE_ACCEPTED=0', self.text[assess:cleanup])
 
     def test_persistent_execute_failure_is_reported_only_after_warm_state_persistence(self):
         execute = self.text.index('name: Execute one encrypted MM-authorized persistent paper command')
@@ -200,6 +224,7 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         self.assertIn('docker image rm "mmibkr-warm-proof:${GITHUB_RUN_ID}"', self.text)
         self.assertIn('"$RUNNER_TEMP/ibkr-command-private.b64"', self.text)
         self.assertIn('"$RUNNER_TEMP/ibkr-paper-proof-return"', self.text)
+        self.assertIn('"$RUNNER_TEMP/ibkr-paper-account-hygiene-receipt.json"', self.text)
         self.assertIn('"$RUNNER_TEMP/mm-ibkr-source"', self.text)
 
 
