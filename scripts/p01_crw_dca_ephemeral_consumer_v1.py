@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -164,6 +165,14 @@ def main() -> int:
     receipt = dict(adapter_receipt)
     receipt["public_harness"] = HARNESS
     receipt["transport_schema"] = TRANSPORT_SCHEMA
+    receipt["public_provenance"] = {
+        "repository": os.environ.get("GITHUB_REPOSITORY", ""),
+        "head_sha": os.environ.get("GITHUB_SHA", ""),
+        "workflow": os.environ.get("GITHUB_WORKFLOW", ""),
+        "run_id": os.environ.get("GITHUB_RUN_ID", ""),
+        "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", ""),
+        "job": os.environ.get("GITHUB_JOB", ""),
+    }
     receipt["source_identity"] = {
         "repository": source["repository"],
         "commit": source["commit"],
