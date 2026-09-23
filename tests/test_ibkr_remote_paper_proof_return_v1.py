@@ -99,6 +99,21 @@ class RemotePaperProofReturnTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "mode/receipt schema mismatch"):
             mod.validate_receipt(self.receipt(), runtime, run_id="12345")
 
+    def test_account_hygiene_receipt_uses_same_encrypted_return_transport(self):
+        runtime = self.runtime()
+        runtime["mode"] = "paper_account_hygiene"
+        receipt = self.receipt()
+        receipt["schema"] = mod.HYGIENE_RECEIPT_SCHEMA
+        receipt["status"] = "PREFLIGHT_READY"
+        receipt["cleanup"] = {
+            "automatic_cleanup": False,
+            "exact_cancel_called": False,
+            "flatten_called": False,
+            "global_cancel_called": False,
+        }
+        out = mod.validate_receipt(receipt, runtime, run_id="12345")
+        self.assertEqual(out["schema"], mod.HYGIENE_RECEIPT_SCHEMA)
+
     def test_recipient_fingerprint_is_verified(self):
         _, recipient = self.recipient()
         recipient["recipient_key_id"] = "sha256:" + "0" * 64
