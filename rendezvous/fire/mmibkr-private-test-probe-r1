@@ -1,10 +1,10 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "7885cd19e07d42de0d0423b625dc75b34ca8ee4c",
+  "source_ref": "965c99c3b55d6355be2c543a283e360d64d5bcd8",
   "test_modules": [
     "tests.test_selected_runtime_strategy_spec_integrity_v1"
   ],
-  "requested_by": "assistant-pr723-selected-runtime-strategyspec-integrity",
+  "requested_by": "assistant-pr723-selected-runtime-strategyspec-integrity-r2",
   "purpose": "exact_validate_selected_runtime_strategyspec_digest_and_preset_identity",
   "authority": {
     "research_only": true,
@@ -13,6 +13,6 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "20260923T1851Z-pr723-strategyspec-integrity",
+  "request_nonce": "20260923T1856Z-pr723-strategyspec-integrity-r2",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault"
 }
