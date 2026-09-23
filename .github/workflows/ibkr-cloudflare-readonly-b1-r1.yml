@@ -296,7 +296,7 @@ jobs:
           echo 'IBKR_INITIAL_SELECTED_RUNTIME_BACKFILL_REQUEST_LOADED=1'
 
       - name: Validate optional encrypted warm read-return request
-        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.read_return_recipient_b64 != '' || inputs.read_return_recipient_key_id != '') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'paper_execute') && (inputs.read_return_recipient_b64 != '' || inputs.read_return_recipient_key_id != '') }}
         env:
           READ_RETURN_MODE: ${{ inputs.mode }}
           READ_RETURN_RECIPIENT_B64: ${{ inputs.read_return_recipient_b64 }}
@@ -306,8 +306,8 @@ jobs:
           python - <<'PY'
           import base64, hashlib, os
           mode=os.environ.get('READ_RETURN_MODE')
-          if mode not in {'readonly','paper_execute','paper_account_snapshot'}:
-              raise SystemExit('encrypted return recipient is admitted only in readonly, paper_execute, or paper_account_snapshot mode')
+          if mode not in {'readonly','paper_execute'}:
+              raise SystemExit('encrypted detailed read return is admitted only in readonly or paper_execute mode')
           encoded=os.environ.get('READ_RETURN_RECIPIENT_B64','').strip()
           key_id=os.environ.get('READ_RETURN_RECIPIENT_KEY_ID','').strip()
           if not encoded or not key_id:
@@ -322,6 +322,31 @@ jobs:
           if key_id != expected:
               raise SystemExit('encrypted read return recipient fingerprint mismatch')
           print('IBKR_WARM_READ_RETURN_REQUEST_VALID=1')
+          PY
+
+      - name: Validate required encrypted account snapshot recipient
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_account_snapshot' }}
+        env:
+          READ_RETURN_RECIPIENT_B64: ${{ inputs.read_return_recipient_b64 }}
+          READ_RETURN_RECIPIENT_KEY_ID: ${{ inputs.read_return_recipient_key_id }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, hashlib, os
+          encoded=os.environ.get('READ_RETURN_RECIPIENT_B64','').strip()
+          key_id=os.environ.get('READ_RETURN_RECIPIENT_KEY_ID','').strip()
+          if not encoded or not key_id:
+              raise SystemExit('paper account snapshot requires recipient key and fingerprint')
+          try:
+              raw=base64.b64decode(encoded.encode('ascii'),validate=True)
+          except Exception as exc:
+              raise SystemExit('paper account snapshot recipient is not valid base64') from exc
+          if len(raw) != 32:
+              raise SystemExit('paper account snapshot recipient must be a 32-byte X25519 public key')
+          expected='sha256:'+hashlib.sha256(raw).hexdigest()
+          if key_id != expected:
+              raise SystemExit('paper account snapshot recipient fingerprint mismatch')
+          print('IBKR_ACCOUNT_SNAPSHOT_RECIPIENT_VALID=1')
           PY
 
       - name: Obtain one-run sealed gateway environment
