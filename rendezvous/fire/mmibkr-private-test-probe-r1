@@ -1,12 +1,11 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "15594dd2353adb334584e8d9025cf7a427428b17",
+  "source_ref": "7885cd19e07d42de0d0423b625dc75b34ca8ee4c",
   "test_modules": [
-    "tests.test_autotuner_campaign_runner",
-    "tests.test_autotuner_primary_validation_runner"
+    "tests.test_selected_runtime_strategy_spec_integrity_v1"
   ],
-  "requested_by": "assistant-g08-autotuner-campaign-validation",
-  "purpose": "validate current G08 canonical owners using previously admitted exact source with byte-identical transitive owner blobs",
+  "requested_by": "assistant-pr723-selected-runtime-strategyspec-integrity",
+  "purpose": "exact_validate_selected_runtime_strategyspec_digest_and_preset_identity",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -14,16 +13,6 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "20260923T1847Z-g08-admitted-equivalent-r2",
-  "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "c1234d2a1837c62e8847f751ddad4b15ef89cfee",
-  "owner_blob_equivalence": {
-    "autotuner_campaign_runner.py": "21bc2b9b042d737ea455344ec438e92870705141",
-    "autotuner_primary_validation_runner.py": "9fddb22578efd00391e5c0200ca82c1a2a98d078",
-    "autotuner_campaign_planner.py": "c36fb474d09515d893b04f6661e34954d66145c5",
-    "autotuner_parameter_consumption.py": "2b56dca4a4b6a2e2d5264f576b1c82bfcf3f0918",
-    "autotuner_strategy_bridge.py": "48e7e976ae2890fad62c412871bfdfffbb8a3852",
-    "strategy_backtest_registry.py": "b7bb3e0cb78d63f12608799e4fda8ce50caced91",
-    "model_lab_validation.py": "d5a1fab17e2fb0391f1d94e736948e56e895604f"
-  }
+  "request_nonce": "20260923T1851Z-pr723-strategyspec-integrity",
+  "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault"
 }
