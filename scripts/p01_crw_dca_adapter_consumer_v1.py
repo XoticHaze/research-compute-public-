@@ -82,7 +82,7 @@ def _full_simulation_rows(result: dict[str, Any], source_root: Path) -> list[dic
     return rows
 
 
-def _metrics(result: dict[str, Any], capital: float, source_root: Path) -> dict[str, Any]:
+def _metrics(result: dict[str, Any], source_root: Path) -> dict[str, Any]:
     views = result.get("execution_views") or {}
     view = views.get(EXECUTION_VIEW)
     if not isinstance(view, dict) or view.get("execution_view") != EXECUTION_VIEW:
@@ -92,7 +92,8 @@ def _metrics(result: dict[str, Any], capital: float, source_root: Path) -> dict[
     return {
         "execution_view": EXECUTION_VIEW,
         "after_cost_net_pnl": pnl,
-        "after_cost_return_pct": 100.0 * pnl / capital,
+        "after_cost_return_points": pnl,
+        "return_unit": "MNQ_index_points",
         "max_drawdown": float(view.get("max_drawdown") or 0.0),
         "trade_count": int(view.get("total_trades") or 0),
         "bar_support": sum(int(x.get("bar_count") or 0) for x in (result.get("symbol_rows") or [])),
@@ -129,15 +130,12 @@ def main() -> int:
     p.add_argument("--corpus", default="mnq-strategy-backtest-12min.csv")
     p.add_argument("--expected-corpus-sha256", required=True)
     p.add_argument("--expected-corpus-bytes", required=True, type=int)
-    p.add_argument("--capital-basis", required=True, type=float)
     args = p.parse_args()
 
     root = Path(args.payload_dir).resolve()
     source_root = (root / args.source_root).resolve()
     seed_path = (root / args.seed_request).resolve()
     corpus = (root / args.corpus).resolve()
-    if args.capital_basis <= 0:
-        raise SystemExit("capital basis must be positive")
     observed_sha = _sha256(corpus)
     observed_bytes = corpus.stat().st_size
     if observed_sha != args.expected_corpus_sha256 or observed_bytes != args.expected_corpus_bytes:
@@ -168,9 +166,9 @@ def main() -> int:
         for name, mode in arms.items():
             request = _arm(seed, trigger_mode=mode, slippage_bps=cost)
             result = _canonical(source_root, request, root)
-            pair[name] = _metrics(result, args.capital_basis, source_root)
-        pair["challenger_minus_control_return_pct"] = (
-            pair["challenger"]["after_cost_return_pct"] - pair["control"]["after_cost_return_pct"]
+            pair[name] = _metrics(result, source_root)
+        pair["challenger_minus_control_return_points"] = (
+            pair["challenger"]["after_cost_return_points"] - pair["control"]["after_cost_return_points"]
         )
         pair["challenger_minus_control_net_pnl"] = (
             pair["challenger"]["after_cost_net_pnl"] - pair["control"]["after_cost_net_pnl"]
@@ -196,7 +194,7 @@ def main() -> int:
             name: _dca_params(request) for name, request in primary_requests.items()
         },
         "matched_controls": {"DCA_BASE_QTY": base_qty, "DCA_MAX_CONTRACTS": max_contracts},
-        "capital_basis": args.capital_basis,
+        "return_unit": "MNQ_index_points",
         "cost_sensitivity_slippage_bps": list(COST_BPS),
         "chronology_fold_contract": [name for name, _, _ in CHRONOLOGY_FOLDS],
         "scenarios": scenarios,
