@@ -1,6 +1,11 @@
 name: MMIBKR Private Test Probe R1
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'rendezvous/fire/mmibkr-private-test-probe-r1'
   pull_request:
     paths:
       - '.github/workflows/mmibkr-private-test-probe-r1.yml'
@@ -46,15 +51,53 @@ jobs:
           python -m py_compile scripts/mmibkr_private_test_probe_v1.py
           PYTHONPATH=scripts python -m pytest -q tests/test_mmibkr_private_test_probe_v1.py
 
+      - name: Resolve exact private test request
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          DISPATCH_SOURCE_REF: ${{ inputs.source_ref }}
+          DISPATCH_TEST_MODULES: ${{ inputs.test_modules }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          event = os.environ.get("GITHUB_EVENT_NAME", "")
+          if event == "workflow_dispatch":
+              source_ref = os.environ.get("DISPATCH_SOURCE_REF", "").strip()
+              modules = os.environ.get("DISPATCH_TEST_MODULES", "").strip()
+          elif event == "push":
+              node = json.loads(Path("rendezvous/fire/mmibkr-private-test-probe-r1").read_text(encoding="utf-8"))
+              if node.get("schema") != "mmibkr.private_test_probe_fire.v1":
+                  raise SystemExit("private test probe fire schema rejected")
+              source_ref = str(node.get("source_ref") or "").strip()
+              raw_modules = node.get("test_modules") or []
+              if not isinstance(raw_modules, list):
+                  raise SystemExit("private test probe modules must be a list")
+              modules = ",".join(str(value).strip() for value in raw_modules if str(value).strip())
+          else:
+              raise SystemExit("unsupported private test probe event")
+          if not re.fullmatch(r"[0-9a-f]{40}", source_ref):
+              raise SystemExit("private test probe requires exact 40-char source SHA")
+          if not modules:
+              raise SystemExit("private test probe requires modules")
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as fh:
+              fh.write("MMIBKR_PRIVATE_TEST_SOURCE_REF=" + source_ref + "\n")
+              fh.write("MMIBKR_PRIVATE_TEST_MODULES=" + modules + "\n")
+          print("MMIBKR_PRIVATE_TEST_REQUEST=PASS")
+          print("MMIBKR_PRIVATE_TEST_SOURCE_REF=" + source_ref)
+          print("MMIBKR_PRIVATE_TEST_MODULE_COUNT=" + str(len([x for x in modules.split(",") if x])))
+          PY
+
       - name: Materialize exact private MM source through existing source exchange
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
           python scripts/mmibkr_cloud_source_exchange_consumer_v1.py \
             --authority-base "$FLEET_AUTHORITY_BASE" \
             --run-id "$GITHUB_RUN_ID" \
-            --source-ref '${{ inputs.source_ref }}' \
+            --source-ref "$MMIBKR_PRIVATE_TEST_SOURCE_REF" \
             --destination "$RUNNER_TEMP/mmibkr-private-test-probe-source" \
             --output "$RUNNER_TEMP/mmibkr-private-test-probe-source.json" \
             --timeout-sec 1200
@@ -73,15 +116,15 @@ jobs:
           PY
 
       - name: Execute allowlisted exact-private research tests
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
           python scripts/mmibkr_private_test_probe_v1.py \
             --source-root "$MMIBKR_PRIVATE_TEST_SOURCE_ROOT" \
             --source-materialization "$RUNNER_TEMP/mmibkr-private-test-probe-source.json" \
-            --source-ref '${{ inputs.source_ref }}' \
-            --test-modules '${{ inputs.test_modules }}' \
+            --source-ref "$MMIBKR_PRIVATE_TEST_SOURCE_REF" \
+            --test-modules "$MMIBKR_PRIVATE_TEST_MODULES" \
             --image-tag "mmibkr-private-test-probe:${GITHUB_RUN_ID}" \
             | tee "$RUNNER_TEMP/mmibkr-private-test-probe-receipt.log"
           grep '^MMIBKR_PRIVATE_TEST_PROBE_RECEIPT=' "$RUNNER_TEMP/mmibkr-private-test-probe-receipt.log" \
@@ -90,7 +133,7 @@ jobs:
             >> "$RUNNER_TEMP/mmibkr-private-test-probe-sanitized-receipt.txt"
 
       - name: Upload sanitized private test receipt
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: mmibkr-private-test-probe-${{ github.run_id }}
