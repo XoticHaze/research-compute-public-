@@ -321,6 +321,25 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
 
+    def test_selected_runtime_ownership_source_bootstrap_is_exact_sha_expiring_and_bootstrap_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("SELECTED_RUNTIME_OWNERSHIP_BOOTSTRAP_SOURCE", text)
+        self.assertIn(
+            "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
+            text,
+        )
+        self.assertIn("SELECTED_RUNTIME_OWNERSHIP_BOOTSTRAP_EXPIRES_AT", text)
+        self.assertIn("2026-09-23T12:00:00Z", text)
+        self.assertIn("selectedRuntimeOwnershipBootstrapApproved", text)
+        self.assertIn(
+            "matchesIdentity(identity, SOURCE_VAULT_BOOTSTRAP_IDENTITY)",
+            text,
+        )
+        self.assertNotIn(
+            "matchesIdentity(identity, OPERATOR_CONSOLE_DEPLOY_IDENTITY)\n  );\n  const selectedRuntimeOwnershipBootstrapApproved",
+            text,
+        )
+
     def test_runtime_bootstrap_identity_is_private_archive_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("SOURCE_VAULT_BOOTSTRAP_IDENTITY", text)
