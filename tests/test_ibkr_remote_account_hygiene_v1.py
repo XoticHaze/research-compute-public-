@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from scripts import ibkr_remote_account_hygiene_v1 as mod
 from scripts import ibkr_remote_selected_runtime_command_capsule_v2 as capsule_v2
@@ -18,7 +19,7 @@ class RemoteAccountHygieneTests(unittest.TestCase):
             "ownership_authority": {
                 "schema": capsule_v2.HYGIENE_OWNERSHIP_SCHEMA,
                 "operator_snapshot_sha256": "d" * 64,
-                "snapshot_generated_at_utc": "2026-09-23T10:30:34Z",
+                "snapshot_generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                 "runtime_source_sha": "a" * 40,
                 "ownership_source": "selected_runtime_strategy_inventory_v1",
                 "strategy_owned_positions": [],
@@ -91,6 +92,29 @@ class RemoteAccountHygieneTests(unittest.TestCase):
                 for symbol in symbols
             ],
         }
+
+    def test_executor_rechecks_ownership_snapshot_freshness_before_broker_preflight(self):
+        request = self.request(execute=True)
+        now = datetime(2026, 9, 23, 12, 0, tzinfo=timezone.utc)
+        request["ownership_authority"]["snapshot_generated_at_utc"] = (
+            now - timedelta(seconds=capsule_v2.HYGIENE_MAX_OWNERSHIP_SNAPSHOT_AGE_SEC + 1)
+        ).isoformat().replace("+00:00", "Z")
+        calls = []
+
+        def send(*args, **kwargs):
+            calls.append((args, kwargs))
+            self.fail("stale ownership authority must fail before canonical broker preflight")
+
+        with self.assertRaisesRegex(RuntimeError, "ownership snapshot is stale"):
+            mod.execute_account_hygiene(
+                runtime=self.runtime(),
+                request=request,
+                send=send,
+                run_id="123",
+                public_head="e" * 40,
+                now_utc=now,
+            )
+        self.assertEqual(calls, [])
 
     def test_read_only_preflight_requires_exact_broker_truth_and_regular_session(self):
         calls = []

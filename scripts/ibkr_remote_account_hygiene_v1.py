@@ -9,6 +9,7 @@ current paper account exactly matches the ownership-authorized position snapshot
 """
 
 import math
+from datetime import datetime
 from typing import Any, Callable, Mapping
 
 from scripts import ibkr_remote_selected_runtime_command_capsule_v2 as capsule_v2
@@ -143,7 +144,12 @@ def _session_gate(preflight: Mapping[str, Any], symbols: list[str]) -> list[str]
     return problems
 
 
-def validate_runtime(runtime: Mapping[str, Any], request: Mapping[str, Any]) -> None:
+def validate_runtime(
+    runtime: Mapping[str, Any],
+    request: Mapping[str, Any],
+    *,
+    now_utc: datetime | None = None,
+) -> None:
     if str(runtime.get("mode") or "") != capsule_v2.HYGIENE_MODE:
         raise RuntimeError("account hygiene runtime mode mismatch")
     if runtime.get("paper_only") is not True:
@@ -151,6 +157,7 @@ def validate_runtime(runtime: Mapping[str, Any], request: Mapping[str, Any]) -> 
     if runtime.get("live_trading_change") is not False:
         raise RuntimeError("account hygiene live trading change rejected")
     authority = _mapping(request.get("ownership_authority"))
+    capsule_v2.validate_hygiene_snapshot_age(authority, now_utc=now_utc)
     if str(runtime.get("mmibkr_head") or "").lower() != str(authority.get("runtime_source_sha") or "").lower():
         raise RuntimeError("account hygiene source must match ownership snapshot runtime source")
     if authority.get("strategy_owned_positions") != []:
@@ -168,8 +175,9 @@ def execute_account_hygiene(
     send: Callable[..., tuple[int, dict[str, Any]]],
     run_id: str,
     public_head: str,
+    now_utc: datetime | None = None,
 ) -> dict[str, Any]:
-    validate_runtime(runtime, request)
+    validate_runtime(runtime, request, now_utc=now_utc)
     expected = _expected_index(request)
     symbols = [str(row["symbol"]).upper() for row in request["expected_positions"]]
     batch_size = int(request["batch_size"])

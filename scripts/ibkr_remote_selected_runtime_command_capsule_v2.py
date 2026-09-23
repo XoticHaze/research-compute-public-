@@ -16,6 +16,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -70,6 +71,8 @@ HYGIENE_OWNERSHIP_FIELDS = {
 HYGIENE_POSITION_FIELDS = {"symbol", "conId", "secType", "position"}
 HYGIENE_OWNERSHIP_SCHEMA = "mmibkr.account_hygiene_authority.v1"
 HYGIENE_OPERATOR_ACK = "MMIBKR_PAPER_ACCOUNT_HYGIENE_ACK_V1"
+HYGIENE_MAX_OWNERSHIP_SNAPSHOT_AGE_SEC = 30 * 60
+HYGIENE_MAX_OWNERSHIP_SNAPSHOT_FUTURE_SKEW_SEC = 2 * 60
 CLEANUP_FIELDS = {
     "cancel_open_order",
     "flatten_filled_position",
@@ -194,6 +197,33 @@ def _validate_source(value: Any) -> dict[str, Any]:
     return _validate_legacy_source(value)
 
 
+def validate_hygiene_snapshot_age(
+    authority: Mapping[str, Any],
+    *,
+    now_utc: datetime | None = None,
+) -> str:
+    raw = str(authority.get("snapshot_generated_at_utc") or "").strip()
+    if not raw:
+        raise RuntimeError("account hygiene snapshot timestamp required")
+    try:
+        instant = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise RuntimeError("account hygiene snapshot timestamp invalid") from exc
+    if instant.tzinfo is None:
+        raise RuntimeError("account hygiene snapshot timestamp must be timezone-aware")
+    instant = instant.astimezone(timezone.utc)
+    now = now_utc or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        raise RuntimeError("account hygiene now_utc must be timezone-aware")
+    now = now.astimezone(timezone.utc)
+    age_sec = (now - instant).total_seconds()
+    if age_sec < -HYGIENE_MAX_OWNERSHIP_SNAPSHOT_FUTURE_SKEW_SEC:
+        raise RuntimeError("account hygiene snapshot timestamp is too far in the future")
+    if age_sec > HYGIENE_MAX_OWNERSHIP_SNAPSHOT_AGE_SEC:
+        raise RuntimeError("account hygiene ownership snapshot is stale")
+    return instant.isoformat().replace("+00:00", "Z")
+
+
 def _validate_hygiene_request(value: Any) -> dict[str, Any]:
     if not isinstance(value, Mapping) or set(value) != HYGIENE_REQUEST_FIELDS:
         raise RuntimeError("account hygiene request field set mismatch")
@@ -234,8 +264,9 @@ def _validate_hygiene_request(value: Any) -> dict[str, Any]:
     snapshot_sha = str(authority.get("operator_snapshot_sha256") or "").strip().lower()
     if not re.fullmatch(r"[0-9a-f]{64}", snapshot_sha):
         raise RuntimeError("account hygiene operator snapshot sha256 invalid")
-    if not str(authority.get("snapshot_generated_at_utc") or "").strip():
-        raise RuntimeError("account hygiene snapshot timestamp required")
+    normalized_snapshot_timestamp = validate_hygiene_snapshot_age(authority)
+    authority = dict(authority)
+    authority["snapshot_generated_at_utc"] = normalized_snapshot_timestamp
 
     rows = request.get("expected_positions")
     if not isinstance(rows, list) or not rows or len(rows) > 50:
