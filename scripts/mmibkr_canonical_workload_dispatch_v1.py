@@ -2,7 +2,7 @@ from __future__ import annotations
 """Portable fail-closed dispatcher for allowlisted MM-IBKR research work."""
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import hashlib, importlib, json, os, re, sys, threading
+import hashlib, importlib, json, os, re, secrets, sys, threading, time
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +10,9 @@ REQUEST_SCHEMA="mmibkr.canonical_workload_request.v1"
 PLAN_SCHEMA="mmibkr.canonical_workload_plan.v1"
 RECEIPT_SCHEMA="mmibkr.canonical_workload_receipt.v1"
 PLAN_RECEIPT_SCHEMA="mmibkr.canonical_workload_plan_receipt.v1"
+CLAIM_SCHEMA="mmibkr.canonical_workload_claim.v1"
+CLAIM_LEASE_SECONDS=120
+CLAIM_HEARTBEAT_SECONDS=30
 SOURCE_RECEIPT_SCHEMA="mmibkr.private_source_materialization.v1"
 SOURCE_REPOSITORY="XoticHaze/mm-IBKR"
 AUTHORITY="research_only"
@@ -120,21 +123,87 @@ def cached(path:Path,fp:str):
     if r.get("schema")!=RECEIPT_SCHEMA or r.get("job_fingerprint")!=fp or r.get("status")!="completed":raise CanonicalDispatchError("cached receipt identity/status mismatch")
     return r
 
+def claim_owned(path:Path,token:str,fp:str)->bool:
+    try:
+        node=load(path)
+    except Exception:
+        return False
+    return (
+        node.get("schema")==CLAIM_SCHEMA
+        and node.get("claim_token")==token
+        and node.get("job_fingerprint")==fp
+    )
+
+def acquire_claim(path:Path,v:dict,fp:str,receipt_path:Path)->tuple[str,dict|None]:
+    path.parent.mkdir(parents=True,exist_ok=True)
+    stale_dir=path.parent/"stale"; stale_dir.mkdir(parents=True,exist_ok=True)
+    while True:
+        token=secrets.token_hex(16)
+        payload={
+            "schema":CLAIM_SCHEMA,
+            "job_id":v["job_id"],
+            "job_fingerprint":fp,
+            "claim_token":token,
+            "pid":os.getpid(),
+            "lease_seconds":CLAIM_LEASE_SECONDS,
+            "claimed_at_epoch":time.time(),
+        }
+        try:
+            fd=os.open(path,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
+        except FileExistsError:
+            hit=cached(receipt_path,fp)
+            if hit:return "",hit
+            try:
+                node=load(path); stat=path.stat()
+            except FileNotFoundError:
+                continue
+            except Exception as e:
+                raise CanonicalDispatchError("existing claim is malformed") from e
+            if node.get("schema")!=CLAIM_SCHEMA or node.get("job_fingerprint")!=fp:
+                raise CanonicalDispatchError("existing claim identity mismatch")
+            try:lease=max(1,int(node.get("lease_seconds") or CLAIM_LEASE_SECONDS))
+            except Exception as e:raise CanonicalDispatchError("existing claim lease is invalid") from e
+            age=max(0.0,time.time()-stat.st_mtime)
+            if age<=lease:
+                raise CanonicalDispatchError("job is already claimed and lease is active")
+            stale=stale_dir/f"{fp}.{int(time.time())}.{secrets.token_hex(4)}.claim"
+            try:os.replace(path,stale)
+            except FileNotFoundError:continue
+            continue
+        with os.fdopen(fd,"w") as h:
+            h.write(json.dumps(payload,sort_keys=True)+"\n")
+        return token,None
+
+def start_claim_heartbeat(path:Path,token:str,fp:str)->tuple[threading.Event,threading.Event,threading.Thread]:
+    stop=threading.Event(); lost=threading.Event()
+    def beat():
+        while not stop.wait(CLAIM_HEARTBEAT_SECONDS):
+            if not claim_owned(path,token,fp):
+                lost.set();return
+            try:os.utime(path,None)
+            except FileNotFoundError:
+                lost.set();return
+    thread=threading.Thread(target=beat,name=f"mmibkr-claim-{fp[:8]}",daemon=True);thread.start()
+    return stop,lost,thread
+
 def execute_request(req:dict,*,source_root:Path,source_receipt:dict,receipt_dir:Path|None=None)->dict:
     v=validate_request(req,source_root,source_receipt); fp=sha(v)
     if receipt_dir is None:return {"receipt":execute_valid(v,source_root),"cache_hit":False}
     rd=receipt_dir.resolve(); rp=rd/"receipts"/f"{fp}.json"; hit=cached(rp,fp)
     if hit:return {"receipt":hit,"cache_hit":True}
-    cp=rd/"claims"/f"{fp}.claim"; cp.parent.mkdir(parents=True,exist_ok=True)
-    try:fd=os.open(cp,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
-    except FileExistsError as e:
-        hit=cached(rp,fp)
-        if hit:return {"receipt":hit,"cache_hit":True}
-        raise CanonicalDispatchError("job is already claimed and has no completed receipt") from e
+    cp=rd/"claims"/f"{fp}.claim"
+    token,hit=acquire_claim(cp,v,fp,rp)
+    if hit:return {"receipt":hit,"cache_hit":True}
+    stop,lost,thread=start_claim_heartbeat(cp,token,fp)
+    published=False
     try:
-        with os.fdopen(fd,"w") as h:h.write(json.dumps({"job_id":v["job_id"],"pid":os.getpid()})+"\n")
-        r=execute_valid(v,source_root); atomic(rp,r); return {"receipt":r,"cache_hit":False}
-    finally:cp.unlink(missing_ok=True)
+        r=execute_valid(v,source_root)
+        if lost.is_set() or not claim_owned(cp,token,fp):
+            raise CanonicalDispatchError("claim lease ownership was lost; canonical result discarded")
+        atomic(rp,r);published=True;return {"receipt":r,"cache_hit":False}
+    finally:
+        stop.set();thread.join(timeout=1)
+        if claim_owned(cp,token,fp):cp.unlink(missing_ok=True)
 
 def validate_plan(plan:dict)->dict:
     exact(plan,{"schema","plan_id","max_parallel","jobs"},"plan")
