@@ -100,7 +100,7 @@ const PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_IDENTITY = {
     'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-pr711-account-hygiene-validation-r1.yml@refs/heads/main',
 };
 const PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_SOURCE =
-  'e78d16c99bde3df4d3828c952e27dc1746772875';
+  '6a20403d771cbcf40ae475f8f66979973debe57b';
 const PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_EXPIRES_AT =
   Date.parse('2026-09-23T18:00:00Z');
 
