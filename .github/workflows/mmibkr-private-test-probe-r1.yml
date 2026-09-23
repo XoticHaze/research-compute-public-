@@ -1,6 +1,11 @@
 name: MMIBKR Private Test Probe R1
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/mmibkr-private-test-probe-r1.yml'
+      - 'scripts/mmibkr_private_test_probe_v1.py'
+      - 'tests/test_mmibkr_private_test_probe_v1.py'
   workflow_dispatch:
     inputs:
       source_ref:
@@ -42,6 +47,7 @@ jobs:
           PYTHONPATH=scripts python -m pytest -q tests/test_mmibkr_private_test_probe_v1.py
 
       - name: Materialize exact private MM source through existing source exchange
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           set -euo pipefail
@@ -67,6 +73,7 @@ jobs:
           PY
 
       - name: Execute allowlisted exact-private research tests
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           set -euo pipefail
@@ -83,6 +90,7 @@ jobs:
             >> "$RUNNER_TEMP/mmibkr-private-test-probe-sanitized-receipt.txt"
 
       - name: Upload sanitized private test receipt
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: mmibkr-private-test-probe-${{ github.run_id }}
