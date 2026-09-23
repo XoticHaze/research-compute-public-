@@ -215,7 +215,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            "7a76b63042aaa2e38784ac0b35ec781703c93f5a",
+            "9162d4117c5a89bd206379df583356bb1083960c",
             text,
         )
         self.assertIn("PRIVATE_PR670_EXACT_VALIDATION_EXPIRES_AT", text)
