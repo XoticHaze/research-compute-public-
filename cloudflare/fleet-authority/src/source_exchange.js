@@ -179,6 +179,12 @@ function matchesIdentity(identity, expected) {
 }
 
 function isPrivateSourceStreamApproved(sourceSha, identity = null) {
+  const exactSha = /^[0-9a-f]{40}$/.test(String(sourceSha || ''));
+  const sourceVaultBootstrapExactShaApproved = (
+    exactSha
+    && matchesIdentity(identity, SOURCE_VAULT_BOOTSTRAP_IDENTITY)
+  );
+  if (sourceVaultBootstrapExactShaApproved) return true;
   if (APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha)) return true;
   const uiBuildApproved = (
     sourceSha === UI_BUILD_PRIVATE_ARCHIVE_SOURCE
