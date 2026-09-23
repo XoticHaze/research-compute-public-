@@ -289,7 +289,10 @@ def _validate_hold(path: Path) -> None:
         raise RuntimeError("selected-runtime maintenance hold is not enabled")
     if str(node.get("reason") or "") != HOLD_REASON:
         raise RuntimeError("selected-runtime maintenance hold reason mismatch")
-    if node.get("broker_authority") is not False or node.get("live_execution_allowed") is not False:
+    if (
+        node.get("broker_mutation_authority") is not False
+        or node.get("live_execution_allowed") is not False
+    ):
         raise RuntimeError("selected-runtime maintenance hold authority boundary violated")
 
 
