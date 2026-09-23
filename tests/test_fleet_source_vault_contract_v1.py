@@ -257,6 +257,49 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
 
+    def test_private_pr709_boundary_expiry_validation_is_exact_sha_expiring_and_archive_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("PRIVATE_PR709_BOUNDARY_EXPIRY_VALIDATION_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-private-pr709-boundary-expiry-validation-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn(
+            "e180c8b14df8411f099b694475dc0edffb50340f",
+            text,
+        )
+        self.assertIn("PRIVATE_PR709_BOUNDARY_EXPIRY_VALIDATION_EXPIRES_AT", text)
+        self.assertIn("2026-09-23T18:00:00Z", text)
+        self.assertIn("matchedPrivatePr709BoundaryExpiryValidation", text)
+        self.assertIn(
+            "(matchedPrivatePr709BoundaryExpiryValidation && privateArchivePathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedPrivatePr709BoundaryExpiryValidation && operatorDeployPathAllowed)",
+            text,
+        )
+
+        workflow = (
+            ROOT
+            / ".github"
+            / "workflows"
+            / "mmibkr-private-pr709-boundary-expiry-validation-r1.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "PRIVATE_SOURCE_SHA: e180c8b14df8411f099b694475dc0edffb50340f",
+            workflow,
+        )
+        self.assertIn("tests.test_ibkr_remote_warm_read_v1", workflow)
+        self.assertIn(
+            "tests.test_ibkr_remote_selected_runtime_boundary_slot_v1",
+            workflow,
+        )
+        self.assertIn("tests.test_selected_runtime_cloud_cycle_v1", workflow)
+        self.assertIn("ENABLE_LIVE_TRADING=0", workflow)
+        self.assertIn("'broker_action': False", workflow)
+        self.assertIn("'live_trading_allowed': False", workflow)
+
     def test_private_pr671_validation_is_isolated_exact_sha_expiring_and_archive_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("PRIVATE_PR671_EXACT_VALIDATION_IDENTITY", text)
