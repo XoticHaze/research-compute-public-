@@ -1,11 +1,12 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "3cabc0a8bd097a296f3b7ace2d5e4ab47eb26d59",
+  "source_ref": "c1234d2a1837c62e8847f751ddad4b15ef89cfee",
   "test_modules": [
-    "tests.test_canonical_data_materialize_v1"
+    "tests.test_autotuner_campaign_runner",
+    "tests.test_autotuner_primary_validation_runner"
   ],
-  "requested_by": "assistant-g05-canonical-data-materialize",
-  "purpose": "validate hardened MM-IBKR PR #712 canonical offline stock/futures data materializer through encrypted exact-private public compute",
+  "requested_by": "assistant-g08-autotuner-campaign-validation",
+  "purpose": "validate canonical AutoTuner campaign and primary validation owners for public G08 dispatcher PR #1665",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -13,9 +14,6 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "20260923T1119Z-712-3cabc0a8-g05-r2",
-  "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "source_vault_bootstrap_run": 35853597229,
-  "source_archive_sha256": "274c127a0193c877feeb3fd6a67dded92ea88c2cc3b5a427066d8e45f4fda102",
-  "source_manifest_sha256": "61b4efdd51588f22121b1549556542bba40054351ca71b99e2202f2c1f393d58"
+  "request_nonce": "20260923T1845Z-g08-campaign-validation-r1",
+  "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault"
 }
