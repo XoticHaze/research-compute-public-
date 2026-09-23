@@ -30,6 +30,7 @@ The portable ABI currently carries these research-only bindings:
 | `AUTOTUNER_CANDIDATE_GENERATE` | `autotuner_strategy_bridge.candidate_mutations` | generate a bounded mutation set only after the canonical consumption gate |
 | `CANONICAL_DATA_MATERIALIZE` | `data_manager.DataManager.ingest_external_stock_source_bars` | normalize/dedupe/resample governed stock bars into canonical raw/features/sidecar artifacts without provider acquisition |
 | `FEATURE_CONTRACT_VALIDATE` | `feature_contract.read_feature_artifact_sidecar` | verify feature artifact bytes, lineage manifest hash, semantic hash, causality and portable feature meaning |
+| `STRATEGY_PREVIEW` | `strategies.create` + `strategies.event_bus.build_strategy_definition` | deterministic read-only strategy evaluation over an exact canonical feature artifact |
 
 CRW backtest callers cannot supply absolute source paths. The request carries per-symbol relative paths, byte counts, and SHA-256 identities under a governed `--input-root`; the dispatcher verifies them and injects canonical `_verified_source_paths` only after admission.
 
@@ -39,7 +40,9 @@ AutoTuner callers cannot supply their own parameter schema. The dispatcher deriv
 
 `FEATURE_CONTRACT_VALIDATE` accepts either a governed external artifact under `--input-root` or a prior canonical receipt artifact addressed by `job_fingerprint + relative_path + SHA-256`. Absolute host paths are never part of the request ABI.
 
-Strategy Preview, AutoTuner campaign/primary validation, Model Lab, News, Options, and report materialization remain dependency-ordered additions rather than one-off workflow families.
+`STRATEGY_PREVIEW` consumes the same governed feature-artifact reference. It owns StrategySpec normalization, feature manifest compatibility, deterministic/as-of row selection, strategy registry evaluation, required/missing indicator evidence, Builder-condition evidence, and the raw research signal. Live/paper positions, sizing, risk/order math, broker-shaped previews, buying-power/margin, order intent, route readiness, and submit authority remain operator/runtime overlays outside the generic executor.
+
+AutoTuner campaign/primary validation, Model Lab, News, Options, and report materialization remain dependency-ordered additions rather than one-off workflow families.
 
 ## Request contract
 
@@ -106,11 +109,12 @@ python scripts/mmibkr_canonical_workload_dispatch_v1.py plan-run \
 ## Next dependency-ordered additions
 
 1. consume #1607 and #1549 through the generalized `CRW_BACKTEST` binding as regression/acceptance fixtures;
-2. finish `STRATEGY_PREVIEW` using canonical feature artifacts rather than backend file paths;
+2. consume #1607 and #1549 as generalized `CRW_BACKTEST` acceptance plans rather than fixed family-specific execution paths;
 3. extend `CANONICAL_DATA_MATERIALIZE` to the dedicated futures roll/stitch producer contract without moving broker/provider credentials into the research executor;
-4. AutoTuner campaign + primary validation on top of the admitted parameter/candidate routes;
-5. Model Lab first consumer, orchestration, and comparison validation;
-6. deterministic News and Options intelligence adapters from #1618;
-7. reproducible report/render artifacts and clean-checkout Docker/bootstrap/doctor smoke.
+4. add a generic registry-backtest adapter so CRW remains the first proven fixture rather than the permanent execution model;
+5. AutoTuner campaign + primary validation on top of the admitted parameter/candidate routes;
+6. Model Lab first consumer, orchestration, and comparison validation;
+7. deterministic News and Options intelligence adapters from #1618;
+8. reproducible report/render artifacts and clean-checkout Docker/bootstrap/doctor smoke.
 
 Cloud transports remain replaceable adapters. Broker/runtime/live authorities remain separate.

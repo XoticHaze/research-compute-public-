@@ -50,6 +50,11 @@ CAPABILITIES={
         "module":"feature_contract",
         "callable":"read_feature_artifact_sidecar",
     },
+    "STRATEGY_PREVIEW":{
+        "path":"strategies/__init__.py",
+        "module":"strategies",
+        "callable":"create",
+    },
 }
 _SHA1=re.compile(r"^[0-9a-f]{40}$")
 _SHA256=re.compile(r"^[0-9a-f]{64}$")
@@ -250,6 +255,35 @@ def validate_feature_contract_arguments(args:Any,input_root:Path|None,receipt_di
         "expected_semantic_hash":expected_semantic or None,
     }
 
+def validate_strategy_preview_arguments(args:Any,input_root:Path|None,receipt_dir:Path|None)->dict:
+    if not isinstance(args,dict):raise CanonicalDispatchError("STRATEGY_PREVIEW arguments must be object")
+    exact(args,{"strategy_spec","feature_artifact","row_policy","lookback_rows","context_values","expected_feature_semantic_hash"},"STRATEGY_PREVIEW arguments")
+    spec=args.get("strategy_spec")
+    if not isinstance(spec,dict):raise CanonicalDispatchError("STRATEGY_PREVIEW strategy_spec must be object")
+    resolved=resolve_artifact_ref(input_root,receipt_dir,args.get("feature_artifact"),"feature_artifact")
+    row_policy=str(args.get("row_policy") or "latest").strip()
+    if row_policy not in {"latest","latest_execution_safe"}:
+        raise CanonicalDispatchError("STRATEGY_PREVIEW row_policy must be latest or latest_execution_safe")
+    try:lookback=int(args.get("lookback_rows",12))
+    except Exception as e:raise CanonicalDispatchError("STRATEGY_PREVIEW lookback_rows must be integer") from e
+    if not 1<=lookback<=100:raise CanonicalDispatchError("STRATEGY_PREVIEW lookback_rows must be within 1..100")
+    context=args.get("context_values")
+    if context is None:context={}
+    if not isinstance(context,dict):raise CanonicalDispatchError("STRATEGY_PREVIEW context_values must be object")
+    semantic=str(args.get("expected_feature_semantic_hash") or "").lower()
+    if semantic and not _SHA256.fullmatch(semantic):
+        raise CanonicalDispatchError("STRATEGY_PREVIEW expected_feature_semantic_hash is invalid")
+    ref={k:resolved[k] for k in ("scope","relative_path","sha256","bytes")}
+    if "job_fingerprint" in resolved:ref["job_fingerprint"]=resolved["job_fingerprint"]
+    return {
+        "strategy_spec":deepcopy(spec),
+        "feature_artifact":ref,
+        "row_policy":row_policy,
+        "lookback_rows":lookback,
+        "context_values":deepcopy(context),
+        "expected_feature_semantic_hash":semantic or None,
+    }
+
 def validate_data_materialize_arguments(args:Any,input_root:Path|None)->dict:
     if not isinstance(args,dict):raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE arguments must be object")
     exact(args,{"asset_type","symbol","source_timeframe","target_timeframes","source_origin","dataset"},"CANONICAL_DATA_MATERIALIZE arguments")
@@ -322,6 +356,8 @@ def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None
         normalized_args=validate_data_materialize_arguments(args,input_root)
     elif cid=="FEATURE_CONTRACT_VALIDATE":
         normalized_args=validate_feature_contract_arguments(args,input_root,receipt_dir)
+    elif cid=="STRATEGY_PREVIEW":
+        normalized_args=validate_strategy_preview_arguments(args,input_root,receipt_dir)
     else:
         raise CanonicalDispatchError(f"capability executor is not implemented: {cid}")
     return {"schema":REQUEST_SCHEMA,"job_id":jid,"capability_id":cid,"mmibkr":mm,"entrypoint":{**cap,"git_blob_sha1":actual},"arguments":normalized_args,"resources":resources(req.get("resources")),"authority":AUTHORITY,"forbidden_authorities":dict(FORBIDDEN_AUTHORITY_ASSERTIONS)}
@@ -371,13 +407,24 @@ def private_blob_identity(root:Path,path:str)->str:
     if root.resolve() not in target.parents or not target.is_file():raise CanonicalDispatchError(f"canonical dependency missing: {path}")
     return git_blob(target.read_bytes())
 
-def normalized_crw_spec(root:Path,raw:dict)->dict:
+def normalized_strategy_spec(root:Path,raw:dict)->dict:
     fn=private_callable(root,"autotuner_strategy_bridge.py","autotuner_strategy_bridge","normalize_strategy_spec")
     normalized=fn(raw)
     if not isinstance(normalized,dict) or not isinstance(normalized.get("strategy_spec"),dict):
         raise CanonicalDispatchError("canonical StrategySpec normalizer returned invalid contract")
     digest=str(normalized.get("strategy_spec_digest") or "")
     if not _SHA256.fullmatch(digest):raise CanonicalDispatchError("canonical StrategySpec digest is invalid")
+    spec=normalized["strategy_spec"]
+    if not str(spec.get("strategy_id") or "").strip():
+        raise CanonicalDispatchError("canonical StrategySpec strategy_id is missing")
+    if not str(spec.get("symbol") or "").strip():
+        raise CanonicalDispatchError("canonical StrategySpec symbol is missing")
+    if not str(spec.get("timeframe") or "").strip():
+        raise CanonicalDispatchError("canonical StrategySpec timeframe is missing")
+    return normalized
+
+def normalized_crw_spec(root:Path,raw:dict)->dict:
+    normalized=normalized_strategy_spec(root,raw)
     if normalized["strategy_spec"].get("strategy_id")!="crw_score_multi_mode":
         raise CanonicalDispatchError("AutoTuner capability only accepts crw_score_multi_mode")
     return normalized
@@ -465,6 +512,221 @@ def sanitize_crw_result(raw:dict,args:dict)->dict:
         "safety":expected,
     }
     return result
+
+def preview_data_quality(row:dict)->dict:
+    fatal=[];warnings=[]
+    def num(name:str):
+        try:
+            value=row.get(name)
+            if value is None or value=="":return None
+            value=float(value)
+            if not (value==value and value not in (float("inf"),float("-inf"))):return None
+            return value
+        except Exception:return None
+    for name in ("open","high","low","close"):
+        value=num(name)
+        if value is None:fatal.append(f"{name} missing_or_non_numeric")
+        elif value<=0:fatal.append(f"{name} <= 0")
+    volume=num("volume")
+    if volume is None:warnings.append("volume missing_or_non_numeric")
+    elif volume<=0:fatal.append("volume <= 0")
+    bar_count=num("barCount")
+    if bar_count is not None and bar_count<=0:warnings.append("barCount <= 0")
+    vwap=num("VWAP")
+    if vwap is None:warnings.append("VWAP missing")
+    elif vwap<=0:warnings.append("VWAP <= 0")
+    return {"status":"blocked" if fatal else "ok","execution_safe":not fatal,"fatal_reasons":fatal,"warnings":warnings}
+
+def select_preview_row(frame:Any,policy:str,lookback:int)->tuple[dict,dict,dict]:
+    if frame is None or getattr(frame,"empty",True):raise CanonicalDispatchError("STRATEGY_PREVIEW feature artifact is empty")
+    latest=dict(frame.iloc[-1].to_dict())
+    latest_quality=preview_data_quality(latest)
+    selection={
+        "policy":policy,
+        "used_fallback_row":False,
+        "latest_feature_timestamp":latest.get("timestamp") or latest.get("ts"),
+        "selected_feature_timestamp":latest.get("timestamp") or latest.get("ts"),
+        "zero_volume_rows_skipped":0,
+        "lookback_rows":lookback,
+        "warnings":[],
+        "blockers":[],
+    }
+    if policy=="latest" or latest_quality.get("execution_safe") is True:
+        return latest,latest_quality,selection
+    fatal=[str(x) for x in latest_quality.get("fatal_reasons") or []]
+    latest_only_volume=bool(fatal) and all(x=="volume <= 0" for x in fatal)
+    if policy!="latest_execution_safe" or not latest_only_volume:
+        selection["blockers"].append("latest_row_not_execution_safe")
+        return latest,latest_quality,selection
+    skipped=0
+    rows=frame.tail(max(1,lookback)).to_dict(orient="records")
+    for candidate in reversed(rows):
+        candidate=dict(candidate or {})
+        quality=preview_data_quality(candidate)
+        if quality.get("execution_safe") is True:
+            selection.update({
+                "used_fallback_row":True,
+                "selected_feature_timestamp":candidate.get("timestamp") or candidate.get("ts"),
+                "zero_volume_rows_skipped":skipped,
+                "warnings":["latest_zero_volume_bar_skipped","selected_recent_positive_volume_feature_row"],
+                "candidate_data_quality":quality,
+            })
+            quality=dict(quality)
+            quality["status"]="ok_with_warnings"
+            quality["warnings"]=list(dict.fromkeys(list(quality.get("warnings") or [])+selection["warnings"]))
+            quality["feature_selection"]=selection
+            quality["latest_row_data_quality"]=latest_quality
+            return candidate,quality,selection
+        cfatal=[str(x) for x in quality.get("fatal_reasons") or []]
+        if cfatal and all(x=="volume <= 0" for x in cfatal):skipped+=1
+    selection["blockers"].append("no_recent_execution_safe_feature_row")
+    selection["zero_volume_rows_skipped"]=skipped
+    latest_quality=dict(latest_quality);latest_quality["feature_selection"]=selection
+    return latest,latest_quality,selection
+
+def preview_condition_rows(block:dict)->list[dict]:
+    rows=[]
+    for item in (block or {}).get("items") or []:
+        if isinstance(item,dict):
+            rows.append({
+                "id":item.get("id"),"label":item.get("label"),"left":item.get("left"),
+                "left_value":item.get("left_value"),"operator":item.get("operator"),
+                "right_param":item.get("right_param"),"right_value":item.get("right_value"),
+                "enabled":item.get("enabled",True),"passed":bool(item.get("passed")),
+            })
+    return rows
+
+def strategy_preview_dependencies(root:Path)->dict[str,str]:
+    paths=[
+        "autotuner_strategy_bridge.py","feature_contract.py","strategies/__init__.py",
+        "strategies/event_bus.py","strategy_builder_condition_contract_14th31kn.py",
+    ]
+    out={}
+    for path in paths:
+        target=(root/path).resolve()
+        if target.is_file():out[path]=private_blob_identity(root,path)
+    return out
+
+def execute_strategy_preview(v:dict,root:Path,input_root:Path|None,receipt_dir:Path|None)->dict:
+    args=v["arguments"]
+    resolved=resolve_artifact_ref(input_root,receipt_dir,args["feature_artifact"],"feature_artifact")
+    sidecar_fn=private_callable(root,"feature_contract.py","feature_contract","read_feature_artifact_sidecar")
+    sidecar=sidecar_fn(resolved["path"],verify_artifact=True)
+    if not isinstance(sidecar,dict):raise CanonicalDispatchError("STRATEGY_PREVIEW feature sidecar validation failed")
+    manifest=sidecar.get("feature_manifest")
+    if not isinstance(manifest,dict):raise CanonicalDispatchError("STRATEGY_PREVIEW feature manifest missing")
+    manifest_hash=str(sidecar.get("feature_manifest_hash") or manifest.get("manifest_hash") or "").lower()
+    semantic_hash=str(manifest.get("feature_semantic_hash") or "").lower()
+    if not _SHA256.fullmatch(manifest_hash) or not _SHA256.fullmatch(semantic_hash):
+        raise CanonicalDispatchError("STRATEGY_PREVIEW feature manifest identities are invalid")
+    if args.get("expected_feature_semantic_hash") and args["expected_feature_semantic_hash"]!=semantic_hash:
+        raise CanonicalDispatchError("STRATEGY_PREVIEW feature semantic hash mismatch")
+    normalized=normalized_strategy_spec(root,args["strategy_spec"]); spec=normalized["strategy_spec"]
+    symbol=str(spec.get("symbol") or "").strip().upper(); timeframe=str(spec.get("timeframe") or "").strip()
+    manifest_symbols=[str(x).strip().upper() for x in manifest.get("symbol_universe") or [] if str(x).strip()]
+    manifest_tfs=[str(x).strip() for x in manifest.get("target_timeframes") or [] if str(x).strip()]
+    if manifest_symbols and symbol not in manifest_symbols:
+        raise CanonicalDispatchError("STRATEGY_PREVIEW StrategySpec symbol is not present in feature manifest")
+    if manifest_tfs and timeframe not in manifest_tfs:
+        raise CanonicalDispatchError("STRATEGY_PREVIEW StrategySpec timeframe is not present in feature manifest")
+    try:pd=importlib.import_module("pandas")
+    except Exception as e:raise CanonicalDispatchError("STRATEGY_PREVIEW requires pandas runtime dependency") from e
+    frame=pd.read_csv(resolved["path"])
+    selected,quality,selection=select_preview_row(frame,args["row_policy"],args["lookback_rows"])
+    create=load_callable(root,CAPABILITIES["STRATEGY_PREVIEW"])
+    definition_fn=private_callable(root,"strategies/event_bus.py","strategies.event_bus","build_strategy_definition")
+    parameters=dict(spec.get("parameters") or {})
+    strategy_id=str(spec.get("strategy_id") or "").strip()
+    definition=definition_fn(strategy_id,{
+        **parameters,
+        "symbol":symbol,
+        "source_symbol":symbol,
+        "symbol_universe":[symbol],
+        "timeframe":timeframe,
+        "source_timeframe":timeframe,
+        "asset_type":spec.get("asset_type") or "stocks",
+        "dataset_identity":{"feature_manifest_hash":manifest_hash,"feature_semantic_hash":semantic_hash},
+    })
+    strategy_obj=create(strategy_id,config=parameters)
+    signal_name,meta=strategy_obj.evaluate(pd.DataFrame([selected]))
+    meta=meta if isinstance(meta,dict) else {}
+    if strategy_id!="crw_score_multi_mode":
+        builder_module_path=root/"strategy_builder_condition_contract_14th31kn.py"
+        if builder_module_path.is_file():
+            get_contract=private_callable(root,"strategy_builder_condition_contract_14th31kn.py","strategy_builder_condition_contract_14th31kn","builder_condition_contract_from_payload")
+            eval_contract=private_callable(root,"strategy_builder_condition_contract_14th31kn.py","strategy_builder_condition_contract_14th31kn","evaluate_builder_condition_contract")
+            contract=get_contract({"strategy_spec":spec})
+            if contract:
+                native_signal=signal_name;native_meta=dict(meta)
+                builder_eval=eval_contract(contract,feature_values=selected,context_values=args["context_values"])
+                if not isinstance(builder_eval,dict):raise CanonicalDispatchError("builder condition evaluator returned invalid contract")
+                signal_name=(builder_eval.get("signal") or "HOLD") if builder_eval.get("evaluation_ready") else "HOLD"
+                meta={
+                    **native_meta,
+                    "reason":builder_eval.get("reason_code"),
+                    "builder_condition_execution":builder_eval,
+                    "builder_condition_contract_hash":contract.get("contract_hash"),
+                    "native_registry_evaluation":{"signal":native_signal,"meta":native_meta},
+                    "builder_condition_signal_override":True,
+                }
+    conditions=meta.get("conditions") if isinstance(meta.get("conditions"),dict) else {}
+    required=list(getattr(definition,"required_indicators",[]) or [])
+    missing=[name for name in required if name not in selected]
+    builder_execution=meta.get("builder_condition_execution") if isinstance(meta.get("builder_condition_execution"),dict) else {}
+    for name in builder_execution.get("missing_indicators") or []:
+        if name not in missing:missing.append(name)
+    current_values=conditions.get("current_values") if isinstance(conditions.get("current_values"),dict) else {}
+    snapshot={}
+    for key in ("close","Z_CLOSE_20","Z_VOLUME_20","ATR","RSI","MFI","VWAP"):
+        if key in selected and selected.get(key) is not None:snapshot[key]=selected.get(key)
+    artifact_ref=dict(args["feature_artifact"])
+    return {
+        "schema":"mmibkr.strategy_preview.v1",
+        "strategy_spec_digest":normalized["strategy_spec_digest"],
+        "strategy":{
+            "strategy_id":strategy_id,
+            "version":getattr(definition,"version",None),
+            "parameters":getattr(definition,"parameters",{}) or parameters,
+            "parameter_schema":meta.get("parameter_schema") or getattr(strategy_obj,"parameter_schema",lambda:{})(),
+            "condition_spec":meta.get("condition_spec") or getattr(strategy_obj,"condition_spec",lambda:{})(),
+            "required_indicators":required,
+            "present_indicators":[name for name in required if name in selected],
+            "missing_indicators":missing,
+            "warmup_bars":getattr(definition,"warmup_bars",None),
+        },
+        "feature_artifact":artifact_ref,
+        "feature_manifest_hash":manifest_hash,
+        "feature_semantic_hash":semantic_hash,
+        "row_selection":selection,
+        "data_quality":quality,
+        "conditions":{
+            "entry_long":conditions.get("entry_long") or {},
+            "exit_long":conditions.get("exit_long") or {},
+            "entry_rows":preview_condition_rows(conditions.get("entry_long") or {}),
+            "exit_rows":preview_condition_rows(conditions.get("exit_long") or {}),
+        },
+        "builder_condition_execution":builder_execution,
+        "signal":{
+            "raw_signal":signal_name or "HOLD",
+            "reason":meta.get("reason"),
+            "indicator_snapshot":snapshot,
+        },
+        "context_values_sha256":sha(args["context_values"]),
+        "canonical_dependencies":strategy_preview_dependencies(root),
+        "safety":{
+            "research_preview_only":True,
+            "position_snapshot_used":False,
+            "risk_preview_used":False,
+            "sizing_preview_used":False,
+            "broker_preview_used":False,
+            "order_intent_emitted":False,
+            "broker_submit":False,
+            "broker_cancel":False,
+            "broker_flatten":False,
+            "runtime_activation":False,
+            "live_trading":False,
+        },
+    }
 
 def validate_feature_contract(v:dict,root:Path,input_root:Path|None,receipt_dir:Path|None)->dict:
     args=v["arguments"]
@@ -630,7 +892,7 @@ def materialize_stock_data(v:dict,root:Path,input_root:Path|None,artifact_root:P
     }
 
 def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None,receipt_dir:Path|None=None)->dict:
-    fn=None if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","FEATURE_CONTRACT_VALIDATE"} else load_callable(root,CAPABILITIES[v["capability_id"]])
+    fn=None if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","FEATURE_CONTRACT_VALIDATE","STRATEGY_PREVIEW"} else load_callable(root,CAPABILITIES[v["capability_id"]])
     if v["capability_id"]=="STRATEGY_SPEC_VALIDATE":
         raw=fn(v["arguments"]["strategy_spec"])
         if not isinstance(raw,dict) or not isinstance(raw.get("strategy_spec"),dict) or not _SHA256.fullmatch(str(raw.get("strategy_spec_digest") or "")):
@@ -671,6 +933,8 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|
         result=materialize_stock_data(v,root,input_root,artifact_root)
     elif v["capability_id"]=="FEATURE_CONTRACT_VALIDATE":
         result=validate_feature_contract(v,root,input_root,receipt_dir)
+    elif v["capability_id"]=="STRATEGY_PREVIEW":
+        result=execute_strategy_preview(v,root,input_root,receipt_dir)
     else:
         raise CanonicalDispatchError(f"capability executor is not implemented: {v['capability_id']}")
     rb=cbytes(result)
