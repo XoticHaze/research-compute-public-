@@ -1,16 +1,16 @@
 {
-  "source_ref": "8a82107be253c3facd3b090cf752bc51b3a8ef8d",
+  "source_ref": "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
   "session_seconds": "18000",
   "max_cycles": "0",
   "self_handoff": true,
-  "requested_by": "assistant-667-pinned-recovery-after-warm-read-failure",
+  "requested_by": "assistant-667-ownership-aware-runtime-promotion",
   "source_public_run_id": "35407829303",
   "expected_checkpoint_cache_key": "mmibkr-selected-runtime-cloud-checkpoint-v1-35779148035-8a82107be253c3facd3b090cf752bc51b3a8ef8d",
   "expected_checkpoint_sha256": "e279cce9433c193863a20b7b1910a6e4fbe183dff396b258c6d9652c8bde3176",
   "require_terminal_continuity": true,
   "predecessor_proof_run": "35779148035",
   "predecessor_v2_receipt_accepted": true,
-  "failed_owner_run": "35804585373",
-  "recovery_reason": "public B1 warm-read capsule failed four consecutive cycles after IBKR API session delays / paper disclaimer 10141; recover from last verified predecessor checkpoint",
-  "purpose": "resume_pinned_selected_runtime_owner_after_verified_predecessor_recovery"
+  "failed_owner_run": "35836806295",
+  "recovery_reason": "promote selected-runtime owner onto merged ownership-aware source after repeated old-source B1 warm-read failure clusters",
+  "purpose": "run_ownership_aware_selected_runtime_owner_for_safe_paper_position_hygiene"
 }
