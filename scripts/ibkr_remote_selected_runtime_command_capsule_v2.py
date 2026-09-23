@@ -37,7 +37,8 @@ from ibkr_remote_paper_capsule_v1 import (
 CAPSULE_SCHEMA = "mmibkr.remote_selected_runtime_command_capsule.v2"
 PROOF_MODE = "paper_submit_proof"
 EXECUTE_MODE = "paper_execute"
-MODES = {PROOF_MODE, EXECUTE_MODE}
+HYGIENE_MODE = "paper_account_hygiene"
+MODES = {PROOF_MODE, EXECUTE_MODE, HYGIENE_MODE}
 MODE = PROOF_MODE
 RETURN_RECIPIENT_SCHEMA = "ibkr-remote-paper-return-recipient-v1"
 CAPSULE_FIELDS = {"schema", "mode", "source", "request", "cleanup", "return_recipient"}
@@ -47,6 +48,28 @@ REQUEST_FIELDS = {
     "canonical_submit_payload",
     "selected_runtime_authority",
 }
+HYGIENE_REQUEST_FIELDS = {
+    "command_id",
+    "source_ref",
+    "expected_positions",
+    "ownership_authority",
+    "execute",
+    "batch_size",
+}
+HYGIENE_OWNERSHIP_FIELDS = {
+    "schema",
+    "operator_snapshot_sha256",
+    "snapshot_generated_at_utc",
+    "runtime_source_sha",
+    "ownership_source",
+    "strategy_owned_positions",
+    "account_position_count",
+    "operator_approved",
+    "operator_ack",
+}
+HYGIENE_POSITION_FIELDS = {"symbol", "conId", "secType", "position"}
+HYGIENE_OWNERSHIP_SCHEMA = "mmibkr.account_hygiene_authority.v1"
+HYGIENE_OPERATOR_ACK = "MMIBKR_PAPER_ACCOUNT_HYGIENE_ACK_V1"
 CLEANUP_FIELDS = {
     "cancel_open_order",
     "flatten_filled_position",
@@ -104,7 +127,13 @@ def _validate_cleanup(value: Any, *, mode: str) -> dict[str, bool]:
         }
     )
     if cleanup != expected:
-        label = "paper proof" if mode == PROOF_MODE else "persistent paper execute"
+        label = (
+            "paper proof"
+            if mode == PROOF_MODE
+            else "paper account hygiene"
+            if mode == HYGIENE_MODE
+            else "persistent paper execute"
+        )
         raise RuntimeError(f"{label} cleanup contract mismatch")
     return cleanup
 
@@ -165,6 +194,94 @@ def _validate_source(value: Any) -> dict[str, Any]:
     return _validate_legacy_source(value)
 
 
+def _validate_hygiene_request(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping) or set(value) != HYGIENE_REQUEST_FIELDS:
+        raise RuntimeError("account hygiene request field set mismatch")
+    request = dict(value)
+    _reject_live(request)
+
+    command_id = str(request.get("command_id") or "").strip().lower()
+    source_ref = str(request.get("source_ref") or "").strip()
+    if not SHA256_ID.fullmatch(command_id):
+        raise RuntimeError("command id invalid")
+    if not source_ref:
+        raise RuntimeError("source ref required")
+    if not isinstance(request.get("execute"), bool):
+        raise RuntimeError("account hygiene execute must be boolean")
+    try:
+        batch_size = int(request.get("batch_size"))
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("account hygiene batch_size invalid") from exc
+    if not 1 <= batch_size <= 10:
+        raise RuntimeError("account hygiene batch_size must be within 1..10")
+
+    authority = request.get("ownership_authority")
+    if not isinstance(authority, Mapping) or set(authority) != HYGIENE_OWNERSHIP_FIELDS:
+        raise RuntimeError("account hygiene ownership authority field set mismatch")
+    if authority.get("schema") != HYGIENE_OWNERSHIP_SCHEMA:
+        raise RuntimeError("account hygiene ownership authority schema mismatch")
+    if authority.get("ownership_source") != "selected_runtime_strategy_inventory_v1":
+        raise RuntimeError("account hygiene ownership source mismatch")
+    if authority.get("strategy_owned_positions") != []:
+        raise RuntimeError("account hygiene requires flat selected-runtime strategy inventory")
+    if authority.get("operator_approved") is not True:
+        raise RuntimeError("account hygiene operator approval required")
+    if str(authority.get("operator_ack") or "") != HYGIENE_OPERATOR_ACK:
+        raise RuntimeError("account hygiene operator ack mismatch")
+    runtime_source_sha = str(authority.get("runtime_source_sha") or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{40}", runtime_source_sha):
+        raise RuntimeError("account hygiene runtime source sha invalid")
+    snapshot_sha = str(authority.get("operator_snapshot_sha256") or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", snapshot_sha):
+        raise RuntimeError("account hygiene operator snapshot sha256 invalid")
+    if not str(authority.get("snapshot_generated_at_utc") or "").strip():
+        raise RuntimeError("account hygiene snapshot timestamp required")
+
+    rows = request.get("expected_positions")
+    if not isinstance(rows, list) or not rows or len(rows) > 50:
+        raise RuntimeError("account hygiene expected_positions must contain 1..50 rows")
+    normalized: list[dict[str, Any]] = []
+    seen_symbols: set[str] = set()
+    for row in rows:
+        if not isinstance(row, Mapping) or set(row) != HYGIENE_POSITION_FIELDS:
+            raise RuntimeError("account hygiene expected position field set mismatch")
+        symbol = str(row.get("symbol") or "").strip().upper()
+        sec_type = str(row.get("secType") or "").strip().upper()
+        try:
+            con_id = int(row.get("conId") or 0)
+            position = float(row.get("position"))
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("account hygiene expected position numeric field invalid") from exc
+        if (
+            not symbol
+            or symbol in seen_symbols
+            or not re.fullmatch(r"[A-Z0-9.\-]{1,32}", symbol)
+        ):
+            raise RuntimeError("account hygiene expected position symbol invalid")
+        if sec_type not in {"STK", "ETF"}:
+            raise RuntimeError("account hygiene supports STK/ETF positions only")
+        if con_id <= 0 or not position:
+            raise RuntimeError("account hygiene expected position identity/quantity invalid")
+        seen_symbols.add(symbol)
+        normalized.append({
+            "symbol": symbol,
+            "conId": con_id,
+            "secType": sec_type,
+            "position": position,
+        })
+    if int(authority.get("account_position_count") or 0) != len(normalized):
+        raise RuntimeError("account hygiene account position count mismatch")
+
+    return {
+        "command_id": command_id,
+        "source_ref": source_ref,
+        "expected_positions": normalized,
+        "ownership_authority": dict(authority),
+        "execute": bool(request["execute"]),
+        "batch_size": batch_size,
+    }
+
+
 def _validate_request(value: Any) -> dict[str, Any]:
     if not isinstance(value, Mapping) or set(value) != REQUEST_FIELDS:
         raise RuntimeError("selected-runtime command request field set mismatch")
@@ -223,7 +340,11 @@ def validate_capsule(raw: bytes) -> dict[str, Any]:
     if mode not in MODES:
         raise RuntimeError("command capsule mode mismatch")
     source = _validate_source(capsule.get("source"))
-    request = _validate_request(capsule.get("request"))
+    request = (
+        _validate_hygiene_request(capsule.get("request"))
+        if mode == HYGIENE_MODE
+        else _validate_request(capsule.get("request"))
+    )
     cleanup = _validate_cleanup(capsule.get("cleanup"), mode=mode)
     return_recipient = _validate_return_recipient(capsule.get("return_recipient"))
     return {
