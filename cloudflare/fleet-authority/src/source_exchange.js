@@ -49,6 +49,19 @@ const MISSED_TRADE_AUDIT_IDENTITY = {
     'XoticHaze/research-compute-public-/.github/workflows/mmibkr-selected-runtime-missed-trade-audit-r1.yml@refs/heads/main',
 };
 
+const PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-paper-account-hygiene-coordinator-r1.yml@refs/heads/main',
+};
+const PAPER_ACCOUNT_HYGIENE_COORDINATOR_PRIVATE_SOURCE =
+  'e78d16c99bde3df4d3828c952e27dc1746772875';
+const PAPER_ACCOUNT_HYGIENE_COORDINATOR_RUNTIME_SOURCE =
+  '35e6b44e5c2618f780a84c1c204fe14c76bdf0e5';
+const PAPER_ACCOUNT_HYGIENE_COORDINATOR_EXPIRES_AT =
+  Date.parse('2026-09-24T18:00:00Z');
+
 const PRIVATE_PR_EXACT_VALIDATION_IDENTITY = {
   repository: 'XoticHaze/research-compute-public-',
   ref: 'refs/heads/main',
@@ -202,6 +215,16 @@ function matchesIdentity(identity, expected) {
 
 function isPrivateSourceStreamApproved(sourceSha, identity = null) {
   const exactSha = /^[0-9a-f]{40}$/.test(String(sourceSha || ''));
+  const paperAccountHygieneCoordinator = matchesIdentity(
+    identity,
+    PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY,
+  );
+  if (paperAccountHygieneCoordinator) {
+    return (
+      sourceSha === PAPER_ACCOUNT_HYGIENE_COORDINATOR_PRIVATE_SOURCE
+      && Date.now() <= PAPER_ACCOUNT_HYGIENE_COORDINATOR_EXPIRES_AT
+    );
+  }
   const sourceVaultBootstrapExactShaApproved = (
     exactSha
     && matchesIdentity(identity, SOURCE_VAULT_BOOTSTRAP_IDENTITY)
@@ -426,6 +449,10 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     const matchedBootstrap = matchesIdentity(claims, SOURCE_VAULT_BOOTSTRAP_IDENTITY);
     const matchedOperatorDeploy = matchesIdentity(claims, OPERATOR_CONSOLE_DEPLOY_IDENTITY);
     const matchedMissedTradeAudit = matchesIdentity(claims, MISSED_TRADE_AUDIT_IDENTITY);
+    const matchedPaperAccountHygieneCoordinator = matchesIdentity(
+      claims,
+      PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY,
+    );
     const matchedPrivatePrValidation = matchesIdentity(claims, PRIVATE_PR_EXACT_VALIDATION_IDENTITY);
     const matchedPrivatePr666Validation = matchesIdentity(claims, PRIVATE_PR666_EXACT_VALIDATION_IDENTITY);
     const matchedPrivatePr670Validation = matchesIdentity(claims, PRIVATE_PR670_EXACT_VALIDATION_IDENTITY);
@@ -435,6 +462,13 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     const matchedPrivatePromotionReviewValidation = matchesIdentity(claims, PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_IDENTITY);
     const matchedPrivateTestProbe = matchesIdentity(claims, PRIVATE_TEST_PROBE_IDENTITY);
     const privateTestProbeUnwrapPathAllowed = pathname === '/v1/source-vault/unwrap';
+    const paperAccountHygieneCoordinatorPathAllowed = (
+      pathname === '/v1/source-vault/unwrap'
+      || /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname)
+      || pathname === '/v1/source-exchange/relay/request'
+      || /^\/v1\/source-exchange\/relay\/response\/\d+\/chunk\/\d+$/.test(pathname)
+      || /^\/v1\/source-exchange\/relay\/response\/\d+\/manifest$/.test(pathname)
+    );
     const privateArchivePathAllowed = (
       /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname)
       || pathname === '/v1/source-vault/private-archive/attest'
@@ -447,6 +481,11 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
         || (matchedBootstrap && privateArchivePathAllowed)
         || (matchedOperatorDeploy && operatorDeployPathAllowed)
         || (matchedMissedTradeAudit && operatorDeployPathAllowed)
+        || (
+          matchedPaperAccountHygieneCoordinator
+          && paperAccountHygieneCoordinatorPathAllowed
+          && Date.now() <= PAPER_ACCOUNT_HYGIENE_COORDINATOR_EXPIRES_AT
+        )
         || (matchedPrivatePrValidation && privateArchivePathAllowed)
         || (matchedPrivatePr666Validation && privateArchivePathAllowed)
         || (matchedPrivatePr670Validation && privateArchivePathAllowed)
@@ -900,6 +939,13 @@ export class SourceExchange {
     if (!Number.isInteger(archiveBytes) || archiveBytes <= 0 || archiveBytes > 150 * 1024 * 1024) {
       throw new Error('vault_archive_bytes_rejected');
     }
+    const requestIdentity = this._producerIdentity(request);
+    if (
+      matchesIdentity(requestIdentity, PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY)
+      && sourceSha !== PAPER_ACCOUNT_HYGIENE_COORDINATOR_RUNTIME_SOURCE
+    ) {
+      throw new Error('paper_account_hygiene_runtime_source_rejected');
+    }
     const approval = await this._resolveVaultSnapshotApproval({
       sourceSha,
       manifestSha,
@@ -939,7 +985,7 @@ export class SourceExchange {
     }
     if (masterKey.length !== 32) throw new Error('vault_master_key_size_rejected');
 
-    const runtimeIdentity = this._producerIdentity(request);
+    const runtimeIdentity = requestIdentity;
     const attestation = {
       schema: 'mmibkr-cloud-source-vault-attestation-v1',
       source_ref: approval.source_ref,
@@ -1305,6 +1351,13 @@ export class SourceExchange {
         const recipientKeyId = String(body?.recipient_key_id || '');
         if (!/^[0-9a-f]{40}$/.test(sourceSha) || !/^[0-9a-f]{64}$/.test(plaintextSha)) {
           throw new Error('source_identity');
+        }
+        const relayIdentity = this._producerIdentity(request);
+        if (
+          matchesIdentity(relayIdentity, PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY)
+          && sourceSha !== PAPER_ACCOUNT_HYGIENE_COORDINATOR_RUNTIME_SOURCE
+        ) {
+          return json({ error: 'paper_account_hygiene_runtime_source_rejected' }, 403);
         }
         if (!Number.isInteger(archiveBytes) || archiveBytes <= 0 || archiveBytes > 150 * 1024 * 1024) {
           throw new Error('archive_bytes');
