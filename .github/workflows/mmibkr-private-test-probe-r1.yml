@@ -10,7 +10,9 @@ on:
     paths:
       - '.github/workflows/mmibkr-private-test-probe-r1.yml'
       - 'scripts/mmibkr_private_test_probe_v1.py'
+      - 'scripts/mmibkr_source_vault_consumer_v1.py'
       - 'tests/test_mmibkr_private_test_probe_v1.py'
+      - 'tests/test_mmibkr_source_vault_consumer_v1.py'
   workflow_dispatch:
     inputs:
       source_ref:
@@ -47,9 +49,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m py_compile scripts/mmibkr_cloud_source_exchange_consumer_v1.py
+          python -m py_compile scripts/mmibkr_source_vault_consumer_v1.py
           python -m py_compile scripts/mmibkr_private_test_probe_v1.py
-          PYTHONPATH=scripts python -m pytest -q tests/test_mmibkr_private_test_probe_v1.py
+          PYTHONPATH=scripts python -m pytest -q \
+            tests/test_mmibkr_private_test_probe_v1.py \
+            tests/test_mmibkr_source_vault_consumer_v1.py
 
       - name: Resolve exact private test request
         if: github.event_name != 'pull_request'
@@ -89,18 +93,19 @@ jobs:
           print("MMIBKR_PRIVATE_TEST_MODULE_COUNT=" + str(len([x for x in modules.split(",") if x])))
           PY
 
-      - name: Materialize exact private MM source through existing source exchange
+      - name: Materialize exact private MM source from encrypted Source Vault
         if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
-          python scripts/mmibkr_cloud_source_exchange_consumer_v1.py \
+          umask 077
+          python scripts/mmibkr_source_vault_consumer_v1.py \
             --authority-base "$FLEET_AUTHORITY_BASE" \
             --run-id "$GITHUB_RUN_ID" \
-            --source-ref "$MMIBKR_PRIVATE_TEST_SOURCE_REF" \
+            --source-sha "$MMIBKR_PRIVATE_TEST_SOURCE_REF" \
             --destination "$RUNNER_TEMP/mmibkr-private-test-probe-source" \
-            --output "$RUNNER_TEMP/mmibkr-private-test-probe-source.json" \
-            --timeout-sec 1200
+            --archive-output "$RUNNER_TEMP/mmibkr-private-test-probe-source.tar.gz" \
+            --output "$RUNNER_TEMP/mmibkr-private-test-probe-source.json"
           python - <<'PY'
           import json,os
           from pathlib import Path
@@ -111,6 +116,8 @@ jobs:
               fh.write('MMIBKR_PRIVATE_TEST_SOURCE_ROOT='+str(node['source_root'])+'\n')
           print('MMIBKR_PRIVATE_TEST_SOURCE_SHA='+str(node['source_sha']))
           print('MMIBKR_PRIVATE_TEST_SOURCE_ARCHIVE_SHA256='+str(node['source_archive_sha256']))
+          print('MMIBKR_PRIVATE_TEST_SOURCE_TRANSPORT='+str(node.get('source_transport')))
+          print('MMIBKR_PRIVATE_TEST_SOURCE_MANIFEST_SHA256='+str(node.get('source_manifest_sha256')))
           print('MMIBKR_PRIVATE_TEST_SOURCE_TOKEN_USED=0')
           print('MMIBKR_PRIVATE_TEST_BROKER_CREDENTIALS_USED=0')
           PY
@@ -149,6 +156,7 @@ jobs:
           sudo rm -rf \
             "$RUNNER_TEMP/mmibkr-private-test-probe-source" \
             "$RUNNER_TEMP/mmibkr-private-test-probe-source.json" \
+            "$RUNNER_TEMP/mmibkr-private-test-probe-source.tar.gz" \
             "$RUNNER_TEMP/mmibkr-private-test-probe-receipt.log" \
             "$RUNNER_TEMP/mmibkr-private-test-probe-sanitized-receipt.txt"
           echo 'MMIBKR_PRIVATE_TEST_PROBE_PRIVATE_MATERIAL_DESTROYED=1'
