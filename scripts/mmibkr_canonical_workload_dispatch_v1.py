@@ -45,6 +45,11 @@ CAPABILITIES={
         "module":"scripts.operator.canonical_data_materialize_v1",
         "callable":"materialize_snapshot",
     },
+    "FEATURE_CONTRACT_VALIDATE":{
+        "path":"feature_contract.py",
+        "module":"feature_contract",
+        "callable":"read_feature_artifact_sidecar",
+    },
 }
 _SHA1=re.compile(r"^[0-9a-f]{40}$")
 _SHA256=re.compile(r"^[0-9a-f]{64}$")
@@ -165,6 +170,19 @@ def validate_crw_arguments(args:Any,input_root:Path|None)->dict:
     if extra:raise CanonicalDispatchError(f"CRW_BACKTEST contains unrequested datasets for symbols={extra}")
     return {"payload":deepcopy(payload),"datasets":normalized}
 
+def validate_feature_contract_arguments(args:Any,input_root:Path|None)->dict:
+    if not isinstance(args,dict):raise CanonicalDispatchError("FEATURE_CONTRACT_VALIDATE arguments must be object")
+    exact(args,{"artifact"},"FEATURE_CONTRACT_VALIDATE arguments")
+    if input_root is None:raise CanonicalDispatchError("FEATURE_CONTRACT_VALIDATE requires governed input_root")
+    resolved=resolve_dataset(input_root,"feature_artifact",args.get("artifact"))
+    sidecar=resolved["path"].with_suffix(resolved["path"].suffix+".manifest.json")
+    if input_root.resolve() not in sidecar.resolve().parents or not sidecar.is_file():
+        raise CanonicalDispatchError("feature artifact sidecar missing from governed input root")
+    return {
+        "artifact":{k:resolved[k] for k in ("relative_path","sha256","bytes")},
+        "sidecar":{"relative_path":sidecar.relative_to(input_root.resolve()).as_posix(),"sha256":sha_file(sidecar),"bytes":sidecar.stat().st_size},
+    }
+
 def validate_materialize_arguments(args:Any,input_root:Path|None)->dict:
     if not isinstance(args,dict):raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE arguments must be object")
     exact(args,{"snapshot"},"CANONICAL_DATA_MATERIALIZE arguments")
@@ -240,6 +258,8 @@ def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None
         normalized_args=validate_autotuner_arguments(cid,args)
     elif cid=="CANONICAL_DATA_MATERIALIZE":
         normalized_args=validate_materialize_arguments(args,input_root)
+    elif cid=="FEATURE_CONTRACT_VALIDATE":
+        normalized_args=validate_feature_contract_arguments(args,input_root)
     else:
         raise CanonicalDispatchError(f"capability executor is not implemented: {cid}")
     return {"schema":REQUEST_SCHEMA,"job_id":jid,"capability_id":cid,"mmibkr":mm,"entrypoint":{**cap,"git_blob_sha1":actual},"arguments":normalized_args,"resources":resources(req.get("resources")),"authority":AUTHORITY,"forbidden_authorities":dict(FORBIDDEN_AUTHORITY_ASSERTIONS)}
@@ -384,6 +404,35 @@ def sanitize_crw_result(raw:dict,args:dict)->dict:
     }
     return result
 
+def feature_contract_projection(raw:dict,args:dict)->dict:
+    if not isinstance(raw,dict):raise CanonicalDispatchError("canonical feature sidecar validator returned invalid contract")
+    manifest=raw.get("feature_manifest")
+    if not isinstance(manifest,dict):raise CanonicalDispatchError("canonical feature manifest missing")
+    manifest_hash=str(raw.get("feature_manifest_hash") or manifest.get("manifest_hash") or "").lower()
+    semantic_hash=str(manifest.get("feature_semantic_hash") or "").lower()
+    if not _SHA256.fullmatch(manifest_hash) or not _SHA256.fullmatch(semantic_hash):
+        raise CanonicalDispatchError("canonical feature manifest hashes invalid")
+    features=manifest.get("features")
+    if not isinstance(features,list):raise CanonicalDispatchError("canonical feature manifest features invalid")
+    if manifest.get("causal") is not True:raise CanonicalDispatchError("canonical feature manifest is not causal")
+    source_identity=manifest.get("source_dataset_identity")
+    return {
+        "feature_manifest_hash":manifest_hash,
+        "feature_semantic_hash":semantic_hash,
+        "feature_count":len(features),
+        "causal":True,
+        "source_timeframes":list(manifest.get("source_timeframes") or []),
+        "target_timeframes":list(manifest.get("target_timeframes") or []),
+        "symbol_universe":list(manifest.get("symbol_universe") or []),
+        "feature_contract_mode":manifest.get("feature_contract_mode"),
+        "generation_identity":manifest.get("generation_identity"),
+        "consumer_identity":manifest.get("consumer_identity"),
+        "label_target_columns_excluded":list(manifest.get("label_target_columns_excluded") or []),
+        "source_dataset_identity_sha256":sha(source_identity if isinstance(source_identity,dict) else {}),
+        "artifact":dict(args["artifact"]),
+        "sidecar":dict(args["sidecar"]),
+    }
+
 def materialization_receipt_projection(final_dir:Path,manifest:dict,descriptor:dict,fp:str)->dict:
     if manifest.get("schema")!="mmibkr.canonical_data_artifact_manifest.v1" or manifest.get("job_fingerprint")!=fp:
         raise CanonicalDispatchError("materialized artifact manifest identity mismatch")
@@ -492,6 +541,11 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|
         if input_root is None or artifact_root is None:
             raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires input_root and receipt-backed artifact root")
         result=materialize_artifact(v,root,input_root,artifact_root,fn)
+    elif v["capability_id"]=="FEATURE_CONTRACT_VALIDATE":
+        if input_root is None:raise CanonicalDispatchError("FEATURE_CONTRACT_VALIDATE requires governed input_root")
+        resolved=resolve_dataset(input_root,"feature_artifact",v["arguments"]["artifact"])
+        raw=fn(resolved["path"],verify_artifact=True)
+        result=feature_contract_projection(raw,v["arguments"])
     elif v["capability_id"]=="AUTOTUNER_PARAMETER_CONSUMPTION":
         normalized,filtered,consumption=autotuner_gate(root,v["arguments"])
         result={
