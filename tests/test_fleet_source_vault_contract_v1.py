@@ -207,6 +207,34 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
 
+    def test_source_vault_bootstrap_identity_may_stream_any_exact_mm_commit_sha_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("sourceVaultBootstrapExactShaApproved", text)
+        self.assertIn(
+            "matchesIdentity(identity, SOURCE_VAULT_BOOTSTRAP_IDENTITY)",
+            text,
+        )
+        self.assertIn(
+            "const exactSha = /^[0-9a-f]{40}$/.test(String(sourceSha || ''));",
+            text,
+        )
+        self.assertIn(
+            "(matchedBootstrap && privateArchivePathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedBootstrap && operatorDeployPathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedBootstrap && privateTestProbePathAllowed)",
+            text,
+        )
+        self.assertIn(
+            "const PRIVATE_REPOSITORY = 'XoticHaze/mm-IBKR';",
+            text,
+        )
+
     def test_private_pr670_validation_is_isolated_exact_sha_expiring_and_archive_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("PRIVATE_PR670_EXACT_VALIDATION_IDENTITY", text)
