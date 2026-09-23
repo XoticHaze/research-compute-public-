@@ -14,6 +14,7 @@ on:
       - scripts/ibkr_warm_selected_runtime_activation_v1.py
       - tests/test_mmibkr_b1_attested_source_consumer_v1.py
       - tests/test_ibkr_b1_canonical_dockerfile_v1.py
+      - tests/test_ibkr_warm_selected_runtime_activation_v1.py
       - tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py
       - tests/test_ibkr_remote_selected_runtime_paper_execute_v1.py
       - .github/workflows/ibkr-b1-attested-source-contract-ci.yml
@@ -39,9 +40,9 @@ jobs:
       - name: Compile attested-source B1 surface
         run: |
           set -euo pipefail
-          python -m py_compile             scripts/mmibkr_b1_attested_source_consumer_v1.py             scripts/ibkr_remote_selected_runtime_command_capsule_v2.py             scripts/ibkr_warm_selected_runtime_activation_v1.py             tests/test_mmibkr_b1_attested_source_consumer_v1.py             tests/test_ibkr_b1_canonical_dockerfile_v1.py
+          python -m py_compile             scripts/mmibkr_b1_attested_source_consumer_v1.py             scripts/ibkr_remote_selected_runtime_command_capsule_v2.py             scripts/ibkr_warm_selected_runtime_activation_v1.py             tests/test_mmibkr_b1_attested_source_consumer_v1.py             tests/test_ibkr_b1_canonical_dockerfile_v1.py             tests/test_ibkr_warm_selected_runtime_activation_v1.py
 
       - name: Run attested-source B1 contracts
         run: |
           set -euo pipefail
-          python -m unittest -v             tests.test_mmibkr_b1_attested_source_consumer_v1             tests.test_ibkr_b1_canonical_dockerfile_v1             tests.test_ibkr_remote_selected_runtime_command_capsule_v2             tests.test_ibkr_remote_selected_runtime_paper_execute_v1
+          python -m unittest -v             tests.test_mmibkr_b1_attested_source_consumer_v1             tests.test_ibkr_b1_canonical_dockerfile_v1             tests.test_ibkr_remote_selected_runtime_command_capsule_v2             tests.test_ibkr_remote_selected_runtime_paper_execute_v1             tests.test_ibkr_warm_selected_runtime_activation_v1
