@@ -339,7 +339,11 @@ def refresh_snapshot(stale: Mapping[str, Any], fresh: Mapping[str, Any], *, expe
         if abs(float(position.get("position") or 0.0)) > 1e-12:
             raise RuntimeError("maintenance refresh refuses non-flat strategy inventory:" + runtime_id)
 
-    if int(fresh.get("open_order_count") or -1) != 0:
+    try:
+        fresh_open_order_count = int(fresh.get("open_order_count"))
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("maintenance refresh fresh broker open order count invalid") from exc
+    if fresh_open_order_count != 0:
         raise RuntimeError("maintenance refresh fresh broker snapshot has open orders")
     stale_positions = _position_index(stale.get("positions"))
     fresh_positions = _position_index(fresh.get("positions"))
