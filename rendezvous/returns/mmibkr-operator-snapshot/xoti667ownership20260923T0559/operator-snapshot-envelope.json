@@ -1,0 +1,33 @@
+{
+  "broker_mutation_authority": false,
+  "chunks": [
+    {
+      "chars": 8000,
+      "local_name": "operator-snapshot-000.txt",
+      "path": "rendezvous/returns/mmibkr-operator-snapshot/xoti667ownership20260923T0559/operator-snapshot-000.txt",
+      "sha256": "7af45933616a70ec63e37b2987a92bd8b63ad39d36759a017e811f7db58d973c"
+    },
+    {
+      "chars": 8000,
+      "local_name": "operator-snapshot-001.txt",
+      "path": "rendezvous/returns/mmibkr-operator-snapshot/xoti667ownership20260923T0559/operator-snapshot-001.txt",
+      "sha256": "ae0e182f1f18df03efb8978a15c79f39e2502e74f2ff43b71bdce69dba52c251"
+    },
+    {
+      "chars": 1832,
+      "local_name": "operator-snapshot-002.txt",
+      "path": "rendezvous/returns/mmibkr-operator-snapshot/xoti667ownership20260923T0559/operator-snapshot-002.txt",
+      "sha256": "f0d8be2ca726ab46ae05403e61f020fe7e5a23499138ed43522a61a0b0233d8a"
+    }
+  ],
+  "ciphertext_sha256": "d03a9dd67c009c78d0c30f168aaa2d9821595bc59ba5023543f8a67995e462db",
+  "generated_at_utc": "2026-09-23T11:00:06.516515Z",
+  "live_execution_allowed": false,
+  "nonce_b64": "rEkxpjSkh0M6b8dS",
+  "plaintext_published": false,
+  "plaintext_sha256": "0bb2fbca10a0f7137d71918397404d1aa6371866cad11b3df1baa7b12b8d9f73",
+  "recipient_key_id": "sha256:932aec1d570141261b6f20bd6d73e46ac175e640c114a8fc831e2da67ef3b359",
+  "request_id": "xoti667ownership20260923T0559",
+  "schema": "mmibkr.operator_snapshot_encrypted_return_x25519.v1",
+  "sender_public_b64": "RK/ix0U9kaTlMd69an8MU3IBYqAtAngPOJ4djnYvIFc="
+}
