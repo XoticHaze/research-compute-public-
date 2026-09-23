@@ -15,6 +15,7 @@ on:
           - paper_submit_proof
           - paper_execute
           - paper_account_hygiene
+          - paper_account_snapshot
       dispatch_nonce:
         description: Optional one-run correlation token
         required: false
@@ -66,6 +67,7 @@ on:
       - assistant/b1-hygiene-skip-history-20260923
       - assistant/b1-account-hygiene-snapshot-freshness-20260923
       - assistant/b1-fleet-stream-attestation-20260923
+      - assistant/b1-account-snapshot-refresh-20260923
     paths:
       - '.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml'
       - 'scripts/fleet_authority_envelope_consumer_v1.py'
@@ -81,6 +83,7 @@ on:
       - 'scripts/ibkr_remote_paper_proof_return_v1.py'
       - 'scripts/ibkr_warm_selected_runtime_activation_v1.py'
       - 'scripts/ibkr_warm_read_return_v1.py'
+      - 'scripts/ibkr_account_snapshot_return_v1.py'
       - 'research/forward_bar_contract_v2.py'
       - 'tests/test_ibkr_b1_auth_contracts_v1.py'
       - 'tests/test_ibkr_post_auth_pipeline_contracts_v1.py'
@@ -94,6 +97,7 @@ on:
       - 'tests/test_ibkr_remote_selected_runtime_paper_execute_v1.py'
       - 'tests/test_ibkr_remote_paper_proof_return_v1.py'
       - 'tests/test_ibkr_warm_read_return_v1.py'
+      - 'tests/test_ibkr_account_snapshot_return_v1.py'
       - 'tests/test_ibkr_initial_selected_runtime_backfill_v1.py'
       - 'ibkr_login_trigger.txt'
       - 'config/ibkr_initial_selected_runtime_backfill_v1.json'
@@ -142,6 +146,7 @@ jobs:
             scripts/ibkr_remote_paper_proof_return_v1.py \
             scripts/ibkr_warm_selected_runtime_activation_v1.py \
             scripts/ibkr_warm_read_return_v1.py \
+            scripts/ibkr_account_snapshot_return_v1.py \
             research/forward_bar_contract_v2.py \
             tests/test_ibkr_b1_auth_contracts_v1.py \
             tests/test_ibkr_b1_warm_state_workflow_v2.py \
@@ -153,6 +158,7 @@ jobs:
             tests/test_ibkr_remote_selected_runtime_paper_execute_v1.py \
             tests/test_ibkr_remote_paper_proof_return_v1.py \
             tests/test_ibkr_warm_read_return_v1.py \
+            tests/test_ibkr_account_snapshot_return_v1.py \
             tests/test_ibkr_initial_selected_runtime_backfill_v1.py
           python - <<'PY'
           from pathlib import Path
@@ -176,6 +182,7 @@ jobs:
             tests.test_ibkr_remote_selected_runtime_paper_execute_v1 \
             tests.test_ibkr_remote_paper_proof_return_v1 \
             tests.test_ibkr_warm_read_return_v1 \
+            tests.test_ibkr_account_snapshot_return_v1 \
             tests.test_ibkr_initial_selected_runtime_backfill_v1 -v
           echo 'IBKR_BROKER_LOGIN_ATTEMPTED=0'
           echo 'IBKR_BROKER_ORDER_ATTEMPTED=0'
@@ -197,9 +204,11 @@ jobs:
       POST_AUTH_BAR_REQUESTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.bar_requests_json || '' }}
       POST_AUTH_INCLUDE_QUOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.include_quotes && '1' || '0' }}
       IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'paper_execute') && inputs.read_return_recipient_b64 != '' && inputs.read_return_recipient_key_id != '' && '1' || '0' }}
+      IBKR_ACCOUNT_SNAPSHOT_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_account_snapshot' && inputs.read_return_recipient_b64 != '' && inputs.read_return_recipient_key_id != '' && '1' || '0' }}
       IBKR_PAPER_PROOF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' && '1' || '0' }}
       IBKR_PAPER_EXECUTE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_execute' && '1' || '0' }}
       IBKR_PAPER_ACCOUNT_HYGIENE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_account_hygiene' && '1' || '0' }}
+      IBKR_PAPER_ACCOUNT_SNAPSHOT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_account_snapshot' && '1' || '0' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -230,6 +239,7 @@ jobs:
             scripts/ibkr_remote_paper_proof_return_v1.py \
             scripts/ibkr_warm_selected_runtime_activation_v1.py \
             scripts/ibkr_warm_read_return_v1.py \
+            scripts/ibkr_account_snapshot_return_v1.py \
             research/forward_bar_contract_v2.py \
             tests/test_ibkr_b1_auth_contracts_v1.py \
             tests/test_ibkr_warm_selected_runtime_activation_v1.py \
@@ -240,6 +250,7 @@ jobs:
             tests/test_ibkr_remote_selected_runtime_paper_execute_v1.py \
             tests/test_ibkr_remote_paper_proof_return_v1.py \
             tests/test_ibkr_warm_read_return_v1.py \
+            tests/test_ibkr_account_snapshot_return_v1.py \
             tests/test_ibkr_initial_selected_runtime_backfill_v1.py
           python -m unittest \
             tests.test_ibkr_b1_auth_contracts_v1 \
@@ -253,6 +264,7 @@ jobs:
             tests.test_ibkr_remote_selected_runtime_paper_execute_v1 \
             tests.test_ibkr_remote_paper_proof_return_v1 \
             tests.test_ibkr_warm_read_return_v1 \
+            tests.test_ibkr_account_snapshot_return_v1 \
             tests.test_ibkr_initial_selected_runtime_backfill_v1 -v
           echo "IBKR_PAPER_PROOF_MODE=${IBKR_PAPER_PROOF_MODE}"
 
@@ -284,7 +296,7 @@ jobs:
           echo 'IBKR_INITIAL_SELECTED_RUNTIME_BACKFILL_REQUEST_LOADED=1'
 
       - name: Validate optional encrypted warm read-return request
-        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.read_return_recipient_b64 != '' || inputs.read_return_recipient_key_id != '') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'paper_execute') && (inputs.read_return_recipient_b64 != '' || inputs.read_return_recipient_key_id != '') }}
         env:
           READ_RETURN_MODE: ${{ inputs.mode }}
           READ_RETURN_RECIPIENT_B64: ${{ inputs.read_return_recipient_b64 }}
@@ -310,6 +322,31 @@ jobs:
           if key_id != expected:
               raise SystemExit('encrypted read return recipient fingerprint mismatch')
           print('IBKR_WARM_READ_RETURN_REQUEST_VALID=1')
+          PY
+
+      - name: Validate required encrypted account snapshot recipient
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_account_snapshot' }}
+        env:
+          READ_RETURN_RECIPIENT_B64: ${{ inputs.read_return_recipient_b64 }}
+          READ_RETURN_RECIPIENT_KEY_ID: ${{ inputs.read_return_recipient_key_id }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, hashlib, os
+          encoded=os.environ.get('READ_RETURN_RECIPIENT_B64','').strip()
+          key_id=os.environ.get('READ_RETURN_RECIPIENT_KEY_ID','').strip()
+          if not encoded or not key_id:
+              raise SystemExit('paper account snapshot requires recipient key and fingerprint')
+          try:
+              raw=base64.b64decode(encoded.encode('ascii'),validate=True)
+          except Exception as exc:
+              raise SystemExit('paper account snapshot recipient is not valid base64') from exc
+          if len(raw) != 32:
+              raise SystemExit('paper account snapshot recipient must be a 32-byte X25519 public key')
+          expected='sha256:'+hashlib.sha256(raw).hexdigest()
+          if key_id != expected:
+              raise SystemExit('paper account snapshot recipient fingerprint mismatch')
+          print('IBKR_ACCOUNT_SNAPSHOT_RECIPIENT_VALID=1')
           PY
 
       - name: Obtain one-run sealed gateway environment
@@ -641,7 +678,7 @@ jobs:
           PY
 
       - name: Materialize canonical post-auth broker and forward-data handoff
-        if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1'
+        if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1' && env.IBKR_PAPER_ACCOUNT_SNAPSHOT_MODE != '1'
         run: |
           set -euo pipefail
           quote_args=()
@@ -715,6 +752,61 @@ jobs:
               ],check=True,stdout=subprocess.DEVNULL)
           print('IBKR_WARM_READ_RETURN_PUBLISHED=1')
           print('IBKR_WARM_READ_RETURN_PLAINTEXT_PUBLISHED=0')
+          PY
+
+      - name: Encrypt bounded account-only snapshot for maintenance refresh
+        id: account_snapshot_return
+        if: env.IBKR_ACCOUNT_SNAPSHOT_RETURN_REQUESTED == '1'
+        env:
+          READ_RETURN_RECIPIENT_B64: ${{ inputs.read_return_recipient_b64 }}
+          READ_RETURN_RECIPIENT_KEY_ID: ${{ inputs.read_return_recipient_key_id }}
+        run: |
+          set -euo pipefail
+          python scripts/ibkr_account_snapshot_return_v1.py \
+            --host 127.0.0.1 \
+            --port 4002 \
+            --client-id 80 \
+            --run-id "$GITHUB_RUN_ID" \
+            --public-head "$GITHUB_SHA" \
+            --recipient-b64 "$READ_RETURN_RECIPIENT_B64" \
+            --recipient-key-id "$READ_RETURN_RECIPIENT_KEY_ID" \
+            --output-dir "$RUNNER_TEMP/ibkr-account-snapshot-return"
+          echo 'ready=1' >> "$GITHUB_OUTPUT"
+          echo 'IBKR_ACCOUNT_SNAPSHOT_RETURN_ENCRYPTED=1'
+
+      - name: Publish encrypted account-only snapshot
+        if: steps.account_snapshot_return.outputs.ready == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64,json,os,subprocess
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'ibkr-account-snapshot-return'
+          envelope=json.loads((root/'ibkr-account-snapshot-envelope.json').read_text(encoding='utf-8'))
+          run_id=os.environ['GITHUB_RUN_ID']
+          if str(envelope.get('run_id')) != run_id:
+              raise SystemExit('encrypted account snapshot run id mismatch')
+          prefix=f'rendezvous/returns/{run_id}/'
+          files=[]
+          for node in envelope.get('chunks') or []:
+              path=str(node.get('path') or '')
+              local_name=str(node.get('local_name') or '')
+              if not path.startswith(prefix) or '..' in path.split('/') or '/' in local_name:
+                  raise SystemExit('encrypted account snapshot publish path rejected')
+              files.append((path, root/local_name))
+          files.append((prefix+'ibkr-account-snapshot-envelope.json', root/'ibkr-account-snapshot-envelope.json'))
+          repo=os.environ['GITHUB_REPOSITORY']
+          for path,local in files:
+              content=base64.b64encode(local.read_bytes()).decode('ascii')
+              subprocess.run([
+                  'gh','api','--method','PUT',f'/repos/{repo}/contents/{path}',
+                  '-f','message=rendezvous: publish encrypted IBKR account snapshot',
+                  '-f',f'content={content}','-f','branch=rendezvous-exchange',
+              ],check=True,stdout=subprocess.DEVNULL)
+          print('IBKR_ACCOUNT_SNAPSHOT_RETURN_PUBLISHED=1')
+          print('IBKR_ACCOUNT_SNAPSHOT_RETURN_PLAINTEXT_PUBLISHED=0')
           PY
 
       - name: Execute one encrypted MM-authorized selected-runtime paper proof
@@ -839,7 +931,7 @@ jobs:
           retention-days: 30
 
       - name: Publish canonical session and forward-data handoff
-        if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1'
+        if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1' && env.IBKR_PAPER_ACCOUNT_SNAPSHOT_MODE != '1'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ibkr-cloudflare-readonly-b1-${{ github.run_id }}
