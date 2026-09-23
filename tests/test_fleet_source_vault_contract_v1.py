@@ -293,6 +293,39 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
         self.assertNotIn('cat "$log"', workflow)
 
+    def test_reusable_exact_sha_vault_approval_requires_trusted_bootstrap_attestation(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("reusableExactShaBootstrapAttestation", text)
+        self.assertIn("validStreamAttestation", text)
+        self.assertIn(
+            "streamAttestation.producer_identity",
+            text,
+        )
+        self.assertIn(
+            "SOURCE_VAULT_BOOTSTRAP_IDENTITY",
+            text,
+        )
+        self.assertIn(
+            "(!legacyApprovedStream && !reusableExactShaBootstrapAttestation)",
+            text,
+        )
+        self.assertNotIn(
+            "if (!APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha))",
+            text,
+        )
+        self.assertIn(
+            "existing.manifest_sha256 !== manifestSha",
+            text,
+        )
+        self.assertIn(
+            "existing.archive_sha256 !== archiveSha",
+            text,
+        )
+        self.assertIn(
+            "Number(existing.archive_bytes) !== archiveBytes",
+            text,
+        )
+
     def test_private_test_probe_is_main_identity_and_vault_unwrap_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("PRIVATE_TEST_PROBE_IDENTITY", text)
