@@ -63,6 +63,7 @@ on:
       - assistant/ibkr-warm-paper-proof-activation-20260917
       - assistant/ibkr-warm-read-gateway-20260917
       - assistant/b1-account-hygiene-transport-20260923
+      - assistant/b1-hygiene-skip-history-20260923
       - assistant/b1-account-hygiene-snapshot-freshness-20260923
     paths:
       - '.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml'
