@@ -49,6 +49,26 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         )
         self.assertIn("archive_bytes: 66322824", text)
 
+    def test_forward_testing_snapshot_is_exactly_code_pinned_after_bootstrap(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn(
+            "'5e56997fe31987fb1ac471ebecb03795b6614887': Object.freeze({",
+            text,
+        )
+        self.assertIn(
+            "source_ref: '5e56997fe31987fb1ac471ebecb03795b6614887'",
+            text,
+        )
+        self.assertIn(
+            "manifest_sha256: '90f7003b95d526cdbfd0d706314cf45aaa3e727353093684c66e8749342526a0'",
+            text,
+        )
+        self.assertIn(
+            "archive_sha256: '1061e11f3105e51ff193a1119b3260e34a4f6b5a388a27adcf806631ba0a6a2e'",
+            text,
+        )
+        self.assertIn("archive_bytes: 66336837", text)
+
     def test_public_key_is_public_but_unwrap_requires_runtime_oidc(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("/v1/source-vault/public-key", text)
