@@ -125,7 +125,7 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
         self.assertLess(post_auth, proof)
         self.assertLess(proof, stop)
-        self.assertIn("if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' }}", self.text)
+        self.assertIn("if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' && steps.snapshot_boundary.outputs.expired != 'true' }}", self.text)
         self.assertIn('python scripts/ibkr_warm_selected_runtime_activation_v1.py', self.text)
         self.assertIn('--exchange-ref rendezvous-exchange', self.text)
         self.assertIn('GH_TOKEN: ${{ github.token }}', self.text)
@@ -140,6 +140,21 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         self.assertIn("env.IBKR_PAPER_PROOF_MODE == '1' || env.IBKR_PAPER_EXECUTE_MODE == '1'", guard)
         self.assertIn('steps.restore.outputs.restored', guard)
         self.assertIn('IBKR_PAPER_MUTATION_WARM_STATE_REQUIRED=1', guard)
+
+    def test_expired_boundary_skips_private_data_and_mutation_paths_but_reseals_warm_state(self):
+        terminal = self.text.index('name: Publish expired completed-bar boundary terminal')
+        post_auth = self.text.index('name: Materialize canonical post-auth broker and forward-data handoff')
+        execute = self.text.index('name: Execute one encrypted MM-authorized persistent paper command')
+        stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
+        self.assertLess(terminal, post_auth)
+        self.assertLess(post_auth, execute)
+        self.assertLess(execute, stop)
+        self.assertIn("if: steps.snapshot_boundary.outputs.expired != 'true'", self.text[post_auth:post_auth + 300])
+        self.assertIn("steps.snapshot_boundary.outputs.expired != 'true'", self.text[execute:execute + 350])
+        artifact = self.text.index('name: Publish canonical session and forward-data handoff')
+        self.assertIn("if: steps.snapshot_boundary.outputs.expired != 'true'", self.text[artifact:artifact + 250])
+        self.assertIn("IBKR_WARM_SELECTED_RUNTIME_COMMAND_EXECUTED=0", self.text)
+        self.assertIn("IBKR_PRIVATE_RUNTIME_DESTROYED=1", self.text)
 
     def test_persistent_execute_uses_same_warm_job_but_has_distinct_mode(self):
         post_auth = self.text.index('name: Materialize canonical post-auth broker and forward-data handoff')

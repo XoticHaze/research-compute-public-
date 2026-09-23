@@ -597,6 +597,7 @@ jobs:
           echo 'IBKR_GATEWAY_API_READY=1'
 
       - name: Wait for optional completed-bar snapshot boundary
+        id: snapshot_boundary
         if: ${{ env.IBKR_WARM_READ_RETURN_REQUESTED == '1' && inputs.snapshot_not_before_utc != '' }}
         env:
           IBKR_SNAPSHOT_NOT_BEFORE_UTC: ${{ inputs.snapshot_not_before_utc }}
@@ -619,14 +620,56 @@ jobs:
           if delay > 600:
               raise SystemExit('snapshot boundary is more than 600 seconds in the future')
           if delay < -60:
-              raise SystemExit('snapshot boundary is more than 60 seconds stale')
+              with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
+                  fh.write('expired=true\\n')
+              print('IBKR_SNAPSHOT_BOUNDARY_EXPIRED=1')
+              print('snapshot boundary is more than 60 seconds stale')
+              raise SystemExit(0)
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
+              fh.write('expired=false\\n')
           if delay > 0:
               print('IBKR_SNAPSHOT_BOUNDARY_WAIT_SEC='+str(round(delay,3)))
               time.sleep(delay)
           print('IBKR_SNAPSHOT_BOUNDARY_REACHED_UTC='+target.isoformat().replace('+00:00','Z'))
           PY
 
+      - name: Publish expired completed-bar boundary terminal
+        if: steps.snapshot_boundary.outputs.expired == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IBKR_SNAPSHOT_NOT_BEFORE_UTC: ${{ inputs.snapshot_not_before_utc }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64,json,os,subprocess
+          run_id=os.environ['GITHUB_RUN_ID']
+          node={
+              'schema':'mmibkr.ibkr_warm_read_terminal.v1',
+              'status':'snapshot_boundary_expired',
+              'run_id':run_id,
+              'public_head':os.environ['GITHUB_SHA'].strip().lower(),
+              'snapshot_not_before_utc':os.environ['IBKR_SNAPSHOT_NOT_BEFORE_UTC'].strip(),
+              'command_intent_present':False,
+              'broker_action':False,
+              'command_executed':False,
+              'live_execution_allowed':False,
+              'private_data_included':False,
+          }
+          raw=(json.dumps(node,sort_keys=True,separators=(',',':'))+'\\n').encode('utf-8')
+          path=f'rendezvous/returns/{run_id}/ibkr-warm-read-terminal.json'
+          subprocess.run([
+              'gh','api','--method','PUT',f'/repos/{os.environ["GITHUB_REPOSITORY"]}/contents/{path}',
+              '-f','message=rendezvous: publish expired IBKR boundary terminal',
+              '-f','content='+base64.b64encode(raw).decode('ascii'),
+              '-f','branch=rendezvous-exchange',
+          ],check=True,stdout=subprocess.DEVNULL)
+          print('IBKR_WARM_READ_BOUNDARY_TERMINAL_PUBLISHED=1')
+          print('IBKR_WARM_SELECTED_RUNTIME_COMMAND_EXECUTED=0')
+          print('IBKR_WARM_READ_TERMINAL_PRIVATE_DATA_INCLUDED=0')
+          PY
+
       - name: Materialize canonical post-auth broker and forward-data handoff
+        if: steps.snapshot_boundary.outputs.expired != 'true'
         run: |
           set -euo pipefail
           quote_args=()
@@ -647,7 +690,7 @@ jobs:
 
       - name: Encrypt optional detailed warm read snapshot for private consumer
         id: warm_read_return
-        if: env.IBKR_WARM_READ_RETURN_REQUESTED == '1'
+        if: ${{ env.IBKR_WARM_READ_RETURN_REQUESTED == '1' && steps.snapshot_boundary.outputs.expired != 'true' }}
         env:
           READ_RETURN_RECIPIENT_B64: ${{ inputs.read_return_recipient_b64 }}
           READ_RETURN_RECIPIENT_KEY_ID: ${{ inputs.read_return_recipient_key_id }}
@@ -704,7 +747,7 @@ jobs:
 
       - name: Execute one encrypted MM-authorized selected-runtime paper proof
         id: paper_proof
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' && steps.snapshot_boundary.outputs.expired != 'true' }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -725,7 +768,7 @@ jobs:
 
       - name: Execute one encrypted MM-authorized persistent paper command
         id: paper_execute
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_execute' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_execute' && steps.snapshot_boundary.outputs.expired != 'true' }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -803,6 +846,7 @@ jobs:
           retention-days: 30
 
       - name: Publish canonical session and forward-data handoff
+        if: steps.snapshot_boundary.outputs.expired != 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ibkr-cloudflare-readonly-b1-${{ github.run_id }}
@@ -817,6 +861,12 @@ jobs:
         if: ${{ always() && env.IBKR_PAPER_PROOF_MODE == '1' }}
         run: |
           set -euo pipefail
+          if [ "${{ steps.snapshot_boundary.outputs.expired }}" = "true" ]; then
+            echo 'IBKR_WARM_SELECTED_RUNTIME_SNAPSHOT_BOUNDARY_EXPIRED=1'
+            echo 'IBKR_WARM_SELECTED_RUNTIME_NO_COMMAND_TERMINAL=1'
+            echo 'IBKR_WARM_SELECTED_RUNTIME_COMMAND_EXECUTED=0'
+            exit 0
+          fi
           if [ "${{ steps.paper_proof.outcome }}" != "success" ]; then
             echo 'IBKR_WARM_SELECTED_RUNTIME_PAPER_PROOF_ACCEPTED=0'
             echo 'Paper proof failed or was blocked; Gateway was stopped and warm state was resealed before surfacing this failure.'
@@ -828,6 +878,12 @@ jobs:
         if: ${{ always() && env.IBKR_PAPER_EXECUTE_MODE == '1' }}
         run: |
           set -euo pipefail
+          if [ "${{ steps.snapshot_boundary.outputs.expired }}" = "true" ]; then
+            echo 'IBKR_WARM_SELECTED_RUNTIME_SNAPSHOT_BOUNDARY_EXPIRED=1'
+            echo 'IBKR_WARM_SELECTED_RUNTIME_NO_COMMAND_TERMINAL=1'
+            echo 'IBKR_WARM_SELECTED_RUNTIME_COMMAND_EXECUTED=0'
+            exit 0
+          fi
           if [ "${{ steps.paper_execute.outcome }}" != "success" ]; then
             echo 'IBKR_WARM_SELECTED_RUNTIME_PAPER_EXECUTE_ACCEPTED=0'
             echo 'Persistent paper execute failed or was blocked; Gateway was stopped and warm state was resealed before surfacing this failure.'
