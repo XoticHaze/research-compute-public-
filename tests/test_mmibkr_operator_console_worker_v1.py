@@ -86,6 +86,10 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
             "XoticHaze/research-compute-public-/.github/workflows/mmibkr-operator-snapshot-read-bridge-r1.yml@refs/heads/main",
             text,
         )
+        self.assertIn(
+            "XoticHaze/research-compute-public-/.github/workflows/mmibkr-paper-account-hygiene-coordinator-r1.yml@refs/heads/main",
+            text,
+        )
         self.assertIn("repository_visibility: 'public'", text)
         publisher_start = text.index("async function verifyPublisher(request)")
         reader_start = text.index("async function verifySnapshotReader(request)")

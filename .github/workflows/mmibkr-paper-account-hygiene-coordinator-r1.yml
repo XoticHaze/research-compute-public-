@@ -1,0 +1,515 @@
+name: MM-IBKR Paper Account Hygiene Coordinator R1
+
+on:
+  workflow_dispatch:
+    inputs:
+      execute:
+        description: Execute canonical paper-account flatten after fresh preflight
+        required: true
+        default: false
+        type: boolean
+      batch_size:
+        description: Canonical flatten batch size (1-10)
+        required: true
+        default: '5'
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - 'rendezvous/fire/mmibkr-paper-account-hygiene-coordinator-r1.json'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/mmibkr-paper-account-hygiene-coordinator-r1.yml'
+      - 'cloudflare/operator-console/src/index.js'
+      - 'cloudflare/fleet-authority/src/source_exchange.js'
+      - 'tests/test_mmibkr_operator_console_worker_v1.py'
+      - 'tests/test_fleet_source_vault_contract_v1.py'
+      - 'tests/test_mmibkr_paper_account_hygiene_coordinator_v1.py'
+
+permissions:
+  contents: write
+  actions: write
+  id-token: write
+
+concurrency:
+  group: mmibkr-paper-account-hygiene-coordinator-r1
+  cancel-in-progress: false
+
+env:
+  OPERATOR_CONSOLE_URL: https://mmibkr-operator-console.slenderiq.workers.dev
+  FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
+  PRODUCER_SOURCE_SHA: e78d16c99bde3df4d3828c952e27dc1746772875
+  PRODUCER_ARCHIVE_SHA256: b5323cbe49c1d124c4ba59b903143d35b46a0ab567a21638a17d63d334b95c5d
+  PRODUCER_ARCHIVE_BYTES: '66374107'
+  RUNTIME_SOURCE_SHA: 35e6b44e5c2618f780a84c1c204fe14c76bdf0e5
+  FIRE_PATH: rendezvous/fire/mmibkr-paper-account-hygiene-coordinator-r1.json
+  OPERATOR_ACK: MMIBKR_PAPER_ACCOUNT_HYGIENE_ACK_V1
+  ENABLE_LIVE_TRADING: '0'
+
+jobs:
+  contract:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Validate coordinator trust and workflow contracts
+        run: |
+          set -euo pipefail
+          python -m unittest -v \
+            tests.test_mmibkr_paper_account_hygiene_coordinator_v1 \
+            tests.test_mmibkr_operator_console_worker_v1 \
+            tests.test_fleet_source_vault_contract_v1
+
+  coordinate:
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Install fixed crypto dependency
+        run: python -m pip install --disable-pip-version-check cryptography==46.0.2
+
+      - name: Resolve fail-closed hygiene request
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          if os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch':
+              event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+              inputs = event.get('inputs') or {}
+              execute = str(inputs.get('execute') or 'false').lower() == 'true'
+              batch_size = int(inputs.get('batch_size') or 5)
+              node = {
+                  'schema': 'mmibkr.paper_account_hygiene_coordinator_fire.v1',
+                  'execute': execute,
+                  'batch_size': batch_size,
+                  'operator_approved': True,
+                  'operator_ack': os.environ['OPERATOR_ACK'],
+                  'requested_by': 'workflow_dispatch',
+              }
+          else:
+              path = Path(os.environ['FIRE_PATH'])
+              if not path.is_file():
+                  raise SystemExit('paper account hygiene fire request missing')
+              node = json.loads(path.read_text(encoding='utf-8'))
+
+          if node.get('schema') != 'mmibkr.paper_account_hygiene_coordinator_fire.v1':
+              raise SystemExit('paper account hygiene fire schema mismatch')
+          if not isinstance(node.get('execute'), bool):
+              raise SystemExit('paper account hygiene execute must be boolean')
+          batch_size = int(node.get('batch_size') or 0)
+          if not 1 <= batch_size <= 10:
+              raise SystemExit('paper account hygiene batch size rejected')
+          if node.get('operator_approved') is not True:
+              raise SystemExit('paper account hygiene operator approval missing')
+          if str(node.get('operator_ack') or '') != os.environ['OPERATOR_ACK']:
+              raise SystemExit('paper account hygiene operator ack mismatch')
+
+          with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
+              fh.write('HYGIENE_EXECUTE=' + str(node['execute']).lower() + '\n')
+              fh.write('HYGIENE_BATCH_SIZE=' + str(batch_size) + '\n')
+          print('MMIBKR_HYGIENE_REQUEST=accepted')
+          print('MMIBKR_HYGIENE_EXECUTE=' + str(node['execute']).lower())
+          print('MMIBKR_HYGIENE_BATCH_SIZE=' + str(batch_size))
+          print('MMIBKR_HYGIENE_LIVE_EXECUTION_ALLOWED=0')
+          PY
+
+      - name: Read fresh ownership-aware Operator Snapshot
+        env:
+          CALLER_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          umask 077
+          raw="$RUNNER_TEMP/mmibkr-operator-machine-read.json"
+          oidc_url="$ACTIONS_ID_TOKEN_REQUEST_URL"
+          if [[ "$oidc_url" == *"?"* ]]; then
+            oidc_url="$oidc_url&audience=mmibkr-operator-console"
+          else
+            oidc_url="$oidc_url?audience=mmibkr-operator-console"
+          fi
+          oidc_json="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            -H 'Accept: application/json' \
+            "$oidc_url")"
+          oidc_token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$oidc_json")"
+          unset oidc_json
+          http_status="$(curl --silent --show-error \
+            -o "$raw" \
+            -w '%{http_code}' \
+            -H "Authorization: Bearer $oidc_token" \
+            -H 'Accept: application/json' \
+            -H "X-MMIBKR-Caller-Run-Id: $CALLER_RUN_ID" \
+            "$OPERATOR_CONSOLE_URL/v1/operator-snapshot-read")"
+          unset oidc_token
+          test "$http_status" = '200'
+
+          python - "$raw" "$RUNNER_TEMP/mmibkr-hygiene-snapshot.json" <<'PY'
+          import json, os, sys
+          from pathlib import Path
+
+          node = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          if node.get('ok') is not True or node.get('schema') != 'mmibkr.operator_console_machine_read.v1':
+              raise SystemExit('operator machine read rejected')
+          snapshot = node.get('snapshot')
+          if not isinstance(snapshot, dict) or snapshot.get('schema') != 'mmibkr.cloud_operator_snapshot.v1':
+              raise SystemExit('operator snapshot rejected')
+          if snapshot.get('mode') != 'paper' or snapshot.get('live_enabled') is not False:
+              raise SystemExit('operator snapshot is not paper-only')
+          runtime = snapshot.get('runtime') if isinstance(snapshot.get('runtime'), dict) else {}
+          if str(runtime.get('source_sha') or runtime.get('source_ref') or '').lower() != os.environ['RUNTIME_SOURCE_SHA']:
+              raise SystemExit('operator snapshot runtime source mismatch')
+          account = snapshot.get('account') if isinstance(snapshot.get('account'), dict) else {}
+          if int(account.get('open_orders_count') or 0) != 0:
+              raise SystemExit('operator snapshot contains open broker orders')
+          Path(sys.argv[2]).write_text(
+              json.dumps(snapshot, sort_keys=True, separators=(',', ':')) + '\n',
+              encoding='utf-8',
+          )
+          print('MMIBKR_HYGIENE_SNAPSHOT=accepted')
+          print('MMIBKR_HYGIENE_ACCOUNT_POSITION_COUNT=' + str(int(account.get('positions_count') or 0)))
+          print('MMIBKR_HYGIENE_OPEN_ORDER_COUNT=0')
+          print('MMIBKR_HYGIENE_RUNTIME_SOURCE=' + os.environ['RUNTIME_SOURCE_SHA'])
+          PY
+          rm -f "$raw"
+
+      - name: Materialize exact validated hygiene producer source
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import hashlib, json, os, shutil, tarfile, time
+          from pathlib import Path
+          from urllib.error import HTTPError
+          from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+          from urllib.request import Request, urlopen
+
+          base = os.environ['FLEET_AUTHORITY_BASE'].rstrip('/')
+          source_sha = os.environ['PRODUCER_SOURCE_SHA'].strip().lower()
+          expected_sha = os.environ['PRODUCER_ARCHIVE_SHA256'].strip().lower()
+          expected_bytes = int(os.environ['PRODUCER_ARCHIVE_BYTES'])
+          run_id = os.environ['GITHUB_RUN_ID']
+          temp = Path(os.environ['RUNNER_TEMP'])
+          archive = temp / 'mmibkr-hygiene-producer.tar.gz'
+          extract = temp / 'mmibkr-hygiene-producer'
+
+          def oidc():
+              parsed = urlparse(os.environ['ACTIONS_ID_TOKEN_REQUEST_URL'])
+              query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+              query['audience'] = 'mmibkr-fleet-authority'
+              url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, urlencode(query), parsed.fragment))
+              req = Request(url, headers={
+                  'Authorization': 'Bearer ' + os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN'],
+                  'Accept': 'application/json',
+              })
+              with urlopen(req, timeout=20) as response:
+                  token = str(json.load(response).get('value') or '')
+              if token.count('.') != 2:
+                  raise RuntimeError('OIDC token invalid')
+              return token
+
+          url = f'{base}/v1/source-vault/private-archive/{source_sha}'
+          response_headers = None
+          for attempt in range(1, 37):
+              try:
+                  req = Request(url, headers={
+                      'Authorization': 'Bearer ' + oidc(),
+                      'Accept': 'application/gzip',
+                      'User-Agent': 'mmibkr-paper-account-hygiene-coordinator-r1',
+                      'X-MMIBKR-Caller-Run-Id': run_id,
+                  })
+                  with urlopen(req, timeout=60) as response:
+                      response_headers = dict(response.headers.items())
+                      with archive.open('wb') as out:
+                          shutil.copyfileobj(response, out, length=1024 * 1024)
+                  break
+              except HTTPError as exc:
+                  if exc.code not in {401, 403, 502, 503}:
+                      raise
+                  time.sleep(5)
+          else:
+              raise SystemExit('exact hygiene producer source did not converge')
+
+          normalized = {str(k).lower(): str(v) for k, v in (response_headers or {}).items()}
+          if normalized.get('x-mmibkr-source-sha') != source_sha:
+              raise SystemExit('hygiene producer source SHA mismatch')
+          if normalized.get('x-mmibkr-private-source-token-exposed') != 'false':
+              raise SystemExit('private source token exposure boundary violated')
+          stream_id = normalized.get('x-mmibkr-source-stream-id', '')
+          if not stream_id:
+              raise SystemExit('private source stream id missing')
+
+          raw = archive.read_bytes()
+          digest = hashlib.sha256(raw).hexdigest()
+          if digest != expected_sha or len(raw) != expected_bytes:
+              raise SystemExit('validated hygiene producer archive identity changed')
+
+          att = {
+              'schema': 'mmibkr-fleet-private-source-attest-v1',
+              'source_sha': source_sha,
+              'stream_id': stream_id,
+              'archive_sha256': digest,
+              'archive_bytes': len(raw),
+          }
+          req = Request(
+              base + '/v1/source-vault/private-archive/attest',
+              data=json.dumps(att, sort_keys=True, separators=(',', ':')).encode(),
+              method='POST',
+              headers={
+                  'Authorization': 'Bearer ' + oidc(),
+                  'Accept': 'application/json',
+                  'Content-Type': 'application/json',
+                  'User-Agent': 'mmibkr-paper-account-hygiene-coordinator-r1',
+                  'X-MMIBKR-Caller-Run-Id': run_id,
+              },
+          )
+          with urlopen(req, timeout=30) as response:
+              result = json.load(response)
+          if result.get('ok') is not True or result.get('archive_sha256') != digest:
+              raise SystemExit('hygiene producer source attestation failed')
+
+          extract.mkdir(parents=True, exist_ok=True)
+          with tarfile.open(archive, 'r:gz') as tf:
+              members = tf.getmembers()
+              tops = {Path(m.name).parts[0] for m in members if Path(m.name).parts}
+              if len(tops) != 1:
+                  raise SystemExit('hygiene producer archive root invalid')
+              root = (extract / next(iter(tops))).resolve()
+              for member in members:
+                  path = Path(member.name)
+                  if path.is_absolute() or '..' in path.parts or member.issym() or member.islnk() or member.isdev():
+                      raise SystemExit('unsafe hygiene producer archive member')
+                  target = (extract / path).resolve()
+                  if target != root and root not in target.parents:
+                      raise SystemExit('hygiene producer archive escape')
+                  if member.isdir():
+                      target.mkdir(parents=True, exist_ok=True)
+                      continue
+                  if not member.isfile():
+                      raise SystemExit('hygiene producer archive member type rejected')
+                  handle = tf.extractfile(member)
+                  if handle is None:
+                      raise SystemExit('hygiene producer archive member unreadable')
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  with target.open('wb') as out:
+                      shutil.copyfileobj(handle, out, length=1024 * 1024)
+
+          if not (root / 'scripts/operator/ibkr_remote_account_hygiene_slot_v1.py').is_file():
+              raise SystemExit('validated hygiene producer missing')
+          with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
+              fh.write('HYGIENE_PRODUCER_ROOT=' + str(root) + '\n')
+          print('MMIBKR_HYGIENE_PRODUCER_SOURCE=accepted')
+          print('MMIBKR_HYGIENE_PRODUCER_PRIVATE_TOKEN_EXPOSED=0')
+          PY
+
+      - name: Materialize exact ownership runtime source from reusable encrypted vault
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/mmibkr-hygiene-runtime-source"
+          python scripts/mmibkr_source_vault_consumer_v1.py \
+            --authority-base "$FLEET_AUTHORITY_BASE" \
+            --run-id "$GITHUB_RUN_ID" \
+            --source-sha "$RUNTIME_SOURCE_SHA" \
+            --public-repo XoticHaze/mm-ibkr-runtime \
+            --public-branch mmibkr-source-vault \
+            --destination "$RUNNER_TEMP/mmibkr-hygiene-runtime-source/extracted" \
+            --archive-output "$RUNNER_TEMP/mmibkr-hygiene-runtime-source/mm-ibkr-source.tar.gz" \
+            --output "$RUNNER_TEMP/mmibkr-hygiene-runtime-source/materialization-host.json"
+
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'mmibkr-hygiene-runtime-source'
+          node = json.loads((root / 'materialization-host.json').read_text())
+          if node.get('ok') is not True or node.get('source_sha') != os.environ['RUNTIME_SOURCE_SHA']:
+              raise SystemExit('hygiene runtime source materialization mismatch')
+          if node.get('source_transport') != 'fleet_authority_exact_sha_encrypted_snapshot_vault':
+              raise SystemExit('hygiene runtime must use reusable encrypted source vault')
+          if node.get('private_repository_token_used') is not False:
+              raise SystemExit('hygiene runtime private repository token unexpectedly used')
+          if node.get('plaintext_emitted') is not False:
+              raise SystemExit('hygiene runtime plaintext emission boundary violated')
+          node['fleet_authority_base'] = os.environ['FLEET_AUTHORITY_BASE']
+          node['caller_run_id'] = os.environ['GITHUB_RUN_ID']
+          (root / 'source-materialization.json').write_text(
+              json.dumps(node, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          print('MMIBKR_HYGIENE_RUNTIME_SOURCE_MATERIALIZED=1')
+          print('MMIBKR_HYGIENE_RUNTIME_SOURCE_SHA=' + node['source_sha'])
+          print('MMIBKR_HYGIENE_RUNTIME_SOURCE_PRIVATE_TOKEN_USED=0')
+          PY
+
+      - name: Run governed encrypted hygiene preflight or execution
+        id: hygiene
+        env:
+          IBKR_REMOTE_EXCHANGE_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          receipt="$RUNNER_TEMP/mmibkr-paper-account-hygiene-receipt.json"
+          args=(
+            run
+            --snapshot "$RUNNER_TEMP/mmibkr-hygiene-snapshot.json"
+            --source-materialization "$RUNNER_TEMP/mmibkr-hygiene-runtime-source/source-materialization.json"
+            --batch-size "$HYGIENE_BATCH_SIZE"
+            --operator-approved
+            --operator-ack "$OPERATOR_ACK"
+            --output "$receipt"
+          )
+          if [ "$HYGIENE_EXECUTE" = 'true' ]; then
+            args+=(--execute)
+          fi
+          set +e
+          (
+            cd "$HYGIENE_PRODUCER_ROOT"
+            PYTHONPATH="$HYGIENE_PRODUCER_ROOT" \
+              python scripts/operator/ibkr_remote_account_hygiene_slot_v1.py "\${args[@]}"
+          )
+          rc=$?
+          set -e
+          echo "producer_exit_code=$rc" >> "$GITHUB_OUTPUT"
+          test -s "$receipt"
+
+      - name: Validate and publish sanitized hygiene receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXCHANGE_REF: rendezvous-exchange
+        run: |
+          set -euo pipefail
+          receipt="$RUNNER_TEMP/mmibkr-paper-account-hygiene-receipt.json"
+          sanitized="$RUNNER_TEMP/mmibkr-paper-account-hygiene-sanitized.json"
+          python - "$receipt" "$sanitized" <<'PY'
+          import json, os, sys
+          from pathlib import Path
+
+          node = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          if node.get('schema') != 'mmibkr.remote_paper_account_hygiene_receipt.v1':
+              raise SystemExit('hygiene receipt schema mismatch')
+          authority = node.get('authority') if isinstance(node.get('authority'), dict) else {}
+          for key in (
+              'cloud_strategy_authority',
+              'cloud_execution_policy_authority',
+              'direct_broker_client_used',
+              'runtime_activation_authority',
+              'global_cancel_allowed',
+              'live_execution_allowed',
+          ):
+              if authority.get(key) is not False:
+                  raise SystemExit('hygiene authority boundary violated:' + key)
+          ownership = node.get('ownership_authority') if isinstance(node.get('ownership_authority'), dict) else {}
+          if ownership.get('ownership_source') != 'selected_runtime_strategy_inventory_v1':
+              raise SystemExit('hygiene ownership source mismatch')
+          if int(ownership.get('strategy_owned_position_count') or -1) != 0:
+              raise SystemExit('hygiene strategy inventory is not flat')
+          if ownership.get('operator_approved') is not True or ownership.get('operator_ack_match') is not True:
+              raise SystemExit('hygiene operator approval boundary violated')
+
+          execution = node.get('execution') if isinstance(node.get('execution'), dict) else {}
+          cleanup = node.get('cleanup') if isinstance(node.get('cleanup'), dict) else {}
+          final = node.get('final_reconciliation') if isinstance(node.get('final_reconciliation'), dict) else {}
+          preflight = node.get('preflight') if isinstance(node.get('preflight'), dict) else {}
+          execute = os.environ['HYGIENE_EXECUTE'] == 'true'
+
+          if not execute:
+              if execution.get('called') is not False or execution.get('broker_order_placed') is not False:
+                  raise SystemExit('preflight unexpectedly executed broker action')
+              if cleanup.get('flatten_called') is not False or cleanup.get('global_cancel_called') is not False:
+                  raise SystemExit('preflight unexpectedly invoked cleanup mutation')
+          else:
+              if node.get('ok') is not True or node.get('status') != 'PAPER_ACCOUNT_HYGIENE_RECONCILED':
+                  raise SystemExit('requested hygiene execution did not reconcile')
+              if final.get('account_flat') is not True or final.get('open_orders_clean') is not True:
+                  raise SystemExit('hygiene final reconciliation incomplete')
+
+          classes = set()
+          for raw in preflight.get('problems') or []:
+              value = str(raw)
+              if 'regular_session_required' in value:
+                  classes.add('regular_session_required')
+              elif 'session_submit_not_allowed' in value:
+                  classes.add('session_submit_not_allowed')
+              elif 'open_orders_present' in value:
+                  classes.add('open_orders_present')
+              elif 'unexpected_broker_position' in value:
+                  classes.add('unexpected_broker_position')
+              elif 'expected_position_missing' in value:
+                  classes.add('expected_position_missing')
+              elif 'position_' in value or 'broker_position_' in value:
+                  classes.add('broker_position_identity_or_quantity_mismatch')
+              elif 'canonical_flatten_preview_unavailable' in value:
+                  classes.add('canonical_flatten_preview_unavailable')
+              else:
+                  classes.add('other_fail_closed_preflight_problem')
+
+          sanitized_node = {
+              'schema': 'mmibkr.paper_account_hygiene_sanitized_receipt.v1',
+              'ok': bool(node.get('ok')),
+              'status': node.get('status'),
+              'execute_requested': execute,
+              'runtime_source_sha': ownership.get('runtime_source_sha'),
+              'operator_snapshot_sha256': ownership.get('operator_snapshot_sha256'),
+              'snapshot_generated_at_utc': ownership.get('snapshot_generated_at_utc'),
+              'ownership_source': ownership.get('ownership_source'),
+              'strategy_owned_position_count': ownership.get('strategy_owned_position_count'),
+              'account_position_count': ownership.get('account_position_count'),
+              'broker_truth_match': preflight.get('broker_truth_match'),
+              'open_orders_clean': preflight.get('open_orders_clean'),
+              'regular_session_ready': preflight.get('regular_session_ready'),
+              'preflight_problem_classes': sorted(classes),
+              'execution_called': bool(execution.get('called')),
+              'broker_order_placed': bool(execution.get('broker_order_placed')),
+              'flatten_called': bool(cleanup.get('flatten_called')),
+              'global_cancel_called': bool(cleanup.get('global_cancel_called')),
+              'final_position_count': final.get('position_count'),
+              'final_open_order_count': final.get('open_order_count'),
+              'account_flat': final.get('account_flat'),
+              'broker_mutation_authority': False,
+              'live_execution_allowed': False,
+              'private_snapshot_published': False,
+              'private_source_published': False,
+          }
+          Path(sys.argv[2]).write_text(
+              json.dumps(sanitized_node, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          print('MMIBKR_HYGIENE_STATUS=' + str(sanitized_node['status']))
+          print('MMIBKR_HYGIENE_BROKER_TRUTH_MATCH=' + str(bool(sanitized_node['broker_truth_match'])).lower())
+          print('MMIBKR_HYGIENE_OPEN_ORDERS_CLEAN=' + str(bool(sanitized_node['open_orders_clean'])).lower())
+          print('MMIBKR_HYGIENE_REGULAR_SESSION_READY=' + str(bool(sanitized_node['regular_session_ready'])).lower())
+          print('MMIBKR_HYGIENE_EXECUTION_CALLED=' + str(bool(sanitized_node['execution_called'])).lower())
+          print('MMIBKR_HYGIENE_LIVE_EXECUTION_ALLOWED=0')
+          PY
+
+          content="$(base64 -w0 "$sanitized")"
+          path="rendezvous/receipts/$GITHUB_RUN_ID-mmibkr-paper-account-hygiene.json"
+          gh api --method PUT "/repos/$GITHUB_REPOSITORY/contents/$path" \
+            -f "message=operator: publish sanitized paper account hygiene receipt" \
+            -f "content=$content" \
+            -f "branch=$EXCHANGE_REF" >/dev/null
+          echo "MMIBKR_HYGIENE_SANITIZED_RECEIPT_PATH=$path"
+
+      - name: Destroy private hygiene material
+        if: always()
+        run: |
+          set +e
+          rm -rf \
+            "$RUNNER_TEMP/mmibkr-operator-machine-read.json" \
+            "$RUNNER_TEMP/mmibkr-hygiene-snapshot.json" \
+            "$RUNNER_TEMP/mmibkr-hygiene-producer.tar.gz" \
+            "$RUNNER_TEMP/mmibkr-hygiene-producer" \
+            "$RUNNER_TEMP/mmibkr-hygiene-runtime-source" \
+            "$RUNNER_TEMP/mmibkr-paper-account-hygiene-receipt.json" \
+            "$RUNNER_TEMP/mmibkr-paper-account-hygiene-sanitized.json"
+          echo 'MMIBKR_HYGIENE_PRIVATE_MATERIAL_DESTROYED=1'
