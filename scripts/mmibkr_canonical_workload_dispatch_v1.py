@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
-import hashlib, importlib, json, os, re, secrets, sys, threading, time
+import hashlib, importlib, json, os, re, secrets, shutil, sys, tempfile, threading, time
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +49,11 @@ CAPABILITIES={
         "path":"autotuner_primary_validation_runner.py",
         "module":"autotuner_primary_validation_runner",
         "callable":"execute_primary_validation",
+    },
+    "MODEL_LAB_FIRST_CONSUMER":{
+        "path":"scripts/operator/model_lab_xgboost_first_consumer.py",
+        "module":"scripts.operator.model_lab_xgboost_first_consumer",
+        "callable":"execute",
     },
 }
 _SHA1=re.compile(r"^[0-9a-f]{40}$")
@@ -281,6 +286,44 @@ def validate_autotuner_primary_validation_arguments(args:Any,input_root:Path|Non
         normalized_policy[key]=value
     return {"strategy_spec":spec,"dataset":dataset,"staged_plan":deepcopy(plan),"split_policy":normalized_policy}
 
+def validate_model_lab_first_consumer_arguments(args:Any,input_root:Path|None)->dict:
+    cid="MODEL_LAB_FIRST_CONSUMER"
+    if not isinstance(args,dict):raise CanonicalDispatchError(f"{cid} arguments must be object")
+    exact(args,{"asset_type","symbol","timeframe","horizon_bars","target_name","start_year","test_span_years","min_test_rows","inputs"},cid+" arguments")
+    asset_type=str(args.get("asset_type") or "").strip().lower()
+    if asset_type not in {"stocks","futures"}:raise CanonicalDispatchError(f"{cid} asset_type must be stocks or futures")
+    symbol=str(args.get("symbol") or "").strip().upper()
+    identity_symbol=symbol
+    if asset_type=="futures" and identity_symbol.endswith("1!"):identity_symbol=identity_symbol[:-2]
+    if asset_type=="futures" and identity_symbol.endswith("-CONTINUOUS"):identity_symbol=identity_symbol[:-11]
+    if not identity_symbol or not _SYMBOL.fullmatch(identity_symbol):raise CanonicalDispatchError(f"{cid} symbol is invalid")
+    timeframe=str(args.get("timeframe") or "").strip()
+    if not timeframe or len(timeframe)>32 or not re.fullmatch(r"[A-Za-z0-9]+",timeframe):
+        raise CanonicalDispatchError(f"{cid} timeframe is invalid")
+    target_name=str(args.get("target_name") or "").strip()
+    if not _ID.fullmatch(target_name):raise CanonicalDispatchError(f"{cid} target_name is invalid")
+    try:
+        horizon=int(args.get("horizon_bars")); start_year=int(args.get("start_year"))
+        test_span=int(args.get("test_span_years")); min_rows=int(args.get("min_test_rows"))
+    except Exception as e:raise CanonicalDispatchError(f"{cid} numeric bounds must be integers") from e
+    if not 1<=horizon<=1000:raise CanonicalDispatchError(f"{cid} horizon_bars must be within 1..1000")
+    if not 1900<=start_year<=2200:raise CanonicalDispatchError(f"{cid} start_year must be within 1900..2200")
+    if not 1<=test_span<=20:raise CanonicalDispatchError(f"{cid} test_span_years must be within 1..20")
+    if not 1<=min_rows<=10_000_000:raise CanonicalDispatchError(f"{cid} min_test_rows must be within 1..10000000")
+    if input_root is None:raise CanonicalDispatchError(f"{cid} requires governed input_root")
+    inputs=args.get("inputs")
+    if not isinstance(inputs,dict):raise CanonicalDispatchError(f"{cid} inputs must be object")
+    exact(inputs,{"raw","features","feature_sidecar"},cid+" inputs")
+    resolved={}
+    for name in ("raw","features","feature_sidecar"):
+        node=resolve_dataset(input_root,f"model_lab_{name}",inputs[name])
+        resolved[name]={k:node[k] for k in ("relative_path","sha256","bytes")}
+    return {
+        "asset_type":asset_type,"symbol":symbol,"timeframe":timeframe,
+        "horizon_bars":horizon,"target_name":target_name,"start_year":start_year,
+        "test_span_years":test_span,"min_test_rows":min_rows,"inputs":resolved,
+    }
+
 def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None=None)->dict:
     exact(req,{"schema","job_id","capability_id","mmibkr","entrypoint","arguments","resources","authority","forbidden_authorities"},"request")
     if req.get("schema")!=REQUEST_SCHEMA:raise CanonicalDispatchError("unsupported request schema")
@@ -320,6 +363,8 @@ def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None
         normalized_args=validate_autotuner_campaign_arguments(args,input_root)
     elif cid=="AUTOTUNER_PRIMARY_VALIDATION":
         normalized_args=validate_autotuner_primary_validation_arguments(args,input_root)
+    elif cid=="MODEL_LAB_FIRST_CONSUMER":
+        normalized_args=validate_model_lab_first_consumer_arguments(args,input_root)
     else:
         raise CanonicalDispatchError(f"capability executor is not implemented: {cid}")
     return {"schema":REQUEST_SCHEMA,"job_id":jid,"capability_id":cid,"mmibkr":mm,"entrypoint":{**cap,"git_blob_sha1":actual},"arguments":normalized_args,"resources":resources(req.get("resources")),"authority":AUTHORITY,"forbidden_authorities":dict(FORBIDDEN_AUTHORITY_ASSERTIONS)}
@@ -505,6 +550,61 @@ def autotuner_validation_dependencies(root:Path)->dict[str,str]:
     )
     return {path:private_blob_identity(root,path) for path in paths}
 
+def model_lab_first_consumer_dependencies(root:Path)->dict[str,str]:
+    paths=(
+        "scripts/operator/model_lab_xgboost_first_consumer.py","model_lab_training_matrix.py",
+        "model_lab_canonical_data.py","model_lab_xgboost.py","model_lab_canonical_trainer.py",
+        "model_lab_validation.py","feature_contract.py","predictive_target_spec.py",
+    )
+    return {path:private_blob_identity(root,path) for path in paths}
+
+def execute_model_lab_first_consumer(v:dict,root:Path,input_root:Path,fn)->dict:
+    args=v["arguments"]; resolved={}
+    for name in ("raw","features","feature_sidecar"):
+        resolved[name]=resolve_dataset(input_root,f"model_lab_{name}",args["inputs"][name])
+    symbol=args["symbol"]
+    stored_symbol=symbol[:-2] if args["asset_type"]=="futures" and symbol.endswith("1!") else symbol
+    if args["asset_type"]=="futures" and stored_symbol.endswith("-CONTINUOUS"):
+        stored_symbol=stored_symbol[:-11]
+    if not stored_symbol or not _SYMBOL.fullmatch(stored_symbol):
+        raise CanonicalDispatchError("MODEL_LAB_FIRST_CONSUMER canonical symbol is invalid")
+    staging=Path(tempfile.mkdtemp(prefix="mmibkr-model-lab-first-consumer-"))
+    try:
+        directory=(staging/"futures"/f"{stored_symbol}-CONTINUOUS") if args["asset_type"]=="futures" else (staging/"stocks"/stored_symbol)
+        directory.mkdir(parents=True,exist_ok=True)
+        raw_path=directory/f"{args['timeframe']}.csv"
+        feature_path=directory/f"{args['timeframe']}.features.csv"
+        sidecar_path=feature_path.with_suffix(feature_path.suffix+".manifest.json")
+        for src,dst in ((resolved["raw"]["path"],raw_path),(resolved["features"]["path"],feature_path),(resolved["feature_sidecar"]["path"],sidecar_path)):
+            shutil.copyfile(src,dst)
+        ns=argparse.Namespace(
+            data_root=str(staging),asset_type=args["asset_type"],symbol=symbol,timeframe=args["timeframe"],
+            horizon_bars=args["horizon_bars"],target_name=args["target_name"],start_year=args["start_year"],
+            test_span_years=args["test_span_years"],min_test_rows=args["min_test_rows"],output=None,
+        )
+        raw=fn(ns)
+        if not isinstance(raw,dict) or raw.get("schema")!="mm.model_lab_xgboost_first_consumer.v1":
+            raise CanonicalDispatchError("canonical Model Lab first consumer returned invalid contract")
+        safety=raw.get("safety")
+        expected={
+            "read_only":True,"runtime_authority":False,"strategy_spec_authority":False,
+            "promotion_authority":False,"order_submission":False,"live_trading_change":False,
+        }
+        if not isinstance(safety,dict) or any(safety.get(key) is not value for key,value in expected.items()):
+            raise CanonicalDispatchError("Model Lab first consumer safety contract rejected")
+        economic=raw.get("economic_evidence")
+        if not isinstance(economic,dict) or economic.get("status")!="EVIDENCE_GAP" or economic.get("promotion_allowed") is not False:
+            raise CanonicalDispatchError("Model Lab first consumer economic-evidence boundary rejected")
+        public=sanitize_public_tree(raw)
+        public["governed_inputs"]={
+            name:{k:resolved[name][k] for k in ("relative_path","sha256","bytes")}
+            for name in ("raw","features","feature_sidecar")
+        }
+        public["canonical_dependencies"]=model_lab_first_consumer_dependencies(root)
+        return public
+    finally:
+        shutil.rmtree(staging,ignore_errors=True)
+
 def execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
     fn=load_callable(root,CAPABILITIES[v["capability_id"]])
     if v["capability_id"]=="STRATEGY_SPEC_VALIDATE":
@@ -573,6 +673,9 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
         public["dataset"]={k:descriptor[k] for k in ("relative_path","sha256","bytes")}
         public["canonical_dependencies"]=autotuner_validation_dependencies(root)
         result=public
+    elif v["capability_id"]=="MODEL_LAB_FIRST_CONSUMER":
+        if input_root is None:raise CanonicalDispatchError("MODEL_LAB_FIRST_CONSUMER requires governed input_root")
+        result=execute_model_lab_first_consumer(v,root,input_root,fn)
     elif v["capability_id"]=="AUTOTUNER_PARAMETER_CONSUMPTION":
         normalized,filtered,consumption=autotuner_gate(root,v["arguments"])
         result={
