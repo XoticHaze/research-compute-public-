@@ -46,6 +46,23 @@ def test_allowlist_accepts_only_exact_selected_runtime_strategyspec_integrity_mo
         validated_modules("tests.test_selected_runtime_strategy_inventory_v1")
 
 
+
+def test_allowlist_accepts_exact_model_lab_scientific_chain_only():
+    assert validated_modules(
+        "tests.test_model_lab_canonical_data_authority_cc44 "
+        "tests.test_model_lab_training_matrix_authority_cc44 "
+        "tests.test_model_lab_canonical_trainer "
+        "tests.test_model_lab_xgboost"
+    ) == [
+        "tests.test_model_lab_canonical_data_authority_cc44",
+        "tests.test_model_lab_training_matrix_authority_cc44",
+        "tests.test_model_lab_canonical_trainer",
+        "tests.test_model_lab_xgboost",
+    ]
+
+    with pytest.raises(ValueError, match="test_module_not_allowlisted"):
+        validated_modules("tests.test_model_lab_status_endpoints")
+
 def _materialization(source: Path, **overrides):
     node = {
         "schema": "mmibkr.attested_source_materialization.v2",
