@@ -45,6 +45,11 @@ CAPABILITIES={
         "module":"data_manager",
         "callable":"DataManager",
     },
+    "FEATURE_CONTRACT_VALIDATE":{
+        "path":"feature_contract.py",
+        "module":"feature_contract",
+        "callable":"read_feature_artifact_sidecar",
+    },
 }
 _SHA1=re.compile(r"^[0-9a-f]{40}$")
 _SHA256=re.compile(r"^[0-9a-f]{64}$")
@@ -195,6 +200,56 @@ def validate_autotuner_arguments(cid:str,args:Any)->dict:
     if max_candidates is not None:result["max_candidates"]=max_candidates
     return result
 
+def resolve_artifact_ref(input_root:Path|None,receipt_dir:Path|None,node:Any,label:str)->dict:
+    if not isinstance(node,dict):raise CanonicalDispatchError(f"{label} must be object")
+    scope=str(node.get("scope") or "").strip()
+    if scope=="input_root":
+        exact(node,{"scope","relative_path","sha256","bytes"},label)
+        if input_root is None:raise CanonicalDispatchError(f"{label} input_root scope requires governed input_root")
+        root=input_root.resolve()
+        job_fingerprint=None
+    elif scope=="receipt_artifact":
+        exact(node,{"scope","job_fingerprint","relative_path","sha256","bytes"},label)
+        if receipt_dir is None:raise CanonicalDispatchError(f"{label} receipt_artifact scope requires receipt_dir")
+        job_fingerprint=str(node.get("job_fingerprint") or "").lower()
+        if not _SHA256.fullmatch(job_fingerprint):raise CanonicalDispatchError(f"{label} job_fingerprint is invalid")
+        root=(receipt_dir.resolve()/"artifacts"/job_fingerprint).resolve()
+    else:
+        raise CanonicalDispatchError(f"{label} scope must be input_root or receipt_artifact")
+    rel=Path(str(node.get("relative_path") or ""))
+    if rel.is_absolute() or not rel.parts or ".." in rel.parts:raise CanonicalDispatchError(f"{label} relative_path rejected")
+    digest=str(node.get("sha256") or "").lower()
+    if not _SHA256.fullmatch(digest):raise CanonicalDispatchError(f"{label} sha256 invalid")
+    try:size=int(node.get("bytes"))
+    except Exception as e:raise CanonicalDispatchError(f"{label} bytes invalid") from e
+    if size<1:raise CanonicalDispatchError(f"{label} bytes must be positive")
+    path=(root/rel).resolve()
+    if root not in path.parents or not path.is_file():raise CanonicalDispatchError(f"{label} missing or outside governed root")
+    if path.stat().st_size!=size:raise CanonicalDispatchError(f"{label} byte count mismatch")
+    actual=sha_file(path)
+    if actual!=digest:raise CanonicalDispatchError(f"{label} sha256 mismatch")
+    out={"scope":scope,"relative_path":rel.as_posix(),"sha256":actual,"bytes":size,"path":path}
+    if job_fingerprint is not None:out["job_fingerprint"]=job_fingerprint
+    return out
+
+def validate_feature_contract_arguments(args:Any,input_root:Path|None,receipt_dir:Path|None)->dict:
+    if not isinstance(args,dict):raise CanonicalDispatchError("FEATURE_CONTRACT_VALIDATE arguments must be object")
+    exact(args,{"feature_artifact","expected_manifest_hash","expected_semantic_hash"},"FEATURE_CONTRACT_VALIDATE arguments")
+    resolved=resolve_artifact_ref(input_root,receipt_dir,args.get("feature_artifact"),"feature_artifact")
+    expected_manifest=str(args.get("expected_manifest_hash") or "").lower()
+    expected_semantic=str(args.get("expected_semantic_hash") or "").lower()
+    if expected_manifest and not _SHA256.fullmatch(expected_manifest):
+        raise CanonicalDispatchError("FEATURE_CONTRACT_VALIDATE expected_manifest_hash is invalid")
+    if expected_semantic and not _SHA256.fullmatch(expected_semantic):
+        raise CanonicalDispatchError("FEATURE_CONTRACT_VALIDATE expected_semantic_hash is invalid")
+    ref={k:resolved[k] for k in ("scope","relative_path","sha256","bytes")}
+    if "job_fingerprint" in resolved:ref["job_fingerprint"]=resolved["job_fingerprint"]
+    return {
+        "feature_artifact":ref,
+        "expected_manifest_hash":expected_manifest or None,
+        "expected_semantic_hash":expected_semantic or None,
+    }
+
 def validate_data_materialize_arguments(args:Any,input_root:Path|None)->dict:
     if not isinstance(args,dict):raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE arguments must be object")
     exact(args,{"asset_type","symbol","source_timeframe","target_timeframes","source_origin","dataset"},"CANONICAL_DATA_MATERIALIZE arguments")
@@ -228,7 +283,7 @@ def validate_data_materialize_arguments(args:Any,input_root:Path|None)->dict:
         "dataset":{k:resolved[k] for k in ("relative_path","sha256","bytes")},
     }
 
-def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None=None)->dict:
+def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None=None,receipt_dir:Path|None=None)->dict:
     exact(req,{"schema","job_id","capability_id","mmibkr","entrypoint","arguments","resources","authority","forbidden_authorities"},"request")
     if req.get("schema")!=REQUEST_SCHEMA:raise CanonicalDispatchError("unsupported request schema")
     jid=valid_id(req.get("job_id")); cid=str(req.get("capability_id") or "").strip(); cap=CAPABILITIES.get(cid)
@@ -265,6 +320,8 @@ def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None
         normalized_args=validate_autotuner_arguments(cid,args)
     elif cid=="CANONICAL_DATA_MATERIALIZE":
         normalized_args=validate_data_materialize_arguments(args,input_root)
+    elif cid=="FEATURE_CONTRACT_VALIDATE":
+        normalized_args=validate_feature_contract_arguments(args,input_root,receipt_dir)
     else:
         raise CanonicalDispatchError(f"capability executor is not implemented: {cid}")
     return {"schema":REQUEST_SCHEMA,"job_id":jid,"capability_id":cid,"mmibkr":mm,"entrypoint":{**cap,"git_blob_sha1":actual},"arguments":normalized_args,"resources":resources(req.get("resources")),"authority":AUTHORITY,"forbidden_authorities":dict(FORBIDDEN_AUTHORITY_ASSERTIONS)}
@@ -409,6 +466,63 @@ def sanitize_crw_result(raw:dict,args:dict)->dict:
     }
     return result
 
+def validate_feature_contract(v:dict,root:Path,input_root:Path|None,receipt_dir:Path|None)->dict:
+    args=v["arguments"]
+    resolved=resolve_artifact_ref(input_root,receipt_dir,args["feature_artifact"],"feature_artifact")
+    fn=load_callable(root,CAPABILITIES["FEATURE_CONTRACT_VALIDATE"])
+    raw=fn(resolved["path"],verify_artifact=True)
+    if not isinstance(raw,dict):raise CanonicalDispatchError("canonical feature sidecar validator returned invalid contract")
+    manifest=raw.get("feature_manifest")
+    if not isinstance(manifest,dict):raise CanonicalDispatchError("canonical feature sidecar is missing feature_manifest")
+    manifest_hash=str(raw.get("feature_manifest_hash") or manifest.get("manifest_hash") or "").lower()
+    semantic_hash=str(manifest.get("feature_semantic_hash") or "").lower()
+    if not _SHA256.fullmatch(manifest_hash):raise CanonicalDispatchError("canonical feature manifest hash is invalid")
+    if not _SHA256.fullmatch(semantic_hash):raise CanonicalDispatchError("canonical feature semantic hash is invalid")
+    if args.get("expected_manifest_hash") and args["expected_manifest_hash"]!=manifest_hash:
+        raise CanonicalDispatchError("FEATURE_CONTRACT_VALIDATE manifest hash mismatch")
+    if args.get("expected_semantic_hash") and args["expected_semantic_hash"]!=semantic_hash:
+        raise CanonicalDispatchError("FEATURE_CONTRACT_VALIDATE semantic hash mismatch")
+    features=manifest.get("features") if isinstance(manifest.get("features"),list) else []
+    feature_columns=[]
+    feature_ids=[]
+    for row in features:
+        if not isinstance(row,dict):continue
+        column=str(row.get("output_column") or "").strip()
+        identity=str(row.get("identity_hash") or "").strip()
+        if column:feature_columns.append(column)
+        if identity:feature_ids.append(identity)
+    source_identity=manifest.get("source_dataset_identity")
+    return {
+        "schema":"mmibkr.feature_contract_validation.v1",
+        "feature_artifact":dict(args["feature_artifact"]),
+        "feature_manifest_hash":manifest_hash,
+        "feature_semantic_hash":semantic_hash,
+        "contract_version":manifest.get("contract_version"),
+        "feature_contract_mode":manifest.get("feature_contract_mode"),
+        "causal":manifest.get("causal") is True,
+        "feature_count":len(features),
+        "feature_columns":feature_columns,
+        "feature_identity_hashes":feature_ids,
+        "symbol_universe":list(manifest.get("symbol_universe") or []),
+        "source_timeframes":list(manifest.get("source_timeframes") or []),
+        "target_timeframes":list(manifest.get("target_timeframes") or []),
+        "label_target_columns_excluded":list(manifest.get("label_target_columns_excluded") or []),
+        "generation_identity":manifest.get("generation_identity"),
+        "consumer_identity":manifest.get("consumer_identity"),
+        "source_dataset_identity_sha256":sha(source_identity if isinstance(source_identity,dict) else {}),
+        "canonical_dependencies":{
+            "feature_contract.py":private_blob_identity(root,"feature_contract.py"),
+        },
+        "safety":{
+            "artifact_read_only":True,
+            "broker_submit":False,
+            "broker_cancel":False,
+            "broker_flatten":False,
+            "runtime_activation":False,
+            "live_trading":False,
+        },
+    }
+
 def artifact_descriptor(path:Path,artifact_root:Path)->dict:
     root=artifact_root.resolve(); resolved=path.resolve()
     if root not in resolved.parents or not resolved.is_file():
@@ -515,8 +629,8 @@ def materialize_stock_data(v:dict,root:Path,input_root:Path|None,artifact_root:P
         },
     }
 
-def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None)->dict:
-    fn=None if v["capability_id"]=="CANONICAL_DATA_MATERIALIZE" else load_callable(root,CAPABILITIES[v["capability_id"]])
+def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None,receipt_dir:Path|None=None)->dict:
+    fn=None if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","FEATURE_CONTRACT_VALIDATE"} else load_callable(root,CAPABILITIES[v["capability_id"]])
     if v["capability_id"]=="STRATEGY_SPEC_VALIDATE":
         raw=fn(v["arguments"]["strategy_spec"])
         if not isinstance(raw,dict) or not isinstance(raw.get("strategy_spec"),dict) or not _SHA256.fullmatch(str(raw.get("strategy_spec_digest") or "")):
@@ -555,6 +669,8 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|
         }
     elif v["capability_id"]=="CANONICAL_DATA_MATERIALIZE":
         result=materialize_stock_data(v,root,input_root,artifact_root)
+    elif v["capability_id"]=="FEATURE_CONTRACT_VALIDATE":
+        result=validate_feature_contract(v,root,input_root,receipt_dir)
     else:
         raise CanonicalDispatchError(f"capability executor is not implemented: {v['capability_id']}")
     rb=cbytes(result)
@@ -562,9 +678,9 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|
     fp=sha(v)
     return {"schema":RECEIPT_SCHEMA,"job_id":v["job_id"],"job_fingerprint":fp,"capability_id":v["capability_id"],"status":"completed","authority":{"research_only":True,**FORBIDDEN_AUTHORITY_ASSERTIONS},"mmibkr":v["mmibkr"],"entrypoint":v["entrypoint"],"resources":v["resources"],"result_sha256":hashlib.sha256(rb).hexdigest(),"result":result}
 
-def safe_execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None)->dict:
+def safe_execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None,receipt_dir:Path|None=None)->dict:
     try:
-        return execute_valid(v,root,input_root=input_root,artifact_root=artifact_root)
+        return execute_valid(v,root,input_root=input_root,artifact_root=artifact_root,receipt_dir=receipt_dir)
     except CanonicalDispatchError:
         raise
     except Exception as e:
@@ -662,12 +778,13 @@ def start_claim_heartbeat(path:Path,token:str,fp:str)->tuple[threading.Event,thr
     return stop,lost,thread
 
 def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:Path|None=None,receipt_dir:Path|None=None)->dict:
-    v=validate_request(req,source_root,source_receipt,input_root=input_root); fp=sha(v)
-    if receipt_dir is None:
+    rd=receipt_dir.resolve() if receipt_dir is not None else None
+    v=validate_request(req,source_root,source_receipt,input_root=input_root,receipt_dir=rd); fp=sha(v)
+    if rd is None:
         if v["capability_id"]=="CANONICAL_DATA_MATERIALIZE":
             raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires receipt_dir artifact storage")
-        return {"receipt":safe_execute_valid(v,source_root,input_root=input_root),"cache_hit":False}
-    rd=receipt_dir.resolve(); rp=rd/"receipts"/f"{fp}.json"; hit=cached(rp,fp)
+        return {"receipt":safe_execute_valid(v,source_root,input_root=input_root,receipt_dir=None),"cache_hit":False}
+    rp=rd/"receipts"/f"{fp}.json"; hit=cached(rp,fp)
     if hit:
         validate_materialization_cache(hit,rd,fp)
         return {"receipt":hit,"cache_hit":True}
@@ -682,7 +799,7 @@ def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:P
     if artifact_root is not None:
         shutil.rmtree(artifact_root,ignore_errors=True);artifact_root.mkdir(parents=True,exist_ok=True)
     try:
-        r=safe_execute_valid(v,source_root,input_root=input_root,artifact_root=artifact_root)
+        r=safe_execute_valid(v,source_root,input_root=input_root,artifact_root=artifact_root,receipt_dir=rd)
         if lost.is_set() or not claim_owned(cp,token,fp):
             raise CanonicalDispatchError("claim lease ownership was lost; canonical result discarded")
         atomic(rp,r);published=True;return {"receipt":r,"cache_hit":False}
