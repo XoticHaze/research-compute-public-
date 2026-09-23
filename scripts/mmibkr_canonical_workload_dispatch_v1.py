@@ -293,7 +293,10 @@ def validate_model_lab_first_consumer_arguments(args:Any,input_root:Path|None)->
     asset_type=str(args.get("asset_type") or "").strip().lower()
     if asset_type not in {"stocks","futures"}:raise CanonicalDispatchError(f"{cid} asset_type must be stocks or futures")
     symbol=str(args.get("symbol") or "").strip().upper()
-    if not _SYMBOL.fullmatch(symbol):raise CanonicalDispatchError(f"{cid} symbol is invalid")
+    identity_symbol=symbol
+    if asset_type=="futures" and identity_symbol.endswith("1!"):identity_symbol=identity_symbol[:-2]
+    if asset_type=="futures" and identity_symbol.endswith("-CONTINUOUS"):identity_symbol=identity_symbol[:-11]
+    if not identity_symbol or not _SYMBOL.fullmatch(identity_symbol):raise CanonicalDispatchError(f"{cid} symbol is invalid")
     timeframe=str(args.get("timeframe") or "").strip()
     if not timeframe or len(timeframe)>32 or not re.fullmatch(r"[A-Za-z0-9]+",timeframe):
         raise CanonicalDispatchError(f"{cid} timeframe is invalid")
