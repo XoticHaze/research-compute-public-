@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/mmibkr-private-pr701-forward-lifecycle-validation-r1.yml'
+      - '.github/workflows/mmibkr-private-pr670-forward-lifecycle-validation-r1.yml'
 
 permissions:
   contents: read
