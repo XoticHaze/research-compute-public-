@@ -217,7 +217,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            "23233724fa4f84c16b5b92467070931a6e9c6e50",
+            "70aec26cd98b2c2273c1b762694d55f2698baa7d",
             text,
         )
         self.assertIn("PRIVATE_PR671_EXACT_VALIDATION_EXPIRES_AT", text)
@@ -237,7 +237,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             / "workflows"
             / "mmibkr-private-pr671-forward-evidence-validation-r1.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("PRIVATE_SOURCE_SHA: 23233724fa4f84c16b5b92467070931a6e9c6e50", workflow)
+        self.assertIn("PRIVATE_SOURCE_SHA: 70aec26cd98b2c2273c1b762694d55f2698baa7d", workflow)
         self.assertIn("tests.test_cloud_forward_performance_v1", workflow)
         self.assertIn("tests.test_cloud_operator_snapshot_v1", workflow)
         self.assertIn("BotConsolePage.acceptance.test.mjs", workflow)
