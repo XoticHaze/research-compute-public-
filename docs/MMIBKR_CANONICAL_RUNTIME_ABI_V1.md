@@ -28,10 +28,13 @@ The portable ABI currently carries these research-only bindings:
 | `CRW_BACKTEST` | `scripts.operator.crw_backtest_summary_13z.run_backtest` | execute canonical CRW replay over exact governed datasets |
 | `AUTOTUNER_PARAMETER_CONSUMPTION` | `autotuner_parameter_consumption.parameter_schema_for_tuning` | derive the searchable CRW parameter surface from the pinned private strategy schema |
 | `AUTOTUNER_CANDIDATE_GENERATE` | `autotuner_strategy_bridge.candidate_mutations` | generate a bounded mutation set only after the canonical consumption gate |
+| `CANONICAL_DATA_MATERIALIZE` | `scripts.operator.canonical_data_materialize_v1.materialize_snapshot` | materialize a hash-bound governed snapshot through existing DataManager/FuturesManager owners |
 
 CRW backtest callers cannot supply absolute source paths. The request carries per-symbol relative paths, byte counts, and SHA-256 identities under a governed `--input-root`; the dispatcher verifies them and injects canonical `_verified_source_paths` only after admission.
 
 AutoTuner callers cannot supply their own parameter schema. The dispatcher derives `CrwScoreMultiModeStrategy.parameter_schema()` from the same pinned private source, applies the canonical consumption gate, and records the relevant private Git blob identities in the receipt.
+
+Canonical data materialization is offline by design: provider acquisition stays outside the generic executor. The request supplies one governed snapshot under `--input-root`, bound by relative path, bytes, and SHA-256. The private owner delegates to existing DataManager/FuturesManager external-ingest methods. Output is staged, verified file-by-file, then promoted under the normalized job fingerprint. The public receipt exposes counts, hashes, and an opaque artifact reference rather than market values or private filesystem paths.
 
 Data materialization, feature/preview, campaign validation, Model Lab, News, and Options remain dependency-ordered additions rather than one-off workflow families.
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
-import hashlib, importlib, json, os, re, secrets, sys, threading, time
+import hashlib, importlib, json, os, re, secrets, shutil, sys, tempfile, threading, time
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +39,11 @@ CAPABILITIES={
         "path":"autotuner_strategy_bridge.py",
         "module":"autotuner_strategy_bridge",
         "callable":"candidate_mutations",
+    },
+    "CANONICAL_DATA_MATERIALIZE":{
+        "path":"scripts/operator/canonical_data_materialize_v1.py",
+        "module":"scripts.operator.canonical_data_materialize_v1",
+        "callable":"materialize_snapshot",
     },
 }
 _SHA1=re.compile(r"^[0-9a-f]{40}$")
@@ -160,6 +165,14 @@ def validate_crw_arguments(args:Any,input_root:Path|None)->dict:
     if extra:raise CanonicalDispatchError(f"CRW_BACKTEST contains unrequested datasets for symbols={extra}")
     return {"payload":deepcopy(payload),"datasets":normalized}
 
+def validate_materialize_arguments(args:Any,input_root:Path|None)->dict:
+    if not isinstance(args,dict):raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE arguments must be object")
+    exact(args,{"snapshot"},"CANONICAL_DATA_MATERIALIZE arguments")
+    if input_root is None:raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires governed input_root")
+    node=args.get("snapshot")
+    resolved=resolve_dataset(input_root,"snapshot",node)
+    return {"snapshot":{k:resolved[k] for k in ("relative_path","sha256","bytes")}}
+
 def validate_tune_parameters(value:Any)->list[str]:
     if value is None:return []
     if not isinstance(value,list) or len(value)>64 or any(not isinstance(x,str) for x in value):
@@ -225,6 +238,8 @@ def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None
         normalized_args=validate_crw_arguments(args,input_root)
     elif cid in {"AUTOTUNER_PARAMETER_CONSUMPTION","AUTOTUNER_CANDIDATE_GENERATE"}:
         normalized_args=validate_autotuner_arguments(cid,args)
+    elif cid=="CANONICAL_DATA_MATERIALIZE":
+        normalized_args=validate_materialize_arguments(args,input_root)
     else:
         raise CanonicalDispatchError(f"capability executor is not implemented: {cid}")
     return {"schema":REQUEST_SCHEMA,"job_id":jid,"capability_id":cid,"mmibkr":mm,"entrypoint":{**cap,"git_blob_sha1":actual},"arguments":normalized_args,"resources":resources(req.get("resources")),"authority":AUTHORITY,"forbidden_authorities":dict(FORBIDDEN_AUTHORITY_ASSERTIONS)}
@@ -369,7 +384,95 @@ def sanitize_crw_result(raw:dict,args:dict)->dict:
     }
     return result
 
-def execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
+def materialization_receipt_projection(final_dir:Path,manifest:dict,descriptor:dict,fp:str)->dict:
+    if manifest.get("schema")!="mmibkr.canonical_data_artifact_manifest.v1" or manifest.get("job_fingerprint")!=fp:
+        raise CanonicalDispatchError("materialized artifact manifest identity mismatch")
+    source_input=manifest.get("source_input")
+    expected={k:descriptor[k] for k in ("relative_path","sha256","bytes")}
+    if source_input!=expected:
+        raise CanonicalDispatchError("materialized artifact source identity mismatch")
+    artifacts=manifest.get("artifacts")
+    if not isinstance(artifacts,list) or not artifacts:
+        raise CanonicalDispatchError("materialized artifact manifest has no artifacts")
+    for row in artifacts:
+        if not isinstance(row,dict):raise CanonicalDispatchError("materialized artifact descriptor invalid")
+        rel=Path(str(row.get("relative_path") or ""))
+        if rel.is_absolute() or not rel.parts or ".." in rel.parts:
+            raise CanonicalDispatchError("materialized artifact path rejected")
+        path=(final_dir/rel).resolve()
+        if final_dir.resolve() not in path.parents or not path.is_file():
+            raise CanonicalDispatchError("materialized artifact missing from content store")
+        if int(row.get("bytes") or -1)!=path.stat().st_size or str(row.get("sha256") or "").lower()!=sha_file(path):
+            raise CanonicalDispatchError("materialized artifact identity mismatch")
+    boundaries=manifest.get("boundaries")
+    if not isinstance(boundaries,dict) or any(value is not False for value in boundaries.values()):
+        raise CanonicalDispatchError("materialized artifact authority boundary rejected")
+    manifest_path=final_dir/"materialization_manifest.json"
+    return {
+        "dataset_count":int(manifest.get("dataset_count") or 0),
+        "artifact_count":int(manifest.get("artifact_count") or 0)+1,
+        "artifact_manifest_sha256":str(manifest.get("artifact_manifest_sha256") or ""),
+        "materialization_manifest_sha256":sha_file(manifest_path),
+        "artifact_ref":fp,
+        "source_input_sha256":descriptor["sha256"],
+        "broker_request_made":False,
+        "boundaries":boundaries,
+    }
+
+def materialize_artifact(v:dict,root:Path,input_root:Path,artifact_root:Path,fn)->dict:
+    descriptor=resolve_dataset(input_root,"snapshot",v["arguments"]["snapshot"])
+    payload=load(descriptor["path"])
+    fp=sha(v)
+    final_dir=(artifact_root/"materialized"/fp).resolve()
+    if final_dir.exists():
+        manifest_path=final_dir/"materialization_manifest.json"
+        if not manifest_path.is_file():
+            raise CanonicalDispatchError("materialized artifact store exists without manifest")
+        return materialization_receipt_projection(final_dir,load(manifest_path),descriptor,fp)
+    work_parent=(artifact_root/"work").resolve();work_parent.mkdir(parents=True,exist_ok=True)
+    staging=Path(tempfile.mkdtemp(prefix=f"{fp}.",dir=work_parent))
+    published=False
+    try:
+        raw=fn(payload,staging)
+        if not isinstance(raw,dict) or raw.get("schema")!="mmibkr.canonical_data_materialize_result.v1" or raw.get("ok") is not True:
+            raise CanonicalDispatchError("canonical data materializer returned invalid contract")
+        if raw.get("broker_request_made") is not False:
+            raise CanonicalDispatchError("canonical data materializer reported broker request")
+        boundaries=raw.get("boundaries")
+        if not isinstance(boundaries,dict) or any(value is not False for value in boundaries.values()):
+            raise CanonicalDispatchError("canonical data materializer authority boundary rejected")
+        artifacts=raw.get("artifacts")
+        if not isinstance(artifacts,list) or not artifacts:
+            raise CanonicalDispatchError("canonical data materializer produced no artifacts")
+        for row in artifacts:
+            if not isinstance(row,dict):raise CanonicalDispatchError("materialized artifact descriptor invalid")
+            rel=Path(str(row.get("relative_path") or ""))
+            if rel.is_absolute() or not rel.parts or ".." in rel.parts:
+                raise CanonicalDispatchError("materialized artifact path rejected")
+            path=(staging/rel).resolve()
+            if staging.resolve() not in path.parents or not path.is_file():
+                raise CanonicalDispatchError("materialized artifact missing from staging root")
+            if int(row.get("bytes") or -1)!=path.stat().st_size or str(row.get("sha256") or "").lower()!=sha_file(path):
+                raise CanonicalDispatchError("materialized artifact identity mismatch")
+        manifest={
+            "schema":"mmibkr.canonical_data_artifact_manifest.v1",
+            "job_fingerprint":fp,
+            "source_input":{k:descriptor[k] for k in ("relative_path","sha256","bytes")},
+            "dataset_count":int(raw.get("dataset_count") or 0),
+            "artifact_count":int(raw.get("artifact_count") or 0),
+            "artifact_manifest_sha256":str(raw.get("artifact_manifest_sha256") or ""),
+            "artifacts":artifacts,
+            "broker_request_made":False,
+            "boundaries":boundaries,
+        }
+        atomic(staging/"materialization_manifest.json",manifest)
+        final_dir.parent.mkdir(parents=True,exist_ok=True)
+        os.replace(staging,final_dir);published=True
+        return materialization_receipt_projection(final_dir,manifest,descriptor,fp)
+    finally:
+        if not published:shutil.rmtree(staging,ignore_errors=True)
+
+def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None)->dict:
     fn=load_callable(root,CAPABILITIES[v["capability_id"]])
     if v["capability_id"]=="STRATEGY_SPEC_VALIDATE":
         raw=fn(v["arguments"]["strategy_spec"])
@@ -385,6 +488,10 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
         raw=fn(payload,input_root.resolve())
         if not isinstance(raw,dict):raise CanonicalDispatchError("canonical CRW backtest returned invalid contract")
         result=sanitize_crw_result(raw,v["arguments"])
+    elif v["capability_id"]=="CANONICAL_DATA_MATERIALIZE":
+        if input_root is None or artifact_root is None:
+            raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires input_root and receipt-backed artifact root")
+        result=materialize_artifact(v,root,input_root,artifact_root,fn)
     elif v["capability_id"]=="AUTOTUNER_PARAMETER_CONSUMPTION":
         normalized,filtered,consumption=autotuner_gate(root,v["arguments"])
         result={
@@ -414,9 +521,9 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
     fp=sha(v)
     return {"schema":RECEIPT_SCHEMA,"job_id":v["job_id"],"job_fingerprint":fp,"capability_id":v["capability_id"],"status":"completed","authority":{"research_only":True,**FORBIDDEN_AUTHORITY_ASSERTIONS},"mmibkr":v["mmibkr"],"entrypoint":v["entrypoint"],"resources":v["resources"],"result_sha256":hashlib.sha256(rb).hexdigest(),"result":result}
 
-def safe_execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
+def safe_execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None)->dict:
     try:
-        return execute_valid(v,root,input_root=input_root)
+        return execute_valid(v,root,input_root=input_root,artifact_root=artifact_root)
     except CanonicalDispatchError:
         raise
     except Exception as e:
@@ -498,7 +605,10 @@ def start_claim_heartbeat(path:Path,token:str,fp:str)->tuple[threading.Event,thr
 
 def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:Path|None=None,receipt_dir:Path|None=None)->dict:
     v=validate_request(req,source_root,source_receipt,input_root=input_root); fp=sha(v)
-    if receipt_dir is None:return {"receipt":safe_execute_valid(v,source_root,input_root=input_root),"cache_hit":False}
+    if receipt_dir is None:
+        if v["capability_id"]=="CANONICAL_DATA_MATERIALIZE":
+            raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires receipt_dir for content-addressed artifacts")
+        return {"receipt":safe_execute_valid(v,source_root,input_root=input_root),"cache_hit":False}
     rd=receipt_dir.resolve(); rp=rd/"receipts"/f"{fp}.json"; hit=cached(rp,fp)
     if hit:return {"receipt":hit,"cache_hit":True}
     cp=rd/"claims"/f"{fp}.claim"
@@ -507,7 +617,7 @@ def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:P
     stop,lost,thread=start_claim_heartbeat(cp,token,fp)
     published=False
     try:
-        r=safe_execute_valid(v,source_root,input_root=input_root)
+        r=safe_execute_valid(v,source_root,input_root=input_root,artifact_root=rd/"artifacts")
         if lost.is_set() or not claim_owned(cp,token,fp):
             raise CanonicalDispatchError("claim lease ownership was lost; canonical result discarded")
         atomic(rp,r);published=True;return {"receipt":r,"cache_hit":False}
