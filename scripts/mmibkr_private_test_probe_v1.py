@@ -13,6 +13,7 @@ from typing import Any
 
 
 SCHEMA = "mmibkr.private_test_probe_receipt.v1"
+PYTEST_VERSION = "8.4.2"
 MODULE_RE = re.compile(r"^tests\.test_[A-Za-z0-9_]+$")
 SAFE_PREFIXES = (
     "tests.test_autotuner_",
@@ -79,6 +80,32 @@ def validated_modules(raw: str) -> list[str]:
         if module not in out:
             out.append(module)
     return out
+
+
+def module_file_path(module: str) -> str:
+    """Map one already-validated test module to its repository-relative file."""
+    if not MODULE_RE.fullmatch(str(module or "")):
+        raise ValueError(f"test_module_rejected:{module}")
+    return module.replace(".", "/") + ".py"
+
+
+def pytest_container_command(image_tag: str, module: str) -> list[str]:
+    """Return a shell-free Docker command for one exact pytest module file."""
+    return [
+        "docker",
+        "run",
+        "--rm",
+        "-e",
+        "ENABLE_LIVE_TRADING=0",
+        "-e",
+        "PYTHONDONTWRITEBYTECODE=1",
+        image_tag,
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        module_file_path(module),
+    ]
 
 
 def validate_source_identity(
@@ -183,35 +210,71 @@ def run_probe(
             log_path=temp / "build.log",
             timeout=1800,
         )
+        tester_image_tag = image_tag + "-pytest"
+        tester_dockerfile = temp / "Dockerfile.pytest"
+        tester_dockerfile.write_text(
+            "ARG BASE_IMAGE\n"
+            "FROM ${BASE_IMAGE}\n"
+            f"RUN python -m pip install --no-cache-dir --disable-pip-version-check pytest=={PYTEST_VERSION}\n",
+            encoding="utf-8",
+        )
+        test_environment = {
+            "status": "SKIPPED",
+            "pytest_version": PYTEST_VERSION,
+            "captured_output_sha256": None,
+            "captured_output_bytes": 0,
+            "exit_code": None,
+        }
         module_rows: list[dict[str, Any]] = []
-        if build["status"] == "PASS":
-            for index, module in enumerate(modules, start=1):
-                row = _run_captured(
+        try:
+            if build["status"] == "PASS":
+                test_environment = _run_captured(
                     [
                         "docker",
-                        "run",
-                        "--rm",
-                        "-e",
-                        "ENABLE_LIVE_TRADING=0",
-                        "-e",
-                        "PYTHONDONTWRITEBYTECODE=1",
-                        image_tag,
-                        "python",
-                        "-m",
-                        "unittest",
-                        "-q",
-                        module,
+                        "build",
+                        "-f",
+                        str(tester_dockerfile),
+                        "--build-arg",
+                        f"BASE_IMAGE={image_tag}",
+                        "-t",
+                        tester_image_tag,
+                        str(temp),
                     ],
                     cwd=None,
                     env=os.environ.copy(),
-                    log_path=temp / f"module-{index:02d}.log",
+                    log_path=temp / "pytest-image-build.log",
                     timeout=600,
                 )
-                module_rows.append({"module": module, **row})
+                test_environment["pytest_version"] = PYTEST_VERSION
+                if test_environment["status"] == "PASS":
+                    for index, module in enumerate(modules, start=1):
+                        row = _run_captured(
+                            pytest_container_command(tester_image_tag, module),
+                            cwd=None,
+                            env=os.environ.copy(),
+                            log_path=temp / f"module-{index:02d}.log",
+                            timeout=600,
+                        )
+                        module_rows.append(
+                            {
+                                "module": module,
+                                "test_file": module_file_path(module),
+                                "runner": "pytest",
+                                **row,
+                            }
+                        )
+        finally:
+            subprocess.run(
+                ["docker", "image", "rm", tester_image_tag],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
 
         status = (
             "PASS"
             if build["status"] == "PASS"
+            and test_environment["status"] == "PASS"
             and len(module_rows) == len(modules)
             and all(row["status"] == "PASS" for row in module_rows)
             else "FAIL"
@@ -230,6 +293,7 @@ def run_probe(
                 "vault_attestation_verified": identity.get("vault_attestation_verified") is True,
             },
             "build": build,
+            "test_environment": test_environment,
             "test_modules": module_rows,
             "authority": {
                 "research_only": True,
