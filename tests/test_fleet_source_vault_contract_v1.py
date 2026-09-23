@@ -300,6 +300,45 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("'broker_action': False", workflow)
         self.assertIn("'live_trading_allowed': False", workflow)
 
+    def test_private_pr711_account_hygiene_validation_is_exact_sha_expiring_and_archive_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-private-pr711-account-hygiene-validation-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn(
+            "e78d16c99bde3df4d3828c952e27dc1746772875",
+            text,
+        )
+        self.assertIn("PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_EXPIRES_AT", text)
+        self.assertIn("2026-09-23T18:00:00Z", text)
+        self.assertIn("matchedPrivatePr711AccountHygieneValidation", text)
+        self.assertIn(
+            "(matchedPrivatePr711AccountHygieneValidation && privateArchivePathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedPrivatePr711AccountHygieneValidation && operatorDeployPathAllowed)",
+            text,
+        )
+
+        workflow = (
+            ROOT
+            / ".github"
+            / "workflows"
+            / "mmibkr-private-pr711-account-hygiene-validation-r1.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "PRIVATE_SOURCE_SHA: e78d16c99bde3df4d3828c952e27dc1746772875",
+            workflow,
+        )
+        self.assertIn("tests.test_ibkr_remote_account_hygiene_slot_v1", workflow)
+        self.assertIn("ENABLE_LIVE_TRADING=0", workflow)
+        self.assertIn("'broker_action': False", workflow)
+        self.assertIn("'live_trading_allowed': False", workflow)
+        self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
+
     def test_private_pr671_validation_is_isolated_exact_sha_expiring_and_archive_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("PRIVATE_PR671_EXACT_VALIDATION_IDENTITY", text)
