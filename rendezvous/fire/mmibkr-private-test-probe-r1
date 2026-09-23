@@ -23,9 +23,10 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "20260923T0959Z-699-15594dd2-vault1",
+  "request_nonce": "20260923T1005Z-699-15594dd2-attested-first-use",
   "admission_commit": "46899ad6d2d3de0c853e130bebef86dca20eb0b9",
-  "retry_reason": "initial run 35841184886 reached source exchange before Fleet identity deployment propagation and failed HTTP 401",
+  "retry_reason": "retry unchanged exact snapshot after #1641 trusted-attested first-use approval fix",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "source_vault_bootstrap_run": 35846053057
+  "source_vault_bootstrap_run": 35846053057,
+  "approval_fix_commit": "d064bd6fb75b414837c8475bc7c857ce12083778"
 }
