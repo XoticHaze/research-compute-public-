@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
-import hashlib, importlib, json, os, re, secrets, sys, threading, time
+import hashlib, importlib, json, os, re, secrets, shutil, sys, threading, time
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +39,11 @@ CAPABILITIES={
         "path":"autotuner_strategy_bridge.py",
         "module":"autotuner_strategy_bridge",
         "callable":"candidate_mutations",
+    },
+    "CANONICAL_DATA_MATERIALIZE":{
+        "path":"data_manager.py",
+        "module":"data_manager",
+        "callable":"DataManager",
     },
 }
 _SHA1=re.compile(r"^[0-9a-f]{40}$")
@@ -190,6 +195,39 @@ def validate_autotuner_arguments(cid:str,args:Any)->dict:
     if max_candidates is not None:result["max_candidates"]=max_candidates
     return result
 
+def validate_data_materialize_arguments(args:Any,input_root:Path|None)->dict:
+    if not isinstance(args,dict):raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE arguments must be object")
+    exact(args,{"asset_type","symbol","source_timeframe","target_timeframes","source_origin","dataset"},"CANONICAL_DATA_MATERIALIZE arguments")
+    if str(args.get("asset_type") or "").strip().lower()!="stocks":
+        raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE v1 currently supports asset_type=stocks")
+    symbol=str(args.get("symbol") or "").strip().upper()
+    if not _SYMBOL.fullmatch(symbol):raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE symbol is invalid")
+    source_tf=str(args.get("source_timeframe") or "").strip()
+    if not source_tf or len(source_tf)>32 or not re.fullmatch(r"[A-Za-z0-9]+",source_tf):
+        raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE source_timeframe is invalid")
+    targets=args.get("target_timeframes")
+    if not isinstance(targets,list) or not targets or len(targets)>16 or any(not isinstance(x,str) for x in targets):
+        raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE target_timeframes must contain 1..16 strings")
+    normalized_targets=[]
+    for raw in targets:
+        tf=raw.strip()
+        if not tf or len(tf)>32 or not re.fullmatch(r"[A-Za-z0-9]+",tf):
+            raise CanonicalDispatchError(f"CANONICAL_DATA_MATERIALIZE target timeframe is invalid: {raw!r}")
+        if tf not in normalized_targets:normalized_targets.append(tf)
+    origin=str(args.get("source_origin") or "").strip()
+    if not origin or len(origin)>128 or not re.fullmatch(r"[A-Za-z0-9_.:-]+",origin):
+        raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE source_origin is invalid")
+    if input_root is None:raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires governed input_root")
+    resolved=resolve_dataset(input_root,symbol,args.get("dataset"))
+    return {
+        "asset_type":"stocks",
+        "symbol":symbol,
+        "source_timeframe":source_tf,
+        "target_timeframes":normalized_targets,
+        "source_origin":origin,
+        "dataset":{k:resolved[k] for k in ("relative_path","sha256","bytes")},
+    }
+
 def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None=None)->dict:
     exact(req,{"schema","job_id","capability_id","mmibkr","entrypoint","arguments","resources","authority","forbidden_authorities"},"request")
     if req.get("schema")!=REQUEST_SCHEMA:raise CanonicalDispatchError("unsupported request schema")
@@ -225,6 +263,8 @@ def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None
         normalized_args=validate_crw_arguments(args,input_root)
     elif cid in {"AUTOTUNER_PARAMETER_CONSUMPTION","AUTOTUNER_CANDIDATE_GENERATE"}:
         normalized_args=validate_autotuner_arguments(cid,args)
+    elif cid=="CANONICAL_DATA_MATERIALIZE":
+        normalized_args=validate_data_materialize_arguments(args,input_root)
     else:
         raise CanonicalDispatchError(f"capability executor is not implemented: {cid}")
     return {"schema":REQUEST_SCHEMA,"job_id":jid,"capability_id":cid,"mmibkr":mm,"entrypoint":{**cap,"git_blob_sha1":actual},"arguments":normalized_args,"resources":resources(req.get("resources")),"authority":AUTHORITY,"forbidden_authorities":dict(FORBIDDEN_AUTHORITY_ASSERTIONS)}
@@ -369,8 +409,114 @@ def sanitize_crw_result(raw:dict,args:dict)->dict:
     }
     return result
 
-def execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
-    fn=load_callable(root,CAPABILITIES[v["capability_id"]])
+def artifact_descriptor(path:Path,artifact_root:Path)->dict:
+    root=artifact_root.resolve(); resolved=path.resolve()
+    if root not in resolved.parents or not resolved.is_file():
+        raise CanonicalDispatchError("materialized artifact missing or outside artifact root")
+    return {
+        "relative_path":resolved.relative_to(root).as_posix(),
+        "sha256":sha_file(resolved),
+        "bytes":resolved.stat().st_size,
+    }
+
+def materialize_stock_data(v:dict,root:Path,input_root:Path|None,artifact_root:Path|None)->dict:
+    if input_root is None:raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires governed input_root")
+    if artifact_root is None:raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires receipt_dir artifact storage")
+    args=v["arguments"]; symbol=args["symbol"]; source_tf=args["source_timeframe"]
+    resolved=resolve_dataset(input_root,symbol,args["dataset"])
+    try:pd=importlib.import_module("pandas")
+    except Exception as e:raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires pandas runtime dependency") from e
+    frame=pd.read_csv(resolved["path"])
+    manager_cls=load_callable(root,CAPABILITIES["CANONICAL_DATA_MATERIALIZE"])
+    class NoBrokerIB:
+        def reqMarketDataType(self,*_args,**_kwargs):return None
+    config={
+        "DATA_OUTPUT_DIR":str(artifact_root.resolve()),
+        "TIMEFRAME":source_tf,
+        "TIMEFRAMES":list(args["target_timeframes"]),
+        "SR_ENABLED":False,
+        "HISTORICAL_DEDICATED_CLIENT":False,
+        "WRITE_AGGREGATE":1,
+        "SAVE_FEATURES_CSV":1,
+        "INCREMENTAL_FETCH":0,
+        "USE_RTH":0,
+    }
+    manager=manager_cls(config,NoBrokerIB())
+    raw=manager.ingest_external_stock_source_bars(
+        symbol,
+        source_tf,
+        frame,
+        target_timeframes=list(args["target_timeframes"]),
+        source_origin=args["source_origin"],
+    )
+    if not isinstance(raw,dict) or raw.get("ok") is not True or raw.get("broker_request_made") is not False:
+        raise CanonicalDispatchError("canonical DataManager external-source ingest safety contract rejected")
+    frames=raw.get("frames")
+    if not isinstance(frames,dict) or not frames:raise CanonicalDispatchError("canonical DataManager returned no materialized frames")
+    outputs=[]; artifacts=[]
+    for tf,node in frames.items():
+        if node is None or not hasattr(node,"__len__"):raise CanonicalDispatchError("canonical DataManager frame contract is invalid")
+        raw_path=manager._path_for("stocks",symbol,str(tf),features=False)
+        features_path=manager._path_for("stocks",symbol,str(tf),features=True)
+        sidecar=features_path.with_suffix(features_path.suffix+".manifest.json")
+        raw_desc=artifact_descriptor(raw_path,artifact_root)
+        feature_desc=artifact_descriptor(features_path,artifact_root)
+        sidecar_desc=artifact_descriptor(sidecar,artifact_root)
+        artifacts.extend([raw_desc,feature_desc,sidecar_desc])
+        first=None;last=None
+        try:
+            if len(node) and "timestamp" in node.columns:
+                first=str(node["timestamp"].iloc[0]);last=str(node["timestamp"].iloc[-1])
+        except Exception:pass
+        try:sidecar_payload=load(sidecar)
+        except Exception as e:raise CanonicalDispatchError("feature artifact sidecar is invalid") from e
+        manifest_hash=str(sidecar_payload.get("feature_manifest_hash") or "")
+        if not _SHA256.fullmatch(manifest_hash):raise CanonicalDispatchError("feature artifact sidecar manifest hash is invalid")
+        outputs.append({
+            "timeframe":str(tf),
+            "rows":int(len(node)),
+            "first_timestamp":first,
+            "latest_timestamp":last,
+            "raw_artifact":raw_desc,
+            "feature_artifact":feature_desc,
+            "feature_sidecar":sidecar_desc,
+            "feature_manifest_hash":manifest_hash,
+        })
+    aggregate_path=manager._aggregate_path("stocks",symbol)
+    aggregate=None
+    if aggregate_path.is_file():
+        aggregate=artifact_descriptor(aggregate_path,artifact_root);artifacts.append(aggregate)
+    return {
+        "schema":"mmibkr.canonical_data_materialization.v1",
+        "asset_type":"stocks",
+        "symbol":symbol,
+        "source_timeframe":source_tf,
+        "target_timeframes":[str(x) for x in frames],
+        "source_origin":args["source_origin"],
+        "source_dataset":dict(args["dataset"]),
+        "frame_count":len(outputs),
+        "frames":outputs,
+        "aggregate_artifact":aggregate,
+        "artifact_count":len(artifacts),
+        "artifacts":artifacts,
+        "broker_request_made":False,
+        "canonical_dependencies":{
+            "data_manager.py":private_blob_identity(root,"data_manager.py"),
+            "feature_contract.py":private_blob_identity(root,"feature_contract.py"),
+        },
+        "safety":{
+            "market_data_acquisition":False,
+            "historical_data_requests":False,
+            "broker_submit":False,
+            "broker_cancel":False,
+            "broker_flatten":False,
+            "runtime_activation":False,
+            "live_trading":False,
+        },
+    }
+
+def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None)->dict:
+    fn=None if v["capability_id"]=="CANONICAL_DATA_MATERIALIZE" else load_callable(root,CAPABILITIES[v["capability_id"]])
     if v["capability_id"]=="STRATEGY_SPEC_VALIDATE":
         raw=fn(v["arguments"]["strategy_spec"])
         if not isinstance(raw,dict) or not isinstance(raw.get("strategy_spec"),dict) or not _SHA256.fullmatch(str(raw.get("strategy_spec_digest") or "")):
@@ -407,6 +553,8 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
             "consumption":consumption,
             "canonical_dependencies":autotuner_dependencies(root),
         }
+    elif v["capability_id"]=="CANONICAL_DATA_MATERIALIZE":
+        result=materialize_stock_data(v,root,input_root,artifact_root)
     else:
         raise CanonicalDispatchError(f"capability executor is not implemented: {v['capability_id']}")
     rb=cbytes(result)
@@ -414,9 +562,9 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
     fp=sha(v)
     return {"schema":RECEIPT_SCHEMA,"job_id":v["job_id"],"job_fingerprint":fp,"capability_id":v["capability_id"],"status":"completed","authority":{"research_only":True,**FORBIDDEN_AUTHORITY_ASSERTIONS},"mmibkr":v["mmibkr"],"entrypoint":v["entrypoint"],"resources":v["resources"],"result_sha256":hashlib.sha256(rb).hexdigest(),"result":result}
 
-def safe_execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
+def safe_execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None)->dict:
     try:
-        return execute_valid(v,root,input_root=input_root)
+        return execute_valid(v,root,input_root=input_root,artifact_root=artifact_root)
     except CanonicalDispatchError:
         raise
     except Exception as e:
@@ -432,6 +580,23 @@ def cached(path:Path,fp:str):
     r=load(path)
     if r.get("schema")!=RECEIPT_SCHEMA or r.get("job_fingerprint")!=fp or r.get("status")!="completed":raise CanonicalDispatchError("cached receipt identity/status mismatch")
     return r
+
+def validate_materialization_cache(receipt:dict,receipt_dir:Path,fp:str)->None:
+    if receipt.get("capability_id")!="CANONICAL_DATA_MATERIALIZE":return
+    result=receipt.get("result") or {}; artifacts=result.get("artifacts")
+    if not isinstance(artifacts,list) or not artifacts:
+        raise CanonicalDispatchError("cached materialization receipt has no artifacts")
+    root=(receipt_dir/"artifacts"/fp).resolve()
+    for node in artifacts:
+        if not isinstance(node,dict):raise CanonicalDispatchError("cached materialization artifact descriptor invalid")
+        rel=Path(str(node.get("relative_path") or ""))
+        if rel.is_absolute() or not rel.parts or ".." in rel.parts:
+            raise CanonicalDispatchError("cached materialization artifact path invalid")
+        path=(root/rel).resolve()
+        if root not in path.parents or not path.is_file():
+            raise CanonicalDispatchError("cached materialization artifact missing")
+        if path.stat().st_size!=int(node.get("bytes") or -1) or sha_file(path)!=str(node.get("sha256") or ""):
+            raise CanonicalDispatchError("cached materialization artifact hash mismatch")
 
 def claim_owned(path:Path,token:str,fp:str)->bool:
     try:
@@ -498,19 +663,32 @@ def start_claim_heartbeat(path:Path,token:str,fp:str)->tuple[threading.Event,thr
 
 def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:Path|None=None,receipt_dir:Path|None=None)->dict:
     v=validate_request(req,source_root,source_receipt,input_root=input_root); fp=sha(v)
-    if receipt_dir is None:return {"receipt":safe_execute_valid(v,source_root,input_root=input_root),"cache_hit":False}
+    if receipt_dir is None:
+        if v["capability_id"]=="CANONICAL_DATA_MATERIALIZE":
+            raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires receipt_dir artifact storage")
+        return {"receipt":safe_execute_valid(v,source_root,input_root=input_root),"cache_hit":False}
     rd=receipt_dir.resolve(); rp=rd/"receipts"/f"{fp}.json"; hit=cached(rp,fp)
-    if hit:return {"receipt":hit,"cache_hit":True}
+    if hit:
+        validate_materialization_cache(hit,rd,fp)
+        return {"receipt":hit,"cache_hit":True}
     cp=rd/"claims"/f"{fp}.claim"
     token,hit=acquire_claim(cp,v,fp,rp)
-    if hit:return {"receipt":hit,"cache_hit":True}
+    if hit:
+        validate_materialization_cache(hit,rd,fp)
+        return {"receipt":hit,"cache_hit":True}
     stop,lost,thread=start_claim_heartbeat(cp,token,fp)
     published=False
+    artifact_root=(rd/"artifacts"/fp).resolve() if v["capability_id"]=="CANONICAL_DATA_MATERIALIZE" else None
+    if artifact_root is not None:
+        shutil.rmtree(artifact_root,ignore_errors=True);artifact_root.mkdir(parents=True,exist_ok=True)
     try:
-        r=safe_execute_valid(v,source_root,input_root=input_root)
+        r=safe_execute_valid(v,source_root,input_root=input_root,artifact_root=artifact_root)
         if lost.is_set() or not claim_owned(cp,token,fp):
             raise CanonicalDispatchError("claim lease ownership was lost; canonical result discarded")
         atomic(rp,r);published=True;return {"receipt":r,"cache_hit":False}
+    except Exception:
+        if artifact_root is not None and not published:shutil.rmtree(artifact_root,ignore_errors=True)
+        raise
     finally:
         stop.set();thread.join(timeout=1)
         if claim_owned(cp,token,fp):cp.unlink(missing_ok=True)
