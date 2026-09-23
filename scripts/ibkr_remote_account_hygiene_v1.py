@@ -217,11 +217,19 @@ def execute_account_hygiene(
             "broker_order_placed": False,
         },
         "final_reconciliation": {},
+        "cleanup": {
+            "automatic_cleanup": False,
+            "exact_cancel_called": False,
+            "flatten_called": False,
+            "global_cancel_called": False,
+        },
         "authority": {
             "canonical_flatten_route": FLATTEN_ROUTE,
             "paper_only": True,
             "account_hygiene_only": True,
-            "strategy_authority": False,
+            "cloud_strategy_authority": False,
+            "cloud_execution_policy_authority": False,
+            "direct_broker_client_used": False,
             "runtime_activation_authority": False,
             "global_cancel_allowed": False,
             "live_execution_allowed": False,
@@ -328,6 +336,9 @@ def execute_account_hygiene(
             "open_order_count_after": (_mapping(result.get("reconcile"))).get("open_order_count_after"),
         }
         receipt["execution"]["batches"].append(batch_receipt)
+        receipt["cleanup"]["flatten_called"] = bool(
+            receipt["cleanup"]["flatten_called"] or batch_receipt["place_order_called"]
+        )
         receipt["execution"]["broker_order_placed"] = bool(
             receipt["execution"]["broker_order_placed"]
             or batch_receipt["broker_order_placed"]
