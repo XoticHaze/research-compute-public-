@@ -4,6 +4,6 @@
   "batch_size": 5,
   "operator_approved": true,
   "operator_ack": "MMIBKR_PAPER_ACCOUNT_HYGIENE_ACK_V1",
-  "requested_by": "assistant-667-679-ownership-safe-preflight",
-  "reason": "fresh ownership-aware snapshot proved selected-runtime strategy inventory flat; run canonical non-mutating hygiene preflight only"
+  "requested_by": "assistant-667-full-pass-freshness-preflight-20260923",
+  "reason": "freshness-hardened producer validated and coordinator repinned; acquire a fresh ownership-aware snapshot and run canonical non-mutating account hygiene preflight"
 }
