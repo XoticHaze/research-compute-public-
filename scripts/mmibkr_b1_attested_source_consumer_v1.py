@@ -268,7 +268,6 @@ def _producer_attestation(
         if str(producer.get("run_attempt") or "").isdigit() is not True:
             raise RuntimeError("b1_fleet_stream_producer_run_attempt_rejected")
         return dict(value)
-        return dict(value)
 
     required_vault_fields = {
         "schema",
