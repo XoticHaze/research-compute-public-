@@ -11,6 +11,9 @@ on:
       - '.github/workflows/mmibkr-selected-runtime-cloud-watchdog-r1.yml'
       - 'scripts/mmibkr_selected_runtime_cloud_watchdog_cooldown_v1.py'
       - 'tests/test_mmibkr_selected_runtime_cloud_watchdog_cooldown_v1.py'
+      - 'scripts/mmibkr_selected_runtime_maintenance_hold_v1.py'
+      - 'tests/test_mmibkr_selected_runtime_maintenance_hold_v1.py'
+      - 'rendezvous/control/mmibkr-selected-runtime-cloud-maintenance-hold-r1.json'
 
 permissions:
   actions: write
@@ -31,6 +34,8 @@ jobs:
           set -euo pipefail
           python -m py_compile scripts/mmibkr_selected_runtime_cloud_watchdog_cooldown_v1.py
           python -m unittest -v tests.test_mmibkr_selected_runtime_cloud_watchdog_cooldown_v1
+          python -m py_compile scripts/mmibkr_selected_runtime_maintenance_hold_v1.py
+          python -m unittest -v tests.test_mmibkr_selected_runtime_maintenance_hold_v1
 
   ensure-owner:
     if: ${{ github.event_name != 'pull_request' }}
@@ -39,7 +44,20 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
+      - name: Respect selected-runtime maintenance hold
+        id: maintenance_hold
+        run: |
+          set -euo pipefail
+          hold="$(python scripts/mmibkr_selected_runtime_maintenance_hold_v1.py \
+            --path rendezvous/control/mmibkr-selected-runtime-cloud-maintenance-hold-r1.json)"
+          echo "enabled=$hold" >> "$GITHUB_OUTPUT"
+          if [ "$hold" = "true" ]; then
+            echo 'MMIBKR_CLOUD_WATCHDOG=maintenance_hold'
+            echo 'MMIBKR_CLOUD_WATCHDOG_MAINTENANCE_REASON=paper_account_hygiene_679'
+          fi
+
       - name: Ensure one selected-runtime cloud owner exists
+        if: ${{ steps.maintenance_hold.outputs.enabled != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
