@@ -347,6 +347,26 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
         self.assertNotIn('cat "$log"', workflow)
 
+    def test_selected_runtime_ownership_snapshot_is_exactly_code_pinned_after_bootstrap(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn(
+            "'35e6b44e5c2618f780a84c1c204fe14c76bdf0e5': Object.freeze({",
+            text,
+        )
+        self.assertIn(
+            "source_ref: '35e6b44e5c2618f780a84c1c204fe14c76bdf0e5'",
+            text,
+        )
+        self.assertIn(
+            "manifest_sha256: 'e1272fad34ee46b211437251b0d9b218f8da95f181a11116282d29730213fb88'",
+            text,
+        )
+        self.assertIn(
+            "archive_sha256: '59f7a59837354db488817d2d0a0981e939e5182ee8c1d6d300befd4775016917'",
+            text,
+        )
+        self.assertIn("archive_bytes: 66337662", text)
+
     def test_promotion_review_merged_source_bootstrap_is_exact_sha_expiring_and_bootstrap_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("OPERATOR_CONSOLE_PROMOTION_BOOTSTRAP_SOURCE", text)
