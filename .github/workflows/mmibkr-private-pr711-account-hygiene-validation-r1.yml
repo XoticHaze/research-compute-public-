@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/mmibkr-private-pr713-account-hygiene-validation-r1.yml'
+      - '.github/workflows/mmibkr-private-pr711-account-hygiene-validation-r1.yml'
 
 permissions:
   contents: read
