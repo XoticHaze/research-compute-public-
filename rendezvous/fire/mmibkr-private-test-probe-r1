@@ -23,6 +23,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "20260923T0909Z-699-73e573f6",
-  "admission_commit": "46899ad6d2d3de0c853e130bebef86dca20eb0b9"
+  "request_nonce": "20260923T0911Z-699-73e573f6-retry1",
+  "admission_commit": "46899ad6d2d3de0c853e130bebef86dca20eb0b9",
+  "retry_reason": "initial run 35841184886 reached source exchange before Fleet identity deployment propagation and failed HTTP 401"
 }
