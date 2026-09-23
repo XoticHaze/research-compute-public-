@@ -382,6 +382,7 @@ def canonical_runtime_docker_command(
         "IB_PORT": str(int(gateway_port)),
         "CLIENT_ID": "34",
         "ENABLE_LIVE_TRADING": "0",
+        "CONFIG_PATH": "/app/config.smoke.json",
         "CONTROL_API_ENABLED": "true",
         "CONTROL_API_HOST": "0.0.0.0",
         "CONTROL_API_PORT": "8001",
