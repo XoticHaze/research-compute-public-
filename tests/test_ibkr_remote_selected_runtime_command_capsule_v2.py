@@ -129,6 +129,53 @@ class SelectedRuntimeCommandCapsuleV2Tests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "persistent paper execute cleanup contract mismatch"):
             self.validate(node)
 
+    def test_paper_account_hygiene_mode_requires_flat_strategy_inventory_and_explicit_operator_ack(self):
+        node = self.capsule()
+        node["mode"] = mod.HYGIENE_MODE
+        node["request"] = {
+            "command_id": "sha256:" + "c" * 64,
+            "source_ref": "operator-snapshot:test",
+            "expected_positions": [{
+                "symbol": "AMAT",
+                "conId": 123,
+                "secType": "STK",
+                "position": 325.0,
+            }],
+            "ownership_authority": {
+                "schema": mod.HYGIENE_OWNERSHIP_SCHEMA,
+                "operator_snapshot_sha256": "d" * 64,
+                "snapshot_generated_at_utc": "2026-09-23T10:30:34Z",
+                "runtime_source_sha": "a" * 40,
+                "ownership_source": "selected_runtime_strategy_inventory_v1",
+                "strategy_owned_positions": [],
+                "account_position_count": 1,
+                "operator_approved": True,
+                "operator_ack": mod.HYGIENE_OPERATOR_ACK,
+            },
+            "execute": False,
+            "batch_size": 5,
+        }
+        node["cleanup"] = {
+            "cancel_open_order": False,
+            "flatten_filled_position": False,
+            "require_zero_baseline": False,
+            "allow_global_cancel": False,
+        }
+        out = self.validate(node)
+        self.assertEqual(out["mode"], mod.HYGIENE_MODE)
+        self.assertFalse(out["request"]["execute"])
+        self.assertEqual(out["request"]["expected_positions"][0]["position"], 325.0)
+
+        bad = json.loads(json.dumps(node))
+        bad["request"]["ownership_authority"]["strategy_owned_positions"] = [{"symbol": "AMAT"}]
+        with self.assertRaisesRegex(RuntimeError, "requires flat selected-runtime"):
+            self.validate(bad)
+
+        bad = json.loads(json.dumps(node))
+        bad["request"]["ownership_authority"]["operator_ack"] = "WRONG"
+        with self.assertRaisesRegex(RuntimeError, "operator ack mismatch"):
+            self.validate(bad)
+
     def test_attested_source_ticket_requires_no_private_bearer_or_url(self):
         node = self.capsule()
         node["source"] = {
