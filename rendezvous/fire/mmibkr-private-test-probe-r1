@@ -8,7 +8,7 @@
     "tests.test_model_lab_xgboost"
   ],
   "requested_by": "assistant-g09-model-lab-first-consumer",
-  "purpose": "validate current Model Lab first-consumer scientific chain using admitted exact source with byte-identical owner/test blobs",
+  "purpose": "revalidate current Model Lab first-consumer scientific chain after canonical pytest probe repair using admitted exact source with byte-identical owner/test blobs",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -16,7 +16,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "20260923T1901Z-g09-model-lab-science-r1",
+  "request_nonce": "20260923T2048Z-g09-model-lab-science-r2",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "c1234d2a1837c62e8847f751ddad4b15ef89cfee"
+  "current_private_reference": "a4cb1a026af9c206ac64a22a6dadade19dfa0814"
 }
