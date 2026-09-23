@@ -1,0 +1,26 @@
+{
+  "schema": "mmibkr.private_test_probe_fire.v1",
+  "source_ref": "82725c0aca3af96acc47e3957468d7ca36409795",
+  "test_modules": [
+    "tests.test_autotuner_strategy_family_catalog_vnext",
+    "tests.test_autotuner_behavioral_consumption_vnext",
+    "tests.test_autotuner_family_universe_campaign_vnext",
+    "tests.test_autotuner_composition_generator_vnext",
+    "tests.test_autotuner_universe_intake_vnext",
+    "tests.test_strategy_backtest_registry_dispatch",
+    "tests.test_autotuner_campaign_planner",
+    "tests.test_autotuner_campaign_runner",
+    "tests.test_autotuner_strategy_bridge",
+    "tests.test_autotuner_parameter_consumption",
+    "tests.test_autotuner_primary_validation_runner"
+  ],
+  "requested_by": "assistant-autotuner-vnext-698",
+  "purpose": "validate AutoTuner family, composition, universe expansion plus incumbent campaign contracts",
+  "authority": {
+    "research_only": true,
+    "broker": false,
+    "runtime_activation": false,
+    "promotion_mutation": false,
+    "live": false
+  }
+}
