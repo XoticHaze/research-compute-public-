@@ -1,0 +1,9 @@
+{
+  "schema": "mmibkr.remote_selected_runtime_boundary_close.v1",
+  "run_id": "35904788469",
+  "public_authority_head": "7cd2c455e463ce81553bf4e1cbe1fc255404ff95",
+  "reason": "coordinator_transport_failed_manifest_413",
+  "command_intent_present": false,
+  "broker_action": false,
+  "live_execution_allowed": false
+}
