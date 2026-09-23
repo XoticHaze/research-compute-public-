@@ -28,7 +28,4 @@ jobs:
         run: |
           set -euo pipefail
           python -m py_compile scripts/mmibkr_canonical_workload_dispatch_v1.py
-          python -m unittest -v tests.test_mmibkr_canonical_workload_dispatch_v1
-          if test -f tests/test_mmibkr_canonical_crw_backtest_dispatch_v1.py; then
-            python -m unittest -v tests.test_mmibkr_canonical_crw_backtest_dispatch_v1
-          fi
+          python -m unittest discover -v -s tests -p 'test_mmibkr_canonical_*_dispatch_v1.py'
