@@ -1,6 +1,7 @@
 from __future__ import annotations
 """Portable fail-closed dispatcher for allowlisted MM-IBKR research work."""
 import argparse
+import csv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 import hashlib, importlib, json, os, re, secrets, shutil, sys, threading, time
@@ -452,7 +453,55 @@ def autotuner_dependencies(root:Path)->dict[str,str]:
         "strategies/python/crw_score_multi_mode.py":private_blob_identity(root,"strategies/python/crw_score_multi_mode.py"),
     }
 
-def sanitize_crw_result(raw:dict,args:dict)->dict:
+def copy_crw_evidence_artifacts(raw:dict,root:Path,artifact_root:Path|None)->dict[str,dict]:
+    if artifact_root is None:return {}
+    rel=str(raw.get("artifact_dir") or "").strip()
+    if not rel:raise CanonicalDispatchError("canonical CRW backtest artifact_dir is missing")
+    source=(root/rel).resolve(); source_root=root.resolve()
+    if source_root not in source.parents or not source.is_dir():
+        raise CanonicalDispatchError("canonical CRW artifact directory is missing or outside private source root")
+    allowed=(
+        "trade_rows.csv",
+        "condition_event_rows.csv",
+        "simulation_trade_rows.csv",
+        "simulation_condition_event_rows.csv",
+        "dca_fill_rows.csv",
+    )
+    out={}
+    dest_root=(artifact_root/"crw_evidence").resolve();dest_root.mkdir(parents=True,exist_ok=True)
+    for name in allowed:
+        src=(source/name).resolve()
+        if source not in src.parents or not src.is_file():
+            raise CanonicalDispatchError(f"canonical CRW evidence artifact missing: {name}")
+        dest=dest_root/name
+        shutil.copyfile(src,dest)
+        desc=artifact_descriptor(dest,artifact_root)
+        try:
+            with dest.open("r",encoding="utf-8-sig",newline="") as handle:
+                count=sum(1 for _ in csv.DictReader(handle))
+        except Exception as e:
+            raise CanonicalDispatchError(f"canonical CRW evidence artifact unreadable: {name}") from e
+        out[name.removesuffix(".csv")]={**desc,"format":"csv","row_count":count}
+    return out
+
+def sanitize_symbol_support(raw:dict)->list[dict]:
+    keys=(
+        "symbol","status","bar_count","event_count","total_trades","closed_trade_count",
+        "open_trade_count","open_trade_mark_to_market","win_rate","profit_factor","gross_pnl",
+        "net_pnl","max_drawdown","exposure","entry_level","exit_level","dca_enabled",
+        "dca_tier_drawdowns_pct","dca_max_adds","dca_base_qty","dca_max_contracts",
+        "dca_trigger_mode","tv_net_pnl","simulated_net_pnl","simulated_minus_tv_net_pnl",
+    )
+    out=[]
+    for row in raw.get("symbol_rows") or []:
+        if not isinstance(row,dict):continue
+        cleaned={key:deepcopy(row.get(key)) for key in keys if key in row}
+        views=row.get("execution_views")
+        if isinstance(views,dict):cleaned["execution_views"]=deepcopy(views)
+        out.append(cleaned)
+    return out
+
+def sanitize_crw_result(raw:dict,args:dict,root:Path|None=None,artifact_root:Path|None=None)->dict:
     safety=raw.get("safety")
     expected={"broker_submit":False,"cancel":False,"replace":False,"live_unlock":False,"backtest_only":True}
     if not isinstance(safety,dict) or any(safety.get(k) is not v for k,v in expected.items()):
@@ -472,6 +521,8 @@ def sanitize_crw_result(raw:dict,args:dict)->dict:
         "simulation_condition_event_rows":raw.get("simulation_condition_event_rows") or [],
         "dca_fill_rows":raw.get("dca_fill_rows") or [],
     }
+    persisted=copy_crw_evidence_artifacts(raw,root,artifact_root) if root is not None else {}
+    persisted_artifacts=[dict(node) for node in persisted.values()]
     result={
         "contract_version":raw.get("contract_version"),
         "ok":raw.get("ok") is True,
@@ -505,10 +556,19 @@ def sanitize_crw_result(raw:dict,args:dict)->dict:
         "simulated_net_pnl":raw.get("simulated_net_pnl"),
         "simulated_minus_tv_net_pnl":raw.get("simulated_minus_tv_net_pnl"),
         "data_coverage":coverage,
+        "symbol_support":sanitize_symbol_support(raw),
         "governed_inputs":deepcopy(input_map),
         "raw_result_sha256":sha(raw),
-        "row_artifact_sha256":{name:sha(rows) for name,rows in row_sets.items()},
-        "row_artifact_counts":{name:len(rows) for name,rows in row_sets.items()},
+        "row_artifact_sha256":{
+            name:(persisted[name]["sha256"] if name in persisted else sha(rows))
+            for name,rows in row_sets.items()
+        },
+        "row_artifact_counts":{
+            name:(persisted[name]["row_count"] if name in persisted else len(rows))
+            for name,rows in row_sets.items()
+        },
+        "row_artifacts":persisted,
+        "artifacts":persisted_artifacts,
         "safety":expected,
     }
     return result
@@ -906,7 +966,7 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|
         payload=deepcopy(v["arguments"]["payload"]);payload["_verified_source_paths"]=verified
         raw=fn(payload,input_root.resolve())
         if not isinstance(raw,dict):raise CanonicalDispatchError("canonical CRW backtest returned invalid contract")
-        result=sanitize_crw_result(raw,v["arguments"])
+        result=sanitize_crw_result(raw,v["arguments"],root=root,artifact_root=artifact_root)
     elif v["capability_id"]=="AUTOTUNER_PARAMETER_CONSUMPTION":
         normalized,filtered,consumption=autotuner_gate(root,v["arguments"])
         result={
@@ -961,11 +1021,12 @@ def cached(path:Path,fp:str):
     if r.get("schema")!=RECEIPT_SCHEMA or r.get("job_fingerprint")!=fp or r.get("status")!="completed":raise CanonicalDispatchError("cached receipt identity/status mismatch")
     return r
 
-def validate_materialization_cache(receipt:dict,receipt_dir:Path,fp:str)->None:
-    if receipt.get("capability_id")!="CANONICAL_DATA_MATERIALIZE":return
+def validate_cached_artifacts(receipt:dict,receipt_dir:Path,fp:str)->None:
     result=receipt.get("result") or {}; artifacts=result.get("artifacts")
-    if not isinstance(artifacts,list) or not artifacts:
+    if receipt.get("capability_id")=="CANONICAL_DATA_MATERIALIZE" and (not isinstance(artifacts,list) or not artifacts):
         raise CanonicalDispatchError("cached materialization receipt has no artifacts")
+    if not artifacts:return
+    if not isinstance(artifacts,list):raise CanonicalDispatchError("cached artifact descriptor list invalid")
     root=(receipt_dir/"artifacts"/fp).resolve()
     for node in artifacts:
         if not isinstance(node,dict):raise CanonicalDispatchError("cached materialization artifact descriptor invalid")
@@ -1050,16 +1111,16 @@ def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:P
         return {"receipt":safe_execute_valid(v,source_root,input_root=input_root,receipt_dir=None),"cache_hit":False}
     rp=rd/"receipts"/f"{fp}.json"; hit=cached(rp,fp)
     if hit:
-        validate_materialization_cache(hit,rd,fp)
+        validate_cached_artifacts(hit,rd,fp)
         return {"receipt":hit,"cache_hit":True}
     cp=rd/"claims"/f"{fp}.claim"
     token,hit=acquire_claim(cp,v,fp,rp)
     if hit:
-        validate_materialization_cache(hit,rd,fp)
+        validate_cached_artifacts(hit,rd,fp)
         return {"receipt":hit,"cache_hit":True}
     stop,lost,thread=start_claim_heartbeat(cp,token,fp)
     published=False
-    artifact_root=(rd/"artifacts"/fp).resolve() if v["capability_id"]=="CANONICAL_DATA_MATERIALIZE" else None
+    artifact_root=(rd/"artifacts"/fp).resolve() if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","CRW_BACKTEST"} else None
     if artifact_root is not None:
         shutil.rmtree(artifact_root,ignore_errors=True);artifact_root.mkdir(parents=True,exist_ok=True)
     try:

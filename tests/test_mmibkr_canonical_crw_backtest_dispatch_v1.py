@@ -32,6 +32,13 @@ class CanonicalCRWBacktestDispatchTests(unittest.TestCase):
             "    p=Path(paths[symbol])\n"
             "    raw=p.read_bytes()\n"
             "    assert p.is_file() and Path(data_root).resolve() in p.resolve().parents\n"
+            "    artifact_dir=Path(__file__).resolve().parents[2]/'artifacts'/'fixture'\n"
+            "    artifact_dir.mkdir(parents=True,exist_ok=True)\n"
+            "    (artifact_dir/'trade_rows.csv').write_text('id,entry_ts,exit_ts,net_pnl\\n1,2021-01-01,2021-01-02,10\\n2,2023-01-01,2023-01-02,22\\n',encoding='utf-8')\n"
+            "    (artifact_dir/'condition_event_rows.csv').write_text('id,event\\n1,entry\\n2,hold\\n3,exit\\n',encoding='utf-8')\n"
+            "    (artifact_dir/'simulation_trade_rows.csv').write_text('id,entry_ts,exit_ts,net_pnl\\n1,2021-01-01,2021-01-02,5\\n2,2023-01-01,2023-01-02,8\\n3,2025-01-01,2025-01-02,15\\n',encoding='utf-8')\n"
+            "    (artifact_dir/'simulation_condition_event_rows.csv').write_text('id,event\\n1,entry\\n2,exit\\n',encoding='utf-8')\n"
+            "    (artifact_dir/'dca_fill_rows.csv').write_text('tier,fill_ts\\n1,2021-01-01\\n2,2023-01-01\\n',encoding='utf-8')\n"
             "    return {\n"
             "      'contract_version':'crw_backtest_summary_13z.v1','ok':True,'status':'ok',\n"
             "      'strategy_id':payload['strategy_id'],'symbols':[symbol],'timeframe':payload['timeframe'],\n"
@@ -42,13 +49,14 @@ class CanonicalCRWBacktestDispatchTests(unittest.TestCase):
             "      'max_drawdown':-90.0,'exposure':0.3,'symbol_count':1,'trade_row_count':2,'event_row_count':3,\n"
             "      'data_coverage':[{'symbol':symbol,'source_path':str(p),'rows':3,'sha256':hashlib.sha256(raw).hexdigest()}],\n"
             "      'cost_model':{'commission_per_share':0.0},\n"
-            "      'execution_views':{'tv_signal_close':{'net_pnl':32.0},'simulated_next_bar_open':{'net_pnl':28.0}},\n"
+            "      'execution_views':{'tv_signal_close':{'execution_view':'tv_signal_close','net_pnl':32.0,'total_trades':2},'simulated_next_bar_open':{'execution_view':'simulated_next_bar_open','net_pnl':28.0,'total_trades':3,'max_drawdown':-70.0}},\n"
             "      'tv_net_pnl':32.0,'simulated_net_pnl':28.0,'simulated_minus_tv_net_pnl':-4.0,\n"
             "      'safety':{'broker_submit':False,'cancel':False,'replace':False,'live_unlock':False,'backtest_only':True},\n"
             "      'trade_rows':[{'id':1},{'id':2}],'condition_event_rows':[{'id':1},{'id':2},{'id':3}],\n"
             "      'simulation_trade_rows':[{'id':1}],'simulation_condition_event_rows':[{'id':1}],\n"
             "      'dca_fill_rows':[{'tier':1}],'chart_rows':[{'close':1.0}],\n"
-            "      'artifact_dir':'artifacts/private/path'\n"
+            "      'symbol_rows':[{'symbol':symbol,'status':'ok','bar_count':77,'event_count':3,'total_trades':2,'net_pnl':32.0,'dca_enabled':True,'dca_trigger_mode':'tiered_previous_buy','data_info':{'source_path':str(p)}}],\n"
+            "      'artifact_dir':'artifacts/fixture'\n"
             "    }\n",
             encoding="utf-8",
         )
@@ -135,6 +143,56 @@ class CanonicalCRWBacktestDispatchTests(unittest.TestCase):
         self.assertRegex(result["raw_result_sha256"], r"^[0-9a-f]{64}$")
         for key in mod.FORBIDDEN_AUTHORITY_KEYS:
             self.assertFalse(receipt["authority"][key])
+
+    def test_receipt_backed_crw_preserves_full_canonical_evidence_artifacts(self):
+        receipt_dir = self.root / "runtime-state"
+        first = mod.execute_request(
+            self.request(),
+            source_root=self.source_root,
+            source_receipt=self.source_receipt,
+            input_root=self.input_root,
+            receipt_dir=receipt_dir,
+        )
+        receipt = first["receipt"]
+        result = receipt["result"]
+        self.assertEqual(result["row_artifact_counts"]["simulation_trade_rows"], 3)
+        self.assertEqual(result["row_artifact_counts"]["trade_rows"], 2)
+        self.assertEqual(result["symbol_support"][0]["bar_count"], 77)
+        self.assertNotIn("data_info", result["symbol_support"][0])
+        self.assertNotIn(str(self.input_root), json.dumps(receipt))
+        self.assertEqual(set(result["row_artifacts"]), {
+            "trade_rows",
+            "condition_event_rows",
+            "simulation_trade_rows",
+            "simulation_condition_event_rows",
+            "dca_fill_rows",
+        })
+        artifact_root = receipt_dir / "artifacts" / receipt["job_fingerprint"]
+        for node in result["artifacts"]:
+            path = artifact_root / node["relative_path"]
+            self.assertTrue(path.is_file())
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), node["sha256"])
+
+        second = mod.execute_request(
+            self.request(),
+            source_root=self.source_root,
+            source_receipt=self.source_receipt,
+            input_root=self.input_root,
+            receipt_dir=receipt_dir,
+        )
+        self.assertTrue(second["cache_hit"])
+
+        sim = result["row_artifacts"]["simulation_trade_rows"]
+        sim_path = artifact_root / sim["relative_path"]
+        sim_path.write_text("tampered\n", encoding="utf-8")
+        with self.assertRaisesRegex(mod.CanonicalDispatchError, "artifact hash mismatch"):
+            mod.execute_request(
+                self.request(),
+                source_root=self.source_root,
+                source_receipt=self.source_receipt,
+                input_root=self.input_root,
+                receipt_dir=receipt_dir,
+            )
 
     def test_caller_verified_paths_are_rejected(self):
         req = self.request()
