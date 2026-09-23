@@ -76,6 +76,9 @@ on:
       - scripts/mmibkr_signal_history_metadata_reconcile_v1.py
       - scripts/mmibkr_operator_snapshot_publish_v1.py
       - tests/test_mmibkr_operator_snapshot_publish_helper_v1.py
+      - scripts/mmibkr_selected_runtime_maintenance_hold_v1.py
+      - tests/test_mmibkr_selected_runtime_maintenance_hold_v1.py
+      - rendezvous/control/mmibkr-selected-runtime-cloud-maintenance-hold-r1.json
 
 permissions:
   contents: write
@@ -146,8 +149,28 @@ jobs:
               mode="owner"
             fi
           fi
+          if [ "$mode" = "owner" ]; then
+            hold="$(python scripts/mmibkr_selected_runtime_maintenance_hold_v1.py \
+              --path rendezvous/control/mmibkr-selected-runtime-cloud-maintenance-hold-r1.json)"
+            if [ "$hold" = "true" ]; then
+              mode="maintenance_hold"
+              echo 'MMIBKR_SELECTED_RUNTIME_CLOUD_MAINTENANCE_HOLD=1'
+            fi
+          fi
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "MMIBKR_SELECTED_RUNTIME_CLOUD_ROUTE=$mode"
+
+  maintenance_hold:
+    if: ${{ needs.route.outputs.mode == 'maintenance_hold' }}
+    needs:
+      - contract
+      - route
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Hold selected-runtime owner for governed maintenance
+        run: |
+          echo 'MMIBKR_SELECTED_RUNTIME_CLOUD_MAINTENANCE_HOLD=1'
+          echo 'MMIBKR_SELECTED_RUNTIME_CLOUD_MAINTENANCE_REASON=paper_account_hygiene_679'
 
   reject_unpinned_dispatch:
     if: ${{ needs.route.outputs.mode == 'unpinned_dispatch_rejected' || needs.route.outputs.mode == 'invalid_dispatch' }}
@@ -172,6 +195,12 @@ jobs:
 
       - name: Install fixed source-vault dependency
         run: python -m pip install --disable-pip-version-check cryptography==46.0.1
+
+      - name: Validate selected-runtime maintenance hold contract
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/mmibkr_selected_runtime_maintenance_hold_v1.py
+          python -m unittest -v tests.test_mmibkr_selected_runtime_maintenance_hold_v1
 
       - name: Validate reusable encrypted source-vault consumer
         run: |
