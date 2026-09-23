@@ -9,6 +9,29 @@ from scripts import ibkr_post_auth_pipeline_v1 as mod
 
 
 class PostAuthPipelineContractTests(unittest.TestCase):
+    def test_historical_different_ip_session_conflict_is_classified_exactly(self):
+        self.assertTrue(mod._is_historical_session_conflict(
+            162,
+            "Historical Market Data Service error message:Trading TWS session is connected from a different IP address",
+        ))
+        self.assertFalse(mod._is_historical_session_conflict(
+            162,
+            "Historical Market Data Service error message:no data of type TRADES",
+        ))
+        self.assertFalse(mod._is_historical_session_conflict(
+            10141,
+            "Please accept the API disclaimer",
+        ))
+
+    def test_historical_session_conflict_path_fails_closed_and_emits_operator_marker(self):
+        from pathlib import Path
+        source = Path(mod.__file__).read_text(encoding="utf-8")
+        self.assertIn("ib.errorEvent += _capture_historical_session_conflict", source)
+        self.assertIn("ib.errorEvent -= _capture_historical_session_conflict", source)
+        self.assertIn("IBKR_HISTORICAL_SESSION_CONFLICT=DIFFERENT_IP", source)
+        self.assertIn("IBKR_OPERATOR_ACTION=CLOSE_COMPETING_IBKR_SESSION", source)
+        self.assertIn("competing TWS/Gateway session is connected from a different IP address", source)
+
     def test_exact_mm_futures_contract_is_preserved(self):
         hints = mod.parse_contract_hints(json.dumps({
             "MNQ": {
