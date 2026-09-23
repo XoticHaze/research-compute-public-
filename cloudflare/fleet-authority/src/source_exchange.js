@@ -99,6 +99,13 @@ const PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_IDENTITY = {
   workflow_ref:
     'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-promotion-review-validation-r1.yml@refs/heads/main',
 };
+
+const PRIVATE_TEST_PROBE_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-test-probe-r1.yml@refs/heads/main',
+};
 const PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_SOURCE =
   'd7b468ea22740df65c4b350dc15b74b0c377280f';
 const PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_EXPIRES_AT =
@@ -378,6 +385,13 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     const matchedPrivatePr670Validation = matchesIdentity(claims, PRIVATE_PR670_EXACT_VALIDATION_IDENTITY);
     const matchedPrivatePr671Validation = matchesIdentity(claims, PRIVATE_PR671_EXACT_VALIDATION_IDENTITY);
     const matchedPrivatePromotionReviewValidation = matchesIdentity(claims, PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_IDENTITY);
+    const matchedPrivateTestProbe = matchesIdentity(claims, PRIVATE_TEST_PROBE_IDENTITY);
+    const privateTestProbePathAllowed = (
+      pathname === '/v1/source-exchange/request'
+      || /^\/v1\/source-exchange\/response\/\d+$/.test(pathname)
+      || /^\/v1\/source-exchange\/response\/\d+\/chunk\/\d+$/.test(pathname)
+      || /^\/v1\/source-exchange\/cleanup\/\d+$/.test(pathname)
+    );
     const privateArchivePathAllowed = (
       /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname)
       || pathname === '/v1/source-vault/private-archive/attest'
@@ -395,6 +409,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
         || (matchedPrivatePr670Validation && privateArchivePathAllowed)
         || (matchedPrivatePr671Validation && privateArchivePathAllowed)
         || (matchedPrivatePromotionReviewValidation && privateArchivePathAllowed)
+        || (matchedPrivateTestProbe && privateTestProbePathAllowed)
       )
       || claims.repository_visibility !== 'public'
       || !ALLOWED_PUBLIC_EVENTS.has(claims.event_name)
