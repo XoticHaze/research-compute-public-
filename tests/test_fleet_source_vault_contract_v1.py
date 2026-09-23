@@ -207,6 +207,34 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
 
+    def test_source_vault_bootstrap_identity_may_stream_any_exact_mm_commit_sha_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("sourceVaultBootstrapExactShaApproved", text)
+        self.assertIn(
+            "matchesIdentity(identity, SOURCE_VAULT_BOOTSTRAP_IDENTITY)",
+            text,
+        )
+        self.assertIn(
+            "const exactSha = /^[0-9a-f]{40}$/.test(String(sourceSha || ''));",
+            text,
+        )
+        self.assertIn(
+            "(matchedBootstrap && privateArchivePathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedBootstrap && operatorDeployPathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedBootstrap && privateTestProbePathAllowed)",
+            text,
+        )
+        self.assertIn(
+            "const PRIVATE_REPOSITORY = 'XoticHaze/mm-IBKR';",
+            text,
+        )
+
     def test_private_pr670_validation_is_isolated_exact_sha_expiring_and_archive_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("PRIVATE_PR670_EXACT_VALIDATION_IDENTITY", text)
@@ -215,7 +243,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            "a58869b51eca21098a4d3c5dcee52dfa922a900b",
+            "7244fa235ea6e110cc01d8db1f793926461e0b10",
             text,
         )
         self.assertIn("PRIVATE_PR670_EXACT_VALIDATION_EXPIRES_AT", text)
@@ -265,7 +293,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
         self.assertNotIn('cat "$log"', workflow)
 
-    def test_private_test_probe_is_main_identity_and_source_exchange_only(self):
+    def test_private_test_probe_is_main_identity_and_vault_unwrap_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("PRIVATE_TEST_PROBE_IDENTITY", text)
         self.assertIn(
@@ -273,22 +301,13 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn("matchedPrivateTestProbe", text)
-        self.assertIn("privateTestProbePathAllowed", text)
+        self.assertIn("privateTestProbeUnwrapPathAllowed", text)
         self.assertIn(
-            "(matchedPrivateTestProbe && privateTestProbePathAllowed)",
-            text,
-        )
-        self.assertIn("pathname === '/v1/source-exchange/request'", text)
-        self.assertIn(
-            r"^\/v1\/source-exchange\/response\/\d+$",
+            "const privateTestProbeUnwrapPathAllowed = pathname === '/v1/source-vault/unwrap';",
             text,
         )
         self.assertIn(
-            r"^\/v1\/source-exchange\/response\/\d+\/chunk\/\d+$",
-            text,
-        )
-        self.assertIn(
-            r"^\/v1\/source-exchange\/cleanup\/\d+$",
+            "(matchedPrivateTestProbe && privateTestProbeUnwrapPathAllowed)",
             text,
         )
         self.assertNotIn(
@@ -297,6 +316,10 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         )
         self.assertNotIn(
             "(matchedPrivateTestProbe && operatorDeployPathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedPrivateTestProbe && privateTestProbePathAllowed)",
             text,
         )
 

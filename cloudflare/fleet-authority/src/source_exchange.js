@@ -78,7 +78,7 @@ const PRIVATE_PR670_EXACT_VALIDATION_IDENTITY = {
     'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-pr670-forward-lifecycle-validation-r1.yml@refs/heads/main',
 };
 const PRIVATE_PR670_EXACT_VALIDATION_SOURCE =
-  'a58869b51eca21098a4d3c5dcee52dfa922a900b';
+  '7244fa235ea6e110cc01d8db1f793926461e0b10';
 const PRIVATE_PR670_EXACT_VALIDATION_EXPIRES_AT =
   Date.parse('2026-09-23T12:00:00Z');
 
@@ -179,6 +179,12 @@ function matchesIdentity(identity, expected) {
 }
 
 function isPrivateSourceStreamApproved(sourceSha, identity = null) {
+  const exactSha = /^[0-9a-f]{40}$/.test(String(sourceSha || ''));
+  const sourceVaultBootstrapExactShaApproved = (
+    exactSha
+    && matchesIdentity(identity, SOURCE_VAULT_BOOTSTRAP_IDENTITY)
+  );
+  if (sourceVaultBootstrapExactShaApproved) return true;
   if (APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha)) return true;
   const uiBuildApproved = (
     sourceSha === UI_BUILD_PRIVATE_ARCHIVE_SOURCE
@@ -392,12 +398,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     const matchedPrivatePr671Validation = matchesIdentity(claims, PRIVATE_PR671_EXACT_VALIDATION_IDENTITY);
     const matchedPrivatePromotionReviewValidation = matchesIdentity(claims, PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_IDENTITY);
     const matchedPrivateTestProbe = matchesIdentity(claims, PRIVATE_TEST_PROBE_IDENTITY);
-    const privateTestProbePathAllowed = (
-      pathname === '/v1/source-exchange/request'
-      || /^\/v1\/source-exchange\/response\/\d+$/.test(pathname)
-      || /^\/v1\/source-exchange\/response\/\d+\/chunk\/\d+$/.test(pathname)
-      || /^\/v1\/source-exchange\/cleanup\/\d+$/.test(pathname)
-    );
+    const privateTestProbeUnwrapPathAllowed = pathname === '/v1/source-vault/unwrap';
     const privateArchivePathAllowed = (
       /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname)
       || pathname === '/v1/source-vault/private-archive/attest'
@@ -415,7 +416,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
         || (matchedPrivatePr670Validation && privateArchivePathAllowed)
         || (matchedPrivatePr671Validation && privateArchivePathAllowed)
         || (matchedPrivatePromotionReviewValidation && privateArchivePathAllowed)
-        || (matchedPrivateTestProbe && privateTestProbePathAllowed)
+        || (matchedPrivateTestProbe && privateTestProbeUnwrapPathAllowed)
       )
       || claims.repository_visibility !== 'public'
       || !ALLOWED_PUBLIC_EVENTS.has(claims.event_name)
