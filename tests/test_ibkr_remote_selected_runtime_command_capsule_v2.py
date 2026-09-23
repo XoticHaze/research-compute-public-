@@ -2,6 +2,7 @@ import base64
 import hashlib
 import json
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from scripts import ibkr_remote_selected_runtime_command_capsule_v2 as mod
 
@@ -144,7 +145,7 @@ class SelectedRuntimeCommandCapsuleV2Tests(unittest.TestCase):
             "ownership_authority": {
                 "schema": mod.HYGIENE_OWNERSHIP_SCHEMA,
                 "operator_snapshot_sha256": "d" * 64,
-                "snapshot_generated_at_utc": "2026-09-23T10:30:34Z",
+                "snapshot_generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                 "runtime_source_sha": "a" * 40,
                 "ownership_source": "selected_runtime_strategy_inventory_v1",
                 "strategy_owned_positions": [],
@@ -175,6 +176,31 @@ class SelectedRuntimeCommandCapsuleV2Tests(unittest.TestCase):
         bad["request"]["ownership_authority"]["operator_ack"] = "WRONG"
         with self.assertRaisesRegex(RuntimeError, "operator ack mismatch"):
             self.validate(bad)
+
+    def test_hygiene_snapshot_timestamp_must_be_recent_and_timezone_aware(self):
+        now = datetime(2026, 9, 23, 12, 0, tzinfo=timezone.utc)
+        authority = {
+            "snapshot_generated_at_utc": (
+                now - timedelta(seconds=mod.HYGIENE_MAX_OWNERSHIP_SNAPSHOT_AGE_SEC)
+            ).isoformat().replace("+00:00", "Z")
+        }
+        self.assertEqual(
+            mod.validate_hygiene_snapshot_age(authority, now_utc=now),
+            "2026-09-23T11:30:00Z",
+        )
+        authority["snapshot_generated_at_utc"] = (
+            now - timedelta(seconds=mod.HYGIENE_MAX_OWNERSHIP_SNAPSHOT_AGE_SEC + 1)
+        ).isoformat().replace("+00:00", "Z")
+        with self.assertRaisesRegex(RuntimeError, "ownership snapshot is stale"):
+            mod.validate_hygiene_snapshot_age(authority, now_utc=now)
+        authority["snapshot_generated_at_utc"] = (
+            now + timedelta(seconds=mod.HYGIENE_MAX_OWNERSHIP_SNAPSHOT_FUTURE_SKEW_SEC + 1)
+        ).isoformat().replace("+00:00", "Z")
+        with self.assertRaisesRegex(RuntimeError, "too far in the future"):
+            mod.validate_hygiene_snapshot_age(authority, now_utc=now)
+        authority["snapshot_generated_at_utc"] = "2026-09-23T12:00:00"
+        with self.assertRaisesRegex(RuntimeError, "timezone-aware"):
+            mod.validate_hygiene_snapshot_age(authority, now_utc=now)
 
     def test_attested_source_ticket_requires_no_private_bearer_or_url(self):
         node = self.capsule()
