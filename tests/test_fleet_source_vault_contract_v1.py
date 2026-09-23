@@ -286,7 +286,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("OPERATOR_CONSOLE_PROMOTION_BOOTSTRAP_SOURCE", text)
         self.assertIn(
-            "1eadfe97304bb78a7e0fabf571e73dfcf0060909",
+            "5e56997fe31987fb1ac471ebecb03795b6614887",
             text,
         )
         self.assertIn("OPERATOR_CONSOLE_PROMOTION_BOOTSTRAP_EXPIRES_AT", text)
