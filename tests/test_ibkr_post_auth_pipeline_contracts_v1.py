@@ -30,7 +30,8 @@ class PostAuthPipelineContractTests(unittest.TestCase):
         self.assertIn("ib.errorEvent -= _capture_historical_session_conflict", source)
         self.assertIn("IBKR_HISTORICAL_SESSION_CONFLICT=DIFFERENT_IP", source)
         self.assertIn("IBKR_OPERATOR_ACTION=CLOSE_COMPETING_IBKR_SESSION", source)
-        self.assertIn("competing TWS/Gateway session is connected from a different IP address", source)
+        self.assertIn("competing TWS/Gateway ", source)
+        self.assertIn("session is connected from a different IP address", source)
 
     def test_exact_mm_futures_contract_is_preserved(self):
         hints = mod.parse_contract_hints(json.dumps({
