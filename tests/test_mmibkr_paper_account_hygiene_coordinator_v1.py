@@ -58,6 +58,14 @@ class PaperAccountHygieneCoordinatorTests(unittest.TestCase):
         self.assertIn("default: false", text)
         self.assertIn("HYGIENE_EXECUTE=", text)
         self.assertIn("args+=(--execute)", text)
+        self.assertIn(
+            'python scripts/operator/ibkr_remote_account_hygiene_slot_v1.py "${args[@]}"',
+            text,
+        )
+        self.assertNotIn(
+            'python scripts/operator/ibkr_remote_account_hygiene_slot_v1.py "\\${args[@]}"',
+            text,
+        )
         self.assertIn("--operator-approved", text)
         self.assertIn("MMIBKR_PAPER_ACCOUNT_HYGIENE_ACK_V1", text)
         self.assertIn("preflight unexpectedly executed broker action", text)
