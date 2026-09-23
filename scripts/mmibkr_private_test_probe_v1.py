@@ -20,6 +20,7 @@ SAFE_PREFIXES = (
 SAFE_EXACT = {
     "tests.test_strategy_backtest_registry_dispatch",
     "tests.test_canonical_data_materialize_v1",
+    "tests.test_selected_runtime_strategy_spec_integrity_v1",
 }
 DENY_TOKENS = (
     "broker",
@@ -62,10 +63,14 @@ def validated_modules(raw: str) -> list[str]:
     for module in values:
         if not MODULE_RE.fullmatch(module):
             raise ValueError(f"test_module_rejected:{module}")
+        if module in SAFE_EXACT:
+            if module not in out:
+                out.append(module)
+            continue
         lowered = module.lower()
         if any(token in lowered for token in DENY_TOKENS):
             raise ValueError(f"test_module_authority_rejected:{module}")
-        if not (module in SAFE_EXACT or module.startswith(SAFE_PREFIXES)):
+        if not module.startswith(SAFE_PREFIXES):
             raise ValueError(f"test_module_not_allowlisted:{module}")
         if module not in out:
             out.append(module)
