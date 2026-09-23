@@ -308,7 +308,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            "e78d16c99bde3df4d3828c952e27dc1746772875",
+            "6a20403d771cbcf40ae475f8f66979973debe57b",
             text,
         )
         self.assertIn("PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_EXPIRES_AT", text)
@@ -330,7 +330,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             / "mmibkr-private-pr711-account-hygiene-validation-r1.yml"
         ).read_text(encoding="utf-8")
         self.assertIn(
-            "PRIVATE_SOURCE_SHA: e78d16c99bde3df4d3828c952e27dc1746772875",
+            "PRIVATE_SOURCE_SHA: 6a20403d771cbcf40ae475f8f66979973debe57b",
             workflow,
         )
         self.assertIn("tests.test_ibkr_remote_account_hygiene_slot_v1", workflow)

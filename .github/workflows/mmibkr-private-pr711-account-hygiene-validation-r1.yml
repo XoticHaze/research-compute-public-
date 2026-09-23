@@ -1,26 +1,26 @@
-name: MM-IBKR Private PR711 Account Hygiene Exact Validation R1
+name: MM-IBKR Private PR713 Account Hygiene Freshness Exact Validation R1
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/mmibkr-private-pr711-account-hygiene-validation-r1.yml'
+      - '.github/workflows/mmibkr-private-pr713-account-hygiene-validation-r1.yml'
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: mmibkr-private-pr711-account-hygiene-validation-r1
+  group: mmibkr-private-pr713-account-hygiene-validation-r1
   cancel-in-progress: false
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  PRIVATE_SOURCE_SHA: e78d16c99bde3df4d3828c952e27dc1746772875
+  PRIVATE_SOURCE_SHA: 6a20403d771cbcf40ae475f8f66979973debe57b
 
 jobs:
-  exact-private-pr711-account-hygiene-validation:
+  exact-private-pr713-account-hygiene-validation:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -30,7 +30,7 @@ jobs:
         with:
           python-version: '3.11.16'
 
-      - name: Materialize exact private PR711 Account Hygiene source through bounded Fleet stream
+      - name: Materialize exact private PR713 Account Hygiene Freshness source through bounded Fleet stream
         shell: bash
         run: |
           set -euo pipefail
@@ -46,8 +46,8 @@ jobs:
           source_sha = os.environ['PRIVATE_SOURCE_SHA'].strip().lower()
           run_id = os.environ['GITHUB_RUN_ID']
           temp = Path(os.environ['RUNNER_TEMP'])
-          archive = temp / 'mmibkr-pr711-account-hygiene.tar.gz'
-          extract = temp / 'mmibkr-pr711-account-hygiene'
+          archive = temp / 'mmibkr-pr713-account-hygiene.tar.gz'
+          extract = temp / 'mmibkr-pr713-account-hygiene'
           if len(source_sha) != 40 or any(ch not in '0123456789abcdef' for ch in source_sha):
               raise SystemExit('invalid exact private source sha')
 
@@ -69,7 +69,7 @@ jobs:
           headers = {
               'Authorization': 'Bearer ' + oidc(),
               'Accept': 'application/gzip',
-              'User-Agent': 'mmibkr-private-pr711-account-hygiene-forward-lifecycle-validation-r1',
+              'User-Agent': 'mmibkr-private-pr713-account-hygiene-forward-lifecycle-validation-r1',
               'X-MMIBKR-Caller-Run-Id': run_id,
           }
           url = f'{base}/v1/source-vault/private-archive/{source_sha}'
@@ -85,7 +85,7 @@ jobs:
                   if exc.code not in {401, 403, 502, 503}:
                       raise
                   if attempt % 12 == 0:
-                      print(f'MMIBKR_PR711 Account Hygiene_SOURCE_WAIT={attempt}')
+                      print(f'MMIBKR_PR713 Account Hygiene Freshness_SOURCE_WAIT={attempt}')
                   time.sleep(5)
           else:
               raise SystemExit('exact private source admission did not converge')
@@ -122,7 +122,7 @@ jobs:
                   'Authorization': 'Bearer ' + oidc(),
                   'Accept': 'application/json',
                   'Content-Type': 'application/json',
-                  'User-Agent': 'mmibkr-private-pr711-account-hygiene-forward-lifecycle-validation-r1',
+                  'User-Agent': 'mmibkr-private-pr713-account-hygiene-forward-lifecycle-validation-r1',
                   'X-MMIBKR-Caller-Run-Id': run_id,
               },
           )
@@ -162,7 +162,7 @@ jobs:
               fh.write('PRIVATE_SOURCE_ROOT=' + str(root) + '\n')
               fh.write('PRIVATE_ARCHIVE_SHA256=' + archive_sha + '\n')
               fh.write('PRIVATE_ARCHIVE_BYTES=' + str(size) + '\n')
-          print('MMIBKR_PR711 Account Hygiene_EXACT_SOURCE_READY=1')
+          print('MMIBKR_PR713 Account Hygiene Freshness_EXACT_SOURCE_READY=1')
           print('MMIBKR_PRIVATE_SOURCE_TOKEN_EXPOSED=0')
           PY
 
@@ -170,27 +170,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          log="$RUNNER_TEMP/pr711-account-hygiene-build.log"
+          log="$RUNNER_TEMP/pr713-account-hygiene-build.log"
           set +e
           docker build -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" --target bot \
-            -t "mmibkr-pr711-account-hygiene:$GITHUB_RUN_ID" "$PRIVATE_SOURCE_ROOT" >"$log" 2>&1
+            -t "mmibkr-pr713-account-hygiene:$GITHUB_RUN_ID" "$PRIVATE_SOURCE_ROOT" >"$log" 2>&1
           rc=$?
           set -e
-          echo "MMIBKR_PR711 Account Hygiene_BUILD_LOG_SHA256=$(sha256sum "$log" | awk '{print $1}')"
+          echo "MMIBKR_PR713 Account Hygiene Freshness_BUILD_LOG_SHA256=$(sha256sum "$log" | awk '{print $1}')"
           rm -f "$log"
           if [ "$rc" -ne 0 ]; then exit "$rc"; fi
-          echo 'MMIBKR_PR711 Account Hygiene_BUILD_STATUS=PASS'
+          echo 'MMIBKR_PR713 Account Hygiene Freshness_BUILD_STATUS=PASS'
 
       - name: Validate attribution-safe lifecycle contracts
         shell: bash
         run: |
           set -euo pipefail
-          log="$RUNNER_TEMP/pr711-account-hygiene-tests.log"
+          log="$RUNNER_TEMP/pr713-account-hygiene-tests.log"
           set +e
           docker run --rm \
             -e ENABLE_LIVE_TRADING=0 \
             -e PYTHONDONTWRITEBYTECODE=1 \
-            "mmibkr-pr711-account-hygiene:$GITHUB_RUN_ID" \
+            "mmibkr-pr713-account-hygiene:$GITHUB_RUN_ID" \
             python -m unittest -v \
               tests.test_ibkr_remote_account_hygiene_slot_v1 \
               tests.test_ibkr_remote_selected_runtime_paper_execute_slot_v1 \
@@ -207,20 +207,20 @@ jobs:
           for raw in Path(sys.argv[1]).read_text(errors='replace').splitlines():
               line = raw.strip()
               if re.match(r'^test_[A-Za-z0-9_]+ .* \.\.\. (ok|FAIL|ERROR)$', line):
-                  print('MMIBKR_PR711 Account Hygiene_SAFE_DIAGNOSTIC=' + line)
+                  print('MMIBKR_PR713 Account Hygiene Freshness_SAFE_DIAGNOSTIC=' + line)
               elif line.startswith('FAILED (') or line == 'OK':
-                  print('MMIBKR_PR711 Account Hygiene_SAFE_DIAGNOSTIC=' + line)
+                  print('MMIBKR_PR713 Account Hygiene Freshness_SAFE_DIAGNOSTIC=' + line)
           PY
-            echo "MMIBKR_PR711 Account Hygiene_TEST_STATUS=FAIL"
-            echo "MMIBKR_PR711 Account Hygiene_TEST_LOG_SHA256=$sha"
-            echo "MMIBKR_PR711 Account Hygiene_TEST_LOG_BYTES=$bytes"
+            echo "MMIBKR_PR713 Account Hygiene Freshness_TEST_STATUS=FAIL"
+            echo "MMIBKR_PR713 Account Hygiene Freshness_TEST_LOG_SHA256=$sha"
+            echo "MMIBKR_PR713 Account Hygiene Freshness_TEST_LOG_BYTES=$bytes"
             rm -f "$log"
             exit "$rc"
           fi
           rm -f "$log"
-          echo 'MMIBKR_PR711 Account Hygiene_TEST_STATUS=PASS'
-          echo "MMIBKR_PR711 Account Hygiene_TEST_LOG_SHA256=$sha"
-          echo "MMIBKR_PR711 Account Hygiene_TEST_LOG_BYTES=$bytes"
+          echo 'MMIBKR_PR713 Account Hygiene Freshness_TEST_STATUS=PASS'
+          echo "MMIBKR_PR713 Account Hygiene Freshness_TEST_LOG_SHA256=$sha"
+          echo "MMIBKR_PR713 Account Hygiene Freshness_TEST_LOG_BYTES=$bytes"
           echo 'MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0'
 
       - name: Emit sanitized validation receipt
@@ -229,8 +229,8 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           import json, os
-          print('MMIBKR_PR711 Account Hygiene_VALIDATION_RECEIPT=' + json.dumps({
-              'schema': 'mmibkr.private_pr711_account_hygiene_validation.v1',
+          print('MMIBKR_PR713 Account Hygiene Freshness_VALIDATION_RECEIPT=' + json.dumps({
+              'schema': 'mmibkr.private_pr713_account_hygiene_validation.v1',
               'status': 'PASS',
               'source_sha': os.environ['PRIVATE_SOURCE_SHA'],
               'source_archive_sha256': os.environ['PRIVATE_ARCHIVE_SHA256'],
@@ -252,6 +252,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker image rm "mmibkr-pr711-account-hygiene:$GITHUB_RUN_ID" >/dev/null 2>&1 || true
-          sudo rm -rf "$RUNNER_TEMP/mmibkr-pr711-account-hygiene" "$RUNNER_TEMP/mmibkr-pr711-account-hygiene.tar.gz" "$RUNNER_TEMP/pr711-account-hygiene-build.log" "$RUNNER_TEMP/pr711-account-hygiene-tests.log"
-          echo 'MMIBKR_PR711 Account Hygiene_PRIVATE_SOURCE_DESTROYED=1'
+          docker image rm "mmibkr-pr713-account-hygiene:$GITHUB_RUN_ID" >/dev/null 2>&1 || true
+          sudo rm -rf "$RUNNER_TEMP/mmibkr-pr713-account-hygiene" "$RUNNER_TEMP/mmibkr-pr713-account-hygiene.tar.gz" "$RUNNER_TEMP/pr713-account-hygiene-build.log" "$RUNNER_TEMP/pr713-account-hygiene-tests.log"
+          echo 'MMIBKR_PR713 Account Hygiene Freshness_PRIVATE_SOURCE_DESTROYED=1'
