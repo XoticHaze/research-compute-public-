@@ -76,12 +76,6 @@ def _validate_payload(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         raise SystemExit("private execution contract mismatch")
     if contract.get("seed_id") != "W96":
         raise SystemExit("unexpected seed identity")
-    try:
-        capital = float(contract.get("capital_basis"))
-    except Exception as exc:
-        raise SystemExit("capital_basis missing or invalid") from exc
-    if capital <= 0:
-        raise SystemExit("capital_basis must be positive")
     if not str(contract.get("research_foundry_ref") or "").strip():
         raise SystemExit("research-foundry lineage missing")
     if not str(contract.get("corpus_source_id") or "").strip():
@@ -103,7 +97,7 @@ def _validate_payload(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     return contract, source
 
 
-def _adapter_receipt(root: Path, capital_basis: float) -> tuple[dict[str, Any], str]:
+def _adapter_receipt(root: Path) -> tuple[dict[str, Any], str]:
     adapter = Path(__file__).with_name("p01_crw_dca_adapter_consumer_v1.py")
     command = [
         sys.executable,
@@ -120,8 +114,6 @@ def _adapter_receipt(root: Path, capital_basis: float) -> tuple[dict[str, Any], 
         EXPECTED_CORPUS_SHA256,
         "--expected-corpus-bytes",
         str(EXPECTED_CORPUS_BYTES),
-        "--capital-basis",
-        str(capital_basis),
     ]
     completed = subprocess.run(command, check=True, text=True, capture_output=True)
     receipt: dict[str, Any] | None = None
@@ -160,7 +152,7 @@ def main() -> int:
         root = Path(tmp)
         _safe_extract(plaintext, root)
         contract, source = _validate_payload(root)
-        adapter_receipt, inner_sha = _adapter_receipt(root, float(contract["capital_basis"]))
+        adapter_receipt, inner_sha = _adapter_receipt(root)
 
     receipt = dict(adapter_receipt)
     receipt["public_harness"] = HARNESS
