@@ -777,10 +777,6 @@ export class SourceExchange {
       };
     }
 
-    if (!APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha)) {
-      throw new Error('vault_source_snapshot_not_approved');
-    }
-
     const approvalKey = `vaultapproval:${sourceSha}`;
     const existing = await this.ctx.storage.get(approvalKey);
     if (existing) {
@@ -799,15 +795,27 @@ export class SourceExchange {
     const streamAttestation = await this.ctx.storage.get(
       `attest:${sourceSha}:${archiveSha}`,
     );
+    const validStreamAttestation = Boolean(
+      streamAttestation
+      && streamAttestation.schema === 'mmibkr-cloud-source-fleet-stream-attestation-v1'
+      && streamAttestation.source_ref === sourceSha
+      && streamAttestation.source_sha === sourceSha
+      && streamAttestation.plaintext_sha256 === archiveSha
+      && Number(streamAttestation.archive_bytes) === archiveBytes
+      && streamAttestation.source_transport
+        === 'fleet_authority_oidc_private_archive_stream'
+    );
+    const reusableExactShaBootstrapAttestation = Boolean(
+      validStreamAttestation
+      && matchesIdentity(
+        streamAttestation.producer_identity,
+        SOURCE_VAULT_BOOTSTRAP_IDENTITY,
+      )
+    );
+    const legacyApprovedStream = APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha);
     if (
-      !streamAttestation
-      || streamAttestation.schema !== 'mmibkr-cloud-source-fleet-stream-attestation-v1'
-      || streamAttestation.source_ref !== sourceSha
-      || streamAttestation.source_sha !== sourceSha
-      || streamAttestation.plaintext_sha256 !== archiveSha
-      || Number(streamAttestation.archive_bytes) !== archiveBytes
-      || streamAttestation.source_transport
-        !== 'fleet_authority_oidc_private_archive_stream'
+      !validStreamAttestation
+      || (!legacyApprovedStream && !reusableExactShaBootstrapAttestation)
     ) {
       throw new Error('vault_source_snapshot_not_approved');
     }
