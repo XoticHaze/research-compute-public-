@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import uuid
 from typing import Any, Mapping
 from urllib.error import HTTPError
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -34,6 +35,16 @@ PRIVATE_REPOSITORY = "XoticHaze/mm-IBKR"
 PRIVATE_WORKFLOW_PREFIX = (
     "XoticHaze/mm-IBKR/.github/workflows/mmibkr-cloud-source-producer-r1.yml@"
 )
+DIRECT_PRIVATE_ATTESTATION_SCHEMA = "mmibkr-cloud-source-private-attestation-v1"
+FLEET_STREAM_ATTESTATION_SCHEMA = "mmibkr-cloud-source-fleet-stream-attestation-v1"
+FLEET_STREAM_TRANSPORT = "fleet_authority_oidc_private_archive_stream"
+SOURCE_VAULT_BOOTSTRAP_REPOSITORY = "XoticHaze/mm-ibkr-runtime"
+SOURCE_VAULT_BOOTSTRAP_REF = "refs/heads/main"
+SOURCE_VAULT_BOOTSTRAP_WORKFLOW = (
+    "XoticHaze/mm-ibkr-runtime/.github/workflows/"
+    "mmibkr-source-vault-bootstrap-r1.yml@refs/heads/main"
+)
+SOURCE_VAULT_BOOTSTRAP_EVENTS = {"push", "workflow_dispatch"}
 MAX_ARCHIVE_BYTES = 150 * 1024 * 1024
 
 
@@ -169,7 +180,12 @@ def _producer_attestation(
 ) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise RuntimeError("b1_private_source_attestation_missing")
-    if value.get("schema") != "mmibkr-cloud-source-private-attestation-v1":
+
+    schema = str(value.get("schema") or "")
+    if schema not in {
+        DIRECT_PRIVATE_ATTESTATION_SCHEMA,
+        FLEET_STREAM_ATTESTATION_SCHEMA,
+    }:
         raise RuntimeError("b1_private_source_attestation_schema_rejected")
     if str(value.get("source_sha") or "").lower() != ticket["head"]:
         raise RuntimeError("b1_private_source_attestation_head_mismatch")
@@ -177,18 +193,68 @@ def _producer_attestation(
         raise RuntimeError("b1_private_source_attestation_digest_mismatch")
     if int(value.get("archive_bytes") or 0) != ticket["archive_bytes"]:
         raise RuntimeError("b1_private_source_attestation_size_mismatch")
+
     producer = value.get("producer_identity")
     if not isinstance(producer, Mapping):
         raise RuntimeError("b1_private_source_producer_identity_missing")
-    if producer.get("repository") != PRIVATE_REPOSITORY:
-        raise RuntimeError("b1_private_source_producer_repository_rejected")
-    if str(producer.get("repository_visibility") or "") != "private":
-        raise RuntimeError("b1_private_source_producer_visibility_rejected")
-    workflow_ref = str(producer.get("workflow_ref") or "")
-    if not workflow_ref.startswith(PRIVATE_WORKFLOW_PREFIX):
-        raise RuntimeError("b1_private_source_producer_workflow_rejected")
     if str(producer.get("run_id") or "").isdigit() is not True:
         raise RuntimeError("b1_private_source_producer_run_id_rejected")
+
+    if schema == DIRECT_PRIVATE_ATTESTATION_SCHEMA:
+        if producer.get("repository") != PRIVATE_REPOSITORY:
+            raise RuntimeError("b1_private_source_producer_repository_rejected")
+        if str(producer.get("repository_visibility") or "") != "private":
+            raise RuntimeError("b1_private_source_producer_visibility_rejected")
+        workflow_ref = str(producer.get("workflow_ref") or "")
+        if not workflow_ref.startswith(PRIVATE_WORKFLOW_PREFIX):
+            raise RuntimeError("b1_private_source_producer_workflow_rejected")
+        return dict(value)
+
+    required_stream_fields = {
+        "schema",
+        "source_ref",
+        "source_sha",
+        "plaintext_sha256",
+        "archive_bytes",
+        "producer_identity",
+        "stream_id",
+        "attested_at",
+        "source_transport",
+    }
+    if set(value) != required_stream_fields:
+        raise RuntimeError("b1_fleet_stream_attestation_field_set_rejected")
+    if str(value.get("source_ref") or "").lower() != ticket["head"]:
+        raise RuntimeError("b1_fleet_stream_attestation_source_ref_mismatch")
+    if value.get("source_transport") != FLEET_STREAM_TRANSPORT:
+        raise RuntimeError("b1_fleet_stream_attestation_transport_rejected")
+    stream_id = str(value.get("stream_id") or "").lower()
+    try:
+        parsed_stream_id = str(uuid.UUID(stream_id))
+    except (ValueError, AttributeError) as exc:
+        raise RuntimeError("b1_fleet_stream_attestation_stream_id_rejected") from exc
+    if parsed_stream_id != stream_id:
+        raise RuntimeError("b1_fleet_stream_attestation_stream_id_rejected")
+
+    required_producer_fields = {
+        "repository",
+        "ref",
+        "workflow_ref",
+        "event_name",
+        "run_id",
+        "run_attempt",
+    }
+    if set(producer) != required_producer_fields:
+        raise RuntimeError("b1_fleet_stream_producer_identity_field_set_rejected")
+    if producer.get("repository") != SOURCE_VAULT_BOOTSTRAP_REPOSITORY:
+        raise RuntimeError("b1_fleet_stream_producer_repository_rejected")
+    if producer.get("ref") != SOURCE_VAULT_BOOTSTRAP_REF:
+        raise RuntimeError("b1_fleet_stream_producer_ref_rejected")
+    if producer.get("workflow_ref") != SOURCE_VAULT_BOOTSTRAP_WORKFLOW:
+        raise RuntimeError("b1_fleet_stream_producer_workflow_rejected")
+    if producer.get("event_name") not in SOURCE_VAULT_BOOTSTRAP_EVENTS:
+        raise RuntimeError("b1_fleet_stream_producer_event_rejected")
+    if str(producer.get("run_attempt") or "").isdigit() is not True:
+        raise RuntimeError("b1_fleet_stream_producer_run_attempt_rejected")
     return dict(value)
 
 
