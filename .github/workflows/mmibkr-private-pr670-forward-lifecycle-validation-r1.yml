@@ -17,7 +17,7 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  PRIVATE_SOURCE_SHA: 7e6c9fba036f26c05022896ada6f98fb79b1e560
+  PRIVATE_SOURCE_SHA: 7a76b63042aaa2e38784ac0b35ec781703c93f5a
 
 jobs:
   exact-private-pr670-validation:
@@ -193,6 +193,7 @@ jobs:
             "mmibkr-pr670:$GITHUB_RUN_ID" \
             python -m unittest -v \
               tests.test_selected_runtime_forward_execution_lifecycle_v1 \
+              tests.test_selected_runtime_cloud_cycle_v1 \
               tests.test_ibkr_remote_selected_runtime_paper_execute_slot_v1 \
             >"$log" 2>&1
           rc=$?
@@ -235,6 +236,7 @@ jobs:
               'source_archive_sha256': os.environ['PRIVATE_ARCHIVE_SHA256'],
               'source_archive_bytes': int(os.environ['PRIVATE_ARCHIVE_BYTES']),
               'lifecycle_attribution_tests': True,
+              'cloud_cycle_hook_tests': True,
               'paper_execute_contract_tests': True,
               'private_source_token_exposed': False,
               'private_plaintext_published': False,
