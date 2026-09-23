@@ -465,6 +465,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     const paperAccountHygieneCoordinatorPathAllowed = (
       pathname === '/v1/source-vault/unwrap'
       || /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname)
+      || pathname === '/v1/source-vault/private-archive/attest'
       || pathname === '/v1/source-exchange/relay/request'
       || /^\/v1\/source-exchange\/relay\/response\/\d+\/chunk\/\d+$/.test(pathname)
       || /^\/v1\/source-exchange\/relay\/response\/\d+\/manifest$/.test(pathname)
