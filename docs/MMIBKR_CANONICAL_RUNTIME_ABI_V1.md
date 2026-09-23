@@ -8,15 +8,32 @@ Provide one portable, fail-closed execution ABI for established MM-IBKR research
 
 The dispatcher is **not** an arbitrary command runner. A request selects only a registered `capability_id`; module/path/callable identity is fixed by the public capability registry and independently bound to an exact Git blob SHA from the pinned private source tree.
 
-## Initial capability
+## Integration stack
 
-`STRATEGY_SPEC_VALIDATE` binds to:
+The reviewed stack order is:
 
-- path: `autotuner_strategy_bridge.py`
-- module: `autotuner_strategy_bridge`
-- callable: `normalize_strategy_spec`
+1. canonical dispatcher/plan ABI (#1620)
+2. claim leases + budget-aware session runtime (#1643)
+3. governed research capabilities (#1624)
 
-The first slice intentionally proves the ABI before adding CRW backtest, data materialization, AutoTuner, Model Lab, News, or Options adapters.
+Capability adapters inherit the same claim/cache/session substrate. Do not merge #1624 as a sibling dispatcher fork or drop the lease/session semantics when resolving the stack.
+
+## Implemented capability bindings
+
+The portable ABI currently carries these research-only bindings:
+
+| Capability | Canonical private owner | Portable contract |
+| --- | --- | --- |
+| `STRATEGY_SPEC_VALIDATE` | `autotuner_strategy_bridge.normalize_strategy_spec` | normalize and digest one StrategySpec |
+| `CRW_BACKTEST` | `scripts.operator.crw_backtest_summary_13z.run_backtest` | execute canonical CRW replay over exact governed datasets |
+| `AUTOTUNER_PARAMETER_CONSUMPTION` | `autotuner_parameter_consumption.parameter_schema_for_tuning` | derive the searchable CRW parameter surface from the pinned private strategy schema |
+| `AUTOTUNER_CANDIDATE_GENERATE` | `autotuner_strategy_bridge.candidate_mutations` | generate a bounded mutation set only after the canonical consumption gate |
+
+CRW backtest callers cannot supply absolute source paths. The request carries per-symbol relative paths, byte counts, and SHA-256 identities under a governed `--input-root`; the dispatcher verifies them and injects canonical `_verified_source_paths` only after admission.
+
+AutoTuner callers cannot supply their own parameter schema. The dispatcher derives `CrwScoreMultiModeStrategy.parameter_schema()` from the same pinned private source, applies the canonical consumption gate, and records the relevant private Git blob identities in the receipt.
+
+Data materialization, feature/preview, campaign validation, Model Lab, News, and Options remain dependency-ordered additions rather than one-off workflow families.
 
 ## Request contract
 
@@ -65,6 +82,7 @@ python scripts/mmibkr_canonical_workload_dispatch_v1.py run \
   --request request.json \
   --source-root /private/mm-source \
   --source-receipt mmibkr-private-source.json \
+  --input-root /governed/input-root \
   --receipt-dir runtime-state
 ```
 
@@ -75,17 +93,17 @@ python scripts/mmibkr_canonical_workload_dispatch_v1.py plan-run \
   --plan plan.json \
   --source-root /private/mm-source \
   --source-receipt mmibkr-private-source.json \
+  --input-root /governed/input-root \
   --receipt-dir runtime-state
 ```
 
 ## Next dependency-ordered additions
 
-1. `CRW_BACKTEST`, with #1607 and #1549 as real acceptance consumers.
-2. governed data input adapters and `CANONICAL_DATA_MATERIALIZE`.
-3. feature validation / strategy preview.
-4. AutoTuner campaign/validation.
-5. Model Lab.
-6. deterministic News and Options intelligence adapters.
-7. explicit claim leases/checkpoints and budget-aware worker loop.
+1. consume #1607 and #1549 through the generalized `CRW_BACKTEST` binding as regression/acceptance fixtures;
+2. governed data materialization and `FEATURE_CONTRACT_VALIDATE` / `STRATEGY_PREVIEW`;
+3. AutoTuner campaign + primary validation on top of the admitted parameter/candidate routes;
+4. Model Lab first consumer, orchestration, and comparison validation;
+5. deterministic News and Options intelligence adapters from #1618;
+6. explicit claim leases/checkpoints and the budget-aware worker loop from #1617.
 
 Cloud transports remain replaceable adapters. Broker/runtime/live authorities remain separate.
