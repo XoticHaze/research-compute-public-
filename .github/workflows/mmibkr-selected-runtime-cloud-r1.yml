@@ -56,6 +56,8 @@ on:
       - main
     paths:
       - .github/workflows/mmibkr-selected-runtime-cloud-r1.yml
+      - .github/workflows/mmibkr-selected-runtime-cloud-watchdog-r1.yml
+      - tests/test_mmibkr_cloud_owner_reusable_vault_contract_v1.py
       - scripts/mmibkr_source_vault_consumer_v1.py
       - tests/test_mmibkr_source_vault_consumer_v1.py
       - tests/test_mmibkr_source_vault_fetch_retry_v1.py
