@@ -269,7 +269,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn("PRIVATE_PR709_BOUNDARY_EXPIRY_VALIDATION_EXPIRES_AT", text)
-        self.assertIn("2026-09-23T18:00:00Z", text)
+        self.assertIn("2026-09-23T22:00:00Z", text)
         self.assertIn("matchedPrivatePr709BoundaryExpiryValidation", text)
         self.assertIn(
             "(matchedPrivatePr709BoundaryExpiryValidation && privateArchivePathAllowed)",
@@ -308,11 +308,11 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            "6a20403d771cbcf40ae475f8f66979973debe57b",
+            "2e95486996f62bf2aafd22a2496fa1eff76e0b8c",
             text,
         )
         self.assertIn("PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_EXPIRES_AT", text)
-        self.assertIn("2026-09-23T18:00:00Z", text)
+        self.assertIn("2026-09-23T22:00:00Z", text)
         self.assertIn("matchedPrivatePr711AccountHygieneValidation", text)
         self.assertIn(
             "(matchedPrivatePr711AccountHygieneValidation && privateArchivePathAllowed)",
@@ -330,7 +330,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             / "mmibkr-private-pr711-account-hygiene-validation-r1.yml"
         ).read_text(encoding="utf-8")
         self.assertIn(
-            "PRIVATE_SOURCE_SHA: 6a20403d771cbcf40ae475f8f66979973debe57b",
+            "PRIVATE_SOURCE_SHA: 2e95486996f62bf2aafd22a2496fa1eff76e0b8c",
             workflow,
         )
         self.assertIn("tests.test_ibkr_remote_account_hygiene_slot_v1", workflow)
@@ -420,7 +420,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            "6a20403d771cbcf40ae475f8f66979973debe57b",
+            "2e95486996f62bf2aafd22a2496fa1eff76e0b8c",
             text,
         )
         self.assertIn(
