@@ -77,7 +77,7 @@ def validate_source_identity(
     expected_source_ref: str,
 ) -> dict[str, Any]:
     node = _load_json(materialization_path)
-    if node.get("schema") != "mmibkr.cloud_source_materialization.v1":
+    if node.get("schema") != "mmibkr.attested_source_materialization.v2":
         raise RuntimeError("source_materialization_schema_rejected")
     if node.get("ok") is not True:
         raise RuntimeError("source_materialization_not_ok")
@@ -97,6 +97,15 @@ def validate_source_identity(
         raise RuntimeError("broker_credential_contract_rejected")
     if node.get("plaintext_emitted") is not False:
         raise RuntimeError("plaintext_emission_contract_rejected")
+    if node.get("live_execution_allowed") is not False:
+        raise RuntimeError("live_execution_contract_rejected")
+    if node.get("vault_attestation_verified") is not True:
+        raise RuntimeError("vault_attestation_contract_rejected")
+    if node.get("source_transport") != "fleet_authority_exact_sha_encrypted_snapshot_vault":
+        raise RuntimeError("source_transport_contract_rejected")
+    manifest_sha = str(node.get("source_manifest_sha256") or "").lower()
+    if len(manifest_sha) != 64 or any(ch not in "0123456789abcdef" for ch in manifest_sha):
+        raise RuntimeError("source_manifest_sha_rejected")
     return node
 
 
@@ -206,7 +215,9 @@ def run_probe(
                 "source_sha": identity["source_sha"],
                 "source_archive_sha256": identity["source_archive_sha256"],
                 "source_archive_bytes": int(identity["source_archive_bytes"]),
-                "producer_identity": identity.get("producer_identity"),
+                "source_manifest_sha256": identity.get("source_manifest_sha256"),
+                "source_transport": identity.get("source_transport"),
+                "vault_attestation_verified": identity.get("vault_attestation_verified") is True,
             },
             "build": build,
             "test_modules": module_rows,
