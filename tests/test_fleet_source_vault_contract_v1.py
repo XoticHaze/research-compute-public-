@@ -265,6 +265,51 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
         self.assertNotIn('cat "$log"', workflow)
 
+    def test_private_test_probe_is_main_identity_and_source_exchange_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("PRIVATE_TEST_PROBE_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-private-test-probe-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn("matchedPrivateTestProbe", text)
+        self.assertIn("privateTestProbePathAllowed", text)
+        self.assertIn(
+            "(matchedPrivateTestProbe && privateTestProbePathAllowed)",
+            text,
+        )
+        self.assertIn("pathname === '/v1/source-exchange/request'", text)
+        self.assertIn(
+            r"^\/v1\/source-exchange\/response\/\d+$",
+            text,
+        )
+        self.assertIn(
+            r"^\/v1\/source-exchange\/response\/\d+\/chunk\/\d+$",
+            text,
+        )
+        self.assertIn(
+            r"^\/v1\/source-exchange\/cleanup\/\d+$",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedPrivateTestProbe && privateArchivePathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedPrivateTestProbe && operatorDeployPathAllowed)",
+            text,
+        )
+
+        workflow = (
+            ROOT
+            / ".github"
+            / "workflows"
+            / "mmibkr-private-test-probe-r1.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("id-token: write", workflow)
+        self.assertIn("contents: read", workflow)
+        self.assertNotIn("actions: write", workflow)
+
     def test_private_promotion_review_validation_is_exact_sha_expiring_and_archive_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_IDENTITY", text)
