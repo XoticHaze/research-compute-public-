@@ -1,0 +1,9 @@
+{
+  "schema": "mmibkr.paper_account_hygiene_coordinator_fire.v1",
+  "execute": false,
+  "batch_size": 5,
+  "operator_approved": true,
+  "operator_ack": "MMIBKR_PAPER_ACCOUNT_HYGIENE_ACK_V1",
+  "requested_by": "assistant-667-679-ownership-safe-preflight",
+  "reason": "fresh ownership-aware snapshot proved selected-runtime strategy inventory flat; run canonical non-mutating hygiene preflight only"
+}
