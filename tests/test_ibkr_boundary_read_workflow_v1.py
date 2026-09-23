@@ -35,8 +35,12 @@ class BoundaryReadWorkflowTests(unittest.TestCase):
             self.text,
         )
         self.assertIn("mode not in {'readonly','paper_execute'}", self.text)
-        writable = self.text.index('if [ "$IBKR_PAPER_PROOF_MODE" = "1" ] || [ "$IBKR_PAPER_EXECUTE_MODE" = "1" ]; then')
-        block = self.text[writable:writable + 220]
+        writable = self.text.index("api_read_only=yes")
+        writable_end = self.text.index('echo "IBKR_GATEWAY_READ_ONLY_API=${api_read_only}"', writable)
+        block = self.text[writable:writable_end]
+        self.assertIn('IBKR_PAPER_PROOF_MODE" = "1"', block)
+        self.assertIn('IBKR_PAPER_EXECUTE_MODE" = "1"', block)
+        self.assertIn('IBKR_PAPER_ACCOUNT_HYGIENE_MODE" = "1"', block)
         self.assertIn("api_read_only=no", block)
 
         handoff = self.text.index("name: Materialize canonical post-auth broker and forward-data handoff")
