@@ -40,6 +40,16 @@ CAPABILITIES={
         "module":"autotuner_strategy_bridge",
         "callable":"candidate_mutations",
     },
+    "AUTOTUNER_CAMPAIGN":{
+        "path":"autotuner_campaign_runner.py",
+        "module":"autotuner_campaign_runner",
+        "callable":"run_campaign_iteration",
+    },
+    "AUTOTUNER_PRIMARY_VALIDATION":{
+        "path":"autotuner_primary_validation_runner.py",
+        "module":"autotuner_primary_validation_runner",
+        "callable":"execute_primary_validation",
+    },
 }
 _SHA1=re.compile(r"^[0-9a-f]{40}$")
 _SHA256=re.compile(r"^[0-9a-f]{64}$")
@@ -190,6 +200,87 @@ def validate_autotuner_arguments(cid:str,args:Any)->dict:
     if max_candidates is not None:result["max_candidates"]=max_candidates
     return result
 
+def _crw_strategy_spec_from_args(args:dict,cid:str)->dict:
+    spec=args.get("strategy_spec")
+    if not isinstance(spec,dict):raise CanonicalDispatchError(f"{cid} strategy_spec must be object")
+    nested=spec.get("strategy_spec") if isinstance(spec.get("strategy_spec"),dict) else spec
+    if str(nested.get("strategy_id") or spec.get("strategy_id") or "")!="crw_score_multi_mode":
+        raise CanonicalDispatchError(f"{cid} strategy_id must be crw_score_multi_mode")
+    symbol=str(nested.get("symbol") or spec.get("symbol") or "").strip().upper()
+    timeframe=str(nested.get("timeframe") or spec.get("timeframe") or "").strip()
+    if not _SYMBOL.fullmatch(symbol):raise CanonicalDispatchError(f"{cid} symbol is invalid")
+    if not timeframe or len(timeframe)>32:raise CanonicalDispatchError(f"{cid} timeframe is invalid")
+    return deepcopy(spec)
+
+def _validated_tuner_dataset(args:dict,cid:str,input_root:Path|None)->dict:
+    if input_root is None:raise CanonicalDispatchError(f"{cid} requires governed input_root")
+    node=args.get("dataset")
+    return {k:v for k,v in resolve_dataset(input_root,"autotuner",node).items() if k in {"relative_path","sha256","bytes"}}
+
+def validate_autotuner_campaign_arguments(args:Any,input_root:Path|None)->dict:
+    cid="AUTOTUNER_CAMPAIGN"
+    if not isinstance(args,dict):raise CanonicalDispatchError(f"{cid} arguments must be object")
+    exact(args,{"strategy_spec","dataset","tune_parameters","advisory_suggestions","batch_size","coarse_points","score_tolerance_fraction","state","history"},cid+" arguments")
+    spec=_crw_strategy_spec_from_args(args,cid)
+    dataset=_validated_tuner_dataset(args,cid,input_root)
+    tune=validate_tune_parameters(args.get("tune_parameters"))
+    try:
+        batch=int(args.get("batch_size",12)); coarse=int(args.get("coarse_points",5)); tolerance=float(args.get("score_tolerance_fraction",0.05))
+    except Exception as e:raise CanonicalDispatchError(f"{cid} numeric bounds are invalid") from e
+    if not 1<=batch<=32:raise CanonicalDispatchError(f"{cid} batch_size must be within 1..32")
+    if not 2<=coarse<=11:raise CanonicalDispatchError(f"{cid} coarse_points must be within 2..11")
+    if not 0.0<=tolerance<=0.5:raise CanonicalDispatchError(f"{cid} score_tolerance_fraction must be within 0..0.5")
+    advisory=args.get("advisory_suggestions") or []
+    if not isinstance(advisory,list) or len(advisory)>32:raise CanonicalDispatchError(f"{cid} advisory_suggestions must be list <=32")
+    normalized_advisory=[]
+    for idx,row in enumerate(advisory):
+        if not isinstance(row,dict):raise CanonicalDispatchError(f"{cid} advisory_suggestions[{idx}] must be object")
+        exact(row,{"parameter","values","hypothesis","rationale"},f"{cid} advisory_suggestions[{idx}]")
+        parameter=str(row.get("parameter") or "").strip()
+        values=row.get("values")
+        if not _ID.fullmatch(parameter) or not isinstance(values,list) or not values or len(values)>16:
+            raise CanonicalDispatchError(f"{cid} advisory_suggestions[{idx}] is invalid")
+        hypothesis=str(row.get("hypothesis") or "")
+        rationale=str(row.get("rationale") or "")
+        if len(hypothesis)>1000 or len(rationale)>1000:raise CanonicalDispatchError(f"{cid} advisory text is too long")
+        normalized_advisory.append({"parameter":parameter,"values":deepcopy(values),"hypothesis":hypothesis,"rationale":rationale})
+    state=args.get("state"); history=args.get("history")
+    if state is not None and not isinstance(state,dict):raise CanonicalDispatchError(f"{cid} state must be object or null")
+    if history is not None and not isinstance(history,dict):raise CanonicalDispatchError(f"{cid} history must be object or null")
+    return {
+        "strategy_spec":spec,"dataset":dataset,"tune_parameters":tune,
+        "advisory_suggestions":normalized_advisory,"batch_size":batch,"coarse_points":coarse,
+        "score_tolerance_fraction":tolerance,"state":deepcopy(state),"history":deepcopy(history),
+    }
+
+def validate_autotuner_primary_validation_arguments(args:Any,input_root:Path|None)->dict:
+    cid="AUTOTUNER_PRIMARY_VALIDATION"
+    if not isinstance(args,dict):raise CanonicalDispatchError(f"{cid} arguments must be object")
+    exact(args,{"strategy_spec","dataset","staged_plan","split_policy"},cid+" arguments")
+    spec=_crw_strategy_spec_from_args(args,cid)
+    dataset=_validated_tuner_dataset(args,cid,input_root)
+    plan=args.get("staged_plan")
+    if not isinstance(plan,dict):raise CanonicalDispatchError(f"{cid} staged_plan must be object")
+    data_ref=plan.get("canonical_data_ref")
+    if not isinstance(data_ref,dict) or str(data_ref.get("dataset_sha256") or "").lower()!=dataset["sha256"]:
+        raise CanonicalDispatchError(f"{cid} staged_plan dataset identity mismatch")
+    for key in ("automatic_promotion","automatic_strategy_spec_write","runtime_activation","broker_submit"):
+        if plan.get(key) not in (None,False):raise CanonicalDispatchError(f"{cid} staged_plan authority rejected: {key}")
+    policy=args.get("split_policy")
+    if not isinstance(policy,dict):raise CanonicalDispatchError(f"{cid} split_policy must be object")
+    exact(policy,{"start_year","test_span_years","embargo_bars","purge_bars","min_test_rows","warmup_bars"},cid+" split_policy")
+    normalized_policy={}
+    bounds={
+        "start_year":(1900,2200),"test_span_years":(1,20),"embargo_bars":(0,100000),
+        "purge_bars":(0,100000),"min_test_rows":(1,10000000),"warmup_bars":(0,1000000),
+    }
+    for key,(low,high) in bounds.items():
+        try:value=int(policy.get(key))
+        except Exception as e:raise CanonicalDispatchError(f"{cid} split_policy {key} must be integer") from e
+        if not low<=value<=high:raise CanonicalDispatchError(f"{cid} split_policy {key} outside bounds")
+        normalized_policy[key]=value
+    return {"strategy_spec":spec,"dataset":dataset,"staged_plan":deepcopy(plan),"split_policy":normalized_policy}
+
 def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None=None)->dict:
     exact(req,{"schema","job_id","capability_id","mmibkr","entrypoint","arguments","resources","authority","forbidden_authorities"},"request")
     if req.get("schema")!=REQUEST_SCHEMA:raise CanonicalDispatchError("unsupported request schema")
@@ -225,6 +316,10 @@ def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None
         normalized_args=validate_crw_arguments(args,input_root)
     elif cid in {"AUTOTUNER_PARAMETER_CONSUMPTION","AUTOTUNER_CANDIDATE_GENERATE"}:
         normalized_args=validate_autotuner_arguments(cid,args)
+    elif cid=="AUTOTUNER_CAMPAIGN":
+        normalized_args=validate_autotuner_campaign_arguments(args,input_root)
+    elif cid=="AUTOTUNER_PRIMARY_VALIDATION":
+        normalized_args=validate_autotuner_primary_validation_arguments(args,input_root)
     else:
         raise CanonicalDispatchError(f"capability executor is not implemented: {cid}")
     return {"schema":REQUEST_SCHEMA,"job_id":jid,"capability_id":cid,"mmibkr":mm,"entrypoint":{**cap,"git_blob_sha1":actual},"arguments":normalized_args,"resources":resources(req.get("resources")),"authority":AUTHORITY,"forbidden_authorities":dict(FORBIDDEN_AUTHORITY_ASSERTIONS)}
@@ -369,6 +464,47 @@ def sanitize_crw_result(raw:dict,args:dict)->dict:
     }
     return result
 
+def sanitize_public_tree(value:Any)->Any:
+    if isinstance(value,dict):
+        out={}
+        for key,node in value.items():
+            low=str(key).lower()
+            if low=="artifact_dir" or low.endswith("_path") or low in {"source_path","dataset_path"}:
+                continue
+            if low=="error" and isinstance(node,str):
+                out["error_class"]=node.split(":",1)[0][:128] if node else None
+                continue
+            out[key]=sanitize_public_tree(node)
+        return out
+    if isinstance(value,list):return [sanitize_public_tree(node) for node in value]
+    return value
+
+def governed_autotuner_backtest_runner(root:Path,dataset_path:Path,strategy_spec:dict):
+    runner=private_callable(root,"strategy_backtest_registry.py","strategy_backtest_registry","run_strategy_backtest")
+    nested=strategy_spec.get("strategy_spec") if isinstance(strategy_spec.get("strategy_spec"),dict) else strategy_spec
+    symbol=str(nested.get("symbol") or strategy_spec.get("symbol") or "").upper()
+    asset_type=str(nested.get("asset_type") or strategy_spec.get("asset_type") or "futures")
+    def run(payload:dict,_data_root:Path):
+        node=deepcopy(payload)
+        node["_verified_source_paths"]={symbol:str(dataset_path)}
+        node["asset_type"]=asset_type
+        return runner(node,dataset_path.parent)
+    return run
+
+def autotuner_campaign_dependencies(root:Path)->dict[str,str]:
+    paths=(
+        "autotuner_campaign_runner.py","autotuner_campaign_planner.py","autotuner_parameter_consumption.py",
+        "autotuner_strategy_bridge.py","strategy_backtest_registry.py","strategies/python/crw_score_multi_mode.py",
+    )
+    return {path:private_blob_identity(root,path) for path in paths}
+
+def autotuner_validation_dependencies(root:Path)->dict[str,str]:
+    paths=(
+        "autotuner_primary_validation_runner.py","autotuner_strategy_bridge.py",
+        "strategy_backtest_registry.py","model_lab_validation.py",
+    )
+    return {path:private_blob_identity(root,path) for path in paths}
+
 def execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
     fn=load_callable(root,CAPABILITIES[v["capability_id"]])
     if v["capability_id"]=="STRATEGY_SPEC_VALIDATE":
@@ -385,6 +521,58 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
         raw=fn(payload,input_root.resolve())
         if not isinstance(raw,dict):raise CanonicalDispatchError("canonical CRW backtest returned invalid contract")
         result=sanitize_crw_result(raw,v["arguments"])
+    elif v["capability_id"]=="AUTOTUNER_CAMPAIGN":
+        if input_root is None:raise CanonicalDispatchError("AUTOTUNER_CAMPAIGN requires governed input_root")
+        args=v["arguments"]; descriptor=resolve_dataset(input_root,"autotuner",args["dataset"])
+        normalized=normalized_crw_spec(root,args["strategy_spec"])
+        state=deepcopy(args["state"])
+        if state is None:
+            new_state=private_callable(root,"autotuner_campaign_planner.py","autotuner_campaign_planner","new_campaign_state")
+            state=new_state(normalized["strategy_spec_digest"])
+        history=deepcopy(args["history"])
+        if history is None:
+            history={"schema":"mm.autotuner_campaign_history.v1","strategy_spec_digest":normalized["strategy_spec_digest"],"results":[]}
+        report,next_state,next_history=fn(
+            strategy_payload=deepcopy(args["strategy_spec"]),data_root=descriptor["path"].parent,
+            state=state,history=history,tune_parameters=args["tune_parameters"],
+            advisory_suggestions=args["advisory_suggestions"],batch_size=args["batch_size"],
+            coarse_points=args["coarse_points"],score_tolerance_fraction=args["score_tolerance_fraction"],
+            backtest_runner=governed_autotuner_backtest_runner(root,descriptor["path"],args["strategy_spec"]),
+        )
+        if not isinstance(report,dict) or report.get("schema")!="mm.autotuner_campaign_iteration.v1":
+            raise CanonicalDispatchError("canonical AutoTuner campaign returned invalid contract")
+        decision=report.get("decision") or {}; safety=report.get("safety") or {}
+        for key,value in {"automatic_promotion":False,"automatic_strategy_spec_write":False}.items():
+            if decision.get(key) is not value:raise CanonicalDispatchError(f"AutoTuner campaign authority rejected: {key}")
+        for key,value in {"runtime_activation":False,"broker_submit":False,"live_unlock":False}.items():
+            if safety.get(key) is not value:raise CanonicalDispatchError(f"AutoTuner campaign safety rejected: {key}")
+        result={
+            "strategy_spec_digest":normalized["strategy_spec_digest"],
+            "dataset":{k:descriptor[k] for k in ("relative_path","sha256","bytes")},
+            "report":sanitize_public_tree(report),
+            "next_state":sanitize_public_tree(next_state),
+            "next_history":sanitize_public_tree(next_history),
+            "canonical_dependencies":autotuner_campaign_dependencies(root),
+        }
+    elif v["capability_id"]=="AUTOTUNER_PRIMARY_VALIDATION":
+        if input_root is None:raise CanonicalDispatchError("AUTOTUNER_PRIMARY_VALIDATION requires governed input_root")
+        args=v["arguments"]; descriptor=resolve_dataset(input_root,"autotuner",args["dataset"])
+        raw=fn(
+            deepcopy(args["staged_plan"]),deepcopy(args["strategy_spec"]),descriptor["path"],
+            split_policy=deepcopy(args["split_policy"]),
+        )
+        if not isinstance(raw,dict) or raw.get("schema")!="mm.autotuner_primary_validation_execution.v1" or raw.get("state")!="PRIMARY_VALIDATION_EXECUTED":
+            raise CanonicalDispatchError("canonical AutoTuner primary validation returned invalid contract")
+        for key in ("automatic_promotion","automatic_strategy_spec_write","runtime_activation","broker_submit"):
+            if raw.get(key) is not False:raise CanonicalDispatchError(f"AutoTuner validation authority rejected: {key}")
+        trades=raw.get("validation_trade_results") or []
+        if not isinstance(trades,list):raise CanonicalDispatchError("AutoTuner validation trade results are invalid")
+        public=sanitize_public_tree({k:value for k,value in raw.items() if k!="validation_trade_results"})
+        public["validation_trade_result_count"]=len(trades)
+        public["validation_trade_results_sha256"]=sha(trades)
+        public["dataset"]={k:descriptor[k] for k in ("relative_path","sha256","bytes")}
+        public["canonical_dependencies"]=autotuner_validation_dependencies(root)
+        result=public
     elif v["capability_id"]=="AUTOTUNER_PARAMETER_CONSUMPTION":
         normalized,filtered,consumption=autotuner_gate(root,v["arguments"])
         result={
