@@ -398,12 +398,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     const matchedPrivatePr671Validation = matchesIdentity(claims, PRIVATE_PR671_EXACT_VALIDATION_IDENTITY);
     const matchedPrivatePromotionReviewValidation = matchesIdentity(claims, PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_IDENTITY);
     const matchedPrivateTestProbe = matchesIdentity(claims, PRIVATE_TEST_PROBE_IDENTITY);
-    const privateTestProbePathAllowed = (
-      pathname === '/v1/source-exchange/request'
-      || /^\/v1\/source-exchange\/response\/\d+$/.test(pathname)
-      || /^\/v1\/source-exchange\/response\/\d+\/chunk\/\d+$/.test(pathname)
-      || /^\/v1\/source-exchange\/cleanup\/\d+$/.test(pathname)
-    );
+    const privateTestProbeUnwrapPathAllowed = pathname === '/v1/source-vault/unwrap';
     const privateArchivePathAllowed = (
       /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname)
       || pathname === '/v1/source-vault/private-archive/attest'
@@ -421,7 +416,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
         || (matchedPrivatePr670Validation && privateArchivePathAllowed)
         || (matchedPrivatePr671Validation && privateArchivePathAllowed)
         || (matchedPrivatePromotionReviewValidation && privateArchivePathAllowed)
-        || (matchedPrivateTestProbe && privateTestProbePathAllowed)
+        || (matchedPrivateTestProbe && privateTestProbeUnwrapPathAllowed)
       )
       || claims.repository_visibility !== 'public'
       || !ALLOWED_PUBLIC_EVENTS.has(claims.event_name)

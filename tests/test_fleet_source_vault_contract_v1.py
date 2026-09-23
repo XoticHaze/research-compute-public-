@@ -293,7 +293,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
         self.assertNotIn('cat "$log"', workflow)
 
-    def test_private_test_probe_is_main_identity_and_source_exchange_only(self):
+    def test_private_test_probe_is_main_identity_and_vault_unwrap_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("PRIVATE_TEST_PROBE_IDENTITY", text)
         self.assertIn(
@@ -301,22 +301,13 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn("matchedPrivateTestProbe", text)
-        self.assertIn("privateTestProbePathAllowed", text)
+        self.assertIn("privateTestProbeUnwrapPathAllowed", text)
         self.assertIn(
-            "(matchedPrivateTestProbe && privateTestProbePathAllowed)",
-            text,
-        )
-        self.assertIn("pathname === '/v1/source-exchange/request'", text)
-        self.assertIn(
-            r"^\/v1\/source-exchange\/response\/\d+$",
+            "const privateTestProbeUnwrapPathAllowed = pathname === '/v1/source-vault/unwrap';",
             text,
         )
         self.assertIn(
-            r"^\/v1\/source-exchange\/response\/\d+\/chunk\/\d+$",
-            text,
-        )
-        self.assertIn(
-            r"^\/v1\/source-exchange\/cleanup\/\d+$",
+            "(matchedPrivateTestProbe && privateTestProbeUnwrapPathAllowed)",
             text,
         )
         self.assertNotIn(
@@ -325,6 +316,10 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         )
         self.assertNotIn(
             "(matchedPrivateTestProbe && operatorDeployPathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedPrivateTestProbe && privateTestProbePathAllowed)",
             text,
         )
 
