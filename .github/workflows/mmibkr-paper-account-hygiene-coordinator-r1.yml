@@ -26,6 +26,8 @@ on:
       - 'tests/test_mmibkr_operator_console_worker_v1.py'
       - 'tests/test_fleet_source_vault_contract_v1.py'
       - 'tests/test_mmibkr_paper_account_hygiene_coordinator_v1.py'
+      - 'scripts/mmibkr_maintenance_operator_snapshot_refresh_v1.py'
+      - 'tests/test_mmibkr_maintenance_operator_snapshot_refresh_v1.py'
 
 permissions:
   contents: write
@@ -60,10 +62,13 @@ jobs:
       - name: Validate coordinator trust and workflow contracts
         run: |
           set -euo pipefail
+          python -m pip install --disable-pip-version-check cryptography==46.0.2
+          python -m py_compile scripts/mmibkr_maintenance_operator_snapshot_refresh_v1.py
           python -m unittest -v \
             tests.test_mmibkr_paper_account_hygiene_coordinator_v1 \
             tests.test_mmibkr_operator_console_worker_v1 \
-            tests.test_fleet_source_vault_contract_v1
+            tests.test_fleet_source_vault_contract_v1 \
+            tests.test_mmibkr_maintenance_operator_snapshot_refresh_v1
 
   coordinate:
     if: ${{ github.event_name != 'pull_request' }}
@@ -351,6 +356,55 @@ jobs:
           print('MMIBKR_HYGIENE_RUNTIME_SOURCE_SHA=' + node['source_sha'])
           print('MMIBKR_HYGIENE_RUNTIME_SOURCE_PRIVATE_TOKEN_USED=0')
           PY
+
+      - name: Refresh ownership snapshot under selected-runtime maintenance hold
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          refreshed="$RUNNER_TEMP/mmibkr-hygiene-snapshot-refreshed.json"
+          publish_meta="$RUNNER_TEMP/mmibkr-hygiene-snapshot-refresh-publish.json"
+
+          python scripts/mmibkr_maintenance_operator_snapshot_refresh_v1.py \
+            --snapshot "$RUNNER_TEMP/mmibkr-hygiene-snapshot.json" \
+            --maintenance-hold rendezvous/control/mmibkr-selected-runtime-cloud-maintenance-hold-r1.json \
+            --expected-source-sha "$RUNTIME_SOURCE_SHA" \
+            --output "$refreshed"
+
+          python scripts/mmibkr_operator_snapshot_publish_v1.py \
+            --snapshot "$refreshed" \
+            --operator-url "$OPERATOR_CONSOLE_URL" \
+            --caller-run-id "$GITHUB_RUN_ID" \
+            --output "$publish_meta" \
+            --mode final
+
+          python - "$refreshed" "$publish_meta" <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          snapshot = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          receipt = json.loads(Path(sys.argv[2]).read_text(encoding='utf-8'))
+          refresh = snapshot.get('maintenance_refresh') if isinstance(snapshot.get('maintenance_refresh'), dict) else {}
+          account = snapshot.get('account') if isinstance(snapshot.get('account'), dict) else {}
+          if refresh.get('exact_broker_position_identity_match') is not True:
+              raise SystemExit('maintenance refresh position identity proof missing')
+          if refresh.get('strategy_inventory_frozen_flat') is not True:
+              raise SystemExit('maintenance refresh flat inventory proof missing')
+          if refresh.get('broker_mutation') is not False or refresh.get('live_execution_allowed') is not False:
+              raise SystemExit('maintenance refresh authority boundary violated')
+          if int(account.get('open_orders_count') or 0) != 0:
+              raise SystemExit('maintenance refresh open orders are not clean')
+          if receipt.get('status') != 'accepted' or receipt.get('durable_readback_verified') is not True:
+              raise SystemExit('maintenance refresh Operator Snapshot publish not durable')
+          print('MMIBKR_HYGIENE_MAINTENANCE_SNAPSHOT_REFRESH=accepted')
+          print('MMIBKR_HYGIENE_REFRESHED_POSITION_COUNT=' + str(int(account.get('positions_count') or 0)))
+          print('MMIBKR_HYGIENE_REFRESHED_OPEN_ORDER_COUNT=0')
+          print('MMIBKR_HYGIENE_REFRESH_B1_RUN_ID=' + str(refresh.get('broker_snapshot_run_id') or ''))
+          print('MMIBKR_HYGIENE_REFRESH_BROKER_MUTATION=0')
+          print('MMIBKR_HYGIENE_REFRESH_LIVE_EXECUTION_ALLOWED=0')
+          PY
+
+          mv "$refreshed" "$RUNNER_TEMP/mmibkr-hygiene-snapshot.json"
+          rm -f "$publish_meta"
 
       - name: Run governed encrypted hygiene preflight or execution
         id: hygiene
