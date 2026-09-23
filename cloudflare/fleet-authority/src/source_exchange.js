@@ -227,6 +227,12 @@ const APPROVED_SOURCE_SNAPSHOTS = Object.freeze({
     archive_sha256: '72a6b205fa7d601162d8e9c79bb888fcc8f475c74f0b4b67229189b5fae58597',
     archive_bytes: 66322824,
   }),
+  '5e56997fe31987fb1ac471ebecb03795b6614887': Object.freeze({
+    source_ref: '5e56997fe31987fb1ac471ebecb03795b6614887',
+    manifest_sha256: '90f7003b95d526cdbfd0d706314cf45aaa3e727353093684c66e8749342526a0',
+    archive_sha256: '1061e11f3105e51ff193a1119b3260e34a4f6b5a388a27adcf806631ba0a6a2e',
+    archive_bytes: 66336837,
+  }),
 });
 
 function json(body, status = 200) {
