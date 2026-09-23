@@ -56,7 +56,7 @@ const PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY = {
     'XoticHaze/research-compute-public-/.github/workflows/mmibkr-paper-account-hygiene-coordinator-r1.yml@refs/heads/main',
 };
 const PAPER_ACCOUNT_HYGIENE_COORDINATOR_PRIVATE_SOURCE =
-  'e78d16c99bde3df4d3828c952e27dc1746772875';
+  '6a20403d771cbcf40ae475f8f66979973debe57b';
 const PAPER_ACCOUNT_HYGIENE_COORDINATOR_RUNTIME_SOURCE =
   '35e6b44e5c2618f780a84c1c204fe14c76bdf0e5';
 const PAPER_ACCOUNT_HYGIENE_COORDINATOR_EXPIRES_AT =
