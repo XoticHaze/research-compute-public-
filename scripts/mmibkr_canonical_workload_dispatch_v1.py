@@ -55,6 +55,11 @@ CAPABILITIES={
         "module":"scripts.operator.model_lab_xgboost_first_consumer",
         "callable":"execute",
     },
+    "MODEL_LAB_COMPARE_VALIDATE":{
+        "path":"model_lab_comparison_matrix.py",
+        "module":"model_lab_comparison_matrix",
+        "callable":"align_training_matrices_for_comparison",
+    },
 }
 _SHA1=re.compile(r"^[0-9a-f]{40}$")
 _SHA256=re.compile(r"^[0-9a-f]{64}$")
@@ -324,6 +329,42 @@ def validate_model_lab_first_consumer_arguments(args:Any,input_root:Path|None)->
         "test_span_years":test_span,"min_test_rows":min_rows,"inputs":resolved,
     }
 
+
+def validate_model_lab_compare_validate_arguments(args:Any,input_root:Path|None)->dict:
+    cid="MODEL_LAB_COMPARE_VALIDATE"
+    if not isinstance(args,dict):raise CanonicalDispatchError(f"{cid} arguments must be object")
+    exact(args,{"target_name","target_identity","min_shared_rows","horizon_bars","start_year","test_span_years","embargo_bars","purge_bars","min_test_rows","inputs"},cid+" arguments")
+    target_name=str(args.get("target_name") or "").strip()
+    target_identity=str(args.get("target_identity") or "").strip()
+    if not _ID.fullmatch(target_name):raise CanonicalDispatchError(f"{cid} target_name is invalid")
+    if not _ID.fullmatch(target_identity):raise CanonicalDispatchError(f"{cid} target_identity is invalid")
+    try:
+        min_shared=int(args.get("min_shared_rows")); horizon=int(args.get("horizon_bars"))
+        start_year=int(args.get("start_year")); test_span=int(args.get("test_span_years"))
+        embargo=int(args.get("embargo_bars")); purge=int(args.get("purge_bars"))
+        min_test=int(args.get("min_test_rows"))
+    except Exception as e:raise CanonicalDispatchError(f"{cid} numeric bounds must be integers") from e
+    if not 1<=min_shared<=10_000_000:raise CanonicalDispatchError(f"{cid} min_shared_rows must be within 1..10000000")
+    if not 1<=horizon<=1000:raise CanonicalDispatchError(f"{cid} horizon_bars must be within 1..1000")
+    if not 1900<=start_year<=2200:raise CanonicalDispatchError(f"{cid} start_year must be within 1900..2200")
+    if not 1<=test_span<=20:raise CanonicalDispatchError(f"{cid} test_span_years must be within 1..20")
+    if not 0<=embargo<=100_000 or not 0<=purge<=100_000:raise CanonicalDispatchError(f"{cid} embargo_bars/purge_bars must be within 0..100000")
+    if not 1<=min_test<=10_000_000:raise CanonicalDispatchError(f"{cid} min_test_rows must be within 1..10000000")
+    if embargo<horizon or purge<horizon:raise CanonicalDispatchError(f"{cid} embargo_bars and purge_bars must each cover horizon_bars")
+    if input_root is None:raise CanonicalDispatchError(f"{cid} requires governed input_root")
+    inputs=args.get("inputs")
+    if not isinstance(inputs,dict):raise CanonicalDispatchError(f"{cid} inputs must be object")
+    exact(inputs,{"incumbent_matrix","challenger_matrix"},cid+" inputs")
+    resolved={}
+    for name in ("incumbent_matrix","challenger_matrix"):
+        node=resolve_dataset(input_root,f"model_lab_{name}",inputs[name])
+        resolved[name]={k:node[k] for k in ("relative_path","sha256","bytes")}
+    return {
+        "target_name":target_name,"target_identity":target_identity,"min_shared_rows":min_shared,
+        "horizon_bars":horizon,"start_year":start_year,"test_span_years":test_span,
+        "embargo_bars":embargo,"purge_bars":purge,"min_test_rows":min_test,"inputs":resolved,
+    }
+
 def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None=None)->dict:
     exact(req,{"schema","job_id","capability_id","mmibkr","entrypoint","arguments","resources","authority","forbidden_authorities"},"request")
     if req.get("schema")!=REQUEST_SCHEMA:raise CanonicalDispatchError("unsupported request schema")
@@ -365,6 +406,8 @@ def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None
         normalized_args=validate_autotuner_primary_validation_arguments(args,input_root)
     elif cid=="MODEL_LAB_FIRST_CONSUMER":
         normalized_args=validate_model_lab_first_consumer_arguments(args,input_root)
+    elif cid=="MODEL_LAB_COMPARE_VALIDATE":
+        normalized_args=validate_model_lab_compare_validate_arguments(args,input_root)
     else:
         raise CanonicalDispatchError(f"capability executor is not implemented: {cid}")
     return {"schema":REQUEST_SCHEMA,"job_id":jid,"capability_id":cid,"mmibkr":mm,"entrypoint":{**cap,"git_blob_sha1":actual},"arguments":normalized_args,"resources":resources(req.get("resources")),"authority":AUTHORITY,"forbidden_authorities":dict(FORBIDDEN_AUTHORITY_ASSERTIONS)}
@@ -605,6 +648,80 @@ def execute_model_lab_first_consumer(v:dict,root:Path,input_root:Path,fn)->dict:
     finally:
         shutil.rmtree(staging,ignore_errors=True)
 
+
+def model_lab_compare_validate_dependencies(root:Path)->dict[str,str]:
+    paths=("model_lab_comparison_matrix.py","model_lab_validation.py")
+    return {path:private_blob_identity(root,path) for path in paths}
+
+def execute_model_lab_compare_validate(v:dict,root:Path,input_root:Path,fn)->dict:
+    args=v["arguments"]; resolved={}
+    for name in ("incumbent_matrix","challenger_matrix"):
+        resolved[name]=resolve_dataset(input_root,f"model_lab_{name}",args["inputs"][name])
+    module=sys.modules.get(getattr(fn,"__module__",""))
+    pd=getattr(module,"pd",None)
+    read_csv=getattr(pd,"read_csv",None)
+    if not callable(read_csv):raise CanonicalDispatchError("MODEL_LAB_COMPARE_VALIDATE canonical comparison owner does not expose pandas CSV loading")
+    incumbent=read_csv(resolved["incumbent_matrix"]["path"])
+    challenger=read_csv(resolved["challenger_matrix"]["path"])
+    raw=fn(
+        incumbent,challenger,
+        target_name=args["target_name"],
+        target_identity=args["target_identity"],
+        min_shared_rows=args["min_shared_rows"],
+    )
+    if not isinstance(raw,tuple) or len(raw)!=3 or not isinstance(raw[2],dict):
+        raise CanonicalDispatchError("canonical Model Lab comparison returned invalid contract")
+    incumbent_aligned,challenger_aligned,alignment=raw
+    if alignment.get("schema")!="mm.model_lab_comparison_alignment_evidence.v1":
+        raise CanonicalDispatchError("canonical Model Lab comparison evidence schema rejected")
+    if alignment.get("target_identity")!=args["target_identity"] or alignment.get("target_name")!=args["target_name"]:
+        raise CanonicalDispatchError("canonical Model Lab comparison target identity mismatch")
+    if alignment.get("target_exact_match") is not True or int(alignment.get("shared_rows") or 0)<args["min_shared_rows"]:
+        raise CanonicalDispatchError("canonical Model Lab comparison shared target contract rejected")
+    expected_safety={
+        "feature_recompute":False,"target_recompute":False,"resample":False,
+        "fill_or_backfill":False,"row_reorder":False,"order_submission":False,
+    }
+    safety=alignment.get("safety")
+    if not isinstance(safety,dict) or any(safety.get(key) is not value for key,value in expected_safety.items()):
+        raise CanonicalDispatchError("canonical Model Lab comparison safety contract rejected")
+    try:timestamps=incumbent_aligned["timestamp"]
+    except Exception as e:raise CanonicalDispatchError("canonical Model Lab comparison aligned timestamps missing") from e
+    splitter=private_callable(root,"model_lab_validation.py","model_lab_validation","non_overlapping_purged_walk_forward_splits")
+    manifest_fn=private_callable(root,"model_lab_validation.py","model_lab_validation","split_manifest")
+    require_target=private_callable(root,"model_lab_validation.py","model_lab_validation","require_target_safe_validation")
+    splits=splitter(
+        timestamps,start_year=args["start_year"],test_span_years=args["test_span_years"],
+        embargo_bars=args["embargo_bars"],purge_bars=args["purge_bars"],min_test_rows=args["min_test_rows"],
+    )
+    manifest=manifest_fn(
+        splits,contract="canonical_nonoverlap_purged_compare",
+        embargo_bars=args["embargo_bars"],purge_bars=args["purge_bars"],test_span_years=args["test_span_years"],
+    )
+    target=argparse.Namespace(
+        horizon_bars=args["horizon_bars"],identity=args["target_identity"],leakage_guard="embargo_and_purge",
+    )
+    target_validation=require_target(manifest,target)
+    if target_validation.get("leakage_safe") is not True:
+        raise CanonicalDispatchError("canonical Model Lab target validation is not leakage safe")
+    public_alignment=sanitize_public_tree(alignment)
+    return {
+        "schema":"mmibkr.model_lab_compare_validate.v1",
+        "alignment":public_alignment,
+        "walk_forward_validation":sanitize_public_tree(manifest),
+        "target_validation":sanitize_public_tree(target_validation),
+        "governed_inputs":{
+            name:{k:resolved[name][k] for k in ("relative_path","sha256","bytes")}
+            for name in ("incumbent_matrix","challenger_matrix")
+        },
+        "canonical_dependencies":model_lab_compare_validate_dependencies(root),
+        "safety":{
+            "read_only":True,"feature_recompute":False,"target_recompute":False,"training":False,
+            "model_promotion":False,"strategy_spec_write":False,"runtime_activation":False,
+            "order_submission":False,"live_trading_change":False,
+        },
+    }
+
 def execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
     fn=load_callable(root,CAPABILITIES[v["capability_id"]])
     if v["capability_id"]=="STRATEGY_SPEC_VALIDATE":
@@ -676,6 +793,9 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
     elif v["capability_id"]=="MODEL_LAB_FIRST_CONSUMER":
         if input_root is None:raise CanonicalDispatchError("MODEL_LAB_FIRST_CONSUMER requires governed input_root")
         result=execute_model_lab_first_consumer(v,root,input_root,fn)
+    elif v["capability_id"]=="MODEL_LAB_COMPARE_VALIDATE":
+        if input_root is None:raise CanonicalDispatchError("MODEL_LAB_COMPARE_VALIDATE requires governed input_root")
+        result=execute_model_lab_compare_validate(v,root,input_root,fn)
     elif v["capability_id"]=="AUTOTUNER_PARAMETER_CONSUMPTION":
         normalized,filtered,consumption=autotuner_gate(root,v["arguments"])
         result={
