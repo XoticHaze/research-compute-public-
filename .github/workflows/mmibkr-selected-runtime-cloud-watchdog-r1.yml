@@ -129,7 +129,7 @@ jobs:
           payload=json.dumps({
               'ref':'main',
               'inputs':{
-                  'source_ref':'8a82107be253c3facd3b090cf752bc51b3a8ef8d',
+                  'source_ref':'35e6b44e5c2618f780a84c1c204fe14c76bdf0e5',
                   'session_seconds':'18000',
                   'max_cycles':'0',
                   'expected_checkpoint_cache_key':checkpoint_key,
