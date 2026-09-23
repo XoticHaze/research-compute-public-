@@ -178,7 +178,7 @@ const HARNESS = 'mmibkr_cloud_source_exchange_v1';
 const REQUEST_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_CHUNKS = 2048;
 const MAX_CHUNK_CHARS = 100000;
-const MAX_MANIFEST_BYTES = 65536;
+const MAX_MANIFEST_BYTES = 131072;
 const ALLOWED_PUBLIC_EVENTS = new Set(['push', 'workflow_dispatch']);
 const ALLOWED_PRIVATE_EVENTS = new Set(['push', 'workflow_dispatch', 'schedule']);
 
