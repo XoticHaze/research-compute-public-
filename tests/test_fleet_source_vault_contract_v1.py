@@ -408,6 +408,45 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
 
+    def test_paper_account_hygiene_coordinator_is_exact_source_scoped_and_bounded(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-paper-account-hygiene-coordinator-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn(
+            "PAPER_ACCOUNT_HYGIENE_COORDINATOR_PRIVATE_SOURCE",
+            text,
+        )
+        self.assertIn(
+            "e78d16c99bde3df4d3828c952e27dc1746772875",
+            text,
+        )
+        self.assertIn(
+            "PAPER_ACCOUNT_HYGIENE_COORDINATOR_RUNTIME_SOURCE",
+            text,
+        )
+        self.assertIn(
+            "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
+            text,
+        )
+        self.assertIn("PAPER_ACCOUNT_HYGIENE_COORDINATOR_EXPIRES_AT", text)
+        self.assertIn("paperAccountHygieneCoordinatorPathAllowed", text)
+        self.assertIn("paper_account_hygiene_runtime_source_rejected", text)
+        self.assertIn(
+            "matchedPaperAccountHygieneCoordinator",
+            text,
+        )
+        self.assertNotIn(
+            "matchedPaperAccountHygieneCoordinator && operatorDeployPathAllowed",
+            text,
+        )
+        self.assertNotIn(
+            "matchedPaperAccountHygieneCoordinator && privateTestProbeUnwrapPathAllowed",
+            text,
+        )
+
     def test_private_test_probe_is_main_identity_and_vault_unwrap_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("PRIVATE_TEST_PROBE_IDENTITY", text)
