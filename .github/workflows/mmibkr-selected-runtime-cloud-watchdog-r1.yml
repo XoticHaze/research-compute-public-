@@ -20,7 +20,8 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, os
+          import base64, json, os
+          from urllib.error import HTTPError
           from urllib.request import Request, urlopen
 
           repo=os.environ['GITHUB_REPOSITORY']
@@ -51,15 +52,96 @@ jobs:
               print('MMIBKR_CLOUD_ACTIVE_RUNS='+','.join(str(x.get('id')) for x in active))
               raise SystemExit(0)
 
+          checkpoint_prefix='mmibkr-selected-runtime-cloud-checkpoint-v1-'
+
+          def receipt_for(run_id):
+              path=f'rendezvous/receipts/{run_id}-mmibkr-selected-runtime-cloud.json'
+              req=Request(
+                  f'https://api.github.com/repos/{repo}/contents/{path}?ref=main',
+                  headers=headers,
+              )
+              try:
+                  with urlopen(req, timeout=30) as response:
+                      node=json.loads(response.read().decode())
+              except HTTPError as exc:
+                  if exc.code == 404:
+                      return None
+                  raise
+              if str(node.get('encoding') or '') != 'base64':
+                  return None
+              raw=base64.b64decode(str(node.get('content') or '').encode())
+              receipt=json.loads(raw.decode())
+              if receipt.get('schema') != 'mmibkr.selected_runtime_cloud_session_receipt.v2':
+                  return None
+              return receipt
+
+          checkpoint_key=''
+          checkpoint_sha=''
+          checkpoint_source=''
+          checkpoint_run_id=''
+          for run in body.get('workflow_runs') or []:
+              run_id=str(run.get('id') or '')
+              if not run_id.isdigit():
+                  continue
+              receipt=receipt_for(run_id)
+              if not isinstance(receipt, dict):
+                  continue
+
+              saved_key=str(receipt.get('checkpoint_cache_key') or '').strip()
+              saved_sha=str(receipt.get('checkpoint_cache_sha256') or '').strip().lower()
+              if (
+                  receipt.get('checkpoint_cache_saved') is True
+                  and saved_key.startswith(checkpoint_prefix)
+                  and len(saved_sha) == 64
+                  and all(ch in '0123456789abcdef' for ch in saved_sha)
+              ):
+                  checkpoint_key=saved_key
+                  checkpoint_sha=saved_sha
+                  checkpoint_source='saved_successor'
+                  checkpoint_run_id=run_id
+                  break
+
+              predecessor_key=str(
+                  receipt.get('expected_predecessor_checkpoint_cache_key') or ''
+              ).strip()
+              predecessor_sha=str(
+                  receipt.get('expected_predecessor_checkpoint_sha256') or ''
+              ).strip().lower()
+              if (
+                  receipt.get('expected_predecessor_checkpoint_match') is True
+                  and receipt.get('checkpoint_restored') is True
+                  and receipt.get('predecessor_terminal_continuity_ready') is True
+                  and predecessor_key.startswith(checkpoint_prefix)
+                  and len(predecessor_sha) == 64
+                  and all(ch in '0123456789abcdef' for ch in predecessor_sha)
+              ):
+                  checkpoint_key=predecessor_key
+                  checkpoint_sha=predecessor_sha
+                  checkpoint_source='verified_predecessor_reuse'
+                  checkpoint_run_id=run_id
+                  break
+
+          if not checkpoint_key or not checkpoint_sha:
+              raise SystemExit(
+                  'watchdog found no durable exact predecessor checkpoint identity'
+              )
+
           payload=json.dumps({
               'ref':'main',
               'inputs':{
                   'source_ref':'8a82107be253c3facd3b090cf752bc51b3a8ef8d',
                   'session_seconds':'18000',
                   'max_cycles':'0',
+                  'expected_checkpoint_cache_key':checkpoint_key,
+                  'expected_checkpoint_sha256':checkpoint_sha,
+                  'require_terminal_continuity':True,
                   'self_handoff':True,
               },
           }).encode()
+          print('MMIBKR_CLOUD_WATCHDOG_CHECKPOINT_SOURCE='+checkpoint_source)
+          print('MMIBKR_CLOUD_WATCHDOG_CHECKPOINT_RUN_ID='+checkpoint_run_id)
+          print('MMIBKR_CLOUD_WATCHDOG_CHECKPOINT_KEY='+checkpoint_key)
+          print('MMIBKR_CLOUD_WATCHDOG_CHECKPOINT_SHA256='+checkpoint_sha)
           dispatch=Request(
               f'https://api.github.com/repos/{repo}/actions/workflows/{workflow}/dispatches',
               data=payload,
