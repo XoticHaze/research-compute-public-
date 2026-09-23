@@ -266,6 +266,108 @@ class B1AttestedSourceConsumerTests(unittest.TestCase):
                 ticket=ticket,
             )
 
+    def test_accepts_exact_hygiene_vault_attestation(self):
+        _, _, manifest, _, ticket = self.build_exchange()
+        manifest["private_attestation"] = {
+            "schema": "mmibkr-cloud-source-vault-attestation-v1",
+            "source_ref": ticket["head"],
+            "source_sha": ticket["head"],
+            "plaintext_sha256": ticket["archive_sha256"],
+            "archive_bytes": ticket["archive_bytes"],
+            "manifest_sha256": "c" * 64,
+            "producer_identity": {
+                "repository": "XoticHaze/research-compute-public-",
+                "ref": "refs/heads/main",
+                "workflow_ref": (
+                    "XoticHaze/research-compute-public-/.github/workflows/"
+                    "mmibkr-paper-account-hygiene-coordinator-r1.yml@refs/heads/main"
+                ),
+                "event_name": "push",
+                "run_id": "99999",
+                "run_attempt": "1",
+            },
+            "attested_at": "2026-09-23T20:44:00Z",
+            "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
+            "snapshot_approval_mode": "static_code_pin",
+        }
+
+        verified = mod._producer_attestation(
+            manifest["private_attestation"],
+            ticket=ticket,
+        )
+
+        self.assertEqual(
+            verified["schema"],
+            "mmibkr-cloud-source-vault-attestation-v1",
+        )
+        self.assertEqual(verified["source_sha"], ticket["head"])
+        self.assertEqual(verified["plaintext_sha256"], ticket["archive_sha256"])
+
+    def test_vault_attestation_rejects_non_hygiene_workflow(self):
+        _, _, manifest, _, ticket = self.build_exchange()
+        manifest["private_attestation"] = {
+            "schema": "mmibkr-cloud-source-vault-attestation-v1",
+            "source_ref": ticket["head"],
+            "source_sha": ticket["head"],
+            "plaintext_sha256": ticket["archive_sha256"],
+            "archive_bytes": ticket["archive_bytes"],
+            "manifest_sha256": "c" * 64,
+            "producer_identity": {
+                "repository": "XoticHaze/research-compute-public-",
+                "ref": "refs/heads/main",
+                "workflow_ref": (
+                    "XoticHaze/research-compute-public-/.github/workflows/"
+                    "unexpected.yml@refs/heads/main"
+                ),
+                "event_name": "workflow_dispatch",
+                "run_id": "99999",
+                "run_attempt": "1",
+            },
+            "attested_at": "2026-09-23T20:44:00Z",
+            "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
+            "snapshot_approval_mode": "static_code_pin",
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "vault_producer_workflow_rejected"):
+            mod._producer_attestation(
+                manifest["private_attestation"],
+                ticket=ticket,
+            )
+
+    def test_vault_attestation_rejects_transport_or_approval_drift(self):
+        _, _, manifest, _, ticket = self.build_exchange()
+        base = {
+            "schema": "mmibkr-cloud-source-vault-attestation-v1",
+            "source_ref": ticket["head"],
+            "source_sha": ticket["head"],
+            "plaintext_sha256": ticket["archive_sha256"],
+            "archive_bytes": ticket["archive_bytes"],
+            "manifest_sha256": "c" * 64,
+            "producer_identity": {
+                "repository": "XoticHaze/research-compute-public-",
+                "ref": "refs/heads/main",
+                "workflow_ref": (
+                    "XoticHaze/research-compute-public-/.github/workflows/"
+                    "mmibkr-paper-account-hygiene-coordinator-r1.yml@refs/heads/main"
+                ),
+                "event_name": "push",
+                "run_id": "99999",
+                "run_attempt": "1",
+            },
+            "attested_at": "2026-09-23T20:44:00Z",
+            "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
+            "snapshot_approval_mode": "static_code_pin",
+        }
+        drift = dict(base)
+        drift["source_transport"] = "unexpected_transport"
+        with self.assertRaisesRegex(RuntimeError, "vault_attestation_transport_rejected"):
+            mod._producer_attestation(drift, ticket=ticket)
+
+        drift = dict(base)
+        drift["snapshot_approval_mode"] = "unreviewed"
+        with self.assertRaisesRegex(RuntimeError, "vault_attestation_approval_mode_rejected"):
+            mod._producer_attestation(drift, ticket=ticket)
+
     def test_unknown_private_attestation_schema_still_fails_closed(self):
         _, _, manifest, _, ticket = self.build_exchange()
         manifest["private_attestation"]["schema"] = "mmibkr-untrusted-attestation-v999"
