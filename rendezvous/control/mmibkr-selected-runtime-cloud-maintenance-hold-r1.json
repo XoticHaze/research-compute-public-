@@ -1,0 +1,8 @@
+{
+  "schema": "mmibkr.selected_runtime_maintenance_hold.v1",
+  "enabled": true,
+  "reason": "paper_account_hygiene_679",
+  "scope": "selected_runtime_owner_dispatch",
+  "broker_mutation_authority": false,
+  "live_execution_allowed": false
+}
