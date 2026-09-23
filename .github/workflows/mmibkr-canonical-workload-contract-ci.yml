@@ -1,0 +1,34 @@
+name: MM-IBKR Canonical Workload Contract CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'scripts/mmibkr_canonical_workload_dispatch_v1.py'
+      - 'tests/test_mmibkr_canonical_workload_dispatch_v1.py'
+      - 'tests/test_mmibkr_canonical_crw_backtest_dispatch_v1.py'
+      - 'docs/MMIBKR_CANONICAL_RUNTIME_ABI_V1.md'
+      - '.github/workflows/mmibkr-canonical-workload-contract-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Compile and run canonical workload contract tests
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/mmibkr_canonical_workload_dispatch_v1.py
+          python -m unittest -v tests.test_mmibkr_canonical_workload_dispatch_v1
+          if test -f tests/test_mmibkr_canonical_crw_backtest_dispatch_v1.py; then
+            python -m unittest -v tests.test_mmibkr_canonical_crw_backtest_dispatch_v1
+          fi
