@@ -93,6 +93,17 @@ const PRIVATE_PR709_BOUNDARY_EXPIRY_VALIDATION_SOURCE =
 const PRIVATE_PR709_BOUNDARY_EXPIRY_VALIDATION_EXPIRES_AT =
   Date.parse('2026-09-23T18:00:00Z');
 
+const PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-pr711-account-hygiene-validation-r1.yml@refs/heads/main',
+};
+const PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_SOURCE =
+  'e78d16c99bde3df4d3828c952e27dc1746772875';
+const PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_EXPIRES_AT =
+  Date.parse('2026-09-23T18:00:00Z');
+
 const PRIVATE_PR671_EXACT_VALIDATION_IDENTITY = {
   repository: 'XoticHaze/research-compute-public-',
   ref: 'refs/heads/main',
@@ -222,6 +233,11 @@ function isPrivateSourceStreamApproved(sourceSha, identity = null) {
     && Date.now() <= PRIVATE_PR709_BOUNDARY_EXPIRY_VALIDATION_EXPIRES_AT
     && matchesIdentity(identity, PRIVATE_PR709_BOUNDARY_EXPIRY_VALIDATION_IDENTITY)
   );
+  const privatePr711AccountHygieneValidationApproved = (
+    sourceSha === PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_SOURCE
+    && Date.now() <= PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_EXPIRES_AT
+    && matchesIdentity(identity, PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_IDENTITY)
+  );
   const privatePr671ValidationApproved = (
     sourceSha === PRIVATE_PR671_EXACT_VALIDATION_SOURCE
     && Date.now() <= PRIVATE_PR671_EXACT_VALIDATION_EXPIRES_AT
@@ -248,6 +264,7 @@ function isPrivateSourceStreamApproved(sourceSha, identity = null) {
     || privatePr666ValidationApproved
     || privatePr670ValidationApproved
     || privatePr709BoundaryExpiryValidationApproved
+    || privatePr711AccountHygieneValidationApproved
     || privatePr671ValidationApproved
     || privatePromotionReviewValidationApproved
     || operatorConsolePromotionBootstrapApproved
@@ -413,6 +430,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     const matchedPrivatePr666Validation = matchesIdentity(claims, PRIVATE_PR666_EXACT_VALIDATION_IDENTITY);
     const matchedPrivatePr670Validation = matchesIdentity(claims, PRIVATE_PR670_EXACT_VALIDATION_IDENTITY);
     const matchedPrivatePr709BoundaryExpiryValidation = matchesIdentity(claims, PRIVATE_PR709_BOUNDARY_EXPIRY_VALIDATION_IDENTITY);
+    const matchedPrivatePr711AccountHygieneValidation = matchesIdentity(claims, PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_IDENTITY);
     const matchedPrivatePr671Validation = matchesIdentity(claims, PRIVATE_PR671_EXACT_VALIDATION_IDENTITY);
     const matchedPrivatePromotionReviewValidation = matchesIdentity(claims, PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_IDENTITY);
     const matchedPrivateTestProbe = matchesIdentity(claims, PRIVATE_TEST_PROBE_IDENTITY);
@@ -433,6 +451,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
         || (matchedPrivatePr666Validation && privateArchivePathAllowed)
         || (matchedPrivatePr670Validation && privateArchivePathAllowed)
         || (matchedPrivatePr709BoundaryExpiryValidation && privateArchivePathAllowed)
+        || (matchedPrivatePr711AccountHygieneValidation && privateArchivePathAllowed)
         || (matchedPrivatePr671Validation && privateArchivePathAllowed)
         || (matchedPrivatePromotionReviewValidation && privateArchivePathAllowed)
         || (matchedPrivateTestProbe && privateTestProbeUnwrapPathAllowed)
