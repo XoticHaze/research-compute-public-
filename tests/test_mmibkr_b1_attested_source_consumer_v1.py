@@ -164,6 +164,121 @@ class B1AttestedSourceConsumerTests(unittest.TestCase):
         self.assertTrue(result["private_attestation_verified"])
         self.assertFalse(result["private_repository_token_used"])
 
+    def test_accepts_exact_fleet_stream_attestation(self):
+        _, _, manifest, _, ticket = self.build_exchange()
+        manifest["private_attestation"] = {
+            "schema": "mmibkr-cloud-source-fleet-stream-attestation-v1",
+            "source_ref": ticket["head"],
+            "source_sha": ticket["head"],
+            "plaintext_sha256": ticket["archive_sha256"],
+            "archive_bytes": ticket["archive_bytes"],
+            "producer_identity": {
+                "repository": "XoticHaze/mm-ibkr-runtime",
+                "ref": "refs/heads/main",
+                "workflow_ref": (
+                    "XoticHaze/mm-ibkr-runtime/.github/workflows/"
+                    "mmibkr-source-vault-bootstrap-r1.yml@refs/heads/main"
+                ),
+                "event_name": "workflow_dispatch",
+                "run_id": "88888",
+                "run_attempt": "1",
+            },
+            "stream_id": "123e4567-e89b-12d3-a456-426614174000",
+            "attested_at": "2026-09-23T18:00:00Z",
+            "source_transport": "fleet_authority_oidc_private_archive_stream",
+        }
+
+        verified = mod._producer_attestation(
+            manifest["private_attestation"],
+            ticket=ticket,
+        )
+
+        self.assertEqual(
+            verified["schema"],
+            "mmibkr-cloud-source-fleet-stream-attestation-v1",
+        )
+        self.assertEqual(verified["source_sha"], ticket["head"])
+        self.assertEqual(verified["plaintext_sha256"], ticket["archive_sha256"])
+
+    def test_fleet_stream_attestation_rejects_wrong_bootstrap_workflow(self):
+        _, _, manifest, _, ticket = self.build_exchange()
+        manifest["private_attestation"] = {
+            "schema": "mmibkr-cloud-source-fleet-stream-attestation-v1",
+            "source_ref": ticket["head"],
+            "source_sha": ticket["head"],
+            "plaintext_sha256": ticket["archive_sha256"],
+            "archive_bytes": ticket["archive_bytes"],
+            "producer_identity": {
+                "repository": "XoticHaze/mm-ibkr-runtime",
+                "ref": "refs/heads/main",
+                "workflow_ref": (
+                    "XoticHaze/mm-ibkr-runtime/.github/workflows/"
+                    "unexpected.yml@refs/heads/main"
+                ),
+                "event_name": "workflow_dispatch",
+                "run_id": "88888",
+                "run_attempt": "1",
+            },
+            "stream_id": "123e4567-e89b-12d3-a456-426614174000",
+            "attested_at": "2026-09-23T18:00:00Z",
+            "source_transport": "fleet_authority_oidc_private_archive_stream",
+        }
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "fleet_stream_producer_workflow_rejected",
+        ):
+            mod._producer_attestation(
+                manifest["private_attestation"],
+                ticket=ticket,
+            )
+
+    def test_fleet_stream_attestation_rejects_transport_drift(self):
+        _, _, manifest, _, ticket = self.build_exchange()
+        manifest["private_attestation"] = {
+            "schema": "mmibkr-cloud-source-fleet-stream-attestation-v1",
+            "source_ref": ticket["head"],
+            "source_sha": ticket["head"],
+            "plaintext_sha256": ticket["archive_sha256"],
+            "archive_bytes": ticket["archive_bytes"],
+            "producer_identity": {
+                "repository": "XoticHaze/mm-ibkr-runtime",
+                "ref": "refs/heads/main",
+                "workflow_ref": (
+                    "XoticHaze/mm-ibkr-runtime/.github/workflows/"
+                    "mmibkr-source-vault-bootstrap-r1.yml@refs/heads/main"
+                ),
+                "event_name": "push",
+                "run_id": "88888",
+                "run_attempt": "1",
+            },
+            "stream_id": "123e4567-e89b-12d3-a456-426614174000",
+            "attested_at": "2026-09-23T18:00:00Z",
+            "source_transport": "unexpected_transport",
+        }
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "fleet_stream_attestation_transport_rejected",
+        ):
+            mod._producer_attestation(
+                manifest["private_attestation"],
+                ticket=ticket,
+            )
+
+    def test_unknown_private_attestation_schema_still_fails_closed(self):
+        _, _, manifest, _, ticket = self.build_exchange()
+        manifest["private_attestation"]["schema"] = "mmibkr-untrusted-attestation-v999"
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "private_source_attestation_schema_rejected",
+        ):
+            mod._producer_attestation(
+                manifest["private_attestation"],
+                ticket=ticket,
+            )
+
     def test_private_attestation_digest_mismatch_fails_closed(self):
         private_raw, archive, manifest, chunks, ticket = self.build_exchange()
         manifest["private_attestation"]["plaintext_sha256"] = "b" * 64
