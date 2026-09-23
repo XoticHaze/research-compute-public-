@@ -2,13 +2,11 @@
   "schema": "mmibkr.private_test_probe_fire.v1",
   "source_ref": "15594dd2353adb334584e8d9025cf7a427428b17",
   "test_modules": [
-    "tests.test_model_lab_canonical_data_authority_cc44",
-    "tests.test_model_lab_training_matrix_authority_cc44",
-    "tests.test_model_lab_canonical_trainer",
-    "tests.test_model_lab_xgboost"
+    "tests.test_model_lab_comparison_matrix_authority_cc44",
+    "tests.test_model_lab_validation_authority_cc44"
   ],
-  "requested_by": "assistant-g09-model-lab-first-consumer",
-  "purpose": "revalidate current Model Lab first-consumer scientific chain after canonical pytest probe repair using admitted exact source with byte-identical owner/test blobs",
+  "requested_by": "assistant-g09-model-lab-compare-validate",
+  "purpose": "validate current Model Lab compare/validation owners using admitted exact source with byte-identical owner/test blobs",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -16,7 +14,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "20260923T2048Z-g09-model-lab-science-r2",
+  "request_nonce": "g09-model-lab-compare-validate-r1-62f2cd02",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
   "current_private_reference": "a4cb1a026af9c206ac64a22a6dadade19dfa0814"
 }
