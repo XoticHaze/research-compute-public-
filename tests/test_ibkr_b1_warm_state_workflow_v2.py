@@ -177,6 +177,31 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         self.assertIn('steps.account_hygiene.outcome', self.text[assess:cleanup])
         self.assertIn('IBKR_WARM_PAPER_ACCOUNT_HYGIENE_ACCEPTED=0', self.text[assess:cleanup])
 
+    def test_account_hygiene_does_not_depend_on_strategy_historical_data_pipeline(self):
+        post_auth = self.text.index(
+            'name: Materialize canonical post-auth broker and forward-data handoff'
+        )
+        hygiene = self.text.index(
+            'name: Execute one encrypted operator-authorized paper account hygiene command'
+        )
+        publish = self.text.index(
+            'name: Publish canonical session and forward-data handoff'
+        )
+        self.assertLess(post_auth, hygiene)
+        self.assertIn(
+            "if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1'",
+            self.text[post_auth:hygiene],
+        )
+        self.assertIn(
+            "if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1'",
+            self.text[publish:],
+        )
+        hygiene_block = self.text[hygiene:self.text.index(
+            'name: Gracefully stop authenticated Gateway before warm-state snapshot'
+        )]
+        self.assertNotIn('ibkr_post_auth_pipeline_v1.py', hygiene_block)
+        self.assertIn('--mode paper_account_hygiene', hygiene_block)
+
     def test_persistent_execute_failure_is_reported_only_after_warm_state_persistence(self):
         execute = self.text.index('name: Execute one encrypted MM-authorized persistent paper command')
         stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')

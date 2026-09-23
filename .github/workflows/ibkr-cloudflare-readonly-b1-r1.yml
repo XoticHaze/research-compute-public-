@@ -63,6 +63,7 @@ on:
       - assistant/ibkr-warm-paper-proof-activation-20260917
       - assistant/ibkr-warm-read-gateway-20260917
       - assistant/b1-account-hygiene-transport-20260923
+      - assistant/b1-hygiene-skip-history-20260923
       - assistant/b1-account-hygiene-snapshot-freshness-20260923
     paths:
       - '.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml'
@@ -639,6 +640,7 @@ jobs:
           PY
 
       - name: Materialize canonical post-auth broker and forward-data handoff
+        if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1'
         run: |
           set -euo pipefail
           quote_args=()
@@ -836,6 +838,7 @@ jobs:
           retention-days: 30
 
       - name: Publish canonical session and forward-data handoff
+        if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ibkr-cloudflare-readonly-b1-${{ github.run_id }}
