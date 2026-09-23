@@ -12,6 +12,9 @@ env:
   RESPONSE_ROOT: rendezvous/responses
   RECIPIENT_ROOT: rendezvous/recipients
   EXCHANGE_REF: rendezvous-exchange
+  P01_DCA_TRANSPORT_SCHEMA: p01-crw-dca-ephemeral-x25519-v1
+  P01_DCA_HARNESS: p01_crw_dca_adapter_v1
+  P01_DCA_AUTHORITY: research_only
 
 jobs:
   consume:
@@ -27,6 +30,7 @@ jobs:
       - name: Compile fixed transport and canonical DCA consumer
         run: |
           python -m py_compile scripts/ephemeral_x25519_chunked_v1.py
+          python -m py_compile scripts/ephemeral_x25519_chunked_decrypt_cli_v1.py
           python -m py_compile scripts/p01_crw_dca_adapter_consumer_v1.py
       - name: Generate one-run recipient
         run: |
@@ -41,7 +45,15 @@ jobs:
           private_raw=private.private_bytes(serialization.Encoding.Raw,serialization.PrivateFormat.Raw,serialization.NoEncryption())
           public_raw=public.public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)
           Path(os.environ['RUNNER_TEMP'],'p01-dca-private.b64').write_text(base64.b64encode(private_raw).decode('ascii'))
-          recipient={'schema':'p01-crw-dca-adapter-recipient-v1','run_id':os.environ['GITHUB_RUN_ID'],'recipient_b64':base64.b64encode(public_raw).decode('ascii'),'recipient_key_id':'sha256:'+hashlib.sha256(public_raw).hexdigest()}
+          recipient={
+              'schema':'p01-crw-dca-adapter-recipient-v1',
+              'run_id':os.environ['GITHUB_RUN_ID'],
+              'recipient_b64':base64.b64encode(public_raw).decode('ascii'),
+              'recipient_key_id':'sha256:'+hashlib.sha256(public_raw).hexdigest(),
+              'transport_schema':os.environ['P01_DCA_TRANSPORT_SCHEMA'],
+              'harness':os.environ['P01_DCA_HARNESS'],
+              'authority':os.environ['P01_DCA_AUTHORITY'],
+          }
           Path(os.environ['RUNNER_TEMP'],'p01-dca-recipient.json').write_text(json.dumps(recipient,sort_keys=True)+'\n')
           print('P01_CRW_DCA_RUN_ID='+os.environ['GITHUB_RUN_ID'])
           print('P01_CRW_DCA_RECIPIENT_KEY_ID='+recipient['recipient_key_id'])
@@ -102,7 +114,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/p01-dca-payload"
-          python scripts/ephemeral_x25519_chunked_v1.py decrypt --envelope "$RUNNER_TEMP/p01-dca-envelope.json" --ciphertext "$RUNNER_TEMP/p01-dca-ciphertext.bin" --private-key "$RUNNER_TEMP/p01-dca-private.b64" --output "$RUNNER_TEMP/p01-dca-payload.tar.gz"
+          python scripts/ephemeral_x25519_chunked_decrypt_cli_v1.py \
+            --envelope "$RUNNER_TEMP/p01-dca-envelope.json" \
+            --ciphertext "$RUNNER_TEMP/p01-dca-ciphertext.bin" \
+            --private-key "$RUNNER_TEMP/p01-dca-private.b64" \
+            --output "$RUNNER_TEMP/p01-dca-payload.tar.gz" \
+            --schema "$P01_DCA_TRANSPORT_SCHEMA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --harness "$P01_DCA_HARNESS" \
+            --response-root "$P01_DCA_RESPONSE_ROOT" \
+            --authority "$P01_DCA_AUTHORITY"
           tar -xzf "$RUNNER_TEMP/p01-dca-payload.tar.gz" -C "$RUNNER_TEMP/p01-dca-payload"
       - name: Execute canonical matched DCA economics
         run: |
