@@ -1,6 +1,6 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "15594dd2353adb334584e8d9025cf7a427428b17",
+  "source_ref": "9d77e1e57cbf64687d756e424dbc0f45fb103b23",
   "test_modules": [
     "tests.test_autotuner_strategy_family_catalog_vnext",
     "tests.test_autotuner_behavioral_consumption_vnext",
@@ -14,8 +14,8 @@
     "tests.test_autotuner_parameter_consumption",
     "tests.test_autotuner_primary_validation_runner"
   ],
-  "requested_by": "assistant-autotuner-vnext-698-vault-exact-private-validation",
-  "purpose": "exact-private validation of current-main-aligned AutoTuner vNext family, composition, universe expansion and incumbent campaign contracts",
+  "requested_by": "assistant-autotuner-vnext-698-consumption-gate-validation",
+  "purpose": "validate behavioral-consumption gating before non-CRW family economics plus full AutoTuner regression slice",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -23,10 +23,10 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "20260923T1005Z-699-15594dd2-attested-first-use",
+  "request_nonce": "20260923T1012Z-699-9d77e1e5-vault1",
   "admission_commit": "46899ad6d2d3de0c853e130bebef86dca20eb0b9",
   "retry_reason": "retry unchanged exact snapshot after #1641 trusted-attested first-use approval fix",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "source_vault_bootstrap_run": 35846053057,
+  "source_vault_bootstrap_run": 35847230522,
   "approval_fix_commit": "d064bd6fb75b414837c8475bc7c857ce12083778"
 }
