@@ -2,7 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from mmibkr_private_test_probe_v1 import validated_modules, validate_source_identity
+from mmibkr_private_test_probe_v1 import (
+    module_file_path,
+    pytest_container_command,
+    validated_modules,
+    validate_source_identity,
+)
 
 
 SOURCE = "0123456789abcdef0123456789abcdef01234567"
@@ -62,6 +67,40 @@ def test_allowlist_accepts_exact_model_lab_scientific_chain_only():
 
     with pytest.raises(ValueError, match="test_module_not_allowlisted"):
         validated_modules("tests.test_model_lab_status_endpoints")
+
+
+
+def test_module_file_path_and_pytest_command_are_exact_and_shell_free():
+    assert module_file_path("tests.test_model_lab_xgboost") == "tests/test_model_lab_xgboost.py"
+    command = pytest_container_command("probe:test", "tests.test_model_lab_xgboost")
+    assert command == [
+        "docker",
+        "run",
+        "--rm",
+        "-e",
+        "ENABLE_LIVE_TRADING=0",
+        "-e",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "probe:test",
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_model_lab_xgboost.py",
+    ]
+    with pytest.raises(ValueError, match="test_module_rejected"):
+        module_file_path("../escape")
+
+
+def test_pytest_runner_executes_unittest_modules_too_by_contract():
+    command = pytest_container_command(
+        "probe:test", "tests.test_autotuner_campaign_runner"
+    )
+    assert command[-3:] == [
+        "pytest",
+        "-q",
+        "tests/test_autotuner_campaign_runner.py",
+    ]
 
 def _materialization(source: Path, **overrides):
     node = {
