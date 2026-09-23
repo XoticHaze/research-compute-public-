@@ -293,6 +293,35 @@ class WarmSelectedRuntimeActivationTests(unittest.TestCase):
         self.assertEqual(out["status"], "PAPER_EXECUTE_RECONCILED")
         execute.assert_called_once()
 
+    def test_execute_command_delegates_account_hygiene_mode_to_canonical_http_adapter(self):
+        runtime = {
+            "mode": mod.capsule_v2.HYGIENE_MODE,
+            "request_path": "/tmp/request.json",
+        }
+        receipt = {
+            "schema": mod.account_hygiene_v1.SCHEMA,
+            "ok": True,
+            "status": "PREFLIGHT_READY",
+        }
+        with tempfile.TemporaryDirectory() as td:
+            request = Path(td) / "request.json"
+            request.write_text("{}", encoding="utf-8")
+            runtime["request_path"] = str(request)
+            from unittest.mock import patch
+            with patch.object(
+                mod.account_hygiene_v1,
+                "execute_account_hygiene",
+                return_value=receipt,
+            ) as execute:
+                out = mod.execute_command(
+                    runtime=runtime,
+                    run_id="123",
+                    public_head="a" * 40,
+                    receipt_path=Path(td) / "receipt.json",
+                )
+        self.assertEqual(out["status"], "PREFLIGHT_READY")
+        execute.assert_called_once()
+
     def test_public_activation_source_contains_no_direct_broker_mutation_client(self):
         source = Path(mod.__file__).read_text(encoding="utf-8")
         self.assertNotIn("placeOrder(", source)
@@ -301,6 +330,7 @@ class WarmSelectedRuntimeActivationTests(unittest.TestCase):
         self.assertNotIn("from ib_insync", source)
         self.assertIn("proof_v2.execute_paper_proof_v2", source)
         self.assertIn("execute_v1.execute_paper_execute", source)
+        self.assertIn("account_hygiene_v1.execute_account_hygiene", source)
         self.assertIn('"STRATEGY_IBKR_PAPER_GLOBAL_CANCEL_ENABLED_13Z37D": "0"', source)
         self.assertIn('"ENABLE_LIVE_TRADING": "0"', source)
 
