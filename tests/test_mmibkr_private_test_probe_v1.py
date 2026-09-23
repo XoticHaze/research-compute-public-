@@ -57,12 +57,16 @@ def test_allowlist_accepts_exact_model_lab_scientific_chain_only():
         "tests.test_model_lab_canonical_data_authority_cc44 "
         "tests.test_model_lab_training_matrix_authority_cc44 "
         "tests.test_model_lab_canonical_trainer "
-        "tests.test_model_lab_xgboost"
+        "tests.test_model_lab_xgboost "
+        "tests.test_model_lab_comparison_matrix_authority_cc44 "
+        "tests.test_model_lab_validation_authority_cc44"
     ) == [
         "tests.test_model_lab_canonical_data_authority_cc44",
         "tests.test_model_lab_training_matrix_authority_cc44",
         "tests.test_model_lab_canonical_trainer",
         "tests.test_model_lab_xgboost",
+        "tests.test_model_lab_comparison_matrix_authority_cc44",
+        "tests.test_model_lab_validation_authority_cc44",
     ]
 
     with pytest.raises(ValueError, match="test_module_not_allowlisted"):

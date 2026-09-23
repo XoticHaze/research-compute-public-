@@ -26,6 +26,8 @@ SAFE_EXACT = {
     "tests.test_model_lab_training_matrix_authority_cc44",
     "tests.test_model_lab_canonical_trainer",
     "tests.test_model_lab_xgboost",
+    "tests.test_model_lab_comparison_matrix_authority_cc44",
+    "tests.test_model_lab_validation_authority_cc44",
 }
 DENY_TOKENS = (
     "broker",
