@@ -452,7 +452,9 @@ def canonical_runtime_diagnostic(
         capture_output=True,
         text=True,
     )
-    raw_logs = (str(logs_proc.stdout or "") + "\n" + str(logs_proc.stderr or "")).strip()
+    stdout = str(logs_proc.stdout or "")
+    stderr = str(logs_proc.stderr or "")
+    raw_logs = stdout + (("\n" + stderr) if stdout and stderr else stderr)
     if raw_logs:
         diagnostic["log_sha256"] = hashlib.sha256(raw_logs.encode("utf-8", errors="replace")).hexdigest()
         patterns = (
