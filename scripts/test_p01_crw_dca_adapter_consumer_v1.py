@@ -61,10 +61,11 @@ def test_metrics_use_simulated_next_bar_open_and_frozen_folds(tmp_path):
         "symbol_rows": [{"bar_count": 100}],
         "simulation_trade_rows": rows[:1],
     }
-    got = _metrics(result, 10000.0, tmp_path)
+    got = _metrics(result, tmp_path)
     assert got["execution_view"] == "simulated_next_bar_open"
     assert got["after_cost_net_pnl"] == 100.0
-    assert got["after_cost_return_pct"] == 1.0
+    assert got["after_cost_return_points"] == 100.0
+    assert got["return_unit"] == "MNQ_index_points"
     assert got["max_drawdown"] == 25.0
     assert got["trade_count"] == 4
     assert got["bar_support"] == 100
