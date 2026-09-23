@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from urllib.error import HTTPError
+from unittest.mock import patch
 
 from scripts import ibkr_warm_selected_runtime_activation_v1 as mod
 
@@ -141,6 +142,81 @@ class WarmSelectedRuntimeActivationTests(unittest.TestCase):
         self.assertNotIn("tws_password", joined)
         self.assertNotIn("ibkr_username", joined)
         self.assertNotIn("ibkr_password", joined)
+
+    def test_runtime_diagnostic_classifies_without_emitting_raw_logs(self):
+        secret = "TWS_PASSWORD=do-not-emit"
+        raw_logs = (
+            secret
+            + "\nTraceback (most recent call last):\n"
+            + "ModuleNotFoundError: No module named 'example'\n"
+        )
+
+        def fake_run(cmd, **kwargs):
+            if cmd[:2] == ["docker", "inspect"]:
+                return subprocess.CompletedProcess(
+                    cmd,
+                    0,
+                    stdout='{"Status":"exited","ExitCode":1,"Error":""}\n',
+                    stderr="",
+                )
+            if cmd[:2] == ["docker", "logs"]:
+                return subprocess.CompletedProcess(cmd, 0, stdout=raw_logs, stderr="")
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        diagnostic = mod.canonical_runtime_diagnostic(
+            run=fake_run,
+            include_logs=True,
+        )
+
+        self.assertEqual(diagnostic["state"], "exited")
+        self.assertEqual(diagnostic["exit_code"], 1)
+        self.assertIn("python_module_missing", diagnostic["classifiers"])
+        self.assertIn("python_traceback_present", diagnostic["classifiers"])
+        self.assertEqual(
+            diagnostic["log_sha256"],
+            hashlib.sha256(raw_logs.encode("utf-8")).hexdigest(),
+        )
+        self.assertNotIn(secret, json.dumps(diagnostic, sort_keys=True))
+
+    def test_start_canonical_runtime_fails_early_with_sanitized_state(self):
+        raw_logs = "Traceback (most recent call last):\nImportError: startup failed\n"
+
+        def fake_run(cmd, **kwargs):
+            if cmd[:2] == ["docker", "inspect"]:
+                return subprocess.CompletedProcess(
+                    cmd,
+                    0,
+                    stdout='{"Status":"exited","ExitCode":2,"Error":""}\n',
+                    stderr="",
+                )
+            if cmd[:2] == ["docker", "logs"]:
+                return subprocess.CompletedProcess(cmd, 0, stdout=raw_logs, stderr="")
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "source"
+            root.mkdir()
+            (root / "Dockerfile.bot").write_text("FROM scratch\n", encoding="utf-8")
+            runtime = {"source_root": str(root)}
+            with patch.object(mod.proof_v1, "_http_json", side_effect=OSError("not ready")):
+                with self.assertRaises(mod.ActivationError) as ctx:
+                    mod.start_canonical_runtime(
+                        runtime=runtime,
+                        run_id="123",
+                        runner_temp=Path(td),
+                        gateway_host="127.0.0.1",
+                        gateway_port=4002,
+                        run=fake_run,
+                        sleep=lambda _: self.fail("exited runtime must fail before sleeping"),
+                    )
+
+        message = str(ctx.exception)
+        self.assertIn("state=exited", message)
+        self.assertIn("exit_code=2", message)
+        self.assertIn("python_import_error", message)
+        self.assertIn("python_traceback_present", message)
+        self.assertIn(hashlib.sha256(raw_logs.encode("utf-8")).hexdigest(), message)
+        self.assertNotIn("startup failed", message)
 
     def test_encrypted_return_publishes_ciphertext_only(self):
         calls = []

@@ -404,6 +404,88 @@ def canonical_runtime_docker_command(
     return cmd
 
 
+def canonical_runtime_diagnostic(
+    *,
+    run: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+    include_logs: bool = False,
+) -> dict[str, Any]:
+    """Return a public-safe startup discriminator without emitting raw bot logs."""
+    status = "unknown"
+    exit_code: int | None = None
+    engine_error_present = False
+    inspect_available = False
+    inspect_proc = run(
+        ["docker", "inspect", "-f", "{{json .State}}", BOT_CONTAINER],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if inspect_proc.returncode == 0:
+        inspect_available = True
+        try:
+            state = json.loads(str(inspect_proc.stdout or "").strip() or "{}")
+        except Exception:
+            state = {}
+        if isinstance(state, Mapping):
+            status = str(state.get("Status") or "unknown").strip().lower() or "unknown"
+            raw_exit = state.get("ExitCode")
+            try:
+                exit_code = int(raw_exit) if raw_exit is not None else None
+            except (TypeError, ValueError):
+                exit_code = None
+            engine_error_present = bool(str(state.get("Error") or "").strip())
+
+    diagnostic: dict[str, Any] = {
+        "inspect_available": inspect_available,
+        "state": status,
+        "exit_code": exit_code,
+        "engine_error_present": engine_error_present,
+        "log_sha256": None,
+        "classifiers": [],
+    }
+    if not include_logs:
+        return diagnostic
+
+    logs_proc = run(
+        ["docker", "logs", "--tail", "200", BOT_CONTAINER],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    stdout = str(logs_proc.stdout or "")
+    stderr = str(logs_proc.stderr or "")
+    raw_logs = stdout + (("\n" + stderr) if stdout and stderr else stderr)
+    if raw_logs:
+        diagnostic["log_sha256"] = hashlib.sha256(raw_logs.encode("utf-8", errors="replace")).hexdigest()
+        patterns = (
+            ("ModuleNotFoundError", "python_module_missing"),
+            ("ImportError", "python_import_error"),
+            ("FileNotFoundError", "file_not_found"),
+            ("PermissionError", "permission_error"),
+            ("Address already in use", "port_bind_conflict"),
+            ("Internal control API failed", "internal_control_api_failed"),
+            ("selected_runtime_activation_merge_failed", "selected_runtime_activation_merge_failed"),
+            ("Traceback (most recent call last)", "python_traceback_present"),
+        )
+        diagnostic["classifiers"] = [
+            label for needle, label in patterns if needle in raw_logs
+        ]
+    return diagnostic
+
+
+def _canonical_runtime_health_error(diagnostic: Mapping[str, Any]) -> ActivationError:
+    classifiers = ",".join(str(value) for value in diagnostic.get("classifiers") or []) or "none"
+    return ActivationError(
+        "canonical MM-IBKR proof runtime did not become healthy"
+        f"; state={diagnostic.get('state') or 'unknown'}"
+        f"; exit_code={diagnostic.get('exit_code')}"
+        f"; inspect_available={bool(diagnostic.get('inspect_available'))}"
+        f"; engine_error_present={bool(diagnostic.get('engine_error_present'))}"
+        f"; log_sha256={diagnostic.get('log_sha256') or 'none'}"
+        f"; classifiers={classifiers}"
+    )
+
+
 def start_canonical_runtime(
     *,
     runtime: Mapping[str, Any],
@@ -453,8 +535,18 @@ def start_canonical_runtime(
             status, body = 0, {}
         if status == 200 and body.get("ok") is not False:
             return image, data_dir
+        diagnostic = canonical_runtime_diagnostic(run=run, include_logs=False)
+        if (
+            diagnostic.get("inspect_available") is not True
+            or diagnostic.get("state") in {"dead", "exited"}
+        ):
+            raise _canonical_runtime_health_error(
+                canonical_runtime_diagnostic(run=run, include_logs=True)
+            )
         sleep(2.0)
-    raise ActivationError("canonical MM-IBKR proof runtime did not become healthy")
+    raise _canonical_runtime_health_error(
+        canonical_runtime_diagnostic(run=run, include_logs=True)
+    )
 
 
 def execute_proof(
