@@ -1,0 +1,159 @@
+name: P01 CRW DCA Ephemeral Rendezvous
+
+on:
+  push:
+    branches:
+      - assistant/p01-crw-dca-adapter-20260922
+    paths:
+      - 'rendezvous/requests/p01-crw-dca-*.txt'
+
+permissions:
+  contents: write
+
+env:
+  RESPONSE_ROOT: rendezvous/responses
+  RECIPIENT_ROOT: rendezvous/recipients
+  EXCHANGE_REF: rendezvous-exchange
+
+jobs:
+  consume:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Install fixed research dependencies
+        run: python -m pip install --disable-pip-version-check cryptography pandas numpy pytest
+
+      - name: Compile and test fixed P01 DCA consumer
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/ephemeral_x25519_chunked_v1.py
+          python -m py_compile scripts/p01_crw_dca_adapter_consumer_v1.py
+          python -m py_compile scripts/p01_crw_dca_ephemeral_consumer_v1.py
+          PYTHONPATH=scripts python -m pytest -q scripts/test_p01_crw_dca_adapter_consumer_v1.py
+
+      - name: Generate one-run P01 DCA recipient
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import base64,hashlib,json,os
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric import x25519
+          private=x25519.X25519PrivateKey.generate()
+          public=private.public_key()
+          private_raw=private.private_bytes(serialization.Encoding.Raw,serialization.PrivateFormat.Raw,serialization.NoEncryption())
+          public_raw=public.public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)
+          Path(os.environ['RUNNER_TEMP'],'p01-dca-private.b64').write_text(base64.b64encode(private_raw).decode('ascii'))
+          recipient={
+              'schema':'p01-crw-dca-recipient-v1',
+              'run_id':os.environ['GITHUB_RUN_ID'],
+              'recipient_b64':base64.b64encode(public_raw).decode('ascii'),
+              'recipient_key_id':'sha256:'+hashlib.sha256(public_raw).hexdigest(),
+              'transport_schema':'p01-crw-dca-ephemeral-x25519-v1',
+              'harness':'p01_crw_dca_adapter_v1',
+              'expected_mm_ibkr_commit':'a083efc5755902315420200b7e341c8a1c9f2934',
+              'expected_workload_blob_sha1':'df215b2b6c8bc0ba2b6652e010862e789dbe2c4c',
+              'expected_corpus_sha256':'c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e',
+              'expected_corpus_bytes':18026715,
+          }
+          Path(os.environ['RUNNER_TEMP'],'p01-dca-recipient.json').write_text(json.dumps(recipient,sort_keys=True)+'\n')
+          print('P01_CRW_DCA_RUN_ID='+os.environ['GITHUB_RUN_ID'])
+          print('P01_CRW_DCA_RECIPIENT_KEY_ID='+recipient['recipient_key_id'])
+          PY
+
+      - name: Publish public recipient to exchange branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          path="${RECIPIENT_ROOT}/${GITHUB_RUN_ID}-p01-crw-dca.json"
+          payload="$(base64 -w0 "$RUNNER_TEMP/p01-dca-recipient.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json,sys
+          print(json.dumps({'message':'rendezvous: publish one-run P01 CRW DCA recipient','content':sys.argv[1],'branch':sys.argv[2]}))
+          PY
+          )"
+          curl -fsSL -X PUT             -H "Authorization: Bearer ${GH_TOKEN}"             -H 'Accept: application/vnd.github+json'             -H 'X-GitHub-Api-Version: 2022-11-28'             "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}"             -d "$body" >/dev/null
+
+      - name: Wait for run-bound P01 DCA envelope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          response_root="${RESPONSE_ROOT}/${GITHUB_RUN_ID}"
+          envelope_path="${response_root}/p01-crw-dca-envelope.json"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${envelope_path}?ref=${EXCHANGE_REF}"
+          found=0
+          for _ in $(seq 1 180); do
+            if curl -fsSL               -H "Authorization: Bearer ${GH_TOKEN}"               -H 'Accept: application/vnd.github.raw+json'               "$api" -o "$RUNNER_TEMP/p01-dca-envelope.json"; then
+              found=1
+              break
+            fi
+            sleep 5
+          done
+          test "$found" = 1 || { echo 'run-bound P01 CRW DCA envelope did not arrive'; exit 42; }
+          echo "P01_DCA_RESPONSE_ROOT=${response_root}" >> "$GITHUB_ENV"
+
+      - name: Reassemble authenticated ciphertext chunks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64,hashlib,json,os
+          from pathlib import Path
+          from urllib.request import Request,urlopen
+          env=json.loads(Path(os.environ['RUNNER_TEMP'],'p01-dca-envelope.json').read_text())
+          chunks=env.get('chunks')
+          if not isinstance(chunks,list) or not chunks or len(chunks)>64:
+              raise SystemExit('invalid chunk list')
+          prefix=f"rendezvous/responses/{os.environ['GITHUB_RUN_ID']}/"
+          pieces=[]
+          seen=set()
+          for node in chunks:
+              if set(node)!={'path','sha256','chars'}:
+                  raise SystemExit('invalid chunk descriptor fields')
+              path=str(node['path'])
+              if not path.startswith(prefix) or path in seen or '..' in path.split('/'):
+                  raise SystemExit('invalid chunk path')
+              seen.add(path)
+              url=f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/{path}?ref={os.environ['EXCHANGE_REF']}"
+              req=Request(url,headers={
+                  'Authorization':'Bearer '+os.environ['GH_TOKEN'],
+                  'Accept':'application/vnd.github.raw+json',
+                  'X-GitHub-Api-Version':'2022-11-28',
+              })
+              raw=urlopen(req,timeout=30).read()
+              if len(raw)!=int(node['chars']) or hashlib.sha256(raw).hexdigest()!=node['sha256']:
+                  raise SystemExit('chunk identity mismatch')
+              pieces.append(raw.decode('ascii'))
+          ciphertext=base64.b64decode(''.join(pieces).encode('ascii'),validate=True)
+          if hashlib.sha256(ciphertext).hexdigest()!=env.get('ciphertext_sha256'):
+              raise SystemExit('assembled ciphertext digest mismatch')
+          Path(os.environ['RUNNER_TEMP'],'p01-dca-ciphertext.bin').write_bytes(ciphertext)
+          PY
+
+      - name: Decrypt privately and execute canonical matched DCA economics
+        run: |
+          set -euo pipefail
+          python scripts/p01_crw_dca_ephemeral_consumer_v1.py             --envelope "$RUNNER_TEMP/p01-dca-envelope.json"             --ciphertext "$RUNNER_TEMP/p01-dca-ciphertext.bin"             --private-key "$RUNNER_TEMP/p01-dca-private.b64"             --run-id "$GITHUB_RUN_ID"             --response-root "$P01_DCA_RESPONSE_ROOT"             | tee "$RUNNER_TEMP/p01-dca-receipt.log"
+          grep '^P01_CRW_DCA_PUBLIC_RECEIPT=' "$RUNNER_TEMP/p01-dca-receipt.log" > "$RUNNER_TEMP/p01-dca-sanitized-receipt.txt"
+          grep '^P01_CRW_DCA_PUBLIC_RECEIPT_SHA256=' "$RUNNER_TEMP/p01-dca-receipt.log" >> "$RUNNER_TEMP/p01-dca-sanitized-receipt.txt"
+
+      - name: Upload sanitized deterministic P01 DCA receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p01-crw-dca-sanitized-receipt-${{ github.run_id }}
+          path: ${{ runner.temp }}/p01-dca-sanitized-receipt.txt
+          retention-days: 7
+
+      - name: Remove one-run private material
+        if: always()
+        run: |
+          rm -f             "$RUNNER_TEMP/p01-dca-private.b64"             "$RUNNER_TEMP/p01-dca-recipient.json"             "$RUNNER_TEMP/p01-dca-envelope.json"             "$RUNNER_TEMP/p01-dca-ciphertext.bin"             "$RUNNER_TEMP/p01-dca-receipt.log"             "$RUNNER_TEMP/p01-dca-sanitized-receipt.txt"
