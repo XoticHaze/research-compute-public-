@@ -53,6 +53,11 @@ class PaperAccountHygieneCoordinatorTests(unittest.TestCase):
         self.assertIn("private_snapshot_published': False", text)
         self.assertIn("private_source_published': False", text)
 
+    def test_private_producer_receives_shell_array_arguments_not_literal_text(self):
+        text = self.text()
+        self.assertIn('ibkr_remote_account_hygiene_slot_v1.py "${args[@]}"', text)
+        self.assertNotIn('ibkr_remote_account_hygiene_slot_v1.py "\\${args[@]}"', text)
+
     def test_preflight_is_default_and_execute_is_explicit(self):
         text = self.text()
         self.assertIn("default: false", text)
