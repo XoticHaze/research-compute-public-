@@ -19,6 +19,7 @@ SAFE_PREFIXES = (
 )
 SAFE_EXACT = {
     "tests.test_strategy_backtest_registry_dispatch",
+    "tests.test_canonical_data_materialize_v1",
 }
 DENY_TOKENS = (
     "broker",

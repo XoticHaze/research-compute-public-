@@ -8,15 +8,17 @@ from mmibkr_private_test_probe_v1 import validated_modules, validate_source_iden
 SOURCE = "0123456789abcdef0123456789abcdef01234567"
 
 
-def test_allowlist_accepts_research_autotuner_and_registry_dispatch():
+def test_allowlist_accepts_research_autotuner_registry_and_data_materializer():
     assert validated_modules(
         "tests.test_autotuner_strategy_family_catalog_vnext,"
         "tests.test_autotuner_behavioral_consumption_vnext "
-        "tests.test_strategy_backtest_registry_dispatch"
+        "tests.test_strategy_backtest_registry_dispatch "
+        "tests.test_canonical_data_materialize_v1"
     ) == [
         "tests.test_autotuner_strategy_family_catalog_vnext",
         "tests.test_autotuner_behavioral_consumption_vnext",
         "tests.test_strategy_backtest_registry_dispatch",
+        "tests.test_canonical_data_materialize_v1",
     ]
 
 
