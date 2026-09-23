@@ -29,6 +29,25 @@ class BoundaryReadWorkflowTests(unittest.TestCase):
         self.assertIn("time.sleep(delay)", self.text)
         self.assertIn("IBKR_SNAPSHOT_BOUNDARY_REACHED_UTC=", self.text)
 
+    def test_stale_boundary_publishes_identity_bound_no_command_terminal(self):
+        self.assertIn("id: snapshot_boundary", self.text)
+        self.assertIn("delay < -60", self.text)
+        self.assertIn("fh.write('expired=true\\\\n')", self.text)
+        self.assertIn("IBKR_SNAPSHOT_BOUNDARY_EXPIRED=1", self.text)
+        self.assertIn("name: Publish expired completed-bar boundary terminal", self.text)
+        self.assertIn("'schema':'mmibkr.ibkr_warm_read_terminal.v1'", self.text)
+        self.assertIn("'status':'snapshot_boundary_expired'", self.text)
+        self.assertIn("'command_intent_present':False", self.text)
+        self.assertIn("'broker_action':False", self.text)
+        self.assertIn("'command_executed':False", self.text)
+        self.assertIn("'live_execution_allowed':False", self.text)
+        self.assertIn("'private_data_included':False", self.text)
+        self.assertIn("ibkr-warm-read-terminal.json", self.text)
+        self.assertIn("steps.snapshot_boundary.outputs.expired != 'true'", self.text)
+        self.assertIn("IBKR_WARM_SELECTED_RUNTIME_SNAPSHOT_BOUNDARY_EXPIRED=1", self.text)
+        self.assertIn("IBKR_WARM_SELECTED_RUNTIME_NO_COMMAND_TERMINAL=1", self.text)
+        self.assertIn("IBKR_WARM_SELECTED_RUNTIME_COMMAND_EXECUTED=0", self.text)
+
     def test_boundary_snapshot_is_readonly_client_evidence_even_inside_paper_execute(self):
         self.assertIn(
             "IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'paper_execute')",
