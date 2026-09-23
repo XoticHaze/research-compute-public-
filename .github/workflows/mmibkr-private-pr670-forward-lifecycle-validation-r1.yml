@@ -17,7 +17,7 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  PRIVATE_SOURCE_SHA: 7244fa235ea6e110cc01d8db1f793926461e0b10
+  PRIVATE_SOURCE_SHA: 111beb2ddf88145477b6c568c41ff81fad80fa30
 
 jobs:
   exact-private-merged-main-a588-validation:
@@ -193,6 +193,7 @@ jobs:
             "mmibkr-merged-main-a588:$GITHUB_RUN_ID" \
             python -m unittest -v \
               tests.test_selected_runtime_forward_execution_lifecycle_v1 \
+              tests.test_selected_runtime_cloud_natural_evaluator_v1 \
               tests.test_selected_runtime_cloud_cycle_v1 \
               tests.test_ibkr_remote_selected_runtime_paper_execute_slot_v1 \
             >"$log" 2>&1
