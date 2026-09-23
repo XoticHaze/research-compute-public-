@@ -408,6 +408,16 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
 
+
+    def test_source_exchange_manifest_cap_covers_large_verified_relay_without_relaxing_chunk_guards(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("const MAX_MANIFEST_BYTES = 131072;", text)
+        self.assertIn("const MAX_CHUNKS = 2048;", text)
+        self.assertIn("const MAX_CHUNK_CHARS = 100000;", text)
+        self.assertGreaterEqual(text.count("if (raw.length > MAX_MANIFEST_BYTES) return json({ error: 'manifest_too_large' }, 413);"), 2)
+        self.assertIn("stored.sha256 !== desc.sha256", text)
+        self.assertIn("Number(stored.chars) !== Number(desc.chars)", text)
+
     def test_paper_account_hygiene_coordinator_is_exact_source_scoped_and_bounded(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY", text)
