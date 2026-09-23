@@ -420,7 +420,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            "e78d16c99bde3df4d3828c952e27dc1746772875",
+            "6a20403d771cbcf40ae475f8f66979973debe57b",
             text,
         )
         self.assertIn(
