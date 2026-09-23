@@ -21,6 +21,10 @@ SAFE_EXACT = {
     "tests.test_strategy_backtest_registry_dispatch",
     "tests.test_canonical_data_materialize_v1",
     "tests.test_selected_runtime_strategy_spec_integrity_v1",
+    "tests.test_model_lab_canonical_data_authority_cc44",
+    "tests.test_model_lab_training_matrix_authority_cc44",
+    "tests.test_model_lab_canonical_trainer",
+    "tests.test_model_lab_xgboost",
 }
 DENY_TOKENS = (
     "broker",
