@@ -2,7 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from mmibkr_private_test_probe_v1 import (\n    module_file_path,\n    pytest_container_command,\n    validated_modules,\n    validate_source_identity,\n)
+from mmibkr_private_test_probe_v1 import (
+    module_file_path,
+    pytest_container_command,
+    validated_modules,
+    validate_source_identity,
+)
 
 
 SOURCE = "0123456789abcdef0123456789abcdef01234567"
