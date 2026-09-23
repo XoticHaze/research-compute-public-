@@ -29,14 +29,14 @@ class PaperAccountHygieneCoordinatorTests(unittest.TestCase):
     def test_coordinator_binds_exact_validated_producer_and_ownership_runtime_source(self):
         text = self.text()
         self.assertIn(
-            "PRODUCER_SOURCE_SHA: 6a20403d771cbcf40ae475f8f66979973debe57b",
+            "PRODUCER_SOURCE_SHA: 2e95486996f62bf2aafd22a2496fa1eff76e0b8c",
             text,
         )
         self.assertIn(
-            "PRODUCER_ARCHIVE_SHA256: f2177a3caebee041a9e15cac9735a0d114eedf183e3df904cfde84866719b82f",
+            "PRODUCER_ARCHIVE_SHA256: f1d086db063877d4d800f13d41a08f4da95d93d784a8c31339f47dc07e95987d",
             text,
         )
-        self.assertIn("PRODUCER_ARCHIVE_BYTES: '66375251'", text)
+        self.assertIn("PRODUCER_ARCHIVE_BYTES: '66378678'", text)
         self.assertIn(
             "RUNTIME_SOURCE_SHA: 35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
             text,
