@@ -4,16 +4,41 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '17,47 * * * *'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/mmibkr-selected-runtime-cloud-watchdog-r1.yml'
+      - 'scripts/mmibkr_selected_runtime_cloud_watchdog_cooldown_v1.py'
+      - 'tests/test_mmibkr_selected_runtime_cloud_watchdog_cooldown_v1.py'
 
 permissions:
   actions: write
   contents: read
 
 jobs:
-  ensure-owner:
+  contract:
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Validate watchdog cooldown contract
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/mmibkr_selected_runtime_cloud_watchdog_cooldown_v1.py
+          python -m unittest -v tests.test_mmibkr_selected_runtime_cloud_watchdog_cooldown_v1
+
+  ensure-owner:
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
       - name: Ensure one selected-runtime cloud owner exists
         env:
           GH_TOKEN: ${{ github.token }}
@@ -22,6 +47,9 @@ jobs:
           python - <<'PY'
           import base64, json, os
           from urllib.error import HTTPError
+          from scripts.mmibkr_selected_runtime_cloud_watchdog_cooldown_v1 import (
+              evaluate_b1_failure_cooldown,
+          )
           from urllib.request import Request, urlopen
 
           repo=os.environ['GITHUB_REPOSITORY']
@@ -50,6 +78,22 @@ jobs:
           if active:
               print('MMIBKR_CLOUD_WATCHDOG=owner_present')
               print('MMIBKR_CLOUD_ACTIVE_RUNS='+','.join(str(x.get('id')) for x in active))
+              raise SystemExit(0)
+
+          b1_workflow='ibkr-cloudflare-readonly-b1-r1.yml'
+          b1_req=Request(
+              f'https://api.github.com/repos/{repo}/actions/workflows/{b1_workflow}/runs?per_page=20',
+              headers=headers,
+          )
+          with urlopen(b1_req, timeout=30) as response:
+              b1_body=json.loads(response.read().decode())
+          cooldown=evaluate_b1_failure_cooldown(b1_body.get('workflow_runs') or [])
+          if cooldown.get('suppress') is True:
+              print('MMIBKR_CLOUD_WATCHDOG=broker_dependency_cooldown')
+              print('MMIBKR_CLOUD_WATCHDOG_COOLDOWN_REASON='+str(cooldown.get('reason') or ''))
+              print('MMIBKR_CLOUD_WATCHDOG_B1_FAILURE_COUNT='+str(cooldown.get('consecutive_failure_count') or 0))
+              print('MMIBKR_CLOUD_WATCHDOG_B1_LATEST_RUN_ID='+str(cooldown.get('latest_run_id') or ''))
+              print('MMIBKR_CLOUD_WATCHDOG_RETRY_AFTER_UTC='+str(cooldown.get('retry_after_utc') or ''))
               raise SystemExit(0)
 
           checkpoint_prefix='mmibkr-selected-runtime-cloud-checkpoint-v1-'
