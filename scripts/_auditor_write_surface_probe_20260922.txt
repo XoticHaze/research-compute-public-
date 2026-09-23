@@ -1,0 +1,1 @@
+Evolution Auditor write-surface probe. Safe non-workflow text mutation to distinguish repository write authority from workflow-path safety policy. 2026-09-22 23:28 CT.
