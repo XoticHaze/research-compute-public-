@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import csv
 import hashlib
 import json
 import sys
@@ -10,7 +11,14 @@ from typing import Any
 
 SCHEMA = "p01-crw-dca-adapter-receipt-v1"
 WORKLOAD_MODULE = "scripts.operator.crw_backtest_summary_13z"
+EXECUTION_VIEW = "simulated_next_bar_open"
 COST_BPS = (0.0, 2.5, 5.0, 10.0)
+CHRONOLOGY_FOLDS = (
+    ("2019-2020", 2019, 2020),
+    ("2021-2022", 2021, 2022),
+    ("2023-2024", 2023, 2024),
+    ("2025-development-cutoff", 2025, 9999),
+)
 
 
 def _sha256(path: Path) -> str:
@@ -37,9 +45,8 @@ def _canonical(source_root: Path, request: dict[str, Any], data_root: Path) -> d
         sys.path.pop(0)
 
 
-def _folds(result: dict[str, Any]) -> list[dict[str, Any]]:
-    rows = result.get("trade_rows") or []
-    by_year: dict[int, list[float]] = {}
+def _folds(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    buckets: dict[str, list[float]] = {name: [] for name, _, _ in CHRONOLOGY_FOLDS}
     for row in rows:
         raw = str(row.get("exit_ts") or row.get("entry_ts") or "")
         try:
@@ -47,36 +54,71 @@ def _folds(result: dict[str, Any]) -> list[dict[str, Any]]:
             pnl = float(row.get("net_pnl") or 0.0)
         except Exception:
             continue
-        by_year.setdefault(year, []).append(pnl)
+        for name, start, end in CHRONOLOGY_FOLDS:
+            if start <= year <= end:
+                buckets[name].append(pnl)
+                break
     return [
-        {"year": year, "trades": len(vals), "net_pnl": sum(vals)}
-        for year, vals in sorted(by_year.items())
+        {"fold": name, "trades": len(buckets[name]), "net_pnl": sum(buckets[name])}
+        for name, _, _ in CHRONOLOGY_FOLDS
     ]
 
 
-def _metrics(result: dict[str, Any], capital: float) -> dict[str, Any]:
-    pnl = float(result.get("net_pnl") or 0.0)
+def _full_simulation_rows(result: dict[str, Any], source_root: Path) -> list[dict[str, Any]]:
+    view = (result.get("execution_views") or {}).get(EXECUTION_VIEW) or {}
+    expected = int(view.get("total_trades") or 0)
+    artifact_rel = str(result.get("artifact_dir") or "")
+    artifact_csv = source_root / artifact_rel / "simulation_trade_rows.csv" if artifact_rel else None
+    rows: list[dict[str, Any]]
+    if artifact_csv and artifact_csv.exists():
+        with artifact_csv.open("r", encoding="utf-8-sig", newline="") as handle:
+            rows = [dict(row) for row in csv.DictReader(handle)]
+    else:
+        rows = [dict(row) for row in (result.get("simulation_trade_rows") or [])]
+    if len(rows) != expected:
+        raise SystemExit(
+            f"{EXECUTION_VIEW} trade-row support incomplete: expected {expected}, observed {len(rows)}"
+        )
+    return rows
+
+
+def _metrics(result: dict[str, Any], capital: float, source_root: Path) -> dict[str, Any]:
+    views = result.get("execution_views") or {}
+    view = views.get(EXECUTION_VIEW)
+    if not isinstance(view, dict) or view.get("execution_view") != EXECUTION_VIEW:
+        raise SystemExit(f"canonical {EXECUTION_VIEW} economics missing")
+    rows = _full_simulation_rows(result, source_root)
+    pnl = float(view.get("net_pnl") or 0.0)
     return {
+        "execution_view": EXECUTION_VIEW,
         "after_cost_net_pnl": pnl,
         "after_cost_return_pct": 100.0 * pnl / capital,
-        "max_drawdown": float(result.get("max_drawdown") or 0.0),
-        "trade_count": int(result.get("total_trades") or 0),
+        "max_drawdown": float(view.get("max_drawdown") or 0.0),
+        "trade_count": int(view.get("total_trades") or 0),
         "bar_support": sum(int(x.get("bar_count") or 0) for x in (result.get("symbol_rows") or [])),
-        "chronology_folds": _folds(result),
+        "chronology_folds": _folds(rows),
+        "cost_model": dict(result.get("cost_model") or {}),
     }
 
 
-def _arm(seed: dict[str, Any], *, trigger_mode: str, extra_cost_bps: float) -> dict[str, Any]:
+def _arm(seed: dict[str, Any], *, trigger_mode: str, slippage_bps: float) -> dict[str, Any]:
     req = copy.deepcopy(seed)
     params = req.setdefault("params", {})
     if not bool(params.get("ENABLE_DCA", False)):
         raise SystemExit("W96 seed is not DCA-enabled; DCA_TRIGGER_MODE discriminator is inadmissible")
     params["DCA_TRIGGER_MODE"] = trigger_mode
-    base_slippage = float(params.get("slippage_bps", params.get("SLIPPAGE_BPS", 0.0)) or 0.0)
-    params["slippage_bps"] = base_slippage + extra_cost_bps
+    # Cost sensitivity is absolute, not additive, so 0 really means the 0 bp slippage arm.
+    params["slippage_bps"] = float(slippage_bps)
+    params["SLIPPAGE_BPS"] = float(slippage_bps)
     req["paper_only"] = True
     req["live_allowed"] = False
     return req
+
+
+def _dca_params(request: dict[str, Any]) -> dict[str, Any]:
+    params = request.get("params") or {}
+    keys = sorted(k for k in params if k == "ENABLE_DCA" or str(k).startswith("DCA_"))
+    return {str(k): params[k] for k in keys}
 
 
 def main() -> int:
@@ -116,13 +158,17 @@ def main() -> int:
         "control": "tiered_previous_buy",
         "challenger": "legacy_pine_v0_2",
     }
+    primary_requests = {
+        name: _arm(seed, trigger_mode=mode, slippage_bps=2.5)
+        for name, mode in arms.items()
+    }
     scenarios: dict[str, Any] = {}
     for cost in COST_BPS:
         pair: dict[str, Any] = {}
         for name, mode in arms.items():
-            request = _arm(seed, trigger_mode=mode, extra_cost_bps=cost)
+            request = _arm(seed, trigger_mode=mode, slippage_bps=cost)
             result = _canonical(source_root, request, root)
-            pair[name] = _metrics(result, args.capital_basis)
+            pair[name] = _metrics(result, args.capital_basis, source_root)
         pair["challenger_minus_control_return_pct"] = (
             pair["challenger"]["after_cost_return_pct"] - pair["control"]["after_cost_return_pct"]
         )
@@ -135,6 +181,7 @@ def main() -> int:
         "schema": SCHEMA,
         "authority": "research_only",
         "canonical_workload": WORKLOAD_MODULE,
+        "execution_view": EXECUTION_VIEW,
         "source_root": args.source_root,
         "corpus": {
             "path_basename": corpus.name,
@@ -145,9 +192,13 @@ def main() -> int:
         },
         "dca_discriminator": "DCA_TRIGGER_MODE",
         "arms": arms,
+        "exact_dca_parameters_at_primary_2_5bp": {
+            name: _dca_params(request) for name, request in primary_requests.items()
+        },
         "matched_controls": {"DCA_BASE_QTY": base_qty, "DCA_MAX_CONTRACTS": max_contracts},
         "capital_basis": args.capital_basis,
-        "cost_sensitivity_extra_slippage_bps": list(COST_BPS),
+        "cost_sensitivity_slippage_bps": list(COST_BPS),
+        "chronology_fold_contract": [name for name, _, _ in CHRONOLOGY_FOLDS],
         "scenarios": scenarios,
         "protected_holdout_read": False,
         "strategy_spec_write": False,
