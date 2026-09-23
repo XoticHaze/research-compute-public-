@@ -1,4 +1,4 @@
-name: MM-IBKR Private PR701 Forward Lifecycle Exact Validation R1
+name: MM-IBKR Private PR703 Forward Lifecycle Exact Validation R1
 
 on:
   workflow_dispatch:
@@ -12,15 +12,15 @@ permissions:
   id-token: write
 
 concurrency:
-  group: mmibkr-private-pr701-forward-lifecycle-validation-r1
+  group: mmibkr-private-pr703-forward-lifecycle-validation-r1
   cancel-in-progress: false
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  PRIVATE_SOURCE_SHA: 29a445ff42f8e1e2be0533f8cc200537f35caa5a
+  PRIVATE_SOURCE_SHA: 65fb19e9d6e33b953e90559475ebf666f2b92ec7
 
 jobs:
-  exact-private-pr701-validation:
+  exact-private-pr703-validation:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -30,7 +30,7 @@ jobs:
         with:
           python-version: '3.11.16'
 
-      - name: Materialize exact private PR701 source through bounded Fleet stream
+      - name: Materialize exact private PR703 source through bounded Fleet stream
         shell: bash
         run: |
           set -euo pipefail
@@ -46,8 +46,8 @@ jobs:
           source_sha = os.environ['PRIVATE_SOURCE_SHA'].strip().lower()
           run_id = os.environ['GITHUB_RUN_ID']
           temp = Path(os.environ['RUNNER_TEMP'])
-          archive = temp / 'mmibkr-pr701.tar.gz'
-          extract = temp / 'mmibkr-pr701'
+          archive = temp / 'mmibkr-pr703.tar.gz'
+          extract = temp / 'mmibkr-pr703'
           if len(source_sha) != 40 or any(ch not in '0123456789abcdef' for ch in source_sha):
               raise SystemExit('invalid exact private source sha')
 
@@ -69,7 +69,7 @@ jobs:
           headers = {
               'Authorization': 'Bearer ' + oidc(),
               'Accept': 'application/gzip',
-              'User-Agent': 'mmibkr-private-pr701-forward-lifecycle-validation-r1',
+              'User-Agent': 'mmibkr-private-pr703-forward-lifecycle-validation-r1',
               'X-MMIBKR-Caller-Run-Id': run_id,
           }
           url = f'{base}/v1/source-vault/private-archive/{source_sha}'
@@ -85,7 +85,7 @@ jobs:
                   if exc.code not in {401, 403, 502, 503}:
                       raise
                   if attempt % 12 == 0:
-                      print(f'MMIBKR_PR701_SOURCE_WAIT={attempt}')
+                      print(f'MMIBKR_PR703_SOURCE_WAIT={attempt}')
                   time.sleep(5)
           else:
               raise SystemExit('exact private source admission did not converge')
@@ -122,7 +122,7 @@ jobs:
                   'Authorization': 'Bearer ' + oidc(),
                   'Accept': 'application/json',
                   'Content-Type': 'application/json',
-                  'User-Agent': 'mmibkr-private-pr701-forward-lifecycle-validation-r1',
+                  'User-Agent': 'mmibkr-private-pr703-forward-lifecycle-validation-r1',
                   'X-MMIBKR-Caller-Run-Id': run_id,
               },
           )
@@ -162,7 +162,7 @@ jobs:
               fh.write('PRIVATE_SOURCE_ROOT=' + str(root) + '\n')
               fh.write('PRIVATE_ARCHIVE_SHA256=' + archive_sha + '\n')
               fh.write('PRIVATE_ARCHIVE_BYTES=' + str(size) + '\n')
-          print('MMIBKR_PR701_EXACT_SOURCE_READY=1')
+          print('MMIBKR_PR703_EXACT_SOURCE_READY=1')
           print('MMIBKR_PRIVATE_SOURCE_TOKEN_EXPOSED=0')
           PY
 
@@ -170,27 +170,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          log="$RUNNER_TEMP/pr701-build.log"
+          log="$RUNNER_TEMP/pr703-build.log"
           set +e
           docker build -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" --target bot \
-            -t "mmibkr-pr701:$GITHUB_RUN_ID" "$PRIVATE_SOURCE_ROOT" >"$log" 2>&1
+            -t "mmibkr-pr703:$GITHUB_RUN_ID" "$PRIVATE_SOURCE_ROOT" >"$log" 2>&1
           rc=$?
           set -e
-          echo "MMIBKR_PR701_BUILD_LOG_SHA256=$(sha256sum "$log" | awk '{print $1}')"
+          echo "MMIBKR_PR703_BUILD_LOG_SHA256=$(sha256sum "$log" | awk '{print $1}')"
           rm -f "$log"
           if [ "$rc" -ne 0 ]; then exit "$rc"; fi
-          echo 'MMIBKR_PR701_BUILD_STATUS=PASS'
+          echo 'MMIBKR_PR703_BUILD_STATUS=PASS'
 
       - name: Validate attribution-safe lifecycle contracts
         shell: bash
         run: |
           set -euo pipefail
-          log="$RUNNER_TEMP/pr701-tests.log"
+          log="$RUNNER_TEMP/pr703-tests.log"
           set +e
           docker run --rm \
             -e ENABLE_LIVE_TRADING=0 \
             -e PYTHONDONTWRITEBYTECODE=1 \
-            "mmibkr-pr701:$GITHUB_RUN_ID" \
+            "mmibkr-pr703:$GITHUB_RUN_ID" \
             python -m unittest -v \
               tests.test_selected_runtime_forward_execution_lifecycle_v1 \
               tests.test_selected_runtime_cloud_cycle_v1 \
@@ -207,20 +207,20 @@ jobs:
           for raw in Path(sys.argv[1]).read_text(errors='replace').splitlines():
               line = raw.strip()
               if re.match(r'^test_[A-Za-z0-9_]+ .* \.\.\. (ok|FAIL|ERROR)$', line):
-                  print('MMIBKR_PR701_SAFE_DIAGNOSTIC=' + line)
+                  print('MMIBKR_PR703_SAFE_DIAGNOSTIC=' + line)
               elif line.startswith('FAILED (') or line == 'OK':
-                  print('MMIBKR_PR701_SAFE_DIAGNOSTIC=' + line)
+                  print('MMIBKR_PR703_SAFE_DIAGNOSTIC=' + line)
           PY
-            echo "MMIBKR_PR701_TEST_STATUS=FAIL"
-            echo "MMIBKR_PR701_TEST_LOG_SHA256=$sha"
-            echo "MMIBKR_PR701_TEST_LOG_BYTES=$bytes"
+            echo "MMIBKR_PR703_TEST_STATUS=FAIL"
+            echo "MMIBKR_PR703_TEST_LOG_SHA256=$sha"
+            echo "MMIBKR_PR703_TEST_LOG_BYTES=$bytes"
             rm -f "$log"
             exit "$rc"
           fi
           rm -f "$log"
-          echo 'MMIBKR_PR701_TEST_STATUS=PASS'
-          echo "MMIBKR_PR701_TEST_LOG_SHA256=$sha"
-          echo "MMIBKR_PR701_TEST_LOG_BYTES=$bytes"
+          echo 'MMIBKR_PR703_TEST_STATUS=PASS'
+          echo "MMIBKR_PR703_TEST_LOG_SHA256=$sha"
+          echo "MMIBKR_PR703_TEST_LOG_BYTES=$bytes"
           echo 'MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0'
 
       - name: Emit sanitized validation receipt
@@ -229,8 +229,8 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           import json, os
-          print('MMIBKR_PR701_VALIDATION_RECEIPT=' + json.dumps({
-              'schema': 'mmibkr.private_pr701_forward_lifecycle_validation.v1',
+          print('MMIBKR_PR703_VALIDATION_RECEIPT=' + json.dumps({
+              'schema': 'mmibkr.private_pr703_forward_lifecycle_validation.v1',
               'status': 'PASS',
               'source_sha': os.environ['PRIVATE_SOURCE_SHA'],
               'source_archive_sha256': os.environ['PRIVATE_ARCHIVE_SHA256'],
@@ -253,6 +253,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker image rm "mmibkr-pr701:$GITHUB_RUN_ID" >/dev/null 2>&1 || true
-          sudo rm -rf "$RUNNER_TEMP/mmibkr-pr701" "$RUNNER_TEMP/mmibkr-pr701.tar.gz" "$RUNNER_TEMP/pr701-build.log" "$RUNNER_TEMP/pr701-tests.log"
-          echo 'MMIBKR_PR701_PRIVATE_SOURCE_DESTROYED=1'
+          docker image rm "mmibkr-pr703:$GITHUB_RUN_ID" >/dev/null 2>&1 || true
+          sudo rm -rf "$RUNNER_TEMP/mmibkr-pr703" "$RUNNER_TEMP/mmibkr-pr703.tar.gz" "$RUNNER_TEMP/pr703-build.log" "$RUNNER_TEMP/pr703-tests.log"
+          echo 'MMIBKR_PR703_PRIVATE_SOURCE_DESTROYED=1'
