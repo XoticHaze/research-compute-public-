@@ -1,6 +1,6 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "73e573f622dd992f4b9337c1a0aef61e0f431bd9",
+  "source_ref": "15594dd2353adb334584e8d9025cf7a427428b17",
   "test_modules": [
     "tests.test_autotuner_strategy_family_catalog_vnext",
     "tests.test_autotuner_behavioral_consumption_vnext",
@@ -14,8 +14,8 @@
     "tests.test_autotuner_parameter_consumption",
     "tests.test_autotuner_primary_validation_runner"
   ],
-  "requested_by": "assistant-autotuner-vnext-698-after-fleet-admission",
-  "purpose": "validate current-main-aligned AutoTuner vNext family, composition, universe expansion plus incumbent campaign contracts",
+  "requested_by": "assistant-autotuner-vnext-698-vault-exact-private-validation",
+  "purpose": "exact-private validation of current-main-aligned AutoTuner vNext family, composition, universe expansion and incumbent campaign contracts",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -23,7 +23,9 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "20260923T0911Z-699-73e573f6-retry1",
+  "request_nonce": "20260923T0959Z-699-15594dd2-vault1",
   "admission_commit": "46899ad6d2d3de0c853e130bebef86dca20eb0b9",
-  "retry_reason": "initial run 35841184886 reached source exchange before Fleet identity deployment propagation and failed HTTP 401"
+  "retry_reason": "initial run 35841184886 reached source exchange before Fleet identity deployment propagation and failed HTTP 401",
+  "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
+  "source_vault_bootstrap_run": 35846053057
 }
