@@ -87,12 +87,12 @@ class MaintenanceOperatorSnapshotRefreshTests(unittest.TestCase):
                 "schema": mod.HOLD_SCHEMA,
                 "enabled": True,
                 "reason": mod.HOLD_REASON,
-                "broker_authority": False,
+                "broker_mutation_authority": False,
                 "live_execution_allowed": False,
             }))
             mod._validate_hold(path)
             node = json.loads(path.read_text())
-            node["broker_authority"] = True
+            node["broker_mutation_authority"] = True
             path.write_text(json.dumps(node))
             with self.assertRaisesRegex(RuntimeError, "authority boundary"):
                 mod._validate_hold(path)
