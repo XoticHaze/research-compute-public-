@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -318,6 +320,17 @@ class IntelligenceReportMaterializeTests(unittest.TestCase):
             target = self.output_dir / filename
             self.assertEqual(node["bytes"], target.stat().st_size)
             self.assertEqual(node["sha256"], mod.file_sha256(target))
+
+        render_output = os.environ.get("MMIBKR_G13_RENDER_OUTPUT")
+        if render_output:
+            target = Path(render_output)
+            target.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(report_path, target / report_path.name)
+            shutil.copy2(html_path, target / html_path.name)
+            shutil.copy2(
+                self.output_dir / "intelligence_report_materialization.json",
+                target / "intelligence_report_materialization.json",
+            )
 
     def test_designated_llm_sidecar_is_hash_bound_separate_and_escaped(self):
         first = mod.materialize_report(
