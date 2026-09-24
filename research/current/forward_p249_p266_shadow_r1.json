@@ -60,7 +60,7 @@
   "decision_at": "2026-09-10T07:25:00+00:00",
   "forward": {
     "first_close": "2026-09-10",
-    "latest_close": "2026-09-21",
+    "latest_close": "2026-09-22",
     "observations": [
       {
         "cost_detail": {
@@ -147,47 +147,74 @@
         "p249_plus_p266_gross": 0.021568900186899376,
         "p249_plus_p266_net": 0.021568900186899376,
         "satellite_increment_net": -0.001118728966765778
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-09-22",
+        "holding_month": "2026-09",
+        "p249_core_gross": 0.009820506307959472,
+        "p249_core_net": 0.009820506307959472,
+        "p249_plus_p266_gross": 0.007365379730969606,
+        "p249_plus_p266_net": 0.007365379730969606,
+        "satellite_increment_net": -0.002455126576989866
       }
     ],
     "p249_core_net": {
-      "annualized_vol": 0.24554013119494297,
-      "cumulative_return": 0.017732010315781643,
-      "days": 8,
+      "annualized_vol": 0.2330998489233222,
+      "cumulative_return": 0.02772665394289997,
+      "days": 9,
       "max_drawdown": -0.022078059615729062,
-      "sharpe_rf0": 2.3648891561628678
+      "sharpe_rf0": 3.393952883195458
     },
     "p249_plus_p266_net": {
-      "annualized_vol": 0.2440482120667422,
-      "cumulative_return": 0.014309283008883789,
-      "days": 8,
+      "annualized_vol": 0.2301234437966,
+      "cumulative_return": 0.021780056042891793,
+      "days": 9,
       "max_drawdown": -0.022644004463825196,
-      "sharpe_rf0": 1.942237890413296
+      "sharpe_rf0": 2.7270741088304717
     },
-    "satellite_increment_cumulative": -0.003391571637500368
+    "satellite_increment_cumulative": -0.005838371476825199
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-09-23T00:50:18.115416+00:00",
+  "observed_at": "2026-09-24T00:43:23.140791+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_health": {
-    "all_symbols_share_latest_date": true,
+    "all_symbols_share_latest_date": false,
     "common_session_lags_source_max": false,
-    "lagging_symbols_vs_source_max": [],
+    "lagging_symbols_vs_source_max": [
+      "AVDV",
+      "AVUV",
+      "DBC",
+      "IHI",
+      "ITA",
+      "IYT",
+      "XAR",
+      "XBI",
+      "XHB",
+      "XME",
+      "XOP",
+      "XPH",
+      "XRT",
+      "XSD",
+      "XSW",
+      "XTN"
+    ],
     "latest_by_symbol": {
       "AVDV": "2026-09-21",
       "AVUV": "2026-09-21",
       "DBC": "2026-09-21",
-      "GLD": "2026-09-21",
-      "IGV": "2026-09-21",
+      "GLD": "2026-09-22",
+      "IGV": "2026-09-22",
       "IHI": "2026-09-21",
       "ITA": "2026-09-21",
       "IYT": "2026-09-21",
-      "KRE": "2026-09-21",
-      "QQQ": "2026-09-21",
-      "SOXX": "2026-09-21",
-      "SPY": "2026-09-21",
-      "TLT": "2026-09-21",
+      "KRE": "2026-09-22",
+      "QQQ": "2026-09-22",
+      "SOXX": "2026-09-22",
+      "SPY": "2026-09-22",
+      "TLT": "2026-09-22",
       "XAR": "2026-09-21",
       "XBI": "2026-09-21",
       "XHB": "2026-09-21",
@@ -199,9 +226,9 @@
       "XSW": "2026-09-21",
       "XTN": "2026-09-21"
     },
-    "latest_scored_common_session": "2026-09-21",
+    "latest_scored_common_session": "2026-09-22",
     "provider": "yfinance_adjusted_close",
-    "source_max_date": "2026-09-21"
+    "source_max_date": "2026-09-22"
   },
   "source_pins": {
     "P248_source_commit": "20490f115d901aac3b586c33072c1157ad4d10a6",
