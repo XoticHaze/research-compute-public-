@@ -202,6 +202,169 @@ class CanonicalSessionRunnerTests(unittest.TestCase):
         self.assertEqual(second["waves"], first["waves"])
         self.assertEqual(second["jobs"], first["jobs"])
 
+    def external_dependency(self, raw: bytes, relative_path: str = "incoming/private-input.bin") -> dict:
+        return {
+            "scope": "input_root",
+            "relative_path": relative_path,
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "bytes": len(raw),
+            "producer": {
+                "mechanism": "source_exchange",
+                "identity": "mmibkr-private-input-producer",
+                "trigger": "rendezvous/fire/mmibkr-private-input-r1",
+            },
+        }
+
+    def test_missing_external_artifact_is_explicit_wait_without_dispatch(self):
+        raw = b"governed-private-input"
+        node = {
+            "schema": session_mod.SESSION_SCHEMA,
+            "session_id": "session-external-wait",
+            "budget_seconds": 20,
+            "reserve_seconds": 1,
+            "max_parallel": 1,
+            "jobs": [
+                {
+                    "job_id": "consumer",
+                    "priority": 100,
+                    "depends_on": [],
+                    "external_artifact_dependency": self.external_dependency(raw),
+                    "request": self.request("consumer", "MNQ"),
+                }
+            ],
+        }
+        input_root = self.root / "governed-input"
+        input_root.mkdir()
+        result = session_mod.execute_session(
+            node,
+            source_root=self.source_root,
+            source_receipt_path=self.source_receipt_path,
+            receipt_dir=self.receipt_dir,
+            input_root=input_root,
+        )
+        self.assertEqual(result["status"], "awaiting_external_artifact")
+        row = result["jobs"]["consumer"]
+        self.assertEqual(row["state"], "awaiting_external_artifact")
+        self.assertEqual(row["reason"], "artifact_missing")
+        self.assertEqual(
+            row["external_artifact_dependency"]["producer"]["mechanism"],
+            "source_exchange",
+        )
+        self.assertEqual(result["waves"], [])
+        self.assertFalse(
+            (self.receipt_dir / "session-inputs" / "session-external-wait" / "consumer.json").exists()
+        )
+
+    def test_same_session_resumes_after_exact_external_artifact_arrives(self):
+        raw = b"governed-private-input"
+        node = {
+            "schema": session_mod.SESSION_SCHEMA,
+            "session_id": "session-external-resume",
+            "budget_seconds": 20,
+            "reserve_seconds": 1,
+            "max_parallel": 1,
+            "jobs": [
+                {
+                    "job_id": "consumer",
+                    "priority": 100,
+                    "depends_on": [],
+                    "external_artifact_dependency": self.external_dependency(raw),
+                    "request": self.request("consumer", "MNQ"),
+                }
+            ],
+        }
+        input_root = self.root / "governed-input-resume"
+        input_root.mkdir()
+        first = session_mod.execute_session(
+            node,
+            source_root=self.source_root,
+            source_receipt_path=self.source_receipt_path,
+            receipt_dir=self.receipt_dir,
+            input_root=input_root,
+        )
+        self.assertEqual(first["status"], "awaiting_external_artifact")
+
+        target = input_root / "incoming" / "private-input.bin"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(raw)
+        second = session_mod.execute_session(
+            node,
+            source_root=self.source_root,
+            source_receipt_path=self.source_receipt_path,
+            receipt_dir=self.receipt_dir,
+            input_root=input_root,
+        )
+        self.assertEqual(second["status"], "completed")
+        self.assertEqual(second["jobs"]["consumer"]["state"], "completed")
+        self.assertEqual(
+            [[row["job_id"] for row in wave["jobs"]] for wave in second["waves"]],
+            [["consumer"]],
+        )
+        self.assertGreater(second["started_at_epoch"], first["started_at_epoch"])
+
+    def test_present_external_artifact_with_wrong_identity_fails_closed(self):
+        raw = b"governed-private-input"
+        node = {
+            "schema": session_mod.SESSION_SCHEMA,
+            "session_id": "session-external-tamper",
+            "budget_seconds": 20,
+            "reserve_seconds": 1,
+            "max_parallel": 1,
+            "jobs": [
+                {
+                    "job_id": "consumer",
+                    "priority": 100,
+                    "depends_on": [],
+                    "external_artifact_dependency": self.external_dependency(raw),
+                    "request": self.request("consumer", "MNQ"),
+                }
+            ],
+        }
+        input_root = self.root / "governed-input-tamper"
+        target = input_root / "incoming" / "private-input.bin"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b"governed-private-inpuX")
+        result = session_mod.execute_session(
+            node,
+            source_root=self.source_root,
+            source_receipt_path=self.source_receipt_path,
+            receipt_dir=self.receipt_dir,
+            input_root=input_root,
+        )
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(
+            result["jobs"]["consumer"]["error_class"],
+            "external_artifact_sha256_mismatch",
+        )
+        self.assertEqual(result["waves"], [])
+
+    def test_external_artifact_dependency_rejects_path_escape(self):
+        raw = b"x"
+        node = {
+            "schema": session_mod.SESSION_SCHEMA,
+            "session_id": "session-external-path",
+            "budget_seconds": 20,
+            "reserve_seconds": 1,
+            "max_parallel": 1,
+            "jobs": [
+                {
+                    "job_id": "consumer",
+                    "priority": 100,
+                    "depends_on": [],
+                    "external_artifact_dependency": self.external_dependency(
+                        raw,
+                        "../escape.bin",
+                    ),
+                    "request": self.request("consumer", "MNQ"),
+                }
+            ],
+        }
+        with self.assertRaisesRegex(
+            session_mod.CanonicalSessionError,
+            "relative_path rejected",
+        ):
+            session_mod.validate_session(node)
+
     def test_session_id_cannot_be_reused_for_different_plan(self):
         node = {
             "schema": session_mod.SESSION_SCHEMA,
