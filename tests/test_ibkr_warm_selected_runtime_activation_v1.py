@@ -128,6 +128,12 @@ class WarmSelectedRuntimeActivationTests(unittest.TestCase):
                 key, value = cmd[index + 1].split("=", 1)
                 env[key] = value
         self.assertEqual(env["ENABLE_LIVE_TRADING"], "0")
+        self.assertEqual(env["IB_HOST"], "127.0.0.1")
+        self.assertEqual(env["IB_PORT"], "4002")
+        self.assertEqual(env["CLIENT_ID"], "34")
+        self.assertEqual(env["MM_IB_HOST"], "127.0.0.1")
+        self.assertEqual(env["MM_IB_PORT"], "4002")
+        self.assertEqual(env["MM_CLIENT_ID"], "34")
         self.assertEqual(env["CONFIG_PATH"], "/app/config.smoke.json")
         self.assertEqual(env["STRATEGY_IBKR_PAPER_ORDER_SUBMIT_ENABLED_13Z53"], "1")
         self.assertEqual(env["STRATEGY_IBKR_PAPER_CANCEL_ENABLED_13Z37"], "1")
