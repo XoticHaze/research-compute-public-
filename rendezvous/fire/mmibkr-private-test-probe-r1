@@ -5,13 +5,13 @@
     "tests.test_data_manager_indicator_context_contract_14th31jq",
     "tests.test_data_manager_registry_authority_14th31lm",
     "tests.test_publish_canonical_feature_sidecar",
-    "tests.test_registry_builder_condition_execution_14th31kn",
+    "tests.test_builder_feature_rhs_comparison_14th31ky",
     "tests.test_strategy_backtest_registry_dispatch",
     "tests.test_crw_tradingview_dual_execution_replay_14th31js",
-    "tests.test_crw_builder_backtest_dca_dual_ledger_14th31jt"
+    "tests.test_crw_backtest_futures_timestamp_14th31kf"
   ],
   "requested_by": "assistant-g05-g07-current-main-recovery",
-  "purpose": "exact-private proof for recovered G05 canonical data, G06 feature/preview, and G07 CRW evidence chain",
+  "purpose": "clean exact-private proof for recovered G05 canonical data, G06 feature/preview, and G07 CRW evidence chain using bot-only headless modules",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -19,7 +19,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "g05-g07-recovery-r1-72330f01",
+  "request_nonce": "g05-g07-recovery-r2-headless-c8427599",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
   "current_private_reference": "604f055815f2746a6f63aa6355d6a0667eeb7c8f"
 }
