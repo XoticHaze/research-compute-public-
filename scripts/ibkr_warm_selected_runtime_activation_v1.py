@@ -378,6 +378,7 @@ def canonical_runtime_docker_command(
     container_name: str = BOT_CONTAINER,
 ) -> list[str]:
     env = {
+        "CONFIG_PATH": "/app/config.smoke.json",
         "IB_HOST": gateway_host,
         "IB_PORT": str(int(gateway_port)),
         "CLIENT_ID": "34",
@@ -506,6 +507,9 @@ def start_canonical_runtime(
     dockerfile = source_root / "Dockerfile.bot"
     if not dockerfile.is_file():
         raise ActivationError("canonical MM-IBKR Dockerfile.bot missing")
+    bootstrap_config = source_root / "config.smoke.json"
+    if not bootstrap_config.is_file():
+        raise ActivationError("source-controlled MM-IBKR config.smoke.json missing")
     run(
         [
             "docker",
