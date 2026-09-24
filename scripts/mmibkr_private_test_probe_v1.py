@@ -39,6 +39,8 @@ SAFE_EXACT = {
     "tests.test_news_publication_time_integrity_20260902",
     "tests.test_news_publication_time_integration_patch_20260902",
     "tests.test_news_scorecard_cycle_break_14th31fd_r18",
+    "tests.test_options_snapshot_analysis",
+    "tests.test_options_snapshot_features",
 }
 DENY_TOKENS = (
     "broker",
