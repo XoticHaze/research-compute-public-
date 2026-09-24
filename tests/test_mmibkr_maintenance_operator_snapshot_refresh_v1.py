@@ -3,6 +3,8 @@ import hashlib
 import json
 import tempfile
 import unittest
+from datetime import datetime, timezone
+from unittest.mock import patch
 from pathlib import Path
 
 from scripts import mmibkr_maintenance_operator_snapshot_refresh_v1 as mod
@@ -51,6 +53,32 @@ class MaintenanceOperatorSnapshotRefreshTests(unittest.TestCase):
                 "order_submission": False, "order_cancel": False, "global_cancel": False, "live_execution": False,
             },
         }
+
+    def test_discover_accepts_exact_child_created_just_before_dispatch_return(self):
+        nonce = "ae405f13d345771c"
+        expected_head = "b" * 40
+        started = datetime(2026, 9, 24, 1, 8, 9, tzinfo=timezone.utc)
+        response = {
+            "workflow_runs": [{
+                "id": 35941580182,
+                "event": "workflow_dispatch",
+                "head_branch": mod.B1_REF,
+                "head_sha": expected_head,
+                "display_title": f"IBKR B1 {mod.MODE} {nonce}",
+                "created_at": "2026-09-24T01:08:08Z",
+            }]
+        }
+
+        with patch.object(mod, "_api_json", return_value=(200, response)):
+            run_id = mod._discover(
+                "token",
+                nonce=nonce,
+                expected_head=expected_head,
+                started=started,
+                timeout_sec=1,
+            )
+
+        self.assertEqual(run_id, "35941580182")
 
     def test_exact_position_parity_refreshes_timestamp_and_preserves_ownership(self):
         stale = self.stale()
