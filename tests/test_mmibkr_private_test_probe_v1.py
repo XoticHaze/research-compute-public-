@@ -74,6 +74,29 @@ def test_allowlist_accepts_exact_model_lab_scientific_chain_only():
 
 
 
+def test_allowlist_accepts_exact_g05_g07_recovery_chain_only():
+    assert validated_modules(
+        "tests.test_data_manager_indicator_context_contract_14th31jq "
+        "tests.test_data_manager_registry_authority_14th31lm "
+        "tests.test_publish_canonical_feature_sidecar "
+        "tests.test_registry_builder_condition_execution_14th31kn "
+        "tests.test_strategy_backtest_registry_dispatch "
+        "tests.test_crw_tradingview_dual_execution_replay_14th31js "
+        "tests.test_crw_builder_backtest_dca_dual_ledger_14th31jt"
+    ) == [
+        "tests.test_data_manager_indicator_context_contract_14th31jq",
+        "tests.test_data_manager_registry_authority_14th31lm",
+        "tests.test_publish_canonical_feature_sidecar",
+        "tests.test_registry_builder_condition_execution_14th31kn",
+        "tests.test_strategy_backtest_registry_dispatch",
+        "tests.test_crw_tradingview_dual_execution_replay_14th31js",
+        "tests.test_crw_builder_backtest_dca_dual_ledger_14th31jt",
+    ]
+
+    with pytest.raises(ValueError, match="test_module_not_allowlisted"):
+        validated_modules("tests.test_strategy_health_preview_binding")
+
+
 def test_module_file_path_and_pytest_command_are_exact_and_shell_free():
     assert module_file_path("tests.test_model_lab_xgboost") == "tests/test_model_lab_xgboost.py"
     command = pytest_container_command("probe:test", "tests.test_model_lab_xgboost")
