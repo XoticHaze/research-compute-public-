@@ -28,6 +28,12 @@ SAFE_EXACT = {
     "tests.test_model_lab_xgboost",
     "tests.test_model_lab_comparison_matrix_authority_cc44",
     "tests.test_model_lab_validation_authority_cc44",
+    "tests.test_data_manager_indicator_context_contract_14th31jq",
+    "tests.test_data_manager_registry_authority_14th31lm",
+    "tests.test_publish_canonical_feature_sidecar",
+    "tests.test_registry_builder_condition_execution_14th31kn",
+    "tests.test_crw_tradingview_dual_execution_replay_14th31js",
+    "tests.test_crw_builder_backtest_dca_dual_ledger_14th31jt",
 }
 DENY_TOKENS = (
     "broker",
