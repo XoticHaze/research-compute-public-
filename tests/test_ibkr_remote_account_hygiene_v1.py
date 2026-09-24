@@ -69,7 +69,14 @@ class RemoteAccountHygieneTests(unittest.TestCase):
             "flatten_candidates": rows,
         }
 
-    def guard_result(self, symbols, *, market_state="regular"):
+    def guard_result(
+        self,
+        symbols,
+        *,
+        market_state="regular",
+        submit_allowed=True,
+        route_blockers=None,
+    ):
         return {
             "ok": False,
             "status": "blocked",
@@ -80,10 +87,10 @@ class RemoteAccountHygieneTests(unittest.TestCase):
                 {
                     "symbol": symbol,
                     "blockers": [],
-                    "session_policy_blockers": [],
+                    "session_policy_blockers": list(route_blockers or []),
                     "execution_session": {
                         "market_state": market_state,
-                        "submit_allowed": True,
+                        "submit_allowed": submit_allowed,
                     },
                     "resolved_order": {
                         "order_type": "MKT" if market_state == "regular" else "LMT",
@@ -116,7 +123,7 @@ class RemoteAccountHygieneTests(unittest.TestCase):
             )
         self.assertEqual(calls, [])
 
-    def test_read_only_preflight_requires_exact_broker_truth_and_regular_session(self):
+    def test_read_only_preflight_requires_exact_broker_truth_and_canonical_route(self):
         calls = []
 
         def send(method, path, *, payload=None, timeout=None, **kwargs):
@@ -138,7 +145,8 @@ class RemoteAccountHygieneTests(unittest.TestCase):
         self.assertEqual(receipt["status"], "PREFLIGHT_READY")
         self.assertTrue(receipt["preflight"]["broker_truth_match"])
         self.assertTrue(receipt["preflight"]["open_orders_clean"])
-        self.assertTrue(receipt["preflight"]["regular_session_ready"])
+        self.assertTrue(receipt["preflight"]["canonical_route_ready"])
+        self.assertTrue(receipt["preflight"]["regular_session_ready"])  # compatibility alias
         self.assertFalse(receipt["execution"]["called"])
         self.assertTrue(all(
             call[1].get("operator_approved") is not True
@@ -173,7 +181,54 @@ class RemoteAccountHygieneTests(unittest.TestCase):
         ))
         self.assertEqual(approved_calls, [])
 
-    def test_extended_session_is_previewable_but_execute_fails_closed(self):
+    def test_extended_session_canonical_lmt_is_preflight_ready(self):
+        calls = []
+
+        def send(method, path, *, payload=None, timeout=None, **kwargs):
+            calls.append((path, dict(payload or {})))
+            if path == mod.PREVIEW_ROUTE:
+                return 200, self.initial_preview()
+            if path == mod.FLATTEN_ROUTE:
+                return 409, self.guard_result(payload["symbols"], market_state="extended")
+            self.fail(path)
+
+        receipt = mod.execute_account_hygiene(
+            runtime=self.runtime(),
+            request=self.request(execute=False),
+            send=send,
+            run_id="123",
+            public_head="e" * 40,
+        )
+        self.assertTrue(receipt["ok"])
+        self.assertEqual(receipt["status"], "PREFLIGHT_READY")
+        self.assertTrue(receipt["preflight"]["canonical_route_ready"])
+        self.assertFalse(any("regular_session" in p for p in receipt["preflight"]["problems"]))
+        flatten_calls = [payload for path, payload in calls if path == mod.FLATTEN_ROUTE]
+        self.assertTrue(flatten_calls)
+        self.assertTrue(all(payload["order_type"] == "AUTO" for payload in flatten_calls))
+        self.assertTrue(all(payload["session_policy"] == "auto" for payload in flatten_calls))
+        self.assertTrue(all(payload["outside_rth"] == "auto" for payload in flatten_calls))
+
+    def test_overnight_session_canonical_lmt_is_preflight_ready(self):
+        def send(method, path, *, payload=None, timeout=None, **kwargs):
+            if path == mod.PREVIEW_ROUTE:
+                return 200, self.initial_preview()
+            if path == mod.FLATTEN_ROUTE:
+                return 409, self.guard_result(payload["symbols"], market_state="overnight")
+            self.fail(path)
+
+        receipt = mod.execute_account_hygiene(
+            runtime=self.runtime(),
+            request=self.request(execute=False),
+            send=send,
+            run_id="123",
+            public_head="e" * 40,
+        )
+        self.assertTrue(receipt["ok"])
+        self.assertEqual(receipt["status"], "PREFLIGHT_READY")
+        self.assertTrue(receipt["preflight"]["canonical_route_ready"])
+
+    def test_closed_session_still_fails_closed_from_canonical_route(self):
         approved_calls = []
 
         def send(method, path, *, payload=None, timeout=None, **kwargs):
@@ -182,7 +237,12 @@ class RemoteAccountHygieneTests(unittest.TestCase):
             if path == mod.FLATTEN_ROUTE:
                 if payload.get("operator_approved"):
                     approved_calls.append(dict(payload))
-                return 409, self.guard_result(payload["symbols"], market_state="extended")
+                return 409, self.guard_result(
+                    payload["symbols"],
+                    market_state="closed",
+                    submit_allowed=False,
+                    route_blockers=["session_policy_submit_not_allowed_13z40"],
+                )
             self.fail(path)
 
         receipt = mod.execute_account_hygiene(
@@ -194,8 +254,36 @@ class RemoteAccountHygieneTests(unittest.TestCase):
         )
         self.assertFalse(receipt["ok"])
         self.assertEqual(receipt["status"], "PREFLIGHT_BLOCKED")
-        self.assertTrue(any("regular_session_required" in p for p in receipt["preflight"]["problems"]))
+        self.assertFalse(receipt["preflight"]["canonical_route_ready"])
+        self.assertTrue(any("session_submit_not_allowed" in p for p in receipt["preflight"]["problems"]))
         self.assertEqual(approved_calls, [])
+
+    def test_futures_position_never_enters_stock_flatten_materializer(self):
+        request = self.request(execute=True)
+        request["expected_positions"] = [
+            {"symbol": "MNQ", "conId": 777, "secType": "FUT", "position": 1.0},
+        ]
+        request["ownership_authority"]["account_position_count"] = 1
+        calls = []
+
+        def send(*args, **kwargs):
+            calls.append((args, kwargs))
+            self.fail("FUT must dispatch through the futures adapter, not the STK/ETF flatten suite")
+
+        receipt = mod.execute_account_hygiene(
+            runtime=self.runtime(),
+            request=request,
+            send=send,
+            run_id="123",
+            public_head="e" * 40,
+        )
+        self.assertFalse(receipt["ok"])
+        self.assertEqual(receipt["status"], "PREFLIGHT_BLOCKED")
+        self.assertIn(
+            "unsupported_stock_flatten_sec_type:MNQ:FUT",
+            receipt["preflight"]["problems"],
+        )
+        self.assertEqual(calls, [])
 
     def test_execute_calls_existing_flatten_route_then_requires_zero_position_reconcile(self):
         calls = []

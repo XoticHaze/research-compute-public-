@@ -22,6 +22,7 @@ PREFLIGHT_ONLY_BLOCKERS = {
     "operator_approved_required_13z39",
     "ibkr_paper_flatten_ack_required_13z39",
 }
+SUPPORTED_FLATTEN_SEC_TYPES = {"STK", "ETF"}
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -50,7 +51,7 @@ def _broker_position_index(rows: Any) -> tuple[dict[str, dict[str, Any]], list[s
         con_id = int(raw.get("conId") or contract.get("conId") or 0)
         sec_type = str(contract.get("secType") or "").strip().upper()
         position = _finite(raw.get("position"))
-        if not symbol or con_id <= 0 or sec_type not in {"STK", "ETF"} or position in {None, 0.0}:
+        if not symbol or con_id <= 0 or sec_type not in SUPPORTED_FLATTEN_SEC_TYPES or position in {None, 0.0}:
             problems.append("broker_position_identity_invalid")
             continue
         if symbol in index:
@@ -102,6 +103,20 @@ def _chunks(symbols: list[str], size: int) -> list[list[str]]:
     return [symbols[index:index + size] for index in range(0, len(symbols), size)]
 
 
+def _route_scope_problems(request: Mapping[str, Any]) -> list[str]:
+    """Fail closed before calling the STK/ETF flatten materializer for other secTypes."""
+    problems: list[str] = []
+    for raw in request.get("expected_positions") or []:
+        if not isinstance(raw, Mapping):
+            problems.append("expected_position_row_invalid")
+            continue
+        symbol = str(raw.get("symbol") or "").strip().upper() or "UNKNOWN"
+        sec_type = str(raw.get("secType") or "").strip().upper() or "UNKNOWN"
+        if sec_type not in SUPPORTED_FLATTEN_SEC_TYPES:
+            problems.append(f"unsupported_stock_flatten_sec_type:{symbol}:{sec_type}")
+    return problems
+
+
 def _guard_payload(symbols: list[str], *, approved: bool) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "symbols": list(symbols),
@@ -118,7 +133,8 @@ def _guard_payload(symbols: list[str], *, approved: bool) -> dict[str, Any]:
     return payload
 
 
-def _session_gate(preflight: Mapping[str, Any], symbols: list[str]) -> list[str]:
+def _canonical_route_gate(preflight: Mapping[str, Any], symbols: list[str]) -> list[str]:
+    """Trust MM-IBKR's canonical session/order resolver instead of re-defining it here."""
     problems: list[str] = []
     items = [
         row for row in preflight.get("preview_items") or []
@@ -132,12 +148,11 @@ def _session_gate(preflight: Mapping[str, Any], symbols: list[str]) -> list[str]
             continue
         session = _mapping(row.get("execution_session"))
         resolved = _mapping(row.get("resolved_order"))
-        if str(session.get("market_state") or "").lower() != "regular":
-            problems.append(f"regular_session_required:{symbol}")
         if session.get("submit_allowed") is not True:
             problems.append(f"session_submit_not_allowed:{symbol}")
-        if str(resolved.get("order_type") or "").upper() != "MKT":
-            problems.append(f"regular_session_market_order_required:{symbol}")
+        order_type = str(resolved.get("order_type") or "").upper()
+        if order_type not in {"MKT", "LMT"}:
+            problems.append(f"canonical_resolved_order_type_invalid:{symbol}:{order_type or 'MISSING'}")
         route_blockers = list(row.get("blockers") or []) + list(row.get("session_policy_blockers") or [])
         for blocker in route_blockers:
             problems.append(f"{symbol}:{blocker}")
@@ -215,6 +230,9 @@ def execute_account_hygiene(
         "preflight": {
             "broker_truth_match": False,
             "open_orders_clean": False,
+            "canonical_route_ready": False,
+            # Deprecated compatibility alias. This now mirrors canonical_route_ready
+            # and MUST NOT be interpreted as a regular-hours-only requirement.
             "regular_session_ready": False,
             "problems": [],
             "batches": [],
@@ -243,6 +261,13 @@ def execute_account_hygiene(
             "live_execution_allowed": False,
         },
     }
+
+    route_scope_problems = _route_scope_problems(request)
+    if route_scope_problems:
+        receipt["preflight"]["problems"] = route_scope_problems
+        receipt["status"] = "PREFLIGHT_BLOCKED"
+        receipt["ok"] = request.get("execute") is not True
+        return receipt
 
     preview_status, preview = send(
         "POST",
@@ -286,7 +311,7 @@ def execute_account_hygiene(
         blockers = set(str(value) for value in guarded.get("blockers") or [])
         unexpected = sorted(blockers - PREFLIGHT_ONLY_BLOCKERS)
         missing = sorted(PREFLIGHT_ONLY_BLOCKERS - blockers)
-        session_problems = _session_gate(guarded, batch)
+        session_problems = _canonical_route_gate(guarded, batch)
         row = {
             "batch_index": batch_index,
             "symbols": batch,
@@ -309,10 +334,9 @@ def execute_account_hygiene(
 
     problems = [*truth_problems, *guard_problems]
     receipt["preflight"]["problems"] = problems
-    receipt["preflight"]["regular_session_ready"] = not any(
-        "regular_session" in problem or "session_" in problem
-        for problem in guard_problems
-    )
+    canonical_route_ready = not guard_problems
+    receipt["preflight"]["canonical_route_ready"] = canonical_route_ready
+    receipt["preflight"]["regular_session_ready"] = canonical_route_ready
     if problems:
         receipt["status"] = "PREFLIGHT_BLOCKED"
         receipt["ok"] = request.get("execute") is not True

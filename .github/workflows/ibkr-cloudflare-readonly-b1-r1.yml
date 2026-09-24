@@ -69,6 +69,7 @@ on:
       - assistant/b1-fleet-stream-attestation-20260923
       - assistant/b1-account-snapshot-refresh-20260923
       - assistant/b1-vault-attestation-contract-20260923
+      - b1/hygiene-canonical-route-authority-667-r1
     paths:
       - '.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml'
       - 'scripts/fleet_authority_envelope_consumer_v1.py'
