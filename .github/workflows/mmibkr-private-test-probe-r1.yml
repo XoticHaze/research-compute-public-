@@ -127,7 +127,7 @@ jobs:
         shell: bash
         env:
           PARITY_PUBLIC_KEY_B64: LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQm9qQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FZOEFNSUlCaWdLQ0FZRUE4anBiQkxQWmVZSnJ1RTU0a3ExSQp4WFZsT1pHdmREem16Ky9wakx4WTlNNDVwZkpuRjEycUF6MGlWWGlaQWxqRjg2N2F5ZVNCZURwY0JxU1hYbExnCkFJSm9pNlp2L2dnMm9iQVMxYlAvQjF0WDhjV2F2QVJueEh4VVVqZHZtelFHLzIrZzNuWG5Jck9ZWnllbUlVcm8KeVFtOUh6YkkwYUNWdGVaa1QyNmc3SkRESzhONFE3RXZiNkxXbk5PR3EzTGYwQURFazN1dmQ0M1dmYUlOZGdLegpQZTJCTmJDWTJNWWU0NEZ3UE05ekV0eUJadjZiUVNQK2xTMmRaN0hIT2VlZUt2UGt4eWJ5N2NrVWtOVFFMbVAxClBTTlFNRjhqSUVLYzRsUVV1akVKQnFYRzFvd0V5QWFPM0ROOEFFTk5WanJVYXZMWWFmdG5BVGxxSFBmWUNTTmoKMkJaQUJMVmorTnBtTmNVVG1xa2ZvdEZRZjNlcTVQdndBOC9sT3duVmlWaGZRK21DVXlzNjhqcVBqZktoRWVDWgpXTzJHRE95WWwvSm5EZ1Vkak9GS0tScFFtNm1tNFBTMG9aK1dRL2h0WFd6K29sSm5UZU5DNXczNzZsS2xNc2VWCmY2RUszVW5LNkdJZ3JUdGoyYUw5WFlJSjJ6RkM5ZXZHZ1BuMi9IWmR2OEpmQWdNQkFBRT0KLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tCg==
-          PARITY_EXPECTED_SOURCE_SHA: 48c4119bed5cc572e1078386070cb2263032f3d8
+          PARITY_EXPECTED_SOURCE_SHA: ebca3cece7a3faa943405f18f598818164e3d020
         run: |
           set -euo pipefail
           umask 077
@@ -173,7 +173,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: mmibkr-parity-encrypted-48c4119bed5cc572e1078386070cb2263032f3d8
+          name: mmibkr-parity-encrypted-ebca3cece7a3faa943405f18f598818164e3d020
           path: ${{ runner.temp }}/mmibkr-parity-export/
           retention-days: 1
           if-no-files-found: error
