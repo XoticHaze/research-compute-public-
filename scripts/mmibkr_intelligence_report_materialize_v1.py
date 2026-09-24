@@ -173,6 +173,15 @@ def validate_dataset(node: Any, label: str) -> dict | None:
     return validate_descriptor(node, f"{label} dataset")
 
 
+def validate_result_authority(result: dict, label: str) -> None:
+    safety = result.get("safety")
+    if not isinstance(safety, dict) or safety.get("research_only") is not True:
+        raise IntelligenceReportError(f"{label} research-only safety drift")
+    for key in FORBIDDEN_AUTHORITY_KEYS:
+        if safety.get(key) is not False:
+            raise IntelligenceReportError(f"{label} safety drift: {key}")
+
+
 def validate_plan_receipt(plan: Any) -> dict:
     if not isinstance(plan, dict):
         raise IntelligenceReportError("plan receipt must be object")
@@ -312,9 +321,19 @@ def news_section(receipt_dir: Path, receipt: dict) -> dict:
     result = receipt["result"]
     if result.get("schema") != "mmibkr.news_replay_analysis.v1":
         raise IntelligenceReportError("News result schema rejected")
+    validate_result_authority(result, "News result")
+    policy = result.get("policy")
+    if (
+        not isinstance(policy, dict)
+        or policy.get("deterministic_only") is not True
+        or policy.get("provider_or_rss_acquisition") is not False
+        or policy.get("llm_enrichment") is not False
+    ):
+        raise IntelligenceReportError("News deterministic/acquisition policy drift")
     artifacts = verify_job_artifacts(receipt_dir, receipt)
     artifact_map = result.get("artifact_map")
-    if not isinstance(artifact_map, dict):
+    expected_news_artifacts = {"articles.json", "scorecards.json", "unmatched.json", "match_summary.json"}
+    if not isinstance(artifact_map, dict) or set(artifact_map) != expected_news_artifacts:
         raise IntelligenceReportError("News artifact_map rejected")
     article_desc = validate_descriptor(artifact_map.get("articles.json"), "News articles")
     pair = artifacts.get(article_desc["relative_path"])
@@ -373,7 +392,19 @@ def options_section(receipt_dir: Path, receipt: dict) -> dict:
     result = receipt["result"]
     if result.get("schema") != "mmibkr.options_snapshot_analysis.v1":
         raise IntelligenceReportError("Options result schema rejected")
+    validate_result_authority(result, "Options result")
+    policy = result.get("policy")
+    if (
+        not isinstance(policy, dict)
+        or policy.get("snapshot_input_only") is not True
+        or policy.get("ibkr_acquisition") is not False
+        or policy.get("alpaca_acquisition") is not False
+        or policy.get("network_acquisition") is not False
+    ):
+        raise IntelligenceReportError("Options snapshot/acquisition policy drift")
     artifacts = verify_job_artifacts(receipt_dir, receipt)
+    if len(artifacts) != 2:
+        raise IntelligenceReportError("Options canonical artifact set rejected")
     analytics_pair = None
     for rel, pair in artifacts.items():
         if rel.endswith("options_snapshot/analytics.json"):
