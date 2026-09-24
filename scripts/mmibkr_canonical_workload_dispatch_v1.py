@@ -76,6 +76,11 @@ CAPABILITIES={
         "module":"model_lab_comparison_matrix",
         "callable":"align_training_matrices_for_comparison",
     },
+    "NEWS_REPLAY_ANALYZE":{
+        "path":"news_engine.py",
+        "module":"news_engine",
+        "callable":"NewsEngine",
+    },
 }
 _SHA1=re.compile(r"^[0-9a-f]{40}$")
 _SHA256=re.compile(r"^[0-9a-f]{64}$")
@@ -493,6 +498,80 @@ def validate_model_lab_compare_validate_arguments(args:Any,input_root:Path|None)
         "embargo_bars":embargo,"purge_bars":purge,"min_test_rows":min_test,"inputs":resolved,
     }
 
+
+def _news_symbols(value:Any,label:str="symbols")->list[str]:
+    if not isinstance(value,list) or not value or len(value)>256:
+        raise CanonicalDispatchError(f"NEWS_REPLAY_ANALYZE {label} must contain 1..256 symbols")
+    out=[]
+    for raw in value:
+        symbol=str(raw or "").strip().upper()
+        if not _SYMBOL.fullmatch(symbol):
+            raise CanonicalDispatchError(f"NEWS_REPLAY_ANALYZE invalid symbol: {raw!r}")
+        if symbol not in out:out.append(symbol)
+    return out
+
+def _news_aliases(value:Any,symbols:list[str])->dict[str,list[str]]:
+    if value is None:return {}
+    if not isinstance(value,dict) or len(value)>256:
+        raise CanonicalDispatchError("NEWS_REPLAY_ANALYZE symbol_aliases must be an object with at most 256 symbols")
+    allowed=set(symbols);out={}
+    for raw_symbol,raw_values in value.items():
+        symbol=str(raw_symbol or "").strip().upper()
+        if symbol not in allowed:
+            raise CanonicalDispatchError(f"NEWS_REPLAY_ANALYZE alias symbol is outside universe: {symbol}")
+        if not isinstance(raw_values,list) or len(raw_values)>32:
+            raise CanonicalDispatchError(f"NEWS_REPLAY_ANALYZE aliases for {symbol} must contain at most 32 strings")
+        vals=[]
+        for raw in raw_values:
+            alias=str(raw or "").strip()
+            if not 3<=len(alias)<=128:
+                raise CanonicalDispatchError(f"NEWS_REPLAY_ANALYZE alias length invalid for {symbol}")
+            if alias not in vals:vals.append(alias)
+        if vals:out[symbol]=vals
+    return out
+
+def _news_theme_map(value:Any,symbols:list[str])->dict[str,list[str]]:
+    if value is None:return {}
+    if not isinstance(value,dict) or len(value)>64:
+        raise CanonicalDispatchError("NEWS_REPLAY_ANALYZE theme_ticker_map must be an object with at most 64 themes")
+    allowed=set(symbols);out={}
+    for raw_theme,raw_symbols in value.items():
+        theme=str(raw_theme or "").strip()
+        if not 1<=len(theme)<=64:
+            raise CanonicalDispatchError("NEWS_REPLAY_ANALYZE theme name is invalid")
+        if not isinstance(raw_symbols,list) or len(raw_symbols)>64:
+            raise CanonicalDispatchError(f"NEWS_REPLAY_ANALYZE theme {theme!r} symbols must contain at most 64 values")
+        vals=[]
+        for raw in raw_symbols:
+            symbol=str(raw or "").strip().upper()
+            if symbol not in allowed:
+                raise CanonicalDispatchError(f"NEWS_REPLAY_ANALYZE theme symbol is outside universe: {symbol}")
+            if symbol not in vals:vals.append(symbol)
+        if vals:out[theme]=vals
+    return out
+
+def validate_news_replay_arguments(args:Any,input_root:Path|None)->dict:
+    if not isinstance(args,dict):
+        raise CanonicalDispatchError("NEWS_REPLAY_ANALYZE arguments must be object")
+    exact(args,{"dataset","symbols","symbol_aliases","theme_ticker_map","max_items"},"NEWS_REPLAY_ANALYZE arguments")
+    if input_root is None:
+        raise CanonicalDispatchError("NEWS_REPLAY_ANALYZE requires governed input_root")
+    symbols=_news_symbols(args.get("symbols"))
+    aliases=_news_aliases(args.get("symbol_aliases"),symbols)
+    themes=_news_theme_map(args.get("theme_ticker_map"),symbols)
+    try:max_items=int(args.get("max_items",800))
+    except Exception as e:raise CanonicalDispatchError("NEWS_REPLAY_ANALYZE max_items must be integer") from e
+    if not 1<=max_items<=5000:
+        raise CanonicalDispatchError("NEWS_REPLAY_ANALYZE max_items must be within 1..5000")
+    resolved=resolve_dataset(input_root,"news_replay",args.get("dataset"))
+    return {
+        "dataset":{k:resolved[k] for k in ("relative_path","sha256","bytes")},
+        "symbols":symbols,
+        "symbol_aliases":aliases,
+        "theme_ticker_map":themes,
+        "max_items":max_items,
+    }
+
 def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None=None,receipt_dir:Path|None=None)->dict:
     exact(req,{"schema","job_id","capability_id","mmibkr","entrypoint","arguments","resources","authority","forbidden_authorities"},"request")
     if req.get("schema")!=REQUEST_SCHEMA:raise CanonicalDispatchError("unsupported request schema")
@@ -542,6 +621,8 @@ def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None
         normalized_args=validate_model_lab_first_consumer_arguments(args,input_root)
     elif cid=="MODEL_LAB_COMPARE_VALIDATE":
         normalized_args=validate_model_lab_compare_validate_arguments(args,input_root)
+    elif cid=="NEWS_REPLAY_ANALYZE":
+        normalized_args=validate_news_replay_arguments(args,input_root)
     else:
         raise CanonicalDispatchError(f"capability executor is not implemented: {cid}")
     return {"schema":REQUEST_SCHEMA,"job_id":jid,"capability_id":cid,"mmibkr":mm,"entrypoint":{**cap,"git_blob_sha1":actual},"arguments":normalized_args,"resources":resources(req.get("resources")),"authority":AUTHORITY,"forbidden_authorities":dict(FORBIDDEN_AUTHORITY_ASSERTIONS)}
@@ -1308,6 +1389,169 @@ def materialize_stock_data(v:dict,root:Path,input_root:Path|None,artifact_root:P
         },
     }
 
+
+def news_replay_dependencies(root:Path)->dict[str,str]:
+    return {
+        "news_engine.py":private_blob_identity(root,"news_engine.py"),
+        "news_publication_time.py":private_blob_identity(root,"news_publication_time.py"),
+        "scripts/operator/news_replay_probe_14nf.py":private_blob_identity(root,"scripts/operator/news_replay_probe_14nf.py"),
+    }
+
+def _news_public_article(row:dict)->dict:
+    allowed=(
+        "id","symbol","title","url","source","published_at","mention_count","source_domain",
+        "match_method","match_confidence","relevance_class","relevance_label","relevance_action",
+        "relevance_weight","macro_spillover","sentiment_score","sentiment_label",
+        "deterministic_sentiment","impact_score","deterministic_impact","confidence",
+        "deterministic_confidence","article_quality_score","score","final_score","themes",
+        "summary","summary_source","symbol_relevance_reason","pos_hits","neg_hits",
+        "source_type","provider","provider_code","provider_article_id","ibkr_provider_code",
+        "ibkr_article_id","provider_sentiment_score","provider_impact_score","provider_confidence",
+        "deterministic_score_raw","blended_score",
+    )
+    return {key:deepcopy(row.get(key)) for key in allowed if key in row}
+
+def execute_news_replay(v:dict,root:Path,input_root:Path|None,artifact_root:Path|None,engine_cls:Any)->dict:
+    if input_root is None:
+        raise CanonicalDispatchError("NEWS_REPLAY_ANALYZE requires governed input_root")
+    if artifact_root is None:
+        raise CanonicalDispatchError("NEWS_REPLAY_ANALYZE requires receipt_dir artifact storage")
+    args=v["arguments"]; descriptor=resolve_dataset(input_root,"news_replay",args["dataset"])
+    try:
+        payload=json.loads(descriptor["path"].read_text(encoding="utf-8"))
+    except Exception as e:
+        raise CanonicalDispatchError("NEWS_REPLAY_ANALYZE dataset must be valid JSON") from e
+    if isinstance(payload,dict):
+        payload=payload.get("items") if isinstance(payload.get("items"),list) else payload.get("articles")
+    if not isinstance(payload,list):
+        raise CanonicalDispatchError("NEWS_REPLAY_ANALYZE dataset must be a JSON list or object containing items/articles list")
+    if len(payload)>args["max_items"]:
+        raw_items=payload[:args["max_items"]]
+    else:
+        raw_items=payload
+    config={
+        "NEWS_SYMBOL_UNIVERSE":list(args["symbols"]),
+        "NEWS_SYMBOL_ALIASES":deepcopy(args["symbol_aliases"]),
+        "NEWS_THEME_TICKER_MAP":deepcopy(args["theme_ticker_map"]),
+        "NEWS_LABELED_ALLOW_OUTSIDE_UNIVERSE":False,
+        "NEWS_LLM_ENABLED":False,
+        "NEWS_MAX_TOTAL_ARTICLES_PER_RUN":args["max_items"],
+        "NEWS_MAX_ARTICLES_PER_RUN":args["max_items"],
+    }
+    work_root=(artifact_root/"news_work").resolve()
+    engine=engine_cls(config,work_root)
+    normalized=[]
+    for raw in raw_items:
+        if not isinstance(raw,dict):continue
+        node=engine._normalize_raw_item(raw)
+        if isinstance(node,dict):normalized.append(node)
+    symbols=engine._load_symbol_universe()
+    aliases=engine._load_symbol_aliases()
+    themes=engine._load_theme_ticker_map()
+    universe=set(symbols)
+    patterns=engine._build_symbol_patterns(universe)
+    alias_patterns=engine._build_alias_patterns(aliases,universe)
+    mapped,match_stats=engine._compile_articles(
+        normalized,patterns,alias_patterns,aliases,themes,universe,args["max_items"],
+    )
+    sentiment_by_symbol={}
+    full_articles=[]
+    for symbol,rows in mapped.items():
+        enriched=[]
+        for row in rows:
+            combined=f"{row.get('title','')} {row.get('text_snip','')}".strip()
+            sentiment,label,pos,neg=engine._score_sentiment(combined)
+            impact=engine._score_impact(combined,int(row.get("mention_count") or 0),str(row.get("source_domain") or ""))
+            confidence=engine._score_confidence(combined,int(row.get("mention_count") or 0),str(row.get("source_domain") or ""))
+            relevance=engine._relevance_profile(
+                str(row.get("match_method") or ""),
+                int(row.get("mention_count") or 0),
+                row.get("match_confidence"),
+            )
+            quality=engine._article_quality_score(sentiment,impact,confidence)
+            score=round(float(quality)*float(relevance.get("relevance_weight") or 0),2)
+            node={
+                **row,**relevance,
+                "sentiment_score":sentiment,"sentiment_label":label,"deterministic_sentiment":sentiment,
+                "impact_score":impact,"deterministic_impact":impact,
+                "confidence":confidence,"deterministic_confidence":confidence,
+                "article_quality_score":quality,"score":score,"final_score":score,
+                "themes":engine._themes_for_text(combined),
+                "summary":engine._deterministic_summary(str(row.get("title") or ""),str(row.get("text_snip") or "")),
+                "summary_source":"deterministic","pos_hits":pos,"neg_hits":neg,
+                "llm_sentiment":None,"llm_impact":None,"llm_confidence":None,
+                "llm_sentiment_raw":None,"llm_impact_raw":None,"llm_confidence_raw":None,"llm_score_raw":None,
+                "disagreement_flag":False,
+            }
+            node["symbol_relevance_reason"]=engine._symbol_relevance_reason(node)
+            node.update(engine._comparison_fields(node))
+            public=_news_public_article(node)
+            enriched.append(public);full_articles.append(public)
+        sentiment_by_symbol[symbol]=enriched
+    scorecards=engine._generate_scorecards(sentiment_by_symbol)
+    for row in scorecards:
+        row.pop("updated_at",None)
+    unmatched=[
+        {key:deepcopy(row.get(key)) for key in ("title","url","source","published_at") if key in row}
+        for row in (match_stats.get("unmatched_items") or [])
+        if isinstance(row,dict)
+    ]
+    evidence_root=(artifact_root/"news_replay").resolve();evidence_root.mkdir(parents=True,exist_ok=True)
+    artifact_payloads={
+        "articles.json":full_articles,
+        "scorecards.json":scorecards,
+        "unmatched.json":unmatched,
+        "match_summary.json":{
+            "matched_items_total":int(match_stats.get("matched_items_total") or 0),
+            "unmatched_items_total":int(match_stats.get("unmatched_items_total") or 0),
+            "top_unmatched_entities":deepcopy(match_stats.get("top_unmatched_entities") or []),
+        },
+    }
+    artifacts=[]
+    artifact_map={}
+    for name,node in artifact_payloads.items():
+        target=evidence_root/name
+        target.write_text(json.dumps(node,sort_keys=True,separators=(",",":"),ensure_ascii=False,allow_nan=False,default=str)+"\n",encoding="utf-8")
+        desc=artifact_descriptor(target,artifact_root);artifacts.append(desc);artifact_map[name]=desc
+    shutil.rmtree(work_root,ignore_errors=True)
+    return {
+        "schema":"mmibkr.news_replay_analysis.v1",
+        "dataset":{k:descriptor[k] for k in ("relative_path","sha256","bytes")},
+        "symbols":list(args["symbols"]),
+        "input_item_count":len(payload),
+        "bounded_item_count":len(raw_items),
+        "normalized_item_count":len(normalized),
+        "matched_item_count":int(match_stats.get("matched_items_total") or 0),
+        "unmatched_item_count":int(match_stats.get("unmatched_items_total") or 0),
+        "matched_article_symbol_rows":len(full_articles),
+        "scorecard_count":len(scorecards),
+        "scorecards":deepcopy(scorecards[:50]),
+        "scorecards_sha256":sha(scorecards),
+        "articles_sha256":sha(full_articles),
+        "top_unmatched_entities":deepcopy(match_stats.get("top_unmatched_entities") or []),
+        "artifact_map":artifact_map,
+        "artifacts":artifacts,
+        "canonical_dependencies":news_replay_dependencies(root),
+        "policy":{
+            "deterministic_only":True,
+            "cross_run_dedupe_applied":False,
+            "provider_or_rss_acquisition":False,
+            "llm_enrichment":False,
+            "labeled_outside_universe":False,
+        },
+        "safety":{
+            "research_only":True,
+            "network_acquisition":False,
+            "broker_submit":False,
+            "broker_cancel":False,
+            "broker_flatten":False,
+            "strategy_spec_write":False,
+            "runtime_activation":False,
+            "promotion_mutation":False,
+            "live_trading":False,
+        },
+    }
+
 def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None,receipt_dir:Path|None=None)->dict:
     fn=None if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","FEATURE_CONTRACT_VALIDATE","STRATEGY_PREVIEW"} else load_callable(root,CAPABILITIES[v["capability_id"]])
     if v["capability_id"]=="STRATEGY_SPEC_VALIDATE":
@@ -1382,6 +1626,8 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|
     elif v["capability_id"]=="MODEL_LAB_COMPARE_VALIDATE":
         if input_root is None:raise CanonicalDispatchError("MODEL_LAB_COMPARE_VALIDATE requires governed input_root")
         result=execute_model_lab_compare_validate(v,root,input_root,fn)
+    elif v["capability_id"]=="NEWS_REPLAY_ANALYZE":
+        result=execute_news_replay(v,root,input_root,artifact_root,fn)
     elif v["capability_id"]=="CANONICAL_DATA_MATERIALIZE":
         result=materialize_stock_data(v,root,input_root,artifact_root)
     elif v["capability_id"]=="FEATURE_CONTRACT_VALIDATE":
@@ -1520,8 +1766,8 @@ def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:P
     rd=receipt_dir.resolve() if receipt_dir is not None else None
     v=validate_request(req,source_root,source_receipt,input_root=input_root,receipt_dir=rd); fp=sha(v)
     if rd is None:
-        if v["capability_id"]=="CANONICAL_DATA_MATERIALIZE":
-            raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires receipt_dir artifact storage")
+        if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","NEWS_REPLAY_ANALYZE"}:
+            raise CanonicalDispatchError(f"{v['capability_id']} requires receipt_dir artifact storage")
         return {"receipt":safe_execute_valid(v,source_root,input_root=input_root,receipt_dir=None),"cache_hit":False}
     rp=rd/"receipts"/f"{fp}.json"; hit=cached(rp,fp)
     if hit:
@@ -1534,7 +1780,7 @@ def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:P
         return {"receipt":hit,"cache_hit":True}
     stop,lost,thread=start_claim_heartbeat(cp,token,fp)
     published=False
-    artifact_root=(rd/"artifacts"/fp).resolve() if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","CRW_BACKTEST"} else None
+    artifact_root=(rd/"artifacts"/fp).resolve() if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","CRW_BACKTEST","NEWS_REPLAY_ANALYZE"} else None
     if artifact_root is not None:
         shutil.rmtree(artifact_root,ignore_errors=True);artifact_root.mkdir(parents=True,exist_ok=True)
     try:
