@@ -8,6 +8,9 @@ on:
       - 'scripts/mmibkr_canonical_workload_dispatch_v1.py'
       - 'tests/test_mmibkr_canonical_workload_dispatch_v1.py'
       - 'tests/test_mmibkr_canonical_*_dispatch_v1.py'
+      - 'scripts/mmibkr_intelligence_report_materialize_v1.py'
+      - 'tests/test_mmibkr_intelligence_report_materialize_v1.py'
+      - 'docs/MMIBKR_INTELLIGENCE_REPORT_G13.md'
       - 'docs/MMIBKR_CANONICAL_RUNTIME_ABI_V1.md'
       - '.github/workflows/mmibkr-canonical-workload-contract-ci.yml'
   workflow_dispatch:
@@ -29,5 +32,16 @@ jobs:
       - name: Compile and run canonical workload contract tests
         run: |
           set -euo pipefail
-          python -m py_compile scripts/mmibkr_canonical_workload_dispatch_v1.py
+          python -m py_compile \
+            scripts/mmibkr_canonical_workload_dispatch_v1.py \
+            scripts/mmibkr_intelligence_report_materialize_v1.py
           python -m unittest discover -v -s tests -p 'test_mmibkr_canonical_*_dispatch_v1.py'
+          MMIBKR_G13_RENDER_OUTPUT="$GITHUB_WORKSPACE/ci-artifacts/g13" \
+            python -m unittest -v tests.test_mmibkr_intelligence_report_materialize_v1
+
+      - name: Upload representative G13 rendered report
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmibkr-g13-intelligence-report
+          path: ci-artifacts/g13
+          if-no-files-found: error
