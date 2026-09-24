@@ -32,6 +32,11 @@ CAPABILITIES={
         "module":"scripts.operator.crw_backtest_summary_13z",
         "callable":"run_backtest",
     },
+    "REGISTRY_BACKTEST":{
+        "path":"strategy_backtest_registry.py",
+        "module":"strategy_backtest_registry",
+        "callable":"run_strategy_backtest",
+    },
     "AUTOTUNER_PARAMETER_CONSUMPTION":{
         "path":"autotuner_parameter_consumption.py",
         "module":"autotuner_parameter_consumption",
@@ -220,6 +225,37 @@ def validate_crw_arguments(args:Any,input_root:Path|None)->dict:
     extra=[s for s in normalized if s not in symbols]
     if extra:raise CanonicalDispatchError(f"CRW_BACKTEST contains unrequested datasets for symbols={extra}")
     return {"payload":deepcopy(payload),"datasets":normalized}
+
+
+def validate_registry_backtest_arguments(args:Any,input_root:Path|None,receipt_dir:Path|None)->dict:
+    if not isinstance(args,dict):
+        raise CanonicalDispatchError("REGISTRY_BACKTEST arguments must be object")
+    exact(args,{"strategy_spec","dataset","requested_start","requested_end"},"REGISTRY_BACKTEST arguments")
+    spec=args.get("strategy_spec")
+    if not isinstance(spec,dict):
+        raise CanonicalDispatchError("REGISTRY_BACKTEST strategy_spec must be object")
+    nested=spec.get("strategy_spec") if isinstance(spec.get("strategy_spec"),dict) else spec
+    forbidden=("submit","execute","live_allowed","broker_submit","broker_cancel","broker_flatten","runtime_activation","promotion_mutation","strategy_spec_write")
+    for key in forbidden:
+        for node in (spec,nested):
+            if node.get(key) not in (None,False,0,"","false","False"):
+                raise CanonicalDispatchError(f"REGISTRY_BACKTEST forbids execution authority field: {key}")
+    resolved=resolve_artifact_ref(input_root,receipt_dir,args.get("dataset"),"REGISTRY_BACKTEST dataset")
+    start_raw=str(args.get("requested_start") or "").strip()
+    end_raw=str(args.get("requested_end") or "").strip()
+    start=_utc_iso(start_raw,"REGISTRY_BACKTEST requested_start") if start_raw else None
+    end=_utc_iso(end_raw,"REGISTRY_BACKTEST requested_end") if end_raw else None
+    if start and end and start>end:
+        raise CanonicalDispatchError("REGISTRY_BACKTEST requested_start must not exceed requested_end")
+    ref={k:resolved[k] for k in ("scope","relative_path","sha256","bytes")}
+    if resolved.get("job_fingerprint") is not None:
+        ref["job_fingerprint"]=resolved["job_fingerprint"]
+    return {
+        "strategy_spec":deepcopy(spec),
+        "dataset":ref,
+        "requested_start":start,
+        "requested_end":end,
+    }
 
 def validate_tune_parameters(value:Any)->list[str]:
     if value is None:return []
@@ -729,6 +765,8 @@ def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None
         normalized_args=deepcopy(args)
     elif cid=="CRW_BACKTEST":
         normalized_args=validate_crw_arguments(args,input_root)
+    elif cid=="REGISTRY_BACKTEST":
+        normalized_args=validate_registry_backtest_arguments(args,input_root,receipt_dir)
     elif cid in {"AUTOTUNER_PARAMETER_CONSUMPTION","AUTOTUNER_CANDIDATE_GENERATE"}:
         normalized_args=validate_autotuner_arguments(cid,args)
     elif cid=="AUTOTUNER_CAMPAIGN":
@@ -2245,6 +2283,296 @@ def materialize_futures_data(v:dict,root:Path,input_root:Path|None,artifact_root
         },
     }
 
+
+def registry_backtest_dependencies(root:Path,strategy_module_path:str|None=None)->dict[str,str]:
+    paths=[
+        "strategy_backtest_registry.py",
+        "autotuner_strategy_bridge.py",
+        "strategies/__init__.py",
+        "strategies/event_bus.py",
+        "strategy_builder_condition_contract_14th31kn.py",
+        "feature_contract.py",
+    ]
+    if strategy_module_path and strategy_module_path not in paths:
+        paths.append(strategy_module_path)
+    out={}
+    for path in paths:
+        target=(root/path).resolve()
+        if target.is_file():
+            out[path]=private_blob_identity(root,path)
+    return out
+
+def _registry_public_ref(resolved:dict)->dict:
+    out={k:resolved[k] for k in ("scope","relative_path","sha256","bytes")}
+    if resolved.get("job_fingerprint") is not None:
+        out["job_fingerprint"]=resolved["job_fingerprint"]
+    return out
+
+def _registry_safe_symbol_rows(raw:dict,dataset_ref:dict)->list[dict]:
+    keys=(
+        "symbol","timeframe","asset_type","strategy_id","status","bar_count","total_trades",
+        "closed_trade_count","open_trade_count","open_trade_mark_to_market","win_rate",
+        "profit_factor","gross_pnl","net_pnl","max_drawdown","exposure",
+        "evaluation_error_count","builder_condition_execution","builder_condition_contract_hash",
+        "event_count",
+    )
+    out=[]
+    for row in raw.get("symbol_rows") or []:
+        if not isinstance(row,dict):
+            continue
+        node={key:deepcopy(row.get(key)) for key in keys if key in row}
+        data=row.get("data")
+        if isinstance(data,dict):
+            coverage=sanitize_public_tree(data.get("coverage") or {})
+            node["data"]={
+                "row_count":data.get("row_count"),
+                "source_row_count":data.get("source_row_count"),
+                "coverage":coverage,
+                "governed_input":deepcopy(dataset_ref),
+            }
+        out.append(node)
+    return out
+
+def _registry_filtered_csv(source:Path,target:Path,allowed:tuple[str,...])->tuple[dict,int,str]:
+    if not source.is_file():
+        raise CanonicalDispatchError(f"canonical registry evidence artifact missing: {source.name}")
+    rows=[]
+    try:
+        with source.open("r",encoding="utf-8-sig",newline="") as handle:
+            for row in csv.DictReader(handle):
+                rows.append({key:row.get(key) for key in allowed if key in row})
+    except Exception as e:
+        raise CanonicalDispatchError(f"canonical registry evidence artifact unreadable: {source.name}") from e
+    target.parent.mkdir(parents=True,exist_ok=True)
+    with target.open("w",encoding="utf-8",newline="") as handle:
+        writer=csv.DictWriter(handle,fieldnames=list(allowed))
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({key:row.get(key) for key in allowed})
+    desc=artifact_descriptor(target,target.parents[1])
+    return desc,len(rows),sha(rows)
+
+def execute_registry_backtest(
+    v:dict,
+    root:Path,
+    input_root:Path|None,
+    receipt_dir:Path|None,
+    artifact_root:Path|None,
+    fn:Any,
+)->dict:
+    if artifact_root is None or receipt_dir is None:
+        raise CanonicalDispatchError("REGISTRY_BACKTEST requires receipt_dir artifact storage")
+    args=v["arguments"]
+    resolved=resolve_artifact_ref(input_root,receipt_dir,args["dataset"],"REGISTRY_BACKTEST dataset")
+    dataset_ref=_registry_public_ref(resolved)
+    normalized=normalized_strategy_spec(root,args["strategy_spec"])
+    spec=normalized["strategy_spec"]
+    strategy_id=str(spec.get("strategy_id") or "").strip()
+    symbol=str(spec.get("symbol") or "").strip().upper()
+    timeframe=str(spec.get("timeframe") or "").strip()
+    asset_type=str(spec.get("asset_type") or "stocks").strip().lower()
+    if not _SYMBOL.fullmatch(symbol):
+        raise CanonicalDispatchError("REGISTRY_BACKTEST normalized symbol is invalid")
+    if not timeframe or len(timeframe)>32 or not re.fullmatch(r"[A-Za-z0-9]+",timeframe):
+        raise CanonicalDispatchError("REGISTRY_BACKTEST normalized timeframe is invalid")
+    if asset_type not in {"stocks","futures"}:
+        raise CanonicalDispatchError("REGISTRY_BACKTEST asset_type must be stocks or futures")
+
+    module=sys.modules.get(getattr(fn,"__module__",""))
+    resolver=getattr(module,"_resolve_strategy_id",None) if module is not None else None
+    registry=getattr(module,"REGISTRY",None) if module is not None else None
+    if not callable(resolver) or not isinstance(registry,dict):
+        raise CanonicalDispatchError("canonical registry backtest owner is missing registry authority")
+    requested_strategy_id,resolved_strategy_id=resolver(strategy_id)
+    if resolved_strategy_id not in registry:
+        raise CanonicalDispatchError(f"REGISTRY_BACKTEST unknown strategy_id: {strategy_id}")
+
+    strategy_cls=registry[resolved_strategy_id]
+    strategy_module_path=str(getattr(strategy_cls,"__module__","")).replace(".","/")+".py"
+    if not (root/strategy_module_path).is_file():
+        strategy_module_path=None
+
+    staging=Path(tempfile.mkdtemp(prefix="mmibkr-registry-backtest-"))
+    try:
+        data_root=staging/"data"
+        directory=data_root/asset_type/symbol
+        directory.mkdir(parents=True,exist_ok=True)
+        staged_dataset=directory/f"{timeframe}.csv"
+        shutil.copyfile(resolved["path"],staged_dataset)
+        if sha_file(staged_dataset)!=resolved["sha256"]:
+            raise CanonicalDispatchError("REGISTRY_BACKTEST staged dataset digest mismatch")
+
+        payload={
+            "strategy_spec":deepcopy(spec),
+            "strategy_id":strategy_id,
+            "symbol":symbol,
+            "symbols":[symbol],
+            "timeframe":timeframe,
+            "asset_type":asset_type,
+            "paper_only":True,
+            "live_allowed":False,
+            "submit":False,
+            "execute":False,
+        }
+        if args.get("requested_start") or args.get("requested_end"):
+            payload["backtest_range"]={
+                "preset":"custom",
+                "requested_start":args.get("requested_start"),
+                "requested_end":args.get("requested_end"),
+                "warmup_start":args.get("requested_start"),
+            }
+
+        old_root=getattr(module,"ROOT",None)
+        with _IMPORT_LOCK:
+            if old_root is not None:
+                module.ROOT=staging
+            try:
+                raw=fn(payload,data_root)
+            finally:
+                if old_root is not None:
+                    module.ROOT=old_root
+
+        if not isinstance(raw,dict) or raw.get("registry_dispatch") is not True:
+            raise CanonicalDispatchError("canonical registry backtest returned invalid dispatch contract")
+        if raw.get("ok") is not True:
+            raise CanonicalDispatchError(
+                f"canonical registry backtest rejected strategy: {str(raw.get('status') or 'not_ok')[:80]}"
+            )
+        if str(raw.get("status") or "")=="data_missing":
+            raise CanonicalDispatchError("canonical registry backtest could not consume the staged governed dataset")
+        if str(raw.get("strategy_id") or "")!=resolved_strategy_id:
+            raise CanonicalDispatchError("canonical registry backtest strategy identity drift")
+        safety=raw.get("safety")
+        expected_safety={
+            "broker_submit":False,
+            "cancel":False,
+            "replace":False,
+            "live_unlock":False,
+            "backtest_only":True,
+        }
+        if not isinstance(safety,dict) or any(safety.get(k) is not value for k,value in expected_safety.items()):
+            raise CanonicalDispatchError("canonical registry backtest safety contract rejected")
+
+        if resolved_strategy_id=="crw_score_multi_mode":
+            crw=sanitize_crw_result(
+                raw,
+                {"datasets":{symbol:dataset_ref}},
+                root=root,
+                artifact_root=artifact_root,
+            )
+            return {
+                "schema":"mmibkr.registry_backtest.v1",
+                "requested_strategy_id":requested_strategy_id,
+                "strategy_id":resolved_strategy_id,
+                "strategy_spec":sanitize_public_tree(spec),
+                "strategy_spec_digest":normalized["strategy_spec_digest"],
+                "registry_dispatch":True,
+                "backtest_engine":raw.get("backtest_engine"),
+                "dataset":dataset_ref,
+                "requested_start":args.get("requested_start"),
+                "requested_end":args.get("requested_end"),
+                "engine_result":crw,
+                "artifacts":deepcopy(crw.get("artifacts") or []),
+                "canonical_dependencies":{
+                    **registry_backtest_dependencies(root,strategy_module_path),
+                    "scripts/operator/crw_backtest_summary_13z.py":private_blob_identity(root,"scripts/operator/crw_backtest_summary_13z.py"),
+                },
+                "safety":{
+                    "research_only":True,
+                    **FORBIDDEN_AUTHORITY_ASSERTIONS,
+                    "provider_acquisition":False,
+                    "backtest_only":True,
+                },
+            }
+
+        artifact_rel=str(raw.get("artifact_dir") or "").strip()
+        source_artifact=(staging/artifact_rel).resolve()
+        if staging.resolve() not in source_artifact.parents or not source_artifact.is_dir():
+            raise CanonicalDispatchError("canonical registry evidence directory is missing or outside staging root")
+        public_root=(artifact_root/"registry_backtest").resolve()
+        public_root.mkdir(parents=True,exist_ok=True)
+        trade_allowed=(
+            "symbol","timeframe","asset_type","strategy_id","side","qty","entry_timestamp",
+            "exit_timestamp","entry_price","exit_price","entry_adjusted_price","exit_adjusted_price",
+            "entry_commission","exit_commission","gross_pnl","net_pnl","bars_held",
+        )
+        event_allowed=(
+            "symbol","timeframe","asset_type","strategy_id","timestamp","bar_index","signal",
+            "raw_signal","price","position_before_or_after","applied","reason","meta",
+        )
+        trade_desc,trade_count,trade_sha=_registry_filtered_csv(
+            source_artifact/"trade_rows.csv",
+            public_root/"trade_rows.csv",
+            trade_allowed,
+        )
+        event_desc,event_count,event_sha=_registry_filtered_csv(
+            source_artifact/"condition_event_rows.csv",
+            public_root/"condition_event_rows.csv",
+            event_allowed,
+        )
+        symbol_rows=_registry_safe_symbol_rows(raw,dataset_ref)
+        summary={
+            "dispatch_contract_version":raw.get("dispatch_contract_version"),
+            "backtest_engine":raw.get("backtest_engine"),
+            "status":raw.get("status"),
+            "strategy_id":resolved_strategy_id,
+            "requested_strategy_id":requested_strategy_id,
+            "symbol":symbol,
+            "timeframe":timeframe,
+            "asset_type":asset_type,
+            "parameter_hash":raw.get("parameter_hash"),
+            "total_trades":raw.get("total_trades"),
+            "closed_trade_count":raw.get("closed_trade_count"),
+            "open_trade_count":raw.get("open_trade_count"),
+            "open_trade_mark_to_market":raw.get("open_trade_mark_to_market"),
+            "win_rate":raw.get("win_rate"),
+            "profit_factor":raw.get("profit_factor"),
+            "avg_win":raw.get("avg_win"),
+            "avg_loss":raw.get("avg_loss"),
+            "gross_pnl":raw.get("gross_pnl"),
+            "net_pnl":raw.get("net_pnl"),
+            "max_drawdown":raw.get("max_drawdown"),
+            "exposure":raw.get("exposure"),
+            "cost_model":sanitize_public_tree(raw.get("cost_model") or {}),
+            "data_coverage":sanitize_public_tree(raw.get("data_coverage") or []),
+            "feature_manifest":sanitize_public_tree(raw.get("feature_manifest") or {}),
+            "symbol_support":symbol_rows,
+        }
+        summary_path=public_root/"summary.json"
+        summary_path.write_text(
+            json.dumps(summary,sort_keys=True,separators=(",",":"),ensure_ascii=False,allow_nan=False,default=str)+"\n",
+            encoding="utf-8",
+        )
+        summary_desc=artifact_descriptor(summary_path,artifact_root)
+        artifacts=[summary_desc,trade_desc,event_desc]
+        return {
+            "schema":"mmibkr.registry_backtest.v1",
+            "requested_strategy_id":requested_strategy_id,
+            "strategy_id":resolved_strategy_id,
+            "strategy_spec":sanitize_public_tree(spec),
+            "strategy_spec_digest":normalized["strategy_spec_digest"],
+            "registry_dispatch":True,
+            "backtest_engine":raw.get("backtest_engine"),
+            "dataset":dataset_ref,
+            "requested_start":args.get("requested_start"),
+            "requested_end":args.get("requested_end"),
+            "summary":summary,
+            "trade_row_count":trade_count,
+            "trade_rows_sha256":trade_sha,
+            "condition_event_row_count":event_count,
+            "condition_event_rows_sha256":event_sha,
+            "artifacts":artifacts,
+            "canonical_dependencies":registry_backtest_dependencies(root,strategy_module_path),
+            "safety":{
+                "research_only":True,
+                **FORBIDDEN_AUTHORITY_ASSERTIONS,
+                "provider_acquisition":False,
+                "backtest_only":True,
+            },
+        }
+    finally:
+        shutil.rmtree(staging,ignore_errors=True)
+
 def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None,receipt_dir:Path|None=None)->dict:
     fn=None if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","FEATURE_CONTRACT_VALIDATE","STRATEGY_PREVIEW"} else load_callable(root,CAPABILITIES[v["capability_id"]])
     if v["capability_id"]=="STRATEGY_SPEC_VALIDATE":
@@ -2261,6 +2589,8 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|
         raw=fn(payload,input_root.resolve())
         if not isinstance(raw,dict):raise CanonicalDispatchError("canonical CRW backtest returned invalid contract")
         result=sanitize_crw_result(raw,v["arguments"],root=root,artifact_root=artifact_root)
+    elif v["capability_id"]=="REGISTRY_BACKTEST":
+        result=execute_registry_backtest(v,root,input_root,receipt_dir,artifact_root,fn)
     elif v["capability_id"]=="AUTOTUNER_CAMPAIGN":
         if input_root is None:raise CanonicalDispatchError("AUTOTUNER_CAMPAIGN requires governed input_root")
         args=v["arguments"]; descriptor=resolve_dataset(input_root,"autotuner",args["dataset"])
@@ -2467,7 +2797,7 @@ def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:P
     rd=receipt_dir.resolve() if receipt_dir is not None else None
     v=validate_request(req,source_root,source_receipt,input_root=input_root,receipt_dir=rd); fp=sha(v)
     if rd is None:
-        if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","NEWS_FEATURE_SIDECAR_BUILD","NEWS_FEATURE_JOIN_AUDIT"}:
+        if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","REGISTRY_BACKTEST","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","NEWS_FEATURE_SIDECAR_BUILD","NEWS_FEATURE_JOIN_AUDIT"}:
             raise CanonicalDispatchError(f"{v['capability_id']} requires receipt_dir artifact storage")
         return {"receipt":safe_execute_valid(v,source_root,input_root=input_root,receipt_dir=None),"cache_hit":False}
     rp=rd/"receipts"/f"{fp}.json"; hit=cached(rp,fp)
@@ -2481,7 +2811,7 @@ def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:P
         return {"receipt":hit,"cache_hit":True}
     stop,lost,thread=start_claim_heartbeat(cp,token,fp)
     published=False
-    artifact_root=(rd/"artifacts"/fp).resolve() if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","CRW_BACKTEST","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","NEWS_FEATURE_SIDECAR_BUILD","NEWS_FEATURE_JOIN_AUDIT"} else None
+    artifact_root=(rd/"artifacts"/fp).resolve() if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","CRW_BACKTEST","REGISTRY_BACKTEST","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","NEWS_FEATURE_SIDECAR_BUILD","NEWS_FEATURE_JOIN_AUDIT"} else None
     if artifact_root is not None:
         shutil.rmtree(artifact_root,ignore_errors=True);artifact_root.mkdir(parents=True,exist_ok=True)
     try:
