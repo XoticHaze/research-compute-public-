@@ -2,12 +2,11 @@
   "schema": "mmibkr.private_test_probe_fire.v1",
   "source_ref": "15594dd2353adb334584e8d9025cf7a427428b17",
   "test_modules": [
-    "tests.test_news_publication_time_integrity_20260902",
-    "tests.test_news_publication_time_integration_patch_20260902",
-    "tests.test_news_scorecard_cycle_break_14th31fd_r18"
+    "tests.test_materialize_admitted_futures_source_canonical",
+    "tests.test_publish_canonical_feature_sidecar"
   ],
-  "requested_by": "assistant-news-replay-analyze-1618",
-  "purpose": "exact-private owner regression proof for G10 NEWS_REPLAY_ANALYZE deterministic NewsEngine capability",
+  "requested_by": "assistant-g05b-futures-materialization",
+  "purpose": "exact-private owner proof for G05b dated futures CANONICAL_DATA_MATERIALIZE extension",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -15,7 +14,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "news-replay-analyze-r1-4799861b",
+  "request_nonce": "g05b-futures-materialize-r1-97cf88ea",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "6a07c884beb26b6fb7bf03cf17706bae7a98a059"
+  "current_private_reference": "fc71050546846824b21e95a22852f45fe13c9f99"
 }
