@@ -2,10 +2,12 @@
   "schema": "mmibkr.private_test_probe_fire.v1",
   "source_ref": "ebca3cece7a3faa943405f18f598818164e3d020",
   "test_modules": [
-    "tests.test_strategy_backtest_registry_dispatch"
+    "tests.test_strategy_backtest_registry_dispatch",
+    "tests.test_options_snapshot_analysis",
+    "tests.test_options_snapshot_features"
   ],
-  "requested_by": "assistant-fleet-parity-current-source",
-  "purpose": "materialize exact latest MM-IBKR source for encrypted fleet parity handoff",
+  "requested_by": "assistant-fleet-parity-current-source+assistant-options-research",
+  "purpose": "materialize exact current MM-IBKR source for encrypted fleet parity handoff and execute canonical Options research regressions",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -13,7 +15,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "fleet-parity-ebca3cec-20260924",
+  "request_nonce": "fleet-parity-options-ebca3cec-20260924",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
   "current_private_reference": "ebca3cece7a3faa943405f18f598818164e3d020"
 }
