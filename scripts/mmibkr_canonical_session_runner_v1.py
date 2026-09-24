@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -18,6 +19,7 @@ except ImportError:  # direct script execution
 
 SESSION_SCHEMA = "mmibkr.canonical_session.v1"
 SESSION_RECEIPT_SCHEMA = "mmibkr.canonical_session_receipt.v1"
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 class CanonicalSessionError(RuntimeError):
@@ -38,6 +40,119 @@ def _int(value: Any, label: str, minimum: int, maximum: int) -> int:
     if not minimum <= number <= maximum:
         raise CanonicalSessionError(f"{label} must be within {minimum}..{maximum}")
     return number
+
+
+def _safe_text(value: Any, label: str, *, max_length: int = 256) -> str:
+    text = str(value or "").strip()
+    if not text or len(text) > max_length or any(ord(ch) < 32 for ch in text):
+        raise CanonicalSessionError(f"{label} must be non-empty printable text <= {max_length} chars")
+    return text
+
+
+def _validate_external_artifact_dependency(node: Any, job_id: str) -> dict | None:
+    if node is None:
+        return None
+    if not isinstance(node, dict):
+        raise CanonicalSessionError(f"{job_id}.external_artifact_dependency must be object")
+    _exact(
+        node,
+        {"scope", "relative_path", "sha256", "bytes", "producer"},
+        f"{job_id}.external_artifact_dependency",
+    )
+    if node.get("scope") != "input_root":
+        raise CanonicalSessionError(
+            f"{job_id}.external_artifact_dependency scope must be input_root"
+        )
+    rel = Path(str(node.get("relative_path") or ""))
+    if rel.is_absolute() or not rel.parts or ".." in rel.parts:
+        raise CanonicalSessionError(
+            f"{job_id}.external_artifact_dependency relative_path rejected"
+        )
+    digest = str(node.get("sha256") or "").strip().lower()
+    if not _SHA256_RE.fullmatch(digest):
+        raise CanonicalSessionError(
+            f"{job_id}.external_artifact_dependency sha256 invalid"
+        )
+    size = _int(
+        node.get("bytes"),
+        f"{job_id}.external_artifact_dependency.bytes",
+        1,
+        10_000_000_000,
+    )
+    producer = node.get("producer")
+    if not isinstance(producer, dict):
+        raise CanonicalSessionError(
+            f"{job_id}.external_artifact_dependency producer must be object"
+        )
+    _exact(
+        producer,
+        {"mechanism", "identity", "trigger"},
+        f"{job_id}.external_artifact_dependency.producer",
+    )
+    return {
+        "scope": "input_root",
+        "relative_path": rel.as_posix(),
+        "sha256": digest,
+        "bytes": size,
+        "producer": {
+            "mechanism": dispatch.valid_id(
+                producer.get("mechanism"),
+                f"{job_id}.external_artifact_dependency.producer.mechanism",
+            ),
+            "identity": _safe_text(
+                producer.get("identity"),
+                f"{job_id}.external_artifact_dependency.producer.identity",
+            ),
+            "trigger": _safe_text(
+                producer.get("trigger"),
+                f"{job_id}.external_artifact_dependency.producer.trigger",
+            ),
+        },
+    }
+
+
+def _external_artifact_state(job: dict, input_root: Path | None) -> dict | None:
+    dep = job.get("external_artifact_dependency")
+    if dep is None:
+        return None
+    evidence = {
+        "scope": dep["scope"],
+        "relative_path": dep["relative_path"],
+        "sha256": dep["sha256"],
+        "bytes": dep["bytes"],
+        "producer": dict(dep["producer"]),
+    }
+    if input_root is None:
+        return {
+            "state": "awaiting_external_artifact",
+            "cache_hit": False,
+            "reason": "input_root_unavailable",
+            "external_artifact_dependency": evidence,
+        }
+    root = input_root.resolve()
+    path = (root / dep["relative_path"]).resolve()
+    if root not in path.parents or not path.is_file():
+        return {
+            "state": "awaiting_external_artifact",
+            "cache_hit": False,
+            "reason": "artifact_missing",
+            "external_artifact_dependency": evidence,
+        }
+    if path.stat().st_size != dep["bytes"]:
+        return {
+            "state": "failed",
+            "cache_hit": False,
+            "error_class": "external_artifact_bytes_mismatch",
+            "external_artifact_dependency": evidence,
+        }
+    if dispatch.sha_file(path) != dep["sha256"]:
+        return {
+            "state": "failed",
+            "cache_hit": False,
+            "error_class": "external_artifact_sha256_mismatch",
+            "external_artifact_dependency": evidence,
+        }
+    return None
 
 
 def validate_session(node: dict) -> dict:
@@ -65,7 +180,17 @@ def validate_session(node: dict) -> dict:
     for raw in raw_jobs:
         if not isinstance(raw, dict):
             raise CanonicalSessionError("session job must be object")
-        _exact(raw, {"job_id", "priority", "depends_on", "request"}, "session job")
+        _exact(
+            raw,
+            {
+                "job_id",
+                "priority",
+                "depends_on",
+                "request",
+                "external_artifact_dependency",
+            },
+            "session job",
+        )
         job_id = dispatch.valid_id(raw.get("job_id"))
         if job_id in ids:
             raise CanonicalSessionError(f"duplicate session job_id: {job_id}")
@@ -82,6 +207,10 @@ def validate_session(node: dict) -> dict:
             raise CanonicalSessionError(f"request resources missing: {job_id}")
         max_wall = _int(resources.get("max_wall_seconds"), f"{job_id}.max_wall_seconds", 1, 18_000)
         priority = _int(raw.get("priority", 0), f"{job_id}.priority", -1000, 1000)
+        external_artifact_dependency = _validate_external_artifact_dependency(
+            raw.get("external_artifact_dependency"),
+            job_id,
+        )
         ids.add(job_id)
         jobs.append(
             {
@@ -89,6 +218,7 @@ def validate_session(node: dict) -> dict:
                 "priority": priority,
                 "max_wall_seconds": max_wall,
                 "depends_on": list(deps),
+                "external_artifact_dependency": external_artifact_dependency,
                 "request": request,
             }
         )
@@ -265,10 +395,17 @@ def execute_session(
     if previous is not None and previous.get("session_fingerprint") != fingerprint:
         raise CanonicalSessionError("session_id already exists with different fingerprint")
 
+    resume_after_external_wait = bool(
+        previous and previous.get("status") == "awaiting_external_artifact"
+    )
     started_at = (
-        float(previous.get("started_at_epoch"))
-        if previous and previous.get("started_at_epoch") is not None
-        else time.time()
+        time.time()
+        if resume_after_external_wait
+        else (
+            float(previous.get("started_at_epoch"))
+            if previous and previous.get("started_at_epoch") is not None
+            else time.time()
+        )
     )
     deadline = started_at + session["budget_seconds"]
     previous_jobs = previous.get("jobs") if isinstance(previous, dict) else {}
@@ -348,6 +485,19 @@ def execute_session(
         )
         if not ready:
             break
+
+        runnable: list[dict[str, Any]] = []
+        for job in ready:
+            external_state = _external_artifact_state(job, input_root)
+            if external_state is None:
+                runnable.append(job)
+                continue
+            external_state["priority"] = job["priority"]
+            states[job["job_id"]] = external_state
+            pending.remove(job["job_id"])
+        ready = runnable
+        if not ready:
+            continue
 
         now = time.time()
         usable = deadline - now - session["reserve_seconds"]
@@ -429,6 +579,8 @@ def execute_session(
         status = "budget_exhausted"
     elif terminal_states & {"failed", "blocked"}:
         status = "failed"
+    elif "awaiting_external_artifact" in terminal_states:
+        status = "awaiting_external_artifact"
     else:
         status = "incomplete"
     return checkpoint(status)
@@ -454,7 +606,11 @@ def main() -> int:
             input_root=args.input_root,
         )
         print(json.dumps(out, sort_keys=True))
-        return 0 if out["status"] in {"completed", "budget_exhausted"} else 2
+        return 0 if out["status"] in {
+            "completed",
+            "budget_exhausted",
+            "awaiting_external_artifact",
+        } else 2
     except (CanonicalSessionError, dispatch.CanonicalDispatchError) as exc:
         print(
             json.dumps({"ok": False, "error": str(exc)}, sort_keys=True),

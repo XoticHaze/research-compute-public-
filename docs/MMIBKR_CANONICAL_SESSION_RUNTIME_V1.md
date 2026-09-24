@@ -62,6 +62,40 @@ PR #1643 adds an explicit claim schema, heartbeat-backed active leases, active-c
 
 If a session process stops, the checkpoint remains under the receipt directory. Re-running the same `session_id` with the same session fingerprint preserves completed/cached state. Reusing a session ID for a different manifest fails closed.
 
+## External/private-input dependencies
+
+A canonical session job may declare one optional `external_artifact_dependency` when the job cannot start until an artifact is produced outside the in-session DAG, such as an already-authorized encrypted private-input producer.
+
+The declaration is attribution, not producer orchestration:
+
+```json
+{
+  "external_artifact_dependency": {
+    "scope": "input_root",
+    "relative_path": "incoming/private-input.bin",
+    "sha256": "<exact artifact sha256>",
+    "bytes": 12345,
+    "producer": {
+      "mechanism": "source_exchange",
+      "identity": "mmibkr-private-input-producer",
+      "trigger": "rendezvous/fire/mmibkr-private-input-r1"
+    }
+  }
+}
+```
+
+The session runner performs no network fetch and fires no producer. Before launching the canonical dispatcher it checks only the governed `input_root` for the declared bytes.
+
+- absent artifact -> job state `awaiting_external_artifact`; producer mechanism/identity/trigger remain visible in the sanitized session receipt;
+- present artifact with wrong byte count or SHA-256 -> fail closed;
+- exact artifact -> the unchanged canonical request is dispatched;
+- downstream jobs remain dependency-blocked until the consumer actually completes;
+- independent jobs remain eligible to run.
+
+A session that has only unresolved external inputs exits successfully with overall status `awaiting_external_artifact` rather than pretending the canonical consumer executed. Re-running the same immutable session after the exact artifact arrives resumes completed/cached work and gives the newly-unblocked work a fresh compute budget window, so external waiting time is not charged as research compute.
+
+This state does not grant source-vault/source-exchange authority, invent a producer, or imply that a missing artifact is a compute, dispatcher, backtester, or MM-IBKR semantic failure.
+
 ## Per-job wall enforcement
 
 The session runner executes each job in a subprocess and applies the request's `resources.max_wall_seconds` as a hard timeout. Timeout/error receipts expose a sanitized failure class and digest, not raw dispatcher stderr.
