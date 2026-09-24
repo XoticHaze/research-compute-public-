@@ -26,6 +26,9 @@ jobs:
         with:
           python-version: '3.11.16'
 
+      - name: Install fixed public crypto dependency
+        run: python -m pip install --disable-pip-version-check cryptography
+
       - name: Validate exact-source materializer
         shell: bash
         run: |
