@@ -98,6 +98,10 @@ CAPABILITIES={
         "callable":"_read_bar_timestamps",
     },
 }
+_DATA_MATERIALIZE_BINDINGS={
+    "stocks":CAPABILITIES["CANONICAL_DATA_MATERIALIZE"],
+    "futures":{"path":"futures_manager.py","module":"futures_manager","callable":"FuturesManager"},
+}
 _SHA1=re.compile(r"^[0-9a-f]{40}$")
 _SHA256=re.compile(r"^[0-9a-f]{64}$")
 _ID=re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
@@ -409,9 +413,13 @@ def validate_strategy_preview_arguments(args:Any,input_root:Path|None,receipt_di
 
 def validate_data_materialize_arguments(args:Any,input_root:Path|None)->dict:
     if not isinstance(args,dict):raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE arguments must be object")
-    exact(args,{"asset_type","symbol","source_timeframe","target_timeframes","source_origin","dataset"},"CANONICAL_DATA_MATERIALIZE arguments")
-    if str(args.get("asset_type") or "").strip().lower()!="stocks":
-        raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE v1 currently supports asset_type=stocks")
+    asset_type=str(args.get("asset_type") or "").strip().lower()
+    if asset_type not in {"stocks","futures"}:
+        raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE asset_type must be stocks or futures")
+    if asset_type=="stocks":
+        exact(args,{"asset_type","symbol","source_timeframe","target_timeframes","source_origin","dataset"},"CANONICAL_DATA_MATERIALIZE stock arguments")
+    else:
+        exact(args,{"asset_type","symbol","contract_month","source_timeframe","target_timeframes","source_origin","dataset","source_lineage"},"CANONICAL_DATA_MATERIALIZE futures arguments")
     symbol=str(args.get("symbol") or "").strip().upper()
     if not _SYMBOL.fullmatch(symbol):raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE symbol is invalid")
     source_tf=str(args.get("source_timeframe") or "").strip()
@@ -431,15 +439,22 @@ def validate_data_materialize_arguments(args:Any,input_root:Path|None)->dict:
         raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE source_origin is invalid")
     if input_root is None:raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires governed input_root")
     resolved=resolve_dataset(input_root,symbol,args.get("dataset"))
-    return {
-        "asset_type":"stocks",
-        "symbol":symbol,
-        "source_timeframe":source_tf,
-        "target_timeframes":normalized_targets,
-        "source_origin":origin,
+    out={
+        "asset_type":asset_type,"symbol":symbol,"source_timeframe":source_tf,
+        "target_timeframes":normalized_targets,"source_origin":origin,
         "dataset":{k:resolved[k] for k in ("relative_path","sha256","bytes")},
     }
-
+    if asset_type=="futures":
+        month=str(args.get("contract_month") or "").strip()
+        if not re.fullmatch(r"\d{6}",month):
+            raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE futures contract_month must be YYYYMM")
+        year=int(month[:4]);month_num=int(month[4:])
+        if year<1900 or month_num<1 or month_num>12:
+            raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE futures contract_month is invalid")
+        lineage=resolve_dataset(input_root,f"{symbol}_lineage",args.get("source_lineage"))
+        out["contract_month"]=month
+        out["source_lineage"]={k:lineage[k] for k in ("relative_path","sha256","bytes")}
+    return out
 def validate_model_lab_first_consumer_arguments(args:Any,input_root:Path|None)->dict:
     cid="MODEL_LAB_FIRST_CONSUMER"
     if not isinstance(args,dict):raise CanonicalDispatchError(f"{cid} arguments must be object")
@@ -682,6 +697,9 @@ def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None
     exact(req,{"schema","job_id","capability_id","mmibkr","entrypoint","arguments","resources","authority","forbidden_authorities"},"request")
     if req.get("schema")!=REQUEST_SCHEMA:raise CanonicalDispatchError("unsupported request schema")
     jid=valid_id(req.get("job_id")); cid=str(req.get("capability_id") or "").strip(); cap=CAPABILITIES.get(cid)
+    if cid=="CANONICAL_DATA_MATERIALIZE":
+        raw_args=req.get("arguments"); asset_hint=str(raw_args.get("asset_type") or "").strip().lower() if isinstance(raw_args,dict) else ""
+        cap=_DATA_MATERIALIZE_BINDINGS.get(asset_hint,cap)
     if not cap:raise CanonicalDispatchError(f"capability is not allowlisted: {cid!r}")
     if req.get("authority")!=AUTHORITY:raise CanonicalDispatchError("authority must be research_only")
     if req.get("forbidden_authorities")!=FORBIDDEN_AUTHORITY_ASSERTIONS:raise CanonicalDispatchError("forbidden authority assertions must all be false")
@@ -1413,7 +1431,7 @@ def materialize_stock_data(v:dict,root:Path,input_root:Path|None,artifact_root:P
     try:pd=importlib.import_module("pandas")
     except Exception as e:raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires pandas runtime dependency") from e
     frame=pd.read_csv(resolved["path"])
-    manager_cls=load_callable(root,CAPABILITIES["CANONICAL_DATA_MATERIALIZE"])
+    manager_cls=load_callable(root,v["entrypoint"])
     class NoBrokerIB:
         def reqMarketDataType(self,*_args,**_kwargs):return None
     config={
@@ -2118,6 +2136,115 @@ def execute_news_feature_join(v:dict,root:Path,input_root:Path|None,receipt_dir:
         },
     }
 
+
+def materialize_futures_data(v:dict,root:Path,input_root:Path|None,artifact_root:Path|None)->dict:
+    if input_root is None:raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires governed input_root")
+    if artifact_root is None:raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires receipt_dir artifact storage")
+    args=v["arguments"]; symbol=args["symbol"]; month=args["contract_month"]; source_tf=args["source_timeframe"]
+    dataset=resolve_dataset(input_root,symbol,args["dataset"])
+    lineage_ref=resolve_dataset(input_root,f"{symbol}_lineage",args["source_lineage"])
+    load_lineage=private_callable(root,"scripts/operator/materialize_admitted_futures_source_canonical.py","scripts.operator.materialize_admitted_futures_source_canonical","_load_lineage")
+    validate_lineage=private_callable(root,"scripts/operator/materialize_admitted_futures_source_canonical.py","scripts.operator.materialize_admitted_futures_source_canonical","_validate_dated_lineage")
+    try:lineage=load_lineage(lineage_ref["path"],source_sha256=dataset["sha256"])
+    except Exception as e:raise CanonicalDispatchError("canonical futures source lineage rejected") from e
+    try:dated=validate_lineage(lineage,root=symbol,contract_month=month,source_timeframe=source_tf)
+    except Exception as e:raise CanonicalDispatchError("canonical dated futures lineage rejected") from e
+    try:pd=importlib.import_module("pandas")
+    except Exception as e:raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE futures requires pandas runtime dependency") from e
+    try:frame=pd.read_csv(dataset["path"])
+    except Exception as e:raise CanonicalDispatchError("canonical futures source CSV is unreadable") from e
+    manager_cls=load_callable(root,v["entrypoint"])
+    class NoBrokerIB:
+        def reqMarketDataType(self,*_args,**_kwargs):return None
+        def __getattr__(self,name):raise RuntimeError(f"network IB method is not permitted: {name}")
+    config={
+        "DATA_OUTPUT_DIR":str(artifact_root.resolve()),
+        "TIME_ZONE":"America/Chicago",
+        "FUTURES_SAVE_AGGREGATE":False,
+        "FUTURES_AUTO_ENABLED":False,
+        "FUTURES_CUSTOM_TIMEFRAME_SOURCE_CACHE_MERGE":1,
+    }
+    manager=manager_cls(config,NoBrokerIB())
+    try:
+        raw=manager.ingest_external_source_bars(
+            symbol,month,source_tf,frame,
+            target_timeframes=list(args["target_timeframes"]),
+            source_origin=args["source_origin"],
+        )
+    except Exception as e:raise CanonicalDispatchError("canonical FuturesManager external-source ingest failed") from e
+    if not isinstance(raw,dict) or raw.get("ok") is not True or raw.get("broker_request_made") is not False:
+        raise CanonicalDispatchError("canonical FuturesManager external-source ingest safety contract rejected")
+    frames=raw.get("frames")
+    if not isinstance(frames,dict) or not frames:raise CanonicalDispatchError("canonical FuturesManager returned no materialized frames")
+    verify_manifest=private_callable(root,"feature_contract.py","feature_contract","verify_feature_manifest")
+    publish_sidecar=private_callable(root,"scripts/operator/publish_canonical_feature_sidecar.py","scripts.operator.publish_canonical_feature_sidecar","publish_sidecar")
+    out_dir=(artifact_root/"futures"/f"{symbol}-{month}").resolve()
+    outputs=[];artifacts=[]
+    for tf,node in frames.items():
+        if node is None or not hasattr(node,"attrs") or not hasattr(node,"__len__"):
+            raise CanonicalDispatchError("canonical FuturesManager frame contract is invalid")
+        raw_path=out_dir/f"{tf}.csv";feature_path=out_dir/f"{tf}.features.csv"
+        if not raw_path.is_file() or not feature_path.is_file():
+            raise CanonicalDispatchError("canonical FuturesManager did not materialize expected raw/features files")
+        manifest_raw=dict(getattr(node,"attrs",{}).get("feature_manifest") or {})
+        try:manifest=verify_manifest(manifest_raw)
+        except Exception as e:raise CanonicalDispatchError("canonical futures feature manifest rejected") from e
+        if manifest.get("feature_contract_mode")!="canonical" or not bool(manifest.get("causal")):
+            raise CanonicalDispatchError("canonical futures feature manifest is not causal canonical")
+        manifest_path=out_dir/f"{tf}.feature_manifest.json"
+        manifest_path.write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n",encoding="utf-8")
+        feature_sha=sha_file(feature_path)
+        try:
+            sidecar_receipt=publish_sidecar(
+                feature_path,manifest_path,
+                expected_feature_sha256=feature_sha,
+                expected_manifest_hash=str(manifest.get("manifest_hash") or ""),
+            )
+        except Exception as e:raise CanonicalDispatchError("canonical futures feature sidecar publication failed") from e
+        sidecar_path=Path(str(sidecar_receipt.get("sidecar_path") or ""))
+        raw_desc=artifact_descriptor(raw_path,artifact_root)
+        feature_desc=artifact_descriptor(feature_path,artifact_root)
+        manifest_desc=artifact_descriptor(manifest_path,artifact_root)
+        sidecar_desc=artifact_descriptor(sidecar_path,artifact_root)
+        artifacts.extend([raw_desc,feature_desc,manifest_desc,sidecar_desc])
+        first=last=None
+        try:
+            if len(node) and "timestamp" in node.columns:
+                first=str(node["timestamp"].iloc[0]);last=str(node["timestamp"].iloc[-1])
+        except Exception:pass
+        outputs.append({
+            "timeframe":str(tf),"rows":int(len(node)),"first_timestamp":first,"latest_timestamp":last,
+            "raw_artifact":raw_desc,"feature_artifact":feature_desc,"feature_manifest":manifest_desc,
+            "feature_sidecar":sidecar_desc,"feature_manifest_hash":str(manifest.get("manifest_hash") or ""),
+            "feature_semantic_hash":manifest.get("feature_semantic_hash"),
+        })
+    outputs.sort(key=lambda row:str(row["timeframe"]))
+    return {
+        "schema":"mmibkr.canonical_data_materialization.v1",
+        "asset_type":"futures","symbol":symbol,"contract_month":month,
+        "series_identity":"dated_contract",
+        "source_timeframe":source_tf,"target_timeframes":[str(x) for x in frames],
+        "source_origin":args["source_origin"],
+        "source_dataset":dict(args["dataset"]),"source_lineage":dict(args["source_lineage"]),
+        "lineage_authority":sanitize_public_tree(dated),
+        "frame_count":len(outputs),"frames":outputs,
+        "artifact_count":len(artifacts),"artifacts":artifacts,
+        "broker_request_made":False,
+        "canonical_dependencies":{
+            "futures_manager.py":private_blob_identity(root,"futures_manager.py"),
+            "feature_contract.py":private_blob_identity(root,"feature_contract.py"),
+            "timeframe_adapters.py":private_blob_identity(root,"timeframe_adapters.py"),
+            "scripts/operator/materialize_admitted_futures_source_canonical.py":private_blob_identity(root,"scripts/operator/materialize_admitted_futures_source_canonical.py"),
+            "scripts/operator/publish_canonical_feature_sidecar.py":private_blob_identity(root,"scripts/operator/publish_canonical_feature_sidecar.py"),
+        },
+        "safety":{
+            "market_data_acquisition":False,"historical_data_requests":False,
+            "new_downloader":False,"roll_cutoff_selection":False,"back_adjustment":False,"continuous_splice":False,
+            "broker_submit":False,"broker_cancel":False,"broker_flatten":False,
+            "strategy_spec_write":False,"runtime_activation":False,"promotion_mutation":False,"live_trading":False,
+        },
+    }
+
 def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None,receipt_dir:Path|None=None)->dict:
     fn=None if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","FEATURE_CONTRACT_VALIDATE","STRATEGY_PREVIEW"} else load_callable(root,CAPABILITIES[v["capability_id"]])
     if v["capability_id"]=="STRATEGY_SPEC_VALIDATE":
@@ -2201,7 +2328,9 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|
     elif v["capability_id"]=="NEWS_FEATURE_JOIN_AUDIT":
         result=execute_news_feature_join(v,root,input_root,receipt_dir,artifact_root,fn)
     elif v["capability_id"]=="CANONICAL_DATA_MATERIALIZE":
-        result=materialize_stock_data(v,root,input_root,artifact_root)
+        result=(materialize_futures_data(v,root,input_root,artifact_root)
+                if v["arguments"].get("asset_type")=="futures"
+                else materialize_stock_data(v,root,input_root,artifact_root))
     elif v["capability_id"]=="FEATURE_CONTRACT_VALIDATE":
         result=validate_feature_contract(v,root,input_root,receipt_dir)
     elif v["capability_id"]=="STRATEGY_PREVIEW":
