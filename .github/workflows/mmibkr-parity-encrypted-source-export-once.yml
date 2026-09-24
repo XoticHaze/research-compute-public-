@@ -17,6 +17,7 @@ jobs:
     env:
       IBKR_REMOTE_SOURCE_TOKEN: ${{ secrets.IBKR_REMOTE_SOURCE_TOKEN }}
       MMIBKR_SOURCE_SHA: 48c4119bed5cc572e1078386070cb2263032f3d8
+      PARITY_PUBLIC_KEY_B64: LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQm9qQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FZOEFNSUlCaWdLQ0FZRUE4anBiQkxQWmVZSnJ1RTU0a3ExSQp4WFZsT1pHdmREem16Ky9wakx4WTlNNDVwZkpuRjEycUF6MGlWWGlaQWxqRjg2N2F5ZVNCZURwY0JxU1hYbExnCkFJSm9pNlp2L2dnMm9iQVMxYlAvQjF0WDhjV2F2QVJueEh4VVVqZHZtelFHLzIrZzNuWG5Jck9ZWnllbUlVcm8KeVFtOUh6YkkwYUNWdGVaa1QyNmc3SkRESzhONFE3RXZiNkxXbk5PR3EzTGYwQURFazN1dmQ0M1dmYUlOZGdLegpQZTJCTmJDWTJNWWU0NEZ3UE05ekV0eUJadjZiUVNQK2xTMmRaN0hIT2VlZUt2UGt4eWJ5N2NrVWtOVFFMbVAxClBTTlFNRjhqSUVLYzRsUVV1akVKQnFYRzFvd0V5QWFPM0ROOEFFTk5WanJVYXZMWWFmdG5BVGxxSFBmWUNTTmoKMkJaQUJMVmorTnBtTmNVVG1xa2ZvdEZRZjNlcTVQdndBOC9sT3duVmlWaGZRK21DVXlzNjhqcVBqZktoRWVDWgpXTzJHRE95WWwvSm5EZ1Vkak9GS0tScFFtNm1tNFBTMG9aK1dRL2h0WFd6K29sSm5UZU5DNXczNzZsS2xNc2VWCmY2RUszVW5LNkdJZ3JUdGoyYUw5WFlJSjJ6RkM5ZXZHZ1BuMi9IWmR2OEpmQWdNQkFBRT0KLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tCg==
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -33,7 +34,7 @@ jobs:
           set -euo pipefail
           umask 077
           mkdir -p "$RUNNER_TEMP/mmibkr-parity-source"
-          python scripts/mmibkr_private_source_materialize_v1.py             --runner-temp "$RUNNER_TEMP/mmibkr-parity-source"             --source-ref "$MMIBKR_SOURCE_SHA"             > "$RUNNER_TEMP/mmibkr-parity-materialize.log"
+          python scripts/mmibkr_private_source_materialize_v1.py --runner-temp "$RUNNER_TEMP/mmibkr-parity-source" --source-ref "$MMIBKR_SOURCE_SHA" > "$RUNNER_TEMP/mmibkr-parity-materialize.log"
           python - <<'PY'
           import json, os
           from pathlib import Path
@@ -52,19 +53,7 @@ jobs:
           set -euo pipefail
           umask 077
           mkdir -p "$RUNNER_TEMP/mmibkr-parity-export"
-          cat > "$RUNNER_TEMP/mmibkr-parity-public.pem" <<'PEM'
------BEGIN PUBLIC KEY-----
-MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEA8jpbBLPZeYJruE54kq1I
-xXVlOZGvdDzmz+/pjLxY9M45pfJnF12qAz0iVXiZAljF867ayeSBeDpcBqSXXlLg
-AIJoi6Zv/gg2obAS1bP/B1tX8cWavARnxHxUUjdvmzQG/2+g3nXnIrOYZyemIUro
-yQm9HzbI0aCVteZkT26g7JDDK8N4Q7Evb6LWnNOGq3Lf0ADEk3uvd43WfaINdgKz
-Pe2BNbCY2MYe44FwPM9zEtyBZv6bQSP+lS2dZ7HHOeeeKvPkxyby7ckUkNTQLmP1
-PSNQMF8jIEKc4lQUujEJBqXG1owEyAaO3DN8AENNVjrUavLYaftnATlqHPfYCSNj
-2BZABLVj+NpmNcUTmqkfotFQf3eq5PvwA8/lOwnViVhfQ+mCUys68jqPjfKhEeCZ
-WO2GDOyYl/JnDgUdjOFKKRpQm6mm4PS0oZ+WQ/htXWz+olJnTeNC5w376lKlMseV
-f6EK3UnK6GIgrTtj2aL9XYIJ2zFC9evGgPn2/HZdv8JfAgMBAAE=
------END PUBLIC KEY-----
-PEM
+          printf '%s' "$PARITY_PUBLIC_KEY_B64" | base64 -d > "$RUNNER_TEMP/mmibkr-parity-public.pem"
           python - <<'PY'
           import base64, hashlib, json, os
           from pathlib import Path
@@ -108,7 +97,7 @@ PEM
         shell: bash
         run: |
           set -euo pipefail
-          sudo rm -rf "$RUNNER_TEMP/mmibkr-parity-source"                        "$RUNNER_TEMP/mmibkr-parity-materialize.log"                        "$RUNNER_TEMP/mmibkr-parity-public.pem"
+          sudo rm -rf "$RUNNER_TEMP/mmibkr-parity-source" "$RUNNER_TEMP/mmibkr-parity-materialize.log" "$RUNNER_TEMP/mmibkr-parity-public.pem"
           test ! -e "$RUNNER_TEMP/mmibkr-parity-source"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
