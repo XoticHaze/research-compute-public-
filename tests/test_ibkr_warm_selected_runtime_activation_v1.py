@@ -179,6 +179,69 @@ class WarmSelectedRuntimeActivationTests(unittest.TestCase):
         )
         self.assertNotIn(secret, json.dumps(diagnostic, sort_keys=True))
 
+    def test_start_canonical_runtime_waits_for_broker_connected_read_boundary(self):
+        calls = []
+        sleeps = []
+
+        def fake_run(cmd, **kwargs):
+            if cmd[:2] == ["docker", "inspect"]:
+                return subprocess.CompletedProcess(
+                    cmd,
+                    0,
+                    stdout='{"Status":"running","ExitCode":0,"Error":""}\n',
+                    stderr="",
+                )
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        responses = iter([
+            (200, {"ok": True, "service": "control-runtime"}),
+            (503, {
+                "ok": False,
+                "status": "blocked",
+                "blockers": ["ib_not_connected"],
+                "broker_order_placed": False,
+                "place_order_called": False,
+            }),
+            (200, {"ok": True, "service": "control-runtime"}),
+            (200, {
+                "ok": True,
+                "status": "read_completed",
+                "account_identity": {"selected_account_is_paper_du": True},
+                "broker_order_placed": False,
+                "place_order_called": False,
+            }),
+        ])
+
+        def fake_http(base_url, method, path, **kwargs):
+            calls.append((method, path))
+            return next(responses)
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "source"
+            root.mkdir()
+            (root / "Dockerfile.bot").write_text("FROM scratch\n", encoding="utf-8")
+            runtime = {"source_root": str(root)}
+            with patch.object(mod.proof_v1, "_http_json", side_effect=fake_http):
+                image, data_dir = mod.start_canonical_runtime(
+                    runtime=runtime,
+                    run_id="123",
+                    runner_temp=Path(td),
+                    gateway_host="127.0.0.1",
+                    gateway_port=4002,
+                    run=fake_run,
+                    sleep=lambda value: sleeps.append(value),
+                )
+
+        self.assertEqual(image, "mmibkr-warm-proof:123")
+        self.assertEqual(data_dir.name, "mmibkr-proof-data")
+        self.assertEqual(calls, [
+            ("GET", "/healthz"),
+            ("GET", "/strategy/ibkr-paper-open-orders"),
+            ("GET", "/healthz"),
+            ("GET", "/strategy/ibkr-paper-open-orders"),
+        ])
+        self.assertEqual(sleeps, [2.0])
+
     def test_start_canonical_runtime_fails_early_with_sanitized_state(self):
         raw_logs = "Traceback (most recent call last):\nImportError: startup failed\n"
 
