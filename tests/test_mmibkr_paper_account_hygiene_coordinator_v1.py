@@ -25,6 +25,8 @@ class PaperAccountHygieneCoordinatorTests(unittest.TestCase):
             "- '.github/workflows/mmibkr-paper-account-hygiene-coordinator-r1.yml'\n  push:",
             text,
         )
+        self.assertIn("mmibkr-paper-account-hygiene-contract-{0}", text)
+        self.assertIn("'mmibkr-paper-account-hygiene-coordinator-r1'", text)
 
     def test_coordinator_binds_exact_validated_producer_and_ownership_runtime_source(self):
         text = self.text()
