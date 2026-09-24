@@ -1783,37 +1783,6 @@ def execute_news_replay(v:dict,root:Path,input_root:Path|None,artifact_root:Path
 def options_snapshot_dependencies(root:Path)->dict[str,str]:
     return {"options_scanner.py":private_blob_identity(root,"options_scanner.py")}
 
-def _finite_number(value:Any)->float|None:
-    if value in (None,""):return None
-    try:number=float(value)
-    except Exception:return None
-    if number!=number or number in (float("inf"),float("-inf")):return None
-    return number
-
-def _options_expiry_utc(row:dict)->tuple[datetime|None,str,str]:
-    exact_time=str(row.get("expiry_utc") or "").strip()
-    if exact_time:
-        try:
-            dt=datetime.fromisoformat(exact_time.replace("Z","+00:00"))
-            if dt.tzinfo is None:return None,"","expiry_utc_missing_timezone"
-            utc=dt.astimezone(timezone.utc)
-            return utc,utc.isoformat().replace("+00:00","Z"),"exact"
-        except Exception:return None,"","expiry_utc_invalid"
-    raw=str(row.get("expiry") or row.get("lastTradeDateOrContractMonth") or "").strip()
-    if not re.fullmatch(r"\d{8}",raw):return None,"","expiry_invalid"
-    try:dt=datetime.strptime(raw,"%Y%m%d").replace(hour=23,minute=59,second=59,tzinfo=timezone.utc)
-    except Exception:return None,"","expiry_invalid"
-    return dt,dt.isoformat().replace("+00:00","Z"),"end_of_utc_day_assumption"
-
-def _options_quote_basis(row:dict)->tuple[float,str,float,float,float]:
-    bid=max(0.0,_finite_number(row.get("bid")) or 0.0)
-    ask=max(0.0,_finite_number(row.get("ask")) or 0.0)
-    last=max(0.0,_finite_number(row.get("last")) or 0.0)
-    if bid>0 and ask>0:return (bid+ask)/2.0,"bid_ask_mid",bid,ask,last
-    if last>0:return last,"last",bid,ask,last
-    if bid>0 or ask>0:return max(bid,ask),"one_sided_quote",bid,ask,last
-    return 0.0,"unavailable",bid,ask,last
-
 def execute_options_snapshot(v:dict,root:Path,input_root:Path|None,artifact_root:Path|None,scanner_cls:Any)->dict:
     if input_root is None:raise CanonicalDispatchError("OPTIONS_SNAPSHOT_ANALYZE requires governed input_root")
     if artifact_root is None:raise CanonicalDispatchError("OPTIONS_SNAPSHOT_ANALYZE requires receipt_dir artifact storage")
@@ -1829,111 +1798,52 @@ def execute_options_snapshot(v:dict,root:Path,input_root:Path|None,artifact_root
         }
     else:rows=payload
     if not isinstance(rows,list):raise CanonicalDispatchError("OPTIONS_SNAPSHOT_ANALYZE dataset must be a JSON list or object containing rows list")
-    state=args["snapshot_state"]
-    if state in {"watch-only-no-history","no-snapshot"} and rows:
-        raise CanonicalDispatchError("OPTIONS_SNAPSHOT_ANALYZE snapshot_state contradicts non-empty dataset")
-    if not rows and state in {"current-live","watch-only-last-known"} and not args["empty_reason"]:
-        raise CanonicalDispatchError("OPTIONS_SNAPSHOT_ANALYZE empty_reason is required for empty available-state snapshot")
-    bounded=rows[:args["max_rows"]]
-    as_of=datetime.fromisoformat(args["as_of_utc"].replace("Z","+00:00")).astimezone(timezone.utc)
-    analyzed=[];reason_counts={};calc_iv_values=[];total_notional=0.0;calls=0;puts=0
-    for index,raw in enumerate(bounded):
-        if not isinstance(raw,dict):
-            reason="row_not_object";reason_counts[reason]=reason_counts.get(reason,0)+1
-            analyzed.append({"row_index":index,"status":"unavailable","reason":reason,"reasons":[reason]});continue
-        symbol=str(raw.get("symbol") or "").strip().upper()
-        expiry_dt,expiry_iso,expiry_basis=_options_expiry_utc(raw)
-        strike=_finite_number(raw.get("strike"))
-        und=_finite_number(raw.get("undPrice") if raw.get("undPrice") not in (None,"") else raw.get("underlying_price"))
-        right_raw=str(raw.get("right") or "").strip().upper()
-        right="C" if right_raw in {"C","CALL"} else ("P" if right_raw in {"P","PUT"} else "")
-        if right=="C":calls+=1
-        elif right=="P":puts+=1
-        price,price_basis,bid,ask,last=_options_quote_basis(raw)
-        try:volume=max(0,int(float(raw.get("volume") or 0)))
-        except Exception:volume=0
-        notional=round(price*100.0*max(1,volume),2) if price>0 else 0.0
-        total_notional+=notional
-        reasons=[]
-        if not symbol or not _SYMBOL.fullmatch(symbol):reasons.append("symbol_invalid")
-        if expiry_dt is None:reasons.append(expiry_basis or "expiry_invalid")
-        if strike is None or strike<=0:reasons.append("strike_unavailable")
-        if not right:reasons.append("right_invalid")
-        if und is None or und<=0:reasons.append("underlying_price_unavailable")
-        if price<=0:reasons.append("option_price_unavailable")
-        t_years=None
-        if expiry_dt is not None:
-            seconds=(expiry_dt-as_of).total_seconds()
-            if seconds<=0:reasons.append("expired_at_as_of")
-            else:t_years=seconds/(365.0*24.0*3600.0)
-        calc_iv=None;greeks={}
-        if not reasons and t_years is not None:
-            calc_iv=scanner_cls._implied_vol(price,float(und),float(strike),t_years,args["risk_free_rate"],right)
-            if calc_iv is None or calc_iv<=0:reasons.append("implied_vol_unavailable")
-            else:
-                _,greeks=scanner_cls._bs_price_greeks(float(und),float(strike),t_years,args["risk_free_rate"],float(calc_iv),right)
-                if not isinstance(greeks,dict) or not greeks:reasons.append("greeks_unavailable")
-                else:calc_iv_values.append(float(calc_iv))
-        ib_fields={}
-        for key in ("ib_model_price","ib_iv","ib_delta","ib_gamma","ib_vega","ib_theta"):
-            value=_finite_number(raw.get(key))
-            if value is not None:ib_fields[key]=value
-        comparison={}
-        for calc_key,ib_key in (
-            ("calc_iv","ib_iv"),("calc_delta","ib_delta"),("calc_gamma","ib_gamma"),
-            ("calc_vega","ib_vega"),("calc_theta","ib_theta"),
-        ):
-            calc_value=float(calc_iv) if calc_key=="calc_iv" and calc_iv is not None else _finite_number(greeks.get(calc_key.removeprefix("calc_")))
-            ib_value=ib_fields.get(ib_key)
-            if calc_value is not None and ib_value is not None:comparison[f"{calc_key}_minus_{ib_key}"]=calc_value-ib_value
-        status="analyzed" if not reasons else "unavailable"
-        for reason in reasons:reason_counts[reason]=reason_counts.get(reason,0)+1
-        analyzed.append({
-            "row_index":index,"symbol":symbol or None,
-            "expiry":str(raw.get("expiry") or raw.get("lastTradeDateOrContractMonth") or "") or None,
-            "expiry_utc":expiry_iso or None,"expiry_time_basis":expiry_basis or None,
-            "strike":strike,"right":right or None,
-            "bid":bid,"ask":ask,"last":last,"price_basis":price_basis,"analysis_price":price,
-            "volume":volume,"notional_usd":notional,"underlying_price":und,
-            "as_of_utc":args["as_of_utc"],"time_to_expiry_years":t_years,
-            "moneyness_pct":round(((float(strike)/float(und))-1.0)*100.0,6) if strike and und and und>0 else None,
-            **ib_fields,"calc_iv":float(calc_iv) if calc_iv is not None else None,
-            "calc_delta":_finite_number(greeks.get("delta")),"calc_gamma":_finite_number(greeks.get("gamma")),
-            "calc_vega":_finite_number(greeks.get("vega")),"calc_theta":_finite_number(greeks.get("theta")),
-            "comparison":comparison,"status":status,"reason":reasons[0] if reasons else None,"reasons":reasons,
-        })
-    analyzed_count=sum(1 for row in analyzed if row.get("status")=="analyzed")
-    summary={
-        "snapshot_state":state,"empty_reason":args["empty_reason"] or None,
-        "input_row_count":len(rows),"bounded_row_count":len(bounded),"analyzed_row_count":analyzed_count,
-        "unavailable_row_count":len(analyzed)-analyzed_count,"call_rows":calls,"put_rows":puts,
-        "total_notional_usd":round(total_notional,2),
-        "average_calc_iv":(sum(calc_iv_values)/len(calc_iv_values)) if calc_iv_values else None,
-        "reason_counts":reason_counts,"capture_source":meta.get("capture_source"),"captured_at":meta.get("captured_at"),
-    }
+    analyzer=getattr(scanner_cls,"analyze_snapshot_rows",None)
+    if not callable(analyzer):
+        raise CanonicalDispatchError("OPTIONS_SNAPSHOT_ANALYZE canonical owner analyze_snapshot_rows is unavailable")
+    try:
+        canonical=analyzer(
+            rows,
+            as_of_utc=args["as_of_utc"],
+            risk_free_rate=args["risk_free_rate"],
+            snapshot_state=args["snapshot_state"],
+            empty_reason=args["empty_reason"],
+            max_rows=args["max_rows"],
+            capture_source=meta.get("capture_source"),
+            captured_at=meta.get("captured_at"),
+        )
+    except ValueError as e:
+        raise CanonicalDispatchError(f"OPTIONS_SNAPSHOT_ANALYZE canonical owner rejected request: {e}") from e
+    if not isinstance(canonical,dict) or canonical.get("schema")!="mmibkr.options_snapshot_analysis.v1":
+        raise CanonicalDispatchError("OPTIONS_SNAPSHOT_ANALYZE canonical owner returned invalid schema")
+    policy=canonical.get("policy")
+    safety=canonical.get("safety")
+    analyzed=canonical.get("rows")
+    summary=canonical.get("summary")
+    if not isinstance(policy,dict) or not isinstance(safety,dict) or not isinstance(analyzed,list) or not isinstance(summary,dict):
+        raise CanonicalDispatchError("OPTIONS_SNAPSHOT_ANALYZE canonical owner returned incomplete contract")
+    for key in ("ibkr_acquisition","alpaca_acquisition","network_acquisition"):
+        if policy.get(key) is not False:
+            raise CanonicalDispatchError(f"OPTIONS_SNAPSHOT_ANALYZE canonical owner acquisition authority drift: {key}")
+    if policy.get("snapshot_input_only") is not True or policy.get("deterministic_as_of") is not True:
+        raise CanonicalDispatchError("OPTIONS_SNAPSHOT_ANALYZE canonical owner policy drift")
+    if safety.get("research_only") is not True:
+        raise CanonicalDispatchError("OPTIONS_SNAPSHOT_ANALYZE canonical owner research-only drift")
+    for key in ("broker_submit","broker_cancel","broker_flatten","strategy_spec_write","runtime_activation","promotion_mutation","live_trading"):
+        if safety.get(key) is not False:
+            raise CanonicalDispatchError(f"OPTIONS_SNAPSHOT_ANALYZE canonical owner safety drift: {key}")
     evidence_root=(artifact_root/"options_snapshot").resolve();evidence_root.mkdir(parents=True,exist_ok=True)
     rows_path=evidence_root/"analytics.json";summary_path=evidence_root/"summary.json"
     rows_path.write_text(json.dumps(analyzed,sort_keys=True,separators=(",",":"),ensure_ascii=False,allow_nan=False,default=str)+"\n",encoding="utf-8")
     summary_path.write_text(json.dumps(summary,sort_keys=True,separators=(",",":"),ensure_ascii=False,allow_nan=False,default=str)+"\n",encoding="utf-8")
     artifacts=[artifact_descriptor(rows_path,artifact_root),artifact_descriptor(summary_path,artifact_root)]
-    return {
-        "schema":"mmibkr.options_snapshot_analysis.v1",
-        "dataset":{k:descriptor[k] for k in ("relative_path","sha256","bytes")},
-        "as_of_utc":args["as_of_utc"],"risk_free_rate":args["risk_free_rate"],
-        "snapshot_state":state,"empty_reason":args["empty_reason"] or None,"summary":summary,
-        "row_sample":deepcopy(analyzed[:50]),"analytics_sha256":sha(analyzed),"artifacts":artifacts,
-        "canonical_dependencies":options_snapshot_dependencies(root),
-        "policy":{
-            "snapshot_input_only":True,"deterministic_as_of":True,"ibkr_acquisition":False,
-            "alpaca_acquisition":False,"network_acquisition":False,
-            "expiry_without_exact_time":"end_of_utc_day_assumption",
-        },
-        "safety":{
-            "research_only":True,"broker_submit":False,"broker_cancel":False,"broker_flatten":False,
-            "strategy_spec_write":False,"runtime_activation":False,"promotion_mutation":False,"live_trading":False,
-        },
-    }
-
+    public={k:deepcopy(value) for k,value in canonical.items() if k!="rows"}
+    public["dataset"]={k:descriptor[k] for k in ("relative_path","sha256","bytes")}
+    public["row_sample"]=deepcopy(analyzed[:50])
+    public["analytics_sha256"]=sha(analyzed)
+    public["artifacts"]=artifacts
+    public["canonical_dependencies"]=options_snapshot_dependencies(root)
+    return public
 
 def news_feature_sidecar_dependencies(root:Path)->dict[str,str]:
     return {

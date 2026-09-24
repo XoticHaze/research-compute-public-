@@ -22,15 +22,26 @@ class CanonicalOptionsSnapshotDispatchTests(unittest.TestCase):
         scanner = self.source_root / "options_scanner.py"
         scanner.write_text(
             "class OptionsScanner:\n"
+            "    calls=[]\n"
             "    @classmethod\n"
-            "    def _implied_vol(cls,target_price,S,K,T,r,right):\n"
-            "        if target_price<=0 or S<=0 or K<=0 or T<=0:return None\n"
-            "        return 0.25\n"
-            "    @classmethod\n"
-            "    def _bs_price_greeks(cls,S,K,T,r,sigma,right):\n"
-            "        if S<=0 or K<=0 or T<=0 or sigma<=0:return 0.0,{}\n"
-            "        delta=0.55 if right=='C' else -0.45\n"
-            "        return 1.0,{'delta':delta,'gamma':0.02,'vega':12.0,'theta':-3.0}\n",
+            "    def analyze_snapshot_rows(cls,rows,**kwargs):\n"
+            "        cls.calls.append({'rows':rows,'kwargs':kwargs})\n"
+            "        state=kwargs['snapshot_state']; empty=kwargs.get('empty_reason') or ''\n"
+            "        if state in {'watch-only-no-history','no-snapshot'} and rows:\n"
+            "            raise ValueError('options snapshot_state contradicts non-empty dataset')\n"
+            "        if not rows and state in {'current-live','watch-only-last-known'} and not empty:\n"
+            "            raise ValueError('options empty_reason is required for empty available-state snapshot')\n"
+            "        if rows:\n"
+            "            analyzed=[\n"
+            "                {'row_index':0,'symbol':'AAPL','expiry':'20261016','expiry_utc':'2026-10-16T23:59:59Z','expiry_time_basis':'end_of_utc_day_assumption','strike':250.0,'right':'C','bid':5.0,'ask':5.4,'last':5.1,'price_basis':'bid_ask_mid','analysis_price':5.2,'volume':10,'notional_usd':5200.0,'underlying_price':248.0,'as_of_utc':kwargs['as_of_utc'],'time_to_expiry_years':0.06,'moneyness_pct':0.806452,'ib_iv':0.24,'calc_iv':0.25,'calc_delta':0.55,'calc_gamma':0.02,'calc_vega':12.0,'calc_theta':-3.0,'comparison':{'calc_iv_minus_ib_iv':0.01},'status':'analyzed','reason':None,'reasons':[]},\n"
+            "                {'row_index':1,'symbol':'AAPL','expiry':None,'expiry_utc':'2026-10-16T20:00:00Z','expiry_time_basis':'exact','strike':245.0,'right':'P','bid':0.0,'ask':0.0,'last':4.2,'price_basis':'last','analysis_price':4.2,'volume':0,'notional_usd':420.0,'underlying_price':248.0,'as_of_utc':kwargs['as_of_utc'],'time_to_expiry_years':0.06,'moneyness_pct':-1.209677,'calc_iv':0.25,'calc_delta':-0.45,'calc_gamma':0.02,'calc_vega':12.0,'calc_theta':-3.0,'comparison':{},'status':'analyzed','reason':None,'reasons':[]},\n"
+            "                {'row_index':2,'symbol':'AAPL','status':'unavailable','reason':'expired_at_as_of','reasons':['expired_at_as_of']},\n"
+            "                {'row_index':3,'symbol':'AAPL','status':'unavailable','reason':'option_price_unavailable','reasons':['option_price_unavailable']},\n"
+            "            ]\n"
+            "        else: analyzed=[]\n"
+            "        analyzed_count=sum(1 for r in analyzed if r.get('status')=='analyzed')\n"
+            "        summary={'snapshot_state':state,'empty_reason':empty or None,'input_row_count':len(rows),'bounded_row_count':len(rows),'analyzed_row_count':analyzed_count,'unavailable_row_count':len(analyzed)-analyzed_count,'call_rows':2 if rows else 0,'put_rows':1 if rows else 0,'total_notional_usd':5620.0 if rows else 0.0,'average_calc_iv':0.25 if rows else None,'reason_counts':{},'capture_source':kwargs.get('capture_source'),'captured_at':kwargs.get('captured_at')}\n"
+            "        return {'schema':'mmibkr.options_snapshot_analysis.v1','as_of_utc':kwargs['as_of_utc'],'risk_free_rate':kwargs['risk_free_rate'],'snapshot_state':state,'empty_reason':empty or None,'summary':summary,'rows':analyzed,'policy':{'snapshot_input_only':True,'deterministic_as_of':True,'ibkr_acquisition':False,'alpaca_acquisition':False,'network_acquisition':False,'expiry_without_exact_time':'end_of_utc_day_assumption'},'safety':{'research_only':True,'broker_submit':False,'broker_cancel':False,'broker_flatten':False,'strategy_spec_write':False,'runtime_activation':False,'promotion_mutation':False,'live_trading':False}}\n",
             encoding="utf-8",
         )
         self.entry_blob = git_blob_sha1(scanner.read_bytes())
@@ -158,6 +169,28 @@ class CanonicalOptionsSnapshotDispatchTests(unittest.TestCase):
             path = artifact_root / node["relative_path"]
             self.assertTrue(path.is_file())
             self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), node["sha256"])
+
+    def test_public_adapter_delegates_analysis_policy_to_canonical_owner(self):
+        source = Path(mod.__file__).read_text(encoding="utf-8")
+        self.assertIn("analyze_snapshot_rows", source)
+        self.assertNotIn("def _options_quote_basis", source)
+        self.assertNotIn("def _options_expiry_utc", source)
+        self.assertNotIn("def _finite_number(value:Any)->float|None:", source)
+
+        result = self.execute()["receipt"]["result"]
+        self.assertEqual(result["summary"]["capture_source"], "fixture-existing-snapshot")
+        self.assertEqual(result["summary"]["captured_at"], "2026-09-23T15:00:00Z")
+        self.assertEqual(result["as_of_utc"], "2026-09-23T20:30:00Z")
+
+    def test_canonical_owner_authority_drift_fails_closed(self):
+        scanner = self.source_root / "options_scanner.py"
+        text = scanner.read_text(encoding="utf-8")
+        text = text.replace("'network_acquisition':False", "'network_acquisition':True")
+        scanner.write_text(text, encoding="utf-8")
+        req = self.request()
+        req["entrypoint"]["git_blob_sha1"] = git_blob_sha1(scanner.read_bytes())
+        with self.assertRaisesRegex(mod.CanonicalDispatchError, "acquisition authority drift"):
+            self.execute(req)
 
     def test_unavailable_truth_states_are_explicit_not_zero_filled(self):
         self.dataset.write_text(json.dumps({"capture_source":"none","rows":[]}), encoding="utf-8")
