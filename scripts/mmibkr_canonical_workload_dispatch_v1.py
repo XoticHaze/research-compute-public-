@@ -92,6 +92,11 @@ CAPABILITIES={
         "module":"scripts.operator.news_feature_sidecar_probe_14ni",
         "callable":"_score_row",
     },
+    "NEWS_FEATURE_JOIN_AUDIT":{
+        "path":"scripts/operator/news_feature_backtest_join_audit_14nj.py",
+        "module":"scripts.operator.news_feature_backtest_join_audit_14nj",
+        "callable":"_read_bar_timestamps",
+    },
 }
 _SHA1=re.compile(r"^[0-9a-f]{40}$")
 _SHA256=re.compile(r"^[0-9a-f]{64}$")
@@ -643,6 +648,36 @@ def validate_news_feature_sidecar_arguments(args:Any,input_root:Path|None,receip
         "max_article_rows":max_rows,
     }
 
+
+def validate_news_feature_join_arguments(args:Any,input_root:Path|None,receipt_dir:Path|None)->dict:
+    if not isinstance(args,dict):raise CanonicalDispatchError("NEWS_FEATURE_JOIN_AUDIT arguments must be object")
+    exact(args,{"sidecar","bars","max_rows_per_file","preview_limit"},"NEWS_FEATURE_JOIN_AUDIT arguments")
+    sidecar=resolve_artifact_ref(input_root,receipt_dir,args.get("sidecar"),"NEWS_FEATURE_JOIN_AUDIT sidecar")
+    bars=args.get("bars")
+    if not isinstance(bars,dict) or len(bars)>256:raise CanonicalDispatchError("NEWS_FEATURE_JOIN_AUDIT bars must be object with at most 256 symbols")
+    normalized_bars={}
+    for raw_symbol,raw_refs in bars.items():
+        symbol=str(raw_symbol or "").strip().upper()
+        if not _SYMBOL.fullmatch(symbol):raise CanonicalDispatchError(f"NEWS_FEATURE_JOIN_AUDIT invalid symbol: {raw_symbol!r}")
+        if not isinstance(raw_refs,list) or len(raw_refs)>20:
+            raise CanonicalDispatchError(f"NEWS_FEATURE_JOIN_AUDIT bars for {symbol} must be list with at most 20 files")
+        nodes=[]
+        for idx,node in enumerate(raw_refs):
+            resolved=resolve_artifact_ref(input_root,receipt_dir,node,f"NEWS_FEATURE_JOIN_AUDIT bars[{symbol}][{idx}]")
+            public={k:resolved[k] for k in ("scope","relative_path","sha256","bytes")}
+            if resolved.get("job_fingerprint") is not None:public["job_fingerprint"]=resolved["job_fingerprint"]
+            nodes.append(public)
+        normalized_bars[symbol]=nodes
+    try:max_rows=int(args.get("max_rows_per_file",250000))
+    except Exception as e:raise CanonicalDispatchError("NEWS_FEATURE_JOIN_AUDIT max_rows_per_file must be integer") from e
+    if not 1<=max_rows<=1_000_000:raise CanonicalDispatchError("NEWS_FEATURE_JOIN_AUDIT max_rows_per_file must be within 1..1000000")
+    try:preview=int(args.get("preview_limit",20))
+    except Exception as e:raise CanonicalDispatchError("NEWS_FEATURE_JOIN_AUDIT preview_limit must be integer") from e
+    if not 1<=preview<=200:raise CanonicalDispatchError("NEWS_FEATURE_JOIN_AUDIT preview_limit must be within 1..200")
+    sidecar_public={k:sidecar[k] for k in ("scope","relative_path","sha256","bytes")}
+    if sidecar.get("job_fingerprint") is not None:sidecar_public["job_fingerprint"]=sidecar["job_fingerprint"]
+    return {"sidecar":sidecar_public,"bars":normalized_bars,"max_rows_per_file":max_rows,"preview_limit":preview}
+
 def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None=None,receipt_dir:Path|None=None)->dict:
     exact(req,{"schema","job_id","capability_id","mmibkr","entrypoint","arguments","resources","authority","forbidden_authorities"},"request")
     if req.get("schema")!=REQUEST_SCHEMA:raise CanonicalDispatchError("unsupported request schema")
@@ -698,6 +733,8 @@ def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None
         normalized_args=validate_options_snapshot_arguments(args,input_root)
     elif cid=="NEWS_FEATURE_SIDECAR_BUILD":
         normalized_args=validate_news_feature_sidecar_arguments(args,input_root,receipt_dir)
+    elif cid=="NEWS_FEATURE_JOIN_AUDIT":
+        normalized_args=validate_news_feature_join_arguments(args,input_root,receipt_dir)
     else:
         raise CanonicalDispatchError(f"capability executor is not implemented: {cid}")
     return {"schema":REQUEST_SCHEMA,"job_id":jid,"capability_id":cid,"mmibkr":mm,"entrypoint":{**cap,"git_blob_sha1":actual},"arguments":normalized_args,"resources":resources(req.get("resources")),"authority":AUTHORITY,"forbidden_authorities":dict(FORBIDDEN_AUTHORITY_ASSERTIONS)}
@@ -1933,6 +1970,154 @@ def execute_news_feature_sidecar(v:dict,root:Path,input_root:Path|None,receipt_d
         },
     }
 
+
+def news_feature_join_dependencies(root:Path)->dict[str,str]:
+    return {
+        "scripts/operator/news_feature_backtest_join_audit_14nj.py":private_blob_identity(root,"scripts/operator/news_feature_backtest_join_audit_14nj.py"),
+    }
+
+def _public_artifact_ref(node:dict)->dict:
+    out={k:node[k] for k in ("scope","relative_path","sha256","bytes")}
+    if node.get("job_fingerprint") is not None:out["job_fingerprint"]=node["job_fingerprint"]
+    return out
+
+def _read_news_sidecar_rows(path:Path,read_csv_fn:Any)->list[dict]:
+    suffix=path.suffix.lower()
+    if suffix==".json":
+        try:payload=json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:raise CanonicalDispatchError("NEWS_FEATURE_JOIN_AUDIT sidecar JSON is invalid") from e
+        if not isinstance(payload,list):raise CanonicalDispatchError("NEWS_FEATURE_JOIN_AUDIT sidecar JSON must be list")
+        return [row for row in payload if isinstance(row,dict)]
+    if suffix==".csv":
+        rows=read_csv_fn(path)
+        if not isinstance(rows,list):raise CanonicalDispatchError("NEWS_FEATURE_JOIN_AUDIT sidecar CSV contract rejected")
+        return [row for row in rows if isinstance(row,dict)]
+    raise CanonicalDispatchError("NEWS_FEATURE_JOIN_AUDIT sidecar must be .json or .csv")
+
+def execute_news_feature_join(v:dict,root:Path,input_root:Path|None,receipt_dir:Path|None,artifact_root:Path|None,read_bar_fn:Any)->dict:
+    if artifact_root is None or receipt_dir is None:
+        raise CanonicalDispatchError("NEWS_FEATURE_JOIN_AUDIT requires receipt_dir artifact storage")
+    args=v["arguments"]
+    sidecar=resolve_artifact_ref(input_root,receipt_dir,args["sidecar"],"NEWS_FEATURE_JOIN_AUDIT sidecar")
+    read_csv_fn=private_callable(root,"scripts/operator/news_feature_backtest_join_audit_14nj.py","scripts.operator.news_feature_backtest_join_audit_14nj","_read_csv")
+    group_fn=private_callable(root,"scripts/operator/news_feature_backtest_join_audit_14nj.py","scripts.operator.news_feature_backtest_join_audit_14nj","_group_sidecar_rows")
+    rep_fn=private_callable(root,"scripts/operator/news_feature_backtest_join_audit_14nj.py","scripts.operator.news_feature_backtest_join_audit_14nj","_representative_sidecar_row")
+    parse_fn=private_callable(root,"scripts/operator/news_feature_backtest_join_audit_14nj.py","scripts.operator.news_feature_backtest_join_audit_14nj","_parse_datetime")
+    iso_fn=private_callable(root,"scripts/operator/news_feature_backtest_join_audit_14nj.py","scripts.operator.news_feature_backtest_join_audit_14nj","_dt_to_iso")
+    contract_fn=private_callable(root,"scripts/operator/news_feature_backtest_join_audit_14nj.py","scripts.operator.news_feature_backtest_join_audit_14nj","_build_contract")
+    rows=_read_news_sidecar_rows(sidecar["path"],read_csv_fn)
+    grouped=group_fn(rows)
+    if not isinstance(grouped,dict):raise CanonicalDispatchError("canonical News sidecar grouping contract rejected")
+    readiness=[];inventory=[];preview=[];public_bars={}
+    for symbol,feature_rows in sorted(grouped.items()):
+        if not isinstance(feature_rows,list) or not feature_rows:continue
+        rep=rep_fn(feature_rows)
+        if not isinstance(rep,dict):raise CanonicalDispatchError("canonical News representative sidecar contract rejected")
+        asof=parse_fn(rep.get("FEATURE_ASOF_UTC"));asof_iso=iso_fn(asof)
+        refs=args["bars"].get(symbol,[])
+        all_ts=[];readable=0
+        public_bars[symbol]=[]
+        for idx,ref in enumerate(refs):
+            resolved=resolve_artifact_ref(input_root,receipt_dir,ref,f"NEWS_FEATURE_JOIN_AUDIT bars[{symbol}][{idx}]")
+            timestamps,meta=read_bar_fn(resolved["path"],max_rows=args["max_rows_per_file"])
+            if not isinstance(timestamps,list) or not isinstance(meta,dict):
+                raise CanonicalDispatchError("canonical News bar timestamp reader contract rejected")
+            timestamps=[ts for ts in timestamps if isinstance(ts,datetime)]
+            if meta.get("status") in {"readable_with_timestamps","readable_no_timestamps"}:readable+=1
+            all_ts.extend(timestamps)
+            pub=_public_artifact_ref(resolved);public_bars[symbol].append(pub)
+            inventory.append({
+                "symbol":symbol,"bar_artifact":pub,"extension":resolved["path"].suffix.lower(),
+                "status":meta.get("status"),"rows_seen":int(meta.get("rows_seen") or 0),
+                "timestamps_seen":int(meta.get("timestamps_seen") or 0),
+                "first_bar_utc":iso_fn(min(timestamps) if timestamps else None),
+                "last_bar_utc":iso_fn(max(timestamps) if timestamps else None),
+                "notes":str(meta.get("notes") or ""),
+            })
+        all_ts=sorted(all_ts)
+        before=after=0;first_joinable=None
+        if asof is not None:
+            for ts in all_ts:
+                if ts>=asof:
+                    after+=1
+                    if first_joinable is None:first_joinable=ts
+                    if len(preview)<args["preview_limit"]:
+                        preview.append({
+                            "symbol":symbol,"feature_asof_utc":asof_iso,"bar_timestamp_utc":iso_fn(ts),
+                            "join_rule_ok":True,
+                            "news_composite_score_24h":rep.get("NEWS_COMPOSITE_SCORE_24H",""),
+                            "news_macro_context_score_24h":rep.get("NEWS_MACRO_CONTEXT_SCORE_24H",""),
+                            "news_theme_only_flag":rep.get("NEWS_THEME_ONLY_FLAG",""),
+                            "news_direct_required_flag":rep.get("NEWS_DIRECT_REQUIRED_FLAG",""),
+                            "news_policy":rep.get("NEWS_POLICY",""),
+                        })
+                else:before+=1
+        if asof is None:status="feature_asof_parse_failed"
+        elif not refs:status="no_candidate_bar_files"
+        elif not all_ts:status="no_parseable_bar_timestamps"
+        elif first_joinable is not None:status="join_ready"
+        else:status="bars_exist_but_all_before_feature_asof"
+        readiness.append({
+            "symbol":symbol,"feature_asof_utc":asof_iso,"feature_rows":len(feature_rows),
+            "candidate_files":len(refs),"readable_files":readable,"bars_seen":len(all_ts),
+            "bars_before_asof":before,"bars_at_or_after_asof":after,
+            "first_bar_utc":iso_fn(all_ts[0] if all_ts else None),
+            "last_bar_utc":iso_fn(all_ts[-1] if all_ts else None),
+            "first_joinable_bar_utc":iso_fn(first_joinable),
+            "join_ready":first_joinable is not None,"join_status":status,
+            "news_composite_score_24h":rep.get("NEWS_COMPOSITE_SCORE_24H",""),
+            "news_macro_context_score_24h":rep.get("NEWS_MACRO_CONTEXT_SCORE_24H",""),
+            "news_theme_only_flag":rep.get("NEWS_THEME_ONLY_FLAG",""),
+            "news_direct_required_flag":rep.get("NEWS_DIRECT_REQUIRED_FLAG",""),
+            "news_policy":rep.get("NEWS_POLICY",""),
+        })
+    contract=contract_fn()
+    if not isinstance(contract,dict) or "FEATURE_ASOF_UTC" not in str(contract.get("join_rule") or ""):
+        raise CanonicalDispatchError("canonical News join contract rejected")
+    root_out=(artifact_root/"news_feature_join_audit").resolve();root_out.mkdir(parents=True,exist_ok=True)
+    payloads={
+        "join_readiness.json":readiness,
+        "bar_file_inventory.json":inventory,
+        "join_preview.json":preview,
+        "join_contract.json":contract,
+        "no_lookahead_join_audit.json":{
+            "schema":"mmibkr.news_feature_join_audit.v1","join_rule":"FEATURE_ASOF_UTC <= bar_timestamp",
+            "join_preview_rows":len(preview),
+            "violations":sum(1 for row in preview if not bool(row.get("join_rule_ok"))),
+            "strategy_execution":False,"labels_read":False,"fills_read":False,"pnl_read":False,
+            "backtest_outcomes_read":False,"broker_state_read":False,"bar_acquisition":False,
+        },
+    }
+    artifacts=[];artifact_map={}
+    for name,node in payloads.items():
+        target=root_out/name
+        target.write_text(json.dumps(node,sort_keys=True,separators=(",",":"),ensure_ascii=False,allow_nan=False,default=str)+"\n",encoding="utf-8")
+        desc=artifact_descriptor(target,artifact_root);artifacts.append(desc);artifact_map[name]=desc
+    return {
+        "schema":"mmibkr.news_feature_join_audit.v1",
+        "sidecar":_public_artifact_ref(sidecar),
+        "bars":public_bars,
+        "sidecar_row_count":len(rows),
+        "symbol_count":len(readiness),
+        "join_ready_count":sum(1 for row in readiness if row["join_ready"]),
+        "not_ready_count":sum(1 for row in readiness if not row["join_ready"]),
+        "readiness":readiness,
+        "preview":preview,
+        "join_contract":sanitize_public_tree(contract),
+        "artifacts":artifacts,"artifact_map":artifact_map,
+        "canonical_dependencies":news_feature_join_dependencies(root),
+        "no_lookahead":{
+            "rule":"FEATURE_ASOF_UTC <= bar_timestamp",
+            "strategy_execution":False,"labels_read":False,"fills_read":False,"pnl_read":False,
+            "backtest_outcomes_read":False,"broker_state_read":False,"bar_acquisition":False,
+        },
+        "safety":{
+            "research_only":True,"feature_recompute":False,"strategy_execution":False,
+            "strategy_spec_write":False,"runtime_activation":False,"promotion_mutation":False,
+            "broker_submit":False,"broker_cancel":False,"broker_flatten":False,"live_trading":False,
+        },
+    }
+
 def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None,receipt_dir:Path|None=None)->dict:
     fn=None if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","FEATURE_CONTRACT_VALIDATE","STRATEGY_PREVIEW"} else load_callable(root,CAPABILITIES[v["capability_id"]])
     if v["capability_id"]=="STRATEGY_SPEC_VALIDATE":
@@ -2013,6 +2198,8 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|
         result=execute_options_snapshot(v,root,input_root,artifact_root,fn)
     elif v["capability_id"]=="NEWS_FEATURE_SIDECAR_BUILD":
         result=execute_news_feature_sidecar(v,root,input_root,receipt_dir,artifact_root,fn)
+    elif v["capability_id"]=="NEWS_FEATURE_JOIN_AUDIT":
+        result=execute_news_feature_join(v,root,input_root,receipt_dir,artifact_root,fn)
     elif v["capability_id"]=="CANONICAL_DATA_MATERIALIZE":
         result=materialize_stock_data(v,root,input_root,artifact_root)
     elif v["capability_id"]=="FEATURE_CONTRACT_VALIDATE":
@@ -2151,7 +2338,7 @@ def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:P
     rd=receipt_dir.resolve() if receipt_dir is not None else None
     v=validate_request(req,source_root,source_receipt,input_root=input_root,receipt_dir=rd); fp=sha(v)
     if rd is None:
-        if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","NEWS_FEATURE_SIDECAR_BUILD"}:
+        if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","NEWS_FEATURE_SIDECAR_BUILD","NEWS_FEATURE_JOIN_AUDIT"}:
             raise CanonicalDispatchError(f"{v['capability_id']} requires receipt_dir artifact storage")
         return {"receipt":safe_execute_valid(v,source_root,input_root=input_root,receipt_dir=None),"cache_hit":False}
     rp=rd/"receipts"/f"{fp}.json"; hit=cached(rp,fp)
@@ -2165,7 +2352,7 @@ def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:P
         return {"receipt":hit,"cache_hit":True}
     stop,lost,thread=start_claim_heartbeat(cp,token,fp)
     published=False
-    artifact_root=(rd/"artifacts"/fp).resolve() if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","CRW_BACKTEST","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","NEWS_FEATURE_SIDECAR_BUILD"} else None
+    artifact_root=(rd/"artifacts"/fp).resolve() if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","CRW_BACKTEST","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","NEWS_FEATURE_SIDECAR_BUILD","NEWS_FEATURE_JOIN_AUDIT"} else None
     if artifact_root is not None:
         shutil.rmtree(artifact_root,ignore_errors=True);artifact_root.mkdir(parents=True,exist_ok=True)
     try:
