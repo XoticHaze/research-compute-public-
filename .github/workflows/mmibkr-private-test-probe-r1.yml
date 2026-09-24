@@ -70,6 +70,7 @@ jobs:
           if event == "workflow_dispatch":
               source_ref = os.environ.get("DISPATCH_SOURCE_REF", "").strip()
               modules = os.environ.get("DISPATCH_TEST_MODULES", "").strip()
+              parity_key = ""
           elif event == "push":
               node = json.loads(Path("rendezvous/fire/mmibkr-private-test-probe-r1").read_text(encoding="utf-8"))
               if node.get("schema") != "mmibkr.private_test_probe_fire.v1":
@@ -79,6 +80,7 @@ jobs:
               if not isinstance(raw_modules, list):
                   raise SystemExit("private test probe modules must be a list")
               modules = ",".join(str(value).strip() for value in raw_modules if str(value).strip())
+              parity_key = str(node.get("parity_public_key_b64") or "").strip()
           else:
               raise SystemExit("unsupported private test probe event")
           if not re.fullmatch(r"[0-9a-f]{40}", source_ref):
@@ -88,6 +90,8 @@ jobs:
           with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as fh:
               fh.write("MMIBKR_PRIVATE_TEST_SOURCE_REF=" + source_ref + "\n")
               fh.write("MMIBKR_PRIVATE_TEST_MODULES=" + modules + "\n")
+              if parity_key:
+                  fh.write("MMIBKR_PARITY_PUBLIC_KEY_B64=" + parity_key + "\n")
           print("MMIBKR_PRIVATE_TEST_REQUEST=PASS")
           print("MMIBKR_PRIVATE_TEST_SOURCE_REF=" + source_ref)
           print("MMIBKR_PRIVATE_TEST_MODULE_COUNT=" + str(len([x for x in modules.split(",") if x])))
