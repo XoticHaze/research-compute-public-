@@ -108,7 +108,7 @@ def test_allowlist_accepts_exact_news_research_regressions_only():
         "tests.test_news_scorecard_cycle_break_14th31fd_r18",
     ]
 
-    with pytest.raises(ValueError, match="test_module_not_allowlisted"):
+    with pytest.raises(ValueError, match="test_module_authority_rejected"):
         validated_modules("tests.test_news_live_provider_submit")
 
 
