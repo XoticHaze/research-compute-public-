@@ -38,11 +38,13 @@ class PaperAccountHygieneCoordinatorTests(unittest.TestCase):
         )
         self.assertIn("PRODUCER_ARCHIVE_BYTES: '66378678'", text)
         self.assertIn(
-            "RUNTIME_SOURCE_SHA: 35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
+            "RUNTIME_SOURCE_SHA: 07824b4ed9354a8519d4ce595735f7c1a610fdc2",
             text,
         )
         self.assertIn("scripts/mmibkr_source_vault_consumer_v1.py", text)
         self.assertIn("fleet_authority_exact_sha_encrypted_snapshot_vault", text)
+        self.assertIn("'canonical_route_ready': preflight.get('canonical_route_ready')", text)
+        self.assertIn("MMIBKR_HYGIENE_CANONICAL_ROUTE_READY=", text)
 
     def test_fresh_operator_snapshot_is_required_and_private(self):
         text = self.text()
