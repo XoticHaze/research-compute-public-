@@ -65,7 +65,7 @@ def run_strategy_backtest(payload,data_root):
     if not source.is_file():
         return {'registry_dispatch':True,'ok':True,'status':'data_missing','strategy_id':strategy,
                 'safety':{'broker_submit':False,'cancel':False,'replace':False,'live_unlock':False,'backtest_only':True}}
-    rows=list(csv.DictReader(source.open(newline='',encoding='utf-8')))
+    with source.open(newline='',encoding='utf-8') as handle:\n        rows=list(csv.DictReader(handle))
     safety={'broker_submit':False,'cancel':False,'replace':False,'live_unlock':False,'backtest_only':True}
     net=12.5 if strategy=='ma_crossover' else (21.0 if strategy=='breakout' else 17.0)
     if strategy=='crw_score_multi_mode':
