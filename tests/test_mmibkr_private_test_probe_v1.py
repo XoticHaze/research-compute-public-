@@ -97,6 +97,21 @@ def test_allowlist_accepts_exact_g05_g07_recovery_chain_only():
         validated_modules("tests.test_strategy_health_preview_binding")
 
 
+def test_allowlist_accepts_exact_news_research_regressions_only():
+    assert validated_modules(
+        "tests.test_news_publication_time_integrity_20260902 "
+        "tests.test_news_publication_time_integration_patch_20260902 "
+        "tests.test_news_scorecard_cycle_break_14th31fd_r18"
+    ) == [
+        "tests.test_news_publication_time_integrity_20260902",
+        "tests.test_news_publication_time_integration_patch_20260902",
+        "tests.test_news_scorecard_cycle_break_14th31fd_r18",
+    ]
+
+    with pytest.raises(ValueError, match="test_module_not_allowlisted"):
+        validated_modules("tests.test_news_live_provider_submit")
+
+
 def test_module_file_path_and_pytest_command_are_exact_and_shell_free():
     assert module_file_path("tests.test_model_lab_xgboost") == "tests/test_model_lab_xgboost.py"
     command = pytest_container_command("probe:test", "tests.test_model_lab_xgboost")
