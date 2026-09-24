@@ -465,7 +465,11 @@ jobs:
           ownership = node.get('ownership_authority') if isinstance(node.get('ownership_authority'), dict) else {}
           if ownership.get('ownership_source') != 'selected_runtime_strategy_inventory_v1':
               raise SystemExit('hygiene ownership source mismatch')
-          if int(ownership.get('strategy_owned_position_count') or -1) != 0:
+          try:
+              strategy_owned_position_count = int(ownership.get('strategy_owned_position_count'))
+          except (TypeError, ValueError):
+              raise SystemExit('hygiene strategy inventory count invalid')
+          if strategy_owned_position_count != 0:
               raise SystemExit('hygiene strategy inventory is not flat')
           if ownership.get('operator_approved') is not True or ownership.get('operator_ack_match') is not True:
               raise SystemExit('hygiene operator approval boundary violated')
