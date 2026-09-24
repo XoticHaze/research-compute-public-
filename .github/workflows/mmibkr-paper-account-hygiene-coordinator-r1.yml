@@ -496,6 +496,8 @@ jobs:
               value = str(raw)
               if 'regular_session_required' in value:
                   classes.add('regular_session_required')
+              elif 'regular_session_market_order_required' in value:
+                  classes.add('regular_session_market_order_required')
               elif 'session_submit_not_allowed' in value:
                   classes.add('session_submit_not_allowed')
               elif 'open_orders_present' in value:
