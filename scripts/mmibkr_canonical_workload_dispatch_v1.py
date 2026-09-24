@@ -234,6 +234,12 @@ def validate_registry_backtest_arguments(args:Any,input_root:Path|None,receipt_d
     spec=args.get("strategy_spec")
     if not isinstance(spec,dict):
         raise CanonicalDispatchError("REGISTRY_BACKTEST strategy_spec must be object")
+    nested=spec.get("strategy_spec") if isinstance(spec.get("strategy_spec"),dict) else spec
+    forbidden=("submit","execute","live_allowed","broker_submit","broker_cancel","broker_flatten","runtime_activation","promotion_mutation","strategy_spec_write")
+    for key in forbidden:
+        for node in (spec,nested):
+            if node.get(key) not in (None,False,0,"","false","False"):
+                raise CanonicalDispatchError(f"REGISTRY_BACKTEST forbids execution authority field: {key}")
     resolved=resolve_artifact_ref(input_root,receipt_dir,args.get("dataset"),"REGISTRY_BACKTEST dataset")
     start_raw=str(args.get("requested_start") or "").strip()
     end_raw=str(args.get("requested_end") or "").strip()
