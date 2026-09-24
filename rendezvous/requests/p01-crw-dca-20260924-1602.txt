@@ -1,0 +1,4 @@
+P01 CRW DCA fresh execution request
+source_head=e179cd11a99be6b70353ec36e8f1b333d127fa08
+mmibkr_source_sha=35e6b44e5c2618f780a84c1c204fe14c76bdf0e5
+purpose=development-only matched DCA economics; protected holdout unread
