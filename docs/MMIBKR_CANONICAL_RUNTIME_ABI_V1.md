@@ -26,6 +26,7 @@ The portable ABI currently carries these research-only bindings:
 | --- | --- | --- |
 | `STRATEGY_SPEC_VALIDATE` | `autotuner_strategy_bridge.normalize_strategy_spec` | normalize and digest one StrategySpec |
 | `CRW_BACKTEST` | `scripts.operator.crw_backtest_summary_13z.run_backtest` | execute canonical CRW replay over exact governed datasets |
+| `REGISTRY_BACKTEST` | `strategy_backtest_registry.run_strategy_backtest` | execute one normalized StrategySpec over one exact governed evaluation dataset across registered strategy families, preserving the primary CRW runner |
 | `AUTOTUNER_PARAMETER_CONSUMPTION` | `autotuner_parameter_consumption.parameter_schema_for_tuning` | derive the searchable CRW parameter surface from the pinned private strategy schema |
 | `AUTOTUNER_CANDIDATE_GENERATE` | `autotuner_strategy_bridge.candidate_mutations` | generate a bounded mutation set only after the canonical consumption gate |
 | `CANONICAL_DATA_MATERIALIZE` | `data_manager.DataManager.ingest_external_stock_source_bars` | normalize governed stock bars into canonical raw/features/sidecars without provider acquisition |
@@ -37,6 +38,8 @@ The portable ABI currently carries these research-only bindings:
 | `MODEL_LAB_COMPARE_VALIDATE` | `model_lab_comparison_matrix.align_training_matrices_for_comparison` | align frozen matrices and apply leakage-safe comparison validation |
 | `NEWS_REPLAY_ANALYZE` | `news_engine.NewsEngine` | replay a governed article corpus through deterministic canonical matching/scoring with network + LLM acquisition disabled |
 | `OPTIONS_SNAPSHOT_ANALYZE` | `options_scanner.OptionsScanner` pure IV/Black-Scholes helpers | analyze an exact captured option snapshot at an explicit as-of time without chain/quote acquisition |
+
+`REGISTRY_BACKTEST` is the generalized arena surface for registry-backed strategy families. Family differences belong in `StrategySpec`; do not add family-specific backtest capability IDs. `CRW_BACKTEST` remains the proven compatibility/acceptance fixture and full CRW evidence route.
 
 CRW backtest callers cannot supply absolute source paths. The request carries per-symbol relative paths, byte counts, and SHA-256 identities under a governed `--input-root`; the dispatcher verifies them and injects canonical `_verified_source_paths` only after admission.
 
