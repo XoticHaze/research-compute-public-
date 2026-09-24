@@ -173,8 +173,9 @@ jobs:
           if snapshot.get('mode') != 'paper' or snapshot.get('live_enabled') is not False:
               raise SystemExit('operator snapshot is not paper-only')
           runtime = snapshot.get('runtime') if isinstance(snapshot.get('runtime'), dict) else {}
-          if str(runtime.get('source_sha') or runtime.get('source_ref') or '').lower() != os.environ['RUNTIME_SOURCE_SHA']:
-              raise SystemExit('operator snapshot runtime source mismatch')
+          snapshot_source_sha = str(runtime.get('source_sha') or runtime.get('source_ref') or '').strip().lower()
+          if len(snapshot_source_sha) != 40 or any(ch not in '0123456789abcdef' for ch in snapshot_source_sha):
+              raise SystemExit('operator snapshot runtime source invalid')
           account = snapshot.get('account') if isinstance(snapshot.get('account'), dict) else {}
           if int(account.get('open_orders_count') or 0) != 0:
               raise SystemExit('operator snapshot contains open broker orders')
@@ -182,9 +183,12 @@ jobs:
               json.dumps(snapshot, sort_keys=True, separators=(',', ':')) + '\n',
               encoding='utf-8',
           )
+          with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
+              fh.write('HYGIENE_OWNERSHIP_SOURCE_SHA=' + snapshot_source_sha + '\n')
           print('MMIBKR_HYGIENE_SNAPSHOT=accepted')
           print('MMIBKR_HYGIENE_ACCOUNT_POSITION_COUNT=' + str(int(account.get('positions_count') or 0)))
           print('MMIBKR_HYGIENE_OPEN_ORDER_COUNT=0')
+          print('MMIBKR_HYGIENE_OWNERSHIP_SOURCE=' + snapshot_source_sha)
           print('MMIBKR_HYGIENE_RUNTIME_SOURCE=' + os.environ['RUNTIME_SOURCE_SHA'])
           PY
           rm -f "$raw"
@@ -348,6 +352,8 @@ jobs:
               raise SystemExit('hygiene runtime plaintext emission boundary violated')
           node['fleet_authority_base'] = os.environ['FLEET_AUTHORITY_BASE']
           node['caller_run_id'] = os.environ['GITHUB_RUN_ID']
+          with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
+              fh.write('HYGIENE_RUNTIME_SOURCE_ROOT=' + str(Path(node['source_root']).resolve()) + '\n')
           (root / 'source-materialization.json').write_text(
               json.dumps(node, sort_keys=True) + '\n',
               encoding='utf-8',
@@ -355,6 +361,45 @@ jobs:
           print('MMIBKR_HYGIENE_RUNTIME_SOURCE_MATERIALIZED=1')
           print('MMIBKR_HYGIENE_RUNTIME_SOURCE_SHA=' + node['source_sha'])
           print('MMIBKR_HYGIENE_RUNTIME_SOURCE_PRIVATE_TOKEN_USED=0')
+          PY
+
+
+      - name: Materialize prior ownership source for maintenance parity proof
+        run: |
+          set -euo pipefail
+          umask 077
+          if [ "$HYGIENE_OWNERSHIP_SOURCE_SHA" = "$RUNTIME_SOURCE_SHA" ]; then
+            echo "HYGIENE_PRIOR_RUNTIME_SOURCE_ROOT=$HYGIENE_RUNTIME_SOURCE_ROOT" >> "$GITHUB_ENV"
+            echo 'MMIBKR_HYGIENE_PRIOR_SOURCE_REUSE=1'
+            exit 0
+          fi
+
+          mkdir -p "$RUNNER_TEMP/mmibkr-hygiene-prior-runtime-source"
+          python scripts/mmibkr_source_vault_consumer_v1.py \
+            --authority-base "$FLEET_AUTHORITY_BASE" \
+            --run-id "$GITHUB_RUN_ID" \
+            --source-sha "$HYGIENE_OWNERSHIP_SOURCE_SHA" \
+            --public-repo XoticHaze/mm-ibkr-runtime \
+            --public-branch mmibkr-source-vault \
+            --destination "$RUNNER_TEMP/mmibkr-hygiene-prior-runtime-source/extracted" \
+            --archive-output "$RUNNER_TEMP/mmibkr-hygiene-prior-runtime-source/mm-ibkr-source.tar.gz" \
+            --output "$RUNNER_TEMP/mmibkr-hygiene-prior-runtime-source/materialization-host.json"
+
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'mmibkr-hygiene-prior-runtime-source'
+          node = json.loads((root / 'materialization-host.json').read_text())
+          if node.get('ok') is not True or node.get('source_sha') != os.environ['HYGIENE_OWNERSHIP_SOURCE_SHA']:
+              raise SystemExit('hygiene prior ownership source materialization mismatch')
+          if node.get('source_transport') != 'fleet_authority_exact_sha_encrypted_snapshot_vault':
+              raise SystemExit('hygiene prior source must use reusable encrypted source vault')
+          if node.get('private_repository_token_used') is not False or node.get('plaintext_emitted') is not False:
+              raise SystemExit('hygiene prior source transport boundary violated')
+          with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
+              fh.write('HYGIENE_PRIOR_RUNTIME_SOURCE_ROOT=' + str(Path(node['source_root']).resolve()) + '\n')
+          print('MMIBKR_HYGIENE_PRIOR_SOURCE_MATERIALIZED=1')
+          print('MMIBKR_HYGIENE_PRIOR_SOURCE_SHA=' + node['source_sha'])
           PY
 
       - name: Refresh ownership snapshot under selected-runtime maintenance hold
@@ -369,6 +414,8 @@ jobs:
             --snapshot "$RUNNER_TEMP/mmibkr-hygiene-snapshot.json" \
             --maintenance-hold rendezvous/control/mmibkr-selected-runtime-cloud-maintenance-hold-r1.json \
             --expected-source-sha "$RUNTIME_SOURCE_SHA" \
+            --previous-source-root "$HYGIENE_PRIOR_RUNTIME_SOURCE_ROOT" \
+            --current-source-root "$HYGIENE_RUNTIME_SOURCE_ROOT" \
             --output "$refreshed"
 
           python scripts/mmibkr_operator_snapshot_publish_v1.py \
@@ -398,7 +445,14 @@ jobs:
           print('MMIBKR_HYGIENE_MAINTENANCE_SNAPSHOT_REFRESH=accepted')
           print('MMIBKR_HYGIENE_REFRESHED_POSITION_COUNT=' + str(int(account.get('positions_count') or 0)))
           print('MMIBKR_HYGIENE_REFRESHED_OPEN_ORDER_COUNT=0')
+          source_rebind = snapshot.get('maintenance_source_rebind') if isinstance(snapshot.get('maintenance_source_rebind'), dict) else {}
+          if os.environ['HYGIENE_OWNERSHIP_SOURCE_SHA'] != os.environ['RUNTIME_SOURCE_SHA']:
+              if source_rebind.get('selected_runtime_authority_exact_match') is not True:
+                  raise SystemExit('maintenance refresh source authority parity proof missing')
+              if source_rebind.get('current_source_sha') != os.environ['RUNTIME_SOURCE_SHA']:
+                  raise SystemExit('maintenance refresh source rebind target mismatch')
           print('MMIBKR_HYGIENE_REFRESH_B1_RUN_ID=' + str(refresh.get('broker_snapshot_run_id') or ''))
+          print('MMIBKR_HYGIENE_SOURCE_REBOUND=' + str(bool(source_rebind)).lower())
           print('MMIBKR_HYGIENE_REFRESH_BROKER_MUTATION=0')
           print('MMIBKR_HYGIENE_REFRESH_LIVE_EXECUTION_ALLOWED=0')
           PY
