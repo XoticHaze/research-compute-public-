@@ -127,6 +127,7 @@ class WarmSelectedRuntimeActivationTests(unittest.TestCase):
             if token == "-e":
                 key, value = cmd[index + 1].split("=", 1)
                 env[key] = value
+        self.assertEqual(env["CONFIG_PATH"], "/app/config.smoke.json")
         self.assertEqual(env["ENABLE_LIVE_TRADING"], "0")
         self.assertEqual(env["CONFIG_PATH"], "/app/config.smoke.json")
         self.assertEqual(env["STRATEGY_IBKR_PAPER_ORDER_SUBMIT_ENABLED_13Z53"], "1")
@@ -143,6 +144,26 @@ class WarmSelectedRuntimeActivationTests(unittest.TestCase):
         self.assertNotIn("tws_password", joined)
         self.assertNotIn("ibkr_username", joined)
         self.assertNotIn("ibkr_password", joined)
+
+    def test_start_canonical_runtime_requires_source_controlled_bootstrap_config(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "source"
+            root.mkdir()
+            (root / "Dockerfile.bot").write_text("FROM scratch\n", encoding="utf-8")
+            runtime = {"source_root": str(root)}
+            with self.assertRaisesRegex(
+                mod.ActivationError,
+                "source-controlled MM-IBKR config.smoke.json missing",
+            ):
+                mod.start_canonical_runtime(
+                    runtime=runtime,
+                    run_id="123",
+                    runner_temp=Path(td),
+                    gateway_host="127.0.0.1",
+                    gateway_port=4002,
+                    run=lambda *args, **kwargs: self.fail("docker must not run without bootstrap config"),
+                    sleep=lambda _: None,
+                )
 
     def test_runtime_diagnostic_classifies_without_emitting_raw_logs(self):
         secret = "TWS_PASSWORD=do-not-emit"
@@ -198,6 +219,7 @@ class WarmSelectedRuntimeActivationTests(unittest.TestCase):
             root = Path(td) / "source"
             root.mkdir()
             (root / "Dockerfile.bot").write_text("FROM scratch\n", encoding="utf-8")
+            (root / "config.smoke.json").write_text("{}\n", encoding="utf-8")
             runtime = {"source_root": str(root)}
             with patch.object(mod.proof_v1, "_http_json", side_effect=OSError("not ready")):
                 with self.assertRaises(mod.ActivationError) as ctx:
