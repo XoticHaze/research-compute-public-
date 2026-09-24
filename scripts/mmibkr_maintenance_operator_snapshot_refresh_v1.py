@@ -17,7 +17,7 @@ import json
 import os
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping
 from urllib.error import HTTPError
@@ -130,6 +130,7 @@ def _dispatch(token: str, *, nonce: str, recipient_b64: str, recipient_key_id: s
 
 def _discover(token: str, *, nonce: str, expected_head: str, started: datetime, timeout_sec: int = 240) -> str:
     target = f"IBKR B1 {MODE} {nonce}"
+    earliest = started - timedelta(seconds=5)
     deadline = time.monotonic() + max(1, int(timeout_sec))
     while time.monotonic() < deadline:
         status, node = _api_json(
@@ -142,12 +143,19 @@ def _discover(token: str, *, nonce: str, expected_head: str, started: datetime, 
         for run in node.get("workflow_runs") or []:
             if not isinstance(run, Mapping):
                 continue
+            if str(run.get("event") or "") != "workflow_dispatch":
+                continue
+            if str(run.get("head_branch") or "") != B1_REF:
+                continue
             if str(run.get("head_sha") or "").lower() != expected_head:
                 continue
             if str(run.get("display_title") or run.get("name") or "") != target:
                 continue
-            created = datetime.fromisoformat(str(run.get("created_at") or "").replace("Z", "+00:00"))
-            if created >= started.replace(microsecond=0):
+            try:
+                created = datetime.fromisoformat(str(run.get("created_at") or "").replace("Z", "+00:00"))
+            except Exception:
+                continue
+            if created >= earliest:
                 matches.append(str(run.get("id") or ""))
         matches = [value for value in matches if value.isdigit()]
         if len(matches) == 1:
