@@ -2,16 +2,12 @@
   "schema": "mmibkr.private_test_probe_fire.v1",
   "source_ref": "15594dd2353adb334584e8d9025cf7a427428b17",
   "test_modules": [
-    "tests.test_data_manager_indicator_context_contract_14th31jq",
-    "tests.test_data_manager_registry_authority_14th31lm",
-    "tests.test_publish_canonical_feature_sidecar",
-    "tests.test_builder_feature_rhs_comparison_14th31ky",
-    "tests.test_strategy_backtest_registry_dispatch",
-    "tests.test_crw_tradingview_dual_execution_replay_14th31js",
-    "tests.test_crw_backtest_futures_timestamp_14th31kf"
+    "tests.test_news_publication_time_integrity_20260902",
+    "tests.test_news_publication_time_integration_patch_20260902",
+    "tests.test_news_scorecard_cycle_break_14th31fd_r18"
   ],
-  "requested_by": "assistant-g05-g07-current-main-recovery",
-  "purpose": "clean exact-private proof for recovered G05 canonical data, G06 feature/preview, and G07 CRW evidence chain using bot-only headless modules",
+  "requested_by": "assistant-news-replay-analyze-1618",
+  "purpose": "exact-private owner regression proof for G10 NEWS_REPLAY_ANALYZE deterministic NewsEngine capability",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -19,7 +15,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "g05-g07-recovery-r2-headless-c8427599",
+  "request_nonce": "news-replay-analyze-r1-4799861b",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "604f055815f2746a6f63aa6355d6a0667eeb7c8f"
+  "current_private_reference": "6a07c884beb26b6fb7bf03cf17706bae7a98a059"
 }
