@@ -43,6 +43,7 @@ HOLD_SCHEMA = "mmibkr.selected_runtime_maintenance_hold.v1"
 HOLD_REASON = "paper_account_hygiene_679"
 OWNERSHIP_SOURCE = "selected_runtime_strategy_inventory_v1"
 OPERATOR_SCHEMA = "mmibkr.cloud_operator_snapshot.v1"
+SELECTED_RUNTIME_CONFIG = Path("config") / "selected_runtime_universe_14tu.json"
 ACCOUNT_TAGS = {
     "NetLiquidation": "net_liquidation",
     "AvailableFunds": "available_funds",
@@ -304,6 +305,99 @@ def _validate_hold(path: Path) -> None:
         raise RuntimeError("selected-runtime maintenance hold authority boundary violated")
 
 
+def _selected_runtime_authority(root: Path) -> dict[str, Any]:
+    path = root.resolve() / SELECTED_RUNTIME_CONFIG
+    if not path.is_file():
+        raise RuntimeError("maintenance refresh selected-runtime config missing")
+    node = json.loads(path.read_text(encoding="utf-8"))
+    rows: list[dict[str, Any]] = []
+    for raw in node.get("runtime_ids") or []:
+        if not isinstance(raw, Mapping):
+            continue
+        policy = dict(raw.get("execution_policy") or {}) if isinstance(raw.get("execution_policy"), Mapping) else {}
+        active = str(raw.get("status") or "") == "active_selected" or policy.get("paper_submit_enabled") is True
+        if not active:
+            continue
+        rows.append({
+            "runtime_id": raw.get("runtime_id"),
+            "status": raw.get("status"),
+            "instrument_class": raw.get("instrument_class"),
+            "strategy_id": raw.get("strategy_id"),
+            "strategy_profile": raw.get("strategy_profile"),
+            "parameter_preset_id": raw.get("parameter_preset_id"),
+            "symbol": raw.get("symbol"),
+            "signal_symbol": raw.get("signal_symbol"),
+            "timeframe": raw.get("timeframe"),
+            "execution_contract": dict(raw.get("execution_contract") or {}),
+            "execution_policy": policy,
+        })
+    rows.sort(key=lambda row: str(row.get("runtime_id") or ""))
+    return {
+        "schema": node.get("schema"),
+        "default_runtime_id": node.get("default_runtime_id"),
+        "policy": dict(node.get("policy") or {}),
+        "active_selected_runtimes": rows,
+    }
+
+
+def _authority_digest(node: Mapping[str, Any]) -> str:
+    raw = json.dumps(dict(node), sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _rebind_snapshot_source(
+    stale: Mapping[str, Any],
+    *,
+    previous_source_root: Path,
+    current_source_root: Path,
+    expected_source_sha: str,
+) -> dict[str, Any]:
+    out = copy.deepcopy(dict(stale))
+    runtime = out.get("runtime") if isinstance(out.get("runtime"), Mapping) else {}
+    previous_sha = str(runtime.get("source_sha") or runtime.get("source_ref") or "").strip().lower()
+    expected = str(expected_source_sha or "").strip().lower()
+    if previous_sha == expected:
+        return out
+    if len(previous_sha) != 40 or len(expected) != 40:
+        raise RuntimeError("maintenance refresh source identity invalid")
+
+    previous_authority = _selected_runtime_authority(previous_source_root)
+    current_authority = _selected_runtime_authority(current_source_root)
+    if previous_authority != current_authority:
+        raise RuntimeError("maintenance refresh selected-runtime authority changed across source rebind")
+
+    expected_runtime_ids = {
+        str(row.get("runtime_id") or "")
+        for row in current_authority.get("active_selected_runtimes") or []
+        if str(row.get("runtime_id") or "")
+    }
+    snapshot_runtime_ids = {
+        str(row.get("runtime_id") or "")
+        for row in out.get("runtimes") or []
+        if isinstance(row, Mapping) and str(row.get("runtime_id") or "")
+    }
+    if snapshot_runtime_ids != expected_runtime_ids:
+        raise RuntimeError("maintenance refresh snapshot runtime universe mismatch")
+
+    digest = _authority_digest(current_authority)
+    runtime_out = dict(runtime)
+    runtime_out["source_sha"] = expected
+    runtime_out["source_ref"] = expected
+    out["runtime"] = runtime_out
+    out["maintenance_source_rebind"] = {
+        "schema": "mmibkr.operator_snapshot_maintenance_source_rebind.v1",
+        "reason": HOLD_REASON,
+        "previous_source_sha": previous_sha,
+        "current_source_sha": expected,
+        "selected_runtime_authority_sha256": digest,
+        "selected_runtime_authority_exact_match": True,
+        "strategy_or_execution_authority_mutated": False,
+        "broker_mutation": False,
+        "live_execution_allowed": False,
+    }
+    return out
+
+
 def _account_summary(rows: Any) -> dict[str, Any]:
     values: dict[str, Any] = {}
     currencies: dict[str, str] = {}
@@ -407,10 +501,25 @@ def refresh_snapshot(stale: Mapping[str, Any], fresh: Mapping[str, Any], *, expe
     return out
 
 
-def execute_refresh(*, token: str, stale_path: Path, hold_path: Path, expected_source_sha: str, output: Path) -> dict[str, Any]:
+def execute_refresh(
+    *,
+    token: str,
+    stale_path: Path,
+    hold_path: Path,
+    expected_source_sha: str,
+    previous_source_root: Path,
+    current_source_root: Path,
+    output: Path,
+) -> dict[str, Any]:
     _validate_hold(hold_path)
     raw = stale_path.read_bytes()
-    stale = json.loads(raw.decode("utf-8"))
+    stale_raw = json.loads(raw.decode("utf-8"))
+    stale = _rebind_snapshot_source(
+        stale_raw,
+        previous_source_root=previous_source_root,
+        current_source_root=current_source_root,
+        expected_source_sha=expected_source_sha,
+    )
     private, recipient_b64, recipient_key_id = _recipient()
     nonce = secrets.token_hex(8)
     expected_head, started = _dispatch(
@@ -448,6 +557,12 @@ def execute_refresh(*, token: str, stale_path: Path, hold_path: Path, expected_s
         "open_order_count": int((refreshed.get("account") or {}).get("open_orders_count") or 0),
         "runtime_count": len(refreshed.get("runtimes") or []),
         "generated_at_utc": refreshed.get("generated_at_utc"),
+        "source_rebound": isinstance(refreshed.get("maintenance_source_rebind"), Mapping),
+        "selected_runtime_authority_sha256": (
+            (refreshed.get("maintenance_source_rebind") or {}).get("selected_runtime_authority_sha256")
+            if isinstance(refreshed.get("maintenance_source_rebind"), Mapping)
+            else None
+        ),
         "strategy_inventory_frozen_flat": True,
         "exact_broker_position_identity_match": True,
         "broker_mutation": False,
@@ -460,6 +575,8 @@ def main() -> int:
     parser.add_argument("--snapshot", required=True, type=Path)
     parser.add_argument("--maintenance-hold", required=True, type=Path)
     parser.add_argument("--expected-source-sha", required=True)
+    parser.add_argument("--previous-source-root", required=True, type=Path)
+    parser.add_argument("--current-source-root", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     token = str(os.environ.get("GH_TOKEN") or "").strip()
@@ -470,6 +587,8 @@ def main() -> int:
         stale_path=args.snapshot,
         hold_path=args.maintenance_hold,
         expected_source_sha=str(args.expected_source_sha).strip().lower(),
+        previous_source_root=args.previous_source_root,
+        current_source_root=args.current_source_root,
         output=args.output,
     )
     print("MMIBKR_MAINTENANCE_SNAPSHOT_REFRESH=" + json.dumps(receipt, sort_keys=True))
