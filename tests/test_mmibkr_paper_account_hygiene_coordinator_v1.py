@@ -68,6 +68,18 @@ class PaperAccountHygieneCoordinatorTests(unittest.TestCase):
         self.assertIn("preflight unexpectedly executed broker action", text)
         self.assertIn("PAPER_ACCOUNT_HYGIENE_RECONCILED", text)
 
+    def test_sanitizer_accepts_exact_zero_strategy_inventory_count(self):
+        text = self.text()
+        self.assertIn(
+            "strategy_owned_position_count = int(ownership.get('strategy_owned_position_count'))",
+            text,
+        )
+        self.assertIn("if strategy_owned_position_count != 0:", text)
+        self.assertNotIn(
+            "int(ownership.get('strategy_owned_position_count') or -1)",
+            text,
+        )
+
     def test_workflow_does_not_own_direct_broker_or_live_authority(self):
         text = self.text()
         self.assertIn("ENABLE_LIVE_TRADING: '0'", text)
