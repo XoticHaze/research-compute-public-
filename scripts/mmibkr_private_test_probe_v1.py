@@ -31,9 +31,9 @@ SAFE_EXACT = {
     "tests.test_data_manager_indicator_context_contract_14th31jq",
     "tests.test_data_manager_registry_authority_14th31lm",
     "tests.test_publish_canonical_feature_sidecar",
-    "tests.test_registry_builder_condition_execution_14th31kn",
     "tests.test_crw_tradingview_dual_execution_replay_14th31js",
-    "tests.test_crw_builder_backtest_dca_dual_ledger_14th31jt",
+    "tests.test_builder_feature_rhs_comparison_14th31ky",
+    "tests.test_crw_backtest_futures_timestamp_14th31kf",
 }
 DENY_TOKENS = (
     "broker",
