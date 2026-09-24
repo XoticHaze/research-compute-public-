@@ -36,6 +36,7 @@ The portable ABI currently carries these research-only bindings:
 | `MODEL_LAB_FIRST_CONSUMER` | `scripts.operator.model_lab_xgboost_first_consumer.execute` | train/evaluate the canonical first predictive consumer while preserving the economic-evidence gap |
 | `MODEL_LAB_COMPARE_VALIDATE` | `model_lab_comparison_matrix.align_training_matrices_for_comparison` | align frozen matrices and apply leakage-safe comparison validation |
 | `NEWS_REPLAY_ANALYZE` | `news_engine.NewsEngine` | replay a governed article corpus through deterministic canonical matching/scoring with network + LLM acquisition disabled |
+| `OPTIONS_SNAPSHOT_ANALYZE` | `options_scanner.OptionsScanner` pure IV/Black-Scholes helpers | analyze an exact captured option snapshot at an explicit as-of time without chain/quote acquisition |
 
 CRW backtest callers cannot supply absolute source paths. The request carries per-symbol relative paths, byte counts, and SHA-256 identities under a governed `--input-root`; the dispatcher verifies them and injects canonical `_verified_source_paths` only after admission.
 
@@ -110,7 +111,7 @@ python scripts/mmibkr_canonical_workload_dispatch_v1.py plan-run \
 1. use the admitted G05/G06/G07 chain as the portable data -> feature lineage -> preview -> full CRW evidence substrate;
 2. consume #1607 and #1549 as ordinary composed `CRW_BACKTEST` research jobs rather than one-off execution harnesses;
 3. extend the admitted `NEWS_REPLAY_ANALYZE` deterministic replay core into no-lookahead News feature/report consumers; keep provider acquisition separate;
-4. promote Options analytics as a sibling pure-analysis capability while keeping chain/quote acquisition separate;
+4. extend the admitted `OPTIONS_SNAPSHOT_ANALYZE` pure-analysis core into operator/report consumers while keeping chain/quote acquisition separate;
 5. build later G11/G13 intelligence/report consumers on canonical immutable receipts;
 6. keep status-owned operator/process orchestration and all broker/runtime/live authorities outside the generic research executor.
 
