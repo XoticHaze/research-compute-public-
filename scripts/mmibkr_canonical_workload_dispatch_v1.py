@@ -87,6 +87,11 @@ CAPABILITIES={
         "module":"options_scanner",
         "callable":"OptionsScanner",
     },
+    "NEWS_FEATURE_SIDECAR_BUILD":{
+        "path":"scripts/operator/news_feature_sidecar_probe_14ni.py",
+        "module":"scripts.operator.news_feature_sidecar_probe_14ni",
+        "callable":"_score_row",
+    },
 }
 _SHA1=re.compile(r"^[0-9a-f]{40}$")
 _SHA256=re.compile(r"^[0-9a-f]{64}$")
@@ -612,6 +617,32 @@ def validate_options_snapshot_arguments(args:Any,input_root:Path|None)->dict:
         "empty_reason":empty_reason,"max_rows":max_rows,
     }
 
+
+_NEWS_RUN_ID_RE=re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+
+def validate_news_feature_sidecar_arguments(args:Any,input_root:Path|None,receipt_dir:Path|None)->dict:
+    if not isinstance(args,dict):raise CanonicalDispatchError("NEWS_FEATURE_SIDECAR_BUILD arguments must be object")
+    exact(args,{"articles","source_run_id","feature_asof_utc","feature_window_hours","max_article_rows"},"NEWS_FEATURE_SIDECAR_BUILD arguments")
+    source_run_id=str(args.get("source_run_id") or "").strip()
+    if not _NEWS_RUN_ID_RE.fullmatch(source_run_id):raise CanonicalDispatchError("NEWS_FEATURE_SIDECAR_BUILD source_run_id is invalid")
+    feature_asof=_utc_iso(args.get("feature_asof_utc"),"NEWS_FEATURE_SIDECAR_BUILD feature_asof_utc")
+    try:window=int(args.get("feature_window_hours",24))
+    except Exception as e:raise CanonicalDispatchError("NEWS_FEATURE_SIDECAR_BUILD feature_window_hours must be integer") from e
+    if not 1<=window<=168:raise CanonicalDispatchError("NEWS_FEATURE_SIDECAR_BUILD feature_window_hours must be within 1..168")
+    try:max_rows=int(args.get("max_article_rows",20000))
+    except Exception as e:raise CanonicalDispatchError("NEWS_FEATURE_SIDECAR_BUILD max_article_rows must be integer") from e
+    if not 1<=max_rows<=20000:raise CanonicalDispatchError("NEWS_FEATURE_SIDECAR_BUILD max_article_rows must be within 1..20000")
+    resolved=resolve_artifact_ref(input_root,receipt_dir,args.get("articles"),"NEWS_FEATURE_SIDECAR_BUILD articles")
+    public_ref={k:resolved[k] for k in ("scope","relative_path","sha256","bytes")}
+    if resolved.get("job_fingerprint") is not None:public_ref["job_fingerprint"]=resolved["job_fingerprint"]
+    return {
+        "articles":public_ref,
+        "source_run_id":source_run_id,
+        "feature_asof_utc":feature_asof,
+        "feature_window_hours":window,
+        "max_article_rows":max_rows,
+    }
+
 def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None=None,receipt_dir:Path|None=None)->dict:
     exact(req,{"schema","job_id","capability_id","mmibkr","entrypoint","arguments","resources","authority","forbidden_authorities"},"request")
     if req.get("schema")!=REQUEST_SCHEMA:raise CanonicalDispatchError("unsupported request schema")
@@ -665,6 +696,8 @@ def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None
         normalized_args=validate_news_replay_arguments(args,input_root)
     elif cid=="OPTIONS_SNAPSHOT_ANALYZE":
         normalized_args=validate_options_snapshot_arguments(args,input_root)
+    elif cid=="NEWS_FEATURE_SIDECAR_BUILD":
+        normalized_args=validate_news_feature_sidecar_arguments(args,input_root,receipt_dir)
     else:
         raise CanonicalDispatchError(f"capability executor is not implemented: {cid}")
     return {"schema":REQUEST_SCHEMA,"job_id":jid,"capability_id":cid,"mmibkr":mm,"entrypoint":{**cap,"git_blob_sha1":actual},"arguments":normalized_args,"resources":resources(req.get("resources")),"authority":AUTHORITY,"forbidden_authorities":dict(FORBIDDEN_AUTHORITY_ASSERTIONS)}
@@ -1749,6 +1782,157 @@ def execute_options_snapshot(v:dict,root:Path,input_root:Path|None,artifact_root
         },
     }
 
+
+def news_feature_sidecar_dependencies(root:Path)->dict[str,str]:
+    return {
+        "scripts/operator/news_theme_weight_review_probe_14nh.py":private_blob_identity(root,"scripts/operator/news_theme_weight_review_probe_14nh.py"),
+        "scripts/operator/news_feature_sidecar_probe_14ni.py":private_blob_identity(root,"scripts/operator/news_feature_sidecar_probe_14ni.py"),
+    }
+
+def _news_count_map_add(node:dict[str,int],key:Any)->None:
+    text=str(key or "").strip()
+    if text:node[text]=int(node.get(text,0))+1
+
+def _news_feature_evidence_rows(articles:list[dict],split_fn:Any,policy_fn:Any)->tuple[list[dict],dict]:
+    by_symbol={}
+    for row in articles:
+        if not isinstance(row,dict):continue
+        symbol=str(row.get("symbol") or "").strip().upper()
+        if not symbol:continue
+        node=by_symbol.setdefault(symbol,{"method_counts":{},"source_types":{},"providers":{},"titles":[]})
+        _news_count_map_add(node["method_counts"],row.get("match_method"))
+        _news_count_map_add(node["source_types"],row.get("source_type"))
+        _news_count_map_add(node["providers"],row.get("provider"))
+        title=str(row.get("title") or "").strip()
+        if title and title not in node["titles"] and len(node["titles"])<3:node["titles"].append(title[:180])
+    evidence=[];symbol_policies={}
+    for symbol,node in sorted(by_symbol.items()):
+        split=split_fn(node["method_counts"])
+        matched=sum(int(v or 0) for v in node["method_counts"].values())
+        direct=int(split.get("direct_count") or 0);alias=int(split.get("alias_count") or 0)
+        theme=int(split.get("theme_count") or 0);macro=int(split.get("macro_count") or 0);other=int(split.get("other_count") or 0)
+        policy,reason,theme_only,direct_required=policy_fn(matched,direct,alias,theme,macro,other)
+        row={
+            "symbol":symbol,"matched_articles":matched,"direct_articles":direct,"alias_articles":alias,
+            "theme_articles":theme,"macro_articles":macro,"other_articles":other,
+            "theme_counts":json.dumps(split.get("theme_counts") or {},sort_keys=True),
+            "method_counts":json.dumps(node["method_counts"],sort_keys=True),
+            "source_types":json.dumps(node["source_types"],sort_keys=True),
+            "providers":json.dumps(node["providers"],sort_keys=True),
+            "weighted_evidence":float(split.get("weighted_evidence") or 0.0),
+            "theme_only_flag":bool(theme_only),"direct_required_flag":bool(direct_required),
+            "policy":policy,"reason":reason,"example_titles":" | ".join(node["titles"]),
+        }
+        evidence.append(row)
+        symbol_policies[symbol]={
+            "policy":policy,
+            "direct_required_for_trade_signal":bool(direct_required),
+            "theme_only_flag":bool(theme_only),
+            "recommended_feature_behavior":(
+                "do_not_use_theme_only_as_trade_signal" if theme_only else
+                "use_direct_alias_score_with_low_weight_theme_overlay" if direct+alias>0 and theme>0 else
+                "use_direct_alias_score" if direct+alias>0 else
+                "context_only"
+            ),
+            "method_counts":deepcopy(node["method_counts"]),
+            "theme_counts":deepcopy(split.get("theme_counts") or {}),
+        }
+    return evidence,symbol_policies
+
+def execute_news_feature_sidecar(v:dict,root:Path,input_root:Path|None,receipt_dir:Path|None,artifact_root:Path|None,score_fn:Any)->dict:
+    if artifact_root is None or receipt_dir is None:
+        raise CanonicalDispatchError("NEWS_FEATURE_SIDECAR_BUILD requires receipt_dir artifact storage")
+    args=v["arguments"]
+    resolved=resolve_artifact_ref(input_root,receipt_dir,args["articles"],"NEWS_FEATURE_SIDECAR_BUILD articles")
+    try:articles=json.loads(resolved["path"].read_text(encoding="utf-8"))
+    except Exception as e:raise CanonicalDispatchError("NEWS_FEATURE_SIDECAR_BUILD articles must be valid JSON") from e
+    if not isinstance(articles,list):raise CanonicalDispatchError("NEWS_FEATURE_SIDECAR_BUILD articles must be a JSON list")
+    if len(articles)>args["max_article_rows"]:raise CanonicalDispatchError("NEWS_FEATURE_SIDECAR_BUILD article row bound exceeded")
+    split_fn=private_callable(root,"scripts/operator/news_theme_weight_review_probe_14nh.py","scripts.operator.news_theme_weight_review_probe_14nh","_split_method_counts")
+    policy_fn=private_callable(root,"scripts/operator/news_theme_weight_review_probe_14nh.py","scripts.operator.news_theme_weight_review_probe_14nh","_policy_for_symbol")
+    contract_fn=private_callable(root,"scripts/operator/news_feature_sidecar_probe_14ni.py","scripts.operator.news_feature_sidecar_probe_14ni","_build_contract")
+    policy_module=sys.modules.get(getattr(split_fn,"__module__",""))
+    weights=deepcopy(getattr(policy_module,"DEFAULT_METHOD_WEIGHTS",{}))
+    if not isinstance(weights,dict) or not weights:raise CanonicalDispatchError("canonical News policy weights are unavailable")
+    evidence,symbol_policies=_news_feature_evidence_rows(articles,split_fn,policy_fn)
+    policy_stub={
+        "schema_version":"news_feature_policy_stub_14nh.v1",
+        "review_only":True,
+        "do_not_apply_blindly":True,
+        "default_method_weights":weights,
+        "default_theme_policy":"context_only_until_direct_or_alias_evidence",
+        "symbol_policies":symbol_policies,
+    }
+    feature_rows=[score_fn(row,policy_stub,args["feature_asof_utc"],args["source_run_id"]) for row in evidence]
+    feature_rows=[row for row in feature_rows if isinstance(row,dict) and row.get("SYMBOL")]
+    feature_rows.sort(key=lambda r:(-float(r.get("NEWS_COMPOSITE_SCORE_24H") or 0),-float(r.get("NEWS_MACRO_CONTEXT_SCORE_24H") or 0),str(r.get("SYMBOL") or "")))
+    contract=contract_fn(policy_stub,args["feature_window_hours"])
+    if not isinstance(contract,dict) or contract.get("primary_key")!=["FEATURE_ASOF_UTC","SOURCE_RUN_ID","SYMBOL"]:
+        raise CanonicalDispatchError("canonical News feature contract rejected")
+    time_semantics=contract.get("time_semantics") or {}
+    if "FEATURE_ASOF_UTC" not in str(time_semantics.get("no_lookahead_rule") or ""):
+        raise CanonicalDispatchError("canonical News no-lookahead rule rejected")
+    trade_signal=[row for row in feature_rows if float(row.get("NEWS_COMPOSITE_SCORE_24H") or 0)>0 and not bool(row.get("NEWS_DIRECT_REQUIRED_FLAG"))]
+    context_only=[row for row in feature_rows if bool(row.get("NEWS_DIRECT_REQUIRED_FLAG")) or bool(row.get("NEWS_THEME_ONLY_FLAG"))]
+    evidence_root=(artifact_root/"news_feature_sidecar").resolve();evidence_root.mkdir(parents=True,exist_ok=True)
+    payloads={
+        "news_feature_sidecar.json":feature_rows,
+        "policy_evidence.json":evidence,
+        "feature_policy_stub.json":policy_stub,
+        "feature_column_contract.json":contract,
+        "no_lookahead_audit.json":{
+            "schema":"mmibkr.news_feature_no_lookahead_audit.v1",
+            "source_run_id":args["source_run_id"],
+            "feature_asof_utc":args["feature_asof_utc"],
+            "rule":"FEATURE_ASOF_UTC <= bar_timestamp",
+            "price_bars_read":False,"labels_read":False,"fills_read":False,"pnl_read":False,
+            "backtest_outcomes_read":False,"broker_state_read":False,
+        },
+    }
+    artifacts=[];artifact_map={}
+    for name,node in payloads.items():
+        target=evidence_root/name
+        target.write_text(json.dumps(node,sort_keys=True,separators=(",",":"),ensure_ascii=False,allow_nan=False,default=str)+"\n",encoding="utf-8")
+        desc=artifact_descriptor(target,artifact_root);artifacts.append(desc);artifact_map[name]=desc
+    csv_target=evidence_root/"news_feature_sidecar.csv"
+    fieldnames=list(getattr(sys.modules.get(getattr(score_fn,"__module__","")),"FEATURE_COLUMNS",[]))
+    if not fieldnames and feature_rows:fieldnames=list(feature_rows[0])
+    with csv_target.open("w",encoding="utf-8",newline="") as handle:
+        writer=csv.DictWriter(handle,fieldnames=fieldnames,extrasaction="ignore");writer.writeheader()
+        for row in feature_rows:writer.writerow(row)
+    csv_desc=artifact_descriptor(csv_target,artifact_root);artifacts.append(csv_desc);artifact_map["news_feature_sidecar.csv"]=csv_desc
+    source_ref={k:resolved[k] for k in ("scope","relative_path","sha256","bytes")}
+    if resolved.get("job_fingerprint") is not None:source_ref["job_fingerprint"]=resolved["job_fingerprint"]
+    return {
+        "schema":"mmibkr.news_feature_sidecar.v1",
+        "source_articles":source_ref,
+        "source_run_id":args["source_run_id"],
+        "feature_asof_utc":args["feature_asof_utc"],
+        "feature_window_hours":args["feature_window_hours"],
+        "article_row_count":len(articles),
+        "feature_row_count":len(feature_rows),
+        "trade_signal_eligible_rows":len(trade_signal),
+        "context_only_rows":len(context_only),
+        "theme_only_rows":sum(1 for row in feature_rows if bool(row.get("NEWS_THEME_ONLY_FLAG"))),
+        "direct_required_rows":sum(1 for row in feature_rows if bool(row.get("NEWS_DIRECT_REQUIRED_FLAG"))),
+        "feature_rows_sha256":sha(feature_rows),
+        "policy_evidence_sha256":sha(evidence),
+        "feature_row_sample":deepcopy(feature_rows[:25]),
+        "feature_contract":sanitize_public_tree(contract),
+        "artifacts":artifacts,"artifact_map":artifact_map,
+        "canonical_dependencies":news_feature_sidecar_dependencies(root),
+        "no_lookahead":{
+            "rule":"FEATURE_ASOF_UTC <= bar_timestamp",
+            "price_bars_read":False,"labels_read":False,"fills_read":False,"pnl_read":False,
+            "backtest_outcomes_read":False,"broker_state_read":False,
+        },
+        "safety":{
+            "research_only":True,"provider_acquisition":False,"network_acquisition":False,
+            "strategy_spec_write":False,"runtime_activation":False,"promotion_mutation":False,
+            "broker_submit":False,"broker_cancel":False,"broker_flatten":False,"live_trading":False,
+        },
+    }
+
 def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None,receipt_dir:Path|None=None)->dict:
     fn=None if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","FEATURE_CONTRACT_VALIDATE","STRATEGY_PREVIEW"} else load_callable(root,CAPABILITIES[v["capability_id"]])
     if v["capability_id"]=="STRATEGY_SPEC_VALIDATE":
@@ -1827,6 +2011,8 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|
         result=execute_news_replay(v,root,input_root,artifact_root,fn)
     elif v["capability_id"]=="OPTIONS_SNAPSHOT_ANALYZE":
         result=execute_options_snapshot(v,root,input_root,artifact_root,fn)
+    elif v["capability_id"]=="NEWS_FEATURE_SIDECAR_BUILD":
+        result=execute_news_feature_sidecar(v,root,input_root,receipt_dir,artifact_root,fn)
     elif v["capability_id"]=="CANONICAL_DATA_MATERIALIZE":
         result=materialize_stock_data(v,root,input_root,artifact_root)
     elif v["capability_id"]=="FEATURE_CONTRACT_VALIDATE":
@@ -1965,7 +2151,7 @@ def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:P
     rd=receipt_dir.resolve() if receipt_dir is not None else None
     v=validate_request(req,source_root,source_receipt,input_root=input_root,receipt_dir=rd); fp=sha(v)
     if rd is None:
-        if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE"}:
+        if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","NEWS_FEATURE_SIDECAR_BUILD"}:
             raise CanonicalDispatchError(f"{v['capability_id']} requires receipt_dir artifact storage")
         return {"receipt":safe_execute_valid(v,source_root,input_root=input_root,receipt_dir=None),"cache_hit":False}
     rp=rd/"receipts"/f"{fp}.json"; hit=cached(rp,fp)
@@ -1979,7 +2165,7 @@ def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:P
         return {"receipt":hit,"cache_hit":True}
     stop,lost,thread=start_claim_heartbeat(cp,token,fp)
     published=False
-    artifact_root=(rd/"artifacts"/fp).resolve() if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","CRW_BACKTEST","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE"} else None
+    artifact_root=(rd/"artifacts"/fp).resolve() if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","CRW_BACKTEST","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","NEWS_FEATURE_SIDECAR_BUILD"} else None
     if artifact_root is not None:
         shutil.rmtree(artifact_root,ignore_errors=True);artifact_root.mkdir(parents=True,exist_ok=True)
     try:
