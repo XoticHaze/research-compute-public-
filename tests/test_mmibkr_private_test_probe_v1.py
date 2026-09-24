@@ -121,7 +121,7 @@ def test_allowlist_accepts_exact_options_research_regressions_only():
         "tests.test_options_snapshot_features",
     ]
 
-    with pytest.raises(ValueError, match="test_module_not_allowlisted"):
+    with pytest.raises(ValueError, match="test_module_authority_rejected"):
         validated_modules("tests.test_options_runtime_submit")
 
 
