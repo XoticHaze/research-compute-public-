@@ -2438,6 +2438,8 @@ def execute_registry_backtest(
             raise CanonicalDispatchError(
                 f"canonical registry backtest rejected strategy: {str(raw.get('status') or 'not_ok')[:80]}"
             )
+        if str(raw.get("status") or "")=="data_missing":
+            raise CanonicalDispatchError("canonical registry backtest could not consume the staged governed dataset")
         if str(raw.get("strategy_id") or "")!=resolved_strategy_id:
             raise CanonicalDispatchError("canonical registry backtest strategy identity drift")
         safety=raw.get("safety")
