@@ -112,6 +112,19 @@ def test_allowlist_accepts_exact_g05b_futures_materialization_only():
         validated_modules("tests.test_futures_unapproved_materializer")
 
 
+def test_allowlist_accepts_exact_options_research_regressions_only():
+    assert validated_modules(
+        "tests.test_options_snapshot_analysis "
+        "tests.test_options_snapshot_features"
+    ) == [
+        "tests.test_options_snapshot_analysis",
+        "tests.test_options_snapshot_features",
+    ]
+
+    with pytest.raises(ValueError, match="test_module_authority_rejected"):
+        validated_modules("tests.test_options_runtime_submit")
+
+
 def test_allowlist_accepts_exact_news_research_regressions_only():
     assert validated_modules(
         "tests.test_news_publication_time_integrity_20260902 "
