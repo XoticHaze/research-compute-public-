@@ -207,6 +207,34 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
 
+    def test_source_vault_bootstrap_identity_may_stream_any_exact_mm_commit_sha_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("sourceVaultBootstrapExactShaApproved", text)
+        self.assertIn(
+            "matchesIdentity(identity, SOURCE_VAULT_BOOTSTRAP_IDENTITY)",
+            text,
+        )
+        self.assertIn(
+            "const exactSha = /^[0-9a-f]{40}$/.test(String(sourceSha || ''));",
+            text,
+        )
+        self.assertIn(
+            "(matchedBootstrap && privateArchivePathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedBootstrap && operatorDeployPathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedBootstrap && privateTestProbePathAllowed)",
+            text,
+        )
+        self.assertIn(
+            "const PRIVATE_REPOSITORY = 'XoticHaze/mm-IBKR';",
+            text,
+        )
+
     def test_private_pr670_validation_is_isolated_exact_sha_expiring_and_archive_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("PRIVATE_PR670_EXACT_VALIDATION_IDENTITY", text)
@@ -215,7 +243,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            "7a76b63042aaa2e38784ac0b35ec781703c93f5a",
+            "111beb2ddf88145477b6c568c41ff81fad80fa30",
             text,
         )
         self.assertIn("PRIVATE_PR670_EXACT_VALIDATION_EXPIRES_AT", text)
@@ -228,6 +256,88 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             "(matchedPrivatePr670Validation && operatorDeployPathAllowed)",
             text,
         )
+
+    def test_private_pr709_boundary_expiry_validation_is_exact_sha_expiring_and_archive_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("PRIVATE_PR709_BOUNDARY_EXPIRY_VALIDATION_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-private-pr709-boundary-expiry-validation-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn(
+            "e180c8b14df8411f099b694475dc0edffb50340f",
+            text,
+        )
+        self.assertIn("PRIVATE_PR709_BOUNDARY_EXPIRY_VALIDATION_EXPIRES_AT", text)
+        self.assertIn("2026-09-23T22:00:00Z", text)
+        self.assertIn("matchedPrivatePr709BoundaryExpiryValidation", text)
+        self.assertIn(
+            "(matchedPrivatePr709BoundaryExpiryValidation && privateArchivePathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedPrivatePr709BoundaryExpiryValidation && operatorDeployPathAllowed)",
+            text,
+        )
+
+        workflow = (
+            ROOT
+            / ".github"
+            / "workflows"
+            / "mmibkr-private-pr709-boundary-expiry-validation-r1.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "PRIVATE_SOURCE_SHA: e180c8b14df8411f099b694475dc0edffb50340f",
+            workflow,
+        )
+        self.assertIn("tests.test_ibkr_remote_warm_read_v1", workflow)
+        self.assertIn(
+            "tests.test_ibkr_remote_selected_runtime_boundary_slot_v1",
+            workflow,
+        )
+        self.assertIn("tests.test_selected_runtime_cloud_cycle_v1", workflow)
+        self.assertIn("ENABLE_LIVE_TRADING=0", workflow)
+        self.assertIn("'broker_action': False", workflow)
+        self.assertIn("'live_trading_allowed': False", workflow)
+
+    def test_private_pr711_account_hygiene_validation_is_exact_sha_expiring_and_archive_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-private-pr711-account-hygiene-validation-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn(
+            "2e95486996f62bf2aafd22a2496fa1eff76e0b8c",
+            text,
+        )
+        self.assertIn("PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_EXPIRES_AT", text)
+        self.assertIn("2026-09-23T22:00:00Z", text)
+        self.assertIn("matchedPrivatePr711AccountHygieneValidation", text)
+        self.assertIn(
+            "(matchedPrivatePr711AccountHygieneValidation && privateArchivePathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedPrivatePr711AccountHygieneValidation && operatorDeployPathAllowed)",
+            text,
+        )
+
+        workflow = (
+            ROOT
+            / ".github"
+            / "workflows"
+            / "mmibkr-private-pr711-account-hygiene-validation-r1.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "PRIVATE_SOURCE_SHA: 2e95486996f62bf2aafd22a2496fa1eff76e0b8c",
+            workflow,
+        )
+        self.assertIn("tests.test_ibkr_remote_account_hygiene_slot_v1", workflow)
+        self.assertIn("ENABLE_LIVE_TRADING=0", workflow)
+        self.assertIn("'broker_action': False", workflow)
+        self.assertIn("'live_trading_allowed': False", workflow)
+        self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
 
     def test_private_pr671_validation_is_isolated_exact_sha_expiring_and_archive_only(self):
         text = SOURCE.read_text(encoding="utf-8")
@@ -264,6 +374,180 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("npm run build", workflow)
         self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
         self.assertNotIn('cat "$log"', workflow)
+
+    def test_private_pr733_validation_is_exact_sha_expiring_and_archive_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("PRIVATE_PR733_EXACT_VALIDATION_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-private-pr733-forward-fine-source-validation-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn(
+            "71975cd98aae4a5b1230893802142c63e74e78cd",
+            text,
+        )
+        self.assertIn("PRIVATE_PR733_EXACT_VALIDATION_EXPIRES_AT", text)
+        self.assertIn("2026-09-25T12:00:00Z", text)
+        self.assertIn("matchedPrivatePr733Validation", text)
+        self.assertIn(
+            "(matchedPrivatePr733Validation && privateArchivePathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedPrivatePr733Validation && operatorDeployPathAllowed)",
+            text,
+        )
+
+        workflow = (
+            ROOT
+            / ".github"
+            / "workflows"
+            / "mmibkr-private-pr733-forward-fine-source-validation-r1.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "PRIVATE_SOURCE_SHA: 71975cd98aae4a5b1230893802142c63e74e78cd",
+            workflow,
+        )
+        self.assertIn("tests.test_selected_runtime_boundary_snapshot_hydrator_v1", workflow)
+        self.assertIn("tests.test_selected_runtime_cloud_natural_evaluator_v1", workflow)
+        self.assertIn("tests.test_selected_runtime_forward_execution_lifecycle_v1", workflow)
+        self.assertIn("ENABLE_LIVE_TRADING=0", workflow)
+        self.assertIn("'completed_trade_claims': False", workflow)
+        self.assertIn("'live_trading_allowed': False", workflow)
+        self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
+        self.assertNotIn('cat "$log"', workflow)
+
+
+    def test_reusable_exact_sha_vault_approval_requires_trusted_bootstrap_attestation(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("reusableExactShaBootstrapAttestation", text)
+        self.assertIn("validStreamAttestation", text)
+        self.assertIn(
+            "streamAttestation.producer_identity",
+            text,
+        )
+        self.assertIn(
+            "SOURCE_VAULT_BOOTSTRAP_IDENTITY",
+            text,
+        )
+        self.assertIn(
+            "(!legacyApprovedStream && !reusableExactShaBootstrapAttestation)",
+            text,
+        )
+        self.assertNotIn(
+            "if (!APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha))",
+            text,
+        )
+        self.assertIn(
+            "existing.manifest_sha256 !== manifestSha",
+            text,
+        )
+        self.assertIn(
+            "existing.archive_sha256 !== archiveSha",
+            text,
+        )
+        self.assertIn(
+            "Number(existing.archive_bytes) !== archiveBytes",
+            text,
+        )
+
+
+    def test_source_exchange_manifest_cap_covers_large_verified_relay_without_relaxing_chunk_guards(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("const MAX_MANIFEST_BYTES = 131072;", text)
+        self.assertIn("const MAX_CHUNKS = 2048;", text)
+        self.assertIn("const MAX_CHUNK_CHARS = 100000;", text)
+        self.assertGreaterEqual(text.count("if (raw.length > MAX_MANIFEST_BYTES) return json({ error: 'manifest_too_large' }, 413);"), 2)
+        self.assertIn("stored.sha256 !== desc.sha256", text)
+        self.assertIn("Number(stored.chars) !== Number(desc.chars)", text)
+
+    def test_paper_account_hygiene_coordinator_is_exact_source_scoped_and_bounded(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-paper-account-hygiene-coordinator-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn(
+            "PAPER_ACCOUNT_HYGIENE_COORDINATOR_PRIVATE_SOURCE",
+            text,
+        )
+        self.assertIn(
+            "2e95486996f62bf2aafd22a2496fa1eff76e0b8c",
+            text,
+        )
+        self.assertIn(
+            "PAPER_ACCOUNT_HYGIENE_COORDINATOR_OWNERSHIP_SOURCE",
+            text,
+        )
+        self.assertIn(
+            "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
+            text,
+        )
+        self.assertIn(
+            "PAPER_ACCOUNT_HYGIENE_COORDINATOR_RUNTIME_SOURCE",
+            text,
+        )
+        self.assertIn(
+            "07824b4ed9354a8519d4ce595735f7c1a610fdc2",
+            text,
+        )
+        self.assertIn("paper_account_hygiene_source_rejected", text)
+        self.assertIn("PAPER_ACCOUNT_HYGIENE_COORDINATOR_EXPIRES_AT", text)
+        self.assertIn("paperAccountHygieneCoordinatorPathAllowed", text)
+        self.assertIn("paper_account_hygiene_runtime_source_rejected", text)
+        self.assertIn(
+            "matchedPaperAccountHygieneCoordinator",
+            text,
+        )
+        self.assertNotIn(
+            "matchedPaperAccountHygieneCoordinator && operatorDeployPathAllowed",
+            text,
+        )
+        self.assertNotIn(
+            "matchedPaperAccountHygieneCoordinator && privateTestProbeUnwrapPathAllowed",
+            text,
+        )
+
+    def test_private_test_probe_is_main_identity_and_vault_unwrap_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("PRIVATE_TEST_PROBE_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-private-test-probe-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn("matchedPrivateTestProbe", text)
+        self.assertIn("privateTestProbeUnwrapPathAllowed", text)
+        self.assertIn(
+            "const privateTestProbeUnwrapPathAllowed = pathname === '/v1/source-vault/unwrap';",
+            text,
+        )
+        self.assertIn(
+            "(matchedPrivateTestProbe && privateTestProbeUnwrapPathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedPrivateTestProbe && privateArchivePathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedPrivateTestProbe && operatorDeployPathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedPrivateTestProbe && privateTestProbePathAllowed)",
+            text,
+        )
+
+        workflow = (
+            ROOT
+            / ".github"
+            / "workflows"
+            / "mmibkr-private-test-probe-r1.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("id-token: write", workflow)
+        self.assertIn("contents: read", workflow)
+        self.assertNotIn("actions: write", workflow)
 
     def test_private_promotion_review_validation_is_exact_sha_expiring_and_archive_only(self):
         text = SOURCE.read_text(encoding="utf-8")
@@ -302,6 +586,26 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
         self.assertNotIn('cat "$log"', workflow)
 
+    def test_selected_runtime_ownership_snapshot_is_exactly_code_pinned_after_bootstrap(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn(
+            "'35e6b44e5c2618f780a84c1c204fe14c76bdf0e5': Object.freeze({",
+            text,
+        )
+        self.assertIn(
+            "source_ref: '35e6b44e5c2618f780a84c1c204fe14c76bdf0e5'",
+            text,
+        )
+        self.assertIn(
+            "manifest_sha256: 'e1272fad34ee46b211437251b0d9b218f8da95f181a11116282d29730213fb88'",
+            text,
+        )
+        self.assertIn(
+            "archive_sha256: '59f7a59837354db488817d2d0a0981e939e5182ee8c1d6d300befd4775016917'",
+            text,
+        )
+        self.assertIn("archive_bytes: 66337662", text)
+
     def test_promotion_review_merged_source_bootstrap_is_exact_sha_expiring_and_bootstrap_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("OPERATOR_CONSOLE_PROMOTION_BOOTSTRAP_SOURCE", text)
@@ -318,6 +622,25 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         )
         self.assertNotIn(
             "matchesIdentity(identity, OPERATOR_CONSOLE_DEPLOY_IDENTITY)\n  );\n  const operatorConsolePromotionBootstrapApproved",
+            text,
+        )
+
+    def test_selected_runtime_ownership_source_bootstrap_is_exact_sha_expiring_and_bootstrap_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("SELECTED_RUNTIME_OWNERSHIP_BOOTSTRAP_SOURCE", text)
+        self.assertIn(
+            "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
+            text,
+        )
+        self.assertIn("SELECTED_RUNTIME_OWNERSHIP_BOOTSTRAP_EXPIRES_AT", text)
+        self.assertIn("2026-09-23T12:00:00Z", text)
+        self.assertIn("selectedRuntimeOwnershipBootstrapApproved", text)
+        self.assertIn(
+            "matchesIdentity(identity, SOURCE_VAULT_BOOTSTRAP_IDENTITY)",
+            text,
+        )
+        self.assertNotIn(
+            "matchesIdentity(identity, OPERATOR_CONSOLE_DEPLOY_IDENTITY)\n  );\n  const selectedRuntimeOwnershipBootstrapApproved",
             text,
         )
 

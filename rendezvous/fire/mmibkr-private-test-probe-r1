@@ -1,0 +1,21 @@
+{
+  "schema": "mmibkr.private_test_probe_fire.v1",
+  "source_ref": "39095b6e2822eb84263db283ea3d60f4a0b33e17",
+  "test_modules": [
+    "tests.test_options_snapshot_analysis",
+    "tests.test_options_snapshot_features"
+  ],
+  "requested_by": "assistant-fleet-parity-current-source",
+  "purpose": "export exact current MM-IBKR source for fleet-local parity bundle and execute existing allowlisted private regression probe",
+  "authority": {
+    "research_only": true,
+    "broker": false,
+    "runtime_activation": false,
+    "promotion_mutation": false,
+    "live": false
+  },
+  "request_nonce": "fleet-parity-39095b6e-20260924-0346cdt",
+  "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
+  "current_private_reference": "39095b6e2822eb84263db283ea3d60f4a0b33e17",
+  "parity_public_key_b64": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQm9qQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FZOEFNSUlCaWdLQ0FZRUEzZUo1QW9UektPYUxxeXR1TDdDSQpWbTYrUk1oSldSTXpWTnA5R0RyOUt3RzNRTENoRjF4VTVqV3h3L0dDMitSeWpMWkZsR1IxNHQ4YUhkc1ozZGUvCmZ5dWNIUmxjRFdlNEcwR3F4cHp1MTArcjFtcmdJTEV0cU85UXQ1UElaVFFFL3VyYThMMnQwMlV0UWZNNlovdksKeCsxNG81ZTRVSGZGcGtpL0R5eWxxYy94K1lOY0gyWlNxbllPVVI3QjZNUHByd0kwNFhWVFlMZVQzc2RraGh2Ugo0Yk1SOHFHaHBwYldFcXF0RFBxVGlwbnZpbHlDOFI5RVBtdnBIbVpwR2hRYjhlUjA0WG1VMUtFWE5hS3dhVDhUClZXNFZXSFNDay9FQy91MDhKR2ZQK0xDcmVMTVNpZlFVRmdvZXhvdVVQWGVEaDJyanVqQS9LelE5ZW5YRUtwQVMKZUdISUt1Q0N5QVhiL2dNQ04vb202MHJ3LzIzQ2xtcVhaNUprWUg4MG5WLzNmRDUrNDJYQUZVZUVrTG0rNExyTgowdE1NZGZXT1pOSUxnSEJVeUU0UXpZaFpJQzg2WjdJOVd3QXZXbVkzWHpMYXR6dVhOM0xaZTA3TWRXOHdjRlVMCmloOEhnR3lkcFYvZFd3eWJEbnZnclFNU1NvZllmOEVncTIxYmRES3pWalFyQWdNQkFBRT0KLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tCg=="
+}

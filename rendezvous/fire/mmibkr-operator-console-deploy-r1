@@ -5,5 +5,7 @@
   "access_required": true,
   "public_fallback_allowed": false,
   "live_execution_allowed": false,
-  "reason": "forward_testing_canonical_accepted_main"
+  "reason": "forward_testing_canonical_accepted_main_deploy",
+  "requested_by": "assistant-667-forward-testing-cloud-promotion",
+  "request_id": "20260923T0932Z"
 }

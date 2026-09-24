@@ -1,4 +1,4 @@
-name: MM-IBKR Private PR670 Forward Lifecycle Exact Validation R1
+name: MM-IBKR Private Merged Main A588 Forward Lifecycle Exact Validation R1
 
 on:
   workflow_dispatch:
@@ -12,15 +12,15 @@ permissions:
   id-token: write
 
 concurrency:
-  group: mmibkr-private-pr670-forward-lifecycle-validation-r1
+  group: mmibkr-private-merged-main-a588-forward-lifecycle-validation-r1
   cancel-in-progress: false
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  PRIVATE_SOURCE_SHA: 7a76b63042aaa2e38784ac0b35ec781703c93f5a
+  PRIVATE_SOURCE_SHA: 111beb2ddf88145477b6c568c41ff81fad80fa30
 
 jobs:
-  exact-private-pr670-validation:
+  exact-private-merged-main-a588-validation:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -30,7 +30,7 @@ jobs:
         with:
           python-version: '3.11.16'
 
-      - name: Materialize exact private PR670 source through bounded Fleet stream
+      - name: Materialize exact private Merged Main A588 source through bounded Fleet stream
         shell: bash
         run: |
           set -euo pipefail
@@ -46,8 +46,8 @@ jobs:
           source_sha = os.environ['PRIVATE_SOURCE_SHA'].strip().lower()
           run_id = os.environ['GITHUB_RUN_ID']
           temp = Path(os.environ['RUNNER_TEMP'])
-          archive = temp / 'mmibkr-pr670.tar.gz'
-          extract = temp / 'mmibkr-pr670'
+          archive = temp / 'mmibkr-merged-main-a588.tar.gz'
+          extract = temp / 'mmibkr-merged-main-a588'
           if len(source_sha) != 40 or any(ch not in '0123456789abcdef' for ch in source_sha):
               raise SystemExit('invalid exact private source sha')
 
@@ -69,7 +69,7 @@ jobs:
           headers = {
               'Authorization': 'Bearer ' + oidc(),
               'Accept': 'application/gzip',
-              'User-Agent': 'mmibkr-private-pr670-forward-lifecycle-validation-r1',
+              'User-Agent': 'mmibkr-private-merged-main-a588-forward-lifecycle-validation-r1',
               'X-MMIBKR-Caller-Run-Id': run_id,
           }
           url = f'{base}/v1/source-vault/private-archive/{source_sha}'
@@ -85,7 +85,7 @@ jobs:
                   if exc.code not in {401, 403, 502, 503}:
                       raise
                   if attempt % 12 == 0:
-                      print(f'MMIBKR_PR670_SOURCE_WAIT={attempt}')
+                      print(f'MMIBKR_Merged Main A588_SOURCE_WAIT={attempt}')
                   time.sleep(5)
           else:
               raise SystemExit('exact private source admission did not converge')
@@ -122,7 +122,7 @@ jobs:
                   'Authorization': 'Bearer ' + oidc(),
                   'Accept': 'application/json',
                   'Content-Type': 'application/json',
-                  'User-Agent': 'mmibkr-private-pr670-forward-lifecycle-validation-r1',
+                  'User-Agent': 'mmibkr-private-merged-main-a588-forward-lifecycle-validation-r1',
                   'X-MMIBKR-Caller-Run-Id': run_id,
               },
           )
@@ -162,7 +162,7 @@ jobs:
               fh.write('PRIVATE_SOURCE_ROOT=' + str(root) + '\n')
               fh.write('PRIVATE_ARCHIVE_SHA256=' + archive_sha + '\n')
               fh.write('PRIVATE_ARCHIVE_BYTES=' + str(size) + '\n')
-          print('MMIBKR_PR670_EXACT_SOURCE_READY=1')
+          print('MMIBKR_Merged Main A588_EXACT_SOURCE_READY=1')
           print('MMIBKR_PRIVATE_SOURCE_TOKEN_EXPOSED=0')
           PY
 
@@ -170,29 +170,30 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          log="$RUNNER_TEMP/pr670-build.log"
+          log="$RUNNER_TEMP/merged-main-a588-build.log"
           set +e
           docker build -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" --target bot \
-            -t "mmibkr-pr670:$GITHUB_RUN_ID" "$PRIVATE_SOURCE_ROOT" >"$log" 2>&1
+            -t "mmibkr-merged-main-a588:$GITHUB_RUN_ID" "$PRIVATE_SOURCE_ROOT" >"$log" 2>&1
           rc=$?
           set -e
-          echo "MMIBKR_PR670_BUILD_LOG_SHA256=$(sha256sum "$log" | awk '{print $1}')"
+          echo "MMIBKR_Merged Main A588_BUILD_LOG_SHA256=$(sha256sum "$log" | awk '{print $1}')"
           rm -f "$log"
           if [ "$rc" -ne 0 ]; then exit "$rc"; fi
-          echo 'MMIBKR_PR670_BUILD_STATUS=PASS'
+          echo 'MMIBKR_Merged Main A588_BUILD_STATUS=PASS'
 
       - name: Validate attribution-safe lifecycle contracts
         shell: bash
         run: |
           set -euo pipefail
-          log="$RUNNER_TEMP/pr670-tests.log"
+          log="$RUNNER_TEMP/merged-main-a588-tests.log"
           set +e
           docker run --rm \
             -e ENABLE_LIVE_TRADING=0 \
             -e PYTHONDONTWRITEBYTECODE=1 \
-            "mmibkr-pr670:$GITHUB_RUN_ID" \
+            "mmibkr-merged-main-a588:$GITHUB_RUN_ID" \
             python -m unittest -v \
               tests.test_selected_runtime_forward_execution_lifecycle_v1 \
+              tests.test_selected_runtime_cloud_natural_evaluator_v1 \
               tests.test_selected_runtime_cloud_cycle_v1 \
               tests.test_ibkr_remote_selected_runtime_paper_execute_slot_v1 \
             >"$log" 2>&1
@@ -207,20 +208,20 @@ jobs:
           for raw in Path(sys.argv[1]).read_text(errors='replace').splitlines():
               line = raw.strip()
               if re.match(r'^test_[A-Za-z0-9_]+ .* \.\.\. (ok|FAIL|ERROR)$', line):
-                  print('MMIBKR_PR670_SAFE_DIAGNOSTIC=' + line)
+                  print('MMIBKR_Merged Main A588_SAFE_DIAGNOSTIC=' + line)
               elif line.startswith('FAILED (') or line == 'OK':
-                  print('MMIBKR_PR670_SAFE_DIAGNOSTIC=' + line)
+                  print('MMIBKR_Merged Main A588_SAFE_DIAGNOSTIC=' + line)
           PY
-            echo "MMIBKR_PR670_TEST_STATUS=FAIL"
-            echo "MMIBKR_PR670_TEST_LOG_SHA256=$sha"
-            echo "MMIBKR_PR670_TEST_LOG_BYTES=$bytes"
+            echo "MMIBKR_Merged Main A588_TEST_STATUS=FAIL"
+            echo "MMIBKR_Merged Main A588_TEST_LOG_SHA256=$sha"
+            echo "MMIBKR_Merged Main A588_TEST_LOG_BYTES=$bytes"
             rm -f "$log"
             exit "$rc"
           fi
           rm -f "$log"
-          echo 'MMIBKR_PR670_TEST_STATUS=PASS'
-          echo "MMIBKR_PR670_TEST_LOG_SHA256=$sha"
-          echo "MMIBKR_PR670_TEST_LOG_BYTES=$bytes"
+          echo 'MMIBKR_Merged Main A588_TEST_STATUS=PASS'
+          echo "MMIBKR_Merged Main A588_TEST_LOG_SHA256=$sha"
+          echo "MMIBKR_Merged Main A588_TEST_LOG_BYTES=$bytes"
           echo 'MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0'
 
       - name: Emit sanitized validation receipt
@@ -229,8 +230,8 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           import json, os
-          print('MMIBKR_PR670_VALIDATION_RECEIPT=' + json.dumps({
-              'schema': 'mmibkr.private_pr670_forward_lifecycle_validation.v1',
+          print('MMIBKR_Merged Main A588_VALIDATION_RECEIPT=' + json.dumps({
+              'schema': 'mmibkr.private_merged-main-a588_forward_lifecycle_validation.v1',
               'status': 'PASS',
               'source_sha': os.environ['PRIVATE_SOURCE_SHA'],
               'source_archive_sha256': os.environ['PRIVATE_ARCHIVE_SHA256'],
@@ -253,6 +254,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker image rm "mmibkr-pr670:$GITHUB_RUN_ID" >/dev/null 2>&1 || true
-          sudo rm -rf "$RUNNER_TEMP/mmibkr-pr670" "$RUNNER_TEMP/mmibkr-pr670.tar.gz" "$RUNNER_TEMP/pr670-build.log" "$RUNNER_TEMP/pr670-tests.log"
-          echo 'MMIBKR_PR670_PRIVATE_SOURCE_DESTROYED=1'
+          docker image rm "mmibkr-merged-main-a588:$GITHUB_RUN_ID" >/dev/null 2>&1 || true
+          sudo rm -rf "$RUNNER_TEMP/mmibkr-merged-main-a588" "$RUNNER_TEMP/mmibkr-merged-main-a588.tar.gz" "$RUNNER_TEMP/merged-main-a588-build.log" "$RUNNER_TEMP/merged-main-a588-tests.log"
+          echo 'MMIBKR_Merged Main A588_PRIVATE_SOURCE_DESTROYED=1'

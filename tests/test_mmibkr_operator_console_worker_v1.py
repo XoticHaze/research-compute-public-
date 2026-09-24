@@ -30,6 +30,28 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertIn("repository_visibility", text)
         self.assertIn("x-mmibkr-caller-run-id", text)
 
+    def test_hygiene_coordinator_is_exact_oidc_snapshot_publisher(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        publishers_start = text.index("const ALLOWED_PUBLISHERS")
+        publishers_end = text.index("const ALLOWED_PROMOTION_PUBLISHERS", publishers_start)
+        publishers = text[publishers_start:publishers_end]
+        identity = (
+            "XoticHaze/research-compute-public-/.github/workflows/"
+            "mmibkr-paper-account-hygiene-coordinator-r1.yml@refs/heads/main"
+        )
+        self.assertIn(identity, publishers)
+        self.assertIn("repository: 'XoticHaze/research-compute-public-'", publishers)
+        self.assertIn("ref: 'refs/heads/main'", publishers)
+
+        publisher_start = text.index("async function verifyPublisher(request)")
+        publisher_end = text.index("async function verifyPromotionPublisher(request)", publisher_start)
+        publisher = text[publisher_start:publisher_end]
+        self.assertIn("claims.repository_visibility !== 'public'", publisher)
+        self.assertIn("claims.runner_environment !== 'github-hosted'", publisher)
+        self.assertIn("['push', 'workflow_dispatch'].includes", publisher)
+        self.assertIn("String(claims.run_id || '') !== callerRunId", publisher)
+        self.assertIn("ALLOWED_PUBLISHERS.some", publisher)
+
     def test_snapshot_fails_closed_on_privacy_and_authority_flags(self):
         text = SOURCE.read_text(encoding="utf-8")
         for marker in (
@@ -84,6 +106,10 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertIn("repository: 'XoticHaze/research-compute-public-'", text)
         self.assertIn(
             "XoticHaze/research-compute-public-/.github/workflows/mmibkr-operator-snapshot-read-bridge-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn(
+            "XoticHaze/research-compute-public-/.github/workflows/mmibkr-paper-account-hygiene-coordinator-r1.yml@refs/heads/main",
             text,
         )
         self.assertIn("repository_visibility: 'public'", text)

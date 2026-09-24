@@ -5,7 +5,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_SHA = "8a82107be253c3facd3b090cf752bc51b3a8ef8d"
+SOURCE_SHA = "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5"
 
 
 class CloudOwnerReusableVaultContractTests(unittest.TestCase):
@@ -45,6 +45,18 @@ class CloudOwnerReusableVaultContractTests(unittest.TestCase):
         text = (ROOT / ".github/workflows/mmibkr-selected-runtime-cloud-watchdog-r1.yml").read_text(encoding="utf-8")
         self.assertIn("'source_ref':'" + SOURCE_SHA + "'", text)
         self.assertNotIn("'source_ref':'main'", text)
+
+    def test_watchdog_recovery_dispatch_is_pinned_to_durable_checkpoint_receipt(self):
+        text = (ROOT / ".github/workflows/mmibkr-selected-runtime-cloud-watchdog-r1.yml").read_text(encoding="utf-8")
+        self.assertIn("rendezvous/receipts/{run_id}-mmibkr-selected-runtime-cloud.json", text)
+        self.assertIn("checkpoint_cache_saved", text)
+        self.assertIn("expected_predecessor_checkpoint_match", text)
+        self.assertIn("predecessor_terminal_continuity_ready", text)
+        self.assertIn("'expected_checkpoint_cache_key':checkpoint_key", text)
+        self.assertIn("'expected_checkpoint_sha256':checkpoint_sha", text)
+        self.assertIn("'require_terminal_continuity':True", text)
+        self.assertNotIn("'allow_unpinned_bootstrap':True", text)
+        self.assertIn("verified_predecessor_reuse", text)
 
     def test_owner_refreshes_stale_handoff_to_current_promoted_source(self):
         text = (ROOT / ".github/workflows/mmibkr-selected-runtime-cloud-r1.yml").read_text(encoding="utf-8")

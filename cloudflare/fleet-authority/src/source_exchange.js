@@ -49,6 +49,21 @@ const MISSED_TRADE_AUDIT_IDENTITY = {
     'XoticHaze/research-compute-public-/.github/workflows/mmibkr-selected-runtime-missed-trade-audit-r1.yml@refs/heads/main',
 };
 
+const PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-paper-account-hygiene-coordinator-r1.yml@refs/heads/main',
+};
+const PAPER_ACCOUNT_HYGIENE_COORDINATOR_PRIVATE_SOURCE =
+  '2e95486996f62bf2aafd22a2496fa1eff76e0b8c';
+const PAPER_ACCOUNT_HYGIENE_COORDINATOR_OWNERSHIP_SOURCE =
+  '35e6b44e5c2618f780a84c1c204fe14c76bdf0e5';
+const PAPER_ACCOUNT_HYGIENE_COORDINATOR_RUNTIME_SOURCE =
+  '07824b4ed9354a8519d4ce595735f7c1a610fdc2';
+const PAPER_ACCOUNT_HYGIENE_COORDINATOR_EXPIRES_AT =
+  Date.parse('2026-09-24T18:00:00Z');
+
 const PRIVATE_PR_EXACT_VALIDATION_IDENTITY = {
   repository: 'XoticHaze/research-compute-public-',
   ref: 'refs/heads/main',
@@ -78,9 +93,31 @@ const PRIVATE_PR670_EXACT_VALIDATION_IDENTITY = {
     'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-pr670-forward-lifecycle-validation-r1.yml@refs/heads/main',
 };
 const PRIVATE_PR670_EXACT_VALIDATION_SOURCE =
-  '7a76b63042aaa2e38784ac0b35ec781703c93f5a';
+  '111beb2ddf88145477b6c568c41ff81fad80fa30';
 const PRIVATE_PR670_EXACT_VALIDATION_EXPIRES_AT =
   Date.parse('2026-09-23T12:00:00Z');
+
+const PRIVATE_PR709_BOUNDARY_EXPIRY_VALIDATION_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-pr709-boundary-expiry-validation-r1.yml@refs/heads/main',
+};
+const PRIVATE_PR709_BOUNDARY_EXPIRY_VALIDATION_SOURCE =
+  'e180c8b14df8411f099b694475dc0edffb50340f';
+const PRIVATE_PR709_BOUNDARY_EXPIRY_VALIDATION_EXPIRES_AT =
+  Date.parse('2026-09-23T18:00:00Z');
+
+const PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-pr711-account-hygiene-validation-r1.yml@refs/heads/main',
+};
+const PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_SOURCE =
+  '2e95486996f62bf2aafd22a2496fa1eff76e0b8c';
+const PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_EXPIRES_AT =
+  Date.parse('2026-09-23T22:00:00Z');
 
 const PRIVATE_PR671_EXACT_VALIDATION_IDENTITY = {
   repository: 'XoticHaze/research-compute-public-',
@@ -93,11 +130,29 @@ const PRIVATE_PR671_EXACT_VALIDATION_SOURCE =
 const PRIVATE_PR671_EXACT_VALIDATION_EXPIRES_AT =
   Date.parse('2026-09-23T12:00:00Z');
 
+const PRIVATE_PR733_EXACT_VALIDATION_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-pr733-forward-fine-source-validation-r1.yml@refs/heads/main',
+};
+const PRIVATE_PR733_EXACT_VALIDATION_SOURCE =
+  '71975cd98aae4a5b1230893802142c63e74e78cd';
+const PRIVATE_PR733_EXACT_VALIDATION_EXPIRES_AT =
+  Date.parse('2026-09-25T12:00:00Z');
+
 const PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_IDENTITY = {
   repository: 'XoticHaze/research-compute-public-',
   ref: 'refs/heads/main',
   workflow_ref:
     'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-promotion-review-validation-r1.yml@refs/heads/main',
+};
+
+const PRIVATE_TEST_PROBE_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-test-probe-r1.yml@refs/heads/main',
 };
 const PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_SOURCE =
   'd7b468ea22740df65c4b350dc15b74b0c377280f';
@@ -107,6 +162,11 @@ const PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_EXPIRES_AT =
 const OPERATOR_CONSOLE_PROMOTION_BOOTSTRAP_SOURCE =
   '5e56997fe31987fb1ac471ebecb03795b6614887';
 const OPERATOR_CONSOLE_PROMOTION_BOOTSTRAP_EXPIRES_AT =
+  Date.parse('2026-09-23T12:00:00Z');
+
+const SELECTED_RUNTIME_OWNERSHIP_BOOTSTRAP_SOURCE =
+  '35e6b44e5c2618f780a84c1c204fe14c76bdf0e5';
+const SELECTED_RUNTIME_OWNERSHIP_BOOTSTRAP_EXPIRES_AT =
   Date.parse('2026-09-23T12:00:00Z');
 
 const UI_BUILD_PRIVATE_ARCHIVE_SOURCE =
@@ -131,7 +191,7 @@ const HARNESS = 'mmibkr_cloud_source_exchange_v1';
 const REQUEST_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_CHUNKS = 2048;
 const MAX_CHUNK_CHARS = 100000;
-const MAX_MANIFEST_BYTES = 65536;
+const MAX_MANIFEST_BYTES = 131072;
 const ALLOWED_PUBLIC_EVENTS = new Set(['push', 'workflow_dispatch']);
 const ALLOWED_PRIVATE_EVENTS = new Set(['push', 'workflow_dispatch', 'schedule']);
 
@@ -167,6 +227,22 @@ function matchesIdentity(identity, expected) {
 }
 
 function isPrivateSourceStreamApproved(sourceSha, identity = null) {
+  const exactSha = /^[0-9a-f]{40}$/.test(String(sourceSha || ''));
+  const paperAccountHygieneCoordinator = matchesIdentity(
+    identity,
+    PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY,
+  );
+  if (paperAccountHygieneCoordinator) {
+    return (
+      sourceSha === PAPER_ACCOUNT_HYGIENE_COORDINATOR_PRIVATE_SOURCE
+      && Date.now() <= PAPER_ACCOUNT_HYGIENE_COORDINATOR_EXPIRES_AT
+    );
+  }
+  const sourceVaultBootstrapExactShaApproved = (
+    exactSha
+    && matchesIdentity(identity, SOURCE_VAULT_BOOTSTRAP_IDENTITY)
+  );
+  if (sourceVaultBootstrapExactShaApproved) return true;
   if (APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha)) return true;
   const uiBuildApproved = (
     sourceSha === UI_BUILD_PRIVATE_ARCHIVE_SOURCE
@@ -188,10 +264,25 @@ function isPrivateSourceStreamApproved(sourceSha, identity = null) {
     && Date.now() <= PRIVATE_PR670_EXACT_VALIDATION_EXPIRES_AT
     && matchesIdentity(identity, PRIVATE_PR670_EXACT_VALIDATION_IDENTITY)
   );
+  const privatePr709BoundaryExpiryValidationApproved = (
+    sourceSha === PRIVATE_PR709_BOUNDARY_EXPIRY_VALIDATION_SOURCE
+    && Date.now() <= PRIVATE_PR709_BOUNDARY_EXPIRY_VALIDATION_EXPIRES_AT
+    && matchesIdentity(identity, PRIVATE_PR709_BOUNDARY_EXPIRY_VALIDATION_IDENTITY)
+  );
+  const privatePr711AccountHygieneValidationApproved = (
+    sourceSha === PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_SOURCE
+    && Date.now() <= PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_EXPIRES_AT
+    && matchesIdentity(identity, PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_IDENTITY)
+  );
   const privatePr671ValidationApproved = (
     sourceSha === PRIVATE_PR671_EXACT_VALIDATION_SOURCE
     && Date.now() <= PRIVATE_PR671_EXACT_VALIDATION_EXPIRES_AT
     && matchesIdentity(identity, PRIVATE_PR671_EXACT_VALIDATION_IDENTITY)
+  );
+  const privatePr733ValidationApproved = (
+    sourceSha === PRIVATE_PR733_EXACT_VALIDATION_SOURCE
+    && Date.now() <= PRIVATE_PR733_EXACT_VALIDATION_EXPIRES_AT
+    && matchesIdentity(identity, PRIVATE_PR733_EXACT_VALIDATION_IDENTITY)
   );
   const privatePromotionReviewValidationApproved = (
     sourceSha === PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_SOURCE
@@ -203,14 +294,23 @@ function isPrivateSourceStreamApproved(sourceSha, identity = null) {
     && Date.now() <= OPERATOR_CONSOLE_PROMOTION_BOOTSTRAP_EXPIRES_AT
     && matchesIdentity(identity, SOURCE_VAULT_BOOTSTRAP_IDENTITY)
   );
+  const selectedRuntimeOwnershipBootstrapApproved = (
+    sourceSha === SELECTED_RUNTIME_OWNERSHIP_BOOTSTRAP_SOURCE
+    && Date.now() <= SELECTED_RUNTIME_OWNERSHIP_BOOTSTRAP_EXPIRES_AT
+    && matchesIdentity(identity, SOURCE_VAULT_BOOTSTRAP_IDENTITY)
+  );
   return (
     uiBuildApproved
     || privatePrValidationApproved
     || privatePr666ValidationApproved
     || privatePr670ValidationApproved
+    || privatePr709BoundaryExpiryValidationApproved
+    || privatePr711AccountHygieneValidationApproved
     || privatePr671ValidationApproved
+    || privatePr733ValidationApproved
     || privatePromotionReviewValidationApproved
     || operatorConsolePromotionBootstrapApproved
+    || selectedRuntimeOwnershipBootstrapApproved
   );
 }
 
@@ -232,6 +332,12 @@ const APPROVED_SOURCE_SNAPSHOTS = Object.freeze({
     manifest_sha256: '90f7003b95d526cdbfd0d706314cf45aaa3e727353093684c66e8749342526a0',
     archive_sha256: '1061e11f3105e51ff193a1119b3260e34a4f6b5a388a27adcf806631ba0a6a2e',
     archive_bytes: 66336837,
+  }),
+  '35e6b44e5c2618f780a84c1c204fe14c76bdf0e5': Object.freeze({
+    source_ref: '35e6b44e5c2618f780a84c1c204fe14c76bdf0e5',
+    manifest_sha256: 'e1272fad34ee46b211437251b0d9b218f8da95f181a11116282d29730213fb88',
+    archive_sha256: '59f7a59837354db488817d2d0a0981e939e5182ee8c1d6d300befd4775016917',
+    archive_bytes: 66337662,
   }),
 });
 
@@ -362,11 +468,28 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     const matchedBootstrap = matchesIdentity(claims, SOURCE_VAULT_BOOTSTRAP_IDENTITY);
     const matchedOperatorDeploy = matchesIdentity(claims, OPERATOR_CONSOLE_DEPLOY_IDENTITY);
     const matchedMissedTradeAudit = matchesIdentity(claims, MISSED_TRADE_AUDIT_IDENTITY);
+    const matchedPaperAccountHygieneCoordinator = matchesIdentity(
+      claims,
+      PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY,
+    );
     const matchedPrivatePrValidation = matchesIdentity(claims, PRIVATE_PR_EXACT_VALIDATION_IDENTITY);
     const matchedPrivatePr666Validation = matchesIdentity(claims, PRIVATE_PR666_EXACT_VALIDATION_IDENTITY);
     const matchedPrivatePr670Validation = matchesIdentity(claims, PRIVATE_PR670_EXACT_VALIDATION_IDENTITY);
+    const matchedPrivatePr709BoundaryExpiryValidation = matchesIdentity(claims, PRIVATE_PR709_BOUNDARY_EXPIRY_VALIDATION_IDENTITY);
+    const matchedPrivatePr711AccountHygieneValidation = matchesIdentity(claims, PRIVATE_PR711_ACCOUNT_HYGIENE_VALIDATION_IDENTITY);
     const matchedPrivatePr671Validation = matchesIdentity(claims, PRIVATE_PR671_EXACT_VALIDATION_IDENTITY);
+    const matchedPrivatePr733Validation = matchesIdentity(claims, PRIVATE_PR733_EXACT_VALIDATION_IDENTITY);
     const matchedPrivatePromotionReviewValidation = matchesIdentity(claims, PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_IDENTITY);
+    const matchedPrivateTestProbe = matchesIdentity(claims, PRIVATE_TEST_PROBE_IDENTITY);
+    const privateTestProbeUnwrapPathAllowed = pathname === '/v1/source-vault/unwrap';
+    const paperAccountHygieneCoordinatorPathAllowed = (
+      pathname === '/v1/source-vault/unwrap'
+      || /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname)
+      || pathname === '/v1/source-vault/private-archive/attest'
+      || pathname === '/v1/source-exchange/relay/request'
+      || /^\/v1\/source-exchange\/relay\/response\/\d+\/chunk\/\d+$/.test(pathname)
+      || /^\/v1\/source-exchange\/relay\/response\/\d+\/manifest$/.test(pathname)
+    );
     const privateArchivePathAllowed = (
       /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname)
       || pathname === '/v1/source-vault/private-archive/attest'
@@ -379,11 +502,20 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
         || (matchedBootstrap && privateArchivePathAllowed)
         || (matchedOperatorDeploy && operatorDeployPathAllowed)
         || (matchedMissedTradeAudit && operatorDeployPathAllowed)
+        || (
+          matchedPaperAccountHygieneCoordinator
+          && paperAccountHygieneCoordinatorPathAllowed
+          && Date.now() <= PAPER_ACCOUNT_HYGIENE_COORDINATOR_EXPIRES_AT
+        )
         || (matchedPrivatePrValidation && privateArchivePathAllowed)
         || (matchedPrivatePr666Validation && privateArchivePathAllowed)
         || (matchedPrivatePr670Validation && privateArchivePathAllowed)
+        || (matchedPrivatePr709BoundaryExpiryValidation && privateArchivePathAllowed)
+        || (matchedPrivatePr711AccountHygieneValidation && privateArchivePathAllowed)
         || (matchedPrivatePr671Validation && privateArchivePathAllowed)
+        || (matchedPrivatePr733Validation && privateArchivePathAllowed)
         || (matchedPrivatePromotionReviewValidation && privateArchivePathAllowed)
+        || (matchedPrivateTestProbe && privateTestProbeUnwrapPathAllowed)
       )
       || claims.repository_visibility !== 'public'
       || !ALLOWED_PUBLIC_EVENTS.has(claims.event_name)
@@ -744,10 +876,6 @@ export class SourceExchange {
       };
     }
 
-    if (!APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha)) {
-      throw new Error('vault_source_snapshot_not_approved');
-    }
-
     const approvalKey = `vaultapproval:${sourceSha}`;
     const existing = await this.ctx.storage.get(approvalKey);
     if (existing) {
@@ -766,15 +894,27 @@ export class SourceExchange {
     const streamAttestation = await this.ctx.storage.get(
       `attest:${sourceSha}:${archiveSha}`,
     );
+    const validStreamAttestation = Boolean(
+      streamAttestation
+      && streamAttestation.schema === 'mmibkr-cloud-source-fleet-stream-attestation-v1'
+      && streamAttestation.source_ref === sourceSha
+      && streamAttestation.source_sha === sourceSha
+      && streamAttestation.plaintext_sha256 === archiveSha
+      && Number(streamAttestation.archive_bytes) === archiveBytes
+      && streamAttestation.source_transport
+        === 'fleet_authority_oidc_private_archive_stream'
+    );
+    const reusableExactShaBootstrapAttestation = Boolean(
+      validStreamAttestation
+      && matchesIdentity(
+        streamAttestation.producer_identity,
+        SOURCE_VAULT_BOOTSTRAP_IDENTITY,
+      )
+    );
+    const legacyApprovedStream = APPROVED_PRIVATE_SOURCE_STREAMS.has(sourceSha);
     if (
-      !streamAttestation
-      || streamAttestation.schema !== 'mmibkr-cloud-source-fleet-stream-attestation-v1'
-      || streamAttestation.source_ref !== sourceSha
-      || streamAttestation.source_sha !== sourceSha
-      || streamAttestation.plaintext_sha256 !== archiveSha
-      || Number(streamAttestation.archive_bytes) !== archiveBytes
-      || streamAttestation.source_transport
-        !== 'fleet_authority_oidc_private_archive_stream'
+      !validStreamAttestation
+      || (!legacyApprovedStream && !reusableExactShaBootstrapAttestation)
     ) {
       throw new Error('vault_source_snapshot_not_approved');
     }
@@ -821,6 +961,16 @@ export class SourceExchange {
     if (!Number.isInteger(archiveBytes) || archiveBytes <= 0 || archiveBytes > 150 * 1024 * 1024) {
       throw new Error('vault_archive_bytes_rejected');
     }
+    const requestIdentity = this._producerIdentity(request);
+    if (
+      matchesIdentity(requestIdentity, PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY)
+      && ![
+        PAPER_ACCOUNT_HYGIENE_COORDINATOR_OWNERSHIP_SOURCE,
+        PAPER_ACCOUNT_HYGIENE_COORDINATOR_RUNTIME_SOURCE,
+      ].includes(sourceSha)
+    ) {
+      throw new Error('paper_account_hygiene_source_rejected');
+    }
     const approval = await this._resolveVaultSnapshotApproval({
       sourceSha,
       manifestSha,
@@ -860,7 +1010,7 @@ export class SourceExchange {
     }
     if (masterKey.length !== 32) throw new Error('vault_master_key_size_rejected');
 
-    const runtimeIdentity = this._producerIdentity(request);
+    const runtimeIdentity = requestIdentity;
     const attestation = {
       schema: 'mmibkr-cloud-source-vault-attestation-v1',
       source_ref: approval.source_ref,
@@ -1226,6 +1376,13 @@ export class SourceExchange {
         const recipientKeyId = String(body?.recipient_key_id || '');
         if (!/^[0-9a-f]{40}$/.test(sourceSha) || !/^[0-9a-f]{64}$/.test(plaintextSha)) {
           throw new Error('source_identity');
+        }
+        const relayIdentity = this._producerIdentity(request);
+        if (
+          matchesIdentity(relayIdentity, PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY)
+          && sourceSha !== PAPER_ACCOUNT_HYGIENE_COORDINATOR_RUNTIME_SOURCE
+        ) {
+          return json({ error: 'paper_account_hygiene_runtime_source_rejected' }, 403);
         }
         if (!Number.isInteger(archiveBytes) || archiveBytes <= 0 || archiveBytes > 150 * 1024 * 1024) {
           throw new Error('archive_bytes');

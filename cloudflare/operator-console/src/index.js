@@ -21,6 +21,12 @@ const ALLOWED_PUBLISHERS = Object.freeze([
       'XoticHaze/research-compute-public-/.github/workflows/mmibkr-selected-runtime-cloud-r1.yml@refs/heads/main',
   }),
   Object.freeze({
+    repository: 'XoticHaze/research-compute-public-',
+    ref: 'refs/heads/main',
+    workflow_ref:
+      'XoticHaze/research-compute-public-/.github/workflows/mmibkr-paper-account-hygiene-coordinator-r1.yml@refs/heads/main',
+  }),
+  Object.freeze({
     repository: 'XoticHaze/mm-ibkr-runtime',
     ref: 'refs/heads/main',
     workflow_ref:
@@ -43,6 +49,13 @@ const ALLOWED_MACHINE_READERS = Object.freeze([
     ref: 'refs/heads/main',
     workflow_ref:
       'XoticHaze/research-compute-public-/.github/workflows/mmibkr-operator-snapshot-read-bridge-r1.yml@refs/heads/main',
+    repository_visibility: 'public',
+  }),
+  Object.freeze({
+    repository: 'XoticHaze/research-compute-public-',
+    ref: 'refs/heads/main',
+    workflow_ref:
+      'XoticHaze/research-compute-public-/.github/workflows/mmibkr-paper-account-hygiene-coordinator-r1.yml@refs/heads/main',
     repository_visibility: 'public',
   }),
 ]);

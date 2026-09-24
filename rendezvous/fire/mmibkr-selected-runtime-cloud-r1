@@ -1,14 +1,16 @@
 {
-  "source_ref": "d81df85788ebb6be6d4d69b9b9a537be96f16507",
+  "source_ref": "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
   "session_seconds": "18000",
   "max_cycles": "0",
   "self_handoff": true,
-  "requested_by": "assistant-resume-steady-paper-forward-after-continuity-proof",
+  "requested_by": "assistant-667-ownership-aware-runtime-promotion",
   "source_public_run_id": "35407829303",
-  "expected_checkpoint_cache_key": "mmibkr-selected-runtime-cloud-checkpoint-v1-35692649864-d81df85788ebb6be6d4d69b9b9a537be96f16507",
-  "expected_checkpoint_sha256": "abe941335b8c2ac03ae16b26210fba07877e06622b1f5f2cd9b45eb6b8706e0f",
+  "expected_checkpoint_cache_key": "mmibkr-selected-runtime-cloud-checkpoint-v1-35779148035-8a82107be253c3facd3b090cf752bc51b3a8ef8d",
+  "expected_checkpoint_sha256": "e279cce9433c193863a20b7b1910a6e4fbe183dff396b258c6d9652c8bde3176",
   "require_terminal_continuity": true,
-  "predecessor_proof_run": "35692649864",
+  "predecessor_proof_run": "35779148035",
   "predecessor_v2_receipt_accepted": true,
-  "purpose": "resume_normal_long_running_paper_forward_owner_from_proven_v2_successor_checkpoint"
+  "failed_owner_run": "35836806295",
+  "recovery_reason": "promote selected-runtime owner onto merged ownership-aware source after repeated old-source B1 warm-read failure clusters",
+  "purpose": "run_ownership_aware_selected_runtime_owner_for_safe_paper_position_hygiene"
 }

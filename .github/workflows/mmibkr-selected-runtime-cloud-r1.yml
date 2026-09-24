@@ -6,7 +6,7 @@ on:
       source_ref:
         description: Exact approved private MM-IBKR source SHA to materialize from the reusable encrypted Fleet vault
         required: true
-        default: 8a82107be253c3facd3b090cf752bc51b3a8ef8d
+        default: 35e6b44e5c2618f780a84c1c204fe14c76bdf0e5
         type: string
       session_seconds:
         description: Bounded daemon session length
@@ -56,6 +56,8 @@ on:
       - main
     paths:
       - .github/workflows/mmibkr-selected-runtime-cloud-r1.yml
+      - .github/workflows/mmibkr-selected-runtime-cloud-watchdog-r1.yml
+      - tests/test_mmibkr_cloud_owner_reusable_vault_contract_v1.py
       - scripts/mmibkr_source_vault_consumer_v1.py
       - tests/test_mmibkr_source_vault_consumer_v1.py
       - tests/test_mmibkr_source_vault_fetch_retry_v1.py
@@ -74,6 +76,9 @@ on:
       - scripts/mmibkr_signal_history_metadata_reconcile_v1.py
       - scripts/mmibkr_operator_snapshot_publish_v1.py
       - tests/test_mmibkr_operator_snapshot_publish_helper_v1.py
+      - scripts/mmibkr_selected_runtime_maintenance_hold_v1.py
+      - tests/test_mmibkr_selected_runtime_maintenance_hold_v1.py
+      - rendezvous/control/mmibkr-selected-runtime-cloud-maintenance-hold-r1.json
 
 permissions:
   contents: write
@@ -144,8 +149,28 @@ jobs:
               mode="owner"
             fi
           fi
+          if [ "$mode" = "owner" ]; then
+            hold="$(python scripts/mmibkr_selected_runtime_maintenance_hold_v1.py \
+              --path rendezvous/control/mmibkr-selected-runtime-cloud-maintenance-hold-r1.json)"
+            if [ "$hold" = "true" ]; then
+              mode="maintenance_hold"
+              echo 'MMIBKR_SELECTED_RUNTIME_CLOUD_MAINTENANCE_HOLD=1'
+            fi
+          fi
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "MMIBKR_SELECTED_RUNTIME_CLOUD_ROUTE=$mode"
+
+  maintenance_hold:
+    if: ${{ needs.route.outputs.mode == 'maintenance_hold' }}
+    needs:
+      - contract
+      - route
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Hold selected-runtime owner for governed maintenance
+        run: |
+          echo 'MMIBKR_SELECTED_RUNTIME_CLOUD_MAINTENANCE_HOLD=1'
+          echo 'MMIBKR_SELECTED_RUNTIME_CLOUD_MAINTENANCE_REASON=paper_account_hygiene_679'
 
   reject_unpinned_dispatch:
     if: ${{ needs.route.outputs.mode == 'unpinned_dispatch_rejected' || needs.route.outputs.mode == 'invalid_dispatch' }}
@@ -170,6 +195,12 @@ jobs:
 
       - name: Install fixed source-vault dependency
         run: python -m pip install --disable-pip-version-check cryptography==46.0.1
+
+      - name: Validate selected-runtime maintenance hold contract
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/mmibkr_selected_runtime_maintenance_hold_v1.py
+          python -m unittest -v tests.test_mmibkr_selected_runtime_maintenance_hold_v1
 
       - name: Validate reusable encrypted source-vault consumer
         run: |
@@ -224,7 +255,7 @@ jobs:
       cancel-in-progress: false
     env:
       IBKR_REMOTE_EXCHANGE_TOKEN: ${{ github.token }}
-      CANONICAL_SOURCE_REF: 8a82107be253c3facd3b090cf752bc51b3a8ef8d
+      CANONICAL_SOURCE_REF: 35e6b44e5c2618f780a84c1c204fe14c76bdf0e5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -1337,7 +1368,7 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
-      CANONICAL_SOURCE_REF: 8a82107be253c3facd3b090cf752bc51b3a8ef8d
+      CANONICAL_SOURCE_REF: 35e6b44e5c2618f780a84c1c204fe14c76bdf0e5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -1687,7 +1718,7 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
-      CANONICAL_SOURCE_REF: 8a82107be253c3facd3b090cf752bc51b3a8ef8d
+      CANONICAL_SOURCE_REF: 35e6b44e5c2618f780a84c1c204fe14c76bdf0e5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -2135,7 +2166,7 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
-      CANONICAL_SOURCE_REF: 8a82107be253c3facd3b090cf752bc51b3a8ef8d
+      CANONICAL_SOURCE_REF: 35e6b44e5c2618f780a84c1c204fe14c76bdf0e5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
