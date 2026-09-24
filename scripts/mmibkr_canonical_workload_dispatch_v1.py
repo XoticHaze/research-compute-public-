@@ -2764,7 +2764,12 @@ def execute_survivor_evidence_verify(
     }
 
 def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None,receipt_dir:Path|None=None)->dict:
-    fn=None if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","FEATURE_CONTRACT_VALIDATE","STRATEGY_PREVIEW"} else load_callable(root,CAPABILITIES[v["capability_id"]])
+    if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","FEATURE_CONTRACT_VALIDATE","STRATEGY_PREVIEW"}:
+        fn=None
+    elif v["capability_id"]=="SURVIVOR_EVIDENCE_VERIFY":
+        fn=load_callable(root,v["entrypoint"])
+    else:
+        fn=load_callable(root,CAPABILITIES[v["capability_id"]])
     if v["capability_id"]=="STRATEGY_SPEC_VALIDATE":
         raw=fn(v["arguments"]["strategy_spec"])
         if not isinstance(raw,dict) or not isinstance(raw.get("strategy_spec"),dict) or not _SHA256.fullmatch(str(raw.get("strategy_spec_digest") or "")):
