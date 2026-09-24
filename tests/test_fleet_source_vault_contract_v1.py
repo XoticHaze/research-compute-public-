@@ -580,11 +580,11 @@ class FleetSourceVaultContractTests(unittest.TestCase):
     def test_selected_runtime_ownership_snapshot_is_exactly_code_pinned_after_bootstrap(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn(
-            "'07824b4ed9354a8519d4ce595735f7c1a610fdc2': Object.freeze({",
+            "'35e6b44e5c2618f780a84c1c204fe14c76bdf0e5': Object.freeze({",
             text,
         )
         self.assertIn(
-            "source_ref: '07824b4ed9354a8519d4ce595735f7c1a610fdc2'",
+            "source_ref: '35e6b44e5c2618f780a84c1c204fe14c76bdf0e5'",
             text,
         )
         self.assertIn(
@@ -620,7 +620,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("SELECTED_RUNTIME_OWNERSHIP_BOOTSTRAP_SOURCE", text)
         self.assertIn(
-            "07824b4ed9354a8519d4ce595735f7c1a610fdc2",
+            "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
             text,
         )
         self.assertIn("SELECTED_RUNTIME_OWNERSHIP_BOOTSTRAP_EXPIRES_AT", text)
