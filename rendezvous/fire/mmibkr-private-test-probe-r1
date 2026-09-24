@@ -2,11 +2,16 @@
   "schema": "mmibkr.private_test_probe_fire.v1",
   "source_ref": "15594dd2353adb334584e8d9025cf7a427428b17",
   "test_modules": [
-    "tests.test_autotuner_campaign_runner",
-    "tests.test_autotuner_primary_validation_runner"
+    "tests.test_data_manager_indicator_context_contract_14th31jq",
+    "tests.test_data_manager_registry_authority_14th31lm",
+    "tests.test_publish_canonical_feature_sidecar",
+    "tests.test_registry_builder_condition_execution_14th31kn",
+    "tests.test_strategy_backtest_registry_dispatch",
+    "tests.test_crw_tradingview_dual_execution_replay_14th31js",
+    "tests.test_crw_builder_backtest_dca_dual_ledger_14th31jt"
   ],
-  "requested_by": "assistant-g08-pytest-regression-closeout",
-  "purpose": "regression-proof G08 AutoTuner exact private modules after canonical private probe switched to pinned pytest",
+  "requested_by": "assistant-g05-g07-current-main-recovery",
+  "purpose": "exact-private proof for recovered G05 canonical data, G06 feature/preview, and G07 CRW evidence chain",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -14,7 +19,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "g08-autotuner-pytest-regression-r1-b3dc44f0",
+  "request_nonce": "g05-g07-recovery-r1-72330f01",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "a4cb1a026af9c206ac64a22a6dadade19dfa0814"
+  "current_private_reference": "604f055815f2746a6f63aa6355d6a0667eeb7c8f"
 }
