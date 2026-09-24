@@ -125,6 +125,21 @@ _SURVIVOR_VERIFY_BINDINGS={
         "callable":"verify",
     },
 }
+EXECUTION_PROFILES=frozenset({"core","model_lab"})
+_CAPABILITY_EXECUTION_PROFILES={
+    "MODEL_LAB_FIRST_CONSUMER":"model_lab",
+    "MODEL_LAB_COMPARE_VALIDATE":"model_lab",
+}
+
+def required_execution_profile(capability_id:Any)->str:
+    cid=str(capability_id or "").strip()
+    if cid not in CAPABILITIES:
+        raise CanonicalDispatchError(f"capability is not allowlisted: {cid!r}")
+    profile=_CAPABILITY_EXECUTION_PROFILES.get(cid,"core")
+    if profile not in EXECUTION_PROFILES:
+        raise CanonicalDispatchError(f"capability execution profile is invalid: {cid!r}")
+    return profile
+
 _SHA1=re.compile(r"^[0-9a-f]{40}$")
 _SHA256=re.compile(r"^[0-9a-f]{64}$")
 _ID=re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
