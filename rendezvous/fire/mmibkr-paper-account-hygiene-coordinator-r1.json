@@ -1,1 +1,1 @@
-{"schema":"mmibkr.paper_account_hygiene_coordinator_fire.v1","execute":false,"batch_size":5,"operator_approved":true,"operator_ack":"MMIBKR_PAPER_ACCOUNT_HYGIENE_ACK_V1","requested_by":"issue-667-config-bootstrap-retry-20260923T2012CDT"}
+{"schema":"mmibkr.paper_account_hygiene_coordinator_fire.v1","execute":false,"batch_size":5,"operator_approved":true,"operator_ack":"MMIBKR_PAPER_ACCOUNT_HYGIENE_ACK_V1","requested_by":"issue-667-discovery-tolerance-retry-20260923T2023CDT"}
