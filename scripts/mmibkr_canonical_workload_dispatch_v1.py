@@ -102,10 +102,28 @@ CAPABILITIES={
         "module":"scripts.operator.news_feature_backtest_join_audit_14nj",
         "callable":"_read_bar_timestamps",
     },
+    "SURVIVOR_EVIDENCE_VERIFY":{
+        "path":"scripts/operator/verify_survivor_forward_operator_contract_v1.py",
+        "module":"scripts.operator.verify_survivor_forward_operator_contract_v1",
+        "callable":"verify_bundle",
+    },
 }
 _DATA_MATERIALIZE_BINDINGS={
     "stocks":CAPABILITIES["CANONICAL_DATA_MATERIALIZE"],
     "futures":{"path":"futures_manager.py","module":"futures_manager","callable":"FuturesManager"},
+}
+_SURVIVOR_VERIFY_BINDINGS={
+    "completed_trade_bundle":{
+        "path":"scripts/operator/verify_survivor_completed_trade_evidence_v1.py",
+        "module":"scripts.operator.verify_survivor_completed_trade_evidence_v1",
+        "callable":"verify_bundle",
+    },
+    "operator_contract_bundle":CAPABILITIES["SURVIVOR_EVIDENCE_VERIFY"],
+    "paper_trade_pairing":{
+        "path":"scripts/operator/verify_survivor_paper_trade_evidence_v1.py",
+        "module":"scripts.operator.verify_survivor_paper_trade_evidence_v1",
+        "callable":"verify",
+    },
 }
 _SHA1=re.compile(r"^[0-9a-f]{40}$")
 _SHA256=re.compile(r"^[0-9a-f]{64}$")
@@ -255,6 +273,42 @@ def validate_registry_backtest_arguments(args:Any,input_root:Path|None,receipt_d
         "dataset":ref,
         "requested_start":start,
         "requested_end":end,
+    }
+
+
+_SURVIVOR_VERIFY_KINDS=frozenset(_SURVIVOR_VERIFY_BINDINGS)
+
+def validate_survivor_evidence_arguments(args:Any,input_root:Path|None,receipt_dir:Path|None)->dict:
+    if not isinstance(args,dict):
+        raise CanonicalDispatchError("SURVIVOR_EVIDENCE_VERIFY arguments must be object")
+    kind=str(args.get("verification_kind") or "").strip()
+    if kind not in _SURVIVOR_VERIFY_KINDS:
+        raise CanonicalDispatchError("SURVIVOR_EVIDENCE_VERIFY verification_kind is not allowlisted")
+    try:max_rows=int(args.get("max_rows",50000))
+    except Exception as e:raise CanonicalDispatchError("SURVIVOR_EVIDENCE_VERIFY max_rows must be integer") from e
+    if not 1<=max_rows<=100000:
+        raise CanonicalDispatchError("SURVIVOR_EVIDENCE_VERIFY max_rows must be within 1..100000")
+    if kind in {"completed_trade_bundle","operator_contract_bundle"}:
+        exact(args,{"verification_kind","bundle","max_rows"},"SURVIVOR_EVIDENCE_VERIFY bundle arguments")
+        resolved=resolve_artifact_ref(input_root,receipt_dir,args.get("bundle"),"SURVIVOR_EVIDENCE_VERIFY bundle")
+        if resolved["bytes"]>20_000_000:
+            raise CanonicalDispatchError("SURVIVOR_EVIDENCE_VERIFY bundle exceeds 20MB")
+        ref=_registry_public_ref(resolved)
+        return {"verification_kind":kind,"bundle":ref,"max_rows":max_rows}
+    exact(args,{"verification_kind","intents","ledger","survivors_only","max_rows"},"SURVIVOR_EVIDENCE_VERIFY paper arguments")
+    intents=resolve_artifact_ref(input_root,receipt_dir,args.get("intents"),"SURVIVOR_EVIDENCE_VERIFY intents")
+    ledger=resolve_artifact_ref(input_root,receipt_dir,args.get("ledger"),"SURVIVOR_EVIDENCE_VERIFY ledger")
+    if intents["bytes"]>50_000_000 or ledger["bytes"]>50_000_000:
+        raise CanonicalDispatchError("SURVIVOR_EVIDENCE_VERIFY paper input exceeds 50MB")
+    survivors_only=args.get("survivors_only")
+    if not isinstance(survivors_only,bool):
+        raise CanonicalDispatchError("SURVIVOR_EVIDENCE_VERIFY survivors_only must be boolean")
+    return {
+        "verification_kind":kind,
+        "intents":_registry_public_ref(intents),
+        "ledger":_registry_public_ref(ledger),
+        "survivors_only":survivors_only,
+        "max_rows":max_rows,
     }
 
 def validate_tune_parameters(value:Any)->list[str]:
@@ -736,6 +790,9 @@ def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None
     if cid=="CANONICAL_DATA_MATERIALIZE":
         raw_args=req.get("arguments"); asset_hint=str(raw_args.get("asset_type") or "").strip().lower() if isinstance(raw_args,dict) else ""
         cap=_DATA_MATERIALIZE_BINDINGS.get(asset_hint,cap)
+    if cid=="SURVIVOR_EVIDENCE_VERIFY":
+        raw_args=req.get("arguments"); verify_hint=str(raw_args.get("verification_kind") or "").strip() if isinstance(raw_args,dict) else ""
+        cap=_SURVIVOR_VERIFY_BINDINGS.get(verify_hint,cap)
     if not cap:raise CanonicalDispatchError(f"capability is not allowlisted: {cid!r}")
     if req.get("authority")!=AUTHORITY:raise CanonicalDispatchError("authority must be research_only")
     if req.get("forbidden_authorities")!=FORBIDDEN_AUTHORITY_ASSERTIONS:raise CanonicalDispatchError("forbidden authority assertions must all be false")
@@ -767,6 +824,8 @@ def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None
         normalized_args=validate_crw_arguments(args,input_root)
     elif cid=="REGISTRY_BACKTEST":
         normalized_args=validate_registry_backtest_arguments(args,input_root,receipt_dir)
+    elif cid=="SURVIVOR_EVIDENCE_VERIFY":
+        normalized_args=validate_survivor_evidence_arguments(args,input_root,receipt_dir)
     elif cid in {"AUTOTUNER_PARAMETER_CONSUMPTION","AUTOTUNER_CANDIDATE_GENERATE"}:
         normalized_args=validate_autotuner_arguments(cid,args)
     elif cid=="AUTOTUNER_CAMPAIGN":
@@ -2573,8 +2632,144 @@ def execute_registry_backtest(
     finally:
         shutil.rmtree(staging,ignore_errors=True)
 
+
+def survivor_verifier_dependencies(root:Path,kind:str)->dict[str,str]:
+    paths=[]
+    binding=_SURVIVOR_VERIFY_BINDINGS.get(kind) or {}
+    if binding.get("path"):
+        paths.append(str(binding["path"]))
+    if kind=="paper_trade_pairing":
+        paths.extend([
+            "scripts/operator/materialize_survivor_paper_trade_evidence_v1.py",
+            "scripts/operator/audit_survivor_paper_trade_acceptance_v1.py",
+        ])
+    return {path:private_blob_identity(root,path) for path in paths if (root/path).is_file()}
+
+def _survivor_load_jsonl(path:Path,max_rows:int)->list[dict]:
+    rows=[]
+    try:
+        with path.open("r",encoding="utf-8-sig") as handle:
+            for line in handle:
+                text=line.strip()
+                if not text:
+                    continue
+                if len(rows)>=max_rows:
+                    raise CanonicalDispatchError("SURVIVOR_EVIDENCE_VERIFY intents row bound exceeded")
+                node=json.loads(text)
+                if not isinstance(node,dict):
+                    raise CanonicalDispatchError("SURVIVOR_EVIDENCE_VERIFY intent row must be object")
+                rows.append(node)
+    except CanonicalDispatchError:
+        raise
+    except Exception as e:
+        raise CanonicalDispatchError("SURVIVOR_EVIDENCE_VERIFY intents JSONL is invalid") from e
+    return rows
+
+def _survivor_load_csv(path:Path,max_rows:int)->list[dict]:
+    rows=[]
+    try:
+        with path.open("r",encoding="utf-8-sig",newline="") as handle:
+            for row in csv.DictReader(handle):
+                if len(rows)>=max_rows:
+                    raise CanonicalDispatchError("SURVIVOR_EVIDENCE_VERIFY ledger row bound exceeded")
+                rows.append(dict(row))
+    except CanonicalDispatchError:
+        raise
+    except Exception as e:
+        raise CanonicalDispatchError("SURVIVOR_EVIDENCE_VERIFY ledger CSV is invalid") from e
+    return rows
+
+def _survivor_validate_private_authority(kind:str,result:dict)->None:
+    if kind in {"completed_trade_bundle","operator_contract_bundle"}:
+        boundary=result.get("authority_boundary")
+        if not isinstance(boundary,dict) or not boundary:
+            raise CanonicalDispatchError("canonical survivor verifier authority boundary missing")
+        if any(value is not False for value in boundary.values()):
+            raise CanonicalDispatchError("canonical survivor verifier authority boundary rejected")
+        return
+    expected={
+        "producer_evidence_inference":False,
+        "selected_runtime_backfill":False,
+        "strategy_spec_mutation":False,
+        "runtime_authority_change":False,
+        "broker_submission":False,
+        "live_trading_change":False,
+    }
+    if any(result.get(key) is not value for key,value in expected.items()):
+        raise CanonicalDispatchError("canonical survivor paper verifier authority boundary rejected")
+
+def execute_survivor_evidence_verify(
+    v:dict,
+    root:Path,
+    input_root:Path|None,
+    receipt_dir:Path|None,
+    artifact_root:Path|None,
+    fn:Any,
+)->dict:
+    if artifact_root is None or receipt_dir is None:
+        raise CanonicalDispatchError("SURVIVOR_EVIDENCE_VERIFY requires receipt_dir artifact storage")
+    args=v["arguments"];kind=args["verification_kind"];inputs={}
+    if kind in {"completed_trade_bundle","operator_contract_bundle"}:
+        resolved=resolve_artifact_ref(input_root,receipt_dir,args["bundle"],"SURVIVOR_EVIDENCE_VERIFY bundle")
+        inputs["bundle"]=_registry_public_ref(resolved)
+        try:bundle=json.loads(resolved["path"].read_text(encoding="utf-8-sig"))
+        except Exception as e:raise CanonicalDispatchError("SURVIVOR_EVIDENCE_VERIFY bundle JSON is invalid") from e
+        if not isinstance(bundle,dict):
+            raise CanonicalDispatchError("SURVIVOR_EVIDENCE_VERIFY bundle must be JSON object")
+        rows=bundle.get("rows")
+        if isinstance(rows,dict) and len(rows)>args["max_rows"]:
+            raise CanonicalDispatchError("SURVIVOR_EVIDENCE_VERIFY bundle row bound exceeded")
+        private_result=fn(bundle)
+    else:
+        intents=resolve_artifact_ref(input_root,receipt_dir,args["intents"],"SURVIVOR_EVIDENCE_VERIFY intents")
+        ledger=resolve_artifact_ref(input_root,receipt_dir,args["ledger"],"SURVIVOR_EVIDENCE_VERIFY ledger")
+        inputs["intents"]=_registry_public_ref(intents);inputs["ledger"]=_registry_public_ref(ledger)
+        intent_rows=_survivor_load_jsonl(intents["path"],args["max_rows"])
+        ledger_rows=_survivor_load_csv(ledger["path"],args["max_rows"])
+        private_result=fn(intent_rows,ledger_rows,survivors_only=args["survivors_only"])
+    if not isinstance(private_result,dict):
+        raise CanonicalDispatchError("canonical survivor verifier returned invalid contract")
+    _survivor_validate_private_authority(kind,private_result)
+    sanitized=sanitize_public_tree(private_result)
+    state=str(sanitized.get("state") or sanitized.get("status") or "UNKNOWN")
+    if len(state)>80:
+        raise CanonicalDispatchError("canonical survivor verifier state is invalid")
+    out_root=(artifact_root/"survivor_evidence_verify").resolve();out_root.mkdir(parents=True,exist_ok=True)
+    evidence_path=out_root/"verification.json"
+    evidence_path.write_text(
+        json.dumps(sanitized,sort_keys=True,separators=(",",":"),ensure_ascii=False,allow_nan=False,default=str)+"\n",
+        encoding="utf-8",
+    )
+    evidence=artifact_descriptor(evidence_path,artifact_root)
+    return {
+        "schema":"mmibkr.survivor_evidence_verification.v1",
+        "verification_kind":kind,
+        "verification_state":state,
+        "passed":state=="PASS",
+        "inputs":inputs,
+        "survivors_only":args.get("survivors_only"),
+        "verification":sanitized,
+        "verification_sha256":sha(sanitized),
+        "artifacts":[evidence],
+        "canonical_dependencies":survivor_verifier_dependencies(root,kind),
+        "safety":{
+            "research_only":True,
+            **FORBIDDEN_AUTHORITY_ASSERTIONS,
+            "survivor_ranking":False,
+            "promotion_admission":False,
+            "capital_allocation":False,
+            "order_sizing_change":False,
+            "provider_acquisition":False,
+        },
+    }
+
 def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None,receipt_dir:Path|None=None)->dict:
-    fn=None if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","FEATURE_CONTRACT_VALIDATE","STRATEGY_PREVIEW"} else load_callable(root,CAPABILITIES[v["capability_id"]])
+    if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","FEATURE_CONTRACT_VALIDATE","STRATEGY_PREVIEW"}:
+        fn=None
+    elif v["capability_id"]=="SURVIVOR_EVIDENCE_VERIFY":
+        fn=load_callable(root,v["entrypoint"])
+    else:
+        fn=load_callable(root,CAPABILITIES[v["capability_id"]])
     if v["capability_id"]=="STRATEGY_SPEC_VALIDATE":
         raw=fn(v["arguments"]["strategy_spec"])
         if not isinstance(raw,dict) or not isinstance(raw.get("strategy_spec"),dict) or not _SHA256.fullmatch(str(raw.get("strategy_spec_digest") or "")):
@@ -2591,6 +2786,8 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|
         result=sanitize_crw_result(raw,v["arguments"],root=root,artifact_root=artifact_root)
     elif v["capability_id"]=="REGISTRY_BACKTEST":
         result=execute_registry_backtest(v,root,input_root,receipt_dir,artifact_root,fn)
+    elif v["capability_id"]=="SURVIVOR_EVIDENCE_VERIFY":
+        result=execute_survivor_evidence_verify(v,root,input_root,receipt_dir,artifact_root,fn)
     elif v["capability_id"]=="AUTOTUNER_CAMPAIGN":
         if input_root is None:raise CanonicalDispatchError("AUTOTUNER_CAMPAIGN requires governed input_root")
         args=v["arguments"]; descriptor=resolve_dataset(input_root,"autotuner",args["dataset"])
@@ -2797,7 +2994,7 @@ def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:P
     rd=receipt_dir.resolve() if receipt_dir is not None else None
     v=validate_request(req,source_root,source_receipt,input_root=input_root,receipt_dir=rd); fp=sha(v)
     if rd is None:
-        if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","REGISTRY_BACKTEST","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","NEWS_FEATURE_SIDECAR_BUILD","NEWS_FEATURE_JOIN_AUDIT"}:
+        if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","REGISTRY_BACKTEST","SURVIVOR_EVIDENCE_VERIFY","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","NEWS_FEATURE_SIDECAR_BUILD","NEWS_FEATURE_JOIN_AUDIT"}:
             raise CanonicalDispatchError(f"{v['capability_id']} requires receipt_dir artifact storage")
         return {"receipt":safe_execute_valid(v,source_root,input_root=input_root,receipt_dir=None),"cache_hit":False}
     rp=rd/"receipts"/f"{fp}.json"; hit=cached(rp,fp)
@@ -2811,7 +3008,7 @@ def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:P
         return {"receipt":hit,"cache_hit":True}
     stop,lost,thread=start_claim_heartbeat(cp,token,fp)
     published=False
-    artifact_root=(rd/"artifacts"/fp).resolve() if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","CRW_BACKTEST","REGISTRY_BACKTEST","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","NEWS_FEATURE_SIDECAR_BUILD","NEWS_FEATURE_JOIN_AUDIT"} else None
+    artifact_root=(rd/"artifacts"/fp).resolve() if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","CRW_BACKTEST","REGISTRY_BACKTEST","SURVIVOR_EVIDENCE_VERIFY","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","NEWS_FEATURE_SIDECAR_BUILD","NEWS_FEATURE_JOIN_AUDIT"} else None
     if artifact_root is not None:
         shutil.rmtree(artifact_root,ignore_errors=True);artifact_root.mkdir(parents=True,exist_ok=True)
     try:

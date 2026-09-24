@@ -27,6 +27,7 @@ The portable ABI currently carries these research-only bindings:
 | `STRATEGY_SPEC_VALIDATE` | `autotuner_strategy_bridge.normalize_strategy_spec` | normalize and digest one StrategySpec |
 | `CRW_BACKTEST` | `scripts.operator.crw_backtest_summary_13z.run_backtest` | execute canonical CRW replay over exact governed datasets |
 | `REGISTRY_BACKTEST` | `strategy_backtest_registry.run_strategy_backtest` | execute one normalized StrategySpec over one exact governed evaluation dataset across registered strategy families, preserving the primary CRW runner |
+| `SURVIVOR_EVIDENCE_VERIFY` | mode-bound existing survivor verifier (`completed_trade`, `operator_contract`, or `paper_trade_pairing`) | verify exact already-produced survivor/forward/economic evidence without ranking, promotion, allocation, broker, or live authority |
 | `AUTOTUNER_PARAMETER_CONSUMPTION` | `autotuner_parameter_consumption.parameter_schema_for_tuning` | derive the searchable CRW parameter surface from the pinned private strategy schema |
 | `AUTOTUNER_CANDIDATE_GENERATE` | `autotuner_strategy_bridge.candidate_mutations` | generate a bounded mutation set only after the canonical consumption gate |
 | `CANONICAL_DATA_MATERIALIZE` | `data_manager.DataManager.ingest_external_stock_source_bars` | normalize governed stock bars into canonical raw/features/sidecars without provider acquisition |
@@ -40,6 +41,8 @@ The portable ABI currently carries these research-only bindings:
 | `OPTIONS_SNAPSHOT_ANALYZE` | `options_scanner.OptionsScanner` pure IV/Black-Scholes helpers | analyze an exact captured option snapshot at an explicit as-of time without chain/quote acquisition |
 
 `REGISTRY_BACKTEST` is the generalized arena surface for registry-backed strategy families. Family differences belong in `StrategySpec`; do not add family-specific backtest capability IDs. `CRW_BACKTEST` remains the proven compatibility/acceptance fixture and full CRW evidence route.
+
+`SURVIVOR_EVIDENCE_VERIFY` treats `PASS`, `FAIL_CLOSED`, and `BLOCKED` as verifier truth states. A negative evidence verdict is still a successfully executed verifier receipt; it does not grant or mutate promotion, capital, runtime, broker, or live authority.
 
 CRW backtest callers cannot supply absolute source paths. The request carries per-symbol relative paths, byte counts, and SHA-256 identities under a governed `--input-root`; the dispatcher verifies them and injects canonical `_verified_source_paths` only after admission.
 
