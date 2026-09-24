@@ -33,10 +33,14 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          node=json.loads(Path('rendezvous/fire/mmibkr-crw-backtest-r1.json').read_text())
-          if node.get('schema') != 'mmibkr.crw_backtest_fire.v1':
-              raise SystemExit('CRW backtest fire schema rejected')
-          if node.get('workload_type') != 'CRW_BACKTEST':
-              raise SystemExit('CRW backtest workload rejected')
-          print('MMIBKR_CRW_BACKTEST_BINDING=PASS')
+          fire = Path('rendezvous/fire/mmibkr-crw-backtest-r1.json')
+          if not fire.is_file():
+              print('MMIBKR_CRW_BACKTEST_FIRE=NOT_REQUESTED')
+          else:
+              node=json.loads(fire.read_text())
+              if node.get('schema') != 'mmibkr.crw_backtest_fire.v1':
+                  raise SystemExit('CRW backtest fire schema rejected')
+              if node.get('workload_type') != 'CRW_BACKTEST':
+                  raise SystemExit('CRW backtest workload rejected')
+              print('MMIBKR_CRW_BACKTEST_BINDING=PASS')
           PY

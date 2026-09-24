@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
+import csv
 import hashlib, importlib, json, os, re, secrets, shutil, sys, tempfile, threading, time
 from pathlib import Path
 from typing import Any
@@ -39,6 +40,21 @@ CAPABILITIES={
         "path":"autotuner_strategy_bridge.py",
         "module":"autotuner_strategy_bridge",
         "callable":"candidate_mutations",
+    },
+    "CANONICAL_DATA_MATERIALIZE":{
+        "path":"data_manager.py",
+        "module":"data_manager",
+        "callable":"DataManager",
+    },
+    "FEATURE_CONTRACT_VALIDATE":{
+        "path":"feature_contract.py",
+        "module":"feature_contract",
+        "callable":"read_feature_artifact_sidecar",
+    },
+    "STRATEGY_PREVIEW":{
+        "path":"strategies/__init__.py",
+        "module":"strategies",
+        "callable":"create",
     },
     "AUTOTUNER_CAMPAIGN":{
         "path":"autotuner_campaign_runner.py",
@@ -291,6 +307,118 @@ def validate_autotuner_primary_validation_arguments(args:Any,input_root:Path|Non
         normalized_policy[key]=value
     return {"strategy_spec":spec,"dataset":dataset,"staged_plan":deepcopy(plan),"split_policy":normalized_policy}
 
+def resolve_artifact_ref(input_root:Path|None,receipt_dir:Path|None,node:Any,label:str)->dict:
+    if not isinstance(node,dict):raise CanonicalDispatchError(f"{label} must be object")
+    scope=str(node.get("scope") or "").strip()
+    if scope=="input_root":
+        exact(node,{"scope","relative_path","sha256","bytes"},label)
+        if input_root is None:raise CanonicalDispatchError(f"{label} input_root scope requires governed input_root")
+        root=input_root.resolve()
+        job_fingerprint=None
+    elif scope=="receipt_artifact":
+        exact(node,{"scope","job_fingerprint","relative_path","sha256","bytes"},label)
+        if receipt_dir is None:raise CanonicalDispatchError(f"{label} receipt_artifact scope requires receipt_dir")
+        job_fingerprint=str(node.get("job_fingerprint") or "").lower()
+        if not _SHA256.fullmatch(job_fingerprint):raise CanonicalDispatchError(f"{label} job_fingerprint is invalid")
+        root=(receipt_dir.resolve()/"artifacts"/job_fingerprint).resolve()
+    else:
+        raise CanonicalDispatchError(f"{label} scope must be input_root or receipt_artifact")
+    rel=Path(str(node.get("relative_path") or ""))
+    if rel.is_absolute() or not rel.parts or ".." in rel.parts:raise CanonicalDispatchError(f"{label} relative_path rejected")
+    digest=str(node.get("sha256") or "").lower()
+    if not _SHA256.fullmatch(digest):raise CanonicalDispatchError(f"{label} sha256 invalid")
+    try:size=int(node.get("bytes"))
+    except Exception as e:raise CanonicalDispatchError(f"{label} bytes invalid") from e
+    if size<1:raise CanonicalDispatchError(f"{label} bytes must be positive")
+    path=(root/rel).resolve()
+    if root not in path.parents or not path.is_file():raise CanonicalDispatchError(f"{label} missing or outside governed root")
+    if path.stat().st_size!=size:raise CanonicalDispatchError(f"{label} byte count mismatch")
+    actual=sha_file(path)
+    if actual!=digest:raise CanonicalDispatchError(f"{label} sha256 mismatch")
+    out={"scope":scope,"relative_path":rel.as_posix(),"sha256":actual,"bytes":size,"path":path}
+    if job_fingerprint is not None:out["job_fingerprint"]=job_fingerprint
+    return out
+
+def validate_feature_contract_arguments(args:Any,input_root:Path|None,receipt_dir:Path|None)->dict:
+    if not isinstance(args,dict):raise CanonicalDispatchError("FEATURE_CONTRACT_VALIDATE arguments must be object")
+    exact(args,{"feature_artifact","expected_manifest_hash","expected_semantic_hash"},"FEATURE_CONTRACT_VALIDATE arguments")
+    resolved=resolve_artifact_ref(input_root,receipt_dir,args.get("feature_artifact"),"feature_artifact")
+    expected_manifest=str(args.get("expected_manifest_hash") or "").lower()
+    expected_semantic=str(args.get("expected_semantic_hash") or "").lower()
+    if expected_manifest and not _SHA256.fullmatch(expected_manifest):
+        raise CanonicalDispatchError("FEATURE_CONTRACT_VALIDATE expected_manifest_hash is invalid")
+    if expected_semantic and not _SHA256.fullmatch(expected_semantic):
+        raise CanonicalDispatchError("FEATURE_CONTRACT_VALIDATE expected_semantic_hash is invalid")
+    ref={k:resolved[k] for k in ("scope","relative_path","sha256","bytes")}
+    if "job_fingerprint" in resolved:ref["job_fingerprint"]=resolved["job_fingerprint"]
+    return {
+        "feature_artifact":ref,
+        "expected_manifest_hash":expected_manifest or None,
+        "expected_semantic_hash":expected_semantic or None,
+    }
+
+def validate_strategy_preview_arguments(args:Any,input_root:Path|None,receipt_dir:Path|None)->dict:
+    if not isinstance(args,dict):raise CanonicalDispatchError("STRATEGY_PREVIEW arguments must be object")
+    exact(args,{"strategy_spec","feature_artifact","row_policy","lookback_rows","context_values","expected_feature_semantic_hash"},"STRATEGY_PREVIEW arguments")
+    spec=args.get("strategy_spec")
+    if not isinstance(spec,dict):raise CanonicalDispatchError("STRATEGY_PREVIEW strategy_spec must be object")
+    resolved=resolve_artifact_ref(input_root,receipt_dir,args.get("feature_artifact"),"feature_artifact")
+    row_policy=str(args.get("row_policy") or "latest").strip()
+    if row_policy not in {"latest","latest_execution_safe"}:
+        raise CanonicalDispatchError("STRATEGY_PREVIEW row_policy must be latest or latest_execution_safe")
+    try:lookback=int(args.get("lookback_rows",12))
+    except Exception as e:raise CanonicalDispatchError("STRATEGY_PREVIEW lookback_rows must be integer") from e
+    if not 1<=lookback<=100:raise CanonicalDispatchError("STRATEGY_PREVIEW lookback_rows must be within 1..100")
+    context=args.get("context_values")
+    if context is None:context={}
+    if not isinstance(context,dict):raise CanonicalDispatchError("STRATEGY_PREVIEW context_values must be object")
+    semantic=str(args.get("expected_feature_semantic_hash") or "").lower()
+    if semantic and not _SHA256.fullmatch(semantic):
+        raise CanonicalDispatchError("STRATEGY_PREVIEW expected_feature_semantic_hash is invalid")
+    ref={k:resolved[k] for k in ("scope","relative_path","sha256","bytes")}
+    if "job_fingerprint" in resolved:ref["job_fingerprint"]=resolved["job_fingerprint"]
+    return {
+        "strategy_spec":deepcopy(spec),
+        "feature_artifact":ref,
+        "row_policy":row_policy,
+        "lookback_rows":lookback,
+        "context_values":deepcopy(context),
+        "expected_feature_semantic_hash":semantic or None,
+    }
+
+def validate_data_materialize_arguments(args:Any,input_root:Path|None)->dict:
+    if not isinstance(args,dict):raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE arguments must be object")
+    exact(args,{"asset_type","symbol","source_timeframe","target_timeframes","source_origin","dataset"},"CANONICAL_DATA_MATERIALIZE arguments")
+    if str(args.get("asset_type") or "").strip().lower()!="stocks":
+        raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE v1 currently supports asset_type=stocks")
+    symbol=str(args.get("symbol") or "").strip().upper()
+    if not _SYMBOL.fullmatch(symbol):raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE symbol is invalid")
+    source_tf=str(args.get("source_timeframe") or "").strip()
+    if not source_tf or len(source_tf)>32 or not re.fullmatch(r"[A-Za-z0-9]+",source_tf):
+        raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE source_timeframe is invalid")
+    targets=args.get("target_timeframes")
+    if not isinstance(targets,list) or not targets or len(targets)>16 or any(not isinstance(x,str) for x in targets):
+        raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE target_timeframes must contain 1..16 strings")
+    normalized_targets=[]
+    for raw in targets:
+        tf=raw.strip()
+        if not tf or len(tf)>32 or not re.fullmatch(r"[A-Za-z0-9]+",tf):
+            raise CanonicalDispatchError(f"CANONICAL_DATA_MATERIALIZE target timeframe is invalid: {raw!r}")
+        if tf not in normalized_targets:normalized_targets.append(tf)
+    origin=str(args.get("source_origin") or "").strip()
+    if not origin or len(origin)>128 or not re.fullmatch(r"[A-Za-z0-9_.:-]+",origin):
+        raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE source_origin is invalid")
+    if input_root is None:raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires governed input_root")
+    resolved=resolve_dataset(input_root,symbol,args.get("dataset"))
+    return {
+        "asset_type":"stocks",
+        "symbol":symbol,
+        "source_timeframe":source_tf,
+        "target_timeframes":normalized_targets,
+        "source_origin":origin,
+        "dataset":{k:resolved[k] for k in ("relative_path","sha256","bytes")},
+    }
+
 def validate_model_lab_first_consumer_arguments(args:Any,input_root:Path|None)->dict:
     cid="MODEL_LAB_FIRST_CONSUMER"
     if not isinstance(args,dict):raise CanonicalDispatchError(f"{cid} arguments must be object")
@@ -365,7 +493,7 @@ def validate_model_lab_compare_validate_arguments(args:Any,input_root:Path|None)
         "embargo_bars":embargo,"purge_bars":purge,"min_test_rows":min_test,"inputs":resolved,
     }
 
-def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None=None)->dict:
+def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None=None,receipt_dir:Path|None=None)->dict:
     exact(req,{"schema","job_id","capability_id","mmibkr","entrypoint","arguments","resources","authority","forbidden_authorities"},"request")
     if req.get("schema")!=REQUEST_SCHEMA:raise CanonicalDispatchError("unsupported request schema")
     jid=valid_id(req.get("job_id")); cid=str(req.get("capability_id") or "").strip(); cap=CAPABILITIES.get(cid)
@@ -404,6 +532,12 @@ def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None
         normalized_args=validate_autotuner_campaign_arguments(args,input_root)
     elif cid=="AUTOTUNER_PRIMARY_VALIDATION":
         normalized_args=validate_autotuner_primary_validation_arguments(args,input_root)
+    elif cid=="CANONICAL_DATA_MATERIALIZE":
+        normalized_args=validate_data_materialize_arguments(args,input_root)
+    elif cid=="FEATURE_CONTRACT_VALIDATE":
+        normalized_args=validate_feature_contract_arguments(args,input_root,receipt_dir)
+    elif cid=="STRATEGY_PREVIEW":
+        normalized_args=validate_strategy_preview_arguments(args,input_root,receipt_dir)
     elif cid=="MODEL_LAB_FIRST_CONSUMER":
         normalized_args=validate_model_lab_first_consumer_arguments(args,input_root)
     elif cid=="MODEL_LAB_COMPARE_VALIDATE":
@@ -457,6 +591,22 @@ def private_blob_identity(root:Path,path:str)->str:
     if root.resolve() not in target.parents or not target.is_file():raise CanonicalDispatchError(f"canonical dependency missing: {path}")
     return git_blob(target.read_bytes())
 
+def normalized_strategy_spec(root:Path,raw:dict)->dict:
+    fn=private_callable(root,"autotuner_strategy_bridge.py","autotuner_strategy_bridge","normalize_strategy_spec")
+    normalized=fn(raw)
+    if not isinstance(normalized,dict) or not isinstance(normalized.get("strategy_spec"),dict):
+        raise CanonicalDispatchError("canonical StrategySpec normalizer returned invalid contract")
+    digest=str(normalized.get("strategy_spec_digest") or "")
+    if not _SHA256.fullmatch(digest):raise CanonicalDispatchError("canonical StrategySpec digest is invalid")
+    spec=normalized["strategy_spec"]
+    if not str(spec.get("strategy_id") or "").strip():
+        raise CanonicalDispatchError("canonical StrategySpec strategy_id is missing")
+    if not str(spec.get("symbol") or "").strip():
+        raise CanonicalDispatchError("canonical StrategySpec symbol is missing")
+    if not str(spec.get("timeframe") or "").strip():
+        raise CanonicalDispatchError("canonical StrategySpec timeframe is missing")
+    return normalized
+
 def normalized_crw_spec(root:Path,raw:dict)->dict:
     fn=private_callable(root,"autotuner_strategy_bridge.py","autotuner_strategy_bridge","normalize_strategy_spec")
     normalized=fn(raw)
@@ -491,7 +641,55 @@ def autotuner_dependencies(root:Path)->dict[str,str]:
         "strategies/python/crw_score_multi_mode.py":private_blob_identity(root,"strategies/python/crw_score_multi_mode.py"),
     }
 
-def sanitize_crw_result(raw:dict,args:dict)->dict:
+def copy_crw_evidence_artifacts(raw:dict,root:Path,artifact_root:Path|None)->dict[str,dict]:
+    if artifact_root is None:return {}
+    rel=str(raw.get("artifact_dir") or "").strip()
+    if not rel:raise CanonicalDispatchError("canonical CRW backtest artifact_dir is missing")
+    source=(root/rel).resolve(); source_root=root.resolve()
+    if source_root not in source.parents or not source.is_dir():
+        raise CanonicalDispatchError("canonical CRW artifact directory is missing or outside private source root")
+    allowed=(
+        "trade_rows.csv",
+        "condition_event_rows.csv",
+        "simulation_trade_rows.csv",
+        "simulation_condition_event_rows.csv",
+        "dca_fill_rows.csv",
+    )
+    out={}
+    dest_root=(artifact_root/"crw_evidence").resolve();dest_root.mkdir(parents=True,exist_ok=True)
+    for name in allowed:
+        src=(source/name).resolve()
+        if source not in src.parents or not src.is_file():
+            raise CanonicalDispatchError(f"canonical CRW evidence artifact missing: {name}")
+        dest=dest_root/name
+        shutil.copyfile(src,dest)
+        desc=artifact_descriptor(dest,artifact_root)
+        try:
+            with dest.open("r",encoding="utf-8-sig",newline="") as handle:
+                count=sum(1 for _ in csv.DictReader(handle))
+        except Exception as e:
+            raise CanonicalDispatchError(f"canonical CRW evidence artifact unreadable: {name}") from e
+        out[name.removesuffix(".csv")]={**desc,"format":"csv","row_count":count}
+    return out
+
+def sanitize_symbol_support(raw:dict)->list[dict]:
+    keys=(
+        "symbol","status","bar_count","event_count","total_trades","closed_trade_count",
+        "open_trade_count","open_trade_mark_to_market","win_rate","profit_factor","gross_pnl",
+        "net_pnl","max_drawdown","exposure","entry_level","exit_level","dca_enabled",
+        "dca_tier_drawdowns_pct","dca_max_adds","dca_base_qty","dca_max_contracts",
+        "dca_trigger_mode","tv_net_pnl","simulated_net_pnl","simulated_minus_tv_net_pnl",
+    )
+    out=[]
+    for row in raw.get("symbol_rows") or []:
+        if not isinstance(row,dict):continue
+        cleaned={key:deepcopy(row.get(key)) for key in keys if key in row}
+        views=row.get("execution_views")
+        if isinstance(views,dict):cleaned["execution_views"]=deepcopy(views)
+        out.append(cleaned)
+    return out
+
+def sanitize_crw_result(raw:dict,args:dict,root:Path|None=None,artifact_root:Path|None=None)->dict:
     safety=raw.get("safety")
     expected={"broker_submit":False,"cancel":False,"replace":False,"live_unlock":False,"backtest_only":True}
     if not isinstance(safety,dict) or any(safety.get(k) is not v for k,v in expected.items()):
@@ -511,6 +709,8 @@ def sanitize_crw_result(raw:dict,args:dict)->dict:
         "simulation_condition_event_rows":raw.get("simulation_condition_event_rows") or [],
         "dca_fill_rows":raw.get("dca_fill_rows") or [],
     }
+    persisted=copy_crw_evidence_artifacts(raw,root,artifact_root) if root is not None else {}
+    persisted_artifacts=[dict(node) for node in persisted.values()]
     result={
         "contract_version":raw.get("contract_version"),
         "ok":raw.get("ok") is True,
@@ -544,14 +744,22 @@ def sanitize_crw_result(raw:dict,args:dict)->dict:
         "simulated_net_pnl":raw.get("simulated_net_pnl"),
         "simulated_minus_tv_net_pnl":raw.get("simulated_minus_tv_net_pnl"),
         "data_coverage":coverage,
+        "symbol_support":sanitize_symbol_support(raw),
         "governed_inputs":deepcopy(input_map),
         "raw_result_sha256":sha(raw),
-        "row_artifact_sha256":{name:sha(rows) for name,rows in row_sets.items()},
-        "row_artifact_counts":{name:len(rows) for name,rows in row_sets.items()},
+        "row_artifact_sha256":{
+            name:(persisted[name]["sha256"] if name in persisted else sha(rows))
+            for name,rows in row_sets.items()
+        },
+        "row_artifact_counts":{
+            name:(persisted[name]["row_count"] if name in persisted else len(rows))
+            for name,rows in row_sets.items()
+        },
+        "row_artifacts":persisted,
+        "artifacts":persisted_artifacts,
         "safety":expected,
     }
     return result
-
 def sanitize_public_tree(value:Any)->Any:
     if isinstance(value,dict):
         out={}
@@ -722,8 +930,386 @@ def execute_model_lab_compare_validate(v:dict,root:Path,input_root:Path,fn)->dic
         },
     }
 
-def execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
-    fn=load_callable(root,CAPABILITIES[v["capability_id"]])
+def preview_data_quality(row:dict)->dict:
+    fatal=[];warnings=[]
+    def num(name:str):
+        try:
+            value=row.get(name)
+            if value is None or value=="":return None
+            value=float(value)
+            if not (value==value and value not in (float("inf"),float("-inf"))):return None
+            return value
+        except Exception:return None
+    for name in ("open","high","low","close"):
+        value=num(name)
+        if value is None:fatal.append(f"{name} missing_or_non_numeric")
+        elif value<=0:fatal.append(f"{name} <= 0")
+    volume=num("volume")
+    if volume is None:warnings.append("volume missing_or_non_numeric")
+    elif volume<=0:fatal.append("volume <= 0")
+    bar_count=num("barCount")
+    if bar_count is not None and bar_count<=0:warnings.append("barCount <= 0")
+    vwap=num("VWAP")
+    if vwap is None:warnings.append("VWAP missing")
+    elif vwap<=0:warnings.append("VWAP <= 0")
+    return {"status":"blocked" if fatal else "ok","execution_safe":not fatal,"fatal_reasons":fatal,"warnings":warnings}
+
+def select_preview_row(frame:Any,policy:str,lookback:int)->tuple[dict,dict,dict]:
+    if frame is None or getattr(frame,"empty",True):raise CanonicalDispatchError("STRATEGY_PREVIEW feature artifact is empty")
+    latest=dict(frame.iloc[-1].to_dict())
+    latest_quality=preview_data_quality(latest)
+    selection={
+        "policy":policy,
+        "used_fallback_row":False,
+        "latest_feature_timestamp":latest.get("timestamp") or latest.get("ts"),
+        "selected_feature_timestamp":latest.get("timestamp") or latest.get("ts"),
+        "zero_volume_rows_skipped":0,
+        "lookback_rows":lookback,
+        "warnings":[],
+        "blockers":[],
+    }
+    if policy=="latest" or latest_quality.get("execution_safe") is True:
+        return latest,latest_quality,selection
+    fatal=[str(x) for x in latest_quality.get("fatal_reasons") or []]
+    latest_only_volume=bool(fatal) and all(x=="volume <= 0" for x in fatal)
+    if policy!="latest_execution_safe" or not latest_only_volume:
+        selection["blockers"].append("latest_row_not_execution_safe")
+        return latest,latest_quality,selection
+    skipped=0
+    rows=frame.tail(max(1,lookback)).to_dict(orient="records")
+    for candidate in reversed(rows):
+        candidate=dict(candidate or {})
+        quality=preview_data_quality(candidate)
+        if quality.get("execution_safe") is True:
+            selection.update({
+                "used_fallback_row":True,
+                "selected_feature_timestamp":candidate.get("timestamp") or candidate.get("ts"),
+                "zero_volume_rows_skipped":skipped,
+                "warnings":["latest_zero_volume_bar_skipped","selected_recent_positive_volume_feature_row"],
+                "candidate_data_quality":quality,
+            })
+            quality=dict(quality)
+            quality["status"]="ok_with_warnings"
+            quality["warnings"]=list(dict.fromkeys(list(quality.get("warnings") or [])+selection["warnings"]))
+            quality["feature_selection"]=selection
+            quality["latest_row_data_quality"]=latest_quality
+            return candidate,quality,selection
+        cfatal=[str(x) for x in quality.get("fatal_reasons") or []]
+        if cfatal and all(x=="volume <= 0" for x in cfatal):skipped+=1
+    selection["blockers"].append("no_recent_execution_safe_feature_row")
+    selection["zero_volume_rows_skipped"]=skipped
+    latest_quality=dict(latest_quality);latest_quality["feature_selection"]=selection
+    return latest,latest_quality,selection
+
+def preview_condition_rows(block:dict)->list[dict]:
+    rows=[]
+    for item in (block or {}).get("items") or []:
+        if isinstance(item,dict):
+            rows.append({
+                "id":item.get("id"),"label":item.get("label"),"left":item.get("left"),
+                "left_value":item.get("left_value"),"operator":item.get("operator"),
+                "right_param":item.get("right_param"),"right_value":item.get("right_value"),
+                "enabled":item.get("enabled",True),"passed":bool(item.get("passed")),
+            })
+    return rows
+
+def strategy_preview_dependencies(root:Path)->dict[str,str]:
+    paths=[
+        "autotuner_strategy_bridge.py","feature_contract.py","strategies/__init__.py",
+        "strategies/event_bus.py","strategy_builder_condition_contract_14th31kn.py",
+    ]
+    out={}
+    for path in paths:
+        target=(root/path).resolve()
+        if target.is_file():out[path]=private_blob_identity(root,path)
+    return out
+
+def execute_strategy_preview(v:dict,root:Path,input_root:Path|None,receipt_dir:Path|None)->dict:
+    args=v["arguments"]
+    resolved=resolve_artifact_ref(input_root,receipt_dir,args["feature_artifact"],"feature_artifact")
+    sidecar_fn=private_callable(root,"feature_contract.py","feature_contract","read_feature_artifact_sidecar")
+    sidecar=sidecar_fn(resolved["path"],verify_artifact=True)
+    if not isinstance(sidecar,dict):raise CanonicalDispatchError("STRATEGY_PREVIEW feature sidecar validation failed")
+    manifest=sidecar.get("feature_manifest")
+    if not isinstance(manifest,dict):raise CanonicalDispatchError("STRATEGY_PREVIEW feature manifest missing")
+    manifest_hash=str(sidecar.get("feature_manifest_hash") or manifest.get("manifest_hash") or "").lower()
+    semantic_hash=str(manifest.get("feature_semantic_hash") or "").lower()
+    if not _SHA256.fullmatch(manifest_hash) or not _SHA256.fullmatch(semantic_hash):
+        raise CanonicalDispatchError("STRATEGY_PREVIEW feature manifest identities are invalid")
+    if args.get("expected_feature_semantic_hash") and args["expected_feature_semantic_hash"]!=semantic_hash:
+        raise CanonicalDispatchError("STRATEGY_PREVIEW feature semantic hash mismatch")
+    normalized=normalized_strategy_spec(root,args["strategy_spec"]); spec=normalized["strategy_spec"]
+    symbol=str(spec.get("symbol") or "").strip().upper(); timeframe=str(spec.get("timeframe") or "").strip()
+    manifest_symbols=[str(x).strip().upper() for x in manifest.get("symbol_universe") or [] if str(x).strip()]
+    manifest_tfs=[str(x).strip() for x in manifest.get("target_timeframes") or [] if str(x).strip()]
+    if manifest_symbols and symbol not in manifest_symbols:
+        raise CanonicalDispatchError("STRATEGY_PREVIEW StrategySpec symbol is not present in feature manifest")
+    if manifest_tfs and timeframe not in manifest_tfs:
+        raise CanonicalDispatchError("STRATEGY_PREVIEW StrategySpec timeframe is not present in feature manifest")
+    try:pd=importlib.import_module("pandas")
+    except Exception as e:raise CanonicalDispatchError("STRATEGY_PREVIEW requires pandas runtime dependency") from e
+    frame=pd.read_csv(resolved["path"])
+    selected,quality,selection=select_preview_row(frame,args["row_policy"],args["lookback_rows"])
+    create=load_callable(root,CAPABILITIES["STRATEGY_PREVIEW"])
+    definition_fn=private_callable(root,"strategies/event_bus.py","strategies.event_bus","build_strategy_definition")
+    parameters=dict(spec.get("parameters") or {})
+    strategy_id=str(spec.get("strategy_id") or "").strip()
+    definition=definition_fn(strategy_id,{
+        **parameters,
+        "symbol":symbol,
+        "source_symbol":symbol,
+        "symbol_universe":[symbol],
+        "timeframe":timeframe,
+        "source_timeframe":timeframe,
+        "asset_type":spec.get("asset_type") or "stocks",
+        "dataset_identity":{"feature_manifest_hash":manifest_hash,"feature_semantic_hash":semantic_hash},
+    })
+    strategy_obj=create(strategy_id,config=parameters)
+    signal_name,meta=strategy_obj.evaluate(pd.DataFrame([selected]))
+    meta=meta if isinstance(meta,dict) else {}
+    if strategy_id!="crw_score_multi_mode":
+        builder_module_path=root/"strategy_builder_condition_contract_14th31kn.py"
+        if builder_module_path.is_file():
+            get_contract=private_callable(root,"strategy_builder_condition_contract_14th31kn.py","strategy_builder_condition_contract_14th31kn","builder_condition_contract_from_payload")
+            eval_contract=private_callable(root,"strategy_builder_condition_contract_14th31kn.py","strategy_builder_condition_contract_14th31kn","evaluate_builder_condition_contract")
+            contract=get_contract({"strategy_spec":spec})
+            if contract:
+                native_signal=signal_name;native_meta=dict(meta)
+                builder_eval=eval_contract(contract,feature_values=selected,context_values=args["context_values"])
+                if not isinstance(builder_eval,dict):raise CanonicalDispatchError("builder condition evaluator returned invalid contract")
+                signal_name=(builder_eval.get("signal") or "HOLD") if builder_eval.get("evaluation_ready") else "HOLD"
+                meta={
+                    **native_meta,
+                    "reason":builder_eval.get("reason_code"),
+                    "builder_condition_execution":builder_eval,
+                    "builder_condition_contract_hash":contract.get("contract_hash"),
+                    "native_registry_evaluation":{"signal":native_signal,"meta":native_meta},
+                    "builder_condition_signal_override":True,
+                }
+    conditions=meta.get("conditions") if isinstance(meta.get("conditions"),dict) else {}
+    required=list(getattr(definition,"required_indicators",[]) or [])
+    missing=[name for name in required if name not in selected]
+    builder_execution=meta.get("builder_condition_execution") if isinstance(meta.get("builder_condition_execution"),dict) else {}
+    for name in builder_execution.get("missing_indicators") or []:
+        if name not in missing:missing.append(name)
+    current_values=conditions.get("current_values") if isinstance(conditions.get("current_values"),dict) else {}
+    snapshot={}
+    for key in ("close","Z_CLOSE_20","Z_VOLUME_20","ATR","RSI","MFI","VWAP"):
+        if key in selected and selected.get(key) is not None:snapshot[key]=selected.get(key)
+    artifact_ref=dict(args["feature_artifact"])
+    return {
+        "schema":"mmibkr.strategy_preview.v1",
+        "strategy_spec_digest":normalized["strategy_spec_digest"],
+        "strategy":{
+            "strategy_id":strategy_id,
+            "version":getattr(definition,"version",None),
+            "parameters":getattr(definition,"parameters",{}) or parameters,
+            "parameter_schema":meta.get("parameter_schema") or getattr(strategy_obj,"parameter_schema",lambda:{})(),
+            "condition_spec":meta.get("condition_spec") or getattr(strategy_obj,"condition_spec",lambda:{})(),
+            "required_indicators":required,
+            "present_indicators":[name for name in required if name in selected],
+            "missing_indicators":missing,
+            "warmup_bars":getattr(definition,"warmup_bars",None),
+        },
+        "feature_artifact":artifact_ref,
+        "feature_manifest_hash":manifest_hash,
+        "feature_semantic_hash":semantic_hash,
+        "row_selection":selection,
+        "data_quality":quality,
+        "conditions":{
+            "entry_long":conditions.get("entry_long") or {},
+            "exit_long":conditions.get("exit_long") or {},
+            "entry_rows":preview_condition_rows(conditions.get("entry_long") or {}),
+            "exit_rows":preview_condition_rows(conditions.get("exit_long") or {}),
+        },
+        "builder_condition_execution":builder_execution,
+        "signal":{
+            "raw_signal":signal_name or "HOLD",
+            "reason":meta.get("reason"),
+            "indicator_snapshot":snapshot,
+        },
+        "context_values_sha256":sha(args["context_values"]),
+        "canonical_dependencies":strategy_preview_dependencies(root),
+        "safety":{
+            "research_preview_only":True,
+            "position_snapshot_used":False,
+            "risk_preview_used":False,
+            "sizing_preview_used":False,
+            "broker_preview_used":False,
+            "order_intent_emitted":False,
+            "broker_submit":False,
+            "broker_cancel":False,
+            "broker_flatten":False,
+            "runtime_activation":False,
+            "live_trading":False,
+        },
+    }
+
+def validate_feature_contract(v:dict,root:Path,input_root:Path|None,receipt_dir:Path|None)->dict:
+    args=v["arguments"]
+    resolved=resolve_artifact_ref(input_root,receipt_dir,args["feature_artifact"],"feature_artifact")
+    fn=load_callable(root,CAPABILITIES["FEATURE_CONTRACT_VALIDATE"])
+    raw=fn(resolved["path"],verify_artifact=True)
+    if not isinstance(raw,dict):raise CanonicalDispatchError("canonical feature sidecar validator returned invalid contract")
+    manifest=raw.get("feature_manifest")
+    if not isinstance(manifest,dict):raise CanonicalDispatchError("canonical feature sidecar is missing feature_manifest")
+    manifest_hash=str(raw.get("feature_manifest_hash") or manifest.get("manifest_hash") or "").lower()
+    semantic_hash=str(manifest.get("feature_semantic_hash") or "").lower()
+    if not _SHA256.fullmatch(manifest_hash):raise CanonicalDispatchError("canonical feature manifest hash is invalid")
+    if not _SHA256.fullmatch(semantic_hash):raise CanonicalDispatchError("canonical feature semantic hash is invalid")
+    if args.get("expected_manifest_hash") and args["expected_manifest_hash"]!=manifest_hash:
+        raise CanonicalDispatchError("FEATURE_CONTRACT_VALIDATE manifest hash mismatch")
+    if args.get("expected_semantic_hash") and args["expected_semantic_hash"]!=semantic_hash:
+        raise CanonicalDispatchError("FEATURE_CONTRACT_VALIDATE semantic hash mismatch")
+    features=manifest.get("features") if isinstance(manifest.get("features"),list) else []
+    feature_columns=[]
+    feature_ids=[]
+    for row in features:
+        if not isinstance(row,dict):continue
+        column=str(row.get("output_column") or "").strip()
+        identity=str(row.get("identity_hash") or "").strip()
+        if column:feature_columns.append(column)
+        if identity:feature_ids.append(identity)
+    source_identity=manifest.get("source_dataset_identity")
+    return {
+        "schema":"mmibkr.feature_contract_validation.v1",
+        "feature_artifact":dict(args["feature_artifact"]),
+        "feature_manifest_hash":manifest_hash,
+        "feature_semantic_hash":semantic_hash,
+        "contract_version":manifest.get("contract_version"),
+        "feature_contract_mode":manifest.get("feature_contract_mode"),
+        "causal":manifest.get("causal") is True,
+        "feature_count":len(features),
+        "feature_columns":feature_columns,
+        "feature_identity_hashes":feature_ids,
+        "symbol_universe":list(manifest.get("symbol_universe") or []),
+        "source_timeframes":list(manifest.get("source_timeframes") or []),
+        "target_timeframes":list(manifest.get("target_timeframes") or []),
+        "label_target_columns_excluded":list(manifest.get("label_target_columns_excluded") or []),
+        "generation_identity":manifest.get("generation_identity"),
+        "consumer_identity":manifest.get("consumer_identity"),
+        "source_dataset_identity_sha256":sha(source_identity if isinstance(source_identity,dict) else {}),
+        "canonical_dependencies":{
+            "feature_contract.py":private_blob_identity(root,"feature_contract.py"),
+        },
+        "safety":{
+            "artifact_read_only":True,
+            "broker_submit":False,
+            "broker_cancel":False,
+            "broker_flatten":False,
+            "runtime_activation":False,
+            "live_trading":False,
+        },
+    }
+
+def artifact_descriptor(path:Path,artifact_root:Path)->dict:
+    root=artifact_root.resolve(); resolved=path.resolve()
+    if root not in resolved.parents or not resolved.is_file():
+        raise CanonicalDispatchError("materialized artifact missing or outside artifact root")
+    return {
+        "relative_path":resolved.relative_to(root).as_posix(),
+        "sha256":sha_file(resolved),
+        "bytes":resolved.stat().st_size,
+    }
+
+def materialize_stock_data(v:dict,root:Path,input_root:Path|None,artifact_root:Path|None)->dict:
+    if input_root is None:raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires governed input_root")
+    if artifact_root is None:raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires receipt_dir artifact storage")
+    args=v["arguments"]; symbol=args["symbol"]; source_tf=args["source_timeframe"]
+    resolved=resolve_dataset(input_root,symbol,args["dataset"])
+    try:pd=importlib.import_module("pandas")
+    except Exception as e:raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires pandas runtime dependency") from e
+    frame=pd.read_csv(resolved["path"])
+    manager_cls=load_callable(root,CAPABILITIES["CANONICAL_DATA_MATERIALIZE"])
+    class NoBrokerIB:
+        def reqMarketDataType(self,*_args,**_kwargs):return None
+    config={
+        "DATA_OUTPUT_DIR":str(artifact_root.resolve()),
+        "TIMEFRAME":source_tf,
+        "TIMEFRAMES":list(args["target_timeframes"]),
+        "SR_ENABLED":False,
+        "HISTORICAL_DEDICATED_CLIENT":False,
+        "WRITE_AGGREGATE":1,
+        "SAVE_FEATURES_CSV":1,
+        "INCREMENTAL_FETCH":0,
+        "USE_RTH":0,
+    }
+    manager=manager_cls(config,NoBrokerIB())
+    raw=manager.ingest_external_stock_source_bars(
+        symbol,
+        source_tf,
+        frame,
+        target_timeframes=list(args["target_timeframes"]),
+        source_origin=args["source_origin"],
+    )
+    if not isinstance(raw,dict) or raw.get("ok") is not True or raw.get("broker_request_made") is not False:
+        raise CanonicalDispatchError("canonical DataManager external-source ingest safety contract rejected")
+    frames=raw.get("frames")
+    if not isinstance(frames,dict) or not frames:raise CanonicalDispatchError("canonical DataManager returned no materialized frames")
+    outputs=[]; artifacts=[]
+    for tf,node in frames.items():
+        if node is None or not hasattr(node,"__len__"):raise CanonicalDispatchError("canonical DataManager frame contract is invalid")
+        raw_path=manager._path_for("stocks",symbol,str(tf),features=False)
+        features_path=manager._path_for("stocks",symbol,str(tf),features=True)
+        sidecar=features_path.with_suffix(features_path.suffix+".manifest.json")
+        raw_desc=artifact_descriptor(raw_path,artifact_root)
+        feature_desc=artifact_descriptor(features_path,artifact_root)
+        sidecar_desc=artifact_descriptor(sidecar,artifact_root)
+        artifacts.extend([raw_desc,feature_desc,sidecar_desc])
+        first=None;last=None
+        try:
+            if len(node) and "timestamp" in node.columns:
+                first=str(node["timestamp"].iloc[0]);last=str(node["timestamp"].iloc[-1])
+        except Exception:pass
+        try:sidecar_payload=load(sidecar)
+        except Exception as e:raise CanonicalDispatchError("feature artifact sidecar is invalid") from e
+        manifest_hash=str(sidecar_payload.get("feature_manifest_hash") or "")
+        if not _SHA256.fullmatch(manifest_hash):raise CanonicalDispatchError("feature artifact sidecar manifest hash is invalid")
+        outputs.append({
+            "timeframe":str(tf),
+            "rows":int(len(node)),
+            "first_timestamp":first,
+            "latest_timestamp":last,
+            "raw_artifact":raw_desc,
+            "feature_artifact":feature_desc,
+            "feature_sidecar":sidecar_desc,
+            "feature_manifest_hash":manifest_hash,
+        })
+    aggregate_path=manager._aggregate_path("stocks",symbol)
+    aggregate=None
+    if aggregate_path.is_file():
+        aggregate=artifact_descriptor(aggregate_path,artifact_root);artifacts.append(aggregate)
+    return {
+        "schema":"mmibkr.canonical_data_materialization.v1",
+        "asset_type":"stocks",
+        "symbol":symbol,
+        "source_timeframe":source_tf,
+        "target_timeframes":[str(x) for x in frames],
+        "source_origin":args["source_origin"],
+        "source_dataset":dict(args["dataset"]),
+        "frame_count":len(outputs),
+        "frames":outputs,
+        "aggregate_artifact":aggregate,
+        "artifact_count":len(artifacts),
+        "artifacts":artifacts,
+        "broker_request_made":False,
+        "canonical_dependencies":{
+            "data_manager.py":private_blob_identity(root,"data_manager.py"),
+            "feature_contract.py":private_blob_identity(root,"feature_contract.py"),
+        },
+        "safety":{
+            "market_data_acquisition":False,
+            "historical_data_requests":False,
+            "broker_submit":False,
+            "broker_cancel":False,
+            "broker_flatten":False,
+            "runtime_activation":False,
+            "live_trading":False,
+        },
+    }
+
+def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None,receipt_dir:Path|None=None)->dict:
+    fn=None if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","FEATURE_CONTRACT_VALIDATE","STRATEGY_PREVIEW"} else load_callable(root,CAPABILITIES[v["capability_id"]])
     if v["capability_id"]=="STRATEGY_SPEC_VALIDATE":
         raw=fn(v["arguments"]["strategy_spec"])
         if not isinstance(raw,dict) or not isinstance(raw.get("strategy_spec"),dict) or not _SHA256.fullmatch(str(raw.get("strategy_spec_digest") or "")):
@@ -737,7 +1323,7 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
         payload=deepcopy(v["arguments"]["payload"]);payload["_verified_source_paths"]=verified
         raw=fn(payload,input_root.resolve())
         if not isinstance(raw,dict):raise CanonicalDispatchError("canonical CRW backtest returned invalid contract")
-        result=sanitize_crw_result(raw,v["arguments"])
+        result=sanitize_crw_result(raw,v["arguments"],root=root,artifact_root=artifact_root)
     elif v["capability_id"]=="AUTOTUNER_CAMPAIGN":
         if input_root is None:raise CanonicalDispatchError("AUTOTUNER_CAMPAIGN requires governed input_root")
         args=v["arguments"]; descriptor=resolve_dataset(input_root,"autotuner",args["dataset"])
@@ -796,6 +1382,12 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
     elif v["capability_id"]=="MODEL_LAB_COMPARE_VALIDATE":
         if input_root is None:raise CanonicalDispatchError("MODEL_LAB_COMPARE_VALIDATE requires governed input_root")
         result=execute_model_lab_compare_validate(v,root,input_root,fn)
+    elif v["capability_id"]=="CANONICAL_DATA_MATERIALIZE":
+        result=materialize_stock_data(v,root,input_root,artifact_root)
+    elif v["capability_id"]=="FEATURE_CONTRACT_VALIDATE":
+        result=validate_feature_contract(v,root,input_root,receipt_dir)
+    elif v["capability_id"]=="STRATEGY_PREVIEW":
+        result=execute_strategy_preview(v,root,input_root,receipt_dir)
     elif v["capability_id"]=="AUTOTUNER_PARAMETER_CONSUMPTION":
         normalized,filtered,consumption=autotuner_gate(root,v["arguments"])
         result={
@@ -825,16 +1417,15 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
     fp=sha(v)
     return {"schema":RECEIPT_SCHEMA,"job_id":v["job_id"],"job_fingerprint":fp,"capability_id":v["capability_id"],"status":"completed","authority":{"research_only":True,**FORBIDDEN_AUTHORITY_ASSERTIONS},"mmibkr":v["mmibkr"],"entrypoint":v["entrypoint"],"resources":v["resources"],"result_sha256":hashlib.sha256(rb).hexdigest(),"result":result}
 
-def safe_execute_valid(v:dict,root:Path,input_root:Path|None=None)->dict:
+def safe_execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|None=None,receipt_dir:Path|None=None)->dict:
     try:
-        return execute_valid(v,root,input_root=input_root)
+        return execute_valid(v,root,input_root=input_root,artifact_root=artifact_root,receipt_dir=receipt_dir)
     except CanonicalDispatchError:
         raise
     except Exception as e:
         raise CanonicalDispatchError(
             f"canonical {v.get('capability_id') or 'workload'} execution failed: {type(e).__name__}"
         ) from e
-
 def atomic(path:Path,v:dict):
     path.parent.mkdir(parents=True,exist_ok=True); tmp=path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp"); tmp.write_bytes(cbytes(v)+b"\n"); os.replace(tmp,path)
 
@@ -843,6 +1434,24 @@ def cached(path:Path,fp:str):
     r=load(path)
     if r.get("schema")!=RECEIPT_SCHEMA or r.get("job_fingerprint")!=fp or r.get("status")!="completed":raise CanonicalDispatchError("cached receipt identity/status mismatch")
     return r
+
+def validate_cached_artifacts(receipt:dict,receipt_dir:Path,fp:str)->None:
+    result=receipt.get("result") or {}; artifacts=result.get("artifacts")
+    if receipt.get("capability_id")=="CANONICAL_DATA_MATERIALIZE" and (not isinstance(artifacts,list) or not artifacts):
+        raise CanonicalDispatchError("cached materialization receipt has no artifacts")
+    if not artifacts:return
+    if not isinstance(artifacts,list):raise CanonicalDispatchError("cached artifact descriptor list invalid")
+    root=(receipt_dir/"artifacts"/fp).resolve()
+    for node in artifacts:
+        if not isinstance(node,dict):raise CanonicalDispatchError("cached materialization artifact descriptor invalid")
+        rel=Path(str(node.get("relative_path") or ""))
+        if rel.is_absolute() or not rel.parts or ".." in rel.parts:
+            raise CanonicalDispatchError("cached materialization artifact path invalid")
+        path=(root/rel).resolve()
+        if root not in path.parents or not path.is_file():
+            raise CanonicalDispatchError("cached materialization artifact missing")
+        if path.stat().st_size!=int(node.get("bytes") or -1) or sha_file(path)!=str(node.get("sha256") or ""):
+            raise CanonicalDispatchError("cached materialization artifact hash mismatch")
 
 def claim_owned(path:Path,token:str,fp:str)->bool:
     try:
@@ -908,24 +1517,37 @@ def start_claim_heartbeat(path:Path,token:str,fp:str)->tuple[threading.Event,thr
     return stop,lost,thread
 
 def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:Path|None=None,receipt_dir:Path|None=None)->dict:
-    v=validate_request(req,source_root,source_receipt,input_root=input_root); fp=sha(v)
-    if receipt_dir is None:return {"receipt":safe_execute_valid(v,source_root,input_root=input_root),"cache_hit":False}
-    rd=receipt_dir.resolve(); rp=rd/"receipts"/f"{fp}.json"; hit=cached(rp,fp)
-    if hit:return {"receipt":hit,"cache_hit":True}
+    rd=receipt_dir.resolve() if receipt_dir is not None else None
+    v=validate_request(req,source_root,source_receipt,input_root=input_root,receipt_dir=rd); fp=sha(v)
+    if rd is None:
+        if v["capability_id"]=="CANONICAL_DATA_MATERIALIZE":
+            raise CanonicalDispatchError("CANONICAL_DATA_MATERIALIZE requires receipt_dir artifact storage")
+        return {"receipt":safe_execute_valid(v,source_root,input_root=input_root,receipt_dir=None),"cache_hit":False}
+    rp=rd/"receipts"/f"{fp}.json"; hit=cached(rp,fp)
+    if hit:
+        validate_cached_artifacts(hit,rd,fp)
+        return {"receipt":hit,"cache_hit":True}
     cp=rd/"claims"/f"{fp}.claim"
     token,hit=acquire_claim(cp,v,fp,rp)
-    if hit:return {"receipt":hit,"cache_hit":True}
+    if hit:
+        validate_cached_artifacts(hit,rd,fp)
+        return {"receipt":hit,"cache_hit":True}
     stop,lost,thread=start_claim_heartbeat(cp,token,fp)
     published=False
+    artifact_root=(rd/"artifacts"/fp).resolve() if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","CRW_BACKTEST"} else None
+    if artifact_root is not None:
+        shutil.rmtree(artifact_root,ignore_errors=True);artifact_root.mkdir(parents=True,exist_ok=True)
     try:
-        r=safe_execute_valid(v,source_root,input_root=input_root)
+        r=safe_execute_valid(v,source_root,input_root=input_root,artifact_root=artifact_root,receipt_dir=rd)
         if lost.is_set() or not claim_owned(cp,token,fp):
             raise CanonicalDispatchError("claim lease ownership was lost; canonical result discarded")
         atomic(rp,r);published=True;return {"receipt":r,"cache_hit":False}
+    except Exception:
+        if artifact_root is not None and not published:shutil.rmtree(artifact_root,ignore_errors=True)
+        raise
     finally:
         stop.set();thread.join(timeout=1)
         if claim_owned(cp,token,fp):cp.unlink(missing_ok=True)
-
 def validate_plan(plan:dict)->dict:
     exact(plan,{"schema","plan_id","max_parallel","jobs"},"plan")
     if plan.get("schema")!=PLAN_SCHEMA:raise CanonicalDispatchError("unsupported plan schema")
