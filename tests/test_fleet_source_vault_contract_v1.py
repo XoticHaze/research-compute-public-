@@ -477,13 +477,22 @@ class FleetSourceVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            "PAPER_ACCOUNT_HYGIENE_COORDINATOR_RUNTIME_SOURCE",
+            "PAPER_ACCOUNT_HYGIENE_COORDINATOR_OWNERSHIP_SOURCE",
             text,
         )
         self.assertIn(
             "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
             text,
         )
+        self.assertIn(
+            "PAPER_ACCOUNT_HYGIENE_COORDINATOR_RUNTIME_SOURCE",
+            text,
+        )
+        self.assertIn(
+            "07824b4ed9354a8519d4ce595735f7c1a610fdc2",
+            text,
+        )
+        self.assertIn("paper_account_hygiene_source_rejected", text)
         self.assertIn("PAPER_ACCOUNT_HYGIENE_COORDINATOR_EXPIRES_AT", text)
         self.assertIn("paperAccountHygieneCoordinatorPathAllowed", text)
         self.assertIn("paper_account_hygiene_runtime_source_rejected", text)

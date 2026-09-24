@@ -57,8 +57,10 @@ const PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY = {
 };
 const PAPER_ACCOUNT_HYGIENE_COORDINATOR_PRIVATE_SOURCE =
   '2e95486996f62bf2aafd22a2496fa1eff76e0b8c';
-const PAPER_ACCOUNT_HYGIENE_COORDINATOR_RUNTIME_SOURCE =
+const PAPER_ACCOUNT_HYGIENE_COORDINATOR_OWNERSHIP_SOURCE =
   '35e6b44e5c2618f780a84c1c204fe14c76bdf0e5';
+const PAPER_ACCOUNT_HYGIENE_COORDINATOR_RUNTIME_SOURCE =
+  '07824b4ed9354a8519d4ce595735f7c1a610fdc2';
 const PAPER_ACCOUNT_HYGIENE_COORDINATOR_EXPIRES_AT =
   Date.parse('2026-09-24T18:00:00Z');
 
@@ -962,9 +964,12 @@ export class SourceExchange {
     const requestIdentity = this._producerIdentity(request);
     if (
       matchesIdentity(requestIdentity, PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY)
-      && sourceSha !== PAPER_ACCOUNT_HYGIENE_COORDINATOR_RUNTIME_SOURCE
+      && ![
+        PAPER_ACCOUNT_HYGIENE_COORDINATOR_OWNERSHIP_SOURCE,
+        PAPER_ACCOUNT_HYGIENE_COORDINATOR_RUNTIME_SOURCE,
+      ].includes(sourceSha)
     ) {
-      throw new Error('paper_account_hygiene_runtime_source_rejected');
+      throw new Error('paper_account_hygiene_source_rejected');
     }
     const approval = await this._resolveVaultSnapshotApproval({
       sourceSha,

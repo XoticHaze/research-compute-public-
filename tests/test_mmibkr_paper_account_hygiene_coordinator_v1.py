@@ -25,6 +25,8 @@ class PaperAccountHygieneCoordinatorTests(unittest.TestCase):
             "- '.github/workflows/mmibkr-paper-account-hygiene-coordinator-r1.yml'\n  push:",
             text,
         )
+        self.assertIn("mmibkr-paper-account-hygiene-contract-{0}", text)
+        self.assertIn("'mmibkr-paper-account-hygiene-coordinator-r1'", text)
 
     def test_coordinator_binds_exact_validated_producer_and_ownership_runtime_source(self):
         text = self.text()
@@ -38,17 +40,26 @@ class PaperAccountHygieneCoordinatorTests(unittest.TestCase):
         )
         self.assertIn("PRODUCER_ARCHIVE_BYTES: '66378678'", text)
         self.assertIn(
-            "RUNTIME_SOURCE_SHA: 35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
+            "RUNTIME_SOURCE_SHA: 07824b4ed9354a8519d4ce595735f7c1a610fdc2",
             text,
         )
         self.assertIn("scripts/mmibkr_source_vault_consumer_v1.py", text)
         self.assertIn("fleet_authority_exact_sha_encrypted_snapshot_vault", text)
+        self.assertIn("RUNTIME_SOURCE_SHA: 07824b4ed9354a8519d4ce595735f7c1a610fdc2", text)
+        self.assertIn("MMIBKR_HYGIENE_CANONICAL_ROUTE_READY=", text)
+        self.assertIn("'canonical_route_ready': preflight.get('canonical_route_ready')", text)
+        self.assertIn("MMIBKR_HYGIENE_CANONICAL_ROUTE_READY=", text)
 
     def test_fresh_operator_snapshot_is_required_and_private(self):
         text = self.text()
         self.assertIn("/v1/operator-snapshot-read", text)
         self.assertIn("audience=mmibkr-operator-console", text)
-        self.assertIn("operator snapshot runtime source mismatch", text)
+        self.assertIn("operator snapshot runtime source invalid", text)
+        self.assertIn("HYGIENE_OWNERSHIP_SOURCE_SHA=", text)
+        self.assertIn("Materialize prior ownership source for maintenance parity proof", text)
+        self.assertIn("--previous-source-root", text)
+        self.assertIn("--current-source-root", text)
+        self.assertIn("selected_runtime_authority_exact_match", text)
         self.assertIn("operator snapshot contains open broker orders", text)
         self.assertIn("private_snapshot_published': False", text)
         self.assertIn("private_source_published': False", text)
