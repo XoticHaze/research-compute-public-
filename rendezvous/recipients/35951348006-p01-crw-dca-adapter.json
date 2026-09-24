@@ -1,0 +1,1 @@
+{"authority": "research_only", "harness": "p01_crw_dca_adapter_v1", "recipient_b64": "vHMhywwOMMCHY7bsJ0LfvE5alILEPhf1CRwwbA+SMlE=", "recipient_key_id": "sha256:67833fce5053c453245bac9cad8764b5bc1d2d6168009445f3443d488050c5e3", "run_id": "35951348006", "schema": "p01-crw-dca-adapter-recipient-v1", "transport_schema": "p01-crw-dca-ephemeral-x25519-v1"}
