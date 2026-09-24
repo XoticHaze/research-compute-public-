@@ -97,6 +97,19 @@ def test_allowlist_accepts_exact_g05_g07_recovery_chain_only():
         validated_modules("tests.test_strategy_health_preview_binding")
 
 
+def test_allowlist_accepts_exact_g05b_futures_materialization_only():
+    assert validated_modules(
+        "tests.test_materialize_admitted_futures_source_canonical "
+        "tests.test_publish_canonical_feature_sidecar"
+    ) == [
+        "tests.test_materialize_admitted_futures_source_canonical",
+        "tests.test_publish_canonical_feature_sidecar",
+    ]
+
+    with pytest.raises(ValueError, match="test_module_not_allowlisted"):
+        validated_modules("tests.test_futures_unapproved_materializer")
+
+
 def test_allowlist_accepts_exact_news_research_regressions_only():
     assert validated_modules(
         "tests.test_news_publication_time_integrity_20260902 "
