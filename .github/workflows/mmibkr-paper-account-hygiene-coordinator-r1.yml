@@ -44,7 +44,7 @@ env:
   PRODUCER_SOURCE_SHA: 2e95486996f62bf2aafd22a2496fa1eff76e0b8c
   PRODUCER_ARCHIVE_SHA256: f1d086db063877d4d800f13d41a08f4da95d93d784a8c31339f47dc07e95987d
   PRODUCER_ARCHIVE_BYTES: '66378678'
-  RUNTIME_SOURCE_SHA: 35e6b44e5c2618f780a84c1c204fe14c76bdf0e5
+  RUNTIME_SOURCE_SHA: 07824b4ed9354a8519d4ce595735f7c1a610fdc2
   FIRE_PATH: rendezvous/fire/mmibkr-paper-account-hygiene-coordinator-r1.json
   OPERATOR_ACK: MMIBKR_PAPER_ACCOUNT_HYGIENE_ACK_V1
   ENABLE_LIVE_TRADING: '0'
@@ -526,6 +526,8 @@ jobs:
               'account_position_count': ownership.get('account_position_count'),
               'broker_truth_match': preflight.get('broker_truth_match'),
               'open_orders_clean': preflight.get('open_orders_clean'),
+              'canonical_route_ready': preflight.get('canonical_route_ready'),
+              # Compatibility alias retained for older readers; this no longer means RTH-only.
               'regular_session_ready': preflight.get('regular_session_ready'),
               'preflight_problem_classes': sorted(classes),
               'execution_called': bool(execution.get('called')),
@@ -547,7 +549,7 @@ jobs:
           print('MMIBKR_HYGIENE_STATUS=' + str(sanitized_node['status']))
           print('MMIBKR_HYGIENE_BROKER_TRUTH_MATCH=' + str(bool(sanitized_node['broker_truth_match'])).lower())
           print('MMIBKR_HYGIENE_OPEN_ORDERS_CLEAN=' + str(bool(sanitized_node['open_orders_clean'])).lower())
-          print('MMIBKR_HYGIENE_REGULAR_SESSION_READY=' + str(bool(sanitized_node['regular_session_ready'])).lower())
+          print('MMIBKR_HYGIENE_CANONICAL_ROUTE_READY=' + str(bool(sanitized_node['canonical_route_ready'])).lower())
           print('MMIBKR_HYGIENE_EXECUTION_CALLED=' + str(bool(sanitized_node['execution_called'])).lower())
           print('MMIBKR_HYGIENE_LIVE_EXECUTION_ALLOWED=0')
           PY
