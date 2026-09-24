@@ -35,7 +35,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: mmibkr-paper-account-hygiene-coordinator-r1
+  group: ${{ github.event_name == 'pull_request' && format('mmibkr-paper-account-hygiene-contract-{0}', github.event.pull_request.number) || 'mmibkr-paper-account-hygiene-coordinator-r1' }}
   cancel-in-progress: false
 
 env:
