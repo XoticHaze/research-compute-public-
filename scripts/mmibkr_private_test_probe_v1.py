@@ -31,6 +31,7 @@ SAFE_EXACT = {
     "tests.test_data_manager_indicator_context_contract_14th31jq",
     "tests.test_data_manager_registry_authority_14th31lm",
     "tests.test_publish_canonical_feature_sidecar",
+    "tests.test_materialize_admitted_futures_source_canonical",
     "tests.test_crw_tradingview_dual_execution_replay_14th31js",
     "tests.test_builder_feature_rhs_comparison_14th31ky",
     "tests.test_crw_backtest_futures_timestamp_14th31kf",
