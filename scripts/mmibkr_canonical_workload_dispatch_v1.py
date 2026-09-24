@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from datetime import datetime, timezone
 import csv
-import hashlib, importlib, json, os, re, secrets, shutil, sys, tempfile, threading, time
+import hashlib, importlib, json, math, os, re, secrets, shutil, sys, tempfile, threading, time
 from pathlib import Path
 from typing import Any
 
@@ -91,6 +91,11 @@ CAPABILITIES={
         "path":"options_scanner.py",
         "module":"options_scanner",
         "callable":"OptionsScanner",
+    },
+    "OPTIONS_FEATURE_MATERIALIZE":{
+        "path":"options_snapshot_features.py",
+        "module":"options_snapshot_features",
+        "callable":"materialize_options_feature_artifact",
     },
     "NEWS_FEATURE_SIDECAR_BUILD":{
         "path":"scripts/operator/news_feature_sidecar_probe_14ni.py",
@@ -730,6 +735,38 @@ def validate_options_snapshot_arguments(args:Any,input_root:Path|None)->dict:
 
 _NEWS_RUN_ID_RE=re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
+def validate_options_feature_materialize_arguments(args:Any,input_root:Path|None,receipt_dir:Path|None)->dict:
+    cid="OPTIONS_FEATURE_MATERIALIZE"
+    if not isinstance(args,dict):raise CanonicalDispatchError(f"{cid} arguments must be object")
+    exact(args,{"history","target_bars","symbol","target_timeframe","max_snapshot_age_seconds","risk_free_rate"},cid+" arguments")
+    history=resolve_artifact_ref(input_root,receipt_dir,args.get("history"),cid+" history")
+    bars=resolve_artifact_ref(input_root,receipt_dir,args.get("target_bars"),cid+" target_bars")
+    symbol=str(args.get("symbol") or "").strip().upper()
+    if not _SYMBOL.fullmatch(symbol):raise CanonicalDispatchError(f"{cid} symbol is invalid")
+    timeframe=str(args.get("target_timeframe") or "").strip()
+    if not timeframe or len(timeframe)>32 or not re.fullmatch(r"[A-Za-z0-9]+",timeframe):
+        raise CanonicalDispatchError(f"{cid} target_timeframe is invalid")
+    try:max_age=int(args.get("max_snapshot_age_seconds"))
+    except Exception as e:raise CanonicalDispatchError(f"{cid} max_snapshot_age_seconds must be integer") from e
+    if max_age<=0:raise CanonicalDispatchError(f"{cid} max_snapshot_age_seconds must be positive")
+    try:risk_free=float(args.get("risk_free_rate"))
+    except Exception as e:raise CanonicalDispatchError(f"{cid} risk_free_rate must be numeric") from e
+    if not math.isfinite(risk_free):raise CanonicalDispatchError(f"{cid} risk_free_rate must be finite")
+    if not -0.10<=risk_free<=0.50:raise CanonicalDispatchError(f"{cid} risk_free_rate must be within -0.10..0.50")
+    def public_ref(node:dict)->dict:
+        out={k:node[k] for k in ("scope","relative_path","sha256","bytes")}
+        if node.get("job_fingerprint") is not None:out["job_fingerprint"]=node["job_fingerprint"]
+        return out
+    return {
+        "history":public_ref(history),
+        "target_bars":public_ref(bars),
+        "symbol":symbol,
+        "target_timeframe":timeframe,
+        "max_snapshot_age_seconds":max_age,
+        "risk_free_rate":risk_free,
+    }
+
+
 def validate_news_feature_sidecar_arguments(args:Any,input_root:Path|None,receipt_dir:Path|None)->dict:
     if not isinstance(args,dict):raise CanonicalDispatchError("NEWS_FEATURE_SIDECAR_BUILD arguments must be object")
     exact(args,{"articles","source_run_id","feature_asof_utc","feature_window_hours","max_article_rows"},"NEWS_FEATURE_SIDECAR_BUILD arguments")
@@ -846,6 +883,8 @@ def validate_request(req:dict,root:Path,source_receipt:dict,input_root:Path|None
         normalized_args=validate_news_replay_arguments(args,input_root)
     elif cid=="OPTIONS_SNAPSHOT_ANALYZE":
         normalized_args=validate_options_snapshot_arguments(args,input_root)
+    elif cid=="OPTIONS_FEATURE_MATERIALIZE":
+        normalized_args=validate_options_feature_materialize_arguments(args,input_root,receipt_dir)
     elif cid=="NEWS_FEATURE_SIDECAR_BUILD":
         normalized_args=validate_news_feature_sidecar_arguments(args,input_root,receipt_dir)
     elif cid=="NEWS_FEATURE_JOIN_AUDIT":
@@ -1845,6 +1884,145 @@ def execute_options_snapshot(v:dict,root:Path,input_root:Path|None,artifact_root
     public["canonical_dependencies"]=options_snapshot_dependencies(root)
     return public
 
+def options_feature_materialize_dependencies(root:Path)->dict[str,str]:
+    return {
+        "options_snapshot_features.py":private_blob_identity(root,"options_snapshot_features.py"),
+        "options_scanner.py":private_blob_identity(root,"options_scanner.py"),
+        "feature_contract.py":private_blob_identity(root,"feature_contract.py"),
+        "scripts/operator/publish_canonical_feature_sidecar.py":private_blob_identity(root,"scripts/operator/publish_canonical_feature_sidecar.py"),
+    }
+
+
+def execute_options_feature_materialize(v:dict,root:Path,input_root:Path|None,receipt_dir:Path|None,artifact_root:Path|None,fn:Any)->dict:
+    cid="OPTIONS_FEATURE_MATERIALIZE"
+    if receipt_dir is None or artifact_root is None:
+        raise CanonicalDispatchError(f"{cid} requires receipt_dir artifact storage")
+    args=v["arguments"]
+    history=resolve_artifact_ref(input_root,receipt_dir,args["history"],cid+" history")
+    bars=resolve_artifact_ref(input_root,receipt_dir,args["target_bars"],cid+" target_bars")
+    evidence_root=(artifact_root/"options_features").resolve()
+    evidence_root.mkdir(parents=True,exist_ok=True)
+    feature_path=evidence_root/f"{args['target_timeframe']}.features.csv"
+    manifest_path=evidence_root/"feature_manifest.json"
+    try:
+        raw=fn(
+            history["path"],
+            bars["path"],
+            feature_path,
+            manifest_path,
+            symbol=args["symbol"],
+            target_timeframe=args["target_timeframe"],
+            max_snapshot_age_seconds=args["max_snapshot_age_seconds"],
+            risk_free_rate=args["risk_free_rate"],
+        )
+    except (ValueError,FileNotFoundError) as e:
+        raise CanonicalDispatchError(f"{cid} canonical owner rejected request: {e}") from e
+    if not isinstance(raw,dict) or raw.get("schema")!="mm.options_snapshot_bar_feature_materialization.v1":
+        raise CanonicalDispatchError(f"{cid} canonical owner returned invalid contract")
+    safety=raw.get("safety")
+    expected={
+        "provider_acquisition":False,
+        "bar_resample":False,
+        "target_or_label_materialization":False,
+        "forward_fill_beyond_max_age":False,
+        "strategy_spec_write":False,
+        "runtime_activation":False,
+        "promotion_mutation":False,
+        "broker_submit":False,
+        "live_trading":False,
+    }
+    if not isinstance(safety,dict) or any(safety.get(key) is not value for key,value in expected.items()):
+        raise CanonicalDispatchError(f"{cid} canonical safety contract rejected")
+    feature_node=raw.get("feature_artifact")
+    manifest_node=raw.get("feature_manifest")
+    if not isinstance(feature_node,dict) or not isinstance(manifest_node,dict):
+        raise CanonicalDispatchError(f"{cid} canonical artifact contract missing")
+    if str(feature_node.get("path") or "")!=str(feature_path) or str(manifest_node.get("path") or "")!=str(manifest_path):
+        raise CanonicalDispatchError(f"{cid} canonical artifact path drift")
+    if not feature_path.is_file() or not manifest_path.is_file():
+        raise CanonicalDispatchError(f"{cid} canonical artifact missing")
+    actual_feature_sha=sha_file(feature_path)
+    if str(feature_node.get("sha256") or "").lower()!=actual_feature_sha:
+        raise CanonicalDispatchError(f"{cid} canonical feature artifact hash drift")
+    manifest_hash=str(manifest_node.get("manifest_hash") or "").lower()
+    semantic_hash=str(manifest_node.get("feature_semantic_hash") or "").lower()
+    if not _SHA256.fullmatch(manifest_hash) or not _SHA256.fullmatch(semantic_hash):
+        raise CanonicalDispatchError(f"{cid} canonical feature manifest identity invalid")
+    publish_fn=private_callable(
+        root,
+        "scripts/operator/publish_canonical_feature_sidecar.py",
+        "scripts.operator.publish_canonical_feature_sidecar",
+        "publish_sidecar",
+    )
+    try:
+        publication=publish_fn(
+            feature_path,
+            manifest_path,
+            expected_feature_sha256=actual_feature_sha,
+            expected_manifest_hash=manifest_hash,
+        )
+    except (ValueError,FileNotFoundError) as e:
+        raise CanonicalDispatchError(f"{cid} sidecar publication rejected: {e}") from e
+    if not isinstance(publication,dict) or publication.get("status")!="PASS":
+        raise CanonicalDispatchError(f"{cid} sidecar publication contract rejected")
+    publication_safety=publication.get("safety")
+    publication_expected={
+        "feature_recompute":False,
+        "downloader":False,
+        "resampler":False,
+        "feature_value_mutation":False,
+    }
+    if not isinstance(publication_safety,dict) or any(publication_safety.get(key) is not value for key,value in publication_expected.items()):
+        raise CanonicalDispatchError(f"{cid} sidecar publication safety rejected")
+    sidecar_path=feature_path.with_name(feature_path.name+".manifest.json")
+    if not sidecar_path.is_file():
+        raise CanonicalDispatchError(f"{cid} published sidecar missing")
+    artifacts=[
+        artifact_descriptor(feature_path,artifact_root),
+        artifact_descriptor(manifest_path,artifact_root),
+        artifact_descriptor(sidecar_path,artifact_root),
+    ]
+    def source_ref(node:dict)->dict:
+        out={k:node[k] for k in ("scope","relative_path","sha256","bytes")}
+        if node.get("job_fingerprint") is not None:out["job_fingerprint"]=node["job_fingerprint"]
+        return out
+    return {
+        "schema":"mmibkr.options_feature_materialization.v1",
+        "symbol":args["symbol"],
+        "target_timeframe":args["target_timeframe"],
+        "max_snapshot_age_seconds":args["max_snapshot_age_seconds"],
+        "risk_free_rate":args["risk_free_rate"],
+        "source_history":source_ref(history),
+        "source_target_bars":source_ref(bars),
+        "history_observations_for_symbol":raw.get("history_observations_for_symbol"),
+        "target_bar_rows":raw.get("target_bar_rows"),
+        "fresh_aligned_bar_rows":raw.get("fresh_aligned_bar_rows"),
+        "unavailable_or_stale_bar_rows":raw.get("unavailable_or_stale_bar_rows"),
+        "first_observation_utc":raw.get("first_observation_utc"),
+        "last_observation_utc":raw.get("last_observation_utc"),
+        "first_target_bar_utc":raw.get("first_target_bar_utc"),
+        "last_target_bar_utc":raw.get("last_target_bar_utc"),
+        "feature_manifest_hash":manifest_hash,
+        "feature_semantic_hash":semantic_hash,
+        "feature_count":manifest_node.get("feature_count"),
+        "artifacts":artifacts,
+        "artifact_map":{
+            "features":artifacts[0],
+            "manifest":artifacts[1],
+            "sidecar":artifacts[2],
+        },
+        "canonical_dependencies":options_feature_materialize_dependencies(root),
+        "safety":{
+            "research_only":True,
+            "provider_acquisition":False,
+            "bar_resample":False,
+            "target_or_label_materialization":False,
+            "forward_fill_beyond_max_age":False,
+            **FORBIDDEN_AUTHORITY_ASSERTIONS,
+        },
+    }
+
+
 def news_feature_sidecar_dependencies(root:Path)->dict[str,str]:
     return {
         "scripts/operator/news_theme_weight_review_probe_14nh.py":private_blob_identity(root,"scripts/operator/news_theme_weight_review_probe_14nh.py"),
@@ -2760,6 +2938,8 @@ def execute_valid(v:dict,root:Path,input_root:Path|None=None,artifact_root:Path|
         result=execute_news_replay(v,root,input_root,artifact_root,fn)
     elif v["capability_id"]=="OPTIONS_SNAPSHOT_ANALYZE":
         result=execute_options_snapshot(v,root,input_root,artifact_root,fn)
+    elif v["capability_id"]=="OPTIONS_FEATURE_MATERIALIZE":
+        result=execute_options_feature_materialize(v,root,input_root,receipt_dir,artifact_root,fn)
     elif v["capability_id"]=="NEWS_FEATURE_SIDECAR_BUILD":
         result=execute_news_feature_sidecar(v,root,input_root,receipt_dir,artifact_root,fn)
     elif v["capability_id"]=="NEWS_FEATURE_JOIN_AUDIT":
@@ -2904,7 +3084,7 @@ def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:P
     rd=receipt_dir.resolve() if receipt_dir is not None else None
     v=validate_request(req,source_root,source_receipt,input_root=input_root,receipt_dir=rd); fp=sha(v)
     if rd is None:
-        if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","REGISTRY_BACKTEST","SURVIVOR_EVIDENCE_VERIFY","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","NEWS_FEATURE_SIDECAR_BUILD","NEWS_FEATURE_JOIN_AUDIT"}:
+        if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","REGISTRY_BACKTEST","SURVIVOR_EVIDENCE_VERIFY","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","OPTIONS_FEATURE_MATERIALIZE","NEWS_FEATURE_SIDECAR_BUILD","NEWS_FEATURE_JOIN_AUDIT"}:
             raise CanonicalDispatchError(f"{v['capability_id']} requires receipt_dir artifact storage")
         return {"receipt":safe_execute_valid(v,source_root,input_root=input_root,receipt_dir=None),"cache_hit":False}
     rp=rd/"receipts"/f"{fp}.json"; hit=cached(rp,fp)
@@ -2918,7 +3098,7 @@ def execute_request(req:dict,*,source_root:Path,source_receipt:dict,input_root:P
         return {"receipt":hit,"cache_hit":True}
     stop,lost,thread=start_claim_heartbeat(cp,token,fp)
     published=False
-    artifact_root=(rd/"artifacts"/fp).resolve() if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","CRW_BACKTEST","REGISTRY_BACKTEST","SURVIVOR_EVIDENCE_VERIFY","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","NEWS_FEATURE_SIDECAR_BUILD","NEWS_FEATURE_JOIN_AUDIT"} else None
+    artifact_root=(rd/"artifacts"/fp).resolve() if v["capability_id"] in {"CANONICAL_DATA_MATERIALIZE","CRW_BACKTEST","REGISTRY_BACKTEST","SURVIVOR_EVIDENCE_VERIFY","NEWS_REPLAY_ANALYZE","OPTIONS_SNAPSHOT_ANALYZE","OPTIONS_FEATURE_MATERIALIZE","NEWS_FEATURE_SIDECAR_BUILD","NEWS_FEATURE_JOIN_AUDIT"} else None
     if artifact_root is not None:
         shutil.rmtree(artifact_root,ignore_errors=True);artifact_root.mkdir(parents=True,exist_ok=True)
     try:
