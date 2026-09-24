@@ -1,11 +1,11 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "48c4119bed5cc572e1078386070cb2263032f3d8",
+  "source_ref": "ebca3cece7a3faa943405f18f598818164e3d020",
   "test_modules": [
     "tests.test_strategy_backtest_registry_dispatch"
   ],
   "requested_by": "assistant-fleet-parity-current-source",
-  "purpose": "materialize exact current MM-IBKR source for encrypted fleet parity handoff",
+  "purpose": "materialize exact latest MM-IBKR source for encrypted fleet parity handoff",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -13,7 +13,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "fleet-parity-48c4119b-20260924",
+  "request_nonce": "fleet-parity-ebca3cec-20260924",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "48c4119bed5cc572e1078386070cb2263032f3d8"
+  "current_private_reference": "ebca3cece7a3faa943405f18f598818164e3d020"
 }
