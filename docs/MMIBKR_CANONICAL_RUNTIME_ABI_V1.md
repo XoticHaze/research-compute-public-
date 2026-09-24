@@ -28,12 +28,19 @@ The portable ABI currently carries these research-only bindings:
 | `CRW_BACKTEST` | `scripts.operator.crw_backtest_summary_13z.run_backtest` | execute canonical CRW replay over exact governed datasets |
 | `AUTOTUNER_PARAMETER_CONSUMPTION` | `autotuner_parameter_consumption.parameter_schema_for_tuning` | derive the searchable CRW parameter surface from the pinned private strategy schema |
 | `AUTOTUNER_CANDIDATE_GENERATE` | `autotuner_strategy_bridge.candidate_mutations` | generate a bounded mutation set only after the canonical consumption gate |
+| `CANONICAL_DATA_MATERIALIZE` | `data_manager.DataManager.ingest_external_stock_source_bars` | normalize governed stock bars into canonical raw/features/sidecars without provider acquisition |
+| `FEATURE_CONTRACT_VALIDATE` | `feature_contract.read_feature_artifact_sidecar` | verify exact feature artifact/sidecar lineage and semantic identity |
+| `STRATEGY_PREVIEW` | `strategies.create` + registry/Builder contracts | evaluate one deterministic read-only strategy preview from an exact canonical feature artifact |
+| `AUTOTUNER_CAMPAIGN` | `autotuner_campaign_runner.run_campaign_iteration` | run bounded research-only candidate campaign iteration |
+| `AUTOTUNER_PRIMARY_VALIDATION` | `autotuner_primary_validation_runner.execute_primary_validation` | execute bounded primary walk-forward validation without promotion authority |
+| `MODEL_LAB_FIRST_CONSUMER` | `scripts.operator.model_lab_xgboost_first_consumer.execute` | train/evaluate the canonical first predictive consumer while preserving the economic-evidence gap |
+| `MODEL_LAB_COMPARE_VALIDATE` | `model_lab_comparison_matrix.align_training_matrices_for_comparison` | align frozen matrices and apply leakage-safe comparison validation |
 
 CRW backtest callers cannot supply absolute source paths. The request carries per-symbol relative paths, byte counts, and SHA-256 identities under a governed `--input-root`; the dispatcher verifies them and injects canonical `_verified_source_paths` only after admission.
 
 AutoTuner callers cannot supply their own parameter schema. The dispatcher derives `CrwScoreMultiModeStrategy.parameter_schema()` from the same pinned private source, applies the canonical consumption gate, and records the relevant private Git blob identities in the receipt.
 
-Data materialization, feature/preview, campaign validation, Model Lab, News, and Options remain dependency-ordered additions rather than one-off workflow families.
+Data materialization, feature/preview, AutoTuner campaign/validation, and the portable Model Lab research consumers are now carried by the same dispatcher/session substrate. Status-owned Model Lab process launch/cancel/list remains intentionally outside the generic executor. News, Options, and later intelligence/report consumers remain dependency-ordered additions rather than one-off workflow families.
 
 ## Request contract
 
@@ -99,11 +106,10 @@ python scripts/mmibkr_canonical_workload_dispatch_v1.py plan-run \
 
 ## Next dependency-ordered additions
 
-1. consume #1607 and #1549 through the generalized `CRW_BACKTEST` binding as regression/acceptance fixtures;
-2. governed data materialization and `FEATURE_CONTRACT_VALIDATE` / `STRATEGY_PREVIEW`;
-3. AutoTuner campaign + primary validation on top of the admitted parameter/candidate routes;
-4. Model Lab first consumer, orchestration, and comparison validation;
-5. deterministic News and Options intelligence adapters from #1618;
-6. explicit claim leases/checkpoints and the budget-aware worker loop from #1617.
+1. use the admitted G05/G06/G07 chain as the portable data -> feature lineage -> preview -> full CRW evidence substrate;
+2. consume #1607 and #1549 as ordinary composed `CRW_BACKTEST` research jobs rather than one-off execution harnesses;
+3. promote deterministic News and Options intelligence adapters from #1618 after their current owners stabilize;
+4. build G10/G11 intelligence consumers and G13 report artifacts on these canonical immutable receipts;
+5. keep status-owned operator/process orchestration and all broker/runtime/live authorities outside the generic research executor.
 
 Cloud transports remain replaceable adapters. Broker/runtime/live authorities remain separate.
