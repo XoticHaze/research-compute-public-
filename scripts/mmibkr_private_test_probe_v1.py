@@ -34,6 +34,9 @@ SAFE_EXACT = {
     "tests.test_crw_tradingview_dual_execution_replay_14th31js",
     "tests.test_builder_feature_rhs_comparison_14th31ky",
     "tests.test_crw_backtest_futures_timestamp_14th31kf",
+    "tests.test_news_publication_time_integrity_20260902",
+    "tests.test_news_publication_time_integration_patch_20260902",
+    "tests.test_news_scorecard_cycle_break_14th31fd_r18",
 }
 DENY_TOKENS = (
     "broker",
