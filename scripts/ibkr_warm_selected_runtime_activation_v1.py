@@ -531,11 +531,41 @@ def start_canonical_runtime(
     deadline = time.monotonic() + 180.0
     while time.monotonic() < deadline:
         try:
-            status, body = proof_v1._http_json("http://127.0.0.1:8001", "GET", "/healthz", timeout=4.0)
+            health_status, health_body = proof_v1._http_json(
+                "http://127.0.0.1:8001",
+                "GET",
+                "/healthz",
+                timeout=4.0,
+            )
         except Exception:
-            status, body = 0, {}
-        if status == 200 and body.get("ok") is not False:
+            health_status, health_body = 0, {}
+
+        broker_ready = False
+        if health_status == 200 and health_body.get("ok") is not False:
+            try:
+                broker_status, broker_body = proof_v1._http_json(
+                    "http://127.0.0.1:8001",
+                    "GET",
+                    "/strategy/ibkr-paper-open-orders",
+                    timeout=6.0,
+                )
+            except Exception:
+                broker_status, broker_body = 0, {}
+            account_identity = (
+                broker_body.get("account_identity")
+                if isinstance(broker_body.get("account_identity"), Mapping)
+                else {}
+            )
+            broker_ready = bool(
+                broker_status == 200
+                and broker_body.get("ok") is True
+                and account_identity.get("selected_account_is_paper_du") is True
+                and broker_body.get("broker_order_placed") is False
+                and broker_body.get("place_order_called") is False
+            )
+        if broker_ready:
             return image, data_dir
+
         diagnostic = canonical_runtime_diagnostic(run=run, include_logs=False)
         if (
             diagnostic.get("inspect_available") is not True
@@ -545,8 +575,8 @@ def start_canonical_runtime(
                 canonical_runtime_diagnostic(run=run, include_logs=True)
             )
         sleep(2.0)
-    raise _canonical_runtime_health_error(
-        canonical_runtime_diagnostic(run=run, include_logs=True)
+    raise ActivationError(
+        "canonical MM-IBKR proof runtime broker readiness did not converge"
     )
 
 
