@@ -2,11 +2,11 @@
   "schema": "mmibkr.private_test_probe_fire.v1",
   "source_ref": "15594dd2353adb334584e8d9025cf7a427428b17",
   "test_modules": [
-    "tests.test_materialize_admitted_futures_source_canonical",
+    "tests.test_materialize_admitted_futures_dated_contract",
     "tests.test_publish_canonical_feature_sidecar"
   ],
-  "requested_by": "assistant-g05b-futures-materialization",
-  "purpose": "exact-private owner proof for G05b dated futures CANONICAL_DATA_MATERIALIZE extension",
+  "requested_by": "assistant-g05b-dated-futures-materialization",
+  "purpose": "exact-private dated-contract and sidecar proof for G05b futures CANONICAL_DATA_MATERIALIZE",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -14,7 +14,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "g05b-futures-materialize-r1-97cf88ea",
+  "request_nonce": "g05b-dated-futures-r2-498e8e84",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
   "current_private_reference": "fc71050546846824b21e95a22852f45fe13c9f99"
 }
