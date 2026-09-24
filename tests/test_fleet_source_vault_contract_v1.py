@@ -375,6 +375,49 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
         self.assertNotIn('cat "$log"', workflow)
 
+    def test_private_pr733_validation_is_exact_sha_expiring_and_archive_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("PRIVATE_PR733_EXACT_VALIDATION_IDENTITY", text)
+        self.assertIn(
+            "mmibkr-private-pr733-forward-fine-source-validation-r1.yml@refs/heads/main",
+            text,
+        )
+        self.assertIn(
+            "71975cd98aae4a5b1230893802142c63e74e78cd",
+            text,
+        )
+        self.assertIn("PRIVATE_PR733_EXACT_VALIDATION_EXPIRES_AT", text)
+        self.assertIn("2026-09-25T12:00:00Z", text)
+        self.assertIn("matchedPrivatePr733Validation", text)
+        self.assertIn(
+            "(matchedPrivatePr733Validation && privateArchivePathAllowed)",
+            text,
+        )
+        self.assertNotIn(
+            "(matchedPrivatePr733Validation && operatorDeployPathAllowed)",
+            text,
+        )
+
+        workflow = (
+            ROOT
+            / ".github"
+            / "workflows"
+            / "mmibkr-private-pr733-forward-fine-source-validation-r1.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "PRIVATE_SOURCE_SHA: 71975cd98aae4a5b1230893802142c63e74e78cd",
+            workflow,
+        )
+        self.assertIn("tests.test_selected_runtime_boundary_snapshot_hydrator_v1", workflow)
+        self.assertIn("tests.test_selected_runtime_cloud_natural_evaluator_v1", workflow)
+        self.assertIn("tests.test_selected_runtime_forward_execution_lifecycle_v1", workflow)
+        self.assertIn("ENABLE_LIVE_TRADING=0", workflow)
+        self.assertIn("'completed_trade_claims': False", workflow)
+        self.assertIn("'live_trading_allowed': False", workflow)
+        self.assertIn("MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0", workflow)
+        self.assertNotIn('cat "$log"', workflow)
+
+
     def test_reusable_exact_sha_vault_approval_requires_trusted_bootstrap_attestation(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("reusableExactShaBootstrapAttestation", text)
