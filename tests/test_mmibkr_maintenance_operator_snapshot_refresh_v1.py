@@ -33,6 +33,84 @@ class MaintenanceOperatorSnapshotRefreshTests(unittest.TestCase):
             "authority": {"broker_mutation_authority": False, "live_execution_allowed": False},
         }
 
+
+    def authority_config(self):
+        return {
+            "schema": "selected_runtime_universe_14tu.v1",
+            "default_runtime_id": "mnq",
+            "policy": {
+                "canonical_execution_authority": "selected_runtime.execution_policy",
+                "paper_submit_enabled_by_config_only": True,
+                "live_submit_enabled_by_config_only": True,
+            },
+            "runtime_ids": [
+                {
+                    "runtime_id": "amat",
+                    "status": "active_selected",
+                    "instrument_class": "STK",
+                    "strategy_id": "crw_score_multi_mode",
+                    "strategy_profile": "selected_bootstrap",
+                    "parameter_preset_id": "crw_amat_15m_selected",
+                    "symbol": "AMAT",
+                    "signal_symbol": "AMAT",
+                    "timeframe": "15Min",
+                    "execution_contract": {"secType": "STK", "symbol": "AMAT", "conId": 1, "exchange": "SMART"},
+                    "execution_policy": {
+                        "paper_submit_enabled": True,
+                        "live_submit_enabled": False,
+                        "dca_enabled": False,
+                        "max_shares": 1,
+                        "allow_inactive_session_orders": True,
+                    },
+                },
+                {
+                    "runtime_id": "aph",
+                    "status": "active_selected",
+                    "instrument_class": "STK",
+                    "strategy_id": "crw_score_multi_mode",
+                    "strategy_profile": "selected_bootstrap",
+                    "parameter_preset_id": "crw_aph_15m_selected",
+                    "symbol": "APH",
+                    "signal_symbol": "APH",
+                    "timeframe": "15Min",
+                    "execution_contract": {"secType": "STK", "symbol": "APH", "conId": 2, "exchange": "SMART"},
+                    "execution_policy": {
+                        "paper_submit_enabled": True,
+                        "live_submit_enabled": False,
+                        "dca_enabled": False,
+                        "max_shares": 1,
+                        "allow_inactive_session_orders": True,
+                    },
+                },
+                {
+                    "runtime_id": "mnq",
+                    "status": "active_selected",
+                    "instrument_class": "FUT",
+                    "strategy_id": "crw_score_multi_mode",
+                    "strategy_profile": "proven_exec",
+                    "parameter_preset_id": "crw_mnq_extreme_default",
+                    "symbol": "MNQ",
+                    "signal_symbol": "MNQ1!",
+                    "timeframe": "12Min",
+                    "execution_contract": {"secType": "FUT", "symbol": "MNQ", "conId": 3, "exchange": "CME"},
+                    "execution_policy": {
+                        "paper_submit_enabled": True,
+                        "live_submit_enabled": False,
+                        "dca_enabled": True,
+                        "max_contracts": 3,
+                        "max_dca_adds": 2,
+                        "allow_inactive_session_orders": True,
+                    },
+                },
+            ],
+        }
+
+    def write_source_root(self, root: Path, config=None):
+        path = root / "config" / "selected_runtime_universe_14tu.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(config or self.authority_config()), encoding="utf-8")
+        return root
+
     def fresh(self):
         from datetime import datetime, timezone
         return {
@@ -107,6 +185,70 @@ class MaintenanceOperatorSnapshotRefreshTests(unittest.TestCase):
         stale["runtimes"][0]["position"]["position"] = 1.0
         with self.assertRaisesRegex(RuntimeError, "non-flat"):
             mod.refresh_snapshot(stale, self.fresh(), expected_source_sha="a" * 40, stale_sha256="c" * 64)
+
+
+    def test_source_rebind_allows_strategy_spec_only_drift_when_runtime_authority_matches(self):
+        stale = self.stale()
+        for row in stale["runtimes"]:
+            row["execution_policy"] = {}
+        stale["runtime"]["source_sha"] = "a" * 40
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            previous = self.write_source_root(base / "previous")
+            current_config = copy.deepcopy(self.authority_config())
+            for row in current_config["runtime_ids"]:
+                row["strategy_spec_digest"] = "changed-only-non-authority"
+                row["strategy_params"] = {"extra_evidence": True}
+            current = self.write_source_root(base / "current", current_config)
+            rebound = mod._rebind_snapshot_source(
+                stale,
+                previous_source_root=previous,
+                current_source_root=current,
+                expected_source_sha="b" * 40,
+            )
+        self.assertEqual(rebound["runtime"]["source_sha"], "b" * 40)
+        self.assertEqual(rebound["runtime"]["source_ref"], "b" * 40)
+        proof = rebound["maintenance_source_rebind"]
+        self.assertTrue(proof["selected_runtime_authority_exact_match"])
+        self.assertFalse(proof["strategy_or_execution_authority_mutated"])
+        self.assertEqual(
+            set(row["runtime_id"] for row in rebound["runtimes"]),
+            {"amat", "aph", "mnq"},
+        )
+
+    def test_source_rebind_rejects_execution_policy_drift(self):
+        stale = self.stale()
+        stale["runtime"]["source_sha"] = "a" * 40
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            previous = self.write_source_root(base / "previous")
+            current_config = copy.deepcopy(self.authority_config())
+            current_config["runtime_ids"][0]["execution_policy"]["paper_submit_enabled"] = False
+            current = self.write_source_root(base / "current", current_config)
+            with self.assertRaisesRegex(RuntimeError, "authority changed"):
+                mod._rebind_snapshot_source(
+                    stale,
+                    previous_source_root=previous,
+                    current_source_root=current,
+                    expected_source_sha="b" * 40,
+                )
+
+    def test_source_rebind_rejects_execution_contract_drift(self):
+        stale = self.stale()
+        stale["runtime"]["source_sha"] = "a" * 40
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            previous = self.write_source_root(base / "previous")
+            current_config = copy.deepcopy(self.authority_config())
+            current_config["runtime_ids"][2]["execution_contract"]["conId"] = 999
+            current = self.write_source_root(base / "current", current_config)
+            with self.assertRaisesRegex(RuntimeError, "authority changed"):
+                mod._rebind_snapshot_source(
+                    stale,
+                    previous_source_root=previous,
+                    current_source_root=current,
+                    expected_source_sha="b" * 40,
+                )
 
     def test_hold_contract_requires_exact_reason_and_no_authority(self):
         with tempfile.TemporaryDirectory() as tmp:
