@@ -100,9 +100,11 @@ def test_allowlist_accepts_exact_g05_g07_recovery_chain_only():
 def test_allowlist_accepts_exact_g05b_futures_materialization_only():
     assert validated_modules(
         "tests.test_materialize_admitted_futures_source_canonical "
+        "tests.test_materialize_admitted_futures_dated_contract "
         "tests.test_publish_canonical_feature_sidecar"
     ) == [
         "tests.test_materialize_admitted_futures_source_canonical",
+        "tests.test_materialize_admitted_futures_dated_contract",
         "tests.test_publish_canonical_feature_sidecar",
     ]
 
