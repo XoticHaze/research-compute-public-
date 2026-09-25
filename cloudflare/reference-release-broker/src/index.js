@@ -1,8 +1,7 @@
-import { verifyAuthorityGrant } from './grant.js';
+import { verifyAuthorityIntent } from './intent.js';
 import {
-  generateSigningKeypair,
+  callerPolicySha256,
   signReleaseTicket,
-  validateClaims,
 } from './ticket.js';
 
 const GITHUB_ISSUER = 'https://token.actions.githubusercontent.com';
@@ -145,63 +144,94 @@ async function handleRelease(request, env) {
   let body;
   try { body = JSON.parse(raw); } catch { throw new Error('request_json_rejected'); }
 
-  const fields = new Set(['worker_key_id','grant']);
+  const fields = new Set(['worker_key_id','grant_id']);
   if (!body || Object.keys(body).length !== fields.size || Object.keys(body).some((k) => !fields.has(k))) {
     throw new Error('request_fields_rejected');
   }
   const workerKeyId = String(body.worker_key_id || '');
+  const requestedGrantId = String(body.grant_id || '');
   if (!/^sha256:[0-9a-f]{64}$/.test(workerKeyId)) throw new Error('worker_key_rejected');
+  if (!/^[A-Za-z0-9_-]{16,128}$/.test(requestedGrantId)) throw new Error('grant_id_rejected');
 
   const policy = policyFromEnv(env);
   const claims = await verifyGithubOidc(auth.slice(7));
   const signer = await importBrokerSigner(env.BROKER_SIGNING_PRIVATE_JWK);
+  const now = Math.floor(Date.now() / 1000);
 
-  const grantPayloadBytes = b64ToBytes(String(body.grant?.payload_b64 || ''));
-  let grantPayload;
-  try { grantPayload = JSON.parse(new TextDecoder().decode(grantPayloadBytes)); }
-  catch { throw new Error('grant_payload_rejected'); }
+  if (typeof env.BOOTSTRAP_SIGNED_INTENT_JSON !== 'string' || !env.BOOTSTRAP_SIGNED_INTENT_JSON) {
+    throw new Error('intent_unconfigured');
+  }
+  let intentWrapper;
+  try { intentWrapper = JSON.parse(env.BOOTSTRAP_SIGNED_INTENT_JSON); }
+  catch { throw new Error('intent_unconfigured'); }
 
-  const expected = {
-    grant_id: String(grantPayload.grant_id || ''),
-    run_id: String(claims.run_id || ''),
-    run_attempt: String(claims.run_attempt || ''),
+  const policyDigest = await callerPolicySha256(claims);
+  let intentPayload;
+  try {
+    intentPayload = JSON.parse(new TextDecoder().decode(b64ToBytes(String(intentWrapper.payload_b64 || ''))));
+  } catch {
+    throw new Error('intent_payload_rejected');
+  }
+  const expectedIntent = {
+    grant_id: requestedGrantId,
+    caller_policy_sha256: policyDigest,
     harness_sha: String(policy.job_workflow_sha),
-    identity_sha256: String(grantPayload.identity_sha256 || ''),
-    worker_key_id: workerKeyId,
     broker_key_id: signer.keyId,
   };
-  const now = Math.floor(Date.now() / 1000);
-  const grant = await verifyAuthorityGrant(
-    body.grant,
+  const intent = await verifyAuthorityIntent(
+    intentWrapper,
     env.AUTHORITY_PUBLIC_B64,
-    expected,
+    expectedIntent,
     now,
-    policy.max_admission_seconds,
+    Number(env.MAX_INTENT_SECONDS || 86400),
   );
 
-  await validateClaims(claims, policy, grant, now);
+  // Static harness policy + live OIDC claims.
+  if (claims.iss !== GITHUB_ISSUER) throw new Error('oidc_issuer_rejected');
+  const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (!aud.includes(policy.audience)) throw new Error('oidc_audience_rejected');
+  if (claims.job_workflow_ref !== policy.job_workflow_ref) throw new Error('oidc_harness_ref_rejected');
+  if (claims.job_workflow_sha !== policy.job_workflow_sha) throw new Error('oidc_harness_sha_rejected');
+  if (claims.runner_environment !== 'github-hosted') throw new Error('oidc_runner_rejected');
+  const iat = Number(claims.iat), nbf = Number(claims.nbf), exp = Number(claims.exp);
+  if (![iat,nbf,exp].every(Number.isFinite)) throw new Error('oidc_time_invalid');
+  if (iat > now + 30 || nbf > now + 30 || exp < now - 30 || exp - iat > 600) throw new Error('oidc_time_rejected');
 
-  const id = env.GRANT_LEDGER.idFromName(String(grant.grant_id));
+  const admissionNotAfter = Math.min(
+    now + Number(policy.max_admission_seconds),
+    Number(intent.intent_not_after),
+  );
+  if (admissionNotAfter <= now) throw new Error('intent_expired');
+
+  const id = env.GRANT_LEDGER.idFromName(String(intent.grant_id));
   const stub = env.GRANT_LEDGER.get(id);
   const consumeResponse = await stub.fetch('https://grant-ledger/consume', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      grant_id: grant.grant_id,
-      run_id: grant.run_id,
-      run_attempt: grant.run_attempt,
-      harness_sha: grant.harness_sha,
-      worker_key_id: grant.worker_key_id,
-      broker_key_id: grant.broker_key_id,
-      admission_not_after: grant.admission_not_after,
+      grant_id: intent.grant_id,
+      run_id: String(claims.run_id),
+      run_attempt: String(claims.run_attempt),
+      harness_sha: intent.harness_sha,
+      worker_key_id: workerKeyId,
+      broker_key_id: signer.keyId,
+      admission_not_after: admissionNotAfter,
     }),
   });
   if (!consumeResponse.ok) throw new Error('grant_consume_rejected');
 
+  const ticketClaims = {
+    grant_id: intent.grant_id,
+    run_id: String(claims.run_id),
+    run_attempt: String(claims.run_attempt),
+    harness_sha: intent.harness_sha,
+    worker_key_id: workerKeyId,
+    admission_not_after: admissionNotAfter,
+  };
   const ticket = await signReleaseTicket(
     signer.privateKey,
     signer.keyId,
-    grant,
+    ticketClaims,
     now,
   );
   return json({ ok: true, ticket }, 200);
@@ -253,6 +283,27 @@ export default {
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname === '/healthz') {
       return json({ ok: true }, 200);
+    }
+    if (request.method === 'GET' && url.pathname === '/v1/public-key') {
+      try {
+        const raw = JSON.parse(env.BROKER_SIGNING_PRIVATE_JWK || '{}');
+        const pub = { ...raw };
+        delete pub.d;
+        const publicKey = await crypto.subtle.importKey(
+          'jwk', pub, { name: 'ECDSA', namedCurve: 'P-256' }, true, ['verify']
+        );
+        const publicRaw = new Uint8Array(await crypto.subtle.exportKey('raw', publicKey));
+        let text = '';
+        for (let i = 0; i < publicRaw.length; i += 0x8000) {
+          text += String.fromCharCode(...publicRaw.subarray(i, i + 0x8000));
+        }
+        return json({
+          public_b64: btoa(text),
+          key_id: 'sha256:' + await sha256Hex(publicRaw),
+        }, 200);
+      } catch {
+        return json({ error: 'unavailable' }, 503);
+      }
     }
     if (request.method !== 'POST' || url.pathname !== '/v1/release') {
       return json({ error: 'not_found' }, 404);
