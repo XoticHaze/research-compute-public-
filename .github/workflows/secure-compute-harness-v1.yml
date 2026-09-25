@@ -1,0 +1,46 @@
+name: Secure Compute Harness V1
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  harness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Prove reusable-harness OIDC claims exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          token_json="$(curl -fsSL -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=secure-compute-reference-v1")"
+          TOKEN_JSON="$token_json" python - <<'PY'
+          import base64, json, os
+          node = json.loads(os.environ["TOKEN_JSON"])
+          token = node["value"]
+          parts = token.split(".")
+          if len(parts) != 3:
+              raise SystemExit(41)
+          p = parts[1] + "=" * (-len(parts[1]) % 4)
+          claims = json.loads(base64.urlsafe_b64decode(p).decode())
+          required = [
+              "iss", "aud", "repository_id", "repository_owner_id",
+              "workflow_ref", "workflow_sha", "job_workflow_ref",
+              "job_workflow_sha", "run_id", "run_attempt",
+              "ref", "event_name", "iat", "nbf", "exp",
+          ]
+          missing = [key for key in required if not claims.get(key)]
+          if missing:
+              raise SystemExit(42)
+          if claims["aud"] != "secure-compute-reference-v1":
+              raise SystemExit(43)
+          if "secure-compute-harness-v1.yml@" not in str(claims["job_workflow_ref"]):
+              raise SystemExit(44)
+          if len(str(claims["job_workflow_sha"])) != 40:
+              raise SystemExit(45)
+          print("REFERENCE_HARNESS_OIDC_CLAIMS_PASS=1")
+          PY
