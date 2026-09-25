@@ -103,9 +103,9 @@ def _oidc_token() -> str:
         raise RuntimeError("oidc_token_rejected")
     return token
 
-def _broker_release(grant_id: str, worker_key_id: str) -> dict:
+def _broker_release(intent: dict, worker_key_id: str) -> dict:
     body = json.dumps(
-        {"worker_key_id": worker_key_id, "grant_id": grant_id},
+        {"worker_key_id": worker_key_id, "intent": intent},
         separators=(",", ":"),
     ).encode("utf-8")
     req = Request(
@@ -127,19 +127,16 @@ def _broker_release(grant_id: str, worker_key_id: str) -> dict:
 
 def _main() -> int:
     run_id = str(os.environ.get("GITHUB_RUN_ID") or "")
-    grant_id = str(os.environ.get("REFERENCE_GRANT_ID") or "")
-    if not grant_id:
-        bootstrap = _get_json("proof/live/bootstrap-grant.json")
-        if not bootstrap or set(bootstrap) != {"schema", "grant_id"}:
-            raise RuntimeError("grant_bootstrap_rejected")
-        if bootstrap.get("schema") != "reference-live-grant-v1":
-            raise RuntimeError("grant_bootstrap_rejected")
-        grant_id = str(bootstrap.get("grant_id") or "")
-    if not run_id.isdigit() or not grant_id:
+    bootstrap = _get_json("proof/live/bootstrap-intent.json")
+    if not bootstrap or set(bootstrap) != {"schema", "intent"}:
+        raise RuntimeError("intent_bootstrap_rejected")
+    if bootstrap.get("schema") != "reference-live-intent-v1" or not isinstance(bootstrap.get("intent"), dict):
+        raise RuntimeError("intent_bootstrap_rejected")
+    if not run_id.isdigit():
         raise RuntimeError("run_context_rejected")
 
     request_private, request_public, worker_key_id = generate_keypair()
-    ticket = _broker_release(grant_id, worker_key_id)
+    ticket = _broker_release(bootstrap["intent"], worker_key_id)
 
     base = f"proof/live/{run_id}"
     _put_json(
