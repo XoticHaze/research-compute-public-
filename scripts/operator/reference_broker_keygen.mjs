@@ -6,7 +6,7 @@ const outDir = process.argv[2];
 if (!outDir) throw new Error('output directory required');
 fs.mkdirSync(outDir, { recursive: true });
 
-const HARNESS_SHA = '3bd5b90c445c6331a8e9c8a99487977b453df443';
+const HARNESS_SHA = 'a90972dc2ed07b225a85ce7e713843c1ee07bbd0';
 const callerPolicy = {
   event_name: 'push',
   ref: 'refs/heads/main',
