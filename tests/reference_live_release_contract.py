@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = ".github/workflows/secure-compute-harness-v1.yml"
+CALLER_WORKFLOW = ROOT / ".github/workflows/reference-live-release-proof.yml"
 HARNESS_SCRIPT = "scripts/live_reference_harness_v1.py"
 BROKER_INDEX = ROOT / "cloudflare/reference-release-broker/src/index.js"
 WRANGLER = ROOT / "cloudflare/reference-release-broker/wrangler.jsonc"
@@ -67,6 +68,18 @@ def main() -> int:
     )
     if f'BROKER_URL = "{expected_url}"' not in harness:
         raise RuntimeError("harness_broker_url_mismatch")
+
+    caller = CALLER_WORKFLOW.read_text(encoding="utf-8")
+    expected_uses = (
+        "uses: XoticHaze/research-compute-public-/"
+        + WORKFLOW_PATH
+        + "@"
+        + allowed_sha
+    )
+    if expected_uses not in caller:
+        raise RuntimeError("caller_harness_pin_mismatch")
+    if "proof/live/bootstrap-intent.json" not in caller:
+        raise RuntimeError("caller_intent_trigger_missing")
 
     broker = BROKER_INDEX.read_text(encoding="utf-8")
     if "new Set(['worker_key_id','intent'])" not in broker:
