@@ -5,8 +5,10 @@ on:
     branches: [main]
     paths:
       - 'scripts/reference_release_ticket_v1.py'
+      - 'scripts/reference_release_grant_v1.py'
       - 'scripts/reference_lifecycle_timing_v1.py'
       - 'tests/test_reference_release_ticket_v1.py'
+      - 'tests/test_reference_release_grant_v1.py'
       - 'tests/test_reference_lifecycle_timing_v1.py'
       - '.github/workflows/reference-release-ticket-ci.yml'
   pull_request:
@@ -34,4 +36,5 @@ jobs:
         run: |
           python -m unittest -v \
             tests.test_reference_release_ticket_v1 \
+            tests.test_reference_release_grant_v1 \
             tests.test_reference_lifecycle_timing_v1
