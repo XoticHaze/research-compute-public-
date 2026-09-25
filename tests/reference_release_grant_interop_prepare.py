@@ -18,6 +18,7 @@ grant = {
     "run_id": "36177988341",
     "run_attempt": "1",
     "harness_sha": "155e3120494ddb0f81b88cb901c3dffc96e687f7",
+    "identity_sha256": "5" * 64,
     "worker_key_id": "sha256:" + "2" * 64,
     "broker_key_id": "sha256:" + "3" * 64,
     "not_before": now,
