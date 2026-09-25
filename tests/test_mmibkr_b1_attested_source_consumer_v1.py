@@ -381,6 +381,112 @@ class B1AttestedSourceConsumerTests(unittest.TestCase):
                 ticket=ticket,
             )
 
+    def test_chunk_401_refreshes_oidc_and_retries_same_chunk_once(self):
+        private_raw, archive, manifest, chunks, ticket = self.build_exchange()
+        token_values = iter(["oidc-initial", "oidc-refreshed"])
+        token_calls = []
+        chunk_calls = []
+
+        def token_factory():
+            value = next(token_values)
+            token_calls.append(value)
+            return value
+
+        with tempfile.TemporaryDirectory() as td:
+            key_path = Path(td) / "key.b64"
+            key_path.write_text(base64.b64encode(private_raw).decode("ascii"))
+
+            def api(authority_base, path, **kwargs):
+                token = kwargs["token"]
+                if path == "/v1/source-exchange/b1/response/12345":
+                    self.assertEqual(token, "oidc-initial")
+                    return 200, json.dumps({
+                        "ok": True,
+                        "response": manifest,
+                    }).encode(), {}
+                if "/chunk/" in path:
+                    chunk_calls.append((path, token))
+                    if token == "oidc-initial":
+                        return 401, b'{"ok":false}', {}
+                    index = int(path.rsplit("/", 1)[1])
+                    raw = chunks[index].encode("ascii")
+                    return 200, raw, {
+                        "X-MMIBKR-Chunk-SHA256": hashlib.sha256(raw).hexdigest()
+                    }
+                if path == "/v1/source-exchange/b1/cleanup/12345":
+                    self.assertEqual(token, "oidc-refreshed")
+                    return 200, b'{"ok":true}', {}
+                raise AssertionError(path)
+
+            result = mod.consume_attested_source(
+                authority_base="https://fleet.example",
+                run_id="12345",
+                source_ticket=ticket,
+                private_key_path=key_path,
+                token_factory=token_factory,
+                api=api,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["archive"], archive)
+        self.assertEqual(token_calls, ["oidc-initial", "oidc-refreshed"])
+        self.assertEqual(
+            chunk_calls,
+            [
+                ("/v1/source-exchange/b1/response/12345/chunk/0", "oidc-initial"),
+                ("/v1/source-exchange/b1/response/12345/chunk/0", "oidc-refreshed"),
+            ],
+        )
+
+    def test_chunk_401_retry_fails_closed_after_one_refresh(self):
+        private_raw, _, manifest, _, ticket = self.build_exchange()
+        token_values = iter(["oidc-initial", "oidc-refreshed"])
+        token_calls = []
+        chunk_calls = []
+
+        def token_factory():
+            value = next(token_values)
+            token_calls.append(value)
+            return value
+
+        with tempfile.TemporaryDirectory() as td:
+            key_path = Path(td) / "key.b64"
+            key_path.write_text(base64.b64encode(private_raw).decode("ascii"))
+
+            def api(authority_base, path, **kwargs):
+                token = kwargs["token"]
+                if path == "/v1/source-exchange/b1/response/12345":
+                    return 200, json.dumps({
+                        "ok": True,
+                        "response": manifest,
+                    }).encode(), {}
+                if "/chunk/" in path:
+                    chunk_calls.append((path, token))
+                    return 401, b'{"ok":false}', {}
+                raise AssertionError(path)
+
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "b1_attested_source_chunk_http_401:0",
+            ):
+                mod.consume_attested_source(
+                    authority_base="https://fleet.example",
+                    run_id="12345",
+                    source_ticket=ticket,
+                    private_key_path=key_path,
+                    token_factory=token_factory,
+                    api=api,
+                )
+
+        self.assertEqual(token_calls, ["oidc-initial", "oidc-refreshed"])
+        self.assertEqual(
+            chunk_calls,
+            [
+                ("/v1/source-exchange/b1/response/12345/chunk/0", "oidc-initial"),
+                ("/v1/source-exchange/b1/response/12345/chunk/0", "oidc-refreshed"),
+            ],
+        )
+
     def test_private_attestation_digest_mismatch_fails_closed(self):
         private_raw, archive, manifest, chunks, ticket = self.build_exchange()
         manifest["private_attestation"]["plaintext_sha256"] = "b" * 64
