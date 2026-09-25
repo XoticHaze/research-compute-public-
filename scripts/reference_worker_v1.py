@@ -124,28 +124,45 @@ def _main() -> int:
             raise RuntimeError("private_request_fields_rejected")
         if private_request["schema"] != REQUEST_SCHEMA:
             raise RuntimeError("private_request_schema_rejected")
-        if private_request["operation"] != "H1":
-            raise RuntimeError("operation_rejected")
-        payload = base64.b64decode(
-            private_request["payload_b64"].encode("ascii"), validate=True
-        )
+        return_public_b64 = private_request["return_public_b64"]
+        try:
+            if private_request["operation"] != "H1":
+                raise RuntimeError("operation_rejected")
+            payload = base64.b64decode(
+                private_request["payload_b64"].encode("ascii"), validate=True
+            )
 
-        import hashlib
-        result_payload = json.dumps(
-            {
+            import hashlib
+            result_node = {
                 "schema": RESULT_SCHEMA,
                 "request_id": private_request["request_id"],
                 "ok": True,
                 "output_b64": base64.b64encode(hashlib.sha256(payload).digest()).decode("ascii"),
                 "cleanup_contract": "PROCESS_EXIT_NO_PLAINTEXT_ARTIFACT",
-            },
+            }
+            public_state = "PASS"
+            exit_code = 0
+        except Exception as exc:
+            payload = b""
+            result_node = {
+                "schema": RESULT_SCHEMA,
+                "request_id": private_request["request_id"],
+                "ok": False,
+                "error_type": type(exc).__name__,
+                "error_code": str(exc)[:128],
+                "cleanup_contract": "PROCESS_EXIT_NO_PLAINTEXT_ARTIFACT",
+            }
+            public_state = "FAIL"
+            exit_code = 1
+
+        result_payload = json.dumps(
+            result_node,
             sort_keys=True,
             separators=(",", ":"),
         ).encode("utf-8")
-
         result_envelope = seal(
             result_payload,
-            recipient_public_b64=private_request["return_public_b64"],
+            recipient_public_b64=return_public_b64,
             run_id=run_id,
             direction="result",
         )
@@ -154,10 +171,12 @@ def _main() -> int:
         payload = b""
         request_raw = b""
         result_payload = b""
+        result_node = {}
         private_request = {}
+        return_public_b64 = ""
         request_private = ""
-        print("REFERENCE_EXECUTION_PASS=1")
-        return 0
+        print("REFERENCE_EXECUTION_" + public_state + "=1")
+        return exit_code
     except Exception:
         print("REFERENCE_EXECUTION_FAIL=1")
         return 1
