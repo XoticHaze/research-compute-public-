@@ -10,9 +10,7 @@ Configure outside the GitHub execution trust domain:
 
 - `BROKER_SIGNING_PRIVATE_JWK` — P-256 private signing JWK; secret/non-exported after provisioning.
 - `AUTHORITY_PUBLIC_B64` — pinned public key for the private-authority grant signer.
-- `ALLOWED_REPOSITORY_ID` — immutable GitHub repository numeric ID.
-- `ALLOWED_REPOSITORY_OWNER_ID` — immutable GitHub owner numeric ID.
-- `ALLOWED_JOB_WORKFLOW_REF` — exact pinned reusable harness reference.
+- `ALLOWED_JOB_WORKFLOW_REF` — exact pinned reusable harness reference. Caller/project identity is not configured here; it is hashed into the independently signed one-time private grant.
 - `ALLOWED_JOB_WORKFLOW_SHA` — exact reusable harness commit SHA.
 - `MAX_ADMISSION_SECONDS` — <= 900; this is an admission window, not execution runtime.
 
@@ -70,3 +68,17 @@ This broker has no business-facing purpose.
 - attach only the intended neutral custom domain/route through the independent Cloudflare administration path;
 - the release endpoint authenticates the caller with GitHub OIDC and fails closed without it;
 - do not add a GitHub-stored Cloudflare Access service token as a prerequisite, because that would create another reusable credential in the domain being policed.
+
+## One broker serves all consumers
+
+Do not create a separate release broker or separate Cloudflare policy for each project.
+
+The broker statically pins only the reusable security harness and its signing/authority roots. The independently signed private grant contains a SHA-256 digest of the expected caller OIDC identity (immutable repository/owner IDs, visibility, ref/event, run ID and attempt).
+
+The broker recomputes that digest from the verified GitHub OIDC token and requires an exact match before consuming the grant.
+
+Consequences:
+- LPC, MM-IBKR, and future projects consume the same broker/protocol;
+- a caller identity can change only through a new private grant, not by changing Cloudflare configuration;
+- project names do not need to be embedded in broker policy;
+- a stolen grant cannot be moved to a different repository/ref/run/attempt.
