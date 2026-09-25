@@ -61,6 +61,25 @@ class P256AesGcmCapsuleTests(unittest.TestCase):
         envelope = seal(marker, recipient_public_b64=self.public, run_id="12345", direction="result")
         self.assertNotIn(marker, json.dumps(envelope, sort_keys=True).encode())
 
+
+    def test_wrong_recipient_key_fails_closed(self):
+        envelope = seal(b"x", recipient_public_b64=self.public, run_id="12345", direction="request")
+        other_private, _, _ = generate_keypair()
+        with self.assertRaises(RuntimeError):
+            open_capsule(
+                envelope,
+                recipient_private_b64=other_private,
+                expected_run_id="12345",
+                expected_direction="request",
+            )
+
+    def test_same_plaintext_encrypts_differently(self):
+        payload = b"same-private-payload"
+        first = seal(payload, recipient_public_b64=self.public, run_id="12345", direction="request")
+        second = seal(payload, recipient_public_b64=self.public, run_id="12345", direction="request")
+        self.assertNotEqual(first["ciphertext_b64"], second["ciphertext_b64"])
+        self.assertNotEqual(first["nonce_b64"], second["nonce_b64"])
+
     def test_fixed_padding_bucket(self):
         envelope = seal(b"x", recipient_public_b64=self.public, run_id="12345", direction="result")
         ciphertext = base64.b64decode(envelope["ciphertext_b64"].encode("ascii"), validate=True)
