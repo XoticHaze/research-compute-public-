@@ -22,6 +22,7 @@ class ReferenceReleaseGrantTests(unittest.TestCase):
             "run_id": "36177988341",
             "run_attempt": "1",
             "harness_sha": "1" * 40,
+            "identity_sha256": "5" * 64,
             "worker_key_id": "sha256:" + "2" * 64,
             "broker_key_id": "sha256:" + "3" * 64,
             "not_before": self.now,
@@ -32,6 +33,7 @@ class ReferenceReleaseGrantTests(unittest.TestCase):
             run_id=self.grant["run_id"],
             run_attempt=self.grant["run_attempt"],
             harness_sha=self.grant["harness_sha"],
+            identity_sha256=self.grant["identity_sha256"],
             worker_key_id=self.grant["worker_key_id"],
             broker_key_id=self.grant["broker_key_id"],
         )
