@@ -71,15 +71,7 @@ const signature = new Uint8Array(await crypto.subtle.sign(
 ));
 if (signature.length !== 64) throw new Error('signature_format_unexpected');
 
-const publicDerivePair = await crypto.subtle.importKey(
-  'pkcs8',
-  pkcs8,
-  { name: 'ECDSA', namedCurve: 'P-256' },
-  true,
-  ['sign'],
-);
-// WebCrypto cannot derive public from an imported private key. The caller only
-// needs the signer key id already persisted by keygen; inject it separately.
+// The signer key id is persisted alongside the private key by keygen.
 const signerKeyIdPath = privatePath.replace('authority-private.pkcs8.b64', 'authority-key-id.txt');
 const signerKeyId = fs.readFileSync(signerKeyIdPath, 'utf8').trim();
 
