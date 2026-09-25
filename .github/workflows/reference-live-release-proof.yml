@@ -1,0 +1,16 @@
+name: Reference Live Release Proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'proof/live/bootstrap-grant.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  live-proof:
+    uses: XoticHaze/research-compute-public-/.github/workflows/secure-compute-harness-v1.yml@a90972dc2ed07b225a85ce7e713843c1ee07bbd0
