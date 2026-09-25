@@ -16,8 +16,8 @@ AUDIENCE = "independent-release-broker-v1"
 SIGNATURE_FORMAT = "ecdsa-p256-sha256-p1363"
 FIELDS = {
     "schema", "issuer", "audience", "grant_id", "run_id", "run_attempt",
-    "harness_sha", "worker_key_id", "broker_key_id", "not_before",
-    "admission_not_after",
+    "harness_sha", "identity_sha256", "worker_key_id", "broker_key_id",
+    "not_before", "admission_not_after",
 }
 WRAPPER_FIELDS = {"payload_b64", "signature_b64", "signer_key_id", "signature_format"}
 
@@ -32,6 +32,7 @@ class ExpectedGrant:
     run_id: str
     run_attempt: str
     harness_sha: str
+    identity_sha256: str
     worker_key_id: str
     broker_key_id: str
 
@@ -84,6 +85,9 @@ def _validate_payload(node: dict) -> None:
     harness_sha = str(node.get("harness_sha") or "")
     if len(harness_sha) != 40 or any(ch not in "0123456789abcdef" for ch in harness_sha):
         raise GrantRejected("grant_harness_rejected")
+    identity_sha = str(node.get("identity_sha256") or "")
+    if len(identity_sha) != 64 or any(ch not in "0123456789abcdef" for ch in identity_sha):
+        raise GrantRejected("grant_identity_rejected")
     for key in ("worker_key_id", "broker_key_id"):
         value = str(node.get(key) or "")
         if not value.startswith("sha256:") or len(value) != 71:
@@ -150,7 +154,7 @@ def verify_grant(
     _validate_payload(node)
 
     for field in (
-        "grant_id", "run_id", "run_attempt", "harness_sha",
+        "grant_id", "run_id", "run_attempt", "harness_sha", "identity_sha256",
         "worker_key_id", "broker_key_id",
     ):
         if str(node[field]) != str(getattr(expected, field)):
