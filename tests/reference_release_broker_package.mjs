@@ -20,7 +20,7 @@ for (const needle of [
 ]) {
   if (!brokerSource.includes(needle)) throw new Error('broker_contract_missing_' + needle);
 }
-if (!wrangler.includes('"workers_dev": false')) throw new Error('workers_dev_must_be_false');
+if (!wrangler.includes('"workers_dev": true')) throw new Error('neutral_workers_dev_endpoint_required');
 if (!wrangler.includes('"preview_urls": false')) throw new Error('preview_urls_must_be_false');
 if (!wrangler.includes('"keep_vars": false')) throw new Error('keep_vars_must_be_false');
 if (!deploy.includes('not deployed by a GitHub Actions workflow')) throw new Error('independent_deploy_boundary_missing');
