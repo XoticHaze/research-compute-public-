@@ -128,6 +128,13 @@ def _broker_release(grant_id: str, worker_key_id: str) -> dict:
 def _main() -> int:
     run_id = str(os.environ.get("GITHUB_RUN_ID") or "")
     grant_id = str(os.environ.get("REFERENCE_GRANT_ID") or "")
+    if not grant_id:
+        bootstrap = _get_json("proof/live/bootstrap-grant.json")
+        if not bootstrap or set(bootstrap) != {"schema", "grant_id"}:
+            raise RuntimeError("grant_bootstrap_rejected")
+        if bootstrap.get("schema") != "reference-live-grant-v1":
+            raise RuntimeError("grant_bootstrap_rejected")
+        grant_id = str(bootstrap.get("grant_id") or "")
     if not run_id.isdigit() or not grant_id:
         raise RuntimeError("run_context_rejected")
 
