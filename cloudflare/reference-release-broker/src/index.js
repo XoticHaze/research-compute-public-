@@ -227,23 +227,26 @@ export class GrantLedger {
       return json({ error: 'grant_rejected' }, 400);
     }
 
-    const existing = await this.state.storage.get('consumed');
-    if (existing) return json({ error: 'grant_already_consumed' }, 409);
-
     const now = Math.floor(Date.now() / 1000);
     if (Number(body.admission_not_after) <= now) {
       return json({ error: 'grant_expired' }, 410);
     }
 
-    await this.state.storage.put('consumed', {
-      grant_id: grantId,
-      run_id: String(body.run_id || ''),
-      run_attempt: String(body.run_attempt || ''),
-      harness_sha: String(body.harness_sha || ''),
-      worker_key_id: String(body.worker_key_id || ''),
-      broker_key_id: String(body.broker_key_id || ''),
-      consumed_at: now,
+    const consumed = await this.state.storage.transaction(async (txn) => {
+      const existing = await txn.get('consumed');
+      if (existing) return false;
+      await txn.put('consumed', {
+        grant_id: grantId,
+        run_id: String(body.run_id || ''),
+        run_attempt: String(body.run_attempt || ''),
+        harness_sha: String(body.harness_sha || ''),
+        worker_key_id: String(body.worker_key_id || ''),
+        broker_key_id: String(body.broker_key_id || ''),
+        consumed_at: now,
+      });
+      return true;
     });
+    if (!consumed) return json({ error: 'grant_already_consumed' }, 409);
     return json({ ok: true }, 200);
   }
 }
