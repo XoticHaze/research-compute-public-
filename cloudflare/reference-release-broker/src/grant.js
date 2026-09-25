@@ -22,7 +22,7 @@ async function sha256Hex(bytes) {
 function validateGrantNode(node, expected, nowSeconds, maxAdmissionSeconds = 900) {
   const required = new Set([
     'schema','issuer','audience','grant_id','run_id','run_attempt',
-    'harness_sha','worker_key_id','broker_key_id','not_before',
+    'harness_sha','identity_sha256','worker_key_id','broker_key_id','not_before',
     'admission_not_after',
   ]);
   if (!node || Object.keys(node).length !== required.size || Object.keys(node).some((k) => !required.has(k))) {
@@ -31,7 +31,8 @@ function validateGrantNode(node, expected, nowSeconds, maxAdmissionSeconds = 900
   if (node.schema !== GRANT_SCHEMA || node.issuer !== GRANT_ISSUER || node.audience !== GRANT_AUDIENCE) {
     throw new Error('grant_schema_rejected');
   }
-  for (const field of ['grant_id','run_id','run_attempt','harness_sha','worker_key_id','broker_key_id']) {
+  if (!/^[0-9a-f]{64}$/.test(String(node.identity_sha256 || ''))) throw new Error('identity_sha256_rejected');
+  for (const field of ['grant_id','run_id','run_attempt','harness_sha','identity_sha256','worker_key_id','broker_key_id']) {
     if (String(node[field]) !== String(expected[field])) throw new Error(field + '_mismatch');
   }
   const notBefore = Number(node.not_before);
