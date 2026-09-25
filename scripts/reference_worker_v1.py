@@ -167,6 +167,10 @@ def _main() -> int:
             direction="result",
         )
         _put(f"{base}/result.json", result_envelope, message="ref: publish result")
+        Path("reference-result-envelope.json").write_text(
+            json.dumps(result_envelope, sort_keys=True, separators=(",", ":")) + "\n",
+            encoding="utf-8",
+        )
 
         payload = b""
         request_raw = b""
