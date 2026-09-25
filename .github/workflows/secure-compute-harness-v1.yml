@@ -2,10 +2,6 @@ name: Secure Compute Harness V1
 
 on:
   workflow_call:
-    inputs:
-      grant_id:
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -19,7 +15,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: XoticHaze/research-compute-public-
-          ref: a846c0428d35a88c11407877c6930135ee19dbcb
+          ref: f806079e62571fa46539d26efe374cecb6f208f0
           path: reference-harness-source
           persist-credentials: false
 
@@ -33,5 +29,4 @@ jobs:
       - name: Execute secure reference harness
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          REFERENCE_GRANT_ID: ${{ inputs.grant_id }}
         run: python reference-harness-source/scripts/live_reference_harness_v1.py
