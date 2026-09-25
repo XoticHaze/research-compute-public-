@@ -5,8 +5,11 @@ on:
     branches: [main]
     paths:
       - 'cloudflare/reference-release-broker/**'
+      - 'scripts/reference_release_grant_v1.py'
       - 'tests/reference_release_broker_policy.mjs'
       - 'tests/reference_release_ticket_interop.py'
+      - 'tests/reference_release_grant_interop_prepare.py'
+      - 'tests/reference_release_grant_interop.mjs'
       - 'scripts/reference_release_ticket_v1.py'
       - '.github/workflows/reference-broker-interop-ci.yml'
   pull_request:
@@ -37,6 +40,10 @@ jobs:
         run: python -m pip install --disable-pip-version-check cryptography==46.0.1
       - name: Prove broker claim policy and WebCrypto signer
         run: node tests/reference_release_broker_policy.mjs
+      - name: Prepare private-authority signed grant
+        run: python tests/reference_release_grant_interop_prepare.py
+      - name: Prove WebCrypto verifies private-authority grant
+        run: node tests/reference_release_grant_interop.mjs
       - name: Prove Python private-authority interoperability
         run: python tests/reference_release_ticket_interop.py
       - name: Ensure proof files contain no private signing key
@@ -45,4 +52,7 @@ jobs:
           test -s reference-release-ticket.json
           test -s reference-release-signer-public.txt
           test -s reference-release-expected.json
-          ! grep -R -E 'PRIVATE KEY|privateKey|BEGIN PRIVATE'             reference-release-ticket.json             reference-release-signer-public.txt             reference-release-expected.json
+          ! grep -R -E 'PRIVATE KEY|privateKey|BEGIN PRIVATE'             reference-release-ticket.json             reference-release-signer-public.txt             reference-release-expected.json \
+            reference-authority-grant.json \
+            reference-authority-public.txt \
+            reference-authority-grant-expected.json
