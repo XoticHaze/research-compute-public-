@@ -2,19 +2,20 @@ import fs from 'node:fs';
 
 const index = fs.readFileSync('cloudflare/reference-release-broker/src/index.js', 'utf8');
 const ticket = fs.readFileSync('cloudflare/reference-release-broker/src/ticket.js', 'utf8');
-const grant = fs.readFileSync('cloudflare/reference-release-broker/src/grant.js', 'utf8');
-const brokerSource = index + '\n' + ticket + '\n' + grant;
+const intent = fs.readFileSync('cloudflare/reference-release-broker/src/intent.js', 'utf8');
+const brokerSource = index + '\n' + ticket + '\n' + intent;
 const wrangler = fs.readFileSync('cloudflare/reference-release-broker/wrangler.jsonc', 'utf8');
 const deploy = fs.readFileSync('cloudflare/reference-release-broker/DEPLOYMENT_BOUNDARY.md', 'utf8');
 
 for (const needle of [
   "verifyGithubOidc",
   "job_workflow_sha",
-  "verifyAuthorityGrant",
-  "grant_identity_rejected",
+  "verifyAuthorityIntent",
+  "callerPolicySha256",
   "GRANT_LEDGER",
   "BROKER_SIGNING_PRIVATE_JWK",
   "AUTHORITY_PUBLIC_B64",
+  "intentWrapper",
   "signReleaseTicket",
   "grant_already_consumed",
 ]) {
