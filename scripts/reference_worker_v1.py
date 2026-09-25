@@ -78,16 +78,17 @@ def _get_json(path: str) -> dict | None:
     node = _api(f"/repos/{_repo()}/contents/{path}?ref={os.environ.get('GITHUB_REF_NAME','main')}")
     if not node:
         return None
-    raw = base64.b64decode(node["content"].encode("ascii"), validate=True)
+    encoded = "".join(str(node["content"]).split())
+    raw = base64.b64decode(encoded.encode("ascii"), validate=True)
     value = json.loads(raw.decode("utf-8"))
     if not isinstance(value, dict):
         raise RuntimeError("json_object_required")
     return value
 
-def main() -> int:
+def _main() -> int:
     run_id = str(os.environ.get("GITHUB_RUN_ID") or "")
     if not run_id.isdigit():
-        raise SystemExit("REFERENCE_EXECUTION_FAIL=1")
+        raise RuntimeError("run_context_rejected")
 
     request_private, request_public, request_key_id = generate_keypair()
     base = f"proof/rendezvous/{run_id}"
@@ -158,6 +159,13 @@ def main() -> int:
         print("REFERENCE_EXECUTION_PASS=1")
         return 0
     except Exception:
+        print("REFERENCE_EXECUTION_FAIL=1")
+        return 1
+
+def main() -> int:
+    try:
+        return _main()
+    except BaseException:
         print("REFERENCE_EXECUTION_FAIL=1")
         return 1
 
