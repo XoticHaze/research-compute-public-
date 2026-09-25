@@ -494,6 +494,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         )
         self.assertIn("paper_account_hygiene_source_rejected", text)
         self.assertIn("PAPER_ACCOUNT_HYGIENE_COORDINATOR_EXPIRES_AT", text)
+        self.assertIn("Date.parse('2026-09-25T18:00:00Z');", text)
         self.assertIn("paperAccountHygieneCoordinatorPathAllowed", text)
         self.assertIn("paper_account_hygiene_runtime_source_rejected", text)
         self.assertIn(
