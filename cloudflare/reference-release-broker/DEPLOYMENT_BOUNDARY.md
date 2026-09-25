@@ -63,9 +63,9 @@ Broker deployment itself is performed from an independently authenticated operat
 
 This broker has no business-facing purpose.
 
-- `workers_dev = false`;
-- `preview_urls = false`;
-- attach only the intended neutral custom domain/route through the independent Cloudflare administration path;
+- `workers_dev = true` for the neutral, non-business broker endpoint;
+- `preview_urls = false` so version/preview URLs are not exposed;
+- do not attach a business-domain custom route; the generic workers.dev endpoint is sufficient for the proof;
 - the release endpoint authenticates the caller with GitHub OIDC and fails closed without it;
 - do not add a GitHub-stored Cloudflare Access service token as a prerequisite, because that would create another reusable credential in the domain being policed.
 
