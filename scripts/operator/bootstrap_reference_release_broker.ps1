@@ -44,26 +44,26 @@ Remove-Item -LiteralPath $AuthorityPrivate -Force
 
 Write-Host ""
 Write-Host "Cloudflare login will open a browser. This is the independent admin path; do not export this login/token to GitHub."
-npx --yes wrangler@4.131.2 login
+npx --yes wrangler@4.135.0 login
 if ($LASTEXITCODE -ne 0) { throw "Cloudflare login failed" }
 
 Write-Host "Deploying the generic broker..."
-npx --yes wrangler@4.131.2 deploy --config $Wrangler
+npx --yes wrangler@4.135.0 deploy --config $Wrangler
 if ($LASTEXITCODE -ne 0) { throw "broker deployment failed" }
 
 Write-Host "Binding broker private signing key..."
 Get-Content -LiteralPath $BrokerPrivate -Raw |
-  npx --yes wrangler@4.131.2 secret put BROKER_SIGNING_PRIVATE_JWK --config $Wrangler
+  npx --yes wrangler@4.135.0 secret put BROKER_SIGNING_PRIVATE_JWK --config $Wrangler
 if ($LASTEXITCODE -ne 0) { throw "broker signing-key binding failed" }
 
 Write-Host "Binding authority public verification key..."
 Get-Content -LiteralPath $AuthorityPublic -Raw |
-  npx --yes wrangler@4.131.2 secret put AUTHORITY_PUBLIC_B64 --config $Wrangler
+  npx --yes wrangler@4.135.0 secret put AUTHORITY_PUBLIC_B64 --config $Wrangler
 if ($LASTEXITCODE -ne 0) { throw "authority public-key binding failed" }
 
 Write-Host "Binding one-time offline-signed intent..."
 Get-Content -LiteralPath $SignedIntent -Raw |
-  npx --yes wrangler@4.131.2 secret put BOOTSTRAP_SIGNED_INTENT_JSON --config $Wrangler
+  npx --yes wrangler@4.135.0 secret put BOOTSTRAP_SIGNED_INTENT_JSON --config $Wrangler
 if ($LASTEXITCODE -ne 0) { throw "signed-intent binding failed" }
 
 $health = Invoke-RestMethod -Method Get -Uri "$BrokerUrl/healthz"
@@ -87,6 +87,9 @@ Write-Host "BROKER_URL=$BrokerUrl"
 Write-Host "GRANT_ID=$($summary['GRANT_ID'])"
 Write-Host "BROKER_KEY_ID=$($summary['BROKER_KEY_ID'])"
 Write-Host "HARNESS_SHA=$($summary['HARNESS_SHA'])"
+Write-Host "SIGNED_INTENT_FILE=$SignedIntent"
+Write-Host "PUBLIC_SUMMARY_FILE=$PublicSummary"
 Write-Host "AUTHORITY_PRIVATE_LOCAL=$AuthorityProtected"
 Write-Host ""
 Write-Host "Keep the DPAPI authority file private. Do NOT upload the KeyDir or paste any private JWK."
+Write-Host "It is safe to paste signed-intent.json and bootstrap-public.txt back into the private project chat."
