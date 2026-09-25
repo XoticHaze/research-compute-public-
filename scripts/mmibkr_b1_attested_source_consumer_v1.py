@@ -422,13 +422,26 @@ def consume_attested_source(
     for index, desc in enumerate(chunks):
         if not isinstance(desc, Mapping) or int(desc.get("index", -1)) != index:
             raise RuntimeError("b1_attested_source_chunk_descriptor_rejected")
+        chunk_path = f"/v1/source-exchange/b1/response/{run_id}/chunk/{index}"
         status, chunk_raw, headers = api(
             authority_base,
-            f"/v1/source-exchange/b1/response/{run_id}/chunk/{index}",
+            chunk_path,
             method="GET",
             run_id=run_id,
             token=token,
         )
+        if status == 401:
+            # GitHub OIDC tokens are short lived. A large attested archive can
+            # outlive the token obtained for the manifest. Refresh the same
+            # run-bound OIDC capability and retry only this exact chunk once.
+            token = token_factory()
+            status, chunk_raw, headers = api(
+                authority_base,
+                chunk_path,
+                method="GET",
+                run_id=run_id,
+                token=token,
+            )
         if status != 200:
             raise RuntimeError(f"b1_attested_source_chunk_http_{status}:{index}")
         text = chunk_raw.decode("ascii")
