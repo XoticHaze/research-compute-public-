@@ -25,3 +25,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python scripts/reference_worker_v1.py
+      - name: Publish encrypted envelope only
+        if: ${{ always() && hashFiles('reference-result-envelope.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: r1
+          path: reference-result-envelope.json
+          if-no-files-found: error
