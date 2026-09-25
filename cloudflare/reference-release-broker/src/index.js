@@ -114,16 +114,12 @@ async function importBrokerSigner(privateJwkText) {
 function policyFromEnv(env) {
   const policy = {
     audience: EXPECTED_AUDIENCE,
-    repository_id: String(env.ALLOWED_REPOSITORY_ID || ''),
-    repository_owner_id: String(env.ALLOWED_REPOSITORY_OWNER_ID || ''),
     job_workflow_ref: String(env.ALLOWED_JOB_WORKFLOW_REF || ''),
     job_workflow_sha: String(env.ALLOWED_JOB_WORKFLOW_SHA || ''),
     max_admission_seconds: Number(env.MAX_ADMISSION_SECONDS || 900),
   };
   if (
-    !/^\d+$/.test(policy.repository_id)
-    || !/^\d+$/.test(policy.repository_owner_id)
-    || !policy.job_workflow_ref
+    !policy.job_workflow_ref
     || !/^[0-9a-f]{40}$/.test(policy.job_workflow_sha)
     || !Number.isInteger(policy.max_admission_seconds)
     || policy.max_admission_seconds < 1
@@ -170,6 +166,7 @@ async function handleRelease(request, env) {
     run_id: String(claims.run_id || ''),
     run_attempt: String(claims.run_attempt || ''),
     harness_sha: String(policy.job_workflow_sha),
+    identity_sha256: String(grantPayload.identity_sha256 || ''),
     worker_key_id: workerKeyId,
     broker_key_id: signer.keyId,
   };
