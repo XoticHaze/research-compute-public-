@@ -46,3 +46,27 @@ A private grant is explicitly bound to the expected broker key ID, so substituti
 The broker ticket expires at `admission_not_after`.
 
 Once the private authority verifies the ticket and admits the workload, the ticket is consumed/dead. The admitted job uses the separate encrypted execution lease from the private job contract.
+
+## Cloudflare resource scoping
+
+Cloudflare now supports Developer Platform roles scoped to an **individual Worker**.
+
+Use that to preserve the independent trust boundary without requiring a separate Cloudflare account:
+
+- the GitHub CI token may retain Editor rights only to explicitly selected ordinary application Workers;
+- the release broker Worker must be **excluded** from every GitHub-held mutable scope;
+- GitHub may have at most Metadata Read-Only access to the broker if operationally useful; no Content Read-Only is required for normal execution;
+- the broker's Durable Object inherits the broker Worker's permissions, so excluding the Worker from GitHub's Editor/Admin scopes also excludes mutation of its Durable Object through that token;
+- rotate any existing account-wide Workers edit token after narrowing it, because historical broad tokens defeat the intended separation.
+
+Broker deployment itself is performed from an independently authenticated operator/admin path or another non-GitHub authority.
+
+## Network exposure
+
+This broker has no business-facing purpose.
+
+- `workers_dev = false`;
+- `preview_urls = false`;
+- attach only the intended neutral custom domain/route through the independent Cloudflare administration path;
+- the release endpoint authenticates the caller with GitHub OIDC and fails closed without it;
+- do not add a GitHub-stored Cloudflare Access service token as a prerequisite, because that would create another reusable credential in the domain being policed.
