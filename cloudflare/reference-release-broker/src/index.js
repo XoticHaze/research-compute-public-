@@ -179,7 +179,7 @@ async function handleRelease(request, env) {
     policy.max_admission_seconds,
   );
 
-  validateClaims(claims, policy, grant, now);
+  await validateClaims(claims, policy, grant, now);
 
   const id = env.GRANT_LEDGER.idFromName(String(grant.grant_id));
   const stub = env.GRANT_LEDGER.get(id);
