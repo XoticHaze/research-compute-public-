@@ -1,6 +1,9 @@
 import fs from 'node:fs';
 
 const index = fs.readFileSync('cloudflare/reference-release-broker/src/index.js', 'utf8');
+const ticket = fs.readFileSync('cloudflare/reference-release-broker/src/ticket.js', 'utf8');
+const grant = fs.readFileSync('cloudflare/reference-release-broker/src/grant.js', 'utf8');
+const brokerSource = index + '\n' + ticket + '\n' + grant;
 const wrangler = fs.readFileSync('cloudflare/reference-release-broker/wrangler.jsonc', 'utf8');
 const deploy = fs.readFileSync('cloudflare/reference-release-broker/DEPLOYMENT_BOUNDARY.md', 'utf8');
 
@@ -15,7 +18,7 @@ for (const needle of [
   "signReleaseTicket",
   "grant_already_consumed",
 ]) {
-  if (!index.includes(needle)) throw new Error('broker_contract_missing_' + needle);
+  if (!brokerSource.includes(needle)) throw new Error('broker_contract_missing_' + needle);
 }
 if (!wrangler.includes('"workers_dev": false')) throw new Error('workers_dev_must_be_false');
 if (!wrangler.includes('"preview_urls": false')) throw new Error('preview_urls_must_be_false');
