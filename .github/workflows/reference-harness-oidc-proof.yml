@@ -1,0 +1,16 @@
+name: Reference Harness OIDC Proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/reference-harness-oidc-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  call-reference-harness:
+    uses: XoticHaze/research-compute-public-/.github/workflows/secure-compute-harness-v1.yml@155e3120494ddb0f81b88cb901c3dffc96e687f7
