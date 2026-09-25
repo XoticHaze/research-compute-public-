@@ -6,6 +6,9 @@ on:
     paths:
       - 'cloudflare/reference-release-broker/**'
       - 'scripts/reference_release_grant_v1.py'
+      - 'tests/reference_release_intent_interop.mjs'
+      - 'tests/reference_release_intent_interop_prepare.py'
+      - 'scripts/reference_release_intent_v1.py'
       - 'tests/reference_release_broker_policy.mjs'
       - 'tests/reference_release_ticket_interop.py'
       - 'tests/reference_release_grant_interop_prepare.py'
@@ -47,13 +50,17 @@ jobs:
         run: node tests/reference_release_grant_interop.mjs
       - name: Prove Python private-authority interoperability
         run: python tests/reference_release_ticket_interop.py
+      - name: Prepare offline signed intent
+        run: python tests/reference_release_intent_interop_prepare.py
+      - name: Prove WebCrypto verifies offline signed intent
+        run: node tests/reference_release_intent_interop.mjs
       - name: Validate broker package and dry-run build
         run: |
           node --check cloudflare/reference-release-broker/src/index.js
-          node --check cloudflare/reference-release-broker/src/grant.js
+          node --check cloudflare/reference-release-broker/src/intent.js
           node --check cloudflare/reference-release-broker/src/ticket.js
           node tests/reference_release_broker_package.mjs
-          npx --yes wrangler@4.131.2 deploy --dry-run             --config cloudflare/reference-release-broker/wrangler.jsonc             --outdir "$RUNNER_TEMP/reference-release-broker-dry-run"
+          npx --yes wrangler@4.135.0 deploy --dry-run             --config cloudflare/reference-release-broker/wrangler.jsonc             --outdir "$RUNNER_TEMP/reference-release-broker-dry-run"
       - name: Ensure proof files contain no private signing key
         run: |
           set -euo pipefail
