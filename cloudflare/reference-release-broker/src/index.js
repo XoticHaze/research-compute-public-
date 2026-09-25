@@ -144,27 +144,20 @@ async function handleRelease(request, env) {
   let body;
   try { body = JSON.parse(raw); } catch { throw new Error('request_json_rejected'); }
 
-  const fields = new Set(['worker_key_id','grant_id']);
+  const fields = new Set(['worker_key_id','intent']);
   if (!body || Object.keys(body).length !== fields.size || Object.keys(body).some((k) => !fields.has(k))) {
     throw new Error('request_fields_rejected');
   }
   const workerKeyId = String(body.worker_key_id || '');
-  const requestedGrantId = String(body.grant_id || '');
   if (!/^sha256:[0-9a-f]{64}$/.test(workerKeyId)) throw new Error('worker_key_rejected');
-  if (!/^[A-Za-z0-9_-]{16,128}$/.test(requestedGrantId)) throw new Error('grant_id_rejected');
+  if (!body.intent || typeof body.intent !== 'object') throw new Error('intent_rejected');
 
   const policy = policyFromEnv(env);
   const claims = await verifyGithubOidc(auth.slice(7));
   const signer = await importBrokerSigner(env.BROKER_SIGNING_PRIVATE_JWK);
   const now = Math.floor(Date.now() / 1000);
 
-  if (typeof env.BOOTSTRAP_SIGNED_INTENT_JSON !== 'string' || !env.BOOTSTRAP_SIGNED_INTENT_JSON) {
-    throw new Error('intent_unconfigured');
-  }
-  let intentWrapper;
-  try { intentWrapper = JSON.parse(env.BOOTSTRAP_SIGNED_INTENT_JSON); }
-  catch { throw new Error('intent_unconfigured'); }
-
+  const intentWrapper = body.intent;
   const policyDigest = await callerPolicySha256(claims);
   let intentPayload;
   try {
@@ -173,7 +166,7 @@ async function handleRelease(request, env) {
     throw new Error('intent_payload_rejected');
   }
   const expectedIntent = {
-    grant_id: requestedGrantId,
+    grant_id: String(intentPayload.grant_id || ''),
     caller_policy_sha256: policyDigest,
     harness_sha: String(policy.job_workflow_sha),
     broker_key_id: signer.keyId,
