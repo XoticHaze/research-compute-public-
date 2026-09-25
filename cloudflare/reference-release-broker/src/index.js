@@ -252,7 +252,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname === '/healthz') {
-      return json({ ok: true, service: 'reference-release-broker-v1' }, 200);
+      return json({ ok: true }, 200);
     }
     if (request.method !== 'POST' || url.pathname !== '/v1/release') {
       return json({ error: 'not_found' }, 404);
