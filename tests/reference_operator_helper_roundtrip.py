@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
-from scripts.reference_release_intent_v1 import ExpectedIntent, verify_intent
-
-
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.reference_release_intent_v1 import ExpectedIntent, verify_intent
 
 
 def main() -> int:
