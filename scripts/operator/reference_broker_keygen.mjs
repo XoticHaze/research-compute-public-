@@ -49,7 +49,7 @@ const intent = {
   harness_sha: HARNESS_SHA,
   broker_key_id: brokerKeyId,
   not_before: now - 30,
-  intent_not_after: now + 24 * 60 * 60,
+  intent_not_after: now + 72 * 60 * 60,
 };
 const payload = Buffer.from(canonical(intent), 'utf8');
 const signature = new Uint8Array(await crypto.webcrypto.subtle.sign(
