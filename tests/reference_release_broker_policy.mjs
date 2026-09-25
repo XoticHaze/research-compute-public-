@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import {
+  callerIdentitySha256,
   validateClaims,
   generateSigningKeypair,
   signReleaseTicket,
@@ -9,8 +10,6 @@ const now = 100000;
 const harnessSha = '155e3120494ddb0f81b88cb901c3dffc96e687f7';
 const policy = {
   audience: 'secure-compute-reference-v1',
-  repository_id: '1358005162',
-  repository_owner_id: '152584286',
   job_workflow_ref: 'XoticHaze/research-compute-public-/.github/workflows/secure-compute-harness-v1.yml@155e3120494ddb0f81b88cb901c3dffc96e687f7',
   job_workflow_sha: harnessSha,
   max_admission_seconds: 900,
@@ -20,14 +19,18 @@ const grant = {
   run_id: '36177988341',
   run_attempt: '1',
   harness_sha: harnessSha,
+  identity_sha256: '',
   worker_key_id: 'sha256:' + '2'.repeat(64),
   admission_not_after: now + 300,
 };
 const claims = {
   iss: 'https://token.actions.githubusercontent.com',
   aud: 'secure-compute-reference-v1',
-  repository_id: policy.repository_id,
-  repository_owner_id: policy.repository_owner_id,
+  repository_id: '1358005162',
+  repository_owner_id: '152584286',
+  repository_visibility: 'public',
+  ref: 'refs/heads/main',
+  event_name: 'push',
   job_workflow_ref: policy.job_workflow_ref,
   job_workflow_sha: policy.job_workflow_sha,
   run_id: grant.run_id,
@@ -37,8 +40,9 @@ const claims = {
   nbf: now - 10,
   exp: now + 300,
 };
+grant.identity_sha256 = await callerIdentitySha256(claims);
 
-validateClaims(claims, policy, grant, now);
+await validateClaims(claims, policy, grant, now);
 
 for (const mutate of [
   c => { c.job_workflow_sha = '9'.repeat(40); },
@@ -50,14 +54,14 @@ for (const mutate of [
   const bad = structuredClone(claims);
   mutate(bad);
   let rejected = false;
-  try { validateClaims(bad, policy, grant, now); } catch { rejected = true; }
+  try { await validateClaims(bad, policy, grant, now); } catch { rejected = true; }
   if (!rejected) throw new Error('negative_oidc_case_not_rejected');
 }
 
 const longGrant = structuredClone(grant);
 longGrant.admission_not_after = now + 5 * 60 * 60;
 let longRejected = false;
-try { validateClaims(claims, policy, longGrant, now); } catch { longRejected = true; }
+try { await validateClaims(claims, policy, longGrant, now); } catch { longRejected = true; }
 if (!longRejected) throw new Error('five_hour_admission_ticket_not_rejected');
 
 const signer = await generateSigningKeypair();
