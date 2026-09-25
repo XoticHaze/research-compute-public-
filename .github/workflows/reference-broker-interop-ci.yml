@@ -16,6 +16,9 @@ on:
       - 'tests/reference_release_broker_package.mjs'
       - 'tests/reference_live_release_contract.py'
       - 'scripts/reference_release_ticket_v1.py'
+      - 'scripts/operator/reference_release_keygen.mjs'
+      - 'scripts/operator/reference_release_prepare_intent.mjs'
+      - 'tests/reference_operator_helper_roundtrip.py'
       - '.github/workflows/reference-broker-interop-ci.yml'
   pull_request:
     paths:
@@ -59,6 +62,8 @@ jobs:
         run: node tests/reference_release_intent_interop.mjs
       - name: Prove pinned live broker-harness contract
         run: python tests/reference_live_release_contract.py
+      - name: Prove local operator key and intent helpers
+        run: python tests/reference_operator_helper_roundtrip.py
       - name: Validate broker package and dry-run build
         run: |
           node --check cloudflare/reference-release-broker/src/index.js
