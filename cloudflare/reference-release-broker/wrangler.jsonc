@@ -25,6 +25,6 @@
     "ALLOWED_JOB_WORKFLOW_REF": "XoticHaze/research-compute-public-/.github/workflows/secure-compute-harness-v1.yml@477b76085c06f77fee72b57771225a66545aa43f",
     "ALLOWED_JOB_WORKFLOW_SHA": "477b76085c06f77fee72b57771225a66545aa43f",
     "MAX_ADMISSION_SECONDS": "300",
-    "MAX_INTENT_SECONDS": "86400"
+    "MAX_INTENT_SECONDS": "259200"
   }
 }
