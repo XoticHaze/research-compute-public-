@@ -37,8 +37,22 @@ function callerIdentity(claims) {
   };
 }
 
+function callerPolicyIdentity(claims) {
+  return {
+    repository_id: String(claims.repository_id || ''),
+    repository_owner_id: String(claims.repository_owner_id || ''),
+    repository_visibility: String(claims.repository_visibility || ''),
+    ref: String(claims.ref || ''),
+    event_name: String(claims.event_name || ''),
+  };
+}
+
 async function callerIdentitySha256(claims) {
   return sha256Hex(utf8(canonical(callerIdentity(claims))));
+}
+
+async function callerPolicySha256(claims) {
+  return sha256Hex(utf8(canonical(callerPolicyIdentity(claims))));
 }
 
 async function validateClaims(claims, policy, grant, nowSeconds) {
@@ -126,7 +140,9 @@ async function signReleaseTicket(privateKey, signerKeyId, grant, nowSeconds) {
 
 export {
   callerIdentity,
+  callerPolicyIdentity,
   callerIdentitySha256,
+  callerPolicySha256,
   validateClaims,
   generateSigningKeypair,
   signReleaseTicket,
