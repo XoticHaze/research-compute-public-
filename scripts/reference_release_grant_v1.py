@@ -51,7 +51,7 @@ def _canonical(node: dict) -> bytes:
 def _public_raw(key: ec.EllipticCurvePublicKey) -> bytes:
     return key.public_bytes(
         serialization.Encoding.X962,
-        serialization.PublicFormat.CompressedPoint,
+        serialization.PublicFormat.UncompressedPoint,
     )
 
 
