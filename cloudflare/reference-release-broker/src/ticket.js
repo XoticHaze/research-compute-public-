@@ -25,10 +25,26 @@ async function sha256Hex(bytes) {
   return [...digest].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-function validateClaims(claims, policy, grant, nowSeconds) {
+function callerIdentity(claims) {
+  return {
+    repository_id: String(claims.repository_id || ''),
+    repository_owner_id: String(claims.repository_owner_id || ''),
+    repository_visibility: String(claims.repository_visibility || ''),
+    ref: String(claims.ref || ''),
+    event_name: String(claims.event_name || ''),
+    run_id: String(claims.run_id || ''),
+    run_attempt: String(claims.run_attempt || ''),
+  };
+}
+
+async function callerIdentitySha256(claims) {
+  return sha256Hex(utf8(canonical(callerIdentity(claims))));
+}
+
+async function validateClaims(claims, policy, grant, nowSeconds) {
   const required = [
-    'iss','aud','repository_id','repository_owner_id',
-    'job_workflow_ref','job_workflow_sha','run_id','run_attempt',
+    'iss','aud','repository_id','repository_owner_id','repository_visibility',
+    'ref','event_name','job_workflow_ref','job_workflow_sha','run_id','run_attempt',
     'runner_environment','iat','nbf','exp',
   ];
   for (const key of required) {
@@ -39,8 +55,6 @@ function validateClaims(claims, policy, grant, nowSeconds) {
   if (claims.iss !== 'https://token.actions.githubusercontent.com') throw new Error('oidc_issuer_rejected');
   const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
   if (!aud.includes(policy.audience)) throw new Error('oidc_audience_rejected');
-  if (String(claims.repository_id) !== String(policy.repository_id)) throw new Error('oidc_repository_id_rejected');
-  if (String(claims.repository_owner_id) !== String(policy.repository_owner_id)) throw new Error('oidc_owner_id_rejected');
   if (claims.job_workflow_ref !== policy.job_workflow_ref) throw new Error('oidc_harness_ref_rejected');
   if (claims.job_workflow_sha !== policy.job_workflow_sha) throw new Error('oidc_harness_sha_rejected');
   if (claims.runner_environment !== 'github-hosted') throw new Error('oidc_runner_rejected');
@@ -58,6 +72,8 @@ function validateClaims(claims, policy, grant, nowSeconds) {
   if (exp - iat > 600) throw new Error('oidc_lifetime_rejected');
 
   if (String(grant.harness_sha) !== String(policy.job_workflow_sha)) throw new Error('grant_harness_rejected');
+  const identityDigest = await callerIdentitySha256(claims);
+  if (String(grant.identity_sha256) !== identityDigest) throw new Error('grant_identity_rejected');
   if (!String(grant.worker_key_id).match(/^sha256:[0-9a-f]{64}$/)) throw new Error('grant_worker_key_rejected');
   if (!String(grant.grant_id || '').match(/^[A-Za-z0-9_-]{16,128}$/)) throw new Error('grant_id_rejected');
   const admission = Number(grant.admission_not_after);
@@ -108,4 +124,10 @@ async function signReleaseTicket(privateKey, signerKeyId, grant, nowSeconds) {
   };
 }
 
-export { validateClaims, generateSigningKeypair, signReleaseTicket };
+export {
+  callerIdentity,
+  callerIdentitySha256,
+  validateClaims,
+  generateSigningKeypair,
+  signReleaseTicket,
+};
