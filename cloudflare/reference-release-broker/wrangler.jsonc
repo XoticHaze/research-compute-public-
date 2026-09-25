@@ -3,7 +3,7 @@
   "name": "reference-release-broker-v1",
   "main": "src/index.js",
   "compatibility_date": "2026-09-25",
-  "workers_dev": false,
+  "workers_dev": true,
   "preview_urls": false,
   "keep_vars": false,
   "durable_objects": {
