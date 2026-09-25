@@ -1,7 +1,4 @@
 import fs from 'node:fs';
-import { webcrypto } from 'node:crypto';
-globalThis.crypto = webcrypto;
-
 import {
   validateClaims,
   generateSigningKeypair,
