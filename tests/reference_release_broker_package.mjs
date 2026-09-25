@@ -7,9 +7,8 @@ const deploy = fs.readFileSync('cloudflare/reference-release-broker/DEPLOYMENT_B
 for (const needle of [
   "verifyGithubOidc",
   "job_workflow_sha",
-  "repository_id",
-  "repository_owner_id",
   "verifyAuthorityGrant",
+  "grant_identity_rejected",
   "GRANT_LEDGER",
   "BROKER_SIGNING_PRIVATE_JWK",
   "AUTHORITY_PUBLIC_B64",
