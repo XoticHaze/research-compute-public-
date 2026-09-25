@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: XoticHaze/research-compute-public-
-          ref: f806079e62571fa46539d26efe374cecb6f208f0
+          ref: 16ec0a2a94b058fa9b120b707de92463e64b068b
           path: reference-harness-source
           persist-credentials: false
 
