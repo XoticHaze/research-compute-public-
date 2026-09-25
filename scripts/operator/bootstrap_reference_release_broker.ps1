@@ -61,10 +61,6 @@ Get-Content -LiteralPath $AuthorityPublic -Raw |
   npx --yes wrangler@4.135.0 secret put AUTHORITY_PUBLIC_B64 --config $Wrangler
 if ($LASTEXITCODE -ne 0) { throw "authority public-key binding failed" }
 
-Write-Host "Binding one-time offline-signed intent..."
-Get-Content -LiteralPath $SignedIntent -Raw |
-  npx --yes wrangler@4.135.0 secret put BOOTSTRAP_SIGNED_INTENT_JSON --config $Wrangler
-if ($LASTEXITCODE -ne 0) { throw "signed-intent binding failed" }
 
 $health = Invoke-RestMethod -Method Get -Uri "$BrokerUrl/healthz"
 if ($health.ok -ne $true) { throw "broker health proof failed" }
