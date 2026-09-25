@@ -19,6 +19,7 @@ for (const needle of [
   if (!index.includes(needle)) throw new Error('broker_contract_missing_' + needle);
 }
 if (!wrangler.includes('"workers_dev": false')) throw new Error('workers_dev_must_be_false');
+if (!wrangler.includes('"preview_urls": false')) throw new Error('preview_urls_must_be_false');
 if (!wrangler.includes('"keep_vars": false')) throw new Error('keep_vars_must_be_false');
 if (!deploy.includes('not deployed by a GitHub Actions workflow')) throw new Error('independent_deploy_boundary_missing');
 if (/CLOUDFLARE_API_TOKEN|github\.token|secrets\./.test(wrangler)) throw new Error('github_deploy_credential_reference_rejected');
