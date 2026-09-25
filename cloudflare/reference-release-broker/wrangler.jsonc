@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "reference-release-broker-v1",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-25",
+  "workers_dev": false,
+  "keep_vars": false,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GRANT_LEDGER",
+        "class_name": "GrantLedger"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["GrantLedger"]
+    }
+  ]
+}
