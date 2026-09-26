@@ -1,0 +1,26 @@
+{
+  "schema": "market_research.schedule13d_r1_phase1_request.v1",
+  "id": "A_SCHEDULE13D_ACTIVISM_R1_PHASE1",
+  "years": [
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025
+  ],
+  "form": "SC 13D exact; amendments/13G excluded",
+  "gate": {
+    "minimum_events": 150,
+    "minimum_unique_subject_ciks": 75,
+    "pit_ticker_mapping_coverage_pct": 95
+  },
+  "source": [
+    "SEC quarterly master index",
+    "SEC filing acceptance metadata"
+  ],
+  "protected_2026_plus": true,
+  "no_returns_until_identity_admitted": true,
+  "live_trading_change": false
+}
