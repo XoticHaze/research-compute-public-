@@ -60,7 +60,7 @@
   "decision_at": "2026-09-10T07:25:00+00:00",
   "forward": {
     "first_close": "2026-09-10",
-    "latest_close": "2026-09-24",
+    "latest_close": "2026-09-25",
     "observations": [
       {
         "cost_detail": {
@@ -177,27 +177,37 @@
         "p249_plus_p266_gross": 0.0007380254498449148,
         "p249_plus_p266_net": 0.0007380254498449148,
         "satellite_increment_net": 0.0004918408211948619
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-09-25",
+        "holding_month": "2026-09",
+        "p249_core_gross": 0.004185776809123933,
+        "p249_core_net": 0.004185776809123933,
+        "p249_plus_p266_gross": 0.004426945262331626,
+        "p249_plus_p266_net": 0.004426945262331626,
+        "satellite_increment_net": 0.00024116845320769267
       }
     ],
     "p249_core_net": {
-      "annualized_vol": 0.22140436572010153,
-      "cumulative_return": 0.019504714381630484,
-      "days": 11,
+      "annualized_vol": 0.21137288388229014,
+      "cumulative_return": 0.023772133571881682,
+      "days": 12,
       "max_drawdown": -0.022078059615729062,
-      "sharpe_rf0": 2.101199417125837
+      "sharpe_rf0": 2.433368623550018
     },
     "p249_plus_p266_net": {
-      "annualized_vol": 0.23071093262525383,
-      "cumulative_return": 0.013458019810957067,
-      "days": 11,
+      "annualized_vol": 0.22043688868629388,
+      "cumulative_return": 0.017944542990331103,
+      "days": 12,
       "max_drawdown": -0.022644004463825196,
-      "sharpe_rf0": 1.4331189301405927
+      "sharpe_rf0": 1.7966550005623503
     },
-    "satellite_increment_cumulative": -0.005882230818750833
+    "satellite_increment_cumulative": -0.005642480974051067
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-09-26T00:46:11.438678+00:00",
+  "observed_at": "2026-09-26T07:53:10.456622+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_health": {
@@ -205,33 +215,33 @@
     "common_session_lags_source_max": false,
     "lagging_symbols_vs_source_max": [],
     "latest_by_symbol": {
-      "AVDV": "2026-09-24",
-      "AVUV": "2026-09-24",
-      "DBC": "2026-09-24",
-      "GLD": "2026-09-24",
-      "IGV": "2026-09-24",
-      "IHI": "2026-09-24",
-      "ITA": "2026-09-24",
-      "IYT": "2026-09-24",
-      "KRE": "2026-09-24",
-      "QQQ": "2026-09-24",
-      "SOXX": "2026-09-24",
-      "SPY": "2026-09-24",
-      "TLT": "2026-09-24",
-      "XAR": "2026-09-24",
-      "XBI": "2026-09-24",
-      "XHB": "2026-09-24",
-      "XME": "2026-09-24",
-      "XOP": "2026-09-24",
-      "XPH": "2026-09-24",
-      "XRT": "2026-09-24",
-      "XSD": "2026-09-24",
-      "XSW": "2026-09-24",
-      "XTN": "2026-09-24"
+      "AVDV": "2026-09-25",
+      "AVUV": "2026-09-25",
+      "DBC": "2026-09-25",
+      "GLD": "2026-09-25",
+      "IGV": "2026-09-25",
+      "IHI": "2026-09-25",
+      "ITA": "2026-09-25",
+      "IYT": "2026-09-25",
+      "KRE": "2026-09-25",
+      "QQQ": "2026-09-25",
+      "SOXX": "2026-09-25",
+      "SPY": "2026-09-25",
+      "TLT": "2026-09-25",
+      "XAR": "2026-09-25",
+      "XBI": "2026-09-25",
+      "XHB": "2026-09-25",
+      "XME": "2026-09-25",
+      "XOP": "2026-09-25",
+      "XPH": "2026-09-25",
+      "XRT": "2026-09-25",
+      "XSD": "2026-09-25",
+      "XSW": "2026-09-25",
+      "XTN": "2026-09-25"
     },
-    "latest_scored_common_session": "2026-09-24",
+    "latest_scored_common_session": "2026-09-25",
     "provider": "yfinance_adjusted_close",
-    "source_max_date": "2026-09-24"
+    "source_max_date": "2026-09-25"
   },
   "source_pins": {
     "P248_source_commit": "20490f115d901aac3b586c33072c1157ad4d10a6",
