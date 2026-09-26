@@ -152,21 +152,21 @@
         "cost_detail": null,
         "date": "2026-09-22",
         "holding_month": "2026-09",
-        "p249_core_gross": 0.009820506307959472,
-        "p249_core_net": 0.009820506307959472,
-        "p249_plus_p266_gross": 0.007365379730969606,
-        "p249_plus_p266_net": 0.007365379730969606,
-        "satellite_increment_net": -0.002455126576989866
+        "p249_core_gross": 0.01230552124892162,
+        "p249_core_net": 0.01230552124892162,
+        "p249_plus_p266_gross": 0.01427243914684027,
+        "p249_plus_p266_net": 0.01427243914684027,
+        "satellite_increment_net": 0.001966917897918651
       },
       {
         "cost_detail": null,
         "date": "2026-09-23",
         "holding_month": "2026-09",
-        "p249_core_gross": -0.008277805479499308,
-        "p249_core_net": -0.008277805479499308,
-        "p249_plus_p266_gross": -0.008938717367608323,
-        "p249_plus_p266_net": -0.008938717367608323,
-        "satellite_increment_net": -0.0006609118881090153
+        "p249_core_gross": -0.010678847080443518,
+        "p249_core_net": -0.010678847080443518,
+        "p249_plus_p266_gross": -0.015625540875324494,
+        "p249_plus_p266_net": -0.015625540875324494,
+        "satellite_increment_net": -0.0049466937948809755
       },
       {
         "cost_detail": null,
@@ -180,24 +180,24 @@
       }
     ],
     "p249_core_net": {
-      "annualized_vol": 0.21562724729593444,
-      "cumulative_return": 0.019470248748376884,
+      "annualized_vol": 0.22140436572010153,
+      "cumulative_return": 0.019504714381630484,
       "days": 11,
       "max_drawdown": -0.022078059615729062,
-      "sharpe_rf0": 2.1485734160671504
+      "sharpe_rf0": 2.101199417125837
     },
     "p249_plus_p266_net": {
-      "annualized_vol": 0.2129236501510887,
-      "cumulative_return": 0.013394011911613601,
+      "annualized_vol": 0.23071093262525383,
+      "cumulative_return": 0.013458019810957067,
       "days": 11,
       "max_drawdown": -0.022644004463825196,
-      "sharpe_rf0": 1.5291434289391916
+      "sharpe_rf0": 1.4331189301405927
     },
-    "satellite_increment_cumulative": -0.006006778609649266
+    "satellite_increment_cumulative": -0.005882230818750833
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-09-25T08:01:09.689416+00:00",
+  "observed_at": "2026-09-26T00:46:11.438678+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_health": {
