@@ -1,0 +1,33 @@
+{
+  "schema": "foundry.research.industry_component_stage1_contract.v1",
+  "parent_issue": 228,
+  "development_universe": [
+    "GE",
+    "RTX",
+    "BA",
+    "GD",
+    "LMT",
+    "HWM",
+    "NOC",
+    "TDG",
+    "LHX",
+    "AXON"
+  ],
+  "external_holdout_universe": [
+    "CW",
+    "BWXT",
+    "TXT",
+    "HII"
+  ],
+  "reserve_universe": [
+    "WWD",
+    "FTAI",
+    "HEI",
+    "KTOS"
+  ],
+  "primary_industry_etf": "ITA",
+  "broad_sector_context": "XLI",
+  "secondary_control": "PPA",
+  "source_start": "2018-01-01",
+  "note": "Frozen #117/#228 development-only Stage-1 mechanical baseline. Holdouts recorded but evaluator must not load them."
+}
