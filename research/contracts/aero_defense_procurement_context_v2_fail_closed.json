@@ -1,0 +1,12 @@
+{
+  "schema": "research.aero_defense_procurement_context.v2",
+  "parent_issue": 228,
+  "architecture_parent_issue": 217,
+  "development_only": true,
+  "historical_execution_state": "INSUFFICIENT_LONG_CYCLE_INFORMATION_SET",
+  "current_source_scope": "current/prospective context only",
+  "blocker": "No causal historical procurement/backlog/order series with reliable as-of timestamps is yet bound. Current FY2026 budget context cannot be backfilled across history or used to claim historical residual alpha.",
+  "prospective_use": "May tag future A&D observations after source publication with predeclared exposure buckets, without changing the price-only model.",
+  "historical_gate": "Do not execute procurement-context historical residual head until a timestamped historical source is prospectively admitted per research-foundry #217/#228.",
+  "guards": ["no backfilled pseudo-history","no ticker exposure reassignment after outcomes","no unlagged geopolitical headlines","no holdout load","no threshold sweep","no allocation/runtime/live authority"]
+}
