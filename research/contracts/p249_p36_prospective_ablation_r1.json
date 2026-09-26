@@ -1,0 +1,13 @@
+{
+  "schema": "research.p249_p36_prospective_ablation_r1",
+  "frozen_at": "2026-09-26",
+  "parent": "P249",
+  "question": "Does the chronology-fragile P36 primitive add prospective value to the otherwise robust SMALL_VALUE + P64 core?",
+  "incumbent": "unchanged P249 equal-third SMALL_VALUE/P64/P36",
+  "challenger": "fixed 50/50 SMALL_VALUE/P64; P36 omitted, no replacement asset",
+  "start_rule": "first monthly decision boundary strictly after this contract freeze; do not backfill September 2026 outcomes",
+  "costs": {"SMALL_VALUE_entry_bp": 10, "P64_bp": 50, "P36_bp": 50},
+  "evaluation": ["net cumulative return","matched excess","SPY and QQQ opportunity cost","annualized volatility","max drawdown","Sharpe rf0","monthly hit breadth"],
+  "gate": "challenger must improve matched excess or risk-adjusted utility without losing broad-market opportunity cost across at least three completed monthly decisions",
+  "guards": ["no weight search","no P64 trend-only substitution in this test","no lookback/top-k/threshold change","no current-September backfill","no allocation/runtime/broker/live authority"]
+}
