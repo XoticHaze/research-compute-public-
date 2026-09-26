@@ -1,0 +1,26 @@
+{
+  "schema": "research.aero_defense_procurement_context.v1",
+  "parent_issue": 228,
+  "development_only": true,
+  "primary_industry_etf": "ITA",
+  "broad_sector_context": "XLI",
+  "secondary_control": "PPA",
+  "information_role": "slow procurement context only; never realized company revenue",
+  "source_authority": "FY2026 US defense procurement request / Senate committee recommendation",
+  "exposure_mapping_rule": "assign predeclared company exposure buckets before any return inspection",
+  "evaluation": "exact price-only component-vs-ITA control versus same control plus lag-known procurement context",
+  "required_outputs": [
+    "matched ITA excess",
+    "chronology breadth",
+    "drawdown delta",
+    "effective sample/concentration",
+    "context incremental attribution"
+  ],
+  "guards": [
+    "no ticker exposure reassignment after outcomes",
+    "no unlagged geopolitical headlines",
+    "no holdout load",
+    "no threshold sweep",
+    "no allocation/runtime/live authority"
+  ]
+}
