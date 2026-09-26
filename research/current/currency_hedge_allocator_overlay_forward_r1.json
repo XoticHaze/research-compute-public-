@@ -25,10 +25,10 @@
   },
   "decision_use": "Prospective portfolio-level falsifier: determine whether the replicated developed-ex-US currency hedge improves the actual frozen allocator target beyond both unchanged cash and an equal unhedged developed-ex-US overlay.",
   "entry_date": "2026-09-14",
-  "forward_sessions": 8,
-  "generated_at": "2026-09-25T02:58:59.402908+00:00",
-  "latest_common_market_date": "2026-09-24",
-  "market_data_asof": "2026-09-25",
+  "forward_sessions": 10,
+  "generated_at": "2026-09-26T03:02:26.952198+00:00",
+  "latest_common_market_date": "2026-09-25",
+  "market_data_asof": "2026-09-26",
   "positions": {
     "hedged_challenger": {
       "AVDV": 0.1,
@@ -116,29 +116,29 @@
       "portfolio_roundtrip_cost_bps_if_flattened_now": 2.5
     },
     "hedged_challenger": {
-      "excess_vs_incumbent_bps": 0.6602,
-      "gross_return_bps": 417.5943,
-      "net_if_flattened_now_bps": 415.0943
+      "excess_vs_incumbent_bps": 3.6005,
+      "gross_return_bps": 472.0278,
+      "net_if_flattened_now_bps": 469.5278
     },
-    "incumbent_return_bps": 414.4341,
+    "incumbent_return_bps": 465.9273,
     "mechanism_attribution": {
-      "hedged_minus_spy_overlay_bps": -2.2317,
-      "hedged_minus_unhedged_bps": 9.3888,
+      "hedged_minus_spy_overlay_bps": -2.0384,
+      "hedged_minus_unhedged_bps": 7.3428,
       "portfolio_improvement_and_hedge_edge_both_positive": true
     },
     "spy_opportunity_control": {
-      "excess_vs_incumbent_bps": 2.8918,
-      "gross_return_bps": 419.826,
-      "net_if_flattened_now_bps": 417.326
+      "excess_vs_incumbent_bps": 5.6389,
+      "gross_return_bps": 474.0662,
+      "net_if_flattened_now_bps": 471.5662
     },
     "unhedged_matched_control": {
-      "excess_vs_incumbent_bps": -8.7286,
-      "gross_return_bps": 408.2055,
-      "net_if_flattened_now_bps": 405.7055
+      "excess_vs_incumbent_bps": -3.7423,
+      "gross_return_bps": 464.685,
+      "net_if_flattened_now_bps": 462.185
     }
   },
   "source": {
-    "panel_sha256": "3f05028003e9cf94986976ea0abf9baaf09fcd4aaa6e6b0b5babce89d549f0d4",
+    "panel_sha256": "63941c69798581c4f6fa81fc006475d601d9dbb84387922777129c843b1014d1",
     "provider": "Yahoo Finance via yfinance; research-only public data",
     "symbols": [
       "AVDV",
