@@ -154,6 +154,17 @@ const PRIVATE_TEST_PROBE_IDENTITY = {
   workflow_ref:
     'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-test-probe-r1.yml@refs/heads/main',
 };
+const REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-canonical-research-session-bau-r1.yml@refs/heads/main',
+};
+const REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_SOURCE =
+  '35e6b44e5c2618f780a84c1c204fe14c76bdf0e5';
+const REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_EXPIRES_AT =
+  Date.parse('2026-09-27T18:00:00Z');
+
 const PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_SOURCE =
   'd7b468ea22740df65c4b350dc15b74b0c377280f';
 const PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_EXPIRES_AT =
@@ -481,6 +492,10 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     const matchedPrivatePr733Validation = matchesIdentity(claims, PRIVATE_PR733_EXACT_VALIDATION_IDENTITY);
     const matchedPrivatePromotionReviewValidation = matchesIdentity(claims, PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_IDENTITY);
     const matchedPrivateTestProbe = matchesIdentity(claims, PRIVATE_TEST_PROBE_IDENTITY);
+    const matchedRegistryBacktestGenericSelectedSurface = matchesIdentity(
+      claims,
+      REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_IDENTITY,
+    );
     const privateTestProbeUnwrapPathAllowed = pathname === '/v1/source-vault/unwrap';
     const paperAccountHygieneCoordinatorPathAllowed = (
       pathname === '/v1/source-vault/unwrap'
@@ -516,6 +531,11 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
         || (matchedPrivatePr733Validation && privateArchivePathAllowed)
         || (matchedPrivatePromotionReviewValidation && privateArchivePathAllowed)
         || (matchedPrivateTestProbe && privateTestProbeUnwrapPathAllowed)
+        || (
+          matchedRegistryBacktestGenericSelectedSurface
+          && privateTestProbeUnwrapPathAllowed
+          && Date.now() <= REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_EXPIRES_AT
+        )
       )
       || claims.repository_visibility !== 'public'
       || !ALLOWED_PUBLIC_EVENTS.has(claims.event_name)
@@ -962,6 +982,15 @@ export class SourceExchange {
       throw new Error('vault_archive_bytes_rejected');
     }
     const requestIdentity = this._producerIdentity(request);
+    if (
+      matchesIdentity(requestIdentity, REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_IDENTITY)
+      && (
+        sourceSha !== REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_SOURCE
+        || Date.now() > REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_EXPIRES_AT
+      )
+    ) {
+      throw new Error('registry_backtest_generic_selected_surface_source_rejected');
+    }
     if (
       matchesIdentity(requestIdentity, PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY)
       && ![
