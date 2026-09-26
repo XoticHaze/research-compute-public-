@@ -695,6 +695,20 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("attest:${sourceSha}:${archiveSha}", text)
         self.assertIn("plaintext_sha256: archiveSha", text)
 
+    def test_p01_crw_dca_identity_is_source_exchange_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("P01_CRW_DCA_RESEARCH_IDENTITY", text)
+        self.assertIn(
+            "p01-crw-dca-ephemeral-rendezvous.yml@refs/heads/assistant/p01-crw-dca-adapter-20260922",
+            text,
+        )
+        self.assertIn("matchedP01CrwDca && p01CrwDcaSourcePathAllowed", text)
+        self.assertIn("pathname === '/v1/source-exchange/request'", text)
+        self.assertNotIn(
+            "matchedP01CrwDca && privateArchivePathAllowed",
+            text,
+        )
+
     def test_runtime_identity_is_exactly_pinned(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("XoticHaze/mm-ibkr-runtime", text)

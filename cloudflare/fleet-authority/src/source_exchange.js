@@ -21,6 +21,13 @@ const ALLOWED_RUNTIME_IDENTITIES = [
   CANONICAL_RUNTIME_IDENTITY,
 ];
 
+const P01_CRW_DCA_RESEARCH_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/assistant/p01-crw-dca-adapter-20260922',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/p01-crw-dca-ephemeral-rendezvous.yml@refs/heads/assistant/p01-crw-dca-adapter-20260922',
+};
+
 const UI_BUILD_VALIDATION_IDENTITY = {
   repository: 'XoticHaze/research-compute-public-',
   ref: 'refs/heads/main',
@@ -464,6 +471,12 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     const matchedRuntime = ALLOWED_RUNTIME_IDENTITIES.some(
       (identity) => matchesIdentity(claims, identity),
     );
+    const matchedP01CrwDca = matchesIdentity(claims, P01_CRW_DCA_RESEARCH_IDENTITY);
+    const p01CrwDcaSourcePathAllowed = (
+      pathname === '/v1/source-exchange/request'
+      || /^\/v1\/source-exchange\/response\/[0-9]+(?:\/chunk\/[0-9]+)?$/.test(pathname)
+      || /^\/v1\/source-exchange\/cleanup\/[0-9]+$/.test(pathname)
+    );
     const matchedUiBuild = matchesIdentity(claims, UI_BUILD_VALIDATION_IDENTITY);
     const matchedBootstrap = matchesIdentity(claims, SOURCE_VAULT_BOOTSTRAP_IDENTITY);
     const matchedOperatorDeploy = matchesIdentity(claims, OPERATOR_CONSOLE_DEPLOY_IDENTITY);
@@ -498,6 +511,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     if (
       !(
         matchedRuntime
+        || (matchedP01CrwDca && p01CrwDcaSourcePathAllowed)
         || (matchedUiBuild && privateArchivePathAllowed)
         || (matchedBootstrap && privateArchivePathAllowed)
         || (matchedOperatorDeploy && operatorDeployPathAllowed)
