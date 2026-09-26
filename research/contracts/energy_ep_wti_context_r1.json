@@ -1,0 +1,13 @@
+{
+  "schema": "research.energy_ep_wti_context.v1",
+  "parent_issue": 226,
+  "development_only": true,
+  "source_series": "DCOILWTICO",
+  "source_authority": "U.S. Energy Information Administration via FRED",
+  "information_role": "lag-known crude context only",
+  "matched_equity_benchmark": "XOP or IEO as frozen by the exact experiment; WTI never substitutes for the equity benchmark",
+  "challenger": "exact price-only component-relative control plus lag-known WTI state",
+  "publication_rule": "use only observations available by the decision cutoff; no same-day forward fill of not-yet-published values",
+  "required_outputs": ["matched benchmark excess","chronology breadth","drawdown delta","effective sample/concentration","WTI incremental attribution"],
+  "guards": ["no holdout load","no threshold sweep","no post-result lag change","no allocation/runtime/live authority"]
+}
