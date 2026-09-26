@@ -1,0 +1,4 @@
+Market Research execution trigger only.
+Scientific executable unchanged: research/p400_semiconductor_equalweight_r1.py blob 1e2f70adf31bbd18626cdb80c4942a859ef6b17f.
+Workflow unchanged: .github/workflows/p400-semiconductor-equalweight-r1.yml blob 7492444edf36f6c97c29461a5912768b52d40acb.
+No parameter, universe, date, cost, control, model, allocation, runtime, broker, or live-trading change.
