@@ -140,6 +140,31 @@ def test_allowlist_accepts_exact_news_research_regressions_only():
         validated_modules("tests.test_news_live_provider_submit")
 
 
+
+def test_allowlist_accepts_exact_capital_survivor_and_corpus_regressions_only():
+    exact = [
+        "tests.test_backtest_capital_replay_v1",
+        "tests.test_selected_runtime_account_sizing_14th31lg",
+        "tests.test_selected_runtime_account_sizing_submit_hook_14th31lg",
+        "tests.test_selected_runtime_margin_guard_14th31lg",
+        "tests.test_selected_runtime_margin_whatif_hook_14th31lg",
+        "tests.test_research_survivor_funnel",
+        "tests.test_acquire_hfdl_bounded_equity_panel",
+    ]
+    assert validated_modules(" ".join(exact)) == exact
+
+    # Exact admission must not open adjacent runtime/broker-authority modules.
+    for rejected in (
+        "tests.test_selected_runtime_submit_authority",
+        "tests.test_selected_runtime_margin_submit_live",
+        "tests.test_backtest_capital_replay_submit",
+        "tests.test_research_survivor_funnel_live",
+        "tests.test_acquire_hfdl_bounded_equity_panel_submit",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(rejected)
+
+
 def test_module_file_path_and_pytest_command_are_exact_and_shell_free():
     assert module_file_path("tests.test_model_lab_xgboost") == "tests/test_model_lab_xgboost.py"
     command = pytest_container_command("probe:test", "tests.test_model_lab_xgboost")
