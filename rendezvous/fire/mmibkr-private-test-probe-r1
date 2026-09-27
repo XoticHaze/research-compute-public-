@@ -1,22 +1,12 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "e7f0f72344063fcadbca2913206ca46d30f5b130",
-  "test_modules": [
-    "tests.test_acquire_hfdl_bounded_equity_panel",
-    "tests.test_materialize_admitted_stock_source_canonical",
-    "tests.test_external_history_admitted_ingest_contract"
-  ],
-  "requested_by": "hfdl-equity-acquisition-pr777",
-  "purpose": "Exact-private HFDL acquisition contract plus canonical stock admission regression acceptance for MM-IBKR PR777",
-  "authority": {
-    "research_only": true,
-    "broker": false,
-    "runtime_activation": false,
-    "promotion_mutation": false,
-    "live": false
-  },
-  "request_nonce": "pr777-hfdl-e7f0f723-r1",
+  "source_ref": "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
+  "test_modules": ["tests.test_strategy_backtest_registry_dispatch"],
+  "requested_by": "continue-release-b1-active-source-canary-r21",
+  "purpose": "B1 active-source canary after serialization freeze",
+  "authority": {"research_only": true, "broker": false, "runtime_activation": false, "promotion_mutation": false, "live": false},
+  "request_nonce": "continue-release-b1-r6-push-r21",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "e7f0f72344063fcadbca2913206ca46d30f5b130",
+  "current_private_reference": "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
   "parity_public_key_b64": ""
 }
