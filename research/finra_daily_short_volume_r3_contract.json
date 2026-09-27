@@ -68,7 +68,10 @@
       5
     ],
     "gross_exposure": 1,
-    "cost": "10bp one-way applied to sum(abs(delta_weight)); no separate hidden roundtrip multiplier"
+    "cost": "10bp one-way applied to sum(abs(delta_weight)); no separate hidden roundtrip multiplier",
+    "construction_detail": "On each decision date after 20-session per-symbol warmup, rank all eligible panel symbols by z-score; choose deterministic bottom ceil(20%*N) long and top ceil(20%*N) short using z-score then symbol as tie-break. Within each side, assign equal gross weight to each represented sector, then equal weight to selected symbols within that sector. Scale long and short sides to 0.5 gross each, for 1.0 total gross and approximately zero net. Do not force a sector into a tail when no member naturally qualifies.",
+    "quintile_rounding": "ceil(0.20*N eligible symbols) per tail",
+    "sector_labels_asof": "Frozen research labels above; no post-result relabeling."
   },
   "controls": [
     "same-panel equal-weight",
@@ -124,5 +127,63 @@
     "turnover",
     "coverage/missing/update-vintage manifest"
   ],
-  "live_trading_change": false
+  "live_trading_change": false,
+  "sectors": {
+    "Information Technology": [
+      "AAPL",
+      "MSFT",
+      "NVDA",
+      "AMD",
+      "AMAT",
+      "AVGO"
+    ],
+    "Financials": [
+      "JPM",
+      "BAC",
+      "GS"
+    ],
+    "Energy": [
+      "XOM",
+      "CVX",
+      "COP"
+    ],
+    "Industrials": [
+      "CAT",
+      "HON",
+      "GE"
+    ],
+    "Health Care": [
+      "JNJ",
+      "LLY",
+      "UNH"
+    ],
+    "Consumer Staples": [
+      "PG",
+      "KO",
+      "PEP"
+    ],
+    "Consumer Discretionary": [
+      "HD",
+      "MCD",
+      "NKE",
+      "TSLA"
+    ],
+    "Communication Services": [
+      "META",
+      "GOOGL",
+      "NFLX"
+    ],
+    "Utilities": [
+      "NEE",
+      "DUK"
+    ],
+    "Materials": [
+      "LIN",
+      "FCX"
+    ],
+    "Real Estate": [
+      "PLD",
+      "AMT"
+    ]
+  }
 }
