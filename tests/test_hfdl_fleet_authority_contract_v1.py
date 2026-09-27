@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 
@@ -23,4 +24,10 @@ def test_hfdl_workflow_identity_is_narrowly_bound():
     assert "id-token: write" in workflow
     assert "scripts/hfdl_api_key_envelope_consumer_v1.py" in workflow
     assert "research/hfdl_equity_history_e1.py" in workflow
-    assert "AMAT,APH" in (ROOT / "rendezvous/fire/hfdl-equity-history-e1-r1").read_text()
+    fire = json.loads(
+        (ROOT / "rendezvous/fire/hfdl-equity-history-e1-r1").read_text()
+    )
+    assert fire["schema"] == "public_research.hfdl_e1_fire.v1"
+    assert fire["symbols"] == ["AMAT", "APH"]
+    assert fire["authority"]["broker"] is False
+    assert fire["authority"]["live"] is False
