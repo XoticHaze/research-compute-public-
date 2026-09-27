@@ -9,7 +9,7 @@
   "provider_version": "raw",
   "provider_timeframe": "1min",
   "admitted_source_regime": "pitrading_pre_2022",
-  "purpose": "AMAT APH bounded artifact proof against merged MM source-feature materialization policy before 30-name batch expansion",
+  "purpose": "AMAT APH native-Parquet handoff validation against merged MM PR782 before frozen sector-batch expansion",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -19,7 +19,7 @@
   },
   "provider_format": "parquet",
   "acquisition_endpoint": "GET /v1/bars/{ticker}?version=raw",
-  "mm_source_sha": "9ba3c346e370beb8fb90f2f49e67d4c09c89a9b6",
+  "mm_source_sha": "c2cbe3e82ccd99cc9fc807ad7aa5f20bf930683b",
   "canonical_target_timeframe": "15Min",
-  "request_nonce": "data-e1-amat-aph-bounded-artifact-proof-20260927"
+  "request_nonce": "data-e1-amat-aph-native-parquet-pr1747-20260927"
 }
