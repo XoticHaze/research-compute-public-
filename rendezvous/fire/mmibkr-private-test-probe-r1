@@ -1,13 +1,14 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "7274ef7abfb0c66bd8df59ce5477f82e3cc7591e",
+  "source_ref": "ee2f521c0ec144b3e00c03585e08ec9e0076caac",
   "test_modules": [
-    "tests.test_backtest_range_contract_14th31im",
-    "tests.test_market_features_provenance_contract"
+    "tests.test_historical_source_stitch",
+    "tests.test_external_history_admitted_ingest_contract",
+    "tests.test_materialize_admitted_stock_source_canonical",
+    "tests.test_materialize_admitted_futures_dated_contract"
   ],
-  "ui_acceptance_file": "ui-react/src/canonical-market-chart-provenance.acceptance.test.mjs",
-  "requested_by": "canonical-market-chart-provenance-ui-pr774",
-  "purpose": "Exact-private backend contracts plus Node acceptance and Vite production build for MM-IBKR PR774",
+  "requested_by": "corpus-v2-admitted-history-pr773-clean-acceptance",
+  "purpose": "Clean exact-private PR773 acceptance excluding only independently proven pre-existing red continuous-materializer legacy test",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -15,8 +16,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr774-full-ui-proof-7274ef7a-r21",
+  "request_nonce": "corpus-v2-pr773-ee2f521c-clean-r3",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "7274ef7abfb0c66bd8df59ce5477f82e3cc7591e",
+  "current_private_reference": "ee2f521c0ec144b3e00c03585e08ec9e0076caac",
   "parity_public_key_b64": ""
 }
