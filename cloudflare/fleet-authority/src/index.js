@@ -328,6 +328,8 @@ export default {
         source_vault_configured: Boolean(env.SOURCE_EXCHANGE),
         private_source_authority_configured: Boolean(env.MMIBKR_PRIVATE_SOURCE_TOKEN),
         hfdl_authority_configured: Boolean(env.HFDL_API_KEY),
+        hfdl_source_vault_unwrap_enabled: true,
+        authority_policy_version: 'hfdl-mm-canonical-v1',
       });
     }
 
