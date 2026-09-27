@@ -1,12 +1,25 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
-  "test_modules": ["tests.test_strategy_backtest_registry_dispatch"],
-  "requested_by": "continue-release-b1-active-source-canary-r21",
-  "purpose": "B1 active-source canary after serialization freeze",
-  "authority": {"research_only": true, "broker": false, "runtime_activation": false, "promotion_mutation": false, "live": false},
-  "request_nonce": "continue-release-b1-r6-push-r21",
+  "source_ref": "5f05c8cd93ee109e23557a2adfdd0b1ede8eda91",
+  "test_modules": [
+    "tests.test_backtest_capital_replay_v1",
+    "tests.test_selected_runtime_account_sizing_14th31lg",
+    "tests.test_selected_runtime_account_sizing_submit_hook_14th31lg",
+    "tests.test_selected_runtime_margin_guard_14th31lg",
+    "tests.test_selected_runtime_margin_whatif_hook_14th31lg",
+    "tests.test_strategy_backtest_registry_dispatch"
+  ],
+  "requested_by": "backtest-capital-replay-pr776-latest",
+  "purpose": "Exact-head funded-capital replay acceptance after canonical commission and observed-density risk corrections for MM-IBKR PR776",
+  "authority": {
+    "research_only": true,
+    "broker": false,
+    "runtime_activation": false,
+    "promotion_mutation": false,
+    "live": false
+  },
+  "request_nonce": "pr776-capital-replay-5f05c8cd-r3",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
+  "current_private_reference": "5f05c8cd93ee109e23557a2adfdd0b1ede8eda91",
   "parity_public_key_b64": ""
 }
