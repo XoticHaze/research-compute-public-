@@ -1,0 +1,125 @@
+{
+  "schema": "research.finra_daily_short_volume_r3_contract.v1",
+  "frozen_at": "2026-09-26T22:36:00-05:00",
+  "development_window": [
+    "2022-01-01",
+    "2025-12-31"
+  ],
+  "protected_holdout": "2026+ UNREAD",
+  "source": {
+    "template": "https://cdn.finra.org/equity/regsho/daily/CNMSshvolYYYYMMDD.txt",
+    "causal_vintage": "original CNMS daily file",
+    "updated_files": "diagnostic only; never silently replace a consumed original",
+    "semantics": "FINRA TRF/ADF off-exchange publicly disseminated activity; not exchange-consolidated shorting and not short interest"
+  },
+  "panel": [
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "AMD",
+    "AMAT",
+    "AVGO",
+    "JPM",
+    "BAC",
+    "GS",
+    "XOM",
+    "CVX",
+    "COP",
+    "CAT",
+    "HON",
+    "GE",
+    "JNJ",
+    "LLY",
+    "UNH",
+    "PG",
+    "KO",
+    "PEP",
+    "HD",
+    "MCD",
+    "NKE",
+    "TSLA",
+    "META",
+    "GOOGL",
+    "NFLX",
+    "NEE",
+    "DUK",
+    "LIN",
+    "FCX",
+    "PLD",
+    "AMT"
+  ],
+  "pit_aliases": {
+    "FB": "META"
+  },
+  "feature": {
+    "ratio": "ShortVolume / TotalVolume",
+    "short_exempt": "diagnostic only; ShortVolume already includes exempt",
+    "zscore_window_sessions": 20,
+    "ddof": 1
+  },
+  "portfolio": {
+    "construction": "sector-balanced long bottom quintile / short top quintile",
+    "entry": "D+1 regular-session open",
+    "horizons_sessions": [
+      1,
+      5
+    ],
+    "gross_exposure": 1,
+    "cost": "10bp one-way applied to sum(abs(delta_weight)); no separate hidden roundtrip multiplier"
+  },
+  "controls": [
+    "same-panel equal-weight",
+    "SPY",
+    "sector context",
+    "sector-balanced zero-signal permutation"
+  ],
+  "permutation": {
+    "seed": 568,
+    "count": 1000
+  },
+  "folds": [
+    [
+      "2022-01-01",
+      "2022-10-31"
+    ],
+    [
+      "2022-11-01",
+      "2023-08-31"
+    ],
+    [
+      "2023-09-01",
+      "2024-06-30"
+    ],
+    [
+      "2024-07-01",
+      "2025-04-30"
+    ],
+    [
+      "2025-05-01",
+      "2025-12-31"
+    ]
+  ],
+  "overlap_5d": "report overlapping and non-overlapping stride-5 sensitivity; primary portfolio accounting must not double-allocate capital",
+  "missing_policy": "attempt every weekday in development window; 404/non-200 recorded in manifest; never impute FINRA rows; warmup requires 20 observed symbol sessions",
+  "ties": "stable symbol sort after ratio/z-score; quintile membership deterministic",
+  "reject_rescue": [
+    "no alternate z window",
+    "no bucket switch",
+    "no horizon switch",
+    "no cost switch",
+    "no proxy switch",
+    "no date-window switch",
+    "no 2026+ read"
+  ],
+  "terminal_minimum": [
+    "absolute and matched after-cost excess",
+    "SPY/sector context",
+    "zero-signal permutation",
+    "chronology folds",
+    "DD/risk/breadth",
+    "symbol/year concentration",
+    "turnover",
+    "coverage/missing/update-vintage manifest"
+  ],
+  "live_trading_change": false
+}
