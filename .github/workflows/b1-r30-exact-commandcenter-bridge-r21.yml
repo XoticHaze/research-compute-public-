@@ -1,0 +1,68 @@
+name: B1 R30 exact CommandCenter bridge R21
+run-name: b1-r30-bridge-${{ github.sha }}
+on:
+  push:
+    branches:
+      - continue-release/b1-r30-bridge-r21
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  launch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      EXPECTED_PUBLIC_HEAD: e3319a018d88e8ce433c40df7e82a7734a595131
+      EXPECTED_JOB_SHA: 64dc3b40b977401495f5c892cf6ffbda17d9be5a55fa41a26d08bc2a17fb0b0a
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify exact canonical transport materialization and frozen main
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=rendezvous/b1-r30-r21
+          test "$(git hash-object "$root/compute/executor_adapter.py")" = bc84355597396a7dd9bab81853639f9136e40ad1
+          test "$(git hash-object "$root/compute/github_actions_generic_driver.py")" = e3c66bc8a7f994b6e480ea5e3e9077b99bf68563
+          test "$(git hash-object "$root/compute/launch_transport.py")" = 6166c88dd9699428a1ecce8b844ce8816f93f304
+          test "$(git hash-object "$root/compute/launch_placed_job.py")" = 7f97a595598d35dd6741e8f0a4d79258212bbc36
+          current="$(gh api repos/XoticHaze/research-compute-public-/commits/main --jq .sha)"
+          test "$current" = "$EXPECTED_PUBLIC_HEAD"
+      - name: Decode immutable B1 packet
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64,zlib,pathlib
+          root=pathlib.Path("rendezvous/b1-r30-r21")
+          raw=zlib.decompress(base64.b64decode((root/"B1_R5_PACKET.zlib.b64").read_text().strip()))
+          (root/"B1_R5_PACKET.json").write_bytes(raw)
+          PY
+      - name: Launch and consume canonical PLACED-to-terminal session
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd rendezvous/b1-r30-r21
+          python -m compute.launch_placed_job B1_R5_PACKET.json --output B1_R30_TERMINAL_RECEIPT.json
+          python - <<'PY'
+          import json
+          n=json.load(open("B1_R30_TERMINAL_RECEIPT.json"))
+          assert n["schema"]=="commandcenter.placed_terminal_receipt.v1"
+          assert n["placement_receipt"]["job_sha256"]=="64dc3b40b977401495f5c892cf6ffbda17d9be5a55fa41a26d08bc2a17fb0b0a"
+          assert n["terminal"]["public_head"]=="e3319a018d88e8ce433c40df7e82a7734a595131"
+          print("B1_R30_CANONICAL_BRIDGE=PASS")
+          PY
+          current="$(gh api repos/XoticHaze/research-compute-public-/commits/main --jq .sha)"
+          test "$current" = "$EXPECTED_PUBLIC_HEAD"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: b1-r30-terminal-${{ github.run_id }}
+          path: rendezvous/b1-r30-r21/B1_R30_TERMINAL_RECEIPT.json
+          if-no-files-found: warn
+          retention-days: 7
