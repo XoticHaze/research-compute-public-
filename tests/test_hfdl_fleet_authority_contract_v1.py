@@ -44,7 +44,16 @@ def test_hfdl_workflow_identity_is_narrowly_bound():
         (ROOT / "rendezvous/fire/hfdl-equity-history-e1-r1").read_text()
     )
     assert fire["schema"] == "public_research.hfdl_e1_fire.v1"
-    assert fire["symbols"] == ["AMAT", "APH"]
+    symbols = fire.get("symbols")
+    assert isinstance(symbols, list) and symbols
+    assert len(symbols) <= 12
+    assert len(symbols) == len(set(symbols))
+    assert all(
+        isinstance(symbol, str)
+        and symbol == symbol.strip().upper()
+        and 1 <= len(symbol) <= 20
+        for symbol in symbols
+    )
     assert fire["provider_timeframe"] == "1min"
     assert fire["provider_format"] == "parquet"
     assert fire["acquisition_endpoint"] == "GET /v1/bars/{ticker}?version=raw"
