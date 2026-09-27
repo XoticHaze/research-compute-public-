@@ -35,7 +35,7 @@ on:
       mm_source_sha:
         description: Exact MM-IBKR source SHA for canonical admission
         required: false
-        default: '24128a842cd860cbf1fe6c93f368fabdae925f80'
+        default: '9ba3c346e370beb8fb90f2f49e67d4c09c89a9b6'
         type: string
 
 permissions:
@@ -122,7 +122,7 @@ jobs:
               symbols=(os.environ.get('DISPATCH_SYMBOLS') or 'AMAT,APH').strip()
               start=(os.environ.get('DISPATCH_START_DATE') or '2004-01-01').strip()
               end=(os.environ.get('DISPATCH_END_DATE') or '2022-02-28').strip()
-              mm_source=(os.environ.get('DISPATCH_MM_SOURCE_SHA') or '24128a842cd860cbf1fe6c93f368fabdae925f80').strip().lower()
+              mm_source=(os.environ.get('DISPATCH_MM_SOURCE_SHA') or '9ba3c346e370beb8fb90f2f49e67d4c09c89a9b6').strip().lower()
               target_tf='15Min'
           else:
               node=json.loads(Path('rendezvous/fire/hfdl-equity-history-e1-r1').read_text())
@@ -223,6 +223,24 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --disable-pip-version-check -r "$MM_SOURCE_ROOT/requirements.txt"
+      - name: Write bounded MM corpus config
+        if: steps.authority.outputs.ready == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path=Path(os.environ['RUNNER_TEMP'])/'hfdl-mm-corpus-config.json'
+          path.write_text(json.dumps({
+              'ADMITTED_STOCK_MATERIALIZE_SOURCE_FEATURES': False,
+              'WRITE_AGGREGATE': 0,
+              'SR_ENABLED': False,
+          },indent=2,sort_keys=True)+'\n')
+          with Path(os.environ['GITHUB_ENV']).open('a',encoding='utf-8') as fh:
+              fh.write('HFDL_E1_MM_CONFIG='+str(path)+'\n')
+          print('HFDL_E1_MM_CONFIG=PASS')
+          PY
       - name: Prepare deterministic MM admission handoffs
         if: steps.authority.outputs.ready == '1'
         shell: bash
@@ -298,6 +316,7 @@ jobs:
                   '--symbol',symbol,
                   '--source-timeframe','1Min',
                   '--target-timeframe',os.environ['HFDL_E1_TARGET_TF'],
+                  '--config-json',os.environ['HFDL_E1_MM_CONFIG'],
                   '--receipt-json',str(receipt_path),
               ]
               subprocess.run(cmd,check=True,cwd=mm_root)
@@ -321,12 +340,15 @@ jobs:
                   raise SystemExit(f'{symbol} canonical timeframe identity mismatch')
               if node.get('safety',{}).get('network_ib_calls') is not False:
                   raise SystemExit(f'{symbol} broker/network boundary violated')
+              if os.environ['HFDL_E1_TARGET_TF'] != '1Min' and node.get('source_features_materialized') is not False:
+                  raise SystemExit(f'{symbol} unexpectedly materialized unused 1Min features')
               receipts.append({
                   'symbol':symbol,
                   'source_rows':node.get('source_rows'),
                   'canonical_rows':node.get('canonical_rows'),
                   'source_sha256':node.get('source_sha256'),
                   'features_sha256':node.get('features_sha256'),
+                  'source_features_materialized':node.get('source_features_materialized'),
                   'source_overlap_evidence':node.get('source_overlap_evidence'),
               })
           summary={
@@ -341,6 +363,50 @@ jobs:
               json.dumps(summary,indent=2,sort_keys=True)+'\n'
           )
           print('HFDL_E1_MM_CANONICAL_RECEIPTS=PASS')
+          PY
+      - name: Compact successful corpus artifacts
+        if: steps.authority.outputs.ready == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          handoff_path=Path('artifacts/hfdl-e1/mm_admission_handoffs.json')
+          handoffs=json.loads(handoff_path.read_text()).get('rows',[])
+          removed=[]
+          for row in handoffs:
+              p=Path(str(row.get('source_csv') or ''))
+              if p.exists():
+                  removed.append({'path':str(p),'bytes':p.stat().st_size})
+                  p.unlink()
+
+          data_root=Path('artifacts/hfdl-e1-mm/data/stocks')
+          for symbol in [x for x in os.environ['HFDL_E1_SYMBOLS'].split(',') if x]:
+              symbol_dir=data_root/symbol
+              for name in (
+                  '1Min.csv',
+                  '1Min.features.csv',
+                  '1Min.features.csv.manifest.json',
+              ):
+                  p=symbol_dir/name
+                  if p.exists():
+                      removed.append({'path':str(p),'bytes':p.stat().st_size})
+                      p.unlink()
+
+          receipt={
+              'schema':'public_research.hfdl_e1_artifact_compaction.v1',
+              'reason':'retain normalized 1Min parquet lineage plus canonical target outputs; remove replayable CSV transports and unused source-resolution artifacts',
+              'removed':removed,
+              'removed_bytes':sum(int(x['bytes']) for x in removed),
+              'normalized_1min_parquet_retained':True,
+              'canonical_target_outputs_retained':True,
+          }
+          Path('artifacts/hfdl-e1-mm/artifact_compaction.json').write_text(
+              json.dumps(receipt,indent=2,sort_keys=True)+'\n'
+          )
+          print('HFDL_E1_ARTIFACT_COMPACTION='+json.dumps(receipt,sort_keys=True))
           PY
       - name: Emit typed acquisition state
         shell: bash
