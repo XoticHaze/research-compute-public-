@@ -11,7 +11,7 @@ on:
       - 'cloudflare/fleet-authority/**'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: fleet-authority-deploy-r2
@@ -90,3 +90,27 @@ jobs:
               raise SystemExit('fleet-authority health proof rejected')
           print('FLEET_AUTHORITY_HEALTH_PASS=1')
           PY
+
+
+      - name: Publish Fleet R2 deploy receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p rendezvous/receipts
+          cat > rendezvous/receipts/fleet-authority-deploy-r2.json <<'JSON'
+          {
+            "schema": "fleet_authority.deploy_receipt.r2",
+            "route": "github_actions",
+            "worker": "fleet-authority",
+            "deploy_pass": true,
+            "control_plane_pass": true,
+            "health_pass": true,
+            "credential_selection": "scoped_r2_if_present_else_legacy_fallback",
+            "workers_builds_required_for_future_redeploy": false
+          }
+          JSON
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add rendezvous/receipts/fleet-authority-deploy-r2.json
+          git commit -m 'deploy: publish Fleet authority R2 receipt' || true
+          git push
