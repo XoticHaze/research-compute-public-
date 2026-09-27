@@ -97,7 +97,10 @@ jobs:
   acquire:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Deep-history target materialization is intentionally sequential so each
+    # symbol has bounded memory. The first 2-name proof consumed ~9 minutes;
+    # bounded 6-8 name sector batches need a larger wall-clock budget.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -307,7 +310,9 @@ jobs:
                   '--config-json',os.environ['HFDL_E1_MM_CONFIG'],
                   '--receipt-json',str(receipt_path),
               ]
+              print('HFDL_E1_MM_CANONICAL_SYMBOL_START='+symbol, flush=True)
               subprocess.run(cmd,check=True,cwd=mm_root)
+              print('HFDL_E1_MM_CANONICAL_SYMBOL_PASS='+symbol, flush=True)
           print('HFDL_E1_MM_CANONICALIZATION=PASS')
           PY
       - name: Validate canonical MM receipts
