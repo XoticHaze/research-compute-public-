@@ -18,5 +18,7 @@
     "live": false
   },
   "provider_format": "parquet",
-  "acquisition_endpoint": "GET /v1/bars/{ticker}?version=raw"
+  "acquisition_endpoint": "GET /v1/bars/{ticker}?version=raw",
+  "mm_source_sha": "24128a842cd860cbf1fe6c93f368fabdae925f80",
+  "canonical_target_timeframe": "15Min"
 }
