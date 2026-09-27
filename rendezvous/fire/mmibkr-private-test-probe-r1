@@ -1,14 +1,16 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "f1ab55e82a4e58cd9e6b413e2f870ea2fa3ae3ad",
+  "source_ref": "45bdc3a95c9d0cac8e30bc5da87060c7d4b473bb",
   "test_modules": [
+    "tests.test_materialize_admitted_stock_source_canonical",
+    "tests.test_external_history_admitted_ingest_contract",
     "tests.test_historical_source_stitch",
     "tests.test_data_manager_indicator_context_contract_14th31jq",
     "tests.test_data_manager_registry_authority_14th31lm",
     "tests.test_materialize_admitted_futures_dated_contract"
   ],
-  "requested_by": "assistant-corpus-v2-stitch-pass",
-  "purpose": "clean exact-private acceptance bundle excluding independently proven pre-existing red source-canonical test",
+  "requested_by": "assistant-corpus-v2-admitted-history-consumers",
+  "purpose": "exact-private acceptance for PR 773 admitted stock/futures history bridge into canonical stitch owners",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -16,8 +18,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "corpus-v2-stitch-clean-acceptance-f1ab55e8-20260926-2101cdt",
+  "request_nonce": "corpus-v2-admitted-history-45bdc3a9-20260926-2156cdt",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "f1ab55e82a4e58cd9e6b413e2f870ea2fa3ae3ad",
+  "current_private_reference": "45bdc3a95c9d0cac8e30bc5da87060c7d4b473bb",
   "parity_public_key_b64": ""
 }
