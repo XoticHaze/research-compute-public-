@@ -37,6 +37,7 @@ def main() -> int:
             re.match(r"^(REFERENCE_|EXISTING_|CLOUDFLARE_)[A-Z0-9_]+=.*$", line)
             or " version upload failed HTTP " in line
             or " settings proof failed HTTP " in line
+            or " secret binding update failed HTTP " in line
             or line.startswith("Unexpected broker denial status:")
         ):
             allowed.append(line[:500])
