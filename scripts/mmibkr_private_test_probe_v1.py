@@ -46,6 +46,15 @@ SAFE_EXACT = {
     "tests.test_news_scorecard_cycle_break_14th31fd_r18",
     "tests.test_options_snapshot_analysis",
     "tests.test_options_snapshot_features",
+    # Exact research/accounting regressions. These modules are side-effect-free
+    # validation consumers; selected_runtime names are admitted only by exact ID.
+    "tests.test_backtest_capital_replay_v1",
+    "tests.test_selected_runtime_account_sizing_14th31lg",
+    "tests.test_selected_runtime_account_sizing_submit_hook_14th31lg",
+    "tests.test_selected_runtime_margin_guard_14th31lg",
+    "tests.test_selected_runtime_margin_whatif_hook_14th31lg",
+    "tests.test_research_survivor_funnel",
+    "tests.test_acquire_hfdl_bounded_equity_panel",
 }
 STATUS_STAGE_MODULES = {
     "tests.test_market_features_provenance_contract",
