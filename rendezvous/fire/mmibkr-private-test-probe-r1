@@ -1,16 +1,12 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "a304b381b735a7c8ab443e669a2e5b2293e7e064",
+  "source_ref": "7274ef7abfb0c66bd8df59ce5477f82e3cc7591e",
   "test_modules": [
-    "tests.test_materialize_admitted_stock_source_canonical",
-    "tests.test_external_history_admitted_ingest_contract",
-    "tests.test_historical_source_stitch",
-    "tests.test_data_manager_indicator_context_contract_14th31jq",
-    "tests.test_data_manager_registry_authority_14th31lm",
-    "tests.test_materialize_admitted_futures_dated_contract"
+    "tests.test_backtest_range_contract_14th31im",
+    "tests.test_market_features_provenance_contract"
   ],
-  "requested_by": "assistant-corpus-v2-admitted-history-consumers",
-  "purpose": "safe-node-id discriminator for remaining PR773 exact-private futures integration failure",
+  "requested_by": "continue-release-pr774-exact-acceptance",
+  "purpose": "Release exact-head Python contract acceptance for Product PR774 canonical chart/provenance UI",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -18,8 +14,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "corpus-v2-admitted-history-a304b381-safe-nodeids-20260926-2210cdt",
+  "request_nonce": "continue-release-pr774-7274ef7a-r18",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "a304b381b735a7c8ab443e669a2e5b2293e7e064",
+  "current_private_reference": "7274ef7abfb0c66bd8df59ce5477f82e3cc7591e",
   "parity_public_key_b64": ""
 }
