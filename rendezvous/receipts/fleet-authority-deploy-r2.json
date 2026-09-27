@@ -1,0 +1,10 @@
+{
+  "schema": "fleet_authority.deploy_receipt.r2",
+  "route": "github_actions",
+  "worker": "fleet-authority",
+  "deploy_pass": true,
+  "control_plane_pass": true,
+  "health_pass": true,
+  "credential_selection": "scoped_r2_if_present_else_legacy_fallback",
+  "workers_builds_required_for_future_redeploy": false
+}
