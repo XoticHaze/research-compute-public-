@@ -8,7 +8,7 @@ import pandas as pd
 from research import hfdl_equity_history_e1 as mod
 
 
-def _provider_csv() -> bytes:
+def _provider_parquet() -> bytes:
     frame = pd.DataFrame(
         {
             "datetime": [
@@ -25,12 +25,14 @@ def _provider_csv() -> bytes:
             "source": ["pitrading", "pitrading", "pitrading", "iex"],
         }
     )
-    return frame.to_csv(index=False).encode("utf-8")
+    buf = BytesIO()
+    frame.to_parquet(buf, index=False, engine="pyarrow")
+    return buf.getvalue()
 
 
 def test_normalize_filters_iex_and_preserves_dst_utc_shape():
-    out, qa = mod.normalize_pitrading_daily(
-        _provider_csv(),
+    out, qa = mod.normalize_pitrading_1min(
+        _provider_parquet(),
         symbol="AMAT",
         start_date="2020-01-01",
         end_date="2022-02-28",
@@ -47,7 +49,7 @@ def test_normalize_filters_iex_and_preserves_dst_utc_shape():
 
 
 def test_acquire_symbol_emits_mm_admission_lineage(tmp_path, monkeypatch):
-    raw = _provider_csv()
+    raw = _provider_parquet()
     monkeypatch.setattr(
         mod,
         "public_symbol_metadata",
@@ -59,14 +61,18 @@ def test_acquire_symbol_emits_mm_admission_lineage(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(
         mod,
-        "_signed_download",
+        "_bars_download",
         lambda symbol, api_key: (
             raw,
             {
+                "endpoint": f"/v1/bars/{symbol}",
                 "version": "raw",
-                "timeframe": "daily",
-                "format": "csv",
-                "expires_at": "fixture",
+                "timeframe": "1min",
+                "format": "parquet",
+                "content_type": "application/octet-stream",
+                "content_disposition": f'attachment; filename="{symbol}_raw.parquet"',
+                "rate_limit_remaining": "99",
+                "rate_limit_reset": "fixture",
                 "signed_url_persisted": False,
             },
         ),
@@ -84,15 +90,16 @@ def test_acquire_symbol_emits_mm_admission_lineage(tmp_path, monkeypatch):
     assert receipt["admission_ready"] is True
     assert receipt["raw_download_bytes"] == len(raw)
 
-    lineage = json.loads((tmp_path / "AMAT" / "AMAT_1Day.lineage.json").read_text())
+    lineage = json.loads((tmp_path / "AMAT" / "AMAT_1Min.lineage.json").read_text())
     assert lineage["source_sha256"] == receipt["normalized_sha256"]
     assert lineage["raw_download_sha256"] == receipt["raw_download_sha256"]
     assert lineage["source_regime"] == "hfdl_pitrading_consolidated_pre_2022"
-    assert lineage["source_timeframe"] == "1Day"
+    assert lineage["source_timeframe"] == "1Min"
     assert "split/dividend adjusted" in lineage["adjustment_policy"]
-    assert lineage["download_token_receipt"]["signed_url_persisted"] is False
+    assert lineage["download_receipt"]["endpoint"] == "/v1/bars/AMAT"
+    assert lineage["download_receipt"]["rate_limit_remaining"] == "99"
 
-    normalized = pd.read_csv(tmp_path / "AMAT" / "AMAT_1Day.csv")
+    normalized = pd.read_parquet(tmp_path / "AMAT" / "AMAT_1Min.parquet")
     assert list(normalized.columns) == ["timestamp", "open", "high", "low", "close", "volume"]
     assert len(normalized) == 3
 
