@@ -186,11 +186,6 @@ def main():
                 "service": "reference-release-maintainer-v1",
                 "environment": "production",
             },
-            {
-                "type": "durable_object_namespace",
-                "name": "AUTHORITY_STATE",
-                "class_name": "AuthorityState",
-            },
         ],
         "exports": {
             "AuthorityState": {"type": "durable-object", "storage": "sqlite"}
