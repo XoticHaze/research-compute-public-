@@ -15,7 +15,6 @@ def base_control():
         "blocked_push_channels": [
             "mmibkr-private-test-probe-r1",
             "mmibkr-canonical-research-session-bau-r1",
-            "hfdl-equity-history-e1-r1",
         ],
         "workflow_dispatch_allowed": True,
         "broker_mutation_authority": False,
