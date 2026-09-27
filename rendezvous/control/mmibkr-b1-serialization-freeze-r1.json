@@ -1,0 +1,15 @@
+{
+  "schema": "mmibkr.b1_serialization_freeze.v1",
+  "enabled": true,
+  "owner": "continue-release",
+  "reason": "serialize current-head B1 canary -> fresh R30 -> R42 before ordinary public-main fire mutations resume",
+  "blocked_push_channels": [
+    "mmibkr-private-test-probe-r1",
+    "mmibkr-canonical-research-session-bau-r1"
+  ],
+  "workflow_dispatch_allowed": true,
+  "broker_mutation_authority": false,
+  "runtime_activation_authority": false,
+  "promotion_authority": false,
+  "live_execution_allowed": false
+}
