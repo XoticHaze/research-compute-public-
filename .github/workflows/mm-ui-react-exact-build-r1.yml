@@ -18,7 +18,7 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  PRIVATE_SOURCE_SHA: ca0adfa9f07d85b500594bbd334bb002e20b1eb6
+  PRIVATE_SOURCE_SHA: c1bb8a8334b3c25ce369143ab1816e343ea47352
 
 jobs:
   exact-private-ui-build:
@@ -249,6 +249,7 @@ jobs:
           node --version
           npm --version
           npm ci --ignore-scripts --no-audit --no-fund
+          node src/canonical-market-chart-provenance.acceptance.test.mjs
           npm run verify:bot-console
           npm run build
           test -s dist/index.html
