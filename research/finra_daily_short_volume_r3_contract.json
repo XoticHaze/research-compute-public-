@@ -191,5 +191,13 @@
     "minimum_symbol_days": 3000,
     "minimum_panel_coverage_fraction_per_decision_day": 0.7,
     "action_if_failed": "INCONCLUSIVE_SOURCE_COVERAGE; no parameter rescue"
+  },
+  "return_data": {
+    "provider": "Yahoo Finance",
+    "client": "yfinance==0.2.65",
+    "adjustment": "auto_adjust=True",
+    "required_symbols": "frozen 34-name panel plus SPY",
+    "provenance": "persist normalized OHLCV extract hash and retrieval timestamp",
+    "missing_policy": "no OHLC forward fill; report missing symbol/session coverage"
   }
 }
