@@ -1,23 +1,12 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "ee2f521c0ec144b3e00c03585e08ec9e0076caac",
-  "test_modules": [
-    "tests.test_historical_source_stitch",
-    "tests.test_external_history_admitted_ingest_contract",
-    "tests.test_materialize_admitted_stock_source_canonical",
-    "tests.test_materialize_admitted_futures_dated_contract"
-  ],
-  "requested_by": "corpus-v2-admitted-history-pr773-clean-acceptance",
-  "purpose": "Clean exact-private PR773 acceptance excluding only independently proven pre-existing red continuous-materializer legacy test",
-  "authority": {
-    "research_only": true,
-    "broker": false,
-    "runtime_activation": false,
-    "promotion_mutation": false,
-    "live": false
-  },
-  "request_nonce": "corpus-v2-pr773-ee2f521c-clean-r3",
+  "source_ref": "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
+  "test_modules": ["tests.test_strategy_backtest_registry_dispatch"],
+  "requested_by": "continue-release-b1-active-source-canary-r19",
+  "purpose": "B1 active-source canary before finite R30 launch",
+  "authority": {"research_only": true, "broker": false, "runtime_activation": false, "promotion_mutation": false, "live": false},
+  "request_nonce": "continue-release-b1-r4-push-r19",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "ee2f521c0ec144b3e00c03585e08ec9e0076caac",
+  "current_private_reference": "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
   "parity_public_key_b64": ""
 }
