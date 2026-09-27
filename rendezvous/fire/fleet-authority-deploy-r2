@@ -1,0 +1,6 @@
+{
+  "schema": "fleet_authority.deploy.r2",
+  "requested_at": "2026-09-27T15:20:00-05:00",
+  "purpose": "prove GitHub Actions deploy route before Workers Builds retirement",
+  "credential_route": "scoped_r2_if_present_else_legacy_fallback"
+}
