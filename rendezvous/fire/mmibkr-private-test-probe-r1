@@ -1,6 +1,6 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "45bdc3a95c9d0cac8e30bc5da87060c7d4b473bb",
+  "source_ref": "a304b381b735a7c8ab443e669a2e5b2293e7e064",
   "test_modules": [
     "tests.test_materialize_admitted_stock_source_canonical",
     "tests.test_external_history_admitted_ingest_contract",
@@ -10,7 +10,7 @@
     "tests.test_materialize_admitted_futures_dated_contract"
   ],
   "requested_by": "assistant-corpus-v2-admitted-history-consumers",
-  "purpose": "exact-private acceptance for PR 773 admitted stock/futures history bridge into canonical stitch owners",
+  "purpose": "R2 exact-private acceptance for PR 773 after routing-test import fix and MM futures series-identity hardening",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -18,8 +18,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "corpus-v2-admitted-history-45bdc3a9-20260926-2156cdt",
+  "request_nonce": "corpus-v2-admitted-history-a304b381-20260926-2205cdt",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "45bdc3a95c9d0cac8e30bc5da87060c7d4b473bb",
+  "current_private_reference": "a304b381b735a7c8ab443e669a2e5b2293e7e064",
   "parity_public_key_b64": ""
 }
