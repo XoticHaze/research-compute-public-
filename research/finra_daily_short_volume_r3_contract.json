@@ -10,7 +10,8 @@
     "template": "https://cdn.finra.org/equity/regsho/daily/CNMSshvolYYYYMMDD.txt",
     "causal_vintage": "original CNMS daily file",
     "updated_files": "diagnostic only; never silently replace a consumed original",
-    "semantics": "FINRA TRF/ADF off-exchange publicly disseminated activity; not exchange-consolidated shorting and not short interest"
+    "semantics": "FINRA TRF/ADF off-exchange publicly disseminated activity; not exchange-consolidated shorting and not short interest",
+    "facility_scope": "Consolidated TRF/ADF NMS file; retain facility-level raw rows for diagnostics but primary feature is date+symbol aggregate."
   },
   "panel": [
     "AAPL",
@@ -55,7 +56,9 @@
     "ratio": "ShortVolume / TotalVolume",
     "short_exempt": "diagnostic only; ShortVolume already includes exempt",
     "zscore_window_sessions": 20,
-    "ddof": 1
+    "ddof": 1,
+    "aggregation": "For each date+canonical symbol, sum ShortVolume, ShortExemptVolume and TotalVolume across all rows/facilities in the Consolidated NMS file, then compute ShortVolume_sum / TotalVolume_sum. Never average facility-level ratios.",
+    "alias_order": "Map PIT alias FB->META before date+symbol aggregation."
   },
   "portfolio": {
     "construction": "sector-balanced long bottom quintile / short top quintile",
