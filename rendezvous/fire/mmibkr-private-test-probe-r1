@@ -10,7 +10,7 @@
     "tests.test_materialize_admitted_futures_dated_contract"
   ],
   "requested_by": "assistant-corpus-v2-admitted-history-consumers",
-  "purpose": "R2 exact-private acceptance for PR 773 after routing-test import fix and MM futures series-identity hardening",
+  "purpose": "safe-node-id discriminator for remaining PR773 exact-private futures integration failure",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -18,7 +18,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "corpus-v2-admitted-history-a304b381-20260926-2205cdt",
+  "request_nonce": "corpus-v2-admitted-history-a304b381-safe-nodeids-20260926-2210cdt",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
   "current_private_reference": "a304b381b735a7c8ab443e669a2e5b2293e7e064",
   "parity_public_key_b64": ""
