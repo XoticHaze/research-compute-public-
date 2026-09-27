@@ -47,6 +47,10 @@ SAFE_EXACT = {
     "tests.test_options_snapshot_analysis",
     "tests.test_options_snapshot_features",
 }
+STATUS_STAGE_MODULES = {
+    "tests.test_market_features_provenance_contract",
+}
+
 DENY_TOKENS = (
     "broker",
     "ibkr",
@@ -228,6 +232,11 @@ def run_probe(
         source_materialization,
         expected_source_ref,
     )
+    docker_target = (
+        "status"
+        if any(module in STATUS_STAGE_MODULES for module in modules)
+        else "bot"
+    )
     with tempfile.TemporaryDirectory(prefix="mmibkr-private-test-probe-") as tmp:
         temp = Path(tmp)
         build = _run_captured(
@@ -237,7 +246,7 @@ def run_probe(
                 "-f",
                 str(source_root / "Dockerfile.bot"),
                 "--target",
-                "bot",
+                docker_target,
                 "-t",
                 image_tag,
                 str(source_root),
@@ -258,6 +267,7 @@ def run_probe(
         test_environment = {
             "status": "SKIPPED",
             "pytest_version": PYTEST_VERSION,
+            "docker_target": docker_target,
             "captured_output_sha256": None,
             "captured_output_bytes": 0,
             "exit_code": None,
@@ -283,6 +293,7 @@ def run_probe(
                     timeout=600,
                 )
                 test_environment["pytest_version"] = PYTEST_VERSION
+                test_environment["docker_target"] = docker_target
                 if test_environment["status"] == "PASS":
                     for index, module in enumerate(modules, start=1):
                         row = _run_captured(
