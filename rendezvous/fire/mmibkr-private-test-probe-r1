@@ -1,16 +1,13 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "5f05c8cd93ee109e23557a2adfdd0b1ede8eda91",
+  "source_ref": "4c9a38e8960586570e0de2c3c5633d11f331b0d2",
   "test_modules": [
-    "tests.test_backtest_capital_replay_v1",
-    "tests.test_selected_runtime_account_sizing_14th31lg",
-    "tests.test_selected_runtime_account_sizing_submit_hook_14th31lg",
-    "tests.test_selected_runtime_margin_guard_14th31lg",
-    "tests.test_selected_runtime_margin_whatif_hook_14th31lg",
-    "tests.test_strategy_backtest_registry_dispatch"
+    "tests.test_acquire_hfdl_bounded_equity_panel",
+    "tests.test_materialize_admitted_stock_source_canonical",
+    "tests.test_external_history_admitted_ingest_contract"
   ],
-  "requested_by": "backtest-capital-replay-pr776-latest",
-  "purpose": "Exact-head funded-capital replay acceptance after canonical commission and observed-density risk corrections for MM-IBKR PR776",
+  "requested_by": "corpus-v2-hfdl-acquisition-pr777-fixed",
+  "purpose": "Exact-head HFDL bounded acquisition acceptance after pandas-precision-independent UTC assertion fix for MM-IBKR PR777",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -18,8 +15,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr776-capital-replay-5f05c8cd-r3",
+  "request_nonce": "pr777-hfdl-4c9a38e8-r2",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "5f05c8cd93ee109e23557a2adfdd0b1ede8eda91",
+  "current_private_reference": "4c9a38e8960586570e0de2c3c5633d11f331b0d2",
   "parity_public_key_b64": ""
 }
