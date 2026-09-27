@@ -33,6 +33,7 @@ SAFE_EXACT = {
     "tests.test_historical_source_stitch",
     "tests.test_external_history_admitted_ingest_contract",
     "tests.test_materialize_admitted_stock_source_canonical",
+    "tests.test_market_features_provenance_contract",
     "tests.test_backtest_range_contract_14th31im",
     "tests.test_publish_canonical_feature_sidecar",
     "tests.test_materialize_admitted_futures_source_canonical",
