@@ -14,7 +14,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "continue-release-pr774-7274ef7a-r18",
+  "request_nonce": "continue-release-pr774-7274ef7a-r19",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
   "current_private_reference": "7274ef7abfb0c66bd8df59ce5477f82e3cc7591e",
   "parity_public_key_b64": ""
