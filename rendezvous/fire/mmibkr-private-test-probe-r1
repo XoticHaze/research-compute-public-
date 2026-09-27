@@ -6,7 +6,7 @@
   ],
   "ui_acceptance_file": "ui-react/src/lib/pilotStrategySpecHandoff.acceptance.test.mjs",
   "requested_by": "exact-strategyspec-pilot-handoff-pr779",
-  "purpose": "Exact-private UI acceptance and production build for reviewed StrategySpec Builder-to-Pilot identity continuity on MM-IBKR PR779",
+  "purpose": "Exact-private UI acceptance and production build for reviewed StrategySpec Builder-to-Pilot identity continuity after validator allowlist admission",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -14,7 +14,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr779-exact-pilot-fff3e604-r1",
+  "request_nonce": "pr779-exact-pilot-fff3e604-r2-validator-allowlist",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
   "current_private_reference": "fff3e604f71628acf9de5c79fbda43871be7ae8f",
   "parity_public_key_b64": ""
