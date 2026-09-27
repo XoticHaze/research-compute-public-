@@ -1,10 +1,13 @@
 {
   "schema": "public_research.hfdl_e1_fire.v1",
-  "symbols": ["AMAT", "APH"],
+  "symbols": [
+    "AMAT",
+    "APH"
+  ],
   "start_date": "2004-01-01",
   "end_date": "2022-02-28",
   "provider_version": "raw",
-  "provider_timeframe": "daily",
+  "provider_timeframe": "1min",
   "admitted_source_regime": "pitrading_pre_2022",
   "purpose": "Data E1 first governed deep-history acquisition for MM-IBKR stock canonical admission",
   "authority": {
@@ -13,5 +16,7 @@
     "runtime_activation": false,
     "strategy_spec_mutation": false,
     "live": false
-  }
+  },
+  "provider_format": "parquet",
+  "acquisition_endpoint": "GET /v1/bars/{ticker}?version=raw"
 }
