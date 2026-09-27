@@ -1,0 +1,67 @@
+{
+  "schema": "fleet.evolution_auditor_view_outstanding.v1",
+  "control_epoch_id": "20260927T034100Z-no-terminal-failure-floor-safepoint-r18",
+  "control_epoch_generation": 18,
+  "role": "Evolution Auditor",
+  "clock_in": "2026-09-27T01:49:10-05:00",
+  "observed_at": "2026-09-27T02:26:43-05:00",
+  "elapsed_seconds": 2253,
+  "state": "FINAL_VIEW_OUTSTANDING__READY_FOR_FRESH_CLOCK_OUT",
+  "closed_or_advanced": [
+    "Auditor 00:24 missed-slot recovery obtained a valid fresh owner run, crossed hard floor, and maintained publication-after-observation chronology.",
+    "Trading Product 01:12 admission debt was consumed by valid 02:13:16 owner admission; current 02:13 firing separately classified post-admission no-durable-progress through checkpoint8 bound.",
+    "Research 01:36 future-dated timing evidence was detected and invalidated for runtime credit; next Research firing is bound to temporal-integrity recovery.",
+    "R30 failure was narrowed to producer admission/capability, not PR814/canary/launcher/crypto/consumer/global compute.",
+    "Existing Producer R2 authority was recovered; smallest GH_TOKEN fallback R3 correction was built and locally proven without replacing the canonical transport family.",
+    "Second B1 serialization violation was detected live and all roles were refrozen on current public head 62ce0466960a8d21fa649177c03987884b2d2c08."
+  ],
+  "outstanding": [
+    {
+      "owner": "Continue Release",
+      "state": "RECOVERY_REQUIRED",
+      "exact": "Consume 01:48 same-role admission recovery; create fresh post-62ce B1 active-source canary using source 35e6b44... + registry-dispatch semantics with a fresh nonce; pin new canary head; choose admitted producer surface; fresh R30 only; then R42 and release freeze."
+    },
+    {
+      "owner": "Trading Product",
+      "state": "RECOVERY_REQUIRED",
+      "exact": "02:13 firing was admitted but produced no durable work/checkpoint artifact through >13m and >5m beyond checkpoint8 threshold. Next valid Product firing consumes post-admission progress recovery and re-grounds MM main 8e206404... or fresher."
+    },
+    {
+      "owner": "Market Research",
+      "state": "TEMPORAL_INTEGRITY_VIOLATION__RECOVERY_REQUIRED",
+      "exact": "Preserve independently valid science from 01:36 firing but reject future-dated runtime/checkpoint/final evidence; next firing must publish only after fresh observed time."
+    },
+    {
+      "owner": "Coordinator",
+      "state": "RECOVERY_REQUIRED_CHAIN",
+      "exact": "01:02 firing interrupted after valid checkpoint24 before floor/final; 02:00 slot unaccounted after early scheduler metadata. Next valid Coordinator firing consumes chain first."
+    }
+  ],
+  "authorities": {
+    "commandcenter_main": "de320413c784d402c0056d8f7027bf5b0c8e4872",
+    "public_frozen_base": "62ce0466960a8d21fa649177c03987884b2d2c08",
+    "mm_main": "8e20640400e8fa7fb5e57c6852f79105c75c6666",
+    "historical_r6_head": "e3319a018d88e8ce433c40df7e82a7734a595131",
+    "historical_r6_fire_blob": "a54548fad0f8bc4cbada7d3440f93a12fee3054a",
+    "r30_failed_run": 36298260602
+  },
+  "producer_r3": {
+    "supersedes_r2_sha256": "9226cf60bf33cfa9208800848d49ee6f242accb77225951e0f894bdbe7f26cdf",
+    "generated_zip_sha256": "676511f3f6126c73df90c69dcfd9b2d336937495a55ac6b36e6a46518c306919",
+    "producer_sha256": "a2d2f708439d125bee1297bdb55a6036e7de60a5f4cc4437f4d86aee1570e7de",
+    "validation": [
+      "py_compile PASS",
+      "GH_TOKEN-only resolution PASS",
+      "GITHUB_TOKEN-only resolution PASS",
+      "custom token-env precedence PASS",
+      "missing-token fail-closed PASS",
+      "canonical decrypt roundtrip PASS",
+      "source diff limited to token resolver + token call; runner semantic diff only R3 PASS label"
+    ],
+    "library_promoted": false
+  },
+  "cadence_changed": false,
+  "tasks_disabled": false,
+  "public_main_mutated_by_auditor": false,
+  "live_trading_change": false
+}
