@@ -61,14 +61,34 @@ def multipart(metadata: dict, file_path: Path):
     return b"".join(parts), "multipart/form-data; boundary=" + boundary
 
 
-def deny_broker(account: str, token: str):
+def broker_preseal_gate(account: str, token: str):
     url = f"{API}/accounts/{account}/workers/scripts/reference-release-broker-v1/settings"
-    status, _ = api(token, "GET", url)
-    if status == 200:
-        raise SystemExit("EXISTING_DEPLOY_CREDENTIAL_CAN_ADMINISTER_BROKER=1")
-    if status not in {401, 403, 404}:
-        raise SystemExit(f"Unexpected broker denial status: {status}")
-    print("REFERENCE_EXISTING_DEPLOY_BROKER_DENY_PASS=1")
+    status, node = api(token, "GET", url)
+    if status in {401, 403, 404}:
+        print("REFERENCE_EXISTING_DEPLOY_BROKER_DENY_PASS=1")
+        return False
+    if status != 200:
+        raise SystemExit(f"Unexpected broker settings status: {status}")
+    result = node.get("result") if isinstance(node.get("result"), dict) else {}
+    bindings = result.get("bindings") or []
+    names = {
+        str(row.get("name") or "")
+        for row in bindings
+        if isinstance(row, dict)
+    }
+    sensitive = {
+        "BROKER_SIGNING_PRIVATE_JWK",
+        "AUTHORITY_PUBLIC_B64",
+        "GRANT_LEDGER",
+    }
+    present = sorted(sensitive & names)
+    if present:
+        raise SystemExit(
+            "BROKER_PRESEAL_GATE_REJECTED_SENSITIVE_BINDINGS=" + ",".join(present)
+        )
+    print("EXISTING_DEPLOY_CREDENTIAL_CAN_ADMINISTER_BROKER=1")
+    print("REFERENCE_BROKER_PRESEAL_EMPTY_PASS=1")
+    return True
 
 
 def upload_version(account: str, token: str, worker: str, source: Path, metadata: dict):
@@ -153,7 +173,7 @@ def main():
         else:
             print("EXISTING_DEPLOY_TOKEN_DETAILS_HTTP=" + str(details_status))
 
-    deny_broker(account, token)
+    broad_preseal = broker_preseal_gate(account, token)
 
     authority_meta = {
         "main_module": "index.js",
@@ -229,10 +249,13 @@ def main():
         "reference-release-maintainer-v1",
         {"BROKER_EDITOR_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "MAINTENANCE_AUTHORITY", "MAINTENANCE_LEDGER"},
     )
-    deny_broker(account, token)
+    broker_preseal_gate(account, token)
 
     print("REFERENCE_NEUTRAL_CONTROL_PLANE_BOOTSTRAP_PASS=1")
-    print("EXISTING_DEPLOY_CREDENTIAL_RENARROW_REQUIRED=1")
+    if broad_preseal:
+        print("EXISTING_DEPLOY_CREDENTIAL_RENARROW_REQUIRED=1")
+    else:
+        print("EXISTING_DEPLOY_CREDENTIAL_ALREADY_BROKER_DENIED=1")
 
 
 if __name__ == "__main__":
