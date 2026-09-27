@@ -1,0 +1,92 @@
+name: Fleet Authority Deploy R2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'rendezvous/fire/fleet-authority-deploy-r2'
+      - '.github/workflows/fleet-authority-deploy-r2.yml'
+      - 'wrangler.jsonc'
+      - 'cloudflare/fleet-authority/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fleet-authority-deploy-r2
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+
+      - name: Validate Fleet authority deployment contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          node --check cloudflare/fleet-authority/src/index.js
+          node --check cloudflare/fleet-authority/src/source_exchange.js
+          npx --yes wrangler@4.135.0 deploy             --dry-run             --config wrangler.jsonc             --outdir "$RUNNER_TEMP/fleet-authority-dry-run"
+          if [ -n "${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 }}" ]; then
+            echo 'FLEET_AUTHORITY_CLOUDFLARE_CREDENTIAL_ROUTE=SCOPED_R2'
+          else
+            echo 'FLEET_AUTHORITY_CLOUDFLARE_CREDENTIAL_ROUTE=LEGACY_FALLBACK'
+          fi
+
+      - name: Deploy existing Fleet authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.135.0 deploy --config wrangler.jsonc
+          echo 'FLEET_AUTHORITY_DEPLOYED_R2=1'
+
+      - name: Prove deployed Worker through Cloudflare control plane
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from urllib.request import Request, urlopen
+
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID'].strip()
+          token=os.environ['CLOUDFLARE_API_TOKEN'].strip()
+          base=f'https://api.cloudflare.com/client/v4/accounts/{account}/workers/scripts/fleet-authority'
+
+          req=Request(base+'/settings',headers={
+              'Authorization':'Bearer '+token,
+              'Accept':'application/json',
+              'User-Agent':'fleet-authority-deploy-r2',
+          })
+          with urlopen(req,timeout=30) as response:
+              node=json.load(response)
+          if node.get('success') is not True or not isinstance(node.get('result'),dict):
+              raise SystemExit('fleet-authority settings proof rejected')
+          bindings=node['result'].get('bindings') or []
+          names={str(x.get('name') or '') for x in bindings if isinstance(x,dict)}
+          if 'SOURCE_EXCHANGE' not in names:
+              raise SystemExit('fleet-authority SOURCE_EXCHANGE binding missing')
+          print('FLEET_AUTHORITY_CONTROL_PLANE_PASS=1')
+
+          health=Request(
+              'https://fleet-authority.slenderiq.workers.dev/healthz',
+              headers={'Accept':'application/json','User-Agent':'fleet-authority-deploy-r2'},
+          )
+          with urlopen(health,timeout=30) as response:
+              body=json.load(response)
+          if body.get('ok') is not True or body.get('service') != 'mmibkr-fleet-authority':
+              raise SystemExit('fleet-authority health proof rejected')
+          print('FLEET_AUTHORITY_HEALTH_PASS=1')
+          PY
