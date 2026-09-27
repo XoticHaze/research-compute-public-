@@ -185,6 +185,22 @@ def _run_captured(
         )
     digest = _sha256(log_path)
     size = log_path.stat().st_size
+    failed_test_node_ids: list[str] = []
+    if proc.returncode != 0:
+        try:
+            safe_text = log_path.read_text(encoding="utf-8", errors="replace")
+            for raw in safe_text.splitlines():
+                line = raw.strip()
+                match = re.match(
+                    r"^FAILED\s+(tests/test_[A-Za-z0-9_]+\.py::[A-Za-z0-9_:\[\]().,-]+)",
+                    line,
+                )
+                if match:
+                    node_id = match.group(1)
+                    if node_id not in failed_test_node_ids:
+                        failed_test_node_ids.append(node_id)
+        except Exception:
+            failed_test_node_ids = []
     try:
         log_path.unlink()
     except FileNotFoundError:
@@ -194,6 +210,7 @@ def _run_captured(
         "status": "PASS" if proc.returncode == 0 else "FAIL",
         "captured_output_sha256": digest,
         "captured_output_bytes": size,
+        "failed_test_node_ids": failed_test_node_ids,
     }
 
 
