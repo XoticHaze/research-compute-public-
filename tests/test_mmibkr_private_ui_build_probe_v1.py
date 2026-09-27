@@ -56,6 +56,12 @@ def test_acceptance_file_is_exact_allowlist():
         )
         == "ui-react/src/canonical-market-chart-provenance.acceptance.test.mjs"
     )
+    assert (
+        mod.validate_acceptance_file(
+            "ui-react/src/lib/pilotStrategySpecHandoff.acceptance.test.mjs"
+        )
+        == "ui-react/src/lib/pilotStrategySpecHandoff.acceptance.test.mjs"
+    )
     with pytest.raises(ValueError, match="not_allowlisted"):
         mod.validate_acceptance_file("ui-react/src/other.test.mjs")
     with pytest.raises(ValueError):
