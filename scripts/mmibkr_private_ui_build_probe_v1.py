@@ -23,6 +23,7 @@ from typing import Any
 SCHEMA = "mmibkr.private_ui_build_probe.v1"
 ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/canonical-market-chart-provenance.acceptance.test.mjs",
+    "ui-react/src/lib/pilotStrategySpecHandoff.acceptance.test.mjs",
 }
 
 
