@@ -247,6 +247,27 @@ def main():
         maintainer_meta,
     )
     deploy_version(account, token, "reference-release-maintainer-v1", maintainer_version)
+    print("REFERENCE_RELEASE_MAINTAINER_NAMESPACE_PROVISIONED=1")
+
+    maintainer_bound_meta = dict(maintainer_meta)
+    maintainer_bound_meta["bindings"] = list(maintainer_meta["bindings"]) + [{
+        "type": "durable_object_namespace",
+        "name": "MAINTENANCE_LEDGER",
+        "class_name": "MaintenanceLedger",
+    }]
+    maintainer_bound_version = upload_version(
+        account,
+        token,
+        "reference-release-maintainer-v1",
+        maintainer_source,
+        maintainer_bound_meta,
+    )
+    deploy_version(
+        account,
+        token,
+        "reference-release-maintainer-v1",
+        maintainer_bound_version,
+    )
 
     prove_settings(
         account,
