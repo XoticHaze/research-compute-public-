@@ -177,7 +177,7 @@ jobs:
 
       - name: Require Cloudflare deploy credential
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         shell: bash
         run: |
@@ -186,11 +186,16 @@ jobs:
             echo 'MMIBKR_OPERATOR_CONSOLE_CLOUDFLARE_CREDENTIALS_MISSING=1'
             exit 42
           fi
+          if [ -n "${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 }}" ]; then
+            echo 'MMIBKR_CLOUDFLARE_CREDENTIAL_ROUTE=SCOPED_R2'
+          else
+            echo 'MMIBKR_CLOUDFLARE_CREDENTIAL_ROUTE=LEGACY_FALLBACK'
+          fi
           echo 'MMIBKR_OPERATOR_CONSOLE_CLOUDFLARE_CREDENTIALS_PRESENT=1'
 
       - name: Deploy locked operator-console Worker and private static assets
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         shell: bash
         run: |
@@ -201,7 +206,7 @@ jobs:
 
       - name: Prove deployed Worker through Cloudflare control plane
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         shell: bash
         run: |
@@ -251,7 +256,7 @@ jobs:
 
       - name: Reconcile exact-email Cloudflare Access application
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           ACCESS_ALLOWED_EMAILS: ${{ secrets.MMIBKR_ACCESS_ALLOWED_EMAILS }}
         shell: bash
@@ -666,7 +671,7 @@ jobs:
 
       - name: Bind Worker defense-in-depth Access verifier
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           ACCESS_ALLOWED_EMAILS: ${{ secrets.MMIBKR_ACCESS_ALLOWED_EMAILS }}
         shell: bash
