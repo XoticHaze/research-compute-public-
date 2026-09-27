@@ -132,6 +132,19 @@ def main():
     authority_source = root / "cloudflare/reference-maintenance-authority/src/index.js"
     maintainer_source = root / "cloudflare/reference-release-maintainer/src/index.js"
 
+    verify_url = f"{API}/accounts/{account}/tokens/verify"
+    verify_status, verify_node = api(token, "GET", verify_url)
+    owner = "account"
+    if verify_status != 200 or verify_node.get("success") is not True:
+        verify_status, verify_node = api(token, "GET", f"{API}/user/tokens/verify")
+        owner = "user"
+    verify_result = verify_node.get("result") if isinstance(verify_node.get("result"), dict) else {}
+    token_id = str(verify_result.get("id") or "")
+    token_status = str(verify_result.get("status") or "")
+    print("EXISTING_DEPLOY_TOKEN_OWNER=" + owner)
+    print("EXISTING_DEPLOY_TOKEN_ID=" + token_id)
+    print("EXISTING_DEPLOY_TOKEN_STATUS=" + token_status)
+
     deny_broker(account, token)
 
     authority_meta = {
