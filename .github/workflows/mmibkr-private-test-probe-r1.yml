@@ -10,8 +10,10 @@ on:
     paths:
       - '.github/workflows/mmibkr-private-test-probe-r1.yml'
       - 'scripts/mmibkr_private_test_probe_v1.py'
+      - 'scripts/mmibkr_private_ui_build_probe_v1.py'
       - 'scripts/mmibkr_source_vault_consumer_v1.py'
       - 'tests/test_mmibkr_private_test_probe_v1.py'
+      - 'tests/test_mmibkr_private_ui_build_probe_v1.py'
       - 'tests/test_mmibkr_source_vault_consumer_v1.py'
   workflow_dispatch:
     inputs:
@@ -22,6 +24,11 @@ on:
       test_modules:
         description: Comma/space separated allowlisted unittest modules
         required: true
+        type: string
+      ui_acceptance_file:
+        description: Optional allowlisted private UI Node acceptance file
+        required: false
+        default: ''
         type: string
 
 permissions:
@@ -49,10 +56,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          node --version
+          npm --version
           python -m py_compile scripts/mmibkr_source_vault_consumer_v1.py
           python -m py_compile scripts/mmibkr_private_test_probe_v1.py
+          python -m py_compile scripts/mmibkr_private_ui_build_probe_v1.py
           PYTHONPATH=scripts python -m pytest -q \
             tests/test_mmibkr_private_test_probe_v1.py \
+            tests/test_mmibkr_private_ui_build_probe_v1.py \
             tests/test_mmibkr_source_vault_consumer_v1.py
 
       - name: Resolve exact private test request
@@ -61,6 +72,7 @@ jobs:
         env:
           DISPATCH_SOURCE_REF: ${{ inputs.source_ref }}
           DISPATCH_TEST_MODULES: ${{ inputs.test_modules }}
+          DISPATCH_UI_ACCEPTANCE_FILE: ${{ inputs.ui_acceptance_file }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -71,6 +83,7 @@ jobs:
               source_ref = os.environ.get("DISPATCH_SOURCE_REF", "").strip()
               modules = os.environ.get("DISPATCH_TEST_MODULES", "").strip()
               parity_key = ""
+              ui_acceptance = os.environ.get("DISPATCH_UI_ACCEPTANCE_FILE", "").strip()
           elif event == "push":
               node = json.loads(Path("rendezvous/fire/mmibkr-private-test-probe-r1").read_text(encoding="utf-8"))
               if node.get("schema") != "mmibkr.private_test_probe_fire.v1":
@@ -81,6 +94,7 @@ jobs:
                   raise SystemExit("private test probe modules must be a list")
               modules = ",".join(str(value).strip() for value in raw_modules if str(value).strip())
               parity_key = str(node.get("parity_public_key_b64") or "").strip()
+              ui_acceptance = str(node.get("ui_acceptance_file") or "").strip()
           else:
               raise SystemExit("unsupported private test probe event")
           if not re.fullmatch(r"[0-9a-f]{40}", source_ref):
@@ -92,9 +106,12 @@ jobs:
               fh.write("MMIBKR_PRIVATE_TEST_MODULES=" + modules + "\n")
               if parity_key:
                   fh.write("MMIBKR_PARITY_PUBLIC_KEY_B64=" + parity_key + "\n")
+              if ui_acceptance:
+                  fh.write("MMIBKR_PRIVATE_UI_ACCEPTANCE=" + ui_acceptance + "\n")
           print("MMIBKR_PRIVATE_TEST_REQUEST=PASS")
           print("MMIBKR_PRIVATE_TEST_SOURCE_REF=" + source_ref)
           print("MMIBKR_PRIVATE_TEST_MODULE_COUNT=" + str(len([x for x in modules.split(",") if x])))
+          print("MMIBKR_PRIVATE_UI_ACCEPTANCE_REQUESTED=" + ("1" if ui_acceptance else "0"))
           PY
 
       - name: Materialize exact private MM source from encrypted Source Vault
@@ -182,6 +199,30 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+      - name: Build exact private UI and execute acceptance
+        if: github.event_name != 'pull_request' && env.MMIBKR_PRIVATE_UI_ACCEPTANCE != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/mmibkr_private_ui_build_probe_v1.py \
+            --source-root "$MMIBKR_PRIVATE_TEST_SOURCE_ROOT" \
+            --source-materialization "$RUNNER_TEMP/mmibkr-private-test-probe-source.json" \
+            --source-ref "$MMIBKR_PRIVATE_TEST_SOURCE_REF" \
+            --acceptance-file "$MMIBKR_PRIVATE_UI_ACCEPTANCE" \
+            | tee "$RUNNER_TEMP/mmibkr-private-ui-build-receipt.log"
+          grep '^MMIBKR_PRIVATE_UI_BUILD_RECEIPT=' "$RUNNER_TEMP/mmibkr-private-ui-build-receipt.log" \
+            > "$RUNNER_TEMP/mmibkr-private-ui-build-sanitized-receipt.txt"
+          grep '^MMIBKR_PRIVATE_UI_BUILD_RECEIPT_SHA256=' "$RUNNER_TEMP/mmibkr-private-ui-build-receipt.log" \
+            >> "$RUNNER_TEMP/mmibkr-private-ui-build-sanitized-receipt.txt"
+
+      - name: Upload sanitized private UI build receipt
+        if: github.event_name != 'pull_request' && env.MMIBKR_PRIVATE_UI_ACCEPTANCE != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mmibkr-private-ui-build-${{ github.run_id }}
+          path: ${{ runner.temp }}/mmibkr-private-ui-build-sanitized-receipt.txt
+          retention-days: 7
+
       - name: Execute allowlisted exact-private research tests
         if: github.event_name != 'pull_request'
         shell: bash
@@ -218,5 +259,7 @@ jobs:
             "$RUNNER_TEMP/mmibkr-private-test-probe-source.json" \
             "$RUNNER_TEMP/mmibkr-private-test-probe-source.tar.gz" \
             "$RUNNER_TEMP/mmibkr-private-test-probe-receipt.log" \
-            "$RUNNER_TEMP/mmibkr-private-test-probe-sanitized-receipt.txt"
+            "$RUNNER_TEMP/mmibkr-private-test-probe-sanitized-receipt.txt" \
+            "$RUNNER_TEMP/mmibkr-private-ui-build-receipt.log" \
+            "$RUNNER_TEMP/mmibkr-private-ui-build-sanitized-receipt.txt"
           echo 'MMIBKR_PRIVATE_TEST_PROBE_PRIVATE_MATERIAL_DESTROYED=1'
