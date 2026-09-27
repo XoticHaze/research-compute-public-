@@ -2,6 +2,11 @@ name: MM-IBKR Canonical Research Session BAU R1
 run-name: canonical-session-${{ inputs.expected_job_sha256 }}-${{ inputs.dispatch_nonce }}
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'rendezvous/fire/mmibkr-canonical-research-session-bau-r1.json'
   workflow_dispatch:
     inputs:
       source_ref:
@@ -49,29 +54,49 @@ jobs:
         env:
           SESSION_ZLIB_B64: ${{ inputs.session_zlib_b64 }}
           EXPECTED_JOB_SHA256: ${{ inputs.expected_job_sha256 }}
+          DISPATCH_SOURCE_REF: ${{ inputs.source_ref }}
         run: |
           set -euo pipefail
           python - <<'PY'
           import base64,hashlib,json,os,zlib
           from pathlib import Path
-          raw=zlib.decompress(base64.b64decode(os.environ['SESSION_ZLIB_B64'],validate=True))
-          node=json.loads(raw)
+          event=os.environ.get('GITHUB_EVENT_NAME','')
+          if event=='push':
+              fire_path=Path('rendezvous/fire/mmibkr-canonical-research-session-bau-r1.json')
+              fire=json.loads(fire_path.read_text(encoding='utf-8'))
+              if fire.get('schema')!='mmibkr.canonical_session_fire.v1':
+                  raise SystemExit('canonical session fire schema rejected')
+              node=fire.get('session')
+              if not isinstance(node,dict):
+                  raise SystemExit('canonical session fire requires session object')
+              raw=json.dumps(node,sort_keys=True,separators=(',',':')).encode('utf-8')
+              job_sha=str(fire.get('expected_job_sha256') or '').strip().lower()
+              source_ref=str(fire.get('source_ref') or '').strip().lower()
+          elif event=='workflow_dispatch':
+              raw=zlib.decompress(base64.b64decode(os.environ['SESSION_ZLIB_B64'],validate=True))
+              node=json.loads(raw)
+              job_sha=os.environ['EXPECTED_JOB_SHA256'].strip().lower()
+              source_ref=os.environ['DISPATCH_SOURCE_REF'].strip().lower()
+          else:
+              raise SystemExit('unsupported canonical session event')
           if node.get('schema')!='mmibkr.canonical_session.v1':
               raise SystemExit('canonical session schema rejected')
           if len(raw)>250000:
               raise SystemExit('canonical session input too large')
-          job_sha=os.environ['EXPECTED_JOB_SHA256'].strip().lower()
           if len(job_sha)!=64 or any(ch not in '0123456789abcdef' for ch in job_sha):
               raise SystemExit('expected job SHA256 invalid')
+          if len(source_ref)!=40 or any(ch not in '0123456789abcdef' for ch in source_ref):
+              raise SystemExit('source_ref must be exact 40-hex SHA')
           Path(os.environ['RUNNER_TEMP'],'canonical-session.json').write_bytes(raw)
           Path(os.environ['RUNNER_TEMP'],'outer-job-sha256.txt').write_text(job_sha+'\n')
+          with Path(os.environ['GITHUB_ENV']).open('a',encoding='utf-8') as fh:
+              fh.write('REQUEST_SOURCE_REF='+source_ref+'\n')
           print('CANONICAL_SESSION_INPUT_SHA256='+hashlib.sha256(raw).hexdigest())
           print('OUTER_JOB_SHA256='+job_sha)
+          print('REQUEST_SOURCE_REF='+source_ref)
           PY
 
       - name: Materialize exact private source from reusable Fleet vault
-        env:
-          REQUEST_SOURCE_REF: ${{ inputs.source_ref }}
         run: |
           set -euo pipefail
           umask 077
