@@ -18,6 +18,7 @@ from io import BytesIO
 import json
 from pathlib import Path
 import re
+import time
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -471,7 +472,11 @@ def run(
         )
     api_key = _read_api_key(api_key_file)
     acquisitions: list[dict[str, Any]] = []
-    for symbol in symbols:
+    for index, symbol in enumerate(symbols):
+        if index:
+            # HFDL data-download ceiling is 100/minute/account. 0.75s keeps
+            # this producer at <=80 downloads/minute even for large batches.
+            time.sleep(0.75)
         acquisitions.append(
             acquire_symbol(
                 symbol,
