@@ -1,12 +1,14 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "d8a51999c8c19c5839f08e3350ebfd16bf6e452a",
+  "source_ref": "2ae707bb5d95a96a1d4212085ffa8f6f6878d471",
   "test_modules": [
-    "tests.test_backtest_capital_replay_v1",
-    "tests.test_strategy_backtest_registry_dispatch"
+    "tests.test_materialize_admitted_stock_source_canonical",
+    "tests.test_historical_source_stitch",
+    "tests.test_data_manager_indicator_context_contract_14th31jq",
+    "tests.test_data_manager_registry_authority_14th31lm"
   ],
-  "requested_by": "futures-commission-unit-capital-replay-pr780",
-  "purpose": "Exact-private funded-account futures commission-unit conversion acceptance for MM-IBKR PR780",
+  "requested_by": "assistant-corpus-v2-pr781",
+  "purpose": "Exact-private selective source-feature materialization acceptance for MM-IBKR PR781",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -14,8 +16,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr780-futures-commission-d8a51999-r1",
+  "request_nonce": "pr781-source-feature-policy-2ae707bb-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "d8a51999c8c19c5839f08e3350ebfd16bf6e452a",
+  "current_private_reference": "2ae707bb5d95a96a1d4212085ffa8f6f6878d471",
   "parity_public_key_b64": ""
 }
