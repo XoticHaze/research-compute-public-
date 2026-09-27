@@ -36,6 +36,10 @@ def test_hfdl_workflow_identity_is_narrowly_bound():
     assert "--config-json',os.environ['HFDL_E1_MM_CONFIG']" in workflow
     assert "HFDL_E1_ARTIFACT_COMPACTION=" in workflow
     assert "unexpectedly materialized unused 1Min features" in workflow
+    assert "HFDL_E1_MM_HANDOFF_FORMAT=PARQUET" in workflow
+    assert "'--source-file',str(source_file)" in workflow
+    assert "public_research.hfdl_e1_mm_admission_handoffs.v2" in workflow
+    assert "mm_admission.csv" not in workflow
     fire = json.loads(
         (ROOT / "rendezvous/fire/hfdl-equity-history-e1-r1").read_text()
     )
@@ -44,7 +48,7 @@ def test_hfdl_workflow_identity_is_narrowly_bound():
     assert fire["provider_timeframe"] == "1min"
     assert fire["provider_format"] == "parquet"
     assert fire["acquisition_endpoint"] == "GET /v1/bars/{ticker}?version=raw"
-    assert fire["mm_source_sha"] == "9ba3c346e370beb8fb90f2f49e67d4c09c89a9b6"
+    assert fire["mm_source_sha"] == "c2cbe3e82ccd99cc9fc807ad7aa5f20bf930683b"
     assert fire["canonical_target_timeframe"] == "15Min"
     assert fire["authority"]["broker"] is False
     assert fire["authority"]["live"] is False

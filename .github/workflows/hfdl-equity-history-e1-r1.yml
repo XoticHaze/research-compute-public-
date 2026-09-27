@@ -35,7 +35,7 @@ on:
       mm_source_sha:
         description: Exact MM-IBKR source SHA for canonical admission
         required: false
-        default: '9ba3c346e370beb8fb90f2f49e67d4c09c89a9b6'
+        default: 'c2cbe3e82ccd99cc9fc807ad7aa5f20bf930683b'
         type: string
 
 permissions:
@@ -122,7 +122,7 @@ jobs:
               symbols=(os.environ.get('DISPATCH_SYMBOLS') or 'AMAT,APH').strip()
               start=(os.environ.get('DISPATCH_START_DATE') or '2004-01-01').strip()
               end=(os.environ.get('DISPATCH_END_DATE') or '2022-02-28').strip()
-              mm_source=(os.environ.get('DISPATCH_MM_SOURCE_SHA') or '9ba3c346e370beb8fb90f2f49e67d4c09c89a9b6').strip().lower()
+              mm_source=(os.environ.get('DISPATCH_MM_SOURCE_SHA') or 'c2cbe3e82ccd99cc9fc807ad7aa5f20bf930683b').strip().lower()
               target_tf='15Min'
           else:
               node=json.loads(Path('rendezvous/fire/hfdl-equity-history-e1-r1').read_text())
@@ -241,15 +241,14 @@ jobs:
               fh.write('HFDL_E1_MM_CONFIG='+str(path)+'\n')
           print('HFDL_E1_MM_CONFIG=PASS')
           PY
-      - name: Prepare deterministic MM admission handoffs
+      - name: Prepare native Parquet MM admission handoffs
         if: steps.authority.outputs.ready == '1'
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
-          import hashlib, json, os
+          import json, os, re
           from pathlib import Path
-          import pandas as pd
 
           root=Path('artifacts/hfdl-e1')
           rows=[]
@@ -257,35 +256,24 @@ jobs:
               symbol_dir=root/symbol
               parquet=symbol_dir/f'{symbol}_1Min.parquet'
               lineage_path=symbol_dir/f'{symbol}_1Min.lineage.json'
-              frame=pd.read_parquet(parquet)
-              handoff=symbol_dir/f'{symbol}_1Min.mm_admission.csv'
-              serial=frame.copy()
-              serial['timestamp']=pd.to_datetime(serial['timestamp'],utc=True).map(lambda x:x.isoformat())
-              serial.to_csv(handoff,index=False,lineterminator='\n')
-              digest=hashlib.sha256(handoff.read_bytes()).hexdigest()
+              if not parquet.is_file() or not lineage_path.is_file():
+                  raise SystemExit(f'{symbol} normalized Parquet handoff missing')
               lineage=json.loads(lineage_path.read_text())
-              parent_sha=str(lineage.get('source_sha256') or '')
-              lineage.update({
-                  'schema':'public_research.hfdl_e1_mm_admission_lineage.v1',
-                  'source_sha256':digest,
-                  'normalized_parent_sha256':parent_sha,
-                  'normalized_parent_format':'parquet',
-                  'admission_transport_format':'csv',
-                  'admission_transport_derivation':'deterministic OHLCV CSV serialization of normalized 1Min parquet',
-              })
-              handoff_lineage=symbol_dir/f'{symbol}_1Min.mm_admission.lineage.json'
-              handoff_lineage.write_text(json.dumps(lineage,indent=2,sort_keys=True)+'\n')
+              digest=str(lineage.get('source_sha256') or '').lower()
+              if not re.fullmatch(r'[0-9a-f]{64}', digest):
+                  raise SystemExit(f'{symbol} normalized Parquet lineage hash missing')
               rows.append({
                   'symbol':symbol,
-                  'source_csv':str(handoff),
+                  'source_file':str(parquet),
                   'source_sha256':digest,
-                  'lineage':str(handoff_lineage),
-                  'normalized_parent_sha256':parent_sha,
+                  'lineage':str(lineage_path),
+                  'source_format':'parquet',
               })
           Path('artifacts/hfdl-e1/mm_admission_handoffs.json').write_text(
-              json.dumps({'schema':'public_research.hfdl_e1_mm_admission_handoffs.v1','rows':rows},indent=2,sort_keys=True)+'\n'
+              json.dumps({'schema':'public_research.hfdl_e1_mm_admission_handoffs.v2','rows':rows},indent=2,sort_keys=True)+'\n'
           )
           print('HFDL_E1_MM_HANDOFFS='+str(len(rows)))
+          print('HFDL_E1_MM_HANDOFF_FORMAT=PARQUET')
           PY
       - name: Invoke MM admitted-stock canonical owner
         if: steps.authority.outputs.ready == '1'
@@ -302,14 +290,14 @@ jobs:
           receipts.mkdir(parents=True,exist_ok=True)
           for row in handoffs:
               symbol=row['symbol']
-              source_csv=Path(row['source_csv']).resolve()
+              source_file=Path(row['source_file']).resolve()
               source_lineage=Path(row['lineage']).resolve()
               data_root=Path('artifacts/hfdl-e1-mm/data').resolve()
               receipt_path=(receipts/f'{symbol}.json').resolve()
               cmd=[
                   sys.executable,
                   str(mm_root/'scripts/operator/materialize_admitted_stock_source_canonical.py'),
-                  '--source-csv',str(source_csv),
+                  '--source-file',str(source_file),
                   '--source-lineage-json',str(source_lineage),
                   '--expected-source-sha256',row['source_sha256'],
                   '--data-root',str(data_root),
@@ -375,12 +363,9 @@ jobs:
 
           handoff_path=Path('artifacts/hfdl-e1/mm_admission_handoffs.json')
           handoffs=json.loads(handoff_path.read_text()).get('rows',[])
+          if not handoffs or any(row.get('source_format') != 'parquet' for row in handoffs):
+              raise SystemExit('native Parquet handoff contract missing')
           removed=[]
-          for row in handoffs:
-              p=Path(str(row.get('source_csv') or ''))
-              if p.exists():
-                  removed.append({'path':str(p),'bytes':p.stat().st_size})
-                  p.unlink()
 
           data_root=Path('artifacts/hfdl-e1-mm/data/stocks')
           for symbol in [x for x in os.environ['HFDL_E1_SYMBOLS'].split(',') if x]:
@@ -397,7 +382,7 @@ jobs:
 
           receipt={
               'schema':'public_research.hfdl_e1_artifact_compaction.v1',
-              'reason':'retain normalized 1Min parquet lineage plus canonical target outputs; remove replayable CSV transports and unused source-resolution artifacts',
+              'reason':'retain normalized 1Min parquet lineage plus canonical target outputs; remove replayable canonical source CSV copies and unused source-resolution artifacts',
               'removed':removed,
               'removed_bytes':sum(int(x['bytes']) for x in removed),
               'normalized_1min_parquet_retained':True,
