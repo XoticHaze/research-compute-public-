@@ -185,5 +185,11 @@
       "PLD",
       "AMT"
     ]
+  },
+  "coverage_gate": {
+    "minimum_symbols_with_usable_history": 24,
+    "minimum_symbol_days": 3000,
+    "minimum_panel_coverage_fraction_per_decision_day": 0.7,
+    "action_if_failed": "INCONCLUSIVE_SOURCE_COVERAGE; no parameter rescue"
   }
 }
