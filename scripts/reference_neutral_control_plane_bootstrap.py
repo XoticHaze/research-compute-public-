@@ -36,6 +36,28 @@ def api(token: str, method: str, url: str, *, body: bytes | None = None, content
     return status, node
 
 
+def put_worker_secret(account: str, token: str, worker: str, name: str, value: str):
+    url = f"{API}/accounts/{account}/workers/scripts/{worker}/secrets"
+    payload = json.dumps({
+        "name": name,
+        "text": value,
+        "type": "secret_text",
+    }, separators=(",", ":")).encode()
+    status, node = api(
+        token,
+        "PUT",
+        url,
+        body=payload,
+        content_type="application/json",
+    )
+    if status != 200 or node.get("success") is not True:
+        raise SystemExit(
+            f"{worker} secret binding update failed HTTP {status}: "
+            + json.dumps(node)[:1000]
+        )
+    print(worker.upper().replace("-", "_") + "_" + name + "_SECRET_BOUND=1")
+
+
 def multipart(metadata: dict, file_path: Path):
     boundary = "----cc-" + secrets.token_hex(16)
     parts: list[bytes] = []
@@ -174,6 +196,14 @@ def main():
             print("EXISTING_DEPLOY_TOKEN_DETAILS_HTTP=" + str(details_status))
 
     broad_preseal = broker_preseal_gate(account, token)
+
+    put_worker_secret(
+        account,
+        token,
+        "reference-release-maintainer-v1",
+        "CLOUDFLARE_ACCOUNT_ID",
+        account,
+    )
 
     authority_meta = {
         "main_module": "index.js",
