@@ -1,12 +1,15 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "7274ef7abfb0c66bd8df59ce5477f82e3cc7591e",
+  "source_ref": "38cedebe81d8c86980eff4a0440e2619ab2fd2a0",
   "test_modules": [
-    "tests.test_backtest_range_contract_14th31im",
-    "tests.test_market_features_provenance_contract"
+    "tests.test_historical_source_stitch",
+    "tests.test_external_history_admitted_ingest_contract",
+    "tests.test_materialize_admitted_stock_source_canonical",
+    "tests.test_materialize_admitted_futures_source_canonical",
+    "tests.test_materialize_admitted_futures_dated_contract"
   ],
-  "requested_by": "continue-release-pr774-exact-acceptance",
-  "purpose": "Release exact-head Python contract acceptance for Product PR774 canonical chart/provenance UI",
+  "requested_by": "corpus-v2-admitted-history-pr773-acceptance",
+  "purpose": "Exact-private acceptance for ranked/admitted stock and futures history consumers through canonical MM stitch owners",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -14,8 +17,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "continue-release-pr774-7274ef7a-r20",
+  "request_nonce": "corpus-v2-pr773-38cedebe-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "7274ef7abfb0c66bd8df59ce5477f82e3cc7591e",
+  "current_private_reference": "38cedebe81d8c86980eff4a0440e2619ab2fd2a0",
   "parity_public_key_b64": ""
 }
