@@ -1,27 +1,12 @@
-name: MMIBKR Private UI Build Probe R1
+name: MMIBKR Private UI Build Probe Contract CI
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'rendezvous/fire/mmibkr-private-ui-build-probe-r1'
   pull_request:
     paths:
       - '.github/workflows/mmibkr-private-ui-build-probe-r1.yml'
       - 'scripts/mmibkr_private_ui_build_probe_v1.py'
       - 'scripts/mmibkr_source_vault_consumer_v1.py'
       - 'tests/test_mmibkr_private_ui_build_probe_v1.py'
-  workflow_dispatch:
-    inputs:
-      source_ref:
-        description: Exact private MM-IBKR commit SHA
-        required: true
-        type: string
-      acceptance_file:
-        description: Allowlisted private UI acceptance file
-        required: true
-        type: string
 
 permissions:
   contents: read
