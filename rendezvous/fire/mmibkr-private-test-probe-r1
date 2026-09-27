@@ -1,16 +1,13 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "ac612c4334e939c2d7db2e96cabe27fcd85f2539",
+  "source_ref": "9645999104376322583bcbb92822a535cc7a9ae7",
   "test_modules": [
-    "tests.test_backtest_capital_replay_v1",
-    "tests.test_selected_runtime_account_sizing_14th31lg",
-    "tests.test_selected_runtime_account_sizing_submit_hook_14th31lg",
-    "tests.test_selected_runtime_margin_guard_14th31lg",
-    "tests.test_selected_runtime_margin_whatif_hook_14th31lg",
-    "tests.test_strategy_backtest_registry_dispatch"
+    "tests.test_research_survivor_funnel",
+    "tests.test_autotuner_campaign_runner",
+    "tests.test_autotuner_family_universe_campaign_vnext"
   ],
-  "requested_by": "backtest-capital-replay-pr776-corrected",
-  "purpose": "Exact-private corrected funded-capital replay plus canonical sizing/margin/registry regression acceptance for MM-IBKR PR776",
+  "requested_by": "survivor-funnel-pr778",
+  "purpose": "Exact-private survivor funnel plus AutoTuner campaign integration acceptance for MM-IBKR PR778",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -18,8 +15,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr776-capital-replay-ac612c43-r2",
+  "request_nonce": "pr778-survivor-funnel-96459991-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "ac612c4334e939c2d7db2e96cabe27fcd85f2539",
+  "current_private_reference": "9645999104376322583bcbb92822a535cc7a9ae7",
   "parity_public_key_b64": ""
 }
