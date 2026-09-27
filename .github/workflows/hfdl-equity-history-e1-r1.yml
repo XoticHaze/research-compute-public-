@@ -32,6 +32,11 @@ on:
         required: false
         default: '2022-02-28'
         type: string
+      mm_source_sha:
+        description: Exact MM-IBKR source SHA for canonical admission
+        required: false
+        default: '24128a842cd860cbf1fe6c93f368fabdae925f80'
+        type: string
 
 permissions:
   contents: read
@@ -106,6 +111,7 @@ jobs:
           DISPATCH_SYMBOLS: ${{ inputs.symbols }}
           DISPATCH_START_DATE: ${{ inputs.start_date }}
           DISPATCH_END_DATE: ${{ inputs.end_date }}
+          DISPATCH_MM_SOURCE_SHA: ${{ inputs.mm_source_sha }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -116,6 +122,8 @@ jobs:
               symbols=(os.environ.get('DISPATCH_SYMBOLS') or 'AMAT,APH').strip()
               start=(os.environ.get('DISPATCH_START_DATE') or '2004-01-01').strip()
               end=(os.environ.get('DISPATCH_END_DATE') or '2022-02-28').strip()
+              mm_source=(os.environ.get('DISPATCH_MM_SOURCE_SHA') or '24128a842cd860cbf1fe6c93f368fabdae925f80').strip().lower()
+              target_tf='15Min'
           else:
               node=json.loads(Path('rendezvous/fire/hfdl-equity-history-e1-r1').read_text())
               if node.get('schema') != 'public_research.hfdl_e1_fire.v1':
@@ -123,16 +131,24 @@ jobs:
               symbols=','.join(str(x).strip().upper() for x in (node.get('symbols') or []) if str(x).strip())
               start=str(node.get('start_date') or '').strip()
               end=str(node.get('end_date') or '').strip()
+              mm_source=str(node.get('mm_source_sha') or '').strip().lower()
+              target_tf=str(node.get('canonical_target_timeframe') or '15Min').strip()
 
           items=[x.strip().upper() for x in symbols.split(',') if x.strip()]
           if not items or any(not re.fullmatch(r'[A-Z0-9.^_-]{1,20}', x) for x in items):
               raise SystemExit('HFDL E1 symbol contract rejected')
           if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', start) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', end):
               raise SystemExit('HFDL E1 date contract rejected')
+          if not re.fullmatch(r'[0-9a-f]{40}', mm_source):
+              raise SystemExit('HFDL E1 exact MM source SHA rejected')
+          if not re.fullmatch(r'(?:[1-9]\d*)Min|[1-9]\d*Hour|1Day', target_tf):
+              raise SystemExit('HFDL E1 canonical target timeframe rejected')
           with Path(os.environ['GITHUB_ENV']).open('a',encoding='utf-8') as fh:
               fh.write('HFDL_E1_SYMBOLS='+','.join(items)+'\n')
               fh.write('HFDL_E1_START_DATE='+start+'\n')
               fh.write('HFDL_E1_END_DATE='+end+'\n')
+              fh.write('MMIBKR_SOURCE_SHA='+mm_source+'\n')
+              fh.write('HFDL_E1_TARGET_TF='+target_tf+'\n')
           print('HFDL_E1_REQUEST=PASS')
           print('HFDL_E1_SYMBOL_COUNT='+str(len(items)))
           PY
@@ -178,6 +194,150 @@ jobs:
             --api-key-file "$RUNNER_TEMP/hfdl-e1.key" \
             --start-date "$HFDL_E1_START_DATE" \
             --end-date "$HFDL_E1_END_DATE"
+      - name: Materialize exact MM source for canonical admission
+        if: steps.authority.outputs.ready == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/mmibkr_source_vault_consumer_v1.py \
+            --source-sha "$MMIBKR_SOURCE_SHA" \
+            --destination "$RUNNER_TEMP/mm-source" \
+            --archive-output "$RUNNER_TEMP/mm-source.tar.gz" \
+            --output "$RUNNER_TEMP/mm-source.json" \
+            --run-id "$GITHUB_RUN_ID"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          node=json.loads(Path(os.environ['RUNNER_TEMP'],'mm-source.json').read_text())
+          if node.get('source_sha') != os.environ['MMIBKR_SOURCE_SHA']:
+              raise SystemExit('MM source identity mismatch')
+          if node.get('vault_attestation_verified') is not True:
+              raise SystemExit('MM source vault attestation not verified')
+          with Path(os.environ['GITHUB_ENV']).open('a',encoding='utf-8') as fh:
+              fh.write('MM_SOURCE_ROOT='+str(node['source_root'])+'\n')
+          print('HFDL_E1_MM_SOURCE=PASS')
+          PY
+      - name: Install exact MM canonical consumer dependencies
+        if: steps.authority.outputs.ready == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check -r "$MM_SOURCE_ROOT/requirements.txt"
+      - name: Prepare deterministic MM admission handoffs
+        if: steps.authority.outputs.ready == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          import pandas as pd
+
+          root=Path('artifacts/hfdl-e1')
+          rows=[]
+          for symbol in [x for x in os.environ['HFDL_E1_SYMBOLS'].split(',') if x]:
+              symbol_dir=root/symbol
+              parquet=symbol_dir/f'{symbol}_1Min.parquet'
+              lineage_path=symbol_dir/f'{symbol}_1Min.lineage.json'
+              frame=pd.read_parquet(parquet)
+              handoff=symbol_dir/f'{symbol}_1Min.mm_admission.csv'
+              serial=frame.copy()
+              serial['timestamp']=pd.to_datetime(serial['timestamp'],utc=True).map(lambda x:x.isoformat())
+              serial.to_csv(handoff,index=False,lineterminator='\n')
+              digest=hashlib.sha256(handoff.read_bytes()).hexdigest()
+              lineage=json.loads(lineage_path.read_text())
+              parent_sha=str(lineage.get('source_sha256') or '')
+              lineage.update({
+                  'schema':'public_research.hfdl_e1_mm_admission_lineage.v1',
+                  'source_sha256':digest,
+                  'normalized_parent_sha256':parent_sha,
+                  'normalized_parent_format':'parquet',
+                  'admission_transport_format':'csv',
+                  'admission_transport_derivation':'deterministic OHLCV CSV serialization of normalized 1Min parquet',
+              })
+              handoff_lineage=symbol_dir/f'{symbol}_1Min.mm_admission.lineage.json'
+              handoff_lineage.write_text(json.dumps(lineage,indent=2,sort_keys=True)+'\n')
+              rows.append({
+                  'symbol':symbol,
+                  'source_csv':str(handoff),
+                  'source_sha256':digest,
+                  'lineage':str(handoff_lineage),
+                  'normalized_parent_sha256':parent_sha,
+              })
+          Path('artifacts/hfdl-e1/mm_admission_handoffs.json').write_text(
+              json.dumps({'schema':'public_research.hfdl_e1_mm_admission_handoffs.v1','rows':rows},indent=2,sort_keys=True)+'\n'
+          )
+          print('HFDL_E1_MM_HANDOFFS='+str(len(rows)))
+          PY
+      - name: Invoke MM admitted-stock canonical owner
+        if: steps.authority.outputs.ready == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, subprocess, sys
+          from pathlib import Path
+
+          mm_root=Path(os.environ['MM_SOURCE_ROOT'])
+          handoffs=json.loads(Path('artifacts/hfdl-e1/mm_admission_handoffs.json').read_text())['rows']
+          receipts=Path('artifacts/hfdl-e1-mm/receipts')
+          receipts.mkdir(parents=True,exist_ok=True)
+          for row in handoffs:
+              symbol=row['symbol']
+              cmd=[
+                  sys.executable,
+                  str(mm_root/'scripts/operator/materialize_admitted_stock_source_canonical.py'),
+                  '--source-csv',row['source_csv'],
+                  '--source-lineage-json',row['lineage'],
+                  '--expected-source-sha256',row['source_sha256'],
+                  '--data-root','artifacts/hfdl-e1-mm/data',
+                  '--symbol',symbol,
+                  '--source-timeframe','1Min',
+                  '--target-timeframe',os.environ['HFDL_E1_TARGET_TF'],
+                  '--receipt-json',str(receipts/f'{symbol}.json'),
+              ]
+              subprocess.run(cmd,check=True,cwd=mm_root)
+          print('HFDL_E1_MM_CANONICALIZATION=PASS')
+          PY
+      - name: Validate canonical MM receipts
+        if: steps.authority.outputs.ready == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          receipts=[]
+          for symbol in [x for x in os.environ['HFDL_E1_SYMBOLS'].split(',') if x]:
+              path=Path('artifacts/hfdl-e1-mm/receipts')/f'{symbol}.json'
+              node=json.loads(path.read_text())
+              if node.get('status') != 'PASS':
+                  raise SystemExit(f'{symbol} canonical materialization not PASS')
+              if node.get('source_timeframe') != '1Min' or node.get('target_timeframe') != os.environ['HFDL_E1_TARGET_TF']:
+                  raise SystemExit(f'{symbol} canonical timeframe identity mismatch')
+              if node.get('safety',{}).get('network_ib_calls') is not False:
+                  raise SystemExit(f'{symbol} broker/network boundary violated')
+              receipts.append({
+                  'symbol':symbol,
+                  'source_rows':node.get('source_rows'),
+                  'canonical_rows':node.get('canonical_rows'),
+                  'source_sha256':node.get('source_sha256'),
+                  'features_sha256':node.get('features_sha256'),
+                  'source_overlap_evidence':node.get('source_overlap_evidence'),
+              })
+          summary={
+              'schema':'public_research.hfdl_e1_mm_canonicalization_summary.v1',
+              'mm_source_sha':os.environ['MMIBKR_SOURCE_SHA'],
+              'target_timeframe':os.environ['HFDL_E1_TARGET_TF'],
+              'receipts':receipts,
+              'broker_credentials_used':False,
+              'live_trading_allowed':False,
+          }
+          Path('artifacts/hfdl-e1-mm/canonicalization_summary.json').write_text(
+              json.dumps(summary,indent=2,sort_keys=True)+'\n'
+          )
+          print('HFDL_E1_MM_CANONICAL_RECEIPTS=PASS')
+          PY
       - name: Emit typed acquisition state
         shell: bash
         env:
@@ -219,6 +379,8 @@ jobs:
         if: always()
         with:
           name: hfdl-e1-${{ github.run_id }}
-          path: artifacts/hfdl-e1/
+          path: |
+            artifacts/hfdl-e1/
+            artifacts/hfdl-e1-mm/
           retention-days: 7
           if-no-files-found: error
