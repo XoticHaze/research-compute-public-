@@ -713,6 +713,25 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("MMIBKR_PRIVATE_SOURCE_TOKEN", text)
         self.assertNotIn("vault:rsa-oaep:private-jwk", text)
 
+    def test_registry_backtest_generic_selected_surface_is_exact_source_expiring_and_unwrap_only(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_IDENTITY", text)
+        self.assertIn("mmibkr-canonical-research-session-bau-r1.yml@refs/heads/main", text)
+        self.assertIn("35e6b44e5c2618f780a84c1c204fe14c76bdf0e5", text)
+        self.assertIn("REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_EXPIRES_AT", text)
+        self.assertIn("2026-09-27T18:00:00Z", text)
+        self.assertIn("matchedRegistryBacktestGenericSelectedSurface", text)
+        self.assertIn("privateTestProbeUnwrapPathAllowed", text)
+        self.assertIn("registry_backtest_generic_selected_surface_source_rejected", text)
+        self.assertNotIn(
+            "matchedRegistryBacktestGenericSelectedSurface && privateArchivePathAllowed",
+            text,
+        )
+        self.assertNotIn(
+            "matchedRegistryBacktestGenericSelectedSurface && operatorDeployPathAllowed",
+            text,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
