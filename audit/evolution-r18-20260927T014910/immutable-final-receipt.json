@@ -1,0 +1,107 @@
+{
+  "schema": "fleet.evolution_auditor_immutable_final_receipt.v1",
+  "control_epoch_id": "20260927T034100Z-no-terminal-failure-floor-safepoint-r18",
+  "control_epoch_generation": 18,
+  "role": "Evolution Auditor",
+  "admission": {
+    "configured_due_boundary": "2026-09-27T01:24:00-05:00",
+    "clock_in": "2026-09-27T01:49:10-05:00",
+    "clock_in_issue_comment_id": 5853520038,
+    "admission_state": "OWNER_ADMITTED_CONTINUE",
+    "recovered_due_slot": "2026-09-27T00:24:00-05:00",
+    "recovered_due_slot_final_state": "CONSUMED_BY_CLEAN_VALID_OWNER_RECOVERY"
+  },
+  "checkpoints": [
+    {
+      "name": "CHECKPOINT_8",
+      "observed_at": "2026-09-27T01:58:28-05:00",
+      "elapsed_seconds": 558,
+      "commit": "a582cb03136c28fe073397d1d967c9f6ed0c413a",
+      "published_at": "2026-09-27T01:59:16-05:00"
+    },
+    {
+      "name": "CHECKPOINT_16",
+      "observed_at": "2026-09-27T02:05:10-05:00",
+      "elapsed_seconds": 960,
+      "commit": "6a4dbdc22d2a291adc8bf52e9295ec992a08ed1a",
+      "published_at": "2026-09-27T02:05:25-05:00"
+    },
+    {
+      "name": "CHECKPOINT_24",
+      "observed_at": "2026-09-27T02:13:10-05:00",
+      "elapsed_seconds": 1440,
+      "commit": "db260040a98bcf896e005a7acec67e2a8603fc8a",
+      "published_at": "2026-09-27T02:13:31-05:00"
+    },
+    {
+      "name": "FLOOR_SAFEPOINT_NON_FINAL",
+      "observed_at": "2026-09-27T02:15:55-05:00",
+      "elapsed_seconds": 1605,
+      "commit": "f93f0afaf73f437c89cffc52d6c39d46acb3c502",
+      "published_at": "2026-09-27T02:16:10-05:00"
+    }
+  ],
+  "final_view": {
+    "observed_at": "2026-09-27T02:26:43-05:00",
+    "elapsed_seconds": 2253,
+    "commit": "715f9a4fa8ee443117c50ef4ccfebc689a7c7bb8",
+    "published_at": "2026-09-27T02:27:06-05:00"
+  },
+  "clock_out": "2026-09-27T02:27:15-05:00",
+  "total_elapsed_seconds": 2285,
+  "total_elapsed_minutes": 38.0833333333,
+  "temporal_integrity": {
+    "clock_in_publication_after_observation": true,
+    "checkpoint8_publication_after_observation": true,
+    "checkpoint16_publication_after_observation": true,
+    "checkpoint24_publication_after_observation": true,
+    "floor_publication_after_observation": true,
+    "final_view_publication_after_observation": true,
+    "clock_out_after_final_view_publication": true,
+    "fabricated_future_timestamp": false
+  },
+  "durable_results": [
+    "Detected and invalidated Market Research 01:36 future-dated runtime evidence.",
+    "Hardened all five live role prompts around admission ownership, temporal integrity, recovery, and B1 serialization.",
+    "Observed Product 02:13 valid owner admission consume prior missed-slot debt, then separately classified no durable progress/checkpoint through bounded checkpoint8 observation.",
+    "Narrowed R30 failure to missing producer admission/capability and recovered authoritative Foundry artifact identities.",
+    "Recovered existing Producer R2 as canonical producer route and built/tested smallest GH_TOKEN-compatible R3 correction without inventing a parallel transport.",
+    "Detected second B1 freeze violation live: non-B1 PR776 and PR777 fire commits moved public main from e3319a to current 62ce046.",
+    "Refroze all roles on current public base 62ce046 and downgraded R6 to historical; recovered exact R6 source/test/authority semantics for fresh post-62ce canary with new nonce.",
+    "Observed canonical MM main advance to 8e206404 and forced Product to re-ground current source authority before acceptance."
+  ],
+  "final_recovery_ledger": {
+    "continue_release": "01:48_DUE_SLOT_UNACCOUNTED_INVOCATION__RECOVERY_REQUIRED; then post-62ce B1 canary -> producer -> fresh R30 -> R42",
+    "trading_product": "02:13 admission valid, but ADMITTED_OWNER__NO_DURABLE_PROGRESS_THROUGH_CHECKPOINT8__RECOVERY_REQUIRED",
+    "market_research": "01:36_TEMPORAL_INTEGRITY_VIOLATION__RECOVERY_REQUIRED",
+    "coordinator": "01:02_INTERRUPTED_BEFORE_VALID_FLOOR plus 02:00_DUE_SLOT_UNACCOUNTED_INVOCATION__RECOVERY_REQUIRED",
+    "evolution_auditor": "CLEAN_CLOSED__00:24_RECOVERY_CONSUMED"
+  },
+  "current_authority": {
+    "commandcenter_main": "de320413c784d402c0056d8f7027bf5b0c8e4872",
+    "public_refrozen_base": "62ce0466960a8d21fa649177c03987884b2d2c08",
+    "mm_main": "8e20640400e8fa7fb5e57c6852f79105c75c6666",
+    "historical_r6_head": "e3319a018d88e8ce433c40df7e82a7734a595131",
+    "historical_r6_fire_blob": "a54548fad0f8bc4cbada7d3440f93a12fee3054a",
+    "current_fire_blob": "7fa270e8ebfeccb1f501b2ec49622e5a4062842d"
+  },
+  "producer_r3": {
+    "source_r2_sha256": "9226cf60bf33cfa9208800848d49ee6f242accb77225951e0f894bdbe7f26cdf",
+    "generated_zip_sha256": "676511f3f6126c73df90c69dcfd9b2d336937495a55ac6b36e6a46518c306919",
+    "corrected_producer_sha256": "a2d2f708439d125bee1297bdb55a6036e7de60a5f4cc4437f4d86aee1570e7de",
+    "library_promoted": false,
+    "tests": [
+      "py_compile",
+      "GH_TOKEN-only",
+      "GITHUB_TOKEN-only",
+      "custom-token-env",
+      "missing-token-fail-closed",
+      "canonical-decrypt-roundtrip"
+    ]
+  },
+  "cadence_changed": false,
+  "task_disabled": false,
+  "public_main_mutated_by_auditor": false,
+  "live_trading_change": false,
+  "completion": "CLEAN_FINAL"
+}
