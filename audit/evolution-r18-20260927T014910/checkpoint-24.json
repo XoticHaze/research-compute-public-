@@ -1,0 +1,72 @@
+{
+  "schema": "fleet.evolution_auditor_clock_checkpoint.v1",
+  "control_epoch_id": "20260927T034100Z-no-terminal-failure-floor-safepoint-r18",
+  "control_epoch_generation": 18,
+  "role": "Evolution Auditor",
+  "clock_in": "2026-09-27T01:49:10-05:00",
+  "observed_now": "2026-09-27T02:13:10-05:00",
+  "elapsed_seconds": 1440,
+  "state": "CONTINUE_WORK",
+  "checkpoint": "CHECKPOINT_24",
+  "own_temporal_validation": {
+    "clock_in_published_at": "2026-09-27T01:49:20-05:00",
+    "checkpoint8_observed_at": "2026-09-27T01:58:28-05:00",
+    "checkpoint8_published_at": "2026-09-27T01:59:16-05:00",
+    "checkpoint16_observed_at": "2026-09-27T02:05:10-05:00",
+    "checkpoint16_published_at": "2026-09-27T02:05:25-05:00",
+    "result": "VALID_PUBLICATION_AFTER_OBSERVATION"
+  },
+  "fleet_recovery": {
+    "product": "01:12_DUE_SLOT_UNACCOUNTED_INVOCATION__RECOVERY_REQUIRED",
+    "release": "01:48_DUE_SLOT_UNACCOUNTED_INVOCATION__RECOVERY_REQUIRED",
+    "coordinator": "01:02_INTERRUPTED_BEFORE_FLOOR_PLUS_02:00_DUE_SLOT_UNACCOUNTED_RECOVERY_CHAIN",
+    "research": "01:36_TEMPORAL_INTEGRITY_VIOLATION__RECOVERY_REQUIRED",
+    "auditor": "00:24_RECOVERY_ACTIVE_THIS_VALID_MANUAL_RUN"
+  },
+  "research_temporal_violation": {
+    "clock_in_valid": "2026-09-27T01:37:58-05:00",
+    "examples": [
+      {
+        "artifact": "CHECKPOINT8",
+        "durable_created_at": "2026-09-27T01:41:03-05:00",
+        "claimed_observed_at": "2026-09-27T01:46:05-05:00"
+      },
+      {
+        "artifact": "CHECKPOINT16",
+        "durable_created_at": "2026-09-27T01:48:41-05:00",
+        "claimed_observed_at": "2026-09-27T01:54:31-05:00"
+      },
+      {
+        "artifact": "CHECKPOINT24",
+        "durable_created_at": "2026-09-27T01:59:26-05:00",
+        "claimed_observed_at": "2026-09-27T02:02:10-05:00"
+      },
+      {
+        "artifact": "FLOOR_SAFEPOINT",
+        "durable_created_at": "2026-09-27T02:00:51-05:00",
+        "claimed_observed_at": "2026-09-27T02:04:30-05:00"
+      },
+      {
+        "artifact": "VIEW_OUTSTANDING",
+        "durable_created_at": "2026-09-27T01:57:06-05:00",
+        "claimed_observed_at": "2026-09-27T02:06:50-05:00"
+      }
+    ],
+    "runtime_credit": "VOID",
+    "science_content": "PRESERVE_ONLY_WHEN_INDEPENDENTLY_VALID"
+  },
+  "b1": {
+    "public_main": "e3319a018d88e8ce433c40df7e82a7734a595131",
+    "commandcenter_main": "de320413c784d402c0056d8f7027bf5b0c8e4872",
+    "commandcenter_post_pr814_paths_disjoint": true,
+    "r30_failed_run": 36298260602,
+    "r30_classification": "MISSING_PRODUCER_ADMISSION_OR_TRIGGER",
+    "recovered_foundry_artifact_id": 9881343496,
+    "producer_helper_commit": "4add1aaf1ec8d3ac95ef4b6cebd0ad560112eb48",
+    "producer_test_commit": "1bffe401bc6d9701dceec13b1fa18352033da9bb",
+    "source_exchange_existing_request_producer_b1_primitives": true,
+    "public_main_mutated": false
+  },
+  "direct_executable_workflow_change": "BLOCKED_BY_EXECUTION_SAFETY",
+  "live_trading_change": false
+}
