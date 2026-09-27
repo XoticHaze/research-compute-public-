@@ -234,11 +234,6 @@ def main():
                 "service": "reference-maintenance-authority-v1",
                 "environment": "production",
             },
-            {
-                "type": "durable_object_namespace",
-                "name": "MAINTENANCE_LEDGER",
-                "class_name": "MaintenanceLedger",
-            },
         ],
         "exports": {
             "MaintenanceLedger": {"type": "durable-object", "storage": "sqlite"}
