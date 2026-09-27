@@ -2,10 +2,14 @@
   "schema": "mmibkr.private_test_probe_fire.v1",
   "source_ref": "f1ab55e82a4e58cd9e6b413e2f870ea2fa3ae3ad",
   "test_modules": [
-    "tests.test_historical_source_stitch"
+    "tests.test_historical_source_stitch",
+    "tests.test_data_manager_indicator_context_contract_14th31jq",
+    "tests.test_data_manager_registry_authority_14th31lm",
+    "tests.test_materialize_admitted_futures_source_canonical",
+    "tests.test_materialize_admitted_futures_dated_contract"
   ],
   "requested_by": "assistant-corpus-v2-stitch-pass",
-  "purpose": "execute exact-private Corpus V2 external-history stitch regression on hardened public compute",
+  "purpose": "widen exact-private Corpus V2 stitch proof across canonical data-manager and admitted-futures consumer regressions",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -13,7 +17,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "corpus-v2-stitch-f1ab55e8-20260926-2048cdt",
+  "request_nonce": "corpus-v2-stitch-regression-bundle-f1ab55e8-20260926-2054cdt",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
   "current_private_reference": "f1ab55e82a4e58cd9e6b413e2f870ea2fa3ae3ad",
   "parity_public_key_b64": ""
