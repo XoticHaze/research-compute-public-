@@ -2,6 +2,9 @@
   "credential_strategy": "existing_deploy_credential",
   "exit_code": 1,
   "markers": [
+    "EXISTING_DEPLOY_TOKEN_OWNER=user",
+    "EXISTING_DEPLOY_TOKEN_ID=0410fd695969e9f8608892717c16d9d1",
+    "EXISTING_DEPLOY_TOKEN_STATUS=active",
     "EXISTING_DEPLOY_CREDENTIAL_CAN_ADMINISTER_BROKER=1"
   ],
   "new_token_created": false,
