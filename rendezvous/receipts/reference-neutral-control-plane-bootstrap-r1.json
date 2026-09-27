@@ -8,7 +8,12 @@
     "EXISTING_DEPLOY_TOKEN_DETAILS_HTTP=403",
     "EXISTING_DEPLOY_CREDENTIAL_CAN_ADMINISTER_BROKER=1",
     "REFERENCE_BROKER_PRESEAL_EMPTY_PASS=1",
-    "reference-maintenance-authority-v1 version upload failed HTTP 403: {\"result\": null, \"success\": false, \"errors\": [{\"code\": 100406, \"message\": \"Durable Object binding 'AUTHORITY_STATE' references class 'AuthorityState', which is declared in `exports` but not yet provisioned. Declarative `exports` are reconciled when the version is deployed, so the namespace must exist before a binding can reference it. Deploy this version to provision the class, or remove the binding and access the Durable Object "
+    "REFERENCE_MAINTENANCE_AUTHORITY_V1_VERSION_UPLOADED=1",
+    "REFERENCE_MAINTENANCE_AUTHORITY_V1_DEPLOYED=1",
+    "REFERENCE_MAINTENANCE_AUTHORITY_NAMESPACE_PROVISIONED=1",
+    "REFERENCE_MAINTENANCE_AUTHORITY_V1_VERSION_UPLOADED=1",
+    "REFERENCE_MAINTENANCE_AUTHORITY_V1_DEPLOYED=1",
+    "reference-release-maintainer-v1 version upload failed HTTP 400: {\"result\": null, \"success\": false, \"errors\": [{\"code\": 10057, \"message\": \"inherit binding 'CLOUDFLARE_ACCOUNT_ID' is invalid: previous version does not have binding named 'CLOUDFLARE_ACCOUNT_ID'\"}], \"messages\": []}"
   ],
   "new_token_created": false,
   "schema": "reference.neutral_control_plane.bootstrap_receipt.r1",
