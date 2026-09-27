@@ -1,14 +1,14 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "c758c59a646167fb9db04335c2bb76f65efba85c",
+  "source_ref": "d6a33555e7f8472a81004cd8a2bc3157f7be9879",
   "test_modules": [
     "tests.test_materialize_admitted_stock_source_canonical",
     "tests.test_historical_source_stitch",
     "tests.test_data_manager_indicator_context_contract_14th31jq",
     "tests.test_data_manager_registry_authority_14th31lm"
   ],
-  "requested_by": "assistant-corpus-v2-pr782",
-  "purpose": "Exact-private native Parquet admitted-stock acceptance for MM-IBKR PR782",
+  "requested_by": "assistant-corpus-v2-pr782-r2",
+  "purpose": "Exact-private native Parquet admitted-stock R2 acceptance for MM-IBKR PR782",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -16,8 +16,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr782-native-parquet-c758c59a-r1",
+  "request_nonce": "pr782-native-parquet-d6a33555-r2",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "c758c59a646167fb9db04335c2bb76f65efba85c",
+  "current_private_reference": "d6a33555e7f8472a81004cd8a2bc3157f7be9879",
   "parity_public_key_b64": ""
 }
