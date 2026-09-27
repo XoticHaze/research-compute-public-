@@ -1,9 +1,9 @@
 {
   "schema": "reference.neutral_control_plane.bootstrap.r1",
-  "requested_at": "2026-09-27T13:57:00-05:00",
+  "requested_at": "2026-09-27T13:59:00-05:00",
   "credential_strategy": "reuse_existing_deploy_credential",
   "new_token_required": false,
   "broker_access_required": false,
-  "attempt": 4,
+  "attempt": 5,
   "purpose": "identify existing deploy token and enforce broker-deny gate"
 }
