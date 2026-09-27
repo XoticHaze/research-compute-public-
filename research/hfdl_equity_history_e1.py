@@ -204,7 +204,7 @@ def normalize_pitrading_1min(
     except Exception as exc:
         raise AcquisitionError(f"provider_parquet_parse_failed:{type(exc).__name__}") from exc
     if provider.empty:
-        raise AcquisitionError("provider_csv_empty")
+        raise AcquisitionError("provider_parquet_empty")
 
     cmap = _normalized_column_map([str(c) for c in provider.columns])
     source_labels = provider[cmap["source"]].astype(str).str.strip().str.lower()
@@ -312,14 +312,6 @@ def normalize_pitrading_1min(
     return out, qa
 
 
-def _deterministic_csv_bytes(frame: pd.DataFrame) -> bytes:
-    node = frame.copy()
-    node["timestamp"] = pd.to_datetime(node["timestamp"], utc=True).map(
-        lambda ts: ts.isoformat()
-    )
-    return node.to_csv(index=False, lineterminator="\n").encode("utf-8")
-
-
 def acquire_symbol(
     symbol: str,
     *,
@@ -340,9 +332,14 @@ def acquire_symbol(
 
     symbol_dir = output_root / symbol
     symbol_dir.mkdir(parents=True, exist_ok=True)
-    normalized_bytes = _deterministic_csv_bytes(normalized)
     normalized_path = symbol_dir / f"{symbol}_1Min.parquet"
-    normalized_path.write_bytes(normalized_bytes)
+    normalized.to_parquet(
+        normalized_path,
+        index=False,
+        engine="pyarrow",
+        compression="zstd",
+    )
+    normalized_bytes = normalized_path.read_bytes()
     normalized_sha = _sha256(normalized_bytes)
     raw_sha = _sha256(raw)
 
