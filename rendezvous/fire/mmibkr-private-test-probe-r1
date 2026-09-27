@@ -1,25 +1,12 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "fd987948786cc2357737d499a111bb40ff5144e5",
-  "test_modules": [
-    "tests.test_backtest_capital_replay_v1",
-    "tests.test_selected_runtime_account_sizing_14th31lg",
-    "tests.test_selected_runtime_account_sizing_submit_hook_14th31lg",
-    "tests.test_selected_runtime_margin_guard_14th31lg",
-    "tests.test_selected_runtime_margin_whatif_hook_14th31lg",
-    "tests.test_strategy_backtest_registry_dispatch"
-  ],
-  "requested_by": "backtest-capital-replay-pr776",
-  "purpose": "Exact-private funded-capital replay plus existing canonical sizing/margin/registry regression acceptance for MM-IBKR PR776",
-  "authority": {
-    "research_only": true,
-    "broker": false,
-    "runtime_activation": false,
-    "promotion_mutation": false,
-    "live": false
-  },
-  "request_nonce": "pr776-capital-replay-fd987948-r1",
+  "source_ref": "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
+  "test_modules": ["tests.test_strategy_backtest_registry_dispatch"],
+  "requested_by": "continue-release-b1-active-source-canary-r20",
+  "purpose": "B1 active-source canary after public freeze repair and PR814 merge",
+  "authority": {"research_only": true, "broker": false, "runtime_activation": false, "promotion_mutation": false, "live": false},
+  "request_nonce": "continue-release-b1-r5-push-r20",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "fd987948786cc2357737d499a111bb40ff5144e5",
+  "current_private_reference": "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5",
   "parity_public_key_b64": ""
 }
