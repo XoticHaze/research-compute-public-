@@ -1,0 +1,30 @@
+{
+  "schema": "fleet.evolution_auditor_clock_checkpoint.v1",
+  "control_epoch_id": "20260927T034100Z-no-terminal-failure-floor-safepoint-r18",
+  "control_epoch_generation": 18,
+  "role": "Evolution Auditor",
+  "clock_in": "2026-09-27T01:49:10-05:00",
+  "observed_now": "2026-09-27T01:58:28-05:00",
+  "elapsed_seconds": 558,
+  "state": "CONTINUE_WORK",
+  "checkpoint": "CHECKPOINT_8",
+  "ledger": {
+    "research_0136": "RECOVERED_VALID_OWNER_CLOCK_013758_CHECKPOINT8_014605",
+    "product_0112": "DUE_SLOT_UNACCOUNTED_INVOCATION__RECOVERY_REQUIRED",
+    "auditor_0024": "RECOVERY_ACTIVE_MANUAL_OWNER_RUN"
+  },
+  "r30": {
+    "failed_run_id": 36298260602,
+    "exact_failure": "WAIT_FOR_RUN_BOUND_MNQ_CORPUS_ENVELOPE_TIMEOUT",
+    "recipient_published": true,
+    "producer_invoked": false,
+    "corpus_artifact_id": 9881343496,
+    "corpus_archive_sha256": "86aae162c38354a0beb0abfc857f317f596a07c9e317d4d21e4fb799881c2b2e",
+    "corpus_member_sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e",
+    "recovery_branch": "audit/r30-rendezvous-recovery-r1",
+    "producer_commit": "4add1aaf1ec8d3ac95ef4b6cebd0ad560112eb48",
+    "producer_test_commit": "1bffe401bc6d9701dceec13b1fa18352033da9bb"
+  },
+  "public_main_mutated": false,
+  "live_trading_change": false
+}
