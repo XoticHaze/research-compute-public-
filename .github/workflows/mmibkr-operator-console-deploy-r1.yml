@@ -13,6 +13,7 @@ on:
       - main
     paths:
       - 'rendezvous/fire/mmibkr-operator-console-deploy-r1'
+      - 'rendezvous/fire/reference-neutral-control-plane-bootstrap-r1'
       - '.github/workflows/mmibkr-operator-console-deploy-r1.yml'
       - 'cloudflare/operator-console/**'
   pull_request:
@@ -39,7 +40,24 @@ env:
   OPERATOR_CONSOLE_URL: https://mmibkr-operator-console.slenderiq.workers.dev
 
 jobs:
+  neutral_bootstrap:
+    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, 'reference neutral control plane bootstrap') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Bootstrap neutral control plane with existing deploy credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/reference_neutral_control_plane_bootstrap.py --repo-root "$GITHUB_WORKSPACE"
+
   contract:
+    if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, 'reference neutral control plane bootstrap') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
