@@ -9,8 +9,12 @@ const EXPECTED_AUTHORITY = 'ibkr-paper-readonly';
 const ALLOWED_REF = 'refs/heads/ibkr-b1-authority-v1';
 const ALLOWED_EVENTS = new Set(['push', 'workflow_dispatch']);
 const ALLOWED_WORKFLOW_REF = 'XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1';
+const HFDL_AUTHORITY = 'hfdl-readonly';
+const HFDL_ALLOWED_REF = 'refs/heads/hfdl-e1-authority-v1';
+const HFDL_ALLOWED_WORKFLOW_REF = 'XoticHaze/research-compute-public-/.github/workflows/hfdl-equity-history-e1-r1.yml@refs/heads/hfdl-e1-authority-v1';
 const REQUEST_SCHEMA = 'mmibkr-fleet-authority-seal-request-v1';
 const ENVELOPE_SCHEMA = 'mmibkr-ibkr-readonly-gateway-env-x25519-hkdf-aesgcm-v1';
+const HFDL_ENVELOPE_SCHEMA = 'mmibkr-hfdl-api-key-x25519-hkdf-aesgcm-v1';
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -62,7 +66,7 @@ function firstConfiguredValue(env, names, name) {
   return null;
 }
 
-async function verifyGithubOidc(jwt, requestedRunId) {
+async function verifyGithubOidc(jwt, requestedRunId, policy = null) {
   const parts = jwt.split('.');
   if (parts.length !== 3) throw new Error('oidc_invalid');
 
@@ -113,9 +117,12 @@ async function verifyGithubOidc(jwt, requestedRunId) {
   if (claims.repository !== EXPECTED_REPOSITORY) throw new Error('oidc_repository_rejected');
   if (claims.repository_visibility !== 'public') throw new Error('oidc_visibility_rejected');
   if (claims.runner_environment !== 'github-hosted') throw new Error('oidc_runner_rejected');
-  if (claims.ref !== ALLOWED_REF) throw new Error('oidc_ref_rejected');
-  if (claims.workflow_ref !== ALLOWED_WORKFLOW_REF) throw new Error('oidc_workflow_ref_rejected');
-  if (!ALLOWED_EVENTS.has(claims.event_name)) throw new Error('oidc_event_rejected');
+  const allowedRef = policy?.allowedRef || ALLOWED_REF;
+  const allowedWorkflowRef = policy?.allowedWorkflowRef || ALLOWED_WORKFLOW_REF;
+  const allowedEvents = policy?.allowedEvents || ALLOWED_EVENTS;
+  if (claims.ref !== allowedRef) throw new Error('oidc_ref_rejected');
+  if (claims.workflow_ref !== allowedWorkflowRef) throw new Error('oidc_workflow_ref_rejected');
+  if (!allowedEvents.has(claims.event_name)) throw new Error('oidc_event_rejected');
   if (String(claims.run_id) !== requestedRunId) throw new Error('oidc_run_rejected');
 
   return {
@@ -236,6 +243,79 @@ async function sealIbkrGatewayEnv(body, env, oidc) {
   };
 }
 
+
+async function sealHfdlApiKey(body, env, oidc) {
+  if (body.schema !== REQUEST_SCHEMA || body.authority !== HFDL_AUTHORITY) throw new Error('request_rejected');
+  const runId = String(body.run_id ?? '');
+  if (!/^\d{4,24}$/.test(runId)) throw new Error('run_id_rejected');
+
+  const recipientB64 = String(body.recipient_b64 ?? '');
+  const recipientKeyId = String(body.recipient_key_id ?? '');
+  let recipientRaw;
+  try {
+    recipientRaw = b64ToBytes(recipientB64);
+  } catch {
+    throw new Error('recipient_rejected');
+  }
+  if (recipientRaw.length !== 32) throw new Error('recipient_rejected');
+  const calculatedKeyId = `sha256:${await sha256Hex(recipientRaw)}`;
+  if (recipientKeyId !== calculatedKeyId) throw new Error('recipient_key_id_rejected');
+
+  if (!env.HFDL_API_KEY) throw new Error('authority_not_configured');
+  const apiKey = validateSecretValue(env.HFDL_API_KEY, 'hfdl_api_key');
+
+  const recipientKey = await crypto.subtle.importKey('raw', recipientRaw, { name: 'X25519' }, false, []);
+  const ephemeral = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
+  const shared = await crypto.subtle.deriveBits(
+    { name: 'X25519', public: recipientKey },
+    ephemeral.privateKey,
+    256,
+  );
+
+  const salt = crypto.getRandomValues(new Uint8Array(32));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const aadText = `mmibkr-fleet-authority|${HFDL_AUTHORITY}|${runId}|${recipientKeyId}`;
+  const aad = new TextEncoder().encode(aadText);
+  const hkdfBase = await crypto.subtle.importKey('raw', shared, 'HKDF', false, ['deriveKey']);
+  const aesKey = await crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt, info: aad },
+    hkdfBase,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt'],
+  );
+
+  const plaintext = new TextEncoder().encode(apiKey);
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, additionalData: aad, tagLength: 128 },
+    aesKey,
+    plaintext,
+  ));
+  const ephemeralPublic = new Uint8Array(await crypto.subtle.exportKey('raw', ephemeral.publicKey));
+
+  return {
+    schema: HFDL_ENVELOPE_SCHEMA,
+    authority: HFDL_AUTHORITY,
+    run_id: runId,
+    recipient_key_id: recipientKeyId,
+    ephemeral_public_b64: bytesToB64(ephemeralPublic),
+    salt_b64: bytesToB64(salt),
+    iv_b64: bytesToB64(iv),
+    aad_b64: bytesToB64(aad),
+    ciphertext_b64: bytesToB64(ciphertext),
+    created_at: new Date().toISOString(),
+    oidc: {
+      repository: oidc.repository,
+      ref: oidc.ref,
+      workflow_ref: oidc.workflow_ref,
+      workflow_sha: oidc.workflow_sha,
+      event_name: oidc.event_name,
+      run_id: oidc.run_id,
+      run_attempt: oidc.run_attempt,
+    },
+  };
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -247,6 +327,7 @@ export default {
         source_exchange_configured: Boolean(env.SOURCE_EXCHANGE),
         source_vault_configured: Boolean(env.SOURCE_EXCHANGE),
         private_source_authority_configured: Boolean(env.MMIBKR_PRIVATE_SOURCE_TOKEN),
+        hfdl_authority_configured: Boolean(env.HFDL_API_KEY),
       });
     }
 
@@ -257,7 +338,9 @@ export default {
       return handleSourceExchange(request, env);
     }
 
-    if (request.method !== 'POST' || url.pathname !== '/v1/authorities/ibkr-paper/seal') {
+    const isIbkrSeal = url.pathname === '/v1/authorities/ibkr-paper/seal';
+    const isHfdlSeal = url.pathname === '/v1/authorities/hfdl/seal';
+    if (request.method !== 'POST' || (!isIbkrSeal && !isHfdlSeal)) {
       return json({ error: 'not_found' }, 404);
     }
 
@@ -282,8 +365,17 @@ export default {
 
     try {
       const runId = String(body?.run_id ?? '');
-      const oidc = await verifyGithubOidc(auth.slice(7), runId);
-      const envelope = await sealIbkrGatewayEnv(body, env, oidc);
+      const hfdlPolicy = isHfdlSeal
+        ? {
+            allowedRef: HFDL_ALLOWED_REF,
+            allowedWorkflowRef: HFDL_ALLOWED_WORKFLOW_REF,
+            allowedEvents: ALLOWED_EVENTS,
+          }
+        : null;
+      const oidc = await verifyGithubOidc(auth.slice(7), runId, hfdlPolicy);
+      const envelope = isHfdlSeal
+        ? await sealHfdlApiKey(body, env, oidc)
+        : await sealIbkrGatewayEnv(body, env, oidc);
       return json(envelope, 200);
     } catch (error) {
       const message = String(error?.message || 'rejected');
