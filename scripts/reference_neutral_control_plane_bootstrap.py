@@ -144,6 +144,14 @@ def main():
     print("EXISTING_DEPLOY_TOKEN_OWNER=" + owner)
     print("EXISTING_DEPLOY_TOKEN_ID=" + token_id)
     print("EXISTING_DEPLOY_TOKEN_STATUS=" + token_status)
+    if token_id:
+        details_path = f"{API}/user/tokens/{token_id}" if owner == "user" else f"{API}/accounts/{account}/tokens/{token_id}"
+        details_status, details_node = api(token, "GET", details_path)
+        details = details_node.get("result") if isinstance(details_node.get("result"), dict) else {}
+        if details_status == 200 and details_node.get("success") is True:
+            print("EXISTING_DEPLOY_TOKEN_NAME=" + str(details.get("name") or ""))
+        else:
+            print("EXISTING_DEPLOY_TOKEN_DETAILS_HTTP=" + str(details_status))
 
     deny_broker(account, token)
 
