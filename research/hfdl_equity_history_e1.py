@@ -20,7 +20,6 @@ from pathlib import Path
 import re
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 import pandas as pd
@@ -29,8 +28,8 @@ BASE_URL = "https://api.hfdatalibrary.com/v1"
 PROVIDER = "HF Data Library"
 DOI = "10.5281/zenodo.19501605"
 VERSION = "raw"
-TIMEFRAME = "daily"
-FORMAT = "csv"
+TIMEFRAME = "1min"
+FORMAT = "parquet"
 SOURCE_REGIME = "pitrading"
 SOURCE_REGIME_CUTOFF = pd.Timestamp("2022-03-01", tz="America/New_York")
 USER_AGENT = "XoticHaze-Data-E1-HFDL/1.0"
@@ -53,12 +52,12 @@ def _safe_symbol(value: str) -> str:
     return symbol
 
 
-def _request_bytes(
+def _request_bytes_with_headers(
     url: str,
     *,
     headers: dict[str, str] | None = None,
     max_bytes: int = MAX_DOWNLOAD_BYTES,
-) -> bytes:
+) -> tuple[bytes, dict[str, str]]:
     req = Request(
         url,
         headers={
@@ -68,11 +67,12 @@ def _request_bytes(
         },
     )
     try:
-        with urlopen(req, timeout=90) as response:
+        with urlopen(req, timeout=120) as response:
             raw = response.read(max_bytes + 1)
             status = int(response.status)
+            response_headers = {str(k): str(v) for k, v in response.headers.items()}
     except HTTPError as exc:
-        # Never surface signed URLs or credential-bearing headers.
+        # Never surface credential-bearing headers or signed URLs.
         raise AcquisitionError(f"provider_http_{int(exc.code)}") from None
     except URLError as exc:
         raise AcquisitionError(f"provider_transport_{type(exc.reason).__name__}") from None
@@ -80,6 +80,20 @@ def _request_bytes(
         raise AcquisitionError(f"provider_http_{status}")
     if len(raw) > max_bytes:
         raise AcquisitionError("provider_download_too_large")
+    return raw, response_headers
+
+
+def _request_bytes(
+    url: str,
+    *,
+    headers: dict[str, str] | None = None,
+    max_bytes: int = MAX_DOWNLOAD_BYTES,
+) -> bytes:
+    raw, _ = _request_bytes_with_headers(
+        url,
+        headers=headers,
+        max_bytes=max_bytes,
+    )
     return raw
 
 
@@ -120,31 +134,40 @@ def _read_api_key(path: Path) -> str:
     return key
 
 
-def _signed_download(symbol: str, *, api_key: str) -> tuple[bytes, dict[str, Any]]:
+def _bars_download(symbol: str, *, api_key: str) -> tuple[bytes, dict[str, Any]]:
     symbol = _safe_symbol(symbol)
-    query = urlencode(
-        {
-            "version": VERSION,
-            "timeframe": TIMEFRAME,
-            "format": FORMAT,
-        }
+    raw, headers = _request_bytes_with_headers(
+        f"{BASE_URL}/bars/{symbol}?version={VERSION}",
+        headers={"X-API-Key": api_key, "Accept": "application/octet-stream"},
+        max_bytes=MAX_DOWNLOAD_BYTES,
     )
-    token_node = _request_json(
-        f"{BASE_URL}/download-token/{symbol}?{query}",
-        headers={"X-API-Key": api_key, "Accept": "application/json"},
-    )
-    signed_url = str(token_node.get("url") or "").strip()
-    if not signed_url.startswith("https://api.hfdatalibrary.com/"):
-        raise AcquisitionError("provider_signed_url_rejected")
-    raw = _request_bytes(signed_url, max_bytes=MAX_DOWNLOAD_BYTES)
-    public_token_receipt = {
-        "version": str(token_node.get("version") or VERSION),
-        "timeframe": str(token_node.get("timeframe") or TIMEFRAME),
-        "format": str(token_node.get("format") or FORMAT),
-        "expires_at": token_node.get("expires_at"),
+    content_type = ""
+    disposition = ""
+    rate_remaining = None
+    rate_reset = None
+    for key, value in headers.items():
+        lower = key.lower()
+        if lower == "content-type":
+            content_type = value
+        elif lower == "content-disposition":
+            disposition = value
+        elif lower == "x-ratelimit-remaining":
+            rate_remaining = value
+        elif lower == "x-ratelimit-reset":
+            rate_reset = value
+    if "application/octet-stream" not in content_type.lower():
+        raise AcquisitionError("provider_bars_content_type_rejected")
+    return raw, {
+        "endpoint": f"/v1/bars/{symbol}",
+        "version": VERSION,
+        "timeframe": TIMEFRAME,
+        "format": FORMAT,
+        "content_type": content_type,
+        "content_disposition": disposition,
+        "rate_limit_remaining": rate_remaining,
+        "rate_limit_reset": rate_reset,
         "signed_url_persisted": False,
     }
-    return raw, public_token_receipt
 
 
 def _normalized_column_map(columns: list[str]) -> dict[str, str]:
@@ -168,7 +191,7 @@ def _normalized_column_map(columns: list[str]) -> dict[str, str]:
     }
 
 
-def normalize_pitrading_daily(
+def normalize_pitrading_1min(
     raw_download: bytes,
     *,
     symbol: str,
@@ -177,9 +200,9 @@ def normalize_pitrading_daily(
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     symbol = _safe_symbol(symbol)
     try:
-        provider = pd.read_csv(BytesIO(raw_download), low_memory=False)
+        provider = pd.read_parquet(BytesIO(raw_download))
     except Exception as exc:
-        raise AcquisitionError(f"provider_csv_parse_failed:{type(exc).__name__}") from exc
+        raise AcquisitionError(f"provider_parquet_parse_failed:{type(exc).__name__}") from exc
     if provider.empty:
         raise AcquisitionError("provider_csv_empty")
 
@@ -246,8 +269,8 @@ def normalize_pitrading_daily(
     invalid_nonpositive = (out[["open", "high", "low", "close"]] <= 0).any(axis=1)
     invalid_volume = out["volume"] < 0
 
-    local_dates = out["timestamp"].dt.tz_convert("America/New_York").dt.normalize()
-    gaps = local_dates.diff().dropna()
+    ordered = out["timestamp"].sort_values()
+    gaps = ordered.diff().dropna()
     qa = {
         "schema": "public_research.hfdl_e1_symbol_qa.v1",
         "symbol": symbol,
@@ -261,8 +284,15 @@ def normalize_pitrading_daily(
         "negative_volume_rows": int(invalid_volume.sum()),
         "first_timestamp_utc": out["timestamp"].iloc[0].isoformat(),
         "last_timestamp_utc": out["timestamp"].iloc[-1].isoformat(),
-        "max_calendar_gap_days": (
-            None if gaps.empty else float(gaps.max() / pd.Timedelta(days=1))
+        "max_gap_minutes": (
+            None if gaps.empty else float(gaps.max() / pd.Timedelta(minutes=1))
+        ),
+        "modal_positive_interval_seconds": (
+            None
+            if gaps.empty
+            else float(gaps[gaps > pd.Timedelta(0)].mode().iloc[0] / pd.Timedelta(seconds=1))
+            if not gaps[gaps > pd.Timedelta(0)].mode().empty
+            else None
         ),
         "source_regime": SOURCE_REGIME,
         "source_regime_cutoff_exclusive": SOURCE_REGIME_CUTOFF.isoformat(),
@@ -300,8 +330,8 @@ def acquire_symbol(
 ) -> dict[str, Any]:
     symbol = _safe_symbol(symbol)
     metadata = public_symbol_metadata(symbol)
-    raw, token_receipt = _signed_download(symbol, api_key=api_key)
-    normalized, qa = normalize_pitrading_daily(
+    raw, download_receipt = _bars_download(symbol, api_key=api_key)
+    normalized, qa = normalize_pitrading_1min(
         raw,
         symbol=symbol,
         start_date=start_date,
@@ -311,7 +341,7 @@ def acquire_symbol(
     symbol_dir = output_root / symbol
     symbol_dir.mkdir(parents=True, exist_ok=True)
     normalized_bytes = _deterministic_csv_bytes(normalized)
-    normalized_path = symbol_dir / f"{symbol}_1Day.csv"
+    normalized_path = symbol_dir / f"{symbol}_1Min.parquet"
     normalized_path.write_bytes(normalized_bytes)
     normalized_sha = _sha256(normalized_bytes)
     raw_sha = _sha256(raw)
@@ -323,7 +353,7 @@ def acquire_symbol(
         "provider": PROVIDER,
         "doi": DOI,
         "symbol": symbol,
-        "source_timeframe": "1Day",
+        "source_timeframe": "1Min",
         "source_sha256": normalized_sha,
         "raw_download_sha256": raw_sha,
         "raw_download_bytes": int(len(raw)),
@@ -331,10 +361,11 @@ def acquire_symbol(
         "provider_version": VERSION,
         "provider_timeframe": TIMEFRAME,
         "provider_format": FORMAT,
+        "provider_endpoint": download_receipt["endpoint"],
         "source_regime": "hfdl_pitrading_consolidated_pre_2022",
         "source_regime_filter": "source == pitrading AND timestamp < 2022-03-01 America/New_York",
         "timestamp_semantics": (
-            "HFDL provider daily Eastern-Time label localized with "
+            "HFDL provider 1-minute tz-naive Eastern-Time label localized with "
             "America/New_York DST rules and converted to UTC; no forward fill"
         ),
         "adjustment_policy": (
@@ -355,15 +386,15 @@ def acquire_symbol(
         "actual_last_timestamp": qa["last_timestamp_utc"],
         "row_count": int(len(normalized)),
         "public_symbol_metadata": metadata,
-        "download_token_receipt": token_receipt,
+        "download_receipt": download_receipt,
         "qa": qa,
     }
-    lineage_path = symbol_dir / f"{symbol}_1Day.lineage.json"
+    lineage_path = symbol_dir / f"{symbol}_1Min.lineage.json"
     lineage_path.write_text(
         json.dumps(lineage, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    qa_path = symbol_dir / f"{symbol}_1Day.qa.json"
+    qa_path = symbol_dir / f"{symbol}_1Min.qa.json"
     qa_path.write_text(json.dumps(qa, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     return {
@@ -468,6 +499,8 @@ def run(
         "api_key_persisted": False,
         "signed_urls_persisted": False,
         "raw_downloads_persisted": False,
+        "acquisition_endpoint": "GET /v1/bars/{ticker}?version=raw",
+        "one_download_request_per_ticker": True,
         "broker_credentials_used": False,
         "live_trading_allowed": False,
     }
