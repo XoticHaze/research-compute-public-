@@ -1,0 +1,37 @@
+{
+  "schema": "fleet.evolution_auditor_clock_checkpoint.v1",
+  "control_epoch_id": "20260927T034100Z-no-terminal-failure-floor-safepoint-r18",
+  "control_epoch_generation": 18,
+  "role": "Evolution Auditor",
+  "clock_in": "2026-09-27T01:49:10-05:00",
+  "observed_now": "2026-09-27T02:05:10-05:00",
+  "elapsed_seconds": 960,
+  "state": "CONTINUE_WORK",
+  "checkpoint": "CHECKPOINT_16",
+  "admission": {
+    "research": "RECOVERED_VALID_0136_OWNER_FIRING",
+    "product": "RECOVERY_REQUIRED_NEWEST_0112",
+    "auditor": "VALID_MANUAL_RECOVERY_ACTIVE"
+  },
+  "r30": {
+    "failed_run_id": 36298260602,
+    "classification": "MISSING_PRODUCER_ADMISSION_OR_TRIGGER",
+    "failed_run_resumable": false,
+    "reason_not_resumable": "one-run X25519 private key destroyed by cleanup",
+    "historical_success_run_id": 34015528856,
+    "external_wait_contract_pr": 1713,
+    "external_wait_merge": "c0e8061b2a91c657e3ef9038d9b1ec75818d62ed",
+    "external_wait_present_in_frozen_head": true,
+    "recovery_branch": "audit/r30-rendezvous-recovery-r1",
+    "producer_commit": "4add1aaf1ec8d3ac95ef4b6cebd0ad560112eb48",
+    "producer_test_commit": "1bffe401bc6d9701dceec13b1fa18352033da9bb",
+    "artifact_id": 9881343496,
+    "archive_sha256": "86aae162c38354a0beb0abfc857f317f596a07c9e317d4d21e4fb799881c2b2e",
+    "member_sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
+  },
+  "direct_actions_rerun": "BLOCKED_BY_EXECUTION_SAFETY",
+  "workflow_write": "BLOCKED_BY_EXECUTION_SAFETY",
+  "b1_public_main": "e3319a018d88e8ce433c40df7e82a7734a595131",
+  "public_main_mutated": false,
+  "live_trading_change": false
+}
