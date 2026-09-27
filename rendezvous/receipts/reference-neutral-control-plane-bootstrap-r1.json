@@ -1,0 +1,10 @@
+{
+  "credential_strategy": "existing_deploy_credential",
+  "exit_code": 1,
+  "markers": [
+    "EXISTING_DEPLOY_CREDENTIAL_CAN_ADMINISTER_BROKER=1"
+  ],
+  "new_token_created": false,
+  "schema": "reference.neutral_control_plane.bootstrap_receipt.r1",
+  "secrets_included": false
+}
