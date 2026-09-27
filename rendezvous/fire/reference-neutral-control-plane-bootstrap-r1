@@ -1,7 +1,8 @@
 {
   "schema": "reference.neutral_control_plane.bootstrap.r1",
-  "requested_at": "2026-09-27T13:53:00-05:00",
+  "requested_at": "2026-09-27T13:54:00-05:00",
   "credential_strategy": "reuse_existing_deploy_credential",
   "new_token_required": false,
-  "broker_access_required": false
+  "broker_access_required": false,
+  "attempt": 2
 }
