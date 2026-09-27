@@ -199,6 +199,27 @@ def main():
         authority_meta,
     )
     deploy_version(account, token, "reference-maintenance-authority-v1", authority_version)
+    print("REFERENCE_MAINTENANCE_AUTHORITY_NAMESPACE_PROVISIONED=1")
+
+    authority_bound_meta = dict(authority_meta)
+    authority_bound_meta["bindings"] = list(authority_meta["bindings"]) + [{
+        "type": "durable_object_namespace",
+        "name": "AUTHORITY_STATE",
+        "class_name": "AuthorityState",
+    }]
+    authority_bound_version = upload_version(
+        account,
+        token,
+        "reference-maintenance-authority-v1",
+        authority_source,
+        authority_bound_meta,
+    )
+    deploy_version(
+        account,
+        token,
+        "reference-maintenance-authority-v1",
+        authority_bound_version,
+    )
 
     maintainer_meta = {
         "main_module": "index.js",
