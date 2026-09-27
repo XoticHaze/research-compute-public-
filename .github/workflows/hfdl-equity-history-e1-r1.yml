@@ -35,7 +35,7 @@ on:
       mm_source_sha:
         description: Exact MM-IBKR source SHA for canonical admission
         required: false
-        default: '9ba3c346e370beb8fb90f2f49e67d4c09c89a9b6'
+        default: 'c2cbe3e82ccd99cc9fc807ad7aa5f20bf930683b'
         type: string
 
 permissions:
@@ -122,7 +122,7 @@ jobs:
               symbols=(os.environ.get('DISPATCH_SYMBOLS') or 'AMAT,APH').strip()
               start=(os.environ.get('DISPATCH_START_DATE') or '2004-01-01').strip()
               end=(os.environ.get('DISPATCH_END_DATE') or '2022-02-28').strip()
-              mm_source=(os.environ.get('DISPATCH_MM_SOURCE_SHA') or '9ba3c346e370beb8fb90f2f49e67d4c09c89a9b6').strip().lower()
+              mm_source=(os.environ.get('DISPATCH_MM_SOURCE_SHA') or 'c2cbe3e82ccd99cc9fc807ad7aa5f20bf930683b').strip().lower()
               target_tf='15Min'
           else:
               node=json.loads(Path('rendezvous/fire/hfdl-equity-history-e1-r1').read_text())
