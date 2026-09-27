@@ -1,12 +1,12 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "fff3e604f71628acf9de5c79fbda43871be7ae8f",
+  "source_ref": "d8a51999c8c19c5839f08e3350ebfd16bf6e452a",
   "test_modules": [
+    "tests.test_backtest_capital_replay_v1",
     "tests.test_strategy_backtest_registry_dispatch"
   ],
-  "ui_acceptance_file": "ui-react/src/lib/pilotStrategySpecHandoff.acceptance.test.mjs",
-  "requested_by": "exact-strategyspec-pilot-handoff-pr779",
-  "purpose": "Exact-private UI acceptance and production build for reviewed StrategySpec Builder-to-Pilot identity continuity after validator allowlist admission",
+  "requested_by": "futures-commission-unit-capital-replay-pr780",
+  "purpose": "Exact-private funded-account futures commission-unit conversion acceptance for MM-IBKR PR780",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -14,8 +14,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr779-exact-pilot-fff3e604-r2-validator-allowlist",
+  "request_nonce": "pr780-futures-commission-d8a51999-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "fff3e604f71628acf9de5c79fbda43871be7ae8f",
+  "current_private_reference": "d8a51999c8c19c5839f08e3350ebfd16bf6e452a",
   "parity_public_key_b64": ""
 }
