@@ -1,13 +1,13 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "9645999104376322583bcbb92822a535cc7a9ae7",
+  "source_ref": "e7f0f72344063fcadbca2913206ca46d30f5b130",
   "test_modules": [
-    "tests.test_research_survivor_funnel",
-    "tests.test_autotuner_campaign_runner",
-    "tests.test_autotuner_family_universe_campaign_vnext"
+    "tests.test_acquire_hfdl_bounded_equity_panel",
+    "tests.test_materialize_admitted_stock_source_canonical",
+    "tests.test_external_history_admitted_ingest_contract"
   ],
-  "requested_by": "survivor-funnel-pr778",
-  "purpose": "Exact-private survivor funnel plus AutoTuner campaign integration acceptance for MM-IBKR PR778",
+  "requested_by": "hfdl-equity-acquisition-pr777",
+  "purpose": "Exact-private HFDL acquisition contract plus canonical stock admission regression acceptance for MM-IBKR PR777",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -15,8 +15,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr778-survivor-funnel-96459991-r1",
+  "request_nonce": "pr777-hfdl-e7f0f723-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "9645999104376322583bcbb92822a535cc7a9ae7",
+  "current_private_reference": "e7f0f72344063fcadbca2913206ca46d30f5b130",
   "parity_public_key_b64": ""
 }
