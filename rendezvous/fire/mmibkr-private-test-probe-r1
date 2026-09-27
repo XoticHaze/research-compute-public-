@@ -1,15 +1,11 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "f1ab55e82a4e58cd9e6b413e2f870ea2fa3ae3ad",
+  "source_ref": "b1b58c8ec350c22e1c0f4e2c177a4b981e1ad24e",
   "test_modules": [
-    "tests.test_historical_source_stitch",
-    "tests.test_data_manager_indicator_context_contract_14th31jq",
-    "tests.test_data_manager_registry_authority_14th31lm",
-    "tests.test_materialize_admitted_futures_source_canonical",
-    "tests.test_materialize_admitted_futures_dated_contract"
+    "tests.test_materialize_admitted_futures_source_canonical"
   ],
   "requested_by": "assistant-corpus-v2-stitch-pass",
-  "purpose": "widen exact-private Corpus V2 stitch proof across canonical data-manager and admitted-futures consumer regressions",
+  "purpose": "base discriminator for widened Corpus V2 regression failure",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -17,8 +13,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "corpus-v2-stitch-regression-bundle-f1ab55e8-20260926-2054cdt",
+  "request_nonce": "corpus-v2-stitch-base-discriminator-b1b58c8e-20260926-2059cdt",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "f1ab55e82a4e58cd9e6b413e2f870ea2fa3ae3ad",
+  "current_private_reference": "b1b58c8ec350c22e1c0f4e2c177a4b981e1ad24e",
   "parity_public_key_b64": ""
 }
