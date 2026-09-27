@@ -284,17 +284,21 @@ jobs:
           receipts.mkdir(parents=True,exist_ok=True)
           for row in handoffs:
               symbol=row['symbol']
+              source_csv=Path(row['source_csv']).resolve()
+              source_lineage=Path(row['lineage']).resolve()
+              data_root=Path('artifacts/hfdl-e1-mm/data').resolve()
+              receipt_path=(receipts/f'{symbol}.json').resolve()
               cmd=[
                   sys.executable,
                   str(mm_root/'scripts/operator/materialize_admitted_stock_source_canonical.py'),
-                  '--source-csv',row['source_csv'],
-                  '--source-lineage-json',row['lineage'],
+                  '--source-csv',str(source_csv),
+                  '--source-lineage-json',str(source_lineage),
                   '--expected-source-sha256',row['source_sha256'],
-                  '--data-root','artifacts/hfdl-e1-mm/data',
+                  '--data-root',str(data_root),
                   '--symbol',symbol,
                   '--source-timeframe','1Min',
                   '--target-timeframe',os.environ['HFDL_E1_TARGET_TF'],
-                  '--receipt-json',str(receipts/f'{symbol}.json'),
+                  '--receipt-json',str(receipt_path),
               ]
               subprocess.run(cmd,check=True,cwd=mm_root)
           print('HFDL_E1_MM_CANONICALIZATION=PASS')
