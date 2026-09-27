@@ -154,6 +154,12 @@ const PRIVATE_TEST_PROBE_IDENTITY = {
   workflow_ref:
     'XoticHaze/research-compute-public-/.github/workflows/mmibkr-private-test-probe-r1.yml@refs/heads/main',
 };
+const HFDL_E1_CANONICAL_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/hfdl-e1-authority-v1',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/hfdl-equity-history-e1-r1.yml@refs/heads/hfdl-e1-authority-v1',
+};
 const REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_IDENTITY = {
   repository: 'XoticHaze/research-compute-public-',
   ref: 'refs/heads/main',
@@ -492,6 +498,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     const matchedPrivatePr733Validation = matchesIdentity(claims, PRIVATE_PR733_EXACT_VALIDATION_IDENTITY);
     const matchedPrivatePromotionReviewValidation = matchesIdentity(claims, PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_IDENTITY);
     const matchedPrivateTestProbe = matchesIdentity(claims, PRIVATE_TEST_PROBE_IDENTITY);
+    const matchedHfdlE1Canonical = matchesIdentity(claims, HFDL_E1_CANONICAL_IDENTITY);
     const matchedRegistryBacktestGenericSelectedSurface = matchesIdentity(
       claims,
       REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_IDENTITY,
@@ -531,6 +538,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
         || (matchedPrivatePr733Validation && privateArchivePathAllowed)
         || (matchedPrivatePromotionReviewValidation && privateArchivePathAllowed)
         || (matchedPrivateTestProbe && privateTestProbeUnwrapPathAllowed)
+        || (matchedHfdlE1Canonical && privateTestProbeUnwrapPathAllowed)
         || (
           matchedRegistryBacktestGenericSelectedSurface
           && privateTestProbeUnwrapPathAllowed
