@@ -50,7 +50,7 @@ jobs:
         with:
           python-version: '3.11.16'
       - name: Install fixed Data E1 dependencies
-        run: python -m pip install --disable-pip-version-check pandas cryptography pytest
+        run: python -m pip install --disable-pip-version-check pandas pyarrow cryptography pytest
       - name: Validate source and contracts
         shell: bash
         run: |
@@ -99,7 +99,7 @@ jobs:
         with:
           python-version: '3.11.16'
       - name: Install fixed Data E1 dependencies
-        run: python -m pip install --disable-pip-version-check pandas cryptography
+        run: python -m pip install --disable-pip-version-check pandas pyarrow cryptography
       - name: Resolve bounded acquisition request
         shell: bash
         env:
@@ -167,7 +167,7 @@ jobs:
           else
             exit "$rc"
           fi
-      - name: Acquire HFDL PiTrading history
+      - name: Acquire HFDL raw 1-minute PiTrading history
         if: steps.authority.outputs.ready == '1'
         shell: bash
         run: |

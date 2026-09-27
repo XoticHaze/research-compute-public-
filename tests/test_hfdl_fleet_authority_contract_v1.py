@@ -29,5 +29,8 @@ def test_hfdl_workflow_identity_is_narrowly_bound():
     )
     assert fire["schema"] == "public_research.hfdl_e1_fire.v1"
     assert fire["symbols"] == ["AMAT", "APH"]
+    assert fire["provider_timeframe"] == "1min"
+    assert fire["provider_format"] == "parquet"
+    assert fire["acquisition_endpoint"] == "GET /v1/bars/{ticker}?version=raw"
     assert fire["authority"]["broker"] is False
     assert fire["authority"]["live"] is False
