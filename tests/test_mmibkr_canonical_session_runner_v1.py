@@ -365,6 +365,29 @@ class CanonicalSessionRunnerTests(unittest.TestCase):
         ):
             session_mod.validate_session(node)
 
+    def test_dispatcher_error_summary_is_bounded_and_redacted(self):
+        sha40 = "a" * 40
+        sha256 = "b" * 64
+        raw = json.dumps({
+            "ok": False,
+            "error": f"REGISTRY_BACKTEST staged dataset digest mismatch {sha40} {sha256} /tmp/private/source/file.py",
+        })
+        out = session_mod._bounded_dispatcher_error(raw)
+        self.assertTrue(out["dispatcher_error_structured"])
+        self.assertIn("REGISTRY_BACKTEST staged dataset digest mismatch", out["dispatcher_error"])
+        self.assertIn("<sha40>", out["dispatcher_error"])
+        self.assertIn("<sha256>", out["dispatcher_error"])
+        self.assertIn("<path>", out["dispatcher_error"])
+        self.assertNotIn(sha40, out["dispatcher_error"])
+        self.assertNotIn(sha256, out["dispatcher_error"])
+
+    def test_dispatcher_error_summary_falls_back_to_exception_tail(self):
+        raw = "Traceback (most recent call last):\n  File \"/tmp/private/source/x.py\", line 1\nModuleNotFoundError: No module named 'pandas'\n"
+        out = session_mod._bounded_dispatcher_error(raw)
+        self.assertFalse(out["dispatcher_error_structured"])
+        self.assertEqual(out["dispatcher_error"], "ModuleNotFoundError: No module named 'pandas'")
+        self.assertIn("modulenotfounderror", out["dispatcher_error_code"])
+
     def test_session_id_cannot_be_reused_for_different_plan(self):
         node = {
             "schema": session_mod.SESSION_SCHEMA,
