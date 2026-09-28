@@ -40,3 +40,26 @@ def test_wrangler_has_no_mutable_sha_or_legacy_event_authority_vars():
     assert "ALLOWED_WORKFLOW_SHA" not in text
     assert "GITHUB_ALLOWED_EVENT" not in text
     assert "GITHUB_ALLOWED_REF" not in text
+
+
+def test_canonical_research_session_uses_attested_vault_snapshot_not_expiring_pin():
+    exchange = (
+        ROOT / "cloudflare" / "fleet-authority" / "src" / "source_exchange.js"
+    ).read_text()
+
+    assert "const REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_IDENTITY = {" in exchange
+    assert (
+        "mmibkr-canonical-research-session-bau-r1.yml@refs/heads/main"
+        in exchange
+    )
+    assert "matchedRegistryBacktestGenericSelectedSurface" in exchange
+    assert "privateTestProbeUnwrapPathAllowed" in exchange
+
+    # Research-session source access is bounded by exact workflow identity and
+    # _resolveVaultSnapshotApproval's exact SHA/manifest/archive attestation,
+    # not by a second temporary date/source pin that can expire independently.
+    assert "REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_EXPIRES_AT" not in exchange
+    assert "REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_SOURCE" not in exchange
+    assert "_resolveVaultSnapshotApproval" in exchange
+    assert "reusableExactShaBootstrapAttestation" in exchange
+    assert "SOURCE_VAULT_BOOTSTRAP_IDENTITY" in exchange
