@@ -1,14 +1,11 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "d6a33555e7f8472a81004cd8a2bc3157f7be9879",
+  "source_ref": "3e98cdbd0b43050c3faf7e8e6ef254274a693c5e",
   "test_modules": [
-    "tests.test_materialize_admitted_stock_source_canonical",
-    "tests.test_historical_source_stitch",
-    "tests.test_data_manager_indicator_context_contract_14th31jq",
-    "tests.test_data_manager_registry_authority_14th31lm"
+    "tests.test_backtest_capital_replay_v1"
   ],
-  "requested_by": "assistant-corpus-v2-pr782-r2",
-  "purpose": "Exact-private native Parquet admitted-stock R2 acceptance for MM-IBKR PR782",
+  "requested_by": "assistant-product-pr790-post-r42-acceptance",
+  "purpose": "Exact-private funded capital replay commission-unit acceptance after R42 rebase",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -16,8 +13,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr782-native-parquet-d6a33555-r2",
+  "request_nonce": "pr790-capital-replay-post-r42-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "d6a33555e7f8472a81004cd8a2bc3157f7be9879",
+  "current_private_reference": "3e98cdbd0b43050c3faf7e8e6ef254274a693c5e",
   "parity_public_key_b64": ""
 }
