@@ -38,6 +38,18 @@ class CanonicalSessionPushFireWorkflowContractTests(unittest.TestCase):
         self.assertIn("--input-root \"$RUNNER_TEMP/input-root\"", text)
         self.assertIn("mmibkr.canonical_session_receipt.v1", text)
 
+    def test_dispatcher_sanitized_job_receipts_are_published_before_cleanup(self):
+        text = self.text
+        self.assertIn("mmibkr_publishable_job_receipts_v1.py", text)
+        self.assertIn("canonical-session-job-receipts-", text)
+        self.assertIn("JOB_RECEIPTS_ARTIFACT_ID=", text)
+        self.assertIn("JOB_RECEIPTS_ARTIFACT_DIGEST=", text)
+        self.assertIn('"$RUNNER_TEMP/public-job-receipts"', text)
+        self.assertLess(
+            text.index("Stage sanitized canonical job receipts"),
+            text.index("Remove one-run private material"),
+        )
+
     def test_research_only_authority_is_preserved_in_terminal_receipt(self):
         text = self.text
         for assertion in (
