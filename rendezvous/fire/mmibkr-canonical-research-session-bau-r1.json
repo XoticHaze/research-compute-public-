@@ -1,8 +1,8 @@
 {
   "schema": "mmibkr.canonical_session_fire.v1",
   "source_ref": "34310f7319f73ee30280a38aee5c2a277bd60c17",
-  "expected_job_sha256": "3a53ce6a492e1ae464ee288401d8873250d671c24e1c011e0002985deedbaed7",
-  "request_nonce": "w124-funded-post780-20260927-r1",
+  "expected_job_sha256": "465b613c270402e746a69eb400204743903a6b2a5a8e8994c419cd12e908a789",
+  "request_nonce": "w124-funded-post780-20260927-r2",
   "purpose": "Re-run frozen MNQ W124 2.5bp candidate on post-PR780 main and return sanitized funded-capital evidence",
   "authority": {
     "research_only": true,
@@ -14,18 +14,18 @@
   },
   "session": {
     "schema": "mmibkr.canonical_session.v1",
-    "session_id": "w124-funded-post780-20260927-r1",
+    "session_id": "w124-funded-post780-20260927-r2",
     "budget_seconds": 1800,
     "reserve_seconds": 60,
     "max_parallel": 1,
     "jobs": [
       {
-        "job_id": "w124-funded-2p5-post780",
+        "job_id": "w124-funded-2p5-post780-r2",
         "priority": 100,
         "depends_on": [],
         "request": {
           "schema": "mmibkr.canonical_workload_request.v1",
-          "job_id": "w124-funded-2p5-post780",
+          "job_id": "w124-funded-2p5-post780-r2",
           "capability_id": "REGISTRY_BACKTEST",
           "mmibkr": {
             "repository": "XoticHaze/mm-IBKR",
