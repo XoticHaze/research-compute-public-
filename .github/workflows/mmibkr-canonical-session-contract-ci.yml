@@ -7,10 +7,12 @@ on:
     paths:
       - 'scripts/mmibkr_canonical_workload_dispatch_v1.py'
       - 'scripts/mmibkr_canonical_session_runner_v1.py'
+      - 'scripts/mmibkr_publishable_job_receipts_v1.py'
       - 'tests/test_mmibkr_canonical_workload_dispatch_v1.py'
       - 'tests/test_mmibkr_canonical_claim_lease_v1.py'
       - 'tests/test_mmibkr_canonical_session_runner_v1.py'
       - 'tests/test_mmibkr_canonical_session_push_fire_workflow_v1.py'
+      - 'tests/test_mmibkr_publishable_job_receipts_v1.py'
       - 'docs/MMIBKR_CANONICAL_SESSION_RUNTIME_V1.md'
       - '.github/workflows/mmibkr-canonical-session-contract-ci.yml'
       - '.github/workflows/mmibkr-canonical-research-session-bau-r1.yml'
@@ -35,7 +37,8 @@ jobs:
           set -euo pipefail
           python -m py_compile \
             scripts/mmibkr_canonical_workload_dispatch_v1.py \
-            scripts/mmibkr_canonical_session_runner_v1.py
+            scripts/mmibkr_canonical_session_runner_v1.py \
+            scripts/mmibkr_publishable_job_receipts_v1.py
 
       - name: Run dispatcher lease and session contracts
         run: |
@@ -44,4 +47,5 @@ jobs:
             tests.test_mmibkr_canonical_workload_dispatch_v1 \
             tests.test_mmibkr_canonical_claim_lease_v1 \
             tests.test_mmibkr_canonical_session_runner_v1 \
-            tests.test_mmibkr_canonical_session_push_fire_workflow_v1
+            tests.test_mmibkr_canonical_session_push_fire_workflow_v1 \
+            tests.test_mmibkr_publishable_job_receipts_v1
