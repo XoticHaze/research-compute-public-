@@ -15,6 +15,12 @@ on:
       - cloudflare/fleet-authority/package-lock.json
       - scripts/mmibkr_cloud_source_exchange_consumer_v1.py
       - tests/test_mmibkr_cloud_source_exchange_consumer_v1.py
+      - scripts/mmibkr_source_vault_consumer_v1.py
+      - tests/test_mmibkr_source_vault_consumer_v1.py
+      - scripts/mmibkr_attested_source_to_canonical_receipt_v1.py
+      - tests/test_mmibkr_attested_source_to_canonical_receipt_v1.py
+      - .github/workflows/mmibkr-canonical-research-session-bau-r1.yml
+      - tests/test_mmibkr_canonical_research_session_bau_workflow_v1.py
       - tests/test_fleet_source_vault_contract_v1.py
       - tests/test_fleet_authority_minimal_oidc_contract_v1.py
       - .github/workflows/fleet-source-exchange-contract-ci.yml
@@ -30,6 +36,12 @@ on:
       - cloudflare/fleet-authority/package-lock.json
       - scripts/mmibkr_cloud_source_exchange_consumer_v1.py
       - tests/test_mmibkr_cloud_source_exchange_consumer_v1.py
+      - scripts/mmibkr_source_vault_consumer_v1.py
+      - tests/test_mmibkr_source_vault_consumer_v1.py
+      - scripts/mmibkr_attested_source_to_canonical_receipt_v1.py
+      - tests/test_mmibkr_attested_source_to_canonical_receipt_v1.py
+      - .github/workflows/mmibkr-canonical-research-session-bau-r1.yml
+      - tests/test_mmibkr_canonical_research_session_bau_workflow_v1.py
       - tests/test_fleet_source_vault_contract_v1.py
       - tests/test_fleet_authority_minimal_oidc_contract_v1.py
       - .github/workflows/fleet-source-exchange-contract-ci.yml
@@ -101,20 +113,36 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --disable-pip-version-check cryptography==46.0.1
-          python -m py_compile scripts/mmibkr_cloud_source_exchange_consumer_v1.py
+          python -m py_compile \
+            scripts/mmibkr_cloud_source_exchange_consumer_v1.py \
+            scripts/mmibkr_source_vault_consumer_v1.py \
+            scripts/mmibkr_attested_source_to_canonical_receipt_v1.py
           python -m unittest -v \
             tests.test_mmibkr_cloud_source_exchange_consumer_v1 \
+            tests.test_mmibkr_source_vault_consumer_v1 \
             tests.test_fleet_source_vault_contract_v1
           python - <<'PY'
-          from tests import test_fleet_authority_minimal_oidc_contract_v1 as contract
-          tests = [
-              getattr(contract, name)
-              for name in sorted(dir(contract))
-              if name.startswith('test_') and callable(getattr(contract, name))
-          ]
-          if not tests:
-              raise SystemExit('Fleet OIDC contract tests missing')
-          for test in tests:
-              test()
-          print('FLEET_OIDC_CONTRACT_TESTS_PASS=' + str(len(tests)))
+          modules = []
+          from tests import test_fleet_authority_minimal_oidc_contract_v1 as oidc_contract
+          from tests import test_mmibkr_attested_source_to_canonical_receipt_v1 as receipt_contract
+          from tests import test_mmibkr_canonical_research_session_bau_workflow_v1 as session_contract
+          modules.extend([
+              ('Fleet OIDC', oidc_contract),
+              ('Attested receipt', receipt_contract),
+              ('Canonical session', session_contract),
+          ])
+          total = 0
+          for label, module in modules:
+              tests = [
+                  getattr(module, name)
+                  for name in sorted(dir(module))
+                  if name.startswith('test_') and callable(getattr(module, name))
+              ]
+              if not tests:
+                  raise SystemExit(label + ' contract tests missing')
+              for test in tests:
+                  test()
+                  total += 1
+              print(label.upper().replace(' ', '_') + '_CONTRACT_TESTS_PASS=' + str(len(tests)))
+          print('FLEET_ATTESTED_ROUTE_CONTRACT_TESTS_PASS=' + str(total))
           PY
