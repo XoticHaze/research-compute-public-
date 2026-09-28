@@ -30,6 +30,7 @@ jobs:
           python -m py_compile scripts/mmibkr_canonical_workload_dispatch_v1.py
           python -m py_compile scripts/crw_chronology_fold_receipt_v1.py
           python -m py_compile scripts/mmibkr_canonical_workload_dispatch_chronology_v1.py
+          python -m unittest -v tests.test_mmibkr_canonical_crw_backtest_dispatch_v1
           python - <<'PY'
           import json
           from pathlib import Path
