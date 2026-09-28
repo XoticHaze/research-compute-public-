@@ -114,6 +114,19 @@ jobs:
           python scripts/mmibkr_attested_source_to_canonical_receipt_v1.py \
             --input "$RUNNER_TEMP/mmibkr-source/materialization-host.json" \
             --output "$RUNNER_TEMP/mmibkr-source/canonical-source-receipt.json"
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          receipt=json.loads(
+              Path(os.environ['RUNNER_TEMP'],'mmibkr-source','canonical-source-receipt.json').read_text(encoding='utf-8')
+          )
+          root=str(receipt.get('source_root') or '').strip()
+          if not root or not Path(root).is_dir():
+              raise SystemExit('canonical source receipt source_root missing')
+          with Path(os.environ['GITHUB_ENV']).open('a',encoding='utf-8') as fh:
+              fh.write('MMIBKR_CANONICAL_SOURCE_ROOT='+root+'\n')
+          print('MMIBKR_CANONICAL_SOURCE_ROOT_BOUND=1')
+          PY
 
       - name: Generate one-run MNQ corpus recipient
         run: |
@@ -214,7 +227,7 @@ jobs:
           set +e
           python scripts/mmibkr_canonical_session_runner_v1.py \
             --session "$RUNNER_TEMP/canonical-session.json" \
-            --source-root "$RUNNER_TEMP/mmibkr-source/extracted" \
+            --source-root "$MMIBKR_CANONICAL_SOURCE_ROOT" \
             --source-receipt "$RUNNER_TEMP/mmibkr-source/canonical-source-receipt.json" \
             --receipt-dir "$RUNNER_TEMP/receipts" \
             --input-root "$RUNNER_TEMP/input-root" \
