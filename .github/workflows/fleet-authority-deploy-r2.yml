@@ -40,7 +40,19 @@ jobs:
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           node --check cloudflare/fleet-authority/src/index.js
           node --check cloudflare/fleet-authority/src/source_exchange.js
-          python -m unittest -v tests.test_fleet_authority_minimal_oidc_contract_v1
+          python - <<'PY'
+          from tests import test_fleet_authority_minimal_oidc_contract_v1 as contract
+          tests=[
+              getattr(contract,name)
+              for name in sorted(dir(contract))
+              if name.startswith('test_') and callable(getattr(contract,name))
+          ]
+          if not tests:
+              raise SystemExit('Fleet authority contract tests missing')
+          for test in tests:
+              test()
+          print('FLEET_AUTHORITY_CONTRACT_TESTS_PASS='+str(len(tests)))
+          PY
           npx --yes wrangler@4.135.0 deploy             --dry-run             --config wrangler.jsonc             --outdir "$RUNNER_TEMP/fleet-authority-dry-run"
           if [ -n "$CLOUDFLARE_DEPLOY_TOKEN_R2" ]; then
             echo 'FLEET_AUTHORITY_CLOUDFLARE_CREDENTIAL_ROUTE=SCOPED_R2'
