@@ -272,6 +272,39 @@ def _write_request(path: Path, request: dict) -> None:
     dispatch.atomic(path, request)
 
 
+def _bounded_dispatcher_error(stderr: str) -> dict:
+    """Expose only a bounded/redacted dispatcher failure summary."""
+    raw = str(stderr or "")
+    lines = [line.strip() for line in raw.splitlines() if line.strip()]
+    message = ""
+    structured = False
+    for line in reversed(lines):
+        try:
+            node = json.loads(line)
+        except Exception:
+            continue
+        if isinstance(node, dict) and node.get("ok") is False and isinstance(node.get("error"), str):
+            message = node["error"].strip()
+            structured = True
+            break
+    if not message and lines:
+        # Tracebacks normally end with a concise exception class/message.
+        message = lines[-1]
+    if not message:
+        return {"dispatcher_error_code": "dispatcher_stderr_empty"}
+
+    message = re.sub(r"(?<![0-9a-f])[0-9a-f]{40}(?![0-9a-f])", "<sha40>", message, flags=re.I)
+    message = re.sub(r"(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])", "<sha256>", message, flags=re.I)
+    message = re.sub(r"(?:/[A-Za-z0-9_.@+,:=-]+){2,}", "<path>", message)
+    message = re.sub(r"\s+", " ", message).strip()[:320]
+    code = re.sub(r"[^a-z0-9]+", "_", message.lower()).strip("_")[:96] or "dispatcher_error"
+    return {
+        "dispatcher_error_code": code,
+        "dispatcher_error": message,
+        "dispatcher_error_structured": structured,
+    }
+
+
 def _invoke_job(
     job: dict,
     *,
@@ -331,6 +364,7 @@ def _invoke_job(
             "error_class": f"dispatcher_exit_{completed.returncode}",
             "elapsed_seconds": elapsed,
             "stderr_sha256": hashlib.sha256(stderr.encode("utf-8")).hexdigest(),
+            **_bounded_dispatcher_error(stderr),
         }
     try:
         payload = json.loads(stdout.strip().splitlines()[-1])
