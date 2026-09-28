@@ -211,6 +211,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/receipts"
+          set +e
           python scripts/mmibkr_canonical_session_runner_v1.py \
             --session "$RUNNER_TEMP/canonical-session.json" \
             --source-root "$RUNNER_TEMP/mmibkr-source/extracted" \
@@ -218,6 +219,14 @@ jobs:
             --receipt-dir "$RUNNER_TEMP/receipts" \
             --input-root "$RUNNER_TEMP/input-root" \
             > "$RUNNER_TEMP/session-terminal.json"
+          session_rc=$?
+          set -e
+          if [ -s "$RUNNER_TEMP/session-terminal.json" ]; then
+            echo 'MMIBKR_CANONICAL_SESSION_TERMINAL_BEGIN'
+            cat "$RUNNER_TEMP/session-terminal.json"
+            echo 'MMIBKR_CANONICAL_SESSION_TERMINAL_END'
+          fi
+          test "$session_rc" = 0 || exit "$session_rc"
           python - <<'PY'
           import hashlib,json,os
           from pathlib import Path
