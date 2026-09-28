@@ -263,6 +263,22 @@ jobs:
           (root/'terminal-receipt.json').write_text(json.dumps(receipt,sort_keys=True,indent=2)+'\n')
           PY
 
+      - name: Stage sanitized canonical job receipts
+        run: |
+          set -euo pipefail
+          python scripts/mmibkr_publishable_job_receipts_v1.py \
+            --session-terminal "$RUNNER_TEMP/session-terminal.json" \
+            --receipt-dir "$RUNNER_TEMP/receipts" \
+            --output-dir "$RUNNER_TEMP/public-job-receipts"
+
+      - name: Upload sanitized canonical job receipts
+        id: job_receipts_artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-session-job-receipts-${{ github.run_id }}
+          path: ${{ runner.temp }}/public-job-receipts
+          if-no-files-found: error
+
       - name: Upload sanitized terminal receipt
         id: terminal_artifact
         uses: actions/upload-artifact@v4
@@ -275,11 +291,13 @@ jobs:
         run: |
           echo "TERMINAL_ARTIFACT_ID=${{ steps.terminal_artifact.outputs.artifact-id }}"
           echo "TERMINAL_ARTIFACT_DIGEST=${{ steps.terminal_artifact.outputs.artifact-digest }}"
+          echo "JOB_RECEIPTS_ARTIFACT_ID=${{ steps.job_receipts_artifact.outputs.artifact-id }}"
+          echo "JOB_RECEIPTS_ARTIFACT_DIGEST=${{ steps.job_receipts_artifact.outputs.artifact-digest }}"
 
       - name: Remove one-run private material
         if: always()
         run: |
-          rm -rf "$RUNNER_TEMP/mmibkr-source" "$RUNNER_TEMP/input-root" "$RUNNER_TEMP/receipts"
+          rm -rf "$RUNNER_TEMP/mmibkr-source" "$RUNNER_TEMP/input-root" "$RUNNER_TEMP/receipts" "$RUNNER_TEMP/public-job-receipts"
           rm -f "$RUNNER_TEMP/mnq-corpus-private.b64" "$RUNNER_TEMP/mnq-corpus-recipient.json" \
             "$RUNNER_TEMP/mnq-corpus-envelope.json" "$RUNNER_TEMP/mnq-corpus-ciphertext.bin" \
             "$RUNNER_TEMP/canonical-session.json"
