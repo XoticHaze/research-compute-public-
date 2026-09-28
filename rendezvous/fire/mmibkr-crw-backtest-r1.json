@@ -1,4 +1,5 @@
 {
   "schema": "mmibkr.crw_backtest_fire.v1",
-  "workload_type": "CRW_BACKTEST"
+  "workload_type": "CRW_BACKTEST",
+  "request_nonce": "capital-sanitizer-ci-20260927-r1"
 }
