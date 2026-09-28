@@ -166,11 +166,6 @@ const REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_IDENTITY = {
   workflow_ref:
     'XoticHaze/research-compute-public-/.github/workflows/mmibkr-canonical-research-session-bau-r1.yml@refs/heads/main',
 };
-const REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_SOURCE =
-  '35e6b44e5c2618f780a84c1c204fe14c76bdf0e5';
-const REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_EXPIRES_AT =
-  Date.parse('2026-09-27T18:00:00Z');
-
 const PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_SOURCE =
   'd7b468ea22740df65c4b350dc15b74b0c377280f';
 const PRIVATE_PROMOTION_REVIEW_EXACT_VALIDATION_EXPIRES_AT =
@@ -542,7 +537,6 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
         || (
           matchedRegistryBacktestGenericSelectedSurface
           && privateTestProbeUnwrapPathAllowed
-          && Date.now() <= REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_EXPIRES_AT
         )
       )
       || claims.repository_visibility !== 'public'
@@ -990,15 +984,11 @@ export class SourceExchange {
       throw new Error('vault_archive_bytes_rejected');
     }
     const requestIdentity = this._producerIdentity(request);
-    if (
-      matchesIdentity(requestIdentity, REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_IDENTITY)
-      && (
-        sourceSha !== REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_SOURCE
-        || Date.now() > REGISTRY_BACKTEST_GENERIC_SELECTED_SURFACE_EXPIRES_AT
-      )
-    ) {
-      throw new Error('registry_backtest_generic_selected_surface_source_rejected');
-    }
+    // Canonical research sessions may unwrap only snapshots already accepted by
+    // _resolveVaultSnapshotApproval.  That approval is exact-SHA + manifest +
+    // archive identity and requires the dedicated Source Vault bootstrap
+    // attestation for first use.  Do not add a second date/source pin here:
+    // temporary pins expire independently of valid reusable vault attestations.
     if (
       matchesIdentity(requestIdentity, PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY)
       && ![
