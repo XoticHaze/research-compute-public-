@@ -2,13 +2,6 @@ name: MM-IBKR Private PR666 Ownership Final Validation R1
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/mmibkr-private-pr666-ownership-final-validation-r1.yml'
-      - 'cloudflare/fleet-authority/src/source_exchange.js'
-      - 'tests/test_fleet_source_vault_contract_v1.py'
 
 permissions:
   contents: read

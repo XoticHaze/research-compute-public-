@@ -3,8 +3,21 @@ name: Fleet Source Exchange Contract CI
 on:
   push:
     branches:
+      - main
       - 'assistant/fleet-*'
       - 'assistant/source-snapshot-*'
+    paths:
+      - wrangler.jsonc
+      - cloudflare/fleet-authority/src/source_exchange.js
+      - cloudflare/fleet-authority/src/index.js
+      - cloudflare/fleet-authority/wrangler.jsonc
+      - cloudflare/fleet-authority/package.json
+      - cloudflare/fleet-authority/package-lock.json
+      - scripts/mmibkr_cloud_source_exchange_consumer_v1.py
+      - tests/test_mmibkr_cloud_source_exchange_consumer_v1.py
+      - tests/test_fleet_source_vault_contract_v1.py
+      - tests/test_fleet_authority_minimal_oidc_contract_v1.py
+      - .github/workflows/fleet-source-exchange-contract-ci.yml
   pull_request:
     branches:
       - main
@@ -18,6 +31,7 @@ on:
       - scripts/mmibkr_cloud_source_exchange_consumer_v1.py
       - tests/test_mmibkr_cloud_source_exchange_consumer_v1.py
       - tests/test_fleet_source_vault_contract_v1.py
+      - tests/test_fleet_authority_minimal_oidc_contract_v1.py
       - .github/workflows/fleet-source-exchange-contract-ci.yml
 
 permissions:
@@ -91,3 +105,16 @@ jobs:
           python -m unittest -v \
             tests.test_mmibkr_cloud_source_exchange_consumer_v1 \
             tests.test_fleet_source_vault_contract_v1
+          python - <<'PY'
+          from tests import test_fleet_authority_minimal_oidc_contract_v1 as contract
+          tests = [
+              getattr(contract, name)
+              for name in sorted(dir(contract))
+              if name.startswith('test_') and callable(getattr(contract, name))
+          ]
+          if not tests:
+              raise SystemExit('Fleet OIDC contract tests missing')
+          for test in tests:
+              test()
+          print('FLEET_OIDC_CONTRACT_TESTS_PASS=' + str(len(tests)))
+          PY
