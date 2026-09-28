@@ -2,8 +2,8 @@
   "schema": "mmibkr.canonical_session_fire.v1",
   "source_ref": "34310f7319f73ee30280a38aee5c2a277bd60c17",
   "expected_job_sha256": "465b613c270402e746a69eb400204743903a6b2a5a8e8994c419cd12e908a789",
-  "request_nonce": "w124-funded-post780-20260927-r6-runtime-deps",
-  "purpose": "Re-run frozen MNQ W124 2.5bp candidate on post-PR780 main and return sanitized funded-capital evidence",
+  "request_nonce": "w124-funded-post780-20260927-r7-publish-receipt",
+  "purpose": "Re-run frozen MNQ W124 2.5bp candidate on post-PR780 main and publish sanitized funded-capital job receipt",
   "authority": {
     "research_only": true,
     "broker": false,
