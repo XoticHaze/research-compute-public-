@@ -23,6 +23,7 @@ jobs:
     timeout-minutes: 15
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_DEPLOY_TOKEN_R2: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -40,17 +41,17 @@ jobs:
           node --check cloudflare/fleet-authority/src/index.js
           node --check cloudflare/fleet-authority/src/source_exchange.js
           npx --yes wrangler@4.135.0 deploy             --dry-run             --config wrangler.jsonc             --outdir "$RUNNER_TEMP/fleet-authority-dry-run"
-          if [ -n "${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 }}" ]; then
+          if [ -n "$CLOUDFLARE_DEPLOY_TOKEN_R2" ]; then
             echo 'FLEET_AUTHORITY_CLOUDFLARE_CREDENTIAL_ROUTE=SCOPED_R2'
           else
             echo 'FLEET_AUTHORITY_CLOUDFLARE_CREDENTIAL_ROUTE=LEGACY_FALLBACK'
           fi
 
       - name: Research Cloudflare R2 scope preflight
-        if: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 != '' }}
+        if: ${{ env.CLOUDFLARE_DEPLOY_TOKEN_R2 != '' }}
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ env.CLOUDFLARE_DEPLOY_TOKEN_R2 }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
         shell: bash
         run: |
           set -euo pipefail
