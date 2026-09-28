@@ -71,6 +71,9 @@ jobs:
     needs: contract
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    env:
+      CLOUDFLARE_DEPLOY_TOKEN_R2: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -186,7 +189,7 @@ jobs:
             echo 'MMIBKR_OPERATOR_CONSOLE_CLOUDFLARE_CREDENTIALS_MISSING=1'
             exit 42
           fi
-          if [ -n "${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 }}" ]; then
+          if [ -n "$CLOUDFLARE_DEPLOY_TOKEN_R2" ]; then
             echo 'MMIBKR_CLOUDFLARE_CREDENTIAL_ROUTE=SCOPED_R2'
           else
             echo 'MMIBKR_CLOUDFLARE_CREDENTIAL_ROUTE=LEGACY_FALLBACK'
@@ -194,10 +197,10 @@ jobs:
           echo 'MMIBKR_OPERATOR_CONSOLE_CLOUDFLARE_CREDENTIALS_PRESENT=1'
 
       - name: Research Cloudflare R2 scope preflight
-        if: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 != '' }}
+        if: ${{ env.CLOUDFLARE_DEPLOY_TOKEN_R2 != '' }}
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ env.CLOUDFLARE_DEPLOY_TOKEN_R2 }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
         shell: bash
         run: |
           set -euo pipefail
