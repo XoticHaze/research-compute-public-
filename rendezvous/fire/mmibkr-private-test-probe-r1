@@ -1,11 +1,11 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "3e98cdbd0b43050c3faf7e8e6ef254274a693c5e",
+  "source_ref": "506faa4cec79685f06e0f53213e935896a7c8293",
   "test_modules": [
-    "tests.test_backtest_capital_replay_v1"
+    "tests.test_strategy_backtest_registry_dispatch"
   ],
-  "requested_by": "assistant-product-pr790-post-r42-acceptance",
-  "purpose": "Exact-private funded capital replay commission-unit acceptance after R42 rebase",
+  "requested_by": "assistant-r42-parameter-hash-guard",
+  "purpose": "Exact-private R42 returned parameter hash guard acceptance",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -13,8 +13,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr790-capital-replay-post-r42-r1",
+  "request_nonce": "r42-parameter-hash-guard-20260928-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "3e98cdbd0b43050c3faf7e8e6ef254274a693c5e",
+  "current_private_reference": "506faa4cec79685f06e0f53213e935896a7c8293",
   "parity_public_key_b64": ""
 }
