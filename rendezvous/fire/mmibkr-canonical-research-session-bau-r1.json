@@ -1,8 +1,8 @@
 {
   "schema": "mmibkr.canonical_session_fire.v1",
   "source_ref": "7a5fe4ba2abab65d15e94c9fc63813957f6596e3",
-  "expected_job_sha256": "r42fix-w124-funded-2p5-7a5fe4ba",
-  "request_nonce": "r42fix-w124-funded-2p5-20260928-r1",
+  "expected_job_sha256": "d23962f0b8ca71f0f8a26945bf531d4366b87156edb124a61f376c028e4c8b3b",
+  "request_nonce": "r42fix-w124-funded-2p5-20260928-r2",
   "purpose": "R42 fixed-source W124 2.5bp funded canary",
   "authority": {
     "research_only": true,
