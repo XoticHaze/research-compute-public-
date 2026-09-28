@@ -234,6 +234,87 @@ class CanonicalCRWBacktestDispatchTests(unittest.TestCase):
         self.assertIsNotNone(loaded)
         self.assertEqual(Path(loaded.__file__).resolve(), (self.source_root / "scripts/operator/crw_backtest_summary_13z.py").resolve())
 
+    def test_crw_sanitizer_preserves_only_bounded_funded_capital_evidence(self):
+        raw = {
+            "contract_version":"crw_backtest_summary_13z.v1",
+            "ok":True,
+            "status":"ok",
+            "strategy_id":"crw_score_multi_mode",
+            "symbols":["MNQ"],
+            "timeframe":"12Min",
+            "asset_type":"futures",
+            "safety":{"broker_submit":False,"cancel":False,"replace":False,"live_unlock":False,"backtest_only":True},
+            "capital_accounting":{
+                "schema":"mm.backtest_capital_accounting.v1",
+                "ok":True,
+                "status":"ok",
+                "starting_nav":100000.0,
+                "ending_nav":120000.0,
+                "total_return_pct":20.0,
+                "cagr_pct":3.1,
+                "max_drawdown_currency":12000.0,
+                "max_drawdown_pct":10.0,
+                "calmar":0.31,
+                "annualized_volatility_pct":8.0,
+                "sortino":1.2,
+                "cvar95_step_return_pct":-0.7,
+                "longest_underwater_seconds":86400.0,
+                "average_exposure_pct_nav":25.0,
+                "peak_exposure_pct_nav":62.0,
+                "turnover_notional":400000.0,
+                "turnover_starting_nav_multiple":4.0,
+                "commission_total":18.0,
+                "commission_sources":["canonical_fill_ledger"],
+                "commission_currency_conversions":["declared_price_unit_x_multiplier"],
+                "accepted_fill_count":20,
+                "blocked_fill_count":0,
+                "blocked_fills":[{"private":"must_not_escape"}],
+                "sizing_mode":"fixed_qty",
+                "account_basis":"NetLiquidation",
+                "contract_multiplier":2.0,
+                "contract_multiplier_source":"selected_runtime_universe.execution_contract",
+                "raw_strategy_economics_mutated":False,
+                "equity_curve_basis":"mark_to_market_close",
+                "equity_curve_point_count":100,
+                "equity_curve":[{"timestamp":"private","nav":99999}],
+                "equity_curve_artifact":"artifacts/private.csv",
+                "historical_margin":{"status":"not_replayed"},
+                "safety":{"broker_read":False,"broker_submit":False,"runtime_mutation":False,"live_authority":False},
+            },
+            "starting_nav":100000.0,
+            "ending_nav":120000.0,
+            "total_return_pct":20.0,
+            "cagr_pct":3.1,
+            "max_drawdown_currency":12000.0,
+            "max_drawdown_pct":10.0,
+            "calmar":0.31,
+        }
+        result = mod.sanitize_crw_result(
+            raw,
+            {"datasets":{"MNQ":{"scope":"input_root","relative_path":"mnq.csv","sha256":"a"*64,"bytes":1}}},
+        )
+        capital=result["capital_accounting"]
+        self.assertEqual(capital["starting_nav"],100000.0)
+        self.assertEqual(capital["contract_multiplier"],2.0)
+        self.assertEqual(capital["commission_total"],18.0)
+        self.assertNotIn("blocked_fills",capital)
+        self.assertNotIn("equity_curve",capital)
+        self.assertNotIn("equity_curve_artifact",capital)
+        self.assertEqual(result["max_drawdown_pct"],10.0)
+
+    def test_crw_sanitizer_rejects_unsafe_capital_accounting(self):
+        raw = {
+            "ok":True,
+            "status":"ok",
+            "safety":{"broker_submit":False,"cancel":False,"replace":False,"live_unlock":False,"backtest_only":True},
+            "capital_accounting":{
+                "ok":True,
+                "safety":{"broker_read":False,"broker_submit":True,"runtime_mutation":False,"live_authority":False},
+            },
+        }
+        with self.assertRaisesRegex(mod.CanonicalDispatchError, "capital accounting safety"):
+            mod.sanitize_crw_result(raw, {"datasets":{}})
+
 
 if __name__ == "__main__":
     unittest.main()
