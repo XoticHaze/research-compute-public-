@@ -1,9 +1,9 @@
 {
   "schema": "mmibkr.canonical_session_fire.v1",
-  "source_ref": "7a5fe4ba2abab65d15e94c9fc63813957f6596e3",
-  "expected_job_sha256": "d23962f0b8ca71f0f8a26945bf531d4366b87156edb124a61f376c028e4c8b3b",
-  "request_nonce": "r42fix-w124-funded-2p5-20260928-r2",
-  "purpose": "R42 fixed-source W124 2.5bp funded canary",
+  "source_ref": "976dec121e01cb81f827aca232a201aea9f6413b",
+  "expected_job_sha256": "284cd9e6b93e2900cfe0a74484ab0883e9e769ea493d5e65ffec4eaefa94195d",
+  "request_nonce": "w124-final-float-zero-post-r42-product-guard-20260928-r1",
+  "purpose": "Final W124 2.5bp canary on combined R42+Product+parameter-guard source with frozen float-zero parameter identity",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -14,55 +14,42 @@
   },
   "session": {
     "schema": "mmibkr.canonical_session.v1",
-    "session_id": "w124-funded-r42fix-20260928-r1",
+    "session_id": "w124-final-float-zero-20260928-r1",
     "budget_seconds": 1800,
     "reserve_seconds": 60,
     "max_parallel": 1,
     "jobs": [
       {
-        "job_id": "w124-funded-2p5-r42fix-r1",
+        "job_id": "w124-cost-2p5-final-r18",
         "priority": 100,
         "depends_on": [],
+        "external_artifact_dependency": {
+          "scope": "input_root",
+          "relative_path": "mnq-strategy-backtest-12min.csv",
+          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e",
+          "bytes": 18026715,
+          "producer": {
+            "identity": "XoticHaze/research-foundry run 33724144266 artifact 9881343496",
+            "mechanism": "research_foundry_artifact",
+            "trigger": "materialize governed member before canonical session"
+          }
+        },
         "request": {
           "schema": "mmibkr.canonical_workload_request.v1",
-          "job_id": "w124-funded-2p5-r42fix-r1",
+          "job_id": "w124-cost-2p5-final-r18",
           "capability_id": "REGISTRY_BACKTEST",
           "mmibkr": {
             "repository": "XoticHaze/mm-IBKR",
-            "commit": "7a5fe4ba2abab65d15e94c9fc63813957f6596e3",
-            "source_archive_sha256": "6af7362e23b9a5b94e9666b1c6458c49bc3e3aa0a6740610334f08f1e7fad497"
+            "commit": "976dec121e01cb81f827aca232a201aea9f6413b",
+            "source_archive_sha256": "d0af2c31310613e15c28ab5b063ac153f167ab7cbb07c7241acf9e689b50ed42"
           },
           "entrypoint": {
             "path": "strategy_backtest_registry.py",
             "module": "strategy_backtest_registry",
             "callable": "run_strategy_backtest",
-            "git_blob_sha1": "6d6a19d717d390cf9c6a4193ea8072eaaefccae8"
+            "git_blob_sha1": "96ff78540154a7932ed9fcf2cb81c740ac0ab650"
           },
           "arguments": {
-            "strategy_spec": {
-              "strategy_id": "crw_score_multi_mode",
-              "symbol": "MNQ",
-              "timeframe": "12Min",
-              "asset_type": "futures",
-              "parameters": {
-                "WINDOW": 124,
-                "ENTRY_EXTREME": -2.52,
-                "EXIT_EXTREME": 4.5,
-                "ENABLE_DCA": true,
-                "DCA_BASE_QTY": 1,
-                "DCA_MAX_CONTRACTS": 3,
-                "DCA_TIER_DRAWDOWNS_PCT": [
-                  1,
-                  2
-                ],
-                "DCA_TRIGGER_MODE": "tiered_previous_buy",
-                "SLIPPAGE_BPS": 2.5,
-                "SPREAD_BPS": 0,
-                "COMMISSION_PER_SHARE": 0.3,
-                "commission_per_share": 0.3,
-                "spread_bps": 0
-              }
-            },
             "dataset": {
               "scope": "input_root",
               "relative_path": "mnq-strategy-backtest-12min.csv",
@@ -70,21 +57,45 @@
               "bytes": 18026715
             },
             "requested_start": null,
-            "requested_end": null
+            "requested_end": null,
+            "strategy_spec": {
+              "strategy_id": "crw_score_multi_mode",
+              "symbol": "MNQ",
+              "timeframe": "12Min",
+              "asset_type": "futures",
+              "parameters": {
+                "COMMISSION_PER_SHARE": 0.3,
+                "DCA_BASE_QTY": 1,
+                "DCA_MAX_CONTRACTS": 3,
+                "DCA_TIER_DRAWDOWNS_PCT": [
+                  1,
+                  2
+                ],
+                "DCA_TRIGGER_MODE": "tiered_previous_buy",
+                "ENABLE_DCA": true,
+                "ENTRY_EXTREME": -2.52,
+                "EXIT_EXTREME": 4.5,
+                "SLIPPAGE_BPS": 2.5,
+                "SPREAD_BPS": 0.0,
+                "WINDOW": 124,
+                "commission_per_share": 0.3,
+                "spread_bps": 0.0
+              }
+            }
           },
           "resources": {
-            "max_wall_seconds": 1200,
-            "max_output_bytes": 3000000
+            "max_wall_seconds": 900,
+            "max_output_bytes": 2000000
           },
           "authority": "research_only",
           "forbidden_authorities": {
-            "broker_submit": false,
             "broker_cancel": false,
             "broker_flatten": false,
-            "strategy_spec_write": false,
-            "runtime_activation": false,
+            "broker_submit": false,
+            "live_trading": false,
             "promotion_mutation": false,
-            "live_trading": false
+            "runtime_activation": false,
+            "strategy_spec_write": false
           }
         }
       }
