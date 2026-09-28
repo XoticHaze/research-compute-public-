@@ -1036,6 +1036,31 @@ def sanitize_symbol_support(raw:dict)->list[dict]:
         out.append(cleaned)
     return out
 
+_CAPITAL_PUBLIC_KEYS=(
+    "schema","ok","status","execution_view",
+    "starting_nav","starting_nav_source","ending_nav","total_return_pct","cagr_pct",
+    "max_drawdown_currency","max_drawdown_pct","calmar","annualized_volatility_pct",
+    "sortino","cvar95_step_return_pct","longest_underwater_seconds",
+    "average_exposure_pct_nav","peak_exposure_pct_nav","turnover_notional",
+    "turnover_starting_nav_multiple","commission_total","commission_sources",
+    "commission_currency_conversions","accepted_fill_count","blocked_fill_count",
+    "sizing_mode","account_basis","contract_multiplier","contract_multiplier_source",
+    "raw_strategy_economics_mutated","equity_curve_basis","equity_curve_point_count",
+    "historical_margin","safety",
+)
+
+def sanitize_capital_accounting(raw:Any)->dict:
+    if not isinstance(raw,dict):
+        return {}
+    node={key:deepcopy(raw.get(key)) for key in _CAPITAL_PUBLIC_KEYS if key in raw}
+    safety=node.get("safety")
+    if safety is not None:
+        expected={"broker_read":False,"broker_submit":False,"runtime_mutation":False,"live_authority":False}
+        if not isinstance(safety,dict) or any(safety.get(k) is not v for k,v in expected.items()):
+            raise CanonicalDispatchError("canonical capital accounting safety contract rejected")
+    # blocked fill details and equity-curve rows stay inside the trusted/private boundary.
+    return sanitize_public_tree(node)
+
 def sanitize_crw_result(raw:dict,args:dict,root:Path|None=None,artifact_root:Path|None=None)->dict:
     safety=raw.get("safety")
     expected={"broker_submit":False,"cancel":False,"replace":False,"live_unlock":False,"backtest_only":True}
@@ -1087,6 +1112,14 @@ def sanitize_crw_result(raw:dict,args:dict,root:Path|None=None,artifact_root:Pat
         "event_row_count":raw.get("event_row_count"),
         "cost_model":raw.get("cost_model") or {},
         "execution_views":raw.get("execution_views") or {},
+        "capital_accounting":sanitize_capital_accounting(raw.get("capital_accounting")),
+        "starting_nav":raw.get("starting_nav"),
+        "ending_nav":raw.get("ending_nav"),
+        "total_return_pct":raw.get("total_return_pct"),
+        "cagr_pct":raw.get("cagr_pct"),
+        "max_drawdown_currency":raw.get("max_drawdown_currency"),
+        "max_drawdown_pct":raw.get("max_drawdown_pct"),
+        "calmar":raw.get("calmar"),
         "tv_net_pnl":raw.get("tv_net_pnl"),
         "simulated_net_pnl":raw.get("simulated_net_pnl"),
         "simulated_minus_tv_net_pnl":raw.get("simulated_minus_tv_net_pnl"),
