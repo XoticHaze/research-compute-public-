@@ -1,0 +1,18 @@
+{
+  "authority": "research_only",
+  "chunks": [
+    {
+      "chars": 764,
+      "path": "rendezvous/responses/36361966274/mnq-corpus-000.txt",
+      "sha256": "a33a7b421b9d9d42f5851c0148518baaa981f7605a1479e1b805072880dc6543"
+    }
+  ],
+  "ciphertext_sha256": "b0b85e7fb20c547215d89f97fb59ac2f8e2119b31faa47babbc298284d97af91",
+  "harness": "mnq_replay_identity_probe_v1",
+  "nonce_b64": "fUtucwnlG4ESHD0l",
+  "plaintext_sha256": "d4066c2da6e6f82555189c37e5f00d6146d73df072d1e97c492ae3902a2652b1",
+  "recipient_key_id": "sha256:d8229315b0604cb3c3d1063c41ec43d0ce9e108d1de10e66516e25f0e48a0ed7",
+  "run_id": "36361966274",
+  "schema": "mnq-corpus-ephemeral-x25519-v1",
+  "sender_public_b64": "+jbj9t9xf9qX8IIUNejAMjTLI/mo6msxBpDqNokyFzU="
+}
