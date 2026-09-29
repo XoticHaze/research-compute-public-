@@ -65,6 +65,7 @@ SAFE_EXACT = {
     "tests.test_operator_snapshot_api",
     "tests.test_promotion_review_stale_status",
     "tests.test_research_ui_backend_restore",
+    "tests.test_admit_exact_pilot_to_promotion_review_13z",
 }
 STATUS_STAGE_MODULES = {
     "tests.test_market_features_provenance_contract",
