@@ -69,6 +69,9 @@ jobs:
   deploy:
     if: ${{ github.event_name != 'pull_request' }}
     needs: contract
+    permissions:
+      contents: write
+      id-token: write
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
@@ -842,6 +845,40 @@ jobs:
           print('MMIBKR_OPERATOR_CONSOLE_PROMOTION_PUBLISHER_UNAUTHENTICATED_DENIED=1')
           print('MMIBKR_OPERATOR_CONSOLE_PROMOTION_READER_UNAUTHENTICATED_DENIED=1')
           PY
+
+      - name: Publish scoped R2 MM deployment receipt
+        if: ${{ success() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          node = {
+              "schema": "mmibkr.operator_console.deploy_receipt.r2",
+              "worker": "mmibkr-operator-console",
+              "worker_deploy_credential": (
+                  "scoped_r2"
+                  if os.environ.get("CLOUDFLARE_DEPLOY_TOKEN_R2")
+                  else "legacy_fallback"
+              ),
+              "access_reconciliation_credential": "legacy_access_capable_token",
+              "source_sha": os.environ.get("REQUEST_SOURCE_SHA", ""),
+              "control_plane_pass": True,
+              "access_reconciliation_step_completed": True,
+              "unauthenticated_fail_closed_pass": True,
+              "private_source_destroy_step_pending": True,
+              "secret_included": False,
+          }
+          out = Path("rendezvous/receipts/mmibkr-operator-console-deploy-r2.json")
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_text(json.dumps(node, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add rendezvous/receipts/mmibkr-operator-console-deploy-r2.json
+          git commit -m 'deploy: publish MM operator console R2 receipt' || true
+          git push
 
       - name: Destroy private deployment source
         if: always()
