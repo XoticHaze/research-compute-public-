@@ -50,7 +50,7 @@ REQUEST_FIELDS = {
     "canonical_submit_payload",
     "selected_runtime_authority",
 }
-EXACT_TICKS_REQUEST_FIELDS = {"command_id", "source_ref", "tick_plan"}
+EXACT_TICKS_REQUEST_FIELDS = {"command_id", "source_ref", "source_sha", "tick_plan"}
 
 HYGIENE_REQUEST_FIELDS = {
     "command_id",
@@ -323,11 +323,14 @@ def _validate_exact_ticks_request(value: Any) -> dict[str, Any]:
     _reject_live(request)
     command_id = str(request.get("command_id") or "").strip().lower()
     source_ref = str(request.get("source_ref") or "").strip()
+    source_sha = str(request.get("source_sha") or "").strip().lower()
     plan = request.get("tick_plan")
     if not SHA256_ID.fullmatch(command_id):
         raise RuntimeError("command id invalid")
     if not source_ref:
         raise RuntimeError("source ref required")
+    if not re.fullmatch(r"[0-9a-f]{40}", source_sha):
+        raise RuntimeError("exact tick source sha invalid")
     if not isinstance(plan, Mapping):
         raise RuntimeError("exact tick plan required")
     if plan.get("schema") != "mmibkr.selected_runtime_forward_exact_extrema_tick_request_plan.v1":
@@ -341,6 +344,7 @@ def _validate_exact_ticks_request(value: Any) -> dict[str, Any]:
     return {
         "command_id": command_id,
         "source_ref": source_ref,
+        "source_sha": source_sha,
         "tick_plan": dict(plan),
     }
 
@@ -410,6 +414,8 @@ def validate_capsule(raw: bytes) -> dict[str, Any]:
         if mode == EXACT_TICKS_MODE
         else _validate_request(capsule.get("request"))
     )
+    if mode == EXACT_TICKS_MODE and request.get("source_sha") != source.get("head"):
+        raise RuntimeError("exact tick request/source head mismatch")
     cleanup = _validate_cleanup(capsule.get("cleanup"), mode=mode)
     return_recipient = _validate_return_recipient(capsule.get("return_recipient"))
     return {
