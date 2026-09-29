@@ -11,6 +11,11 @@ on:
     paths:
       - 'research/currency_hedge_mechanism_forward_r1.py'
       - '.github/workflows/currency-hedge-mechanism-forward-r1.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/currency_hedge_mechanism_forward_r1.py'
+      - '.github/workflows/currency-hedge-mechanism-forward-r1.yml'
 
 permissions:
   contents: read
