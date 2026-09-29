@@ -220,6 +220,86 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
 
 
 
+def _p438_semiconductor_predecessor(x: dict[str, Any] | None) -> dict[str, Any]:
+    """Compact an older immutable semiconductor forward identity without pooling it into the current cohort."""
+    if not x:
+        return {
+            "present": False,
+            "sample_combination_authorized": False,
+        }
+    frozen = x.get("frozen_prediction_identity") or {}
+    rows = [row for row in (x.get("rows") or []) if isinstance(row, dict)]
+    elapsed = [
+        int(row.get("elapsed_close_to_close_sessions") or 0)
+        for row in rows
+        if row.get("elapsed_close_to_close_sessions") is not None
+    ]
+    remaining = [
+        int(row.get("remaining_sessions_to_fixed20") or 0)
+        for row in rows
+        if row.get("remaining_sessions_to_fixed20") is not None
+    ]
+    latest = sorted(
+        str(row.get("latest_common_date"))
+        for row in rows
+        if row.get("latest_common_date")
+    )
+    symbols = sorted(str(row.get("symbol")) for row in rows if row.get("symbol"))
+    return {
+        "present": True,
+        "program_id": "P438_SEMICONDUCTOR_FORWARD_MTD_R1",
+        "parent": x.get("parent"),
+        "classification": x.get("classification"),
+        "signal_date": frozen.get("generation_bar_date"),
+        "execution_delay_sessions": frozen.get("delay_sessions"),
+        "holding_horizon_sessions": frozen.get("hold_sessions"),
+        "cost_bps": frozen.get("cost_bps"),
+        "prediction_blob_sha": frozen.get("prediction_blob_sha"),
+        "research_foundry_branch_commit": frozen.get("research_foundry_branch_commit"),
+        "symbols": symbols,
+        "latest_common_date": latest[-1] if latest else None,
+        "elapsed_close_to_close_sessions": max(elapsed) if elapsed else None,
+        "remaining_sessions_to_fixed20": max(remaining) if remaining else None,
+        "all_rows_terminal": bool(rows) and all(bool(row.get("final_target_resolved")) for row in rows),
+        "sample_combination_authorized": False,
+        "combination_rule": (
+            "Predecessor and current-cohort sessions may overlap in calendar time and have different frozen identities; "
+            "never add their session counts or pool their outcomes without a preregistered cross-cohort aggregation rule."
+        ),
+    }
+
+
+def _semiconductor_program_continuity(
+    predecessor: dict[str, Any],
+    current: dict[str, Any],
+) -> dict[str, Any]:
+    dates = [
+        str(value)
+        for value in (
+            predecessor.get("signal_date") if predecessor.get("present") else None,
+            current.get("current_signal_date"),
+        )
+        if value
+    ]
+    return {
+        "program_family": "SEMICONDUCTOR_FORWARD",
+        "first_frozen_signal_date": min(dates) if dates else None,
+        "predecessor": predecessor,
+        "current_cohort": {
+            "cohort_id": current.get("current_cohort_id"),
+            "signal_date": current.get("current_signal_date"),
+            "status": current.get("current_cohort_status"),
+            "resolution": current.get("current_resolution"),
+        },
+        "program_clock_is_not_current_cohort_clock": True,
+        "overlapping_sessions_are_not_additive": True,
+        "reporting_rule": (
+            "Show program-family age, predecessor identities, and current-cohort age separately. "
+            "A newer cohort must not erase an older frozen forward identity."
+        ),
+    }
+
+
 def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[str, Any]:
     if ledger is None:
         return {"ledger_status": "NOT_SUPPLIED", "program_id": program_id}
@@ -410,6 +490,9 @@ def _decision_chain(lanes: list[dict[str, Any]]) -> dict[str, Any]:
 
 def build(root: Path) -> dict[str, Any]:
     ledger = _load(root, "forward_prospective_cohort_ledger_r1.json")
+    p438_predecessor = _p438_semiconductor_predecessor(
+        _load(root, "p438_semiconductor_forward_mtd_r1.json")
+    )
     lanes = [
         _p46(_load(root, "p46_forward_observation_v2.json")),
         _p249(_load(root, "forward_p249_p266_shadow_r1.json")),
@@ -428,6 +511,19 @@ def build(root: Path) -> dict[str, Any]:
                 "validation_grade": "NO_CURRENT_NATIVE_RESULT",
                 "decision_use": "Adapter contract exists; current sanitized native result has not been supplied to this report run.",
             })
+
+    semi_lane = next((row for row in lanes if row.get("program_id") == "SEMICONDUCTOR_SHARED_RIDGE"), None)
+    semi_prospective = (
+        semi_lane.get("prospective_evidence", {})
+        if isinstance(semi_lane, dict)
+        else _prospective_state(ledger, "SEMICONDUCTOR_SHARED_RIDGE")
+    )
+    semiconductor_continuity = _semiconductor_program_continuity(
+        p438_predecessor,
+        semi_prospective,
+    )
+    if isinstance(semi_lane, dict):
+        semi_lane["program_continuity"] = semiconductor_continuity
 
     actionable_context = []
     for lane in lanes:
@@ -483,6 +579,9 @@ def build(root: Path) -> dict[str, Any]:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "purpose": "Daily/on-demand forward validation and market-decision reporting across frozen research survivors.",
         "lanes": lanes,
+        "program_continuity": {
+            "SEMICONDUCTOR_FORWARD": semiconductor_continuity,
+        },
         "market_decision_context": actionable_context,
         "decision_chain": _decision_chain(lanes),
         "freshness": freshness,
@@ -495,6 +594,9 @@ def build(root: Path) -> dict[str, Any]:
                 "market_data_asof": None if ledger is None else ledger.get("market_data_asof"),
                 "programs": [] if ledger is None else sorted((ledger.get("summary") or {}).keys()),
             },
+            "predecessor_forward_identities": {
+                "P438_SEMICONDUCTOR_FORWARD_MTD_R1": p438_predecessor.get("present") is True,
+            },
         },
         "interpretation": {
             "weight_is_not_forecast": True,
@@ -503,6 +605,8 @@ def build(root: Path) -> dict[str, Any]:
             "small_samples_are_not_promotion_evidence": True,
             "daily_score_does_not_imply_daily_turnover": True,
             "prospective_evidence_does_not_grant_allocation_authority": True,
+            "program_clock_is_not_current_cohort_clock": True,
+            "overlapping_forward_cohort_sessions_are_not_additive": True,
             "broker_or_live_authority": False,
         },
     }
@@ -567,6 +671,27 @@ def self_test() -> None:
                 "SEMICONDUCTOR_SHARED_RIDGE": {"registered_cohorts": 1, "resolved_cohorts": 0, "open_cohorts": 1, "late_registration_rejections": 0, "minimum_resolved_for_promotion": 20, "mean_ticker_book_excess_vs_smh_bps": None},
             },
         }))
+        (root / "p438_semiconductor_forward_mtd_r1.json").write_text(json.dumps({
+            "schema": "research.p438_semiconductor_forward_mtd_r1.v1",
+            "workload_id": "P438_SEMICONDUCTOR_FORWARD_MTD_R1",
+            "parent": "SEMICONDUCTOR_PREDICTED_VALUE_SCARCITY_FORWARD",
+            "frozen_prediction_identity": {
+                "research_foundry_branch_commit": "a" * 40,
+                "prediction_blob_sha": "b" * 40,
+                "generation_bar_date": "2026-09-04",
+                "delay_sessions": 1,
+                "hold_sessions": 20,
+                "cost_bps": 25.0,
+            },
+            "classification": "FIXED20_TARGET_UNRESOLVED__DESCRIPTIVE_PATH_ONLY",
+            "rows": [{
+                "symbol": "AMAT",
+                "latest_common_date": "2026-09-13",
+                "elapsed_close_to_close_sessions": 4,
+                "remaining_sessions_to_fixed20": 16,
+                "final_target_resolved": False,
+            }],
+        }))
         out = build(root)
         assert out["schema"] == SCHEMA
         assert out["lanes"][0]["validation_grade"] == "SHAKEDOWN_ONLY"
@@ -595,6 +720,12 @@ def self_test() -> None:
         assert out["freshness"]["p249_p266_source_health"]["lagging_symbols_vs_source_max"] == ["XBI"]
         assert out["interpretation"]["daily_score_does_not_imply_daily_turnover"] is True
         assert out["interpretation"]["prospective_evidence_does_not_grant_allocation_authority"] is True
+        continuity = out["program_continuity"]["SEMICONDUCTOR_FORWARD"]
+        assert continuity["first_frozen_signal_date"] == "2026-09-04"
+        assert continuity["predecessor"]["elapsed_close_to_close_sessions"] == 4
+        assert continuity["current_cohort"]["signal_date"] == "2026-09-10"
+        assert continuity["overlapping_sessions_are_not_additive"] is True
+        assert out["coverage"]["predecessor_forward_identities"]["P438_SEMICONDUCTOR_FORWARD_MTD_R1"] is True
     print("FORWARD_MARKET_SCOREBOARD_SELF_TEST=PASS")
 
 
