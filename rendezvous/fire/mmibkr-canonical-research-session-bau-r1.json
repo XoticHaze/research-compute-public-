@@ -2,8 +2,8 @@
   "schema": "mmibkr.canonical_session_fire.v1",
   "source_ref": "43565f2704e72b3b3990348b605089ca77a579c3",
   "expected_job_sha256": "de1a027cf744beaed4a569a3add4a9a891ff631254f787065c39a987e63ac8e9",
-  "request_nonce": "w124-post-r8-funded-canary-20260928-r1",
-  "purpose": "Post-R8 merged-head W124 2.5bp funded-capital canary with full chronology",
+  "request_nonce": "w124-post-r8-funded-canary-float-zero-20260928-r2",
+  "purpose": "Post-R8 merged-head W124 2.5bp funded-capital canary with frozen float-zero parameter identity",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -14,7 +14,7 @@
   },
   "session": {
     "schema": "mmibkr.canonical_session.v1",
-    "session_id": "w124-post-r8-funded-canary-20260928-r1",
+    "session_id": "w124-post-r8-funded-canary-float-zero-20260928-r2",
     "budget_seconds": 1800,
     "reserve_seconds": 60,
     "max_parallel": 1,
@@ -76,10 +76,10 @@
                 "ENTRY_EXTREME": -2.52,
                 "EXIT_EXTREME": 4.5,
                 "SLIPPAGE_BPS": 2.5,
-                "SPREAD_BPS": 0,
+                "SPREAD_BPS": 0.0,
                 "WINDOW": 124,
                 "commission_per_share": 0.3,
-                "spread_bps": 0
+                "spread_bps": 0.0
               }
             }
           },
