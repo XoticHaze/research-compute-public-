@@ -57,6 +57,14 @@ SAFE_EXACT = {
     "tests.test_selected_runtime_forward_exact_extrema_v1",
     "tests.test_research_survivor_funnel",
     "tests.test_acquire_hfdl_bounded_equity_panel",
+    # Exact read-only Promotion Review / Pilot audit-boundary regressions.
+    # These exercise durable decision records and HTTP presentation only; they
+    # do not mutate selected runtime, broker state, StrategySpec, or live authority.
+    "tests.test_promotion_review_store",
+    "tests.test_autotuner_promotion_review_backend_product",
+    "tests.test_operator_snapshot_api",
+    "tests.test_promotion_review_stale_status",
+    "tests.test_research_ui_backend_restore",
 }
 STATUS_STAGE_MODULES = {
     "tests.test_market_features_provenance_contract",
