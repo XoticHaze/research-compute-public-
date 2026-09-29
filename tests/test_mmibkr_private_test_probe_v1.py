@@ -173,6 +173,7 @@ def test_allowlist_accepts_exact_promotion_review_read_only_regressions():
         "tests.test_promotion_review_stale_status",
         "tests.test_research_ui_backend_restore",
         "tests.test_admit_exact_pilot_to_promotion_review_13z",
+        "tests.test_ibkr_remote_forward_exact_ticks_slot_v1",
     ]
     assert validated_modules(" ".join(exact)) == exact
 
