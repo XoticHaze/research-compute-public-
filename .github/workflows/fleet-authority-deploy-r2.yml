@@ -18,6 +18,51 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  r2_scope_audit:
+    if: ${{ github.event_name != 'pull_request' }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_DEPLOY_TOKEN_R2: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Require scoped R2 credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_DEPLOY_TOKEN_R2"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+
+      - name: Execute R2 scope audit
+        id: scope
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ env.CLOUDFLARE_DEPLOY_TOKEN_R2 }}
+        shell: bash
+        run: |
+          python scripts/cloudflare_r2_scope_preflight.py
+
+      - name: Persist R2 scope audit
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f rendezvous/receipts/research-cloudflare-r2-scope-preflight.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add rendezvous/receipts/research-cloudflare-r2-scope-preflight.json
+          git commit -m 'security: publish research Cloudflare R2 scope receipt' || true
+          git push
+
+      - name: Require scope audit success
+        if: ${{ steps.scope.outcome != 'success' }}
+        shell: bash
+        run: exit 1
+
   deploy:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
