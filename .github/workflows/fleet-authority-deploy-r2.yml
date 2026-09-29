@@ -61,6 +61,7 @@ jobs:
           fi
 
       - name: Research Cloudflare R2 scope preflight
+        id: r2_scope_preflight
         if: ${{ env.CLOUDFLARE_DEPLOY_TOKEN_R2 != '' }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ env.CLOUDFLARE_DEPLOY_TOKEN_R2 }}
@@ -69,6 +70,18 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/cloudflare_r2_scope_preflight.py
+
+      - name: Publish R2 scope preflight receipt
+        if: ${{ always() && env.CLOUDFLARE_DEPLOY_TOKEN_R2 != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f rendezvous/receipts/research-cloudflare-r2-scope-preflight.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add rendezvous/receipts/research-cloudflare-r2-scope-preflight.json
+          git commit -m 'security: publish research Cloudflare R2 scope receipt' || true
+          git push
 
       - name: Deploy existing Fleet authority
         shell: bash
@@ -121,18 +134,29 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p rendezvous/receipts
-          cat > rendezvous/receipts/fleet-authority-deploy-r2.json <<'JSON'
-          {
-            "schema": "fleet_authority.deploy_receipt.r2",
-            "route": "github_actions",
-            "worker": "fleet-authority",
-            "deploy_pass": true,
-            "control_plane_pass": true,
-            "health_pass": true,
-            "credential_selection": "scoped_r2_if_present_else_legacy_fallback",
-            "workers_builds_required_for_future_redeploy": false
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          node = {
+              "schema": "fleet_authority.deploy_receipt.r2",
+              "route": "github_actions",
+              "worker": "fleet-authority",
+              "deploy_pass": True,
+              "control_plane_pass": True,
+              "health_pass": True,
+              "credential_selection": (
+                  "scoped_r2"
+                  if os.environ.get("CLOUDFLARE_DEPLOY_TOKEN_R2")
+                  else "legacy_fallback"
+              ),
+              "workers_builds_required_for_future_redeploy": False,
           }
-          JSON
+          Path("rendezvous/receipts").mkdir(parents=True, exist_ok=True)
+          Path("rendezvous/receipts/fleet-authority-deploy-r2.json").write_text(
+              json.dumps(node, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add rendezvous/receipts/fleet-authority-deploy-r2.json
