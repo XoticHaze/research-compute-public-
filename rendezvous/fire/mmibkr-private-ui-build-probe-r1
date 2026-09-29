@@ -1,10 +1,10 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "7274ef7abfb0c66bd8df59ce5477f82e3cc7591e",
-  "acceptance_file": "ui-react/src/canonical-market-chart-provenance.acceptance.test.mjs",
-  "requested_by": "canonical-market-chart-provenance-ui-pr774",
-  "purpose": "Exact-private Node acceptance and Vite production build for MM-IBKR PR774",
-  "request_nonce": "pr774-ui-build-7274ef7a-r1",
+  "source_ref": "51bee12ccec32423d358d261b5dbd4d95ce2637b",
+  "acceptance_file": "ui-react/src/lib/pilotStrategySpecHandoff.acceptance.test.mjs",
+  "requested_by": "assistant-pr797-pilot-persistence-ui",
+  "purpose": "Exact-private Pilot persistence handoff acceptance and production Vite build for PR797",
+  "request_nonce": "pr797-pilot-persistence-ui-r1",
   "authority": {
     "research_only": true,
     "broker": false,
