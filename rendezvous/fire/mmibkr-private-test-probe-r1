@@ -1,12 +1,12 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "7557ddb6def8b410b77f5943e54579b28f299a19",
+  "source_ref": "b85324c924808681bcb920d1c1f9777e25109c49",
   "test_modules": [
-    "tests.test_admit_exact_pilot_to_promotion_review_13z",
-    "tests.test_promotion_review_store"
+    "tests.test_selected_runtime_forward_historical_tick_producer_v1",
+    "tests.test_selected_runtime_forward_exact_extrema_v1"
   ],
-  "requested_by": "assistant-pr801-pilot-runner-hardening",
-  "purpose": "Controlled refire after push-trigger registration failure; exact-private direct-script and existing durable batch Promotion Review admission acceptance",
+  "requested_by": "assistant-pr794-historical-tick-acceptance",
+  "purpose": "Exact-private validation of non-overlapping whole-second historical tick pagination and exact-extrema fail-closed consumer",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -14,8 +14,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr801-pilot-direct-runner-batch-admission-r2",
+  "request_nonce": "pr794-historical-tick-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "7557ddb6def8b410b77f5943e54579b28f299a19",
+  "current_private_reference": "b85324c924808681bcb920d1c1f9777e25109c49",
   "parity_public_key_b64": ""
 }
