@@ -165,6 +165,25 @@ def test_allowlist_accepts_exact_capital_survivor_and_corpus_regressions_only():
             validated_modules(rejected)
 
 
+def test_allowlist_accepts_exact_promotion_review_read_only_regressions():
+    exact = [
+        "tests.test_promotion_review_store",
+        "tests.test_autotuner_promotion_review_backend_product",
+        "tests.test_operator_snapshot_api",
+        "tests.test_promotion_review_stale_status",
+        "tests.test_research_ui_backend_restore",
+    ]
+    assert validated_modules(" ".join(exact)) == exact
+
+    for rejected in (
+        "tests.test_promotion_review_live_submit",
+        "tests.test_promotion_review_broker_mutation",
+        "tests.test_operator_snapshot_ibkr_submit",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(rejected)
+
+
 def test_allowlist_accepts_only_exact_forward_historical_tick_evidence_modules():
     exact = [
         "tests.test_selected_runtime_forward_historical_tick_producer_v1",
