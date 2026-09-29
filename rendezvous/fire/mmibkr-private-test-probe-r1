@@ -6,7 +6,7 @@
     "tests.test_promotion_review_store"
   ],
   "requested_by": "assistant-pr801-pilot-runner-hardening",
-  "purpose": "Exact-private direct-script and existing durable batch Promotion Review admission acceptance",
+  "purpose": "Controlled refire after push-trigger registration failure; exact-private direct-script and existing durable batch Promotion Review admission acceptance",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -14,7 +14,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr801-pilot-direct-runner-batch-admission-r1",
+  "request_nonce": "pr801-pilot-direct-runner-batch-admission-r2",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
   "current_private_reference": "7557ddb6def8b410b77f5943e54579b28f299a19",
   "parity_public_key_b64": ""
