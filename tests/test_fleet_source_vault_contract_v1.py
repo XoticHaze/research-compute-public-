@@ -740,3 +740,24 @@ if __name__ == "__main__":
 # Hashed unwrap diagnostics must remain non-secret.
 
 # source-vault response encoding helper must exist.
+
+
+
+def test_private_ui_build_probe_is_unwrap_only_source_vault_consumer():
+    text = SOURCE.read_text(encoding="utf-8")
+    self_identity = "PRIVATE_UI_BUILD_PROBE_IDENTITY"
+    assert self_identity in text
+    assert (
+        "mmibkr-private-ui-build-probe-r1.yml@refs/heads/main"
+        in text
+    )
+    assert "matchedPrivateUiBuildProbe" in text
+    assert "privateUiBuildProbeUnwrapPathAllowed" in text
+    assert (
+        "matchedPrivateUiBuildProbe && privateUiBuildProbeUnwrapPathAllowed"
+        in text
+    )
+    assert "const privateUiBuildProbeUnwrapPathAllowed = pathname === '/v1/source-vault/unwrap';" in text
+    assert "(matchedPrivateUiBuildProbe && privateArchivePathAllowed)" not in text
+    assert "(matchedPrivateUiBuildProbe && operatorDeployPathAllowed)" not in text
+    assert "(matchedPrivateUiBuildProbe && paperAccountHygieneCoordinatorPathAllowed)" not in text
