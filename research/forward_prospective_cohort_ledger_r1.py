@@ -24,6 +24,9 @@ import pandas as pd
 SCHEMA = "research.forward_prospective_cohort_ledger_r1"
 ADAPTER_SCHEMA = "foundry.forward_program_adapter.v1"
 SUPPORTED = {"HOMEBUILDERS", "SEMICONDUCTOR_SHARED_RIDGE"}
+SEMICONDUCTOR_VARIANT_START_SIGNAL_DATE = "2026-09-30"
+SEMICONDUCTOR_VOL_LOOKBACK_SESSIONS = 20
+SEMICONDUCTOR_VOL_MIN_SESSIONS = 15
 
 SESSION_SETTLE_ET = dt_time(18, 30)
 
@@ -150,6 +153,13 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
         "holding_horizon_sessions": 20,
         "symbols": positive,
         "ticker_book_weights_within_cohort": ticker_weights,
+        "expression_variant_eligibility": (
+            "PROSPECTIVE_VARIANTS_ELIGIBLE"
+            if signal_date >= SEMICONDUCTOR_VARIANT_START_SIGNAL_DATE
+            else "PRE_VARIANT_START_NO_RETROSPECTIVE_CREDIT"
+        ),
+        "expression_variant_start_signal_date": SEMICONDUCTOR_VARIANT_START_SIGNAL_DATE,
+        "expression_variants": None,
         "predicted_fixed20_net_value_bps": {s: predictions[s] for s in positive if s in predictions},
         "positive_breadth": float(signal.get("positive_breadth", 0.0)),
         "benchmarks": ["CASH", "SMH", "QQQ", "EQUAL_WEIGHT_13"],
@@ -281,7 +291,9 @@ def _prices_for(cohort: dict[str, Any], asof: date, loader: Callable[[str, date,
         required = symbols + ["ITB", "QQQ"]
     else:
         required = symbols + ["SMH", "QQQ"]
-    start = date.fromisoformat(cohort["signal_date"]) - timedelta(days=10)
+    start = date.fromisoformat(cohort["signal_date"]) - timedelta(
+        days=45 if program == "SEMICONDUCTOR_SHARED_RIDGE" else 10
+    )
     out: dict[str, pd.Series] = {}
     for symbol in dict.fromkeys(required):
         out[symbol] = loader(symbol, start, asof)
@@ -412,6 +424,155 @@ def _resolve_homebuilders(cohort: dict[str, Any], prices: dict[str, pd.Series], 
     }
 
 
+
+def _normalize_weights(raw: dict[str, float], symbols: list[str]) -> dict[str, float]:
+    cleaned = {s: float(raw.get(s, 0.0)) for s in symbols if float(raw.get(s, 0.0)) > 0}
+    total = sum(cleaned.values())
+    if total <= 0:
+        raise RuntimeError("weight expression has zero gross weight")
+    return {s: cleaned.get(s, 0.0) / total for s in symbols}
+
+
+def _linear_rank_weights(
+    predictions: dict[str, float],
+    symbols: list[str],
+) -> dict[str, float]:
+    ordered = sorted(
+        symbols,
+        key=lambda s: (float(predictions.get(s, float("-inf"))), s),
+    )
+    if any(s not in predictions for s in symbols):
+        missing = [s for s in symbols if s not in predictions]
+        raise RuntimeError(f"linear-rank variant missing predictions: {missing}")
+    rank = {symbol: float(i + 1) for i, symbol in enumerate(ordered)}
+    return _normalize_weights(rank, symbols)
+
+
+def _inverse_vol_weights(
+    prices: dict[str, pd.Series],
+    symbols: list[str],
+    signal_date: str,
+    rank_weights: dict[str, float] | None = None,
+) -> dict[str, float]:
+    cutoff = pd.Timestamp(signal_date)
+    raw: dict[str, float] = {}
+    for symbol in symbols:
+        series = prices[symbol]
+        history = series[series.index <= cutoff].pct_change(fill_method=None).dropna()
+        history = history.tail(SEMICONDUCTOR_VOL_LOOKBACK_SESSIONS)
+        if len(history) < SEMICONDUCTOR_VOL_MIN_SESSIONS:
+            raise RuntimeError(
+                f"rank-inverse-vol variant insufficient pre-signal history symbol={symbol} "
+                f"rows={len(history)}"
+            )
+        vol = float(history.std(ddof=1))
+        if not (vol > 0):
+            raise RuntimeError(f"rank-inverse-vol variant invalid volatility symbol={symbol}")
+        multiplier = 1.0 if rank_weights is None else float(rank_weights[symbol])
+        raw[symbol] = multiplier / vol
+    return _normalize_weights(raw, symbols)
+
+
+def _attach_semiconductor_expression_variants(
+    cohort: dict[str, Any],
+    prices: dict[str, pd.Series],
+) -> dict[str, Any]:
+    if cohort.get("expression_variant_eligibility") != "PROSPECTIVE_VARIANTS_ELIGIBLE":
+        return cohort
+    if cohort.get("expression_variants"):
+        return cohort
+    symbols = list(cohort["symbols"])
+    predictions = {
+        str(k): float(v)
+        for k, v in (cohort.get("predicted_fixed20_net_value_bps") or {}).items()
+    }
+    equal = {s: 1.0 / len(symbols) for s in symbols}
+    linear_rank = _linear_rank_weights(predictions, symbols)
+    rank_inverse_vol = _inverse_vol_weights(
+        prices,
+        symbols,
+        str(cohort["signal_date"]),
+        rank_weights=linear_rank,
+    )
+    incumbent = _normalize_weights(
+        {
+            str(k): float(v)
+            for k, v in (cohort.get("ticker_book_weights_within_cohort") or {}).items()
+        },
+        symbols,
+    )
+    return {
+        **cohort,
+        "expression_variants": {
+            "incumbent_frozen_book": {
+                "weights_within_cohort": incumbent,
+                "rule": "existing frozen ticker-book weights",
+                "scientific_forward_credit": True,
+            },
+            "equal_weight": {
+                "weights_within_cohort": equal,
+                "rule": "equal weight across positive admitted symbols",
+                "scientific_forward_credit": True,
+            },
+            "linear_prediction_rank": {
+                "weights_within_cohort": linear_rank,
+                "rule": "weights proportional to ascending positive prediction rank; largest prediction gets largest rank",
+                "scientific_forward_credit": True,
+            },
+            "rank_x_inverse_vol": {
+                "weights_within_cohort": rank_inverse_vol,
+                "rule": (
+                    "linear prediction-rank weight multiplied by inverse trailing "
+                    f"{SEMICONDUCTOR_VOL_LOOKBACK_SESSIONS}-session pre-signal volatility"
+                ),
+                "scientific_forward_credit": True,
+            },
+        },
+        "expression_variant_freeze": {
+            "signal_date": str(cohort["signal_date"]),
+            "volatility_information_cutoff": str(cohort["signal_date"]),
+            "outcomes_observed_for_weight_construction": False,
+            "retrospective_credit": False,
+        },
+    }
+
+
+def _expression_variant_metrics(
+    cohort: dict[str, Any],
+    symbol_returns_bps: dict[str, float],
+    smh_bps: float,
+    qqq_bps: float,
+    equal_weight_universe_bps: float,
+    stock_cost_bps: float,
+) -> dict[str, Any] | None:
+    variants = cohort.get("expression_variants") or {}
+    if not variants:
+        return None
+    out: dict[str, Any] = {}
+    for name, spec in variants.items():
+        weights = {
+            str(k): float(v)
+            for k, v in (spec.get("weights_within_cohort") or {}).items()
+        }
+        gross = sum(
+            float(weights.get(symbol, 0.0)) * float(value)
+            for symbol, value in symbol_returns_bps.items()
+        )
+        net = gross - float(stock_cost_bps)
+        out[name] = {
+            "ticker_book_gross_return_bps": round(gross, 4),
+            "ticker_book_net_return_bps": round(net, 4),
+            "excess_vs_smh_bps": round(net - smh_bps, 4),
+            "excess_vs_qqq_bps": round(net - qqq_bps, 4),
+            "excess_vs_equal_weight_universe_bps": round(
+                net - equal_weight_universe_bps, 4
+            ),
+            "scientific_forward_credit": bool(spec.get("scientific_forward_credit")),
+        }
+    return out
+
+
+
 def _resolve_semiconductor(cohort: dict[str, Any], prices: dict[str, pd.Series], is_new: bool) -> dict[str, Any]:
     symbols = list(cohort["symbols"])
     calendar = _common_calendar(prices, symbols + ["SMH", "QQQ"])
@@ -458,6 +619,14 @@ def _resolve_semiconductor(cohort: dict[str, Any], prices: dict[str, pd.Series],
             if row["predicted_fixed20_net_value_bps"] is not None
         ]
         metrics = _prediction_metrics([x[0] for x in usable], [x[1] for x in usable])
+        variant_marks = _expression_variant_metrics(
+            cohort,
+            {symbol: float(row["gross_return_bps"]) for symbol, row in marks.items()},
+            smh,
+            qqq,
+            ew,
+            stock_cost,
+        )
         metrics.update({
             "nonterminal": True,
             "mark_date": mark_ts.date().isoformat(),
@@ -483,6 +652,7 @@ def _resolve_semiconductor(cohort: dict[str, Any], prices: dict[str, pd.Series],
                 "common_market_latest_date": calendar[-1].date().isoformat() if len(calendar) else None,
                 "current_ticker_marks": marks,
                 "current_mark_metrics": metrics,
+                "expression_variant_marks": variant_marks,
             },
         }
 
@@ -515,6 +685,14 @@ def _resolve_semiconductor(cohort: dict[str, Any], prices: dict[str, pd.Series],
         if v["predicted_net_value_bps"] is not None
     ]
     terminal_metrics = _prediction_metrics([x[0] for x in usable], [x[1] for x in usable])
+    variant_results = _expression_variant_metrics(
+        cohort,
+        {symbol: float(row["gross_return_bps"]) for symbol, row in realized.items()},
+        smh,
+        qqq,
+        ew13,
+        stock_cost,
+    )
     required = symbols + ["SMH", "QQQ"]
 
     return {
@@ -544,6 +722,7 @@ def _resolve_semiconductor(cohort: dict[str, Any], prices: dict[str, pd.Series],
             "rank_ic_spearman": terminal_metrics["rank_ic_spearman"],
             "calibration_intercept_bps": terminal_metrics["calibration_intercept_bps"],
             "calibration_slope": terminal_metrics["calibration_slope"],
+            "expression_variant_results": variant_results,
         },
     }
 
@@ -554,6 +733,7 @@ def _advance_cohort(cohort: dict[str, Any], is_new: bool, asof: date, loader: Ca
     prices = _prices_for(cohort, asof, loader)
     if cohort["program_id"] == "HOMEBUILDERS":
         return _resolve_homebuilders(cohort, prices, is_new)
+    cohort = _attach_semiconductor_expression_variants(cohort, prices)
     return _resolve_semiconductor(cohort, prices, is_new)
 
 
@@ -720,6 +900,44 @@ def self_test() -> None:
     assert obs["entry_date"] == "2026-01-05"
     assert obs["exit_date"] == "2026-01-12"
     assert obs["net_return_bps"] < obs["gross_return_bps"]
+
+    semi_dates = pd.date_range("2026-08-20", "2026-10-12", freq="B")
+    semi_fake: dict[str, pd.Series] = {}
+    for i, symbol in enumerate(["AAA", "BBB", "CCC", "SMH", "QQQ"]):
+        semi_fake[symbol] = pd.Series(
+            [100.0 + i + j * (1.0 + i * 0.07) + ((j % 5) - 2) * (i + 1) * 0.03 for j in range(len(semi_dates))],
+            index=semi_dates,
+            dtype=float,
+        )
+
+    def semi_loader(symbol: str, _start: date, _end: date) -> pd.Series:
+        series = semi_fake[symbol]
+        return series[(series.index >= pd.Timestamp(_start)) & (series.index <= pd.Timestamp(_end))]
+
+    prestart = {
+        "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+        "signal_date": "2026-09-11",
+        "expression_variant_eligibility": "PRE_VARIANT_START_NO_RETROSPECTIVE_CREDIT",
+        "symbols": ["AAA", "BBB", "CCC"],
+        "ticker_book_weights_within_cohort": {"AAA": 0.5, "BBB": 0.3, "CCC": 0.2},
+        "predicted_fixed20_net_value_bps": {"AAA": 100.0, "BBB": 200.0, "CCC": 300.0},
+    }
+    pre_prices = {s: semi_loader(s, date(2026, 8, 20), date(2026, 9, 20)) for s in ["AAA", "BBB", "CCC"]}
+    assert _attach_semiconductor_expression_variants(prestart, pre_prices).get("expression_variants") is None
+
+    prospective = {
+        **prestart,
+        "signal_date": "2026-10-01",
+        "expression_variant_eligibility": "PROSPECTIVE_VARIANTS_ELIGIBLE",
+    }
+    pro_prices = {s: semi_loader(s, date(2026, 8, 20), date(2026, 10, 2)) for s in ["AAA", "BBB", "CCC"]}
+    frozen = _attach_semiconductor_expression_variants(prospective, pro_prices)
+    assert set(frozen["expression_variants"]) == {
+        "incumbent_frozen_book", "equal_weight", "linear_prediction_rank", "rank_x_inverse_vol"
+    }
+    assert abs(sum(frozen["expression_variants"]["equal_weight"]["weights_within_cohort"].values()) - 1.0) < 1e-12
+    assert frozen["expression_variants"]["linear_prediction_rank"]["weights_within_cohort"]["CCC"] > frozen["expression_variants"]["linear_prediction_rank"]["weights_within_cohort"]["AAA"]
+    assert frozen["expression_variant_freeze"]["retrospective_credit"] is False
     print("FORWARD_PROSPECTIVE_COHORT_LEDGER_SELF_TEST=PASS")
 
 
