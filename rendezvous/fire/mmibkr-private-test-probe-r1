@@ -1,11 +1,12 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "51bee12ccec32423d358d261b5dbd4d95ce2637b",
+  "source_ref": "5896971eca8b343ab3c9797ce611b45ae17d1204",
   "test_modules": [
+    "tests.test_admit_exact_pilot_to_promotion_review_13z",
     "tests.test_promotion_review_store"
   ],
-  "requested_by": "assistant-pr797-pilot-arena-admission",
-  "purpose": "Exact-private durable Pilot persistence handoff and RESEARCH-to-ARENA operator acceptance for PR797",
+  "requested_by": "assistant-pr799-exact-pilot-arena-admission",
+  "purpose": "Exact-private validation of Pilot audit persistence -> Promotion Review RESEARCH-to-ARENA admission and candidate-preserving upsert",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -13,8 +14,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr797-pilot-arena-admission-python-r1",
+  "request_nonce": "pr799-pilot-arena-admission-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "51bee12ccec32423d358d261b5dbd4d95ce2637b",
+  "current_private_reference": "5896971eca8b343ab3c9797ce611b45ae17d1204",
   "parity_public_key_b64": ""
 }
