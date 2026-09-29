@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -46,17 +47,18 @@ def main() -> int:
         "waterboys-fantasy-broker",
     ]
 
+    matrix: dict[str, int] = {}
+    failure = ""
+
     for worker in expected:
         status, node = request(
             token,
             "GET",
             f"{API}/accounts/{account}/workers/scripts/{worker}/settings",
         )
-        if status != 200 or node.get("success") is not True:
-            raise SystemExit(
-                f"R2 expected Worker access failed: {worker}:HTTP_{status}"
-            )
-        print("R2_ALLOW_" + worker.upper().replace("-", "_") + "=1")
+        matrix[worker] = status
+        if not failure and (status != 200 or node.get("success") is not True):
+            failure = f"expected_worker_denied:{worker}:HTTP_{status}"
 
     for worker in forbidden:
         status, _ = request(
@@ -64,13 +66,35 @@ def main() -> int:
             "GET",
             f"{API}/accounts/{account}/workers/scripts/{worker}/settings",
         )
-        if status == 200:
-            raise SystemExit(f"R2 forbidden Worker reachable: {worker}")
-        if status not in {401, 403, 404}:
-            raise SystemExit(
-                f"R2 forbidden Worker unexpected status: {worker}:HTTP_{status}"
-            )
-        print("R2_DENY_" + worker.upper().replace("-", "_") + "=1")
+        matrix[worker] = status
+        if not failure and status == 200:
+            failure = f"forbidden_worker_reachable:{worker}"
+        elif not failure and status not in {401, 403, 404}:
+            failure = f"forbidden_worker_unexpected:{worker}:HTTP_{status}"
+
+    receipt = {
+        "schema": "research.cloudflare_r2_scope_preflight.r1",
+        "worker_settings_http": matrix,
+        "expected_allow": expected,
+        "expected_deny": forbidden,
+        "pass": not bool(failure),
+        "failure": failure,
+        "mutation_performed": False,
+        "secret_included": False,
+    }
+    out = Path("rendezvous/receipts/research-cloudflare-r2-scope-preflight.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    for worker in expected:
+        if matrix.get(worker) == 200:
+            print("R2_ALLOW_" + worker.upper().replace("-", "_") + "=1")
+    for worker in forbidden:
+        if matrix.get(worker) in {401, 403, 404}:
+            print("R2_DENY_" + worker.upper().replace("-", "_") + "=1")
+
+    if failure:
+        raise SystemExit("RESEARCH_CLOUDFLARE_R2_PREFLIGHT_REJECTED=" + failure)
 
     print("RESEARCH_CLOUDFLARE_R2_PREFLIGHT_PASS=1")
     return 0
