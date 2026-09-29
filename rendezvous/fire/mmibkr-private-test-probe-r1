@@ -1,11 +1,11 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "506faa4cec79685f06e0f53213e935896a7c8293",
+  "source_ref": "085db5146a21f4acf91dfec4b09452f9218b447f",
   "test_modules": [
-    "tests.test_strategy_backtest_registry_dispatch"
+    "tests.test_backtest_range_contract_14th31im"
   ],
-  "requested_by": "assistant-r42-parameter-hash-guard",
-  "purpose": "Exact-private R42 returned parameter hash guard acceptance",
+  "requested_by": "assistant-product-r8-exact-acceptance",
+  "purpose": "Exact-private Product R8 full-chronology funded-capital regression acceptance",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -13,8 +13,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "r42-parameter-hash-guard-20260928-r1",
+  "request_nonce": "product-r8-capital-full-chronology-20260928-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "506faa4cec79685f06e0f53213e935896a7c8293",
+  "current_private_reference": "085db5146a21f4acf91dfec4b09452f9218b447f",
   "parity_public_key_b64": ""
 }
