@@ -40,9 +40,108 @@ HOLD_MARKET_SESSIONS = 5
 ONE_WAY_COST_BPS = 10.0
 
 
+def _currency(value: Any) -> float | None:
+    text = str(value or "").strip().replace(",", "")
+    if not text or text.lower() in {"null", "none", "nan"}:
+        return None
+    try:
+        out = float(text)
+    except ValueError:
+        return None
+    return out if math.isfinite(out) else None
+
+
+def _normalize_tga_rows(frame: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
+    """Normalize the DTS Table-I schema eras onto one daily closing-balance series.
+
+    Era 1: legacy row named "Federal Reserve Account" carries close_today_bal.
+    Era 2: transitional generic TGA row carries close_today_bal.
+    Era 3: split Table-I rows include explicit "TGA Closing Balance"; the
+    displayed Today value is represented by open_today_bal while
+    close_today_bal is the literal string "null".
+
+    Explicit closing rows outrank generic TGA rows, which outrank legacy FRA.
+    Multiple same-rank candidates for one date must agree exactly.
+    """
+    candidates: list[dict[str, Any]] = []
+    era_counts: dict[str, int] = {}
+    for row in frame.itertuples(index=False):
+        record_date = pd.to_datetime(getattr(row, "record_date", None), errors="coerce")
+        if pd.isna(record_date):
+            continue
+        account = str(getattr(row, "account_type", "") or "").strip()
+        lower = account.lower()
+        close_value = _currency(getattr(row, "close_today_bal", None))
+        open_value = _currency(getattr(row, "open_today_bal", None))
+
+        era: str | None = None
+        rank = 0
+        value: float | None = None
+        source_field: str | None = None
+
+        if "treasury general account" in lower and "closing balance" in lower:
+            era = "TGA_EXPLICIT_CLOSING_ROW"
+            rank = 3
+            # Modern DTS split rows put the Table-I "Today" amount in
+            # open_today_bal and return close_today_bal="null".
+            if open_value is not None:
+                value, source_field = open_value, "open_today_bal"
+            elif close_value is not None:
+                value, source_field = close_value, "close_today_bal"
+        elif "treasury general account" in lower:
+            # Ignore explicit opening/deposit/withdrawal component rows.
+            if any(token in lower for token in ("opening balance", "deposit", "withdraw")):
+                continue
+            era = "TGA_GENERIC_ACCOUNT_ROW"
+            rank = 2
+            if close_value is not None:
+                value, source_field = close_value, "close_today_bal"
+            elif open_value is not None:
+                value, source_field = open_value, "open_today_bal"
+        elif "federal reserve account" in lower:
+            era = "FEDERAL_RESERVE_ACCOUNT_LEGACY"
+            rank = 1
+            if close_value is not None:
+                value, source_field = close_value, "close_today_bal"
+
+        if era is None or value is None or value <= 0:
+            continue
+        candidates.append({
+            "record_date": record_date.normalize(),
+            "account_type": account,
+            "close_today_bal": float(value),
+            "schema_era": era,
+            "source_field": source_field,
+            "selection_rank": rank,
+        })
+
+    if not candidates:
+        raise RuntimeError("no normalized TGA/Federal Reserve Account closing-balance candidates")
+
+    raw = pd.DataFrame(candidates)
+    selected: list[dict[str, Any]] = []
+    for record_date, group in raw.groupby("record_date", sort=True):
+        rank = int(group["selection_rank"].max())
+        winners = group[group["selection_rank"] == rank].copy()
+        unique_values = sorted({round(float(x), 8) for x in winners["close_today_bal"]})
+        if len(unique_values) != 1:
+            detail = winners[["account_type", "source_field", "close_today_bal"]].to_dict("records")
+            raise RuntimeError(
+                f"conflicting same-rank TGA closing candidates date={record_date.date()} candidates={detail}"
+            )
+        chosen = winners.iloc[-1].to_dict()
+        chosen.pop("selection_rank", None)
+        selected.append(chosen)
+        era = str(chosen["schema_era"])
+        era_counts[era] = era_counts.get(era, 0) + 1
+
+    out = pd.DataFrame(selected).sort_values("record_date").reset_index(drop=True)
+    return out, era_counts
+
+
 def load_tga() -> tuple[pd.DataFrame, dict[str, Any]]:
     params = {
-        "fields": "record_date,account_type,close_today_bal",
+        "fields": "record_date,account_type,open_today_bal,close_today_bal",
         "filter": f"record_date:gte:{START},record_date:lte:{END}",
         "sort": "record_date",
         "page[size]": "10000",
@@ -63,30 +162,29 @@ def load_tga() -> tuple[pd.DataFrame, dict[str, Any]]:
         raise RuntimeError("Treasury Fiscal Data API returned no rows")
 
     frame = pd.DataFrame(rows)
-    if not {"record_date", "account_type", "close_today_bal"} <= set(frame.columns):
+    required = {"record_date", "account_type", "open_today_bal", "close_today_bal"}
+    if not required <= set(frame.columns):
         raise RuntimeError(f"unexpected Treasury fields: {sorted(frame.columns)}")
     types = sorted(set(frame["account_type"].dropna().astype(str)))
-    mask = frame["account_type"].astype(str).str.contains(
-        "Treasury General Account", case=False, regex=False
-    )
-    tga = frame.loc[mask, ["record_date", "account_type", "close_today_bal"]].copy()
-    if tga.empty:
-        raise RuntimeError(f"TGA account row not found; observed account types={types}")
-    tga["record_date"] = pd.to_datetime(tga["record_date"], errors="coerce")
-    tga["close_today_bal"] = pd.to_numeric(
-        tga["close_today_bal"].astype(str).str.replace(",", "", regex=False),
-        errors="coerce",
-    )
-    tga = (
-        tga.dropna(subset=["record_date", "close_today_bal"])
-        .sort_values("record_date")
-        .drop_duplicates("record_date", keep="last")
-        .reset_index(drop=True)
-    )
+    tga, era_counts = _normalize_tga_rows(frame)
     if len(tga) < 1000:
-        raise RuntimeError(f"insufficient TGA history: {len(tga)} rows")
+        raise RuntimeError(
+            f"insufficient normalized TGA history: {len(tga)} rows; "
+            f"eras={era_counts}; account_types={types}"
+        )
 
-    tga["tga_change_5"] = tga["close_today_bal"] / tga["close_today_bal"].shift(LOOKBACK_TREASURY_RECORDS) - 1.0
+    # Fail closed on suspicious multi-week gaps inside the requested history.
+    gaps = tga["record_date"].diff().dt.days.dropna()
+    if len(gaps) and int(gaps.max()) > 10:
+        raise RuntimeError(
+            f"normalized TGA history has unexpected gap max_days={int(gaps.max())}"
+        )
+
+    tga["tga_change_5"] = (
+        tga["close_today_bal"]
+        / tga["close_today_bal"].shift(LOOKBACK_TREASURY_RECORDS)
+        - 1.0
+    )
     tga = tga.dropna(subset=["tga_change_5"]).copy()
 
     # Last Treasury observation in each Friday-ended week. The sign is frozen:
@@ -108,7 +206,9 @@ def load_tga() -> tuple[pd.DataFrame, dict[str, Any]]:
     )
     actual["week"] = actual["record_date"].dt.to_period("W-FRI")
     weekly["week"] = weekly["week_end"].dt.to_period("W-FRI")
-    weekly = weekly.drop(columns=["tga_change_5", "close_today_bal"], errors="ignore").merge(
+    weekly = weekly.drop(
+        columns=["tga_change_5", "close_today_bal"], errors="ignore"
+    ).merge(
         actual[["week", "record_date", "tga_change_5", "close_today_bal"]],
         on="week",
         how="inner",
@@ -117,7 +217,7 @@ def load_tga() -> tuple[pd.DataFrame, dict[str, Any]]:
     weekly = weekly.sort_values("record_date").reset_index(drop=True)
 
     manifest = (
-        tga[["record_date", "close_today_bal"]]
+        tga[["record_date", "close_today_bal", "schema_era", "source_field"]]
         .assign(record_date=lambda x: x["record_date"].dt.date.astype(str))
         .to_csv(index=False)
         .encode("utf-8")
@@ -131,7 +231,15 @@ def load_tga() -> tuple[pd.DataFrame, dict[str, Any]]:
         "tga_daily_rows": int(len(tga)),
         "weekly_signal_rows": int(len(weekly)),
         "account_types_observed": types,
-        "publication_clock": "Daily Treasury Statement is published the following business day; R1 enters only on the second market session after record_date.",
+        "schema_era_counts": era_counts,
+        "normalization_rule": (
+            "explicit TGA Closing Balance/open_today_bal > generic TGA close_today_bal "
+            "> legacy Federal Reserve Account close_today_bal"
+        ),
+        "publication_clock": (
+            "Daily Treasury Statement is published the following business day; "
+            "R1 enters only on the second market session after record_date."
+        ),
         "2026_tga_requested": False,
     }
 
