@@ -97,3 +97,19 @@ def test_package_contract_rejects_lifecycle_hooks(tmp_path):
     )
     with pytest.raises(RuntimeError, match="lifecycle_hook"):
         mod.validate_package_contract(ui)
+
+
+
+def test_workflow_exposes_private_ui_rendezvous_fire_and_dispatch():
+    source=(
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "mmibkr-private-ui-build-probe-r1.yml"
+    ).read_text(encoding="utf-8")
+    assert "workflow_dispatch:" in source
+    assert "source_ref:" in source
+    assert "acceptance_file:" in source
+    assert "push:" in source
+    assert "- 'rendezvous/fire/mmibkr-private-ui-build-probe-r1'" in source
+    assert "elif event == \"push\":" in source
