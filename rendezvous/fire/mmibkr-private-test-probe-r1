@@ -1,12 +1,11 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "b85324c924808681bcb920d1c1f9777e25109c49",
+  "source_ref": "bb4bdac9c115eccdf2812121017410bc6d3ca7cc",
   "test_modules": [
-    "tests.test_selected_runtime_forward_historical_tick_producer_v1",
-    "tests.test_selected_runtime_forward_exact_extrema_v1"
+    "tests.test_ibkr_remote_forward_exact_ticks_slot_v1"
   ],
-  "requested_by": "assistant-pr794-exact-historical-tick-paging",
-  "purpose": "Validate whole-second historical TRADES paging boundaries and exact-extrema fail-closed consumption for #669",
+  "requested_by": "assistant-pr803-forward-exact-ticks",
+  "purpose": "Validate exact private dispatcher for governed B1 historical tick evidence transport",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -14,8 +13,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr794-historical-tick-paging-r1",
+  "request_nonce": "pr803-forward-exact-ticks-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "b85324c924808681bcb920d1c1f9777e25109c49",
+  "current_private_reference": "bb4bdac9c115eccdf2812121017410bc6d3ca7cc",
   "parity_public_key_b64": ""
 }
