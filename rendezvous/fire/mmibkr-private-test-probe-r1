@@ -1,11 +1,11 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "085db5146a21f4acf91dfec4b09452f9218b447f",
+  "source_ref": "8a1a8607c52fe370ef109ac0c40c26ee4f150951",
   "test_modules": [
-    "tests.test_backtest_range_contract_14th31im"
+    "tests.test_autotuner_promotion_review_backend_product"
   ],
-  "requested_by": "assistant-product-r8-exact-acceptance",
-  "purpose": "Exact-private Product R8 full-chronology funded-capital regression acceptance",
+  "requested_by": "assistant-pr793-exact-acceptance",
+  "purpose": "Exact-private Pilot persistence to Promotion Review identity continuity",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -13,8 +13,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "product-r8-capital-full-chronology-20260928-r1",
+  "request_nonce": "pr793-pilot-promotion-review-20260928-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "085db5146a21f4acf91dfec4b09452f9218b447f",
+  "current_private_reference": "8a1a8607c52fe370ef109ac0c40c26ee4f150951",
   "parity_public_key_b64": ""
 }
