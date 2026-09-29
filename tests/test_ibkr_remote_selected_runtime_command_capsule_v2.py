@@ -246,6 +246,7 @@ class SelectedRuntimeCommandCapsuleV2Tests(unittest.TestCase):
         node["request"] = {
             "command_id": "sha256:" + "c" * 64,
             "source_ref": "forward-pair:pair-1",
+            "source_sha": "a" * 40,
             "tick_plan": {
                 "schema": "mmibkr.selected_runtime_forward_exact_extrema_tick_request_plan.v1",
                 "state": "TICK_REQUEST_PLAN_READY",
@@ -272,6 +273,11 @@ class SelectedRuntimeCommandCapsuleV2Tests(unittest.TestCase):
         self.assertEqual(out["mode"], mod.EXACT_TICKS_MODE)
         self.assertFalse(out["cleanup"]["cancel_open_order"])
         self.assertEqual(out["request"]["tick_plan"]["pair_id"], "pair-1")
+
+        bad = json.loads(json.dumps(node))
+        bad["request"]["source_sha"] = "d" * 40
+        with self.assertRaisesRegex(RuntimeError, "source head mismatch"):
+            self.validate(bad)
 
         bad = json.loads(json.dumps(node))
         bad["request"]["tick_plan"]["broker_submission"] = True
