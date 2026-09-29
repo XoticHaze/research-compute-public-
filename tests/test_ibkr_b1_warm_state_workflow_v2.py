@@ -253,6 +253,67 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         self.assertIn('"$RUNNER_TEMP/mm-ibkr-source"', self.text)
 
 
+    def test_forward_exact_ticks_stays_read_only_and_skips_unrelated_bar_pipeline(self):
+        self.assertIn('- forward_exact_ticks', self.text)
+        self.assertIn(
+            "IBKR_FORWARD_EXACT_TICKS_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'forward_exact_ticks' && '1' || '0' }}",
+            self.text,
+        )
+        read_only_block = self.text[
+            self.text.index('api_read_only=yes'):
+            self.text.index('echo "IBKR_GATEWAY_READ_ONLY_API=${api_read_only}"')
+        ]
+        self.assertNotIn('IBKR_FORWARD_EXACT_TICKS_MODE', read_only_block)
+        self.assertIn('api_read_only=yes', read_only_block)
+
+        post_auth = self.text.index(
+            'name: Materialize canonical post-auth broker and forward-data handoff'
+        )
+        tick = self.text.index(
+            'name: Execute one encrypted MM-owned exact historical tick command'
+        )
+        stop = self.text.index(
+            'name: Gracefully stop authenticated Gateway before warm-state snapshot'
+        )
+        self.assertLess(post_auth, tick)
+        self.assertLess(tick, stop)
+        post_auth_guard = self.text[post_auth:tick]
+        self.assertIn("env.IBKR_FORWARD_EXACT_TICKS_MODE != '1'", post_auth_guard)
+        tick_block = self.text[tick:stop]
+        self.assertIn("inputs.mode == 'forward_exact_ticks'", tick_block)
+        self.assertIn('--mode forward_exact_ticks', tick_block)
+        self.assertNotIn('ibkr_post_auth_pipeline_v1.py', tick_block)
+        self.assertNotIn('start_canonical_runtime', tick_block)
+
+    def test_forward_exact_ticks_is_not_classified_as_broker_mutation_mode(self):
+        require = self.text.index(
+            'name: Require restored warm state for broker-mutating selected-runtime command'
+        )
+        auth = self.text.index('name: Resolve authenticated session boundary')
+        guard = self.text[require:auth]
+        self.assertNotIn('IBKR_FORWARD_EXACT_TICKS_MODE', guard)
+        self.assertIn('IBKR_PAPER_PROOF_MODE', guard)
+        self.assertIn('IBKR_PAPER_EXECUTE_MODE', guard)
+        self.assertIn('IBKR_PAPER_ACCOUNT_HYGIENE_MODE', guard)
+
+    def test_forward_exact_ticks_private_material_is_destroyed_and_result_checked_after_reseal(self):
+        tick = self.text.index(
+            'name: Execute one encrypted MM-owned exact historical tick command'
+        )
+        stop = self.text.index(
+            'name: Gracefully stop authenticated Gateway before warm-state snapshot'
+        )
+        assess = self.text.index(
+            'name: Enforce exact historical tick result after warm-state persistence'
+        )
+        cleanup = self.text.index('name: Destroy private runtime material')
+        self.assertLess(tick, stop)
+        self.assertLess(stop, assess)
+        self.assertLess(assess, cleanup)
+        self.assertIn('steps.forward_exact_ticks.outcome', self.text[assess:cleanup])
+        self.assertIn('"$RUNNER_TEMP/ibkr-forward-exact-ticks-receipt.json"', self.text)
+        self.assertIn('"$RUNNER_TEMP/ibkr-forward-exact-ticks-return"', self.text)
+
 
 def test_optional_warm_read_return_is_readonly_run_bound_and_encrypted(self):
     self.assertIn('read_return_recipient_b64:', self.text)

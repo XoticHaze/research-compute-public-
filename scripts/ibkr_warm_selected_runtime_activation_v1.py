@@ -36,6 +36,7 @@ for import_root in (REPO_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(import_root))
 
 import ibkr_remote_paper_proof_return_v1 as proof_return
+import ibkr_remote_forward_exact_ticks_v1 as exact_ticks_v1
 import mmibkr_b1_attested_source_consumer_v1 as attested_source
 import ibkr_remote_selected_runtime_command_capsule_v2 as capsule_v2
 import ibkr_remote_account_hygiene_v1 as account_hygiene_v1
@@ -361,6 +362,12 @@ def materialize_command(
     elif mode == capsule_v2.HYGIENE_MODE:
         request_path = Path(_required_text(runtime.get("request_path"), "runtime.request_path"))
         account_hygiene_v1.validate_runtime(
+            runtime,
+            json.loads(request_path.read_text(encoding="utf-8")),
+        )
+    elif mode == capsule_v2.EXACT_TICKS_MODE:
+        request_path = Path(_required_text(runtime.get("request_path"), "runtime.request_path"))
+        exact_ticks_v1.validate_runtime(
             runtime,
             json.loads(request_path.read_text(encoding="utf-8")),
         )
@@ -737,7 +744,7 @@ def main() -> None:
     parser.add_argument("--wait-seconds", type=int, default=900)
     parser.add_argument(
         "--mode",
-        choices=(capsule_v2.PROOF_MODE, capsule_v2.EXECUTE_MODE, capsule_v2.HYGIENE_MODE),
+        choices=(capsule_v2.PROOF_MODE, capsule_v2.EXECUTE_MODE, capsule_v2.HYGIENE_MODE, capsule_v2.EXACT_TICKS_MODE),
         default=capsule_v2.PROOF_MODE,
     )
     args = parser.parse_args()
@@ -813,6 +820,66 @@ def main() -> None:
         print("IBKR_REMOTE_COMMAND_MATERIALIZED=1")
         print("IBKR_REMOTE_COMMAND_ID=" + str(runtime.get("command_id")))
         print("IBKR_REMOTE_COMMAND_MODE=" + str(runtime.get("mode")))
+
+        if runtime.get("mode") == capsule_v2.EXACT_TICKS_MODE:
+            request_path = Path(_required_text(runtime.get("request_path"), "runtime.request_path"))
+            request = json.loads(request_path.read_text(encoding="utf-8"))
+            receipt = exact_ticks_v1.collect_evidence(
+                runtime=runtime,
+                request=request,
+                host=args.gateway_host,
+                port=args.gateway_port,
+                client_id=81,
+                run_id=run_id,
+                public_head=public_head,
+            )
+            receipt_path = runner_temp / "ibkr-forward-exact-ticks-receipt.json"
+            receipt_path.write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+            os.chmod(receipt_path, stat.S_IRUSR | stat.S_IWUSR)
+
+            recipient_return_path = Path(_required_text(runtime.get("return_recipient_path"), "runtime.return_recipient_path"))
+            return_recipient = json.loads(recipient_return_path.read_text(encoding="utf-8"))
+            return_dir = runner_temp / "ibkr-forward-exact-ticks-return"
+            return_envelope = exact_ticks_v1.encrypt_receipt(
+                receipt=receipt,
+                recipient=return_recipient,
+                run_id=run_id,
+                output_dir=return_dir,
+            )
+            prefix = f"{RETURN_ROOT}/{run_id}/"
+            for node in return_envelope.get("chunks") or []:
+                if not isinstance(node, Mapping):
+                    raise ActivationError("exact tick return chunk descriptor invalid")
+                path = str(node.get("path") or "")
+                local_name = str(node.get("local_name") or "")
+                if not path.startswith(prefix) or ".." in path.split("/") or "/" in local_name:
+                    raise ActivationError("exact tick return publish path rejected")
+                payload_text = (return_dir / local_name).read_text(encoding="ascii")
+                if len(payload_text) != int(node.get("chars") or 0):
+                    raise ActivationError("exact tick return chunk length mismatch")
+                if hashlib.sha256(payload_text.encode("ascii")).hexdigest() != str(node.get("sha256") or ""):
+                    raise ActivationError("exact tick return chunk digest mismatch")
+                publish_new_text(
+                    token=token,
+                    repository=repository,
+                    branch=args.exchange_ref,
+                    path=path,
+                    content=payload_text,
+                    message="rendezvous: publish encrypted forward exact tick evidence chunk",
+                )
+            publish_new_text(
+                token=token,
+                repository=repository,
+                branch=args.exchange_ref,
+                path=prefix + "ibkr-forward-exact-ticks-envelope.json",
+                content=json.dumps(return_envelope, sort_keys=True) + "\n",
+                message="rendezvous: publish encrypted forward exact tick evidence envelope",
+            )
+            print("IBKR_FORWARD_EXACT_TICKS_TRANSPORT_COMPLETE=1")
+            print("IBKR_REMOTE_RETURN_PLAINTEXT_PUBLISHED=0")
+            print("IBKR_REMOTE_BROKER_ORDER_ACTION=0")
+            print("IBKR_REMOTE_LIVE_EXECUTION_ALLOWED=0")
+            return
 
         image, _ = start_canonical_runtime(
             runtime=runtime,
