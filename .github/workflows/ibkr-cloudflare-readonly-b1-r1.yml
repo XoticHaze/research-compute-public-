@@ -16,6 +16,7 @@ on:
           - paper_execute
           - paper_account_hygiene
           - paper_account_snapshot
+          - forward_exact_ticks
       dispatch_nonce:
         description: Optional one-run correlation token
         required: false
@@ -70,6 +71,7 @@ on:
       - assistant/b1-account-snapshot-refresh-20260923
       - assistant/b1-vault-attestation-contract-20260923
       - b1/hygiene-canonical-route-authority-667-r1
+      - b1/forward-exact-ticks-669-r1
     paths:
       - '.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml'
       - 'scripts/fleet_authority_envelope_consumer_v1.py'
@@ -77,6 +79,7 @@ on:
       - 'scripts/ibkr_login_window_guard_v1.py'
       - 'scripts/ibkr_post_auth_pipeline_v1.py'
       - 'scripts/ibkr_remote_selected_runtime_command_capsule_v2.py'
+      - 'scripts/ibkr_remote_forward_exact_ticks_v1.py'
       - 'scripts/ibkr_remote_account_hygiene_v1.py'
       - 'scripts/mmibkr_b1_attested_source_consumer_v1.py'
       - 'scripts/ibkr_remote_selected_runtime_paper_proof_v1.py'
@@ -93,6 +96,7 @@ on:
       - 'tests/test_ibkr_b1_warm_state_workflow_v2.py'
       - 'tests/test_ibkr_warm_selected_runtime_activation_v1.py'
       - 'tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py'
+      - 'tests/test_ibkr_remote_forward_exact_ticks_v1.py'
       - 'tests/test_ibkr_remote_account_hygiene_v1.py'
       - 'tests/test_mmibkr_b1_attested_source_consumer_v1.py'
       - 'tests/test_ibkr_b1_canonical_dockerfile_v1.py'
@@ -140,6 +144,7 @@ jobs:
             tests/test_ibkr_post_auth_pipeline_contracts_v1.py \
             tests/test_forward_bar_multitimeframe_v2.py \
             scripts/ibkr_remote_selected_runtime_command_capsule_v2.py \
+            scripts/ibkr_remote_forward_exact_ticks_v1.py \
             scripts/ibkr_remote_account_hygiene_v1.py \
             scripts/mmibkr_b1_attested_source_consumer_v1.py \
             scripts/ibkr_remote_selected_runtime_paper_proof_v1.py \
@@ -154,6 +159,7 @@ jobs:
             tests/test_ibkr_b1_warm_state_workflow_v2.py \
             tests/test_ibkr_warm_selected_runtime_activation_v1.py \
             tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py \
+            tests/test_ibkr_remote_forward_exact_ticks_v1.py \
             tests/test_ibkr_remote_account_hygiene_v1.py \
             tests/test_mmibkr_b1_attested_source_consumer_v1.py \
             tests/test_ibkr_b1_canonical_dockerfile_v1.py \
@@ -178,6 +184,7 @@ jobs:
             tests.test_ibkr_b1_warm_state_workflow_v2 \
             tests.test_ibkr_warm_selected_runtime_activation_v1 \
             tests.test_ibkr_remote_selected_runtime_command_capsule_v2 \
+            tests.test_ibkr_remote_forward_exact_ticks_v1 \
             tests.test_ibkr_remote_account_hygiene_v1 \
             tests.test_mmibkr_b1_attested_source_consumer_v1 \
             tests.test_ibkr_b1_canonical_dockerfile_v1 \
@@ -211,6 +218,7 @@ jobs:
       IBKR_PAPER_EXECUTE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_execute' && '1' || '0' }}
       IBKR_PAPER_ACCOUNT_HYGIENE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_account_hygiene' && '1' || '0' }}
       IBKR_PAPER_ACCOUNT_SNAPSHOT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_account_snapshot' && '1' || '0' }}
+      IBKR_FORWARD_EXACT_TICKS_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'forward_exact_ticks' && '1' || '0' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -233,6 +241,7 @@ jobs:
             tests/test_ibkr_post_auth_pipeline_contracts_v1.py \
             tests/test_forward_bar_multitimeframe_v2.py \
             scripts/ibkr_remote_selected_runtime_command_capsule_v2.py \
+            scripts/ibkr_remote_forward_exact_ticks_v1.py \
             scripts/ibkr_remote_account_hygiene_v1.py \
             scripts/mmibkr_b1_attested_source_consumer_v1.py \
             scripts/ibkr_remote_selected_runtime_paper_proof_v1.py \
@@ -246,6 +255,7 @@ jobs:
             tests/test_ibkr_b1_auth_contracts_v1.py \
             tests/test_ibkr_warm_selected_runtime_activation_v1.py \
             tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py \
+            tests/test_ibkr_remote_forward_exact_ticks_v1.py \
             tests/test_ibkr_remote_account_hygiene_v1.py \
             tests/test_mmibkr_b1_attested_source_consumer_v1.py \
             tests/test_ibkr_b1_canonical_dockerfile_v1.py \
@@ -260,6 +270,7 @@ jobs:
             tests.test_forward_bar_multitimeframe_v2 \
             tests.test_ibkr_warm_selected_runtime_activation_v1 \
             tests.test_ibkr_remote_selected_runtime_command_capsule_v2 \
+            tests.test_ibkr_remote_forward_exact_ticks_v1 \
             tests.test_ibkr_remote_account_hygiene_v1 \
             tests.test_mmibkr_b1_attested_source_consumer_v1 \
             tests.test_ibkr_b1_canonical_dockerfile_v1 \
@@ -680,7 +691,7 @@ jobs:
           PY
 
       - name: Materialize canonical post-auth broker and forward-data handoff
-        if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1' && env.IBKR_PAPER_ACCOUNT_SNAPSHOT_MODE != '1'
+        if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1' && env.IBKR_PAPER_ACCOUNT_SNAPSHOT_MODE != '1' && env.IBKR_FORWARD_EXACT_TICKS_MODE != '1'
         run: |
           set -euo pipefail
           quote_args=()
@@ -880,6 +891,27 @@ jobs:
             --mode paper_account_hygiene
           echo 'IBKR_WARM_PAPER_ACCOUNT_HYGIENE_TRANSPORT_COMPLETE=1'
 
+      - name: Execute one encrypted MM-owned exact historical tick command
+        id: forward_exact_ticks
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'forward_exact_ticks' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$IBKR_FORWARD_EXACT_TICKS_MODE" = "1"
+          python scripts/ibkr_warm_selected_runtime_activation_v1.py \
+            --run-id "$GITHUB_RUN_ID" \
+            --public-head "$GITHUB_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --exchange-ref rendezvous-exchange \
+            --runner-temp "$RUNNER_TEMP" \
+            --gateway-host 127.0.0.1 \
+            --gateway-port 4002 \
+            --wait-seconds 900 \
+            --mode forward_exact_ticks
+          echo 'IBKR_FORWARD_EXACT_TICKS_ENCRYPTED_TRANSPORT_COMPLETE=1'
+
       - name: Gracefully stop authenticated Gateway before warm-state snapshot
         id: graceful_stop
         run: |
@@ -933,7 +965,7 @@ jobs:
           retention-days: 30
 
       - name: Publish canonical session and forward-data handoff
-        if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1' && env.IBKR_PAPER_ACCOUNT_SNAPSHOT_MODE != '1'
+        if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1' && env.IBKR_PAPER_ACCOUNT_SNAPSHOT_MODE != '1' && env.IBKR_FORWARD_EXACT_TICKS_MODE != '1'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ibkr-cloudflare-readonly-b1-${{ github.run_id }}
@@ -982,6 +1014,17 @@ jobs:
           fi
           echo 'IBKR_WARM_PAPER_ACCOUNT_HYGIENE_ACCEPTED=1'
 
+      - name: Enforce exact historical tick result after warm-state persistence
+        if: ${{ always() && env.IBKR_FORWARD_EXACT_TICKS_MODE == '1' }}
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.forward_exact_ticks.outcome }}" != "success" ]; then
+            echo 'IBKR_FORWARD_EXACT_TICKS_ACCEPTED=0'
+            echo 'Exact historical tick transport failed; Gateway was stopped and warm state was resealed before surfacing this failure.'
+            exit 55
+          fi
+          echo 'IBKR_FORWARD_EXACT_TICKS_ACCEPTED=1'
+
       - name: Destroy private runtime material
         if: always()
         run: |
@@ -1015,7 +1058,9 @@ jobs:
             "$RUNNER_TEMP/ibkr-paper-proof-receipt.json" \
             "$RUNNER_TEMP/ibkr-paper-execute-receipt.json" \
             "$RUNNER_TEMP/ibkr-paper-account-hygiene-receipt.json" \
+            "$RUNNER_TEMP/ibkr-forward-exact-ticks-receipt.json" \
             "$RUNNER_TEMP/ibkr-paper-proof-return" \
+            "$RUNNER_TEMP/ibkr-forward-exact-ticks-return" \
             "$RUNNER_TEMP/ibkr-warm-read-return" \
             "$RUNNER_TEMP/mm-ibkr-source" \
             "$RUNNER_TEMP/mmibkr-proof-data" \
