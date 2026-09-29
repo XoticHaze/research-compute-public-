@@ -14,7 +14,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr794-historical-tick-r1",
+  "request_nonce": "pr794-historical-tick-r2-trigger-refire",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
   "current_private_reference": "b85324c924808681bcb920d1c1f9777e25109c49",
   "parity_public_key_b64": ""
