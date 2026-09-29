@@ -248,7 +248,7 @@ class SelectedRuntimeCommandCapsuleV2Tests(unittest.TestCase):
             "source_ref": "forward-pair:pair-1",
             "source_sha": "a" * 40,
             "tick_plan": {
-                "schema": "mmibkr.selected_runtime_forward_exact_extrema_tick_request_plan.v1",
+                "schema": "mmibkr.selected_runtime_forward_historical_tick_plan.v1",
                 "state": "TICK_REQUEST_PLAN_READY",
                 "pair_id": "pair-1",
                 "identity": {
