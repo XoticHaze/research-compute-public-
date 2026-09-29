@@ -24,11 +24,14 @@
     "overlay_weight": 0.05
   },
   "decision_use": "Prospective portfolio-level falsifier: determine whether the replicated developed-ex-US currency hedge improves the actual frozen allocator target beyond both unchanged cash and an equal unhedged developed-ex-US overlay.",
+  "elapsed_close_to_close_sessions": 10,
   "entry_date": "2026-09-14",
+  "forward_session_clock_semantics": "forward_sessions is legacy inclusive-entry count; elapsed_close_to_close_sessions is the cross-program comparable elapsed clock",
   "forward_sessions": 11,
-  "generated_at": "2026-09-29T20:51:28.158918+00:00",
+  "generated_at": "2026-09-29T21:01:59.788798+00:00",
   "latest_common_market_date": "2026-09-28",
   "market_data_asof": "2026-09-28",
+  "market_sessions_observed_including_entry": 11,
   "positions": {
     "hedged_challenger": {
       "AVDV": 0.1,
