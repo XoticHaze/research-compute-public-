@@ -1,26 +1,26 @@
-name: MM-IBKR Private PR733 Forward Fine Source Exact Validation R1
+name: MM-IBKR PR794 Historical Tick Exact Private Acceptance R1
 
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [assistant/pr794-historical-tick-private-acceptance-r1]
     paths:
-      - '.github/workflows/mmibkr-private-pr733-forward-fine-source-validation-r1.yml'
+      - 'rendezvous/requests/pr794-historical-tick-private-acceptance-r1.txt'
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: mmibkr-private-pr733-forward-fine-source-validation-r1
+  group: mmibkr-pr794-historical-tick-private-acceptance-r1
   cancel-in-progress: false
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  PRIVATE_SOURCE_SHA: 71975cd98aae4a5b1230893802142c63e74e78cd
+  PRIVATE_SOURCE_SHA: b85324c924808681bcb920d1c1f9777e25109c49
 
 jobs:
-  exact-private-pr733-validation:
+  exact-private-pr794-validation:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -30,7 +30,7 @@ jobs:
         with:
           python-version: '3.11.16'
 
-      - name: Materialize exact private PR733 source through bounded Fleet stream
+      - name: Materialize exact private PR794 source through bounded Fleet stream
         shell: bash
         run: |
           set -euo pipefail
@@ -46,8 +46,8 @@ jobs:
           source_sha = os.environ['PRIVATE_SOURCE_SHA'].strip().lower()
           run_id = os.environ['GITHUB_RUN_ID']
           temp = Path(os.environ['RUNNER_TEMP'])
-          archive = temp / 'mmibkr-pr733.tar.gz'
-          extract = temp / 'mmibkr-pr733'
+          archive = temp / 'mmibkr-pr794.tar.gz'
+          extract = temp / 'mmibkr-pr794'
 
           if len(source_sha) != 40 or any(ch not in '0123456789abcdef' for ch in source_sha):
               raise SystemExit('invalid exact private source sha')
@@ -70,7 +70,7 @@ jobs:
           headers = {
               'Authorization': 'Bearer ' + oidc(),
               'Accept': 'application/gzip',
-              'User-Agent': 'mmibkr-private-pr733-forward-fine-source-validation-r1',
+              'User-Agent': 'mmibkr-private-pr794-forward-fine-source-validation-r1',
               'X-MMIBKR-Caller-Run-Id': run_id,
           }
           url = f'{base}/v1/source-vault/private-archive/{source_sha}'
@@ -90,7 +90,7 @@ jobs:
                   if exc.code not in {401, 403, 502, 503}:
                       raise
                   if attempt % 12 == 0:
-                      print(f'MMIBKR_PR733_SOURCE_WAIT={attempt}')
+                      print(f'MMIBKR_PR794_SOURCE_WAIT={attempt}')
                   time.sleep(5)
           else:
               raise SystemExit('exact private source admission did not converge: ' + str(last))
@@ -129,7 +129,7 @@ jobs:
                   'Authorization': 'Bearer ' + oidc(),
                   'Accept': 'application/json',
                   'Content-Type': 'application/json',
-                  'User-Agent': 'mmibkr-private-pr733-forward-fine-source-validation-r1',
+                  'User-Agent': 'mmibkr-private-pr794-forward-fine-source-validation-r1',
                   'X-MMIBKR-Caller-Run-Id': run_id,
               },
           )
@@ -182,7 +182,7 @@ jobs:
               fh.write('PRIVATE_SOURCE_ROOT=' + str(root) + '\n')
               fh.write('PRIVATE_ARCHIVE_SHA256=' + archive_sha + '\n')
               fh.write('PRIVATE_ARCHIVE_BYTES=' + str(size) + '\n')
-          print('MMIBKR_PR733_EXACT_SOURCE_READY=1')
+          print('MMIBKR_PR794_EXACT_SOURCE_READY=1')
           print('MMIBKR_PRIVATE_SOURCE_TOKEN_EXPOSED=0')
           PY
 
@@ -190,24 +190,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          log="$RUNNER_TEMP/pr733-build.log"
+          log="$RUNNER_TEMP/pr794-build.log"
           set +e
-          docker build -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" --target bot             -t "mmibkr-pr733:$GITHUB_RUN_ID" "$PRIVATE_SOURCE_ROOT" >"$log" 2>&1
+          docker build -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" --target bot             -t "mmibkr-pr794:$GITHUB_RUN_ID" "$PRIVATE_SOURCE_ROOT" >"$log" 2>&1
           rc=$?
           set -e
-          echo "MMIBKR_PR733_BUILD_LOG_SHA256=$(sha256sum "$log" | awk '{print $1}')"
-          echo "MMIBKR_PR733_BUILD_LOG_BYTES=$(wc -c < "$log")"
+          echo "MMIBKR_PR794_BUILD_LOG_SHA256=$(sha256sum "$log" | awk '{print $1}')"
+          echo "MMIBKR_PR794_BUILD_LOG_BYTES=$(wc -c < "$log")"
           rm -f "$log"
           if [ "$rc" -ne 0 ]; then exit "$rc"; fi
-          echo 'MMIBKR_PR733_BUILD_STATUS=PASS'
+          echo 'MMIBKR_PR794_BUILD_STATUS=PASS'
 
-      - name: Validate forward fine-source evidence contracts
+      - name: Validate historical tick producer and exact-extrema consumer
         shell: bash
         run: |
           set -euo pipefail
-          log="$RUNNER_TEMP/pr733-tests.log"
+          log="$RUNNER_TEMP/pr794-tests.log"
           set +e
-          docker run --rm             -e ENABLE_LIVE_TRADING=0             -e PYTHONDONTWRITEBYTECODE=1             "mmibkr-pr733:$GITHUB_RUN_ID"             python -m unittest -v               tests.test_selected_runtime_boundary_snapshot_hydrator_v1               tests.test_selected_runtime_cloud_natural_evaluator_v1               tests.test_selected_runtime_forward_execution_lifecycle_v1               tests.test_selected_runtime_cloud_cycle_v1               tests.test_ibkr_remote_selected_runtime_paper_execute_slot_v1             >"$log" 2>&1
+          docker run --rm             -e ENABLE_LIVE_TRADING=0             -e PYTHONDONTWRITEBYTECODE=1             "mmibkr-pr794:$GITHUB_RUN_ID"             python -m unittest -v               tests.test_selected_runtime_forward_historical_tick_producer_v1               tests.test_selected_runtime_forward_exact_extrema_v1             >"$log" 2>&1
           rc=$?
           set -e
           sha="$(sha256sum "$log" | awk '{print $1}')"
@@ -228,18 +228,18 @@ jobs:
               elif re.match(r'^[A-Za-z][A-Za-z0-9_]*(Error|Exception):', line):
                   safe.append(line.split(':', 1)[0])
           for item in safe[-60:]:
-              print('MMIBKR_PR733_SAFE_DIAGNOSTIC=' + item)
+              print('MMIBKR_PR794_SAFE_DIAGNOSTIC=' + item)
           PY
-            echo 'MMIBKR_PR733_TEST_STATUS=FAIL'
-            echo "MMIBKR_PR733_TEST_LOG_SHA256=$sha"
-            echo "MMIBKR_PR733_TEST_LOG_BYTES=$bytes"
+            echo 'MMIBKR_PR794_TEST_STATUS=FAIL'
+            echo "MMIBKR_PR794_TEST_LOG_SHA256=$sha"
+            echo "MMIBKR_PR794_TEST_LOG_BYTES=$bytes"
             rm -f "$log"
             exit "$rc"
           fi
           rm -f "$log"
-          echo 'MMIBKR_PR733_TEST_STATUS=PASS'
-          echo "MMIBKR_PR733_TEST_LOG_SHA256=$sha"
-          echo "MMIBKR_PR733_TEST_LOG_BYTES=$bytes"
+          echo 'MMIBKR_PR794_TEST_STATUS=PASS'
+          echo "MMIBKR_PR794_TEST_LOG_SHA256=$sha"
+          echo "MMIBKR_PR794_TEST_LOG_BYTES=$bytes"
           echo 'MMIBKR_PRIVATE_PLAINTEXT_PUBLISHED=0'
 
       - name: Emit sanitized validation receipt
@@ -248,17 +248,14 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           import json, os
-          print('MMIBKR_PR733_VALIDATION_RECEIPT=' + json.dumps({
-              'schema': 'mmibkr.private_pr733_forward_fine_source_validation.v1',
+          print('MMIBKR_PR794_VALIDATION_RECEIPT=' + json.dumps({
+              'schema': 'mmibkr.private_pr794_historical_tick_validation.v1',
               'status': 'PASS',
               'source_sha': os.environ['PRIVATE_SOURCE_SHA'],
               'source_archive_sha256': os.environ['PRIVATE_ARCHIVE_SHA256'],
               'source_archive_bytes': int(os.environ['PRIVATE_ARCHIVE_BYTES']),
-              'fine_source_hydration_tests': True,
-              'fine_source_projection_tests': True,
-              'lifecycle_observation_tests': True,
-              'cloud_cycle_regression_tests': True,
-              'paper_execute_contract_tests': True,
+              'historical_tick_producer_tests': True,
+              'exact_extrema_consumer_tests': True,
               'mfe_materialized': False,
               'mae_materialized': False,
               'completed_trade_claims': False,
@@ -277,6 +274,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker image rm "mmibkr-pr733:$GITHUB_RUN_ID" >/dev/null 2>&1 || true
-          sudo rm -rf "$RUNNER_TEMP/mmibkr-pr733" "$RUNNER_TEMP/mmibkr-pr733.tar.gz" "$RUNNER_TEMP/pr733-build.log" "$RUNNER_TEMP/pr733-tests.log"
-          echo 'MMIBKR_PR733_PRIVATE_SOURCE_DESTROYED=1'
+          docker image rm "mmibkr-pr794:$GITHUB_RUN_ID" >/dev/null 2>&1 || true
+          sudo rm -rf "$RUNNER_TEMP/mmibkr-pr794" "$RUNNER_TEMP/mmibkr-pr794.tar.gz" "$RUNNER_TEMP/pr794-build.log" "$RUNNER_TEMP/pr794-tests.log"
+          echo 'MMIBKR_PR794_PRIVATE_SOURCE_DESTROYED=1'
