@@ -86,6 +86,7 @@ class ForwardExactTicksTests(unittest.TestCase):
         return {
             "command_id": "sha256:" + "c" * 64,
             "source_ref": "forward-pair:pair-1",
+            "source_sha": "a" * 40,
             "tick_plan": self.plan(),
         }
 
@@ -115,6 +116,11 @@ class ForwardExactTicksTests(unittest.TestCase):
     def test_runtime_rejects_non_read_only_or_non_attested_source(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td)
+            request=self.request()
+            request["source_sha"]="d" * 40
+            with self.assertRaisesRegex(RuntimeError, "source identity"):
+                mod.validate_runtime(self.runtime(root),request)
+
             runtime=self.runtime(root)
             runtime["read_only_api"]="no"
             with self.assertRaisesRegex(RuntimeError, "read-only"):
