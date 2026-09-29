@@ -66,6 +66,7 @@ SAFE_EXACT = {
     "tests.test_promotion_review_stale_status",
     "tests.test_research_ui_backend_restore",
     "tests.test_admit_exact_pilot_to_promotion_review_13z",
+    "tests.test_ibkr_remote_forward_exact_ticks_slot_v1",
 }
 STATUS_STAGE_MODULES = {
     "tests.test_market_features_provenance_contract",
