@@ -1,6 +1,6 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "54851bf48d64c20e29c973ebc40a8282b205367b",
+  "source_ref": "8374cac297e0c420d2de956e1471951f8dbc6ddf",
   "test_modules": [
     "tests.test_promotion_review_store",
     "tests.test_autotuner_promotion_review_backend_product",
@@ -8,8 +8,8 @@
     "tests.test_promotion_review_stale_status",
     "tests.test_research_ui_backend_restore"
   ],
-  "requested_by": "assistant-pr796-pilot-promotion-correction-r2",
-  "purpose": "Exact-private Pilot Research-to-Arena and durable Promotion Review identity acceptance for PR796 after Source Vault attestation",
+  "requested_by": "assistant-pr796-pilot-promotion-correction-r3",
+  "purpose": "Exact-private Pilot Research-to-Arena and durable Promotion Review identity acceptance for corrected PR796 head",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -17,8 +17,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr796-pilot-promotion-stage-readback-r2",
+  "request_nonce": "pr796-pilot-promotion-stage-readback-r3",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "54851bf48d64c20e29c973ebc40a8282b205367b",
+  "current_private_reference": "8374cac297e0c420d2de956e1471951f8dbc6ddf",
   "parity_public_key_b64": ""
 }
