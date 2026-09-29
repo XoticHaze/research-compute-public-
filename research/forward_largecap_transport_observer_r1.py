@@ -15,8 +15,9 @@ excess only; prediction-magnitude calibration remains deliberately blocked.
 import argparse
 import hashlib
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from typing import Any, Callable
 
 import pandas as pd
@@ -25,6 +26,14 @@ SCHEMA = "research.forward_largecap_transport_observation_r1"
 ADAPTER_SCHEMA = "foundry.forward_program_adapter.v1"
 SCOREBOARD_SCHEMA = "research.forward_market_scoreboard_r1"
 PROGRAM_ID = "GENERALIZED_LARGECAP_RIDGE"
+SESSION_SETTLE_ET = dt_time(18, 30)
+
+
+def _completed_market_data_date(now_utc: datetime) -> date:
+    eastern = now_utc.astimezone(ZoneInfo("America/New_York"))
+    return eastern.date() if eastern.time() >= SESSION_SETTLE_ET else eastern.date() - timedelta(days=1)
+
+
 
 # Recovery evidence for the earliest durable observer publication. The initial
 # artifact predated the first_registered_at field, so generated_at is the correct
@@ -361,6 +370,8 @@ def _write(path: Path, payload: dict[str, Any]) -> None:
 
 
 def self_test() -> None:
+    assert _completed_market_data_date(datetime(2026, 9, 29, 18, 43, tzinfo=timezone.utc)) == date(2026, 9, 28)
+    assert _completed_market_data_date(datetime(2026, 9, 29, 23, 10, tzinfo=timezone.utc)) == date(2026, 9, 29)
     dates = pd.to_datetime([
         "2026-01-02", "2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09",
     ])
@@ -449,7 +460,7 @@ def main() -> None:
 
     adapter = json.loads(Path(args.adapter).read_text(encoding="utf-8"))
     now = datetime.now(timezone.utc)
-    asof = date.fromisoformat(args.asof) if args.asof else now.date()
+    asof = date.fromisoformat(args.asof) if args.asof else _completed_market_data_date(now)
     prior_path = Path(args.prior) if args.prior else None
     prior = (
         json.loads(prior_path.read_text(encoding="utf-8"))

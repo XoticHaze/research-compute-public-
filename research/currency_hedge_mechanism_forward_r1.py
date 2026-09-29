@@ -3,8 +3,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from typing import Any
 
 import pandas as pd
@@ -12,6 +13,14 @@ import yfinance as yf
 
 SCHEMA = "research.currency_hedge_mechanism_forward_r1"
 PROGRAM_ID = "DEVELOPED_EXUS_CURRENCY_HEDGE"
+SESSION_SETTLE_ET = dt_time(18, 30)
+
+
+def _completed_market_data_date(now_utc: datetime) -> date:
+    eastern = now_utc.astimezone(ZoneInfo("America/New_York"))
+    return eastern.date() if eastern.time() >= SESSION_SETTLE_ET else eastern.date() - timedelta(days=1)
+
+
 REGISTRATION_DATE = date(2026, 9, 13)
 ENDPOINT_COST_BPS = 25.0
 SYMBOLS = ("HEFA", "IEFA", "DBEF", "EFA", "SPY", "UUP")
@@ -208,6 +217,8 @@ def build(asof: date) -> dict[str, Any]:
 
 
 def self_test() -> None:
+    assert _completed_market_data_date(datetime(2026, 9, 29, 18, 43, tzinfo=timezone.utc)) == date(2026, 9, 28)
+    assert _completed_market_data_date(datetime(2026, 9, 29, 23, 10, tzinfo=timezone.utc)) == date(2026, 9, 29)
     assert REGISTRATION_DATE == date(2026, 9, 13)
     assert ENDPOINT_COST_BPS == 25.0
     assert FROZEN_SOURCES["P426_HEFA"]["blob"] == "8e783a07b78f4f6efee8963c1d05f07792c12bff"
@@ -227,7 +238,8 @@ def main() -> None:
     if args.self_test:
         self_test()
         return
-    asof = date.fromisoformat(args.asof) if args.asof else datetime.now(timezone.utc).date()
+    now = datetime.now(timezone.utc)
+    asof = date.fromisoformat(args.asof) if args.asof else _completed_market_data_date(now)
     result = build(asof)
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
