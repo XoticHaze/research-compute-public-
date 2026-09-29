@@ -82,7 +82,11 @@ def _fetch_one(ts: pd.Timestamp) -> tuple[str, bytes | None, str | None]:
                 return ymd, None, "unexpected_header"
             return ymd, raw, None
         except HTTPError as exc:
-            if exc.code == 404:
+            # FINRA's CDN returns 403 as well as 404 for dates with no daily
+            # file (for example US market holidays). Because admitted trading
+            # dates succeed through the same endpoint in this run, classify
+            # only these two status codes as an absent calendar-date file.
+            if exc.code in {403, 404}:
                 return ymd, None, "no_file"
             last_error = f"http_{exc.code}"
         except (URLError, TimeoutError) as exc:
