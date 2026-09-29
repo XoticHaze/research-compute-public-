@@ -8,8 +8,8 @@
     "tests.test_promotion_review_stale_status",
     "tests.test_research_ui_backend_restore"
   ],
-  "requested_by": "assistant-pr796-pilot-promotion-correction",
-  "purpose": "Exact-private Pilot Research-to-Arena and durable Promotion Review identity acceptance for PR796",
+  "requested_by": "assistant-pr796-pilot-promotion-correction-r2",
+  "purpose": "Exact-private Pilot Research-to-Arena and durable Promotion Review identity acceptance for PR796 after Source Vault attestation",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -17,7 +17,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr796-pilot-promotion-stage-readback-r1",
+  "request_nonce": "pr796-pilot-promotion-stage-readback-r2",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
   "current_private_reference": "54851bf48d64c20e29c973ebc40a8282b205367b",
   "parity_public_key_b64": ""
