@@ -1,0 +1,9 @@
+schema=market_research.amat_15m_userth_discriminator.fire.r1
+symbol=AMAT
+timeframe=15Min
+what_to_show=TRADES
+use_rth_compare=false,true
+target_date=2026-06-15
+paper_only=true
+readonly=true
+live_execution_allowed=false
