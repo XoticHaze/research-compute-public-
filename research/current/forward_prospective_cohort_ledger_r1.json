@@ -346,11 +346,13 @@
     }
   ],
   "freshness": {
+    "completed_session_cutoff_rule": "Before 18:30 America/New_York, exclude the current calendar date from daily-bar scoring.",
     "freshness_gap_note": "A requested/observed gap may be a non-session day; consumers must compare against the expected completed exchange session before classifying stale data.",
-    "freshness_gap_visible": true,
+    "freshness_gap_visible": false,
+    "in_progress_session_excluded": true,
     "lagging_symbols_by_program": {},
     "observed_common_asof": "2026-09-28",
-    "requested_asof": "2026-09-29",
+    "requested_asof": "2026-09-28",
     "source_health_by_program": {
       "HOMEBUILDERS": {
         "all_symbols_share_latest_date": true,
@@ -391,9 +393,9 @@
       }
     }
   },
-  "generated_at": "2026-09-29T08:47:19.106233+00:00",
+  "generated_at": "2026-09-29T20:44:14.961830+00:00",
   "market_data_asof": "2026-09-28",
-  "requested_market_data_asof": "2026-09-29",
+  "requested_market_data_asof": "2026-09-28",
   "schema": "research.forward_prospective_cohort_ledger_r1",
   "summary": {
     "HOMEBUILDERS": {
