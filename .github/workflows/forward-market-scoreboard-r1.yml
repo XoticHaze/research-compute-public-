@@ -21,6 +21,7 @@ on:
       - 'research/forward_largecap_transport_observer_r1.py'
       - 'research/forward_bundle_publish_guard_r1.py'
       - 'research/forward_scoreboard_history_r1.py'
+      - 'research/p438_semiconductor_forward_mtd_r1.py'
       - 'research/current/native_adapters/*.json'
       - 'research/current/p160_forward_observation_r1.json'
       - 'research/current/currency_hedge_mechanism_forward_r1.json'
@@ -38,6 +39,7 @@ on:
       - 'research/forward_largecap_transport_observer_r1.py'
       - 'research/forward_bundle_publish_guard_r1.py'
       - 'research/forward_scoreboard_history_r1.py'
+      - 'research/p438_semiconductor_forward_mtd_r1.py'
       - 'research/current/native_adapters/*.json'
       - 'research/current/p160_forward_observation_r1.json'
       - 'research/current/currency_hedge_mechanism_forward_r1.json'
@@ -91,6 +93,22 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+  p438-semiconductor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3
+      - run: python research/p438_semiconductor_forward_mtd_r1.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forward-score-input-p438-semiconductor
+          path: research/artifacts/p438_semiconductor_forward_mtd_r1.json
+          if-no-files-found: error
+          retention-days: 90
+
   p249-p266:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -140,7 +158,7 @@ jobs:
           retention-days: 90
 
   report:
-    needs: [self-test, p46, p249-p266, p558, senior-clo]
+    needs: [self-test, p46, p438-semiconductor, p249-p266, p558, senior-clo]
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
@@ -325,6 +343,7 @@ jobs:
           print('prospective_ledger=', json.dumps(x['coverage']['prospective_ledger'], sort_keys=True))
           print('challenger_observers=', json.dumps(x['coverage']['challenger_observers'], sort_keys=True))
           print('decision_chain=', json.dumps(x['decision_chain'], sort_keys=True))
+          print('program_continuity=', json.dumps(x.get('program_continuity', {}), sort_keys=True))
           print('allocator_policy=', a['policy_id'])
           print('allocator_targets=', json.dumps(a['final_target_weights'], sort_keys=True))
           print('allocator_zero_weight_lanes=', json.dumps(a['zero_weight_lane_visibility'], sort_keys=True))
