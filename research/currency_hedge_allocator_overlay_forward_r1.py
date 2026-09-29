@@ -209,6 +209,9 @@ def build(asof: date) -> dict[str, Any]:
             "entry_date": None,
             "latest_common_market_date": None,
             "forward_sessions": 0,
+            "market_sessions_observed_including_entry": 0,
+            "elapsed_close_to_close_sessions": 0,
+            "forward_session_clock_semantics": "forward_sessions is legacy inclusive-entry count; elapsed_close_to_close_sessions is the cross-program comparable elapsed clock",
             "scorecard": None,
         }
 
@@ -232,6 +235,9 @@ def build(asof: date) -> dict[str, Any]:
         "entry_date": entry.date().isoformat(),
         "latest_common_market_date": latest.date().isoformat(),
         "forward_sessions": len(usable),
+        "market_sessions_observed_including_entry": len(usable),
+        "elapsed_close_to_close_sessions": max(0, len(usable) - 1),
+        "forward_session_clock_semantics": "forward_sessions is legacy inclusive-entry count; elapsed_close_to_close_sessions is the cross-program comparable elapsed clock",
         "scorecard": {
             "incumbent_return_bps": round(incumbent_bps, 4),
             "hedged_challenger": {
@@ -267,6 +273,9 @@ def build(asof: date) -> dict[str, Any]:
 
 
 def self_test() -> None:
+    synthetic = [pd.Timestamp("2026-09-14"), pd.Timestamp("2026-09-15"), pd.Timestamp("2026-09-16")]
+    assert len(synthetic) == 3
+    assert max(0, len(synthetic) - 1) == 2
     assert _completed_market_data_date(datetime(2026, 9, 29, 18, 43, tzinfo=timezone.utc)) == date(2026, 9, 28)
     assert _completed_market_data_date(datetime(2026, 9, 29, 23, 10, tzinfo=timezone.utc)) == date(2026, 9, 29)
     _validate_contract()

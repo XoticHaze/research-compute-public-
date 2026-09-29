@@ -59,6 +59,9 @@ def _lane_currency(x: dict[str, Any]) -> dict[str, Any]:
         "timing": {
             "entry": x.get("entry", {}),
             "forward_sessions": x.get("forward_sessions", 0),
+            "market_sessions_observed_including_entry": x.get("market_sessions_observed_including_entry", x.get("forward_sessions", 0)),
+            "elapsed_close_to_close_sessions": x.get("elapsed_close_to_close_sessions", max(0, int(x.get("forward_sessions", 0) or 0) - 1)),
+            "clock_semantics": "cross-program comparisons use elapsed_close_to_close_sessions; forward_sessions is retained as legacy inclusive-entry count",
             "regime_is_not_timing_gate": (x.get("contract") or {}).get("regime_is_not_timing_gate"),
         },
         "paper_action": {"status": "OBSERVE_ONLY", "portfolio_authority": False},
@@ -101,6 +104,9 @@ def _lane_currency_overlay(x: dict[str, Any]) -> dict[str, Any]:
         "timing": {
             "entry_date": x.get("entry_date"),
             "forward_sessions": x.get("forward_sessions", 0),
+            "market_sessions_observed_including_entry": x.get("market_sessions_observed_including_entry", x.get("forward_sessions", 0)),
+            "elapsed_close_to_close_sessions": x.get("elapsed_close_to_close_sessions", max(0, int(x.get("forward_sessions", 0) or 0) - 1)),
+            "clock_semantics": "cross-program comparisons use elapsed_close_to_close_sessions; forward_sessions is retained as legacy inclusive-entry count",
             "entry_rule": contract.get("entry_rule"),
             "holding_rule": contract.get("holding_rule"),
         },
@@ -206,6 +212,8 @@ def enrich(
         "state": currency_overlay.get("state"),
         "entry_date": currency_overlay.get("entry_date"),
         "forward_sessions": currency_overlay.get("forward_sessions", 0),
+        "market_sessions_observed_including_entry": currency_overlay.get("market_sessions_observed_including_entry", currency_overlay.get("forward_sessions", 0)),
+        "elapsed_close_to_close_sessions": currency_overlay.get("elapsed_close_to_close_sessions", max(0, int(currency_overlay.get("forward_sessions", 0) or 0) - 1)),
         "scorecard": currency_overlay.get("scorecard"),
         "funding_source": (currency_overlay.get("contract") or {}).get("funding_source"),
         "overlay_weight": (currency_overlay.get("contract") or {}).get("overlay_weight"),
@@ -304,6 +312,8 @@ def self_test() -> None:
     assert out["decision_chain"]["diversification"]["CURRENCY_HEDGE_ALLOCATOR_OVERLAY"]["funding_source"] == "CASH_ONLY"
     assert out["interpretation"]["challenger_observers_do_not_grant_allocator_authority"] is True
     assert out["interpretation"]["currency_overlay_is_observation_not_allocator_mutation"] is True
+    assert by_id["DEVELOPED_EXUS_CURRENCY_HEDGE"]["timing"]["elapsed_close_to_close_sessions"] == 0
+    assert by_id["CURRENCY_HEDGE_ALLOCATOR_OVERLAY"]["timing"]["elapsed_close_to_close_sessions"] == 0
     print("FORWARD_CHALLENGER_SCOREBOARD_ENRICHMENT_SELF_TEST=PASS")
 
 
