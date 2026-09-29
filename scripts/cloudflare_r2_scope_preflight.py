@@ -39,12 +39,11 @@ def main() -> int:
     if not account or not token:
         raise SystemExit("R2 Cloudflare credential missing")
 
-    expected = ["fleet-authority", "mmibkr-operator-console"]
+    expected = ["fleet-authority", "mmibkr-operator-console", "waterboys-fantasy-broker"]
     forbidden = [
         "reference-release-broker-v1",
         "reference-release-maintainer-v1",
         "reference-maintenance-authority-v1",
-        "waterboys-fantasy-broker",
     ]
 
     matrix: dict[str, int] = {}
