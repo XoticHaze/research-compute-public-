@@ -3,12 +3,28 @@ from __future__ import annotations
 import json
 import math
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
 import yfinance as yf
+
+SESSION_SETTLE_ET = dt_time(18, 30)
+
+
+def _completed_market_data_date(now_utc: datetime) -> date:
+    """Return the latest date allowed to contribute a completed US daily bar.
+
+    Before 18:30 America/New_York, exclude the current calendar date even if a
+    provider exposes an intraday/partial daily candle. Weekends and holidays are
+    harmless because downstream market data naturally falls back to the last
+    actual trading session.
+    """
+    eastern = now_utc.astimezone(ZoneInfo("America/New_York"))
+    return eastern.date() if eastern.time() >= SESSION_SETTLE_ET else eastern.date() - timedelta(days=1)
+
 
 DECISION_AT = pd.Timestamp("2026-09-10T07:25:00Z")
 P248_SOURCE_COMMIT = "20490f115d901aac3b586c33072c1157ad4d10a6"
@@ -157,7 +173,8 @@ def _metrics(returns: pd.Series) -> dict[str, float | int | None]:
 
 def main() -> None:
     now = datetime.now(timezone.utc)
-    end = (now + timedelta(days=1)).date().isoformat()
+    completed_data_date = _completed_market_data_date(now)
+    end = (completed_data_date + timedelta(days=1)).isoformat()
     raw = yf.download(ALL, start=START_DOWNLOAD, end=end, auto_adjust=True, progress=False, threads=False)
     close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
     close = close[ALL].dropna(how="all").astype(float)
@@ -232,6 +249,8 @@ def main() -> None:
         "status": "FORWARD_OBSERVING" if len(rows) else "BASELINE_FROZEN_NO_FORWARD_CLOSES",
         "source_health": {
             "provider": "yfinance_adjusted_close",
+            "completed_session_request_date": completed_data_date.isoformat(),
+            "in_progress_session_excluded": True,
             "source_max_date": source_max_date,
             "latest_by_symbol": latest_by_symbol,
             "lagging_symbols_vs_source_max": lagging_symbols,

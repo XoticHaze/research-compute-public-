@@ -3,11 +3,27 @@ from __future__ import annotations
 import json
 import math
 import runpy
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import yfinance as yf
+
+SESSION_SETTLE_ET = dt_time(18, 30)
+
+
+def _completed_market_data_date(now_utc: datetime) -> date:
+    """Return the latest date allowed to contribute a completed US daily bar.
+
+    Before 18:30 America/New_York, exclude the current calendar date even if a
+    provider exposes an intraday/partial daily candle. Weekends and holidays are
+    harmless because downstream market data naturally falls back to the last
+    actual trading session.
+    """
+    eastern = now_utc.astimezone(ZoneInfo("America/New_York"))
+    return eastern.date() if eastern.time() >= SESSION_SETTLE_ET else eastern.date() - timedelta(days=1)
+
 
 DECISION_AT = pd.Timestamp("2026-09-11T10:20:31Z")
 LEGACY_CORE = Path(__file__).with_name("p279_p249_p266_forward_shadow_observer_r1.py")
@@ -99,7 +115,8 @@ def main() -> None:
         core_daily = pd.Series(obs["p249_plus_p266_net"].astype(float).to_numpy(), index=obs["date"], dtype=float)
 
     now = datetime.now(timezone.utc)
-    end = (now + timedelta(days=1)).date().isoformat()
+    completed_data_date = _completed_market_data_date(now)
+    end = (completed_data_date + timedelta(days=1)).isoformat()
     px = yf.download([CANDIDATE, CASH], start="2026-09-10", end=end, auto_adjust=True, progress=False, threads=False)
     close = px["Close"] if isinstance(px.columns, pd.MultiIndex) else px
     simple = close[[CANDIDATE, CASH]].astype(float).pct_change(fill_method=None)

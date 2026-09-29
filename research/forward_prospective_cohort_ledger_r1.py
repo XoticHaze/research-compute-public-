@@ -13,8 +13,9 @@ cutoff-aware so the late-registration guard is exercised without future leakage.
 import argparse
 import hashlib
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from time import sleep
 from typing import Any, Callable
 
@@ -23,6 +24,21 @@ import pandas as pd
 SCHEMA = "research.forward_prospective_cohort_ledger_r1"
 ADAPTER_SCHEMA = "foundry.forward_program_adapter.v1"
 SUPPORTED = {"HOMEBUILDERS", "SEMICONDUCTOR_SHARED_RIDGE"}
+
+SESSION_SETTLE_ET = dt_time(18, 30)
+
+
+def _completed_market_data_date(now_utc: datetime) -> date:
+    """Return the latest date allowed to contribute a completed US daily bar.
+
+    Before 18:30 America/New_York, exclude the current calendar date even if a
+    provider exposes an intraday/partial daily candle. Weekends and holidays are
+    harmless because downstream market data naturally falls back to the last
+    actual trading session.
+    """
+    eastern = now_utc.astimezone(ZoneInfo("America/New_York"))
+    return eastern.date() if eastern.time() >= SESSION_SETTLE_ET else eastern.date() - timedelta(days=1)
+
 
 CONTRACTS: dict[str, dict[str, Any]] = {
     "HOMEBUILDERS": {
@@ -638,6 +654,8 @@ def build(
         "freshness": {
             "requested_asof": asof.isoformat(),
             "observed_common_asof": observed_asof,
+            "in_progress_session_excluded": True,
+            "completed_session_cutoff_rule": "Before 18:30 America/New_York, exclude the current calendar date from daily-bar scoring.",
             "source_health_by_program": source_health,
             "lagging_symbols_by_program": lagging,
             "freshness_gap_visible": observed_asof < asof.isoformat(),
@@ -658,6 +676,8 @@ def build(
 
 
 def self_test() -> None:
+    assert _completed_market_data_date(datetime(2026, 9, 29, 18, 43, tzinfo=timezone.utc)) == date(2026, 9, 28)
+    assert _completed_market_data_date(datetime(2026, 9, 29, 23, 10, tzinfo=timezone.utc)) == date(2026, 9, 29)
     dates = pd.to_datetime([
         "2026-01-02", "2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08",
         "2026-01-09", "2026-01-12", "2026-01-13", "2026-01-14", "2026-01-15",
@@ -717,7 +737,7 @@ def main() -> None:
     if not args.output:
         p.error("--output is required unless --self-test")
     now = datetime.now(timezone.utc)
-    asof = date.fromisoformat(args.asof) if args.asof else now.date()
+    asof = date.fromisoformat(args.asof) if args.asof else _completed_market_data_date(now)
     prior = _read_json(Path(args.prior)) if args.prior else None
     result = build(Path(args.adapter_dir), prior, asof, now.isoformat())
     out = Path(args.output)
