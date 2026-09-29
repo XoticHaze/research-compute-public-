@@ -2,8 +2,8 @@
   "schema": "mmibkr.canonical_session_fire.v1",
   "source_ref": "43565f2704e72b3b3990348b605089ca77a579c3",
   "expected_job_sha256": "de1a027cf744beaed4a569a3add4a9a891ff631254f787065c39a987e63ac8e9",
-  "request_nonce": "w124-post-r8-funded-canary-float-zero-20260928-r2",
-  "purpose": "Post-R8 merged-head W124 2.5bp funded-capital canary with frozen float-zero parameter identity",
+  "request_nonce": "w124-post-r8-funded-canary-float-zero-20260928-r3",
+  "purpose": "Post-R8 W124 float-zero identity canary with hostless governed artifact-ticket producer",
   "authority": {
     "research_only": true,
     "broker": false,
