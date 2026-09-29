@@ -1,7 +1,9 @@
 {
   "schema": "fleet_authority.deploy.r2",
-  "requested_at": "2026-09-29T00:37:00-05:00",
-  "purpose": "prove scoped R2 Cloudflare deploy credential",
+  "requested_at": "2026-09-29T13:32:44-05:00",
+  "purpose": "consume merged R6 single-owner serialization through exactly one push-triggered deploy",
   "credential_route": "CLOUDFLARE_DEPLOY_TOKEN_R2",
-  "attempt": 3
+  "source_merge_sha": "d302de35c3f1319696ec7a5508e47f18f34ff480",
+  "expected_workflow_blob": "21d664ad82cfe646b5e07674b914c2b1113e3472",
+  "attempt": 4
 }
