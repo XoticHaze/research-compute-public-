@@ -59,6 +59,8 @@ def validate_runtime(runtime: Mapping[str, Any], request: Mapping[str, Any]) -> 
         raise RuntimeError("exact tick MM source identity missing")
     if str(request.get("command_id") or "") != str(runtime.get("command_id") or ""):
         raise RuntimeError("exact tick command identity mismatch")
+    if str(request.get("source_sha") or "").strip().lower() != str(runtime.get("mmibkr_head") or "").strip().lower():
+        raise RuntimeError("exact tick request/source identity mismatch")
     plan = request.get("tick_plan")
     if not isinstance(plan, Mapping):
         raise RuntimeError("exact tick plan missing")
