@@ -1,17 +1,17 @@
 {
   "expected_allow": [
     "fleet-authority",
-    "mmibkr-operator-console"
+    "mmibkr-operator-console",
+    "waterboys-fantasy-broker"
   ],
   "expected_deny": [
     "reference-release-broker-v1",
     "reference-release-maintainer-v1",
-    "reference-maintenance-authority-v1",
-    "waterboys-fantasy-broker"
+    "reference-maintenance-authority-v1"
   ],
-  "failure": "",
+  "failure": "expected_worker_denied:waterboys-fantasy-broker:HTTP_403",
   "mutation_performed": false,
-  "pass": true,
+  "pass": false,
   "schema": "research.cloudflare_r2_scope_preflight.r1",
   "secret_included": false,
   "worker_settings_http": {
