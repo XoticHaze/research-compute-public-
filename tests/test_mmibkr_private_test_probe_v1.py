@@ -165,6 +165,24 @@ def test_allowlist_accepts_exact_capital_survivor_and_corpus_regressions_only():
             validated_modules(rejected)
 
 
+def test_allowlist_accepts_only_exact_forward_historical_tick_evidence_modules():
+    exact = [
+        "tests.test_selected_runtime_forward_historical_tick_producer_v1",
+        "tests.test_selected_runtime_forward_exact_extrema_v1",
+    ]
+    assert validated_modules(" ".join(exact)) == exact
+
+    # Keep neighboring selected-runtime broker/runtime authority outside this
+    # research-only exact validation aperture.
+    for rejected in (
+        "tests.test_selected_runtime_forward_execution_submit_v1",
+        "tests.test_selected_runtime_forward_historical_tick_submit_v1",
+        "tests.test_selected_runtime_forward_exact_extrema_live_v1",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(rejected)
+
+
 def test_module_file_path_and_pytest_command_are_exact_and_shell_free():
     assert module_file_path("tests.test_model_lab_xgboost") == "tests/test_model_lab_xgboost.py"
     command = pytest_container_command("probe:test", "tests.test_model_lab_xgboost")
