@@ -25,7 +25,7 @@ from ib_insync import IB
 
 MODE = "forward_exact_ticks"
 RECEIPT_SCHEMA = "mmibkr.remote_forward_exact_tick_evidence_receipt.v1"
-EVIDENCE_SCHEMA = "mmibkr.selected_runtime_forward_exact_extrema_tick_evidence.v1"
+EVIDENCE_SCHEMA = "mmibkr.selected_runtime_forward_historical_tick_evidence.v1"
 PRODUCER_SCHEMA = "mmibkr.selected_runtime_forward_historical_tick_producer.v1"
 RETURN_RECIPIENT_SCHEMA = "ibkr-remote-paper-return-recipient-v1"
 RETURN_ENVELOPE_SCHEMA = "ibkr-forward-exact-ticks-return-x25519-v1"
