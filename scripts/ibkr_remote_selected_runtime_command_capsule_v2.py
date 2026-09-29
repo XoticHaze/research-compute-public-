@@ -333,7 +333,7 @@ def _validate_exact_ticks_request(value: Any) -> dict[str, Any]:
         raise RuntimeError("exact tick source sha invalid")
     if not isinstance(plan, Mapping):
         raise RuntimeError("exact tick plan required")
-    if plan.get("schema") != "mmibkr.selected_runtime_forward_exact_extrema_tick_request_plan.v1":
+    if plan.get("schema") != "mmibkr.selected_runtime_forward_historical_tick_plan.v1":
         raise RuntimeError("exact tick plan schema rejected")
     if plan.get("state") != "TICK_REQUEST_PLAN_READY":
         raise RuntimeError("exact tick plan state rejected")
