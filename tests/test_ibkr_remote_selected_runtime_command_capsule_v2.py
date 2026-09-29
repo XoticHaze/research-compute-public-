@@ -233,6 +233,61 @@ class SelectedRuntimeCommandCapsuleV2Tests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "source ticket field set mismatch"):
             self.validate(node)
 
+    def test_forward_exact_ticks_mode_is_read_only_and_fail_closed(self):
+        node = self.capsule()
+        node["mode"] = mod.EXACT_TICKS_MODE
+        node["source"] = {
+            "repository": "XoticHaze/mm-IBKR",
+            "head": "a" * 40,
+            "archive_sha256": "b" * 64,
+            "archive_bytes": 12345,
+            "transport": mod.ATTESTED_SOURCE_TRANSPORT,
+        }
+        node["request"] = {
+            "command_id": "sha256:" + "c" * 64,
+            "source_ref": "forward-pair:pair-1",
+            "tick_plan": {
+                "schema": "mmibkr.selected_runtime_forward_exact_extrema_tick_request_plan.v1",
+                "state": "TICK_REQUEST_PLAN_READY",
+                "pair_id": "pair-1",
+                "identity": {
+                    "runtime_id": "mnq-runtime",
+                    "strategy_id": "crw_score_multi_mode",
+                    "strategy_spec_digest": "spec-1",
+                    "symbol": "MNQ",
+                    "timeframe": "12Min",
+                },
+                "requests": [],
+                "broker_submission": False,
+                "live_execution_allowed": False,
+            },
+        }
+        node["cleanup"] = {
+            "cancel_open_order": False,
+            "flatten_filled_position": False,
+            "require_zero_baseline": False,
+            "allow_global_cancel": False,
+        }
+        out = self.validate(node)
+        self.assertEqual(out["mode"], mod.EXACT_TICKS_MODE)
+        self.assertFalse(out["cleanup"]["cancel_open_order"])
+        self.assertEqual(out["request"]["tick_plan"]["pair_id"], "pair-1")
+
+        bad = json.loads(json.dumps(node))
+        bad["request"]["tick_plan"]["broker_submission"] = True
+        with self.assertRaisesRegex(RuntimeError, "broker submission"):
+            self.validate(bad)
+
+        bad = json.loads(json.dumps(node))
+        bad["request"]["tick_plan"]["nested"] = {"live_execution_allowed": True}
+        with self.assertRaisesRegex(RuntimeError, "live authority rejected"):
+            self.validate(bad)
+
+        bad = json.loads(json.dumps(node))
+        bad["cleanup"]["flatten_filled_position"] = True
+        with self.assertRaisesRegex(RuntimeError, "cleanup contract mismatch"):
+            self.validate(bad)
+
     def test_unknown_command_mode_is_rejected(self):
         node = self.capsule()
         node["mode"] = "paper_magic"
