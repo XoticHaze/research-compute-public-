@@ -27,7 +27,7 @@ import yfinance as yf
 
 SCHEMA = "research.sec_form4_open_market_purchase_r1.v1"
 OUT = Path("artifacts/sec_form4_open_market_purchase_r1.json")
-ZIP_URL = "https://www.sec.gov/files/structureddata/data/insider-transactions-data-sets/{year}q{quarter}_form345.zip"
+ZIP_URL = "https://dcm.sec.gov/files/structureddata/data/insider-transactions-data-sets/{year}q{quarter}_form345.zip"
 YEARS = (2022, 2023, 2024, 2025)
 QUARTERS = (1, 2, 3, 4)
 PRICE_START = "2021-12-01"
@@ -228,7 +228,7 @@ def load_events() -> tuple[pd.DataFrame, dict[str, Any]]:
     events["industry"] = events["symbol"].map(SYMBOL_TO_INDUSTRY)
     lineage_text = "\n".join(f"{x['year']}Q{x['quarter']}:{x['sha256']}" for x in zip_meta)
     return events, {
-        "provider": "U.S. SEC Insider Transactions Data Sets",
+        "provider": "U.S. SEC Insider Transactions Data Sets via official dcm.sec.gov distribution host",
         "quarters": zip_meta,
         "quarter_count": len(zip_meta),
         "zip_manifest_sha256": hashlib.sha256(lineage_text.encode("utf-8")).hexdigest(),
