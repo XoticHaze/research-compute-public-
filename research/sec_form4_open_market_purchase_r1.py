@@ -76,8 +76,15 @@ def _download_zip(year: int, quarter: int) -> tuple[bytes, dict[str, Any]]:
             req = Request(
                 url,
                 headers={
-                    "User-Agent": "XoticHaze-research/1.0 https://github.com/XoticHaze/research-compute-public-",
+                    "User-Agent": (
+                        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/140.0 Safari/537.36 "
+                        "XoticHaze-research https://github.com/XoticHaze/research-compute-public-"
+                    ),
                     "Accept": "application/zip,application/octet-stream,*/*",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Referer": "https://www.sec.gov/data-research/sec-markets-data/insider-transactions-data-sets",
+                    "Connection": "close",
                 },
             )
             with urlopen(req, timeout=90) as resp:
