@@ -39,7 +39,8 @@ CAPSULE_SCHEMA = "mmibkr.remote_selected_runtime_command_capsule.v2"
 PROOF_MODE = "paper_submit_proof"
 EXECUTE_MODE = "paper_execute"
 HYGIENE_MODE = "paper_account_hygiene"
-MODES = {PROOF_MODE, EXECUTE_MODE, HYGIENE_MODE}
+EXACT_TICKS_MODE = "forward_exact_ticks"
+MODES = {PROOF_MODE, EXECUTE_MODE, HYGIENE_MODE, EXACT_TICKS_MODE}
 MODE = PROOF_MODE
 RETURN_RECIPIENT_SCHEMA = "ibkr-remote-paper-return-recipient-v1"
 CAPSULE_FIELDS = {"schema", "mode", "source", "request", "cleanup", "return_recipient"}
@@ -49,6 +50,8 @@ REQUEST_FIELDS = {
     "canonical_submit_payload",
     "selected_runtime_authority",
 }
+EXACT_TICKS_REQUEST_FIELDS = {"command_id", "source_ref", "tick_plan"}
+
 HYGIENE_REQUEST_FIELDS = {
     "command_id",
     "source_ref",
@@ -313,6 +316,35 @@ def _validate_hygiene_request(value: Any) -> dict[str, Any]:
     }
 
 
+def _validate_exact_ticks_request(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping) or set(value) != EXACT_TICKS_REQUEST_FIELDS:
+        raise RuntimeError("exact tick request field set mismatch")
+    request = dict(value)
+    _reject_live(request)
+    command_id = str(request.get("command_id") or "").strip().lower()
+    source_ref = str(request.get("source_ref") or "").strip()
+    plan = request.get("tick_plan")
+    if not SHA256_ID.fullmatch(command_id):
+        raise RuntimeError("command id invalid")
+    if not source_ref:
+        raise RuntimeError("source ref required")
+    if not isinstance(plan, Mapping):
+        raise RuntimeError("exact tick plan required")
+    if plan.get("schema") != "mmibkr.selected_runtime_forward_exact_extrema_tick_request_plan.v1":
+        raise RuntimeError("exact tick plan schema rejected")
+    if plan.get("state") != "TICK_REQUEST_PLAN_READY":
+        raise RuntimeError("exact tick plan state rejected")
+    if plan.get("broker_submission") is not False:
+        raise RuntimeError("exact tick plan broker submission authority rejected")
+    if plan.get("live_execution_allowed") is not False:
+        raise RuntimeError("exact tick plan live authority rejected")
+    return {
+        "command_id": command_id,
+        "source_ref": source_ref,
+        "tick_plan": dict(plan),
+    }
+
+
 def _validate_request(value: Any) -> dict[str, Any]:
     if not isinstance(value, Mapping) or set(value) != REQUEST_FIELDS:
         raise RuntimeError("selected-runtime command request field set mismatch")
@@ -374,6 +406,8 @@ def validate_capsule(raw: bytes) -> dict[str, Any]:
     request = (
         _validate_hygiene_request(capsule.get("request"))
         if mode == HYGIENE_MODE
+        else _validate_exact_ticks_request(capsule.get("request"))
+        if mode == EXACT_TICKS_MODE
         else _validate_request(capsule.get("request"))
     )
     cleanup = _validate_cleanup(capsule.get("cleanup"), mode=mode)
@@ -426,7 +460,7 @@ def materialize(
         "request_path": str(request_path),
         "return_recipient_path": str(return_recipient_path),
         "encrypted_return_requested": True,
-        "read_only_api": "no",
+        "read_only_api": "yes" if str(capsule["mode"]) == EXACT_TICKS_MODE else "no",
         "cleanup": dict(capsule["cleanup"]),
         "paper_only": True,
         "live_trading_change": False,
