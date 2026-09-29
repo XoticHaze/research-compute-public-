@@ -1,11 +1,15 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "07104e3d6f60736eeb5159b8b25086a2b9d406d2",
+  "source_ref": "54851bf48d64c20e29c973ebc40a8282b205367b",
   "test_modules": [
-    "tests.test_autotuner_promotion_review_backend_product"
+    "tests.test_promotion_review_store",
+    "tests.test_autotuner_promotion_review_backend_product",
+    "tests.test_operator_snapshot_api",
+    "tests.test_promotion_review_stale_status",
+    "tests.test_research_ui_backend_restore"
   ],
-  "requested_by": "assistant-pr793-exact-acceptance-r2",
-  "purpose": "Exact-private Pilot persistence to Promotion Review identity continuity after TestClient decoupling",
+  "requested_by": "assistant-pr796-pilot-promotion-correction",
+  "purpose": "Exact-private Pilot Research-to-Arena and durable Promotion Review identity acceptance for PR796",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -13,8 +17,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr793-pilot-promotion-review-20260928-r2",
+  "request_nonce": "pr796-pilot-promotion-stage-readback-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "07104e3d6f60736eeb5159b8b25086a2b9d406d2",
+  "current_private_reference": "54851bf48d64c20e29c973ebc40a8282b205367b",
   "parity_public_key_b64": ""
 }
