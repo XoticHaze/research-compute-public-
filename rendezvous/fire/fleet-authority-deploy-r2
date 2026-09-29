@@ -1,7 +1,7 @@
 {
   "schema": "fleet_authority.deploy.r2",
-  "requested_at": "2026-09-27T15:24:00-05:00",
-  "purpose": "prove GitHub Actions deploy route before Workers Builds retirement",
-  "credential_route": "scoped_r2_if_present_else_legacy_fallback",
-  "attempt": 2
+  "requested_at": "2026-09-29T00:37:00-05:00",
+  "purpose": "prove scoped R2 Cloudflare deploy credential",
+  "credential_route": "CLOUDFLARE_DEPLOY_TOKEN_R2",
+  "attempt": 3
 }
