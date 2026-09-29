@@ -26,9 +26,9 @@
   "decision_use": "Prospective portfolio-level falsifier: determine whether the replicated developed-ex-US currency hedge improves the actual frozen allocator target beyond both unchanged cash and an equal unhedged developed-ex-US overlay.",
   "entry_date": "2026-09-14",
   "forward_sessions": 11,
-  "generated_at": "2026-09-29T03:44:05.897792+00:00",
+  "generated_at": "2026-09-29T20:51:28.158918+00:00",
   "latest_common_market_date": "2026-09-28",
-  "market_data_asof": "2026-09-29",
+  "market_data_asof": "2026-09-28",
   "positions": {
     "hedged_challenger": {
       "AVDV": 0.1,
