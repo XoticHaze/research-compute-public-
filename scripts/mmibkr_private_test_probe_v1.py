@@ -53,6 +53,8 @@ SAFE_EXACT = {
     "tests.test_selected_runtime_account_sizing_submit_hook_14th31lg",
     "tests.test_selected_runtime_margin_guard_14th31lg",
     "tests.test_selected_runtime_margin_whatif_hook_14th31lg",
+    "tests.test_selected_runtime_forward_historical_tick_producer_v1",
+    "tests.test_selected_runtime_forward_exact_extrema_v1",
     "tests.test_research_survivor_funnel",
     "tests.test_acquire_hfdl_bounded_equity_panel",
 }
