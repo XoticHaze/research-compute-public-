@@ -21,8 +21,6 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import x25519
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from ib_insync import IB
-
 MODE = "forward_exact_ticks"
 RECEIPT_SCHEMA = "mmibkr.remote_forward_exact_tick_evidence_receipt.v1"
 EVIDENCE_SCHEMA = "mmibkr.selected_runtime_forward_historical_tick_evidence.v1"
@@ -170,6 +168,10 @@ def collect_evidence(
 ) -> dict[str, Any]:
     validate_runtime(runtime, request)
     producer = load_private_producer(runtime["source_root"])
+    # Broker dependency belongs to the B1 execution path, not source-level
+    # contract inspection/import.
+    from ib_insync import IB
+
     ib = IB()
     try:
         ib.connect(str(host), int(port), clientId=int(client_id), timeout=10, readonly=True)

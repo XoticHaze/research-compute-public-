@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import ast
 import base64
 import hashlib
 import json
@@ -51,6 +52,23 @@ class FakeProducer:
 
 
 class ForwardExactTicksTests(unittest.TestCase):
+    def test_ib_insync_is_runtime_lazy_import_only(self):
+        tree = ast.parse(Path(mod.__file__).read_text(encoding="utf-8"))
+        offenders = [
+            ast.unparse(node)
+            for node in tree.body
+            if (
+                isinstance(node, ast.Import)
+                and any(alias.name == "ib_insync" or alias.name.startswith("ib_insync.") for alias in node.names)
+            )
+            or (
+                isinstance(node, ast.ImportFrom)
+                and bool(node.module)
+                and (node.module == "ib_insync" or node.module.startswith("ib_insync."))
+            )
+        ]
+        self.assertEqual(offenders, [])
+
     def plan(self):
         return {
             "schema": "mmibkr.selected_runtime_forward_exact_extrema_tick_request_plan.v1",
