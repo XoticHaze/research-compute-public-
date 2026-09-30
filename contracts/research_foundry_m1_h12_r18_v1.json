@@ -4,9 +4,9 @@
   "authority": "research_only",
   "source": {
     "repository": "XoticHaze/research-foundry",
-    "head": "b9820750ae24c208d3f75ec14a120b547e252872",
-    "scientific_commit": "75237f1fad47d1f0d69d9da4f99f4b399b28714c",
-    "git_tree": "bfc05b01c2b23d8c2f0da7ff99d35f0fcaf9c830"
+    "head": "90d8588bc0dfc0da2b502b6f61041c3debd78f10",
+    "scientific_commit": "90d8588bc0dfc0da2b502b6f61041c3debd78f10",
+    "git_tree": "e9ab8e04d94ec91365175d2869604af4543940a4"
   },
   "anchor": {
     "artifact_id": 9784705106,
