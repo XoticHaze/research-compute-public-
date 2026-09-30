@@ -11,6 +11,7 @@ on:
       - 'tests/test_opaque_bidirectional_capsule_p256_aesgcm_v1.py'
       - 'docs/opaque-compute-profile-v1.md'
       - '.github/workflows/opaque-capsule-protocol-ci.yml'
+      - 'proof/fire/opaque/**'
   pull_request:
     paths:
       - 'scripts/opaque_bidirectional_capsule_v1.py'
