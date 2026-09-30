@@ -1,0 +1,44 @@
+{
+  "schema": "research-compute.fixed-harness-contract.v1",
+  "harness": "research_foundry_m1_h12_r18_v1",
+  "authority": "research_only",
+  "source": {
+    "repository": "XoticHaze/research-foundry",
+    "head": "90d8588bc0dfc0da2b502b6f61041c3debd78f10",
+    "scientific_commit": "90d8588bc0dfc0da2b502b6f61041c3debd78f10",
+    "git_tree": "e9ab8e04d94ec91365175d2869604af4543940a4"
+  },
+  "anchor": {
+    "artifact_id": 9784705106,
+    "sha256": "07b0a02cbd32d5e3e0f015f17a2781f1be034333dbbabba751803de40bfdb775",
+    "expires_at": "2026-10-01T03:14:41Z"
+  },
+  "frozen_folds": {
+    "sha256": "b81c89ce34d4533036617f98edad112cf6522ca154331a8adf2c072a5ac20498",
+    "oos_rows": 84841,
+    "embargo_rows": 12,
+    "tail_purge_rows": 0
+  },
+  "scientific_files_sha256": {
+    ".github/workflows/m1-h12-frozen-robustness-r18.yml": "4f89bc91a3d0b1738b523100b386180549b4e85e5054361ded466e04e70e2112",
+    "m1_h12_frozen_folds_run33358415504.json": "b81c89ce34d4533036617f98edad112cf6522ca154331a8adf2c072a5ac20498",
+    "m1_h12_runner_oos_probability_r18.patch": "183a692f3c61fa855dbfba3a6aa26a0453037e44cf515c34378a97ac3a4cc02b",
+    "src/foundry_mm_ml/robustness.py": "4193ef8a5a6725dc25ce9d05290232a3159b626e021b8688c652b8e62113fb53",
+    "src/foundry_mm_ml/robustness_cli_r18.py": "a92e841ddab4b859c2ef42d2d572c242c80eab7c444d26b503bbbd847b2220f7",
+    "tests/test_robustness_r18.py": "3fa193690a2951ecfbf0d93548bef4912aadaa35215a8d0312353518f3e27ca6"
+  },
+  "execution": {
+    "selection": "NONE__REPORT_ALL",
+    "families": ["xgboost","logistic_regression","hist_gradient_boosting","extra_trees"],
+    "feature_ablations": ["price_path","volume_liquidity","volatility","momentum_trend","calendar"],
+    "protected_holdout_read": false,
+    "arbitrary_command": false,
+    "broker_authority": false,
+    "live_trading_authority": false,
+    "promotion_authority": false
+  },
+  "result": {
+    "sanitized_only": true,
+    "required": ["result_sha256","source_head","source_tree","frozen_fold_sha256","oos_rows","families"]
+  }
+}
