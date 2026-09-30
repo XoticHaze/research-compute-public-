@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'proof/fire/**'
+      - 'proof/fire/reference/**'
   workflow_dispatch:
 
 permissions:
