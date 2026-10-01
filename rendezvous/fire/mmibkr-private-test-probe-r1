@@ -1,13 +1,11 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "102814a30b4b5f291ef922e7df36df7e20bfdf84",
+  "source_ref": "0caede612f928e35dec9a2a0e7580d3d9671d063",
   "test_modules": [
-    "tests.test_cloud_operator_snapshot_v1",
-    "tests.test_selected_runtime_strategy_inventory_v1"
+    "tests.test_ibkr_remote_account_hygiene_slot_v1"
   ],
-  "ui_acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
-  "requested_by": "product-pr798-current-main-acceptance",
-  "purpose": "Exact-private acceptance for PR798 current-main runtime-owned position observability, broker completeness truth, canonical execution-contract PnL, DCA tri-state, and Bot Console build",
+  "requested_by": "product-pr804-current-main-acceptance",
+  "purpose": "Exact-private acceptance for PR804 terminal-child fail-fast plus canonical broker-position completeness authority after PR798",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -15,8 +13,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr798-current-main-backend-ui-acceptance-r1",
+  "request_nonce": "pr804-current-main-hygiene-acceptance-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "102814a30b4b5f291ef922e7df36df7e20bfdf84",
+  "current_private_reference": "0caede612f928e35dec9a2a0e7580d3d9671d063",
   "parity_public_key_b64": ""
 }
