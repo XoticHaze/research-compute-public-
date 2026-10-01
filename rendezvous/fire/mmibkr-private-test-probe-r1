@@ -1,11 +1,12 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "bb4bdac9c115eccdf2812121017410bc6d3ca7cc",
+  "source_ref": "8b34234b811c4a215692084fd656769983873b27",
   "test_modules": [
-    "tests.test_ibkr_remote_forward_exact_ticks_slot_v1"
+    "tests.test_admit_exact_pilot_to_promotion_review_13z",
+    "tests.test_promotion_review_store"
   ],
-  "requested_by": "assistant-pr803-forward-exact-ticks",
-  "purpose": "Validate exact private dispatcher for governed B1 historical tick evidence transport",
+  "requested_by": "coordinator-pr805-current-main-acceptance",
+  "purpose": "Exact-private acceptance for PR805 current-main semantic transplant; same two-module gate as predecessor, no acceptance transfer",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -13,8 +14,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr803-forward-exact-ticks-r1",
+  "request_nonce": "pr805-current-main-two-module-acceptance-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "bb4bdac9c115eccdf2812121017410bc6d3ca7cc",
+  "current_private_reference": "8b34234b811c4a215692084fd656769983873b27",
   "parity_public_key_b64": ""
 }
