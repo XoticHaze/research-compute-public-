@@ -461,6 +461,13 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("stored.sha256 !== desc.sha256", text)
         self.assertIn("Number(stored.chars) !== Number(desc.chars)", text)
 
+    def test_source_exchange_batches_multi_key_deletes_within_cloudflare_limit(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("const STORAGE_DELETE_BATCH_LIMIT = 128;", text)
+        self.assertIn("keys.slice(start, start + STORAGE_DELETE_BATCH_LIMIT)", text)
+        self.assertGreaterEqual(text.count("await this._deleteKeys(keys);"), 2)
+        self.assertNotIn("await this.ctx.storage.delete(keys);", text)
+
     def test_paper_account_hygiene_coordinator_is_exact_source_scoped_and_bounded(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("PAPER_ACCOUNT_HYGIENE_COORDINATOR_IDENTITY", text)
