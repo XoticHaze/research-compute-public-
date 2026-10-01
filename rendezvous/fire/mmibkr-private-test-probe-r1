@@ -1,11 +1,11 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "3540e2491f5775c4b281f1e5906ba085ff3a3aaf",
+  "source_ref": "4785dfa60988d50fb6dc3c5ee5679df27d7c0d61",
   "test_modules": [
     "tests.test_ibkr_remote_account_hygiene_slot_v1"
   ],
-  "requested_by": "product-pr804-current-main-acceptance-r3",
-  "purpose": "Exact-private acceptance for PR804 terminal-child fail-fast and canonical broker-position completeness authority with deterministic polling test",
+  "requested_by": "product-pr804-current-main-acceptance-r4",
+  "purpose": "Exact-private acceptance for PR804 canonical broker-position completeness and terminal-child fail-fast after fixing missing HTTPError fixture import",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -13,8 +13,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr804-current-main-hygiene-acceptance-r3",
+  "request_nonce": "pr804-current-main-hygiene-acceptance-r4",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "3540e2491f5775c4b281f1e5906ba085ff3a3aaf",
+  "current_private_reference": "4785dfa60988d50fb6dc3c5ee5679df27d7c0d61",
   "parity_public_key_b64": ""
 }
