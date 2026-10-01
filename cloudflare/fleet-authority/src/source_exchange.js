@@ -210,6 +210,7 @@ const REQUEST_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_CHUNKS = 2048;
 const MAX_CHUNK_CHARS = 100000;
 const MAX_MANIFEST_BYTES = 131072;
+const STORAGE_DELETE_BATCH_LIMIT = 128;
 const ALLOWED_PUBLIC_EVENTS = new Set(['push', 'workflow_dispatch']);
 const ALLOWED_PRIVATE_EVENTS = new Set(['push', 'workflow_dispatch', 'schedule']);
 
@@ -754,12 +755,18 @@ export class SourceExchange {
     this.env = env;
   }
 
+  async _deleteKeys(keys) {
+    for (let start = 0; start < keys.length; start += STORAGE_DELETE_BATCH_LIMIT) {
+      await this.ctx.storage.delete(keys.slice(start, start + STORAGE_DELETE_BATCH_LIMIT));
+    }
+  }
+
   async _deleteRun(runId) {
     const manifest = await this.ctx.storage.get(`resp:${runId}`);
     const chunkCount = Number(manifest?.chunk_count || 0);
     const keys = [`req:${runId}`, `resp:${runId}`];
     for (let i = 0; i < chunkCount; i += 1) keys.push(`chunk:${runId}:${i}`);
-    await this.ctx.storage.delete(keys);
+    await this._deleteKeys(keys);
   }
 
   async _cleanupExpired() {
@@ -1604,7 +1611,7 @@ export class SourceExchange {
       const chunkCount = Number(manifest?.chunk_count || 0);
       const keys = [`relayreq:${targetRunId}`, `relayresp:${targetRunId}`];
       for (let i = 0; i < chunkCount; i += 1) keys.push(`relaychunk:${targetRunId}:${i}`);
-      await this.ctx.storage.delete(keys);
+      await this._deleteKeys(keys);
       return json({ ok: true, status: 'deleted', target_run_id: targetRunId });
     }
 
