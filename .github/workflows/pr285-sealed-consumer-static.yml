@@ -39,7 +39,7 @@ jobs:
           assert 'command' in m.FORBIDDEN and 'plaintext' in m.FORBIDDEN
           src=inspect.getsource(m.run_pr285)
           assert '"result": r' not in src and "'result': r" not in src
-          quiet=inspect.getsource(m._run_quiet)
+          quiet=inspect.getsource(m.quiet)
           assert 'stdout=subprocess.PIPE' in quiet and 'stderr=subprocess.PIPE' in quiet
           obj={'schema_version':'sealed-job-v1','job_id':'proof','mode':'sealed','authority':'research_only','harness':'research_foundry_pr285_stage1_v1','ciphertext':{'path':'payload.age','sha256':sha},'encryption':{'algorithm':'age-x25519','recipient_key_id':'sha256:'+'1'*64}}
           Path('sealed-job.json').write_text(json.dumps(obj))
