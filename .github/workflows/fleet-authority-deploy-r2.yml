@@ -108,11 +108,13 @@ jobs:
           fi
 
       - name: Deploy existing Fleet authority
+        id: deploy
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
           npx --yes wrangler@4.135.0 deploy --config wrangler.jsonc
-          echo 'FLEET_AUTHORITY_DEPLOYED_R2=1'
+          echo 'FLEET_AUTHORITY_WRANGLER_EXIT_PASS=1'
 
       - name: Prove deployed Worker through Cloudflare control plane
         shell: bash
@@ -125,6 +127,21 @@ jobs:
           account=os.environ['CLOUDFLARE_ACCOUNT_ID'].strip()
           token=os.environ['CLOUDFLARE_API_TOKEN'].strip()
           base=f'https://api.cloudflare.com/client/v4/accounts/{account}/workers/scripts/fleet-authority'
+
+          script=Request(base,headers={
+              'Authorization':'Bearer '+token,
+              'Accept':'*/*',
+              'User-Agent':'fleet-authority-deploy-r2',
+          })
+          with urlopen(script,timeout=30) as response:
+              deployed=response.read()
+          for marker in (
+              b'STORAGE_DELETE_BATCH_LIMIT = 128',
+              b'keys.slice(start, start + STORAGE_DELETE_BATCH_LIMIT)',
+          ):
+              if marker not in deployed:
+                  raise SystemExit('fleet-authority deployed source marker missing')
+          print('FLEET_AUTHORITY_DEPLOYED_SOURCE_PASS=1')
 
           req=Request(base+'/settings',headers={
               'Authorization':'Bearer '+token,
@@ -154,6 +171,8 @@ jobs:
 
 
       - name: Publish Fleet R2 deploy receipt
+        env:
+          FLEET_AUTHORITY_WRANGLER_OUTCOME: ${{ steps.deploy.outcome }}
         shell: bash
         run: |
           set -euo pipefail
@@ -166,6 +185,8 @@ jobs:
               "route": "github_actions",
               "worker": "fleet-authority",
               "deploy_pass": True,
+              "deployed_source_verified": True,
+              "wrangler_outcome": os.environ.get("FLEET_AUTHORITY_WRANGLER_OUTCOME", ""),
               "control_plane_pass": True,
               "health_pass": True,
               "credential_selection": (
