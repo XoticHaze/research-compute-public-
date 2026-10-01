@@ -42,13 +42,19 @@ def test_allowlist_rejects_authority_or_unknown_modules(module):
         validated_modules(module)
 
 
-def test_allowlist_accepts_only_exact_selected_runtime_strategyspec_integrity_module():
+def test_allowlist_accepts_exact_pr798_read_only_position_projection_modules():
     assert validated_modules(
-        "tests.test_selected_runtime_strategy_spec_integrity_v1"
-    ) == ["tests.test_selected_runtime_strategy_spec_integrity_v1"]
+        "tests.test_selected_runtime_strategy_spec_integrity_v1 "
+        "tests.test_selected_runtime_strategy_inventory_v1 "
+        "tests.test_cloud_operator_snapshot_v1"
+    ) == [
+        "tests.test_selected_runtime_strategy_spec_integrity_v1",
+        "tests.test_selected_runtime_strategy_inventory_v1",
+        "tests.test_cloud_operator_snapshot_v1",
+    ]
 
     with pytest.raises(ValueError, match="test_module_authority_rejected"):
-        validated_modules("tests.test_selected_runtime_strategy_inventory_v1")
+        validated_modules("tests.test_selected_runtime_submit_authority")
 
 
 
