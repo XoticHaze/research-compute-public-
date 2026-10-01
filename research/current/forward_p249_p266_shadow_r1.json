@@ -19,7 +19,7 @@
     "p249_core": "fixed equal-third small-value/P64/P36 primitive stack",
     "p266_satellite": "fixed 12-1 top-3 industry momentum"
   },
-  "current_holding_month": "2026-09",
+  "current_holding_month": "2026-10",
   "current_state": {
     "p249_core": {
       "AVDV": 0.16666666666666666,
@@ -38,12 +38,12 @@
       "QQQ": 0.0625,
       "SOXX": 0.2916666666666667,
       "XBI": 0.125,
-      "XPH": 0.08333333333333333,
+      "XOP": 0.08333333333333333,
       "XSD": 0.08333333333333333
     },
     "p266": {
       "XBI": 0.3333333333333333,
-      "XPH": 0.3333333333333333,
+      "XOP": 0.3333333333333333,
       "XSD": 0.3333333333333333
     },
     "p36": {
@@ -227,13 +227,13 @@
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-09-30T08:46:59.464593+00:00",
+  "observed_at": "2026-10-01T01:25:06.318130+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_health": {
     "all_symbols_share_latest_date": true,
     "common_session_lags_source_max": false,
-    "completed_session_request_date": "2026-09-29",
+    "completed_session_request_date": "2026-09-30",
     "in_progress_session_excluded": true,
     "lagging_symbols_vs_source_max": [],
     "latest_by_symbol": {
