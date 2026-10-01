@@ -1,6 +1,10 @@
 name: M1 H12 Sealed Private Research Consumer R19
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'rendezvous/fire/m1-h12-sealed-private-r19'
 permissions:
   contents: write
 env:
