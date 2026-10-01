@@ -1,6 +1,11 @@
 import csv
 
-from p01_crw_dca_adapter_consumer_v1 import _arm, _metrics
+from p01_crw_dca_adapter_consumer_v1 import (
+    CORRECTED_TWO_ADD_LADDER,
+    HISTORICAL_TV_DCA_LADDER,
+    _arm,
+    _metrics,
+)
 
 
 def test_arm_changes_only_consumed_dca_mode_and_sets_absolute_cost():
@@ -75,3 +80,52 @@ def test_metrics_use_simulated_next_bar_open_and_frozen_folds(tmp_path):
         {"fold": "2023-2024", "trades": 1, "net_pnl": 30.0},
         {"fold": "2025-development-cutoff", "trades": 1, "net_pnl": 40.0},
     ]
+
+
+def test_control_arm_preserves_seed_dca_settings():
+    seed = {
+        "params": {
+            "ENABLE_DCA": True,
+            "DCA_TRIGGER_MODE": "tiered_previous_buy",
+            "DCA_TIER_DRAWDOWNS_PCT": [1.0, 2.0],
+            "DCA_BASE_QTY": 1,
+            "DCA_MAX_ADDS": 2,
+            "DCA_MAX_CONTRACTS": 3,
+            "ENTRY_EXTREME": -2.52,
+        }
+    }
+    control = _arm(seed, slippage_bps=2.5)
+    assert control["params"]["DCA_TRIGGER_MODE"] == "tiered_previous_buy"
+    assert control["params"]["DCA_TIER_DRAWDOWNS_PCT"] == [1.0, 2.0]
+    assert seed["params"]["DCA_TIER_DRAWDOWNS_PCT"] == [1.0, 2.0]
+
+
+def test_historical_and_corrected_6x8_arms_are_explicit_and_non_mutating():
+    seed = {
+        "params": {
+            "ENABLE_DCA": True,
+            "DCA_TRIGGER_MODE": "tiered_previous_buy",
+            "DCA_TIER_DRAWDOWNS_PCT": [1.0, 2.0],
+            "DCA_BASE_QTY": 1,
+            "DCA_MAX_ADDS": 2,
+            "DCA_MAX_CONTRACTS": 3,
+            "ENTRY_EXTREME": -2.52,
+        }
+    }
+    legacy = _arm(
+        seed,
+        slippage_bps=2.5,
+        trigger_mode="legacy_pine_v0_2",
+        tier_drawdowns_pct=HISTORICAL_TV_DCA_LADDER,
+    )
+    corrected = _arm(
+        seed,
+        slippage_bps=2.5,
+        trigger_mode="tiered_previous_buy",
+        tier_drawdowns_pct=CORRECTED_TWO_ADD_LADDER,
+    )
+    assert legacy["params"]["DCA_TRIGGER_MODE"] == "legacy_pine_v0_2"
+    assert legacy["params"]["DCA_TIER_DRAWDOWNS_PCT"] == [6.0, 6.0, 8.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+    assert corrected["params"]["DCA_TRIGGER_MODE"] == "tiered_previous_buy"
+    assert corrected["params"]["DCA_TIER_DRAWDOWNS_PCT"] == [6.0, 8.0]
+    assert seed["params"]["DCA_TIER_DRAWDOWNS_PCT"] == [1.0, 2.0]
