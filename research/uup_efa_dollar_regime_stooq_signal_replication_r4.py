@@ -1,15 +1,19 @@
 """Independent-vendor UUP signal replication of the frozen UUP->SPY/EFA regime.
 
 Frozen mechanism: prior completed calendar-month UUP return >= +2% => SPY next
-month, otherwise EFA. UUP signal history is sourced from Stooq CSV directly.
-SPY/EFA outcome returns remain Yahoo adjusted-close so the only changed axis is
-UUP signal-vendor provenance. No parameter/date/control rescue is permitted.
+month, otherwise EFA. UUP signal history is sourced from Stooq. SPY/EFA outcome
+returns remain Yahoo adjusted-close so the only changed axis is UUP signal-vendor
+provenance. No parameter/date/control rescue is permitted.
 """
 from __future__ import annotations
 
 import datetime as dt
 import io
 import json
+from pathlib import Path
+import tempfile
+import zipfile
+
 import pandas as pd
 import requests
 
@@ -17,7 +21,36 @@ END = "2026-10-01"
 COST = 0.001
 
 
-def stooq_uup() -> pd.Series:
+def _normalize_stooq_frame(frame: pd.DataFrame) -> pd.Series:
+    columns = {str(col).strip().strip("<>").upper(): col for col in frame.columns}
+    date_col = columns.get("DATE")
+    close_col = columns.get("CLOSE")
+    if date_col is None or close_col is None:
+        raise RuntimeError("stooq_uup_schema_rejected")
+    raw_date = frame[date_col]
+    if pd.api.types.is_numeric_dtype(raw_date):
+        idx = pd.to_datetime(raw_date.astype("Int64").astype(str), format="%Y%m%d", errors="coerce")
+    else:
+        as_text = raw_date.astype(str).str.strip()
+        compact = as_text.str.fullmatch(r"\d{8}").fillna(False)
+        idx = pd.to_datetime(as_text.where(~compact, as_text), errors="coerce")
+        if bool(compact.any()):
+            parsed_compact = pd.to_datetime(as_text[compact], format="%Y%m%d", errors="coerce")
+            idx.loc[compact] = parsed_compact
+    close = pd.to_numeric(frame[close_col], errors="coerce")
+    series = pd.Series(close.to_numpy(), index=idx, dtype="float64").dropna().sort_index()
+    series = series[~series.index.duplicated(keep="last")].rename("UUP_STOOQ")
+    if (
+        series.empty
+        or series.index.min() > pd.Timestamp("2012-01-03")
+        or series.index.max() < pd.Timestamp("2026-08-01")
+        or len(series) < 3000
+    ):
+        raise RuntimeError("stooq_uup_coverage_insufficient")
+    return series
+
+
+def _stooq_direct() -> pd.Series:
     response = requests.get(
         "https://stooq.com/q/d/l/",
         params={"s": "uup.us", "d1": "20110101", "d2": "20261001", "i": "d"},
@@ -27,17 +60,57 @@ def stooq_uup() -> pd.Series:
     response.raise_for_status()
     body = response.text.strip()
     if not body or body == "N/D" or "Date,Open,High,Low,Close" not in body:
-        raise RuntimeError("stooq_uup_csv_unavailable_or_key_required")
-    frame = pd.read_csv(io.StringIO(body))
-    if not {"Date", "Close"}.issubset(frame.columns):
-        raise RuntimeError("stooq_uup_csv_schema_rejected")
-    idx = pd.to_datetime(frame["Date"], errors="coerce")
-    close = pd.to_numeric(frame["Close"], errors="coerce")
-    series = pd.Series(close.to_numpy(), index=idx, dtype="float64").dropna().sort_index()
-    series = series[~series.index.duplicated(keep="last")].rename("UUP_STOOQ")
-    if series.empty or series.index.min() > pd.Timestamp("2012-01-03") or series.index.max() < pd.Timestamp("2026-08-01"):
-        raise RuntimeError("stooq_uup_coverage_insufficient")
-    return series
+        raise RuntimeError("stooq_direct_csv_unavailable_or_key_required")
+    return _normalize_stooq_frame(pd.read_csv(io.StringIO(body)))
+
+
+def _stooq_bulk() -> pd.Series:
+    url = "https://static.stooq.com/db/h/d_us_txt.zip"
+    with tempfile.TemporaryDirectory(prefix="uup-stooq-") as td:
+        archive = Path(td) / "d_us_txt.zip"
+        with requests.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 alpha-research/1.0"},
+            stream=True,
+            timeout=120,
+        ) as response:
+            response.raise_for_status()
+            total = 0
+            with archive.open("wb") as handle:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if not chunk:
+                        continue
+                    total += len(chunk)
+                    if total > 900_000_000:
+                        raise RuntimeError("stooq_bulk_archive_too_large")
+                    handle.write(chunk)
+        if archive.stat().st_size < 1_000_000:
+            raise RuntimeError("stooq_bulk_archive_too_small")
+        with zipfile.ZipFile(archive) as zf:
+            matches = [
+                name
+                for name in zf.namelist()
+                if Path(name).name.lower() == "uup.us.txt"
+            ]
+            if len(matches) != 1:
+                raise RuntimeError(f"stooq_bulk_uup_member_count:{len(matches)}")
+            raw = zf.read(matches[0]).decode("utf-8", errors="replace")
+        frame = pd.read_csv(io.StringIO(raw), sep=None, engine="python")
+        return _normalize_stooq_frame(frame)
+
+
+def stooq_uup() -> tuple[pd.Series, str]:
+    try:
+        return _stooq_direct(), "stooq_direct_csv"
+    except Exception as direct_exc:
+        try:
+            return _stooq_bulk(), "stooq_bulk_us_daily_zip"
+        except Exception as bulk_exc:
+            raise RuntimeError(
+                "stooq_uup_all_routes_failed:"
+                f"direct={type(direct_exc).__name__}:{direct_exc};"
+                f"bulk={type(bulk_exc).__name__}:{bulk_exc}"
+            ) from bulk_exc
 
 
 def yahoo_adjusted(ticker: str) -> pd.Series:
@@ -45,7 +118,13 @@ def yahoo_adjusted(ticker: str) -> pd.Series:
     p2 = int(dt.datetime(2026, 10, 2, tzinfo=dt.timezone.utc).timestamp())
     response = requests.get(
         f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}",
-        params={"period1": p1, "period2": p2, "interval": "1d", "events": "history", "includeAdjustedClose": "true"},
+        params={
+            "period1": p1,
+            "period2": p2,
+            "interval": "1d",
+            "events": "history",
+            "includeAdjustedClose": "true",
+        },
         headers={"User-Agent": "Mozilla/5.0 alpha-research/1.0"},
         timeout=30,
     )
@@ -71,7 +150,7 @@ def stats(ret: pd.Series) -> dict[str, float | int]:
 
 
 def main() -> None:
-    uup = stooq_uup()
+    uup, stooq_route = stooq_uup()
     spy = yahoo_adjusted("SPY")
     efa = yahoo_adjusted("EFA")
 
@@ -116,12 +195,14 @@ def main() -> None:
     support = (
         all(float(v["excess_cagr_pp"]) > 0.0 for v in windows.values())
         and positive >= 3
-        and float(long["candidate"]["max_drawdown"]) >= float(long["matched"]["max_drawdown"]) - 0.05
+        and float(long["candidate"]["max_drawdown"])
+        >= float(long["matched"]["max_drawdown"]) - 0.05
     )
     output = {
-        "schema": "research.uup_efa_dollar_regime_stooq_signal_replication_r4.v1",
+        "schema": "research.uup_efa_dollar_regime_stooq_signal_replication_r4.v2",
         "frozen_mechanism": "prior completed calendar-month UUP return >= +2% => SPY next month; otherwise EFA",
-        "signal_vendor": "Stooq direct CSV UUP.US",
+        "signal_vendor": "Stooq UUP.US",
+        "signal_transport": stooq_route,
         "outcome_vendor": "Yahoo chart adjusted-close SPY/EFA (held fixed from prior replication)",
         "independence_scope": "UUP signal vendor only; outcome/benchmark return source deliberately held fixed",
         "cost_one_way": COST,
@@ -134,7 +215,11 @@ def main() -> None:
         "windows": windows,
         "blocks": blocks,
         "positive_blocks": positive,
-        "decision": "UUP_EFA_DOLLAR_REGIME_INDEPENDENT_SIGNAL_VENDOR_SUPPORTED" if support else "UUP_EFA_DOLLAR_REGIME_INDEPENDENT_SIGNAL_VENDOR_REJECTED",
+        "decision": (
+            "UUP_EFA_DOLLAR_REGIME_INDEPENDENT_SIGNAL_VENDOR_SUPPORTED"
+            if support
+            else "UUP_EFA_DOLLAR_REGIME_INDEPENDENT_SIGNAL_VENDOR_REJECTED"
+        ),
         "protected_boundary": "no UUP threshold/proxy/regional ETF/horizon/cost/date/control/block rescue",
         "scientific_consequence": "If supported, vendor dependence of the UUP signal is materially reduced; if rejected, release this confirmation path without retuning.",
     }
