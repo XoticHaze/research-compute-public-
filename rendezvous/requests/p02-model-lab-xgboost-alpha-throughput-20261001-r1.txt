@@ -1,0 +1,6 @@
+schema=p02-model-lab-xgboost-alpha-throughput-r1
+requested_at_utc=2026-10-02T04:36:00Z
+objective=Execute one real canonical Model Lab XGBoost challenger through the existing encrypted rendezvous and return attributable OOS/economic evidence.
+preserve=canonical training matrix; comparison matrix; model-family matrix; Model Lab validation/orchestrator; Arena/Pilot; survivor funnel; Promotion Review
+not_authority=No StrategySpec write; no runtime activation; no broker submit; no live trading.
+post_result=Consume the returned result immediately. If economic evidence is incomplete, identify the exact missing consumer and continue a different independent alpha axis rather than parking Research.
