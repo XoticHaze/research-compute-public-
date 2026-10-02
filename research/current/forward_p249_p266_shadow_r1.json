@@ -60,7 +60,7 @@
   "decision_at": "2026-09-10T07:25:00+00:00",
   "forward": {
     "first_close": "2026-09-10",
-    "latest_close": "2026-09-29",
+    "latest_close": "2026-10-01",
     "observations": [
       {
         "cost_detail": {
@@ -207,63 +207,89 @@
         "p249_plus_p266_gross": 0.0007088031022816519,
         "p249_plus_p266_net": 0.0007088031022816519,
         "satellite_increment_net": -0.0009326311110756799
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-09-30",
+        "holding_month": "2026-09",
+        "p249_core_gross": 0.0014503266645840745,
+        "p249_core_net": 0.0014503266645840745,
+        "p249_plus_p266_gross": 0.00011595225942244913,
+        "p249_plus_p266_net": 0.00011595225942244913,
+        "satellite_increment_net": -0.0013343744051616253
+      },
+      {
+        "cost_detail": {
+          "p249_core_cost_bp": 0.0,
+          "p249_plus_p266_cost_bp": 4.166666666666666,
+          "p266_one_way_turnover": 0.3333333333333333,
+          "p36_one_way_turnover": 0.0,
+          "p64_one_way_turnover": 0.0
+        },
+        "date": "2026-10-01",
+        "holding_month": "2026-10",
+        "p249_core_gross": 0.006289462096018963,
+        "p249_core_net": 0.006289462096018963,
+        "p249_plus_p266_gross": 0.006353576669289656,
+        "p249_plus_p266_net": 0.00593691000262299,
+        "satellite_increment_net": -0.00035255209339597315
       }
     ],
     "p249_core_net": {
-      "annualized_vol": 0.2034510092681694,
-      "cumulative_return": 0.013043093425183061,
-      "days": 14,
+      "annualized_vol": 0.19055654175895403,
+      "cumulative_return": 0.020893073724423727,
+      "days": 16,
       "max_drawdown": -0.022078059615729062,
-      "sharpe_rf0": 1.2415224706187418
+      "sharpe_rf0": 1.7995553683494419
     },
     "p249_plus_p266_net": {
-      "annualized_vol": 0.2078588357748053,
-      "cumulative_return": 0.009261436096742903,
-      "days": 14,
+      "annualized_vol": 0.19463591247448706,
+      "cumulative_return": 0.015371051329514884,
+      "days": 16,
       "max_drawdown": -0.022644004463825196,
-      "sharpe_rf0": 0.8950674971933122
+      "sharpe_rf0": 1.3261905486183725
     },
-    "satellite_increment_cumulative": -0.003719517538985584
+    "satellite_increment_cumulative": -0.005399700798151663
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-10-01T01:25:06.318130+00:00",
+  "observed_at": "2026-10-02T01:45:45.566931+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_health": {
     "all_symbols_share_latest_date": true,
     "common_session_lags_source_max": false,
-    "completed_session_request_date": "2026-09-30",
+    "completed_session_request_date": "2026-10-01",
     "in_progress_session_excluded": true,
     "lagging_symbols_vs_source_max": [],
     "latest_by_symbol": {
-      "AVDV": "2026-09-29",
-      "AVUV": "2026-09-29",
-      "DBC": "2026-09-29",
-      "GLD": "2026-09-29",
-      "IGV": "2026-09-29",
-      "IHI": "2026-09-29",
-      "ITA": "2026-09-29",
-      "IYT": "2026-09-29",
-      "KRE": "2026-09-29",
-      "QQQ": "2026-09-29",
-      "SOXX": "2026-09-29",
-      "SPY": "2026-09-29",
-      "TLT": "2026-09-29",
-      "XAR": "2026-09-29",
-      "XBI": "2026-09-29",
-      "XHB": "2026-09-29",
-      "XME": "2026-09-29",
-      "XOP": "2026-09-29",
-      "XPH": "2026-09-29",
-      "XRT": "2026-09-29",
-      "XSD": "2026-09-29",
-      "XSW": "2026-09-29",
-      "XTN": "2026-09-29"
+      "AVDV": "2026-10-01",
+      "AVUV": "2026-10-01",
+      "DBC": "2026-10-01",
+      "GLD": "2026-10-01",
+      "IGV": "2026-10-01",
+      "IHI": "2026-10-01",
+      "ITA": "2026-10-01",
+      "IYT": "2026-10-01",
+      "KRE": "2026-10-01",
+      "QQQ": "2026-10-01",
+      "SOXX": "2026-10-01",
+      "SPY": "2026-10-01",
+      "TLT": "2026-10-01",
+      "XAR": "2026-10-01",
+      "XBI": "2026-10-01",
+      "XHB": "2026-10-01",
+      "XME": "2026-10-01",
+      "XOP": "2026-10-01",
+      "XPH": "2026-10-01",
+      "XRT": "2026-10-01",
+      "XSD": "2026-10-01",
+      "XSW": "2026-10-01",
+      "XTN": "2026-10-01"
     },
-    "latest_scored_common_session": "2026-09-29",
+    "latest_scored_common_session": "2026-10-01",
     "provider": "yfinance_adjusted_close",
-    "source_max_date": "2026-09-29"
+    "source_max_date": "2026-10-01"
   },
   "source_pins": {
     "P248_source_commit": "20490f115d901aac3b586c33072c1157ad4d10a6",
