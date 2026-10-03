@@ -1,14 +1,15 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "bc983c1e64865c71fcb7fcdb66bae2424a9651d4",
+  "source_ref": "0358d469dffa26d5ff9132b54cd11219c18fe5ea",
   "test_modules": [
-    "tests.test_crw_consumer_observation_capture_20261003",
-    "tests.test_autotuner_behavioral_consumption_vnext"
+    "tests.test_s3_composition_matched_control_economics_20261003",
+    "tests.test_autotuner_composition_generator_vnext"
   ],
   "ui_acceptance_file": "",
-  "crw_consumer_reprobe": true,
+  "crw_consumer_reprobe": false,
+  "s3_composition_economics": true,
   "requested_by": "evolution-auditor",
-  "purpose": "Exact-private CRW24 consumer observation reprobe on bounded recent development slice after provider-retention correction",
+  "purpose": "Execute exact-private S3 36x3 matched-control after-cost composition matrix on bounded recent development data",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -16,8 +17,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "crw24-consumer-observation-alt-vault-20261003-r2",
+  "request_nonce": "s3-composition-economics-alt-vault-20261003-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "bc983c1e64865c71fcb7fcdb66bae2424a9651d4",
+  "current_private_reference": "0358d469dffa26d5ff9132b54cd11219c18fe5ea",
   "parity_public_key_b64": ""
 }
