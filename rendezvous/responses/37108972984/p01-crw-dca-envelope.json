@@ -1,0 +1,43 @@
+{
+  "authority": "research_only",
+  "chunks": [
+    {
+      "chars": 700000,
+      "path": "rendezvous/responses/37108972984/p01-crw-dca-cipher-000.txt",
+      "sha256": "577fed20aad1dc9c48c8582291d96e1dc5380f51a874833cda29764e36625038"
+    },
+    {
+      "chars": 700000,
+      "path": "rendezvous/responses/37108972984/p01-crw-dca-cipher-001.txt",
+      "sha256": "ec7bb73c237abc2649c9a7d9a109c42a75f3f08eddb5b53b11f8c73171900353"
+    },
+    {
+      "chars": 700000,
+      "path": "rendezvous/responses/37108972984/p01-crw-dca-cipher-002.txt",
+      "sha256": "a8042bb9bbae15c14515e9b1550e48eaa1e7c15fe66637fffbcf4851e5865c01"
+    },
+    {
+      "chars": 700000,
+      "path": "rendezvous/responses/37108972984/p01-crw-dca-cipher-003.txt",
+      "sha256": "15b2d66f4779d7f5b49c658546e40b806eb8d2c167ed1c975a926ff9d1ead145"
+    },
+    {
+      "chars": 700000,
+      "path": "rendezvous/responses/37108972984/p01-crw-dca-cipher-004.txt",
+      "sha256": "67eaeaf3199a165b772808d526e78bdb221fb27cb9e076a887b0176856c7daf9"
+    },
+    {
+      "chars": 522400,
+      "path": "rendezvous/responses/37108972984/p01-crw-dca-cipher-005.txt",
+      "sha256": "99ab21ca8cd7f7e5fc42d370a7c2c33ecb387fe507b404a7b9467980ac21e935"
+    }
+  ],
+  "ciphertext_sha256": "3377715c019ed65a9f137a0c3347fe0fd24bcf2c6a0e4c4149d6ae9832bbe71d",
+  "harness": "p01_crw_dca_adapter_v1",
+  "nonce_b64": "8pPnfXMlM78YsrZA",
+  "plaintext_sha256": "62d1b5c7bb2bd61144d6e778ec6d4e0d7f3328560228b19e9023c7d91a5209de",
+  "recipient_key_id": "sha256:8856e4c880d357df209c1004fb6a52b8fbd1d6d6b94b701845440ff8611bb08a",
+  "run_id": "37108972984",
+  "schema": "p01-crw-dca-ephemeral-x25519-v1",
+  "sender_public_b64": "Y4TnVtfPKq2qMqMKcAbj9jzCM6pcEo6ABJUNscitDyc="
+}
