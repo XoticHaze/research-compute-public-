@@ -41,7 +41,7 @@ env:
 jobs:
   probe:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -85,6 +85,7 @@ jobs:
               parity_key = ""
               ui_acceptance = os.environ.get("DISPATCH_UI_ACCEPTANCE_FILE", "").strip()
               crw_consumer_reprobe = False
+              s3_composition_economics = False
           elif event == "push":
               node = json.loads(Path("rendezvous/fire/mmibkr-private-test-probe-r1").read_text(encoding="utf-8"))
               if node.get("schema") != "mmibkr.private_test_probe_fire.v1":
@@ -97,6 +98,7 @@ jobs:
               parity_key = str(node.get("parity_public_key_b64") or "").strip()
               ui_acceptance = str(node.get("ui_acceptance_file") or "").strip()
               crw_consumer_reprobe = bool(node.get("crw_consumer_reprobe"))
+              s3_composition_economics = bool(node.get("s3_composition_economics"))
           else:
               raise SystemExit("unsupported private test probe event")
           if not re.fullmatch(r"[0-9a-f]{40}", source_ref):
@@ -111,6 +113,7 @@ jobs:
               if ui_acceptance:
                   fh.write("MMIBKR_PRIVATE_UI_ACCEPTANCE=" + ui_acceptance + "\n")
               fh.write("MMIBKR_CRW_CONSUMER_REPROBE=" + ("1" if crw_consumer_reprobe else "0") + "\n")
+              fh.write("MMIBKR_S3_COMPOSITION_ECONOMICS=" + ("1" if s3_composition_economics else "0") + "\n")
           print("MMIBKR_PRIVATE_TEST_REQUEST=PASS")
           print("MMIBKR_PRIVATE_TEST_SOURCE_REF=" + source_ref)
           print("MMIBKR_PRIVATE_TEST_MODULE_COUNT=" + str(len([x for x in modules.split(",") if x])))
@@ -323,6 +326,84 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+      - name: Execute exact-private S3 composition economics
+        if: github.event_name != 'pull_request' && env.MMIBKR_S3_COMPOSITION_ECONOMICS == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/mmibkr-s3-composition-economics"
+          mkdir -p "$ROOT/results"
+          python -m pip install --disable-pip-version-check \
+            pandas==2.3.3 numpy==2.3.3 scikit-learn pytest pytz requests ib_insync==0.9.86
+
+          PYTHONPATH="$MMIBKR_PRIVATE_TEST_SOURCE_ROOT" python -m pytest -q \
+            "$MMIBKR_PRIVATE_TEST_SOURCE_ROOT/tests/test_s3_composition_matched_control_economics_20261003.py" \
+            "$MMIBKR_PRIVATE_TEST_SOURCE_ROOT/tests/test_autotuner_composition_generator_vnext.py"
+
+          python "$MMIBKR_PRIVATE_TEST_SOURCE_ROOT/scripts/research/s1a_public_stock_shard_materialize_20261002.py" \
+            --config "$MMIBKR_PRIVATE_TEST_SOURCE_ROOT/config/research/s3_composition_economics_20261003.json" \
+            --shard-index 0 --shard-count 1 \
+            --start-utc 2026-09-03T13:30:00Z --end-utc 2026-10-02T00:00:00Z \
+            --source-root "$ROOT/source" \
+            --data-root "$ROOT/data" \
+            --receipt-json "$ROOT/input-materialization.json"
+
+          for symbol in AMAT AAPL TSLA; do
+            PYTHONPATH="$MMIBKR_PRIVATE_TEST_SOURCE_ROOT" \
+              python "$MMIBKR_PRIVATE_TEST_SOURCE_ROOT/scripts/research/s3_composition_matched_control_economics_20261003.py" \
+                --symbol "$symbol" \
+                --data-root "$ROOT/data" \
+                --output "$ROOT/results/$symbol.json"
+          done
+
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])/"mmibkr-s3-composition-economics"
+          rows=[]
+          for symbol in ("AMAT","AAPL","TSLA"):
+              node=json.loads((root/"results"/f"{symbol}.json").read_text())
+              rows.append({
+                  "symbol":symbol,
+                  "candidate_count":node["candidate_count"],
+                  "backtest_valid_count":node["backtest_valid_count"],
+                  "positive_simpler_control_count":node["positive_simpler_control_count"],
+                  "positive_underlying_excess_count":node["positive_underlying_excess_count"],
+                  "positive_sector_excess_count":node["positive_sector_excess_count"],
+                  "economic_seed_supported_count":node["economic_seed_supported_count"],
+                  "economic_seed_supported_ids":node["economic_seed_supported_ids"],
+              })
+          summary={
+              "schema":"mm.s3_composition_matched_control_economics.summary.v1",
+              "source_sha":os.environ["MMIBKR_PRIVATE_TEST_SOURCE_REF"],
+              "symbols":rows,
+              "candidate_evaluations":sum(x["candidate_count"] for x in rows),
+              "economic_seed_supported_total":sum(x["economic_seed_supported_count"] for x in rows),
+              "authority":{
+                  "research_only":True,
+                  "historical_survivor_granted":False,
+                  "runtime_activation":False,
+                  "broker_submit":False,
+                  "promotion_mutation":False,
+                  "live_trading":False,
+              },
+          }
+          (root/"sanitized-s3-summary.json").write_text(json.dumps(summary,sort_keys=True,indent=2)+"\n")
+          print("MMIBKR_S3_COMPOSITION_ECONOMICS_SUMMARY="+json.dumps(summary,sort_keys=True))
+          PY
+
+      - name: Upload sanitized S3 composition economics
+        if: github.event_name != 'pull_request' && env.MMIBKR_S3_COMPOSITION_ECONOMICS == '1'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mmibkr-s3-composition-economics-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/mmibkr-s3-composition-economics/sanitized-s3-summary.json
+            ${{ runner.temp }}/mmibkr-s3-composition-economics/results/*.json
+            ${{ runner.temp }}/mmibkr-s3-composition-economics/input-materialization.json
+          retention-days: 14
+          if-no-files-found: error
+
       - name: Execute allowlisted exact-private research tests
         if: github.event_name != 'pull_request'
         shell: bash
@@ -362,5 +443,6 @@ jobs:
             "$RUNNER_TEMP/mmibkr-private-test-probe-sanitized-receipt.txt" \
             "$RUNNER_TEMP/mmibkr-private-ui-build-receipt.log" \
             "$RUNNER_TEMP/mmibkr-private-ui-build-sanitized-receipt.txt" \
-            "$RUNNER_TEMP/mmibkr-crw-consumer-reprobe"
+            "$RUNNER_TEMP/mmibkr-crw-consumer-reprobe" \
+            "$RUNNER_TEMP/mmibkr-s3-composition-economics"
           echo 'MMIBKR_PRIVATE_TEST_PROBE_PRIVATE_MATERIAL_DESTROYED=1'
