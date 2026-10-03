@@ -224,6 +224,8 @@ jobs:
             --prior score-inputs/prior-current/forward_prospective_cohort_ledger_r1.json \
             --output score-inputs/prospective-current/forward_prospective_cohort_ledger_r1.json
       - run: python research/forward_market_scoreboard_r1.py --input-root score-inputs --output artifacts/forward_market_scoreboard_r1.json
+      - name: Freeze same-session allocator baseline before observer-only enrichment
+        run: cp artifacts/forward_market_scoreboard_r1.json artifacts/forward_market_scoreboard_allocator_baseline_r1.json
       - name: Add forward challenger observers without allocation authority
         run: |
           set -euo pipefail
@@ -253,10 +255,13 @@ jobs:
             --scoreboard-output artifacts/forward_market_scoreboard_r1.json
       - name: Build governed deterministic paper allocation
         run: |
+          baseline_args=(--scoreboard artifacts/forward_market_scoreboard_allocator_baseline_r1.json --output artifacts/forward_deterministic_allocator_baseline_r1.json)
           args=(--scoreboard artifacts/forward_market_scoreboard_r1.json --output artifacts/forward_deterministic_allocator_r1.json)
           if test -f score-inputs/prior-current/forward_deterministic_allocator_r1.json; then
+            baseline_args+=(--prior score-inputs/prior-current/forward_deterministic_allocator_r1.json)
             args+=(--prior score-inputs/prior-current/forward_deterministic_allocator_r1.json)
           fi
+          python research/forward_deterministic_allocator_r1.py "${baseline_args[@]}"
           python research/forward_deterministic_allocator_r1.py "${args[@]}"
           python research/forward_scoreboard_lineage_r1.py \
             --mode allocator \
@@ -299,6 +304,7 @@ jobs:
           from pathlib import Path
           score=json.load(open('artifacts/forward_market_scoreboard_r1.json'))
           after=json.load(open('artifacts/forward_deterministic_allocator_r1.json'))
+          same_session_baseline=json.load(open('artifacts/forward_deterministic_allocator_baseline_r1.json'))
           ledger_path=Path('artifacts/forward_prospective_cohort_ledger_r1.json')
           ledger=json.load(open(ledger_path))
           ledger_sha=hashlib.sha256(ledger_path.read_bytes()).hexdigest()
@@ -317,9 +323,11 @@ jobs:
           assert zero['P558']=='ACTIVE'
           assert zero['SENIOR_CLO']=='ACTIVE'
           assert zero['GENERALIZED_LARGECAP_RIDGE']=='ACTIVE'
-          if Path('score-inputs/prior-current/forward_deterministic_allocator_r1.json').exists():
-              prior=json.load(open('score-inputs/prior-current/forward_deterministic_allocator_r1.json'))
-              assert after['final_target_weights']==prior['final_target_weights']
+          # Challenger and generalized-largecap rows are observer-only. Prove
+          # noninterference against the same-session allocator input before those
+          # rows were added, not against a prior market session whose core signals
+          # may legitimately produce different targets.
+          assert after['final_target_weights']==same_session_baseline['final_target_weights']
           print('FORWARD_CHALLENGER_ALLOCATOR_NONINTERFERENCE=PASS')
           print('FORWARD_PROSPECTIVE_LINEAGE=PASS',ledger_sha)
           print('ALLOCATOR_TARGETS='+json.dumps(after['final_target_weights'],sort_keys=True))
@@ -354,6 +362,7 @@ jobs:
           path: |
             artifacts/forward_market_scoreboard_r1.json
             artifacts/forward_deterministic_allocator_r1.json
+            artifacts/forward_deterministic_allocator_baseline_r1.json
             artifacts/forward_prospective_cohort_ledger_r1.json
             artifacts/forward_largecap_transport_observation_r1.json
             artifacts/forward_market_scoreboard_history_r1.json
