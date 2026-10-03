@@ -1,13 +1,14 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "102814a30b4b5f291ef922e7df36df7e20bfdf84",
+  "source_ref": "bc983c1e64865c71fcb7fcdb66bae2424a9651d4",
   "test_modules": [
-    "tests.test_cloud_operator_snapshot_v1",
-    "tests.test_selected_runtime_strategy_inventory_v1"
+    "tests.test_crw_consumer_observation_capture_20261003",
+    "tests.test_autotuner_behavioral_consumption_vnext"
   ],
-  "ui_acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
-  "requested_by": "coordinator-pr798-current-main-acceptance",
-  "purpose": "Exact-private acceptance for PR798 current-main runtime-owned position observability; backend ownership/completeness proof plus Bot Console acceptance/build",
+  "ui_acceptance_file": "",
+  "crw_consumer_reprobe": true,
+  "requested_by": "evolution-auditor",
+  "purpose": "Exact-private CRW consumer observation regression plus full 24-cell selective behavioral reprobe on alternate encrypted Source Vault surface",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -15,8 +16,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "pr798-runtime-owned-position-observability-current-main-r1",
+  "request_nonce": "crw24-consumer-observation-alt-vault-20261003-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "102814a30b4b5f291ef922e7df36df7e20bfdf84",
+  "current_private_reference": "bc983c1e64865c71fcb7fcdb66bae2424a9651d4",
   "parity_public_key_b64": ""
 }
