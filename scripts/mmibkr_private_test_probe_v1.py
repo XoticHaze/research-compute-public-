@@ -57,6 +57,7 @@ SAFE_EXACT = {
     "tests.test_selected_runtime_forward_exact_extrema_v1",
     "tests.test_research_survivor_funnel",
     "tests.test_crw_consumer_observation_capture_20261003",
+    "tests.test_s3_composition_matched_control_economics_20261003",
     "tests.test_acquire_hfdl_bounded_equity_panel",
     # Exact read-only Promotion Review / Pilot audit-boundary regressions.
     # These exercise durable decision records and HTTP presentation only; they
