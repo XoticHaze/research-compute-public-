@@ -1,0 +1,6 @@
+P01_CRW_DCA_REQUEST=20261003T0813Z-r1
+PURPOSE=fresh_post_oidc_source_callsite_execution
+SCIENCE=frozen_W96_ENTRY_EXTREME_-2.52_matched_DCA_development_only
+PROTECTED_HOLDOUT=UNREAD
+LIVE_TRADING=false
+RUNTIME_MUTATION=false
