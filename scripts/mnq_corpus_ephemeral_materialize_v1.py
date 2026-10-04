@@ -6,7 +6,7 @@ artifact ticket or the exact admitted corpus bytes directly. Scientific
 identity is the immutable inner corpus SHA/byte contract; disposable artifact
 retention is not data authority.
 """
-import argparse, json, os, zipfile
+import argparse, gzip, json, os, zipfile
 from pathlib import Path
 
 import mnq_corpus_ephemeral_consumer_v1 as corpus
@@ -55,6 +55,18 @@ def materialize_payload(payload_bytes:bytes, output_root:Path)->dict:
         if digest!=corpus.DATASET_SHA256:
             raise RuntimeError("MNQ direct corpus identity mismatch")
         return _write_member(payload_bytes,output_root,transport_mode="direct_exact_corpus")
+
+    # Existing non-Actions corpus producers gzip before X25519 encryption to keep
+    # the public exchange bounded. Accept that transport encoding only after
+    # bounded decompression and the same exact inner corpus identity check.
+    if payload_bytes.startswith(b"\\x1f\\x8b"):
+        try:
+            raw=gzip.decompress(payload_bytes)
+        except Exception as exc:
+            raise RuntimeError("MNQ gzip corpus payload invalid") from exc
+        if len(raw)!=DATASET_BYTES or corpus.sha256_bytes(raw)!=corpus.DATASET_SHA256:
+            raise RuntimeError("MNQ gzip corpus identity mismatch")
+        return _write_member(raw,output_root,transport_mode="direct_exact_corpus_gzip")
 
     # A direct corpus with the wrong byte count must not be silently interpreted
     # as another data format. Only the established ticket schema is an alternate.
