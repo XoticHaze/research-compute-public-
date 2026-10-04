@@ -1,19 +1,16 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "1b46e67e64cee32a9d9996e95000612bad33144d",
+  "source_ref": "a8b6a327a5643a3fd674a329efe0720a991256c1",
   "test_modules": [
+    "tests.test_s4_layered_mtf_matched_control_economics_20261004",
     "tests.test_autotuner_composition_generator_vnext",
-    "tests.test_strategy_spec_mtf_registry_backtest_vnext",
-    "tests.test_parameterized_indicator_instances_14th31kp",
-    "tests.test_per_indicator_timeframe_execution_core_14th31kq",
-    "tests.test_builder_cross_timeframe_aligned_evaluation_14th31ks",
-    "tests.test_strategy_spec_source_feature_materialization_14th31kr"
+    "tests.test_strategy_spec_mtf_registry_backtest_vnext"
   ],
   "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
   "s3_composition_economics": false,
   "requested_by": "evolution-auditor",
-  "purpose": "Reprobe PR #820 StrategySpec multi-timeframe Builder research integration after exact test-surface allowlist correction",
+  "purpose": "Validate MM PR #821 layered StrategySpec multi-timeframe matched-control economics implementation before merge",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -21,8 +18,9 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "mmibkr-strategy-spec-mtf-pr820-20261004-r2",
+  "request_nonce": "mmibkr-s4-layered-mtf-pr821-20261004-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "1b46e67e64cee32a9d9996e95000612bad33144d",
-  "parity_public_key_b64": ""
+  "current_private_reference": "a8b6a327a5643a3fd674a329efe0720a991256c1",
+  "parity_public_key_b64": "",
+  "s4_layered_mtf_economics": false
 }
