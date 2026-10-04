@@ -6,7 +6,7 @@ artifact ticket or the exact admitted corpus bytes directly. Scientific
 identity is the immutable inner corpus SHA/byte contract; disposable artifact
 retention is not data authority.
 """
-import argparse, gzip, json, os, zipfile
+import argparse, gzip, io, json, os, zipfile
 from pathlib import Path
 
 import mnq_corpus_ephemeral_consumer_v1 as corpus
@@ -61,7 +61,12 @@ def materialize_payload(payload_bytes:bytes, output_root:Path)->dict:
     # bounded decompression and the same exact inner corpus identity check.
     if payload_bytes.startswith(b"\\x1f\\x8b"):
         try:
-            raw=gzip.decompress(payload_bytes)
+            with gzip.GzipFile(fileobj=io.BytesIO(payload_bytes),mode="rb") as handle:
+                raw=handle.read(DATASET_BYTES+1)
+                if handle.read(1):
+                    raise RuntimeError("MNQ gzip corpus expands beyond fixed byte cap")
+        except RuntimeError:
+            raise
         except Exception as exc:
             raise RuntimeError("MNQ gzip corpus payload invalid") from exc
         if len(raw)!=DATASET_BYTES or corpus.sha256_bytes(raw)!=corpus.DATASET_SHA256:
