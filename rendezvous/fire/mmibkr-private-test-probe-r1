@@ -1,15 +1,23 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "0358d469dffa26d5ff9132b54cd11219c18fe5ea",
+  "source_ref": "ffb688a28a53fe0616e16370dd861b7c94423cfb",
   "test_modules": [
-    "tests.test_s3_composition_matched_control_economics_20261003",
-    "tests.test_autotuner_composition_generator_vnext"
+    "tests.test_selected_runtime_strategy_spec_integrity_v1",
+    "tests.test_selected_runtime_account_sizing_14th31lg",
+    "tests.test_selected_runtime_account_sizing_submit_hook_14th31lg",
+    "tests.test_selected_runtime_margin_guard_14th31lg",
+    "tests.test_selected_runtime_margin_whatif_hook_14th31lg",
+    "tests.test_selected_runtime_strategy_inventory_v1",
+    "tests.test_promotion_review_store",
+    "tests.test_autotuner_promotion_review_backend_product",
+    "tests.test_admit_exact_pilot_to_promotion_review_13z",
+    "tests.test_ibkr_remote_account_hygiene_slot_v1"
   ],
   "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
-  "s3_composition_economics": true,
+  "s3_composition_economics": false,
   "requested_by": "evolution-auditor",
-  "purpose": "Execute exact-private S3 36x3 matched-control after-cost composition matrix on bounded recent development data",
+  "purpose": "Re-prove current-main MM-IBKR live-readiness control contracts without broker mutation or live enablement",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -17,8 +25,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "s3-composition-economics-alt-vault-20261003-r1",
+  "request_nonce": "mmibkr-live-readiness-current-main-20261004-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "0358d469dffa26d5ff9132b54cd11219c18fe5ea",
+  "current_private_reference": "ffb688a28a53fe0616e16370dd861b7c94423cfb",
   "parity_public_key_b64": ""
 }
