@@ -116,6 +116,14 @@ def test_allowlist_accepts_strategy_spec_mtf_research_regressions():
         validated_modules("tests.test_strategy_spec_mtf_live_submit")
 
 
+def test_allowlist_accepts_s4_layered_mtf_economics_regression():
+    exact = ["tests.test_s4_layered_mtf_matched_control_economics_20261004"]
+    assert validated_modules(" ".join(exact)) == exact
+    import pytest
+    with pytest.raises(ValueError):
+        validated_modules("tests.test_s4_layered_mtf_live_submit")
+
+
 def test_allowlist_accepts_exact_g05b_futures_materialization_only():
     assert validated_modules(
         "tests.test_materialize_admitted_futures_source_canonical "
