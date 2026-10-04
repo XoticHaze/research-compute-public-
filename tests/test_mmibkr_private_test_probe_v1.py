@@ -103,6 +103,19 @@ def test_allowlist_accepts_exact_g05_g07_recovery_chain_only():
         validated_modules("tests.test_strategy_health_preview_binding")
 
 
+def test_allowlist_accepts_strategy_spec_mtf_research_regressions():
+    exact = [
+        "tests.test_strategy_spec_mtf_registry_backtest_vnext",
+        "tests.test_parameterized_indicator_instances_14th31kp",
+        "tests.test_per_indicator_timeframe_execution_core_14th31kq",
+        "tests.test_builder_cross_timeframe_aligned_evaluation_14th31ks",
+        "tests.test_strategy_spec_source_feature_materialization_14th31kr",
+    ]
+    assert validated_modules(" ".join(exact)) == exact
+    with pytest.raises(ValueError):
+        validated_modules("tests.test_strategy_spec_mtf_live_submit")
+
+
 def test_allowlist_accepts_exact_g05b_futures_materialization_only():
     assert validated_modules(
         "tests.test_materialize_admitted_futures_source_canonical "
