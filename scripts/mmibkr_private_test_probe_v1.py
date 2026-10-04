@@ -45,6 +45,7 @@ SAFE_EXACT = {
     "tests.test_per_indicator_timeframe_execution_core_14th31kq",
     "tests.test_builder_cross_timeframe_aligned_evaluation_14th31ks",
     "tests.test_strategy_spec_source_feature_materialization_14th31kr",
+    "tests.test_s4_layered_mtf_matched_control_economics_20261004",
     "tests.test_crw_backtest_futures_timestamp_14th31kf",
     "tests.test_news_publication_time_integrity_20260902",
     "tests.test_news_publication_time_integration_patch_20260902",
