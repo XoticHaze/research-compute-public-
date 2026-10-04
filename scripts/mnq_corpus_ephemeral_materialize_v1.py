@@ -59,7 +59,7 @@ def materialize_payload(payload_bytes:bytes, output_root:Path)->dict:
     # Existing non-Actions corpus producers gzip before X25519 encryption to keep
     # the public exchange bounded. Accept that transport encoding only after
     # bounded decompression and the same exact inner corpus identity check.
-    if payload_bytes.startswith(b"\\x1f\\x8b"):
+    if payload_bytes.startswith(bytes.fromhex("1f8b")):
         try:
             with gzip.GzipFile(fileobj=io.BytesIO(payload_bytes),mode="rb") as handle:
                 raw=handle.read(DATASET_BYTES+1)
