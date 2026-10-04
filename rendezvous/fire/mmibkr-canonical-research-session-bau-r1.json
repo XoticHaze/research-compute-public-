@@ -1,1144 +1,285 @@
 {
   "schema": "mmibkr.canonical_session_fire.v1",
-  "source_ref": "43565f2704e72b3b3990348b605089ca77a579c3",
-  "expected_job_sha256": "7e26fc92ee6b1855764bdb8b745351c5d0491da81933136dbfd1278a7474361b",
-  "request_nonce": "full14-post-r8-r5-pass-20260928-r2",
-  "purpose": "Full 14-job W96/W120/W124 funded cost/DCA matrix after exact post-R8 Product R5 canary PASS",
-  "authority": {
-    "research_only": true,
-    "broker": false,
-    "runtime_activation": false,
-    "strategy_spec_write": false,
-    "promotion_mutation": false,
-    "live": false
-  },
+  "source_ref": "ffb688a28a53fe0616e16370dd861b7c94423cfb",
+  "expected_job_sha256": "c601eb3daafd4e083d0f3f6bc828099ca8cd1ac34f986643c253167737151843",
+  "request_nonce": "audit-generic-breadth-20261004T1233CDT-r1",
+  "purpose": "Evolution Auditor: execute bounded non-CRW/non-MA registry breadth canary on frozen governed MNQ 12Min corpus using current MM-IBKR source-vault identity; research only; no promotion/runtime/broker/live mutation.",
   "session": {
-    "budget_seconds": 7200,
+    "schema": "mmibkr.canonical_session.v1",
+    "session_id": "audit-generic-breadth-20261004T1233CDT-r1",
+    "budget_seconds": 3600,
+    "reserve_seconds": 120,
+    "max_parallel": 4,
     "jobs": [
       {
+        "job_id": "breadth-breakout-mnq-12min",
+        "priority": 100,
         "depends_on": [],
         "external_artifact_dependency": {
+          "scope": "input_root",
+          "relative_path": "mnq-strategy-backtest-12min.csv",
+          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e",
           "bytes": 18026715,
           "producer": {
-            "identity": "XoticHaze/research-foundry run 33724144266 artifact 9881343496",
             "mechanism": "research_foundry_artifact",
-            "trigger": "materialize governed member before canonical session"
-          },
-          "relative_path": "mnq-strategy-backtest-12min.csv",
-          "scope": "input_root",
-          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
+            "repository": "XoticHaze/research-foundry",
+            "workflow_run_id": "33724144266",
+            "artifact_id": "9881343496"
+          }
         },
-        "job_id": "w96-cost-0",
-        "priority": 70,
         "request": {
+          "schema": "mmibkr.canonical_workload_request.v1",
+          "job_id": "breadth-breakout-mnq-12min",
+          "capability_id": "REGISTRY_BACKTEST",
+          "mmibkr": {
+            "repository": "XoticHaze/mm-IBKR",
+            "commit": "ffb688a28a53fe0616e16370dd861b7c94423cfb",
+            "source_archive_sha256": "88a25e7586d5b1b3c15ce8067e9707a63b9062b0080f365171f2365c00b878b1"
+          },
+          "entrypoint": {
+            "path": "strategy_backtest_registry.py",
+            "module": "strategy_backtest_registry",
+            "callable": "run_strategy_backtest",
+            "git_blob_sha1": "a2771b6385770b1a50fa974cf00964f3a2b04298"
+          },
           "arguments": {
-            "dataset": {
-              "bytes": 18026715,
-              "relative_path": "mnq-strategy-backtest-12min.csv",
-              "scope": "input_root",
-              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-            },
-            "requested_end": null,
-            "requested_start": null,
             "strategy_spec": {
+              "strategy_id": "breakout",
+              "symbol": "MNQ",
+              "timeframe": "12Min",
               "asset_type": "futures",
               "parameters": {
-                "COMMISSION_PER_SHARE": 0.3,
-                "DCA_BASE_QTY": 1,
-                "DCA_MAX_CONTRACTS": 3,
-                "DCA_TIER_DRAWDOWNS_PCT": [
-                  1,
-                  2
-                ],
-                "DCA_TRIGGER_MODE": "tiered_previous_buy",
-                "ENABLE_DCA": true,
-                "ENTRY_EXTREME": -2.52,
-                "EXIT_EXTREME": 4.5,
-                "SLIPPAGE_BPS": 0,
-                "SPREAD_BPS": 0,
-                "WINDOW": 96,
-                "commission_per_share": 0.3,
-                "spread_bps": 0
-              },
-              "strategy_id": "crw_score_multi_mode",
-              "symbol": "MNQ",
-              "timeframe": "12Min"
-            }
-          },
-          "authority": "research_only",
-          "capability_id": "REGISTRY_BACKTEST",
-          "entrypoint": {
-            "callable": "run_strategy_backtest",
-            "git_blob_sha1": "96ff78540154a7932ed9fcf2cb81c740ac0ab650",
-            "module": "strategy_backtest_registry",
-            "path": "strategy_backtest_registry.py"
-          },
-          "forbidden_authorities": {
-            "broker_cancel": false,
-            "broker_flatten": false,
-            "broker_submit": false,
-            "live_trading": false,
-            "promotion_mutation": false,
-            "runtime_activation": false,
-            "strategy_spec_write": false
-          },
-          "job_id": "w96-cost-0",
-          "mmibkr": {
-            "commit": "43565f2704e72b3b3990348b605089ca77a579c3",
-            "repository": "XoticHaze/mm-IBKR",
-            "source_archive_sha256": "84af54fa13c79b00e52cb6796784428a2acd4e9421208c80fad16a795943a23f"
+                "BREAKOUT_LOOKBACK": 20
+              }
+            },
+            "dataset": {
+              "scope": "input_root",
+              "relative_path": "mnq-strategy-backtest-12min.csv",
+              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e",
+              "bytes": 18026715
+            },
+            "requested_start": null,
+            "requested_end": null
           },
           "resources": {
-            "max_output_bytes": 2000000,
-            "max_wall_seconds": 900
+            "max_wall_seconds": 900,
+            "max_output_bytes": 2000000
           },
-          "schema": "mmibkr.canonical_workload_request.v1"
+          "authority": "research_only",
+          "forbidden_authorities": {
+            "broker_submit": false,
+            "broker_cancel": false,
+            "broker_flatten": false,
+            "strategy_spec_write": false,
+            "runtime_activation": false,
+            "promotion_mutation": false,
+            "live_trading": false
+          }
         }
       },
       {
+        "job_id": "breadth-mean-reversion-mnq-12min",
+        "priority": 99,
         "depends_on": [],
         "external_artifact_dependency": {
+          "scope": "input_root",
+          "relative_path": "mnq-strategy-backtest-12min.csv",
+          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e",
           "bytes": 18026715,
           "producer": {
-            "identity": "XoticHaze/research-foundry run 33724144266 artifact 9881343496",
             "mechanism": "research_foundry_artifact",
-            "trigger": "materialize governed member before canonical session"
-          },
-          "relative_path": "mnq-strategy-backtest-12min.csv",
-          "scope": "input_root",
-          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
+            "repository": "XoticHaze/research-foundry",
+            "workflow_run_id": "33724144266",
+            "artifact_id": "9881343496"
+          }
         },
-        "job_id": "w96-cost-2p5",
-        "priority": 80,
         "request": {
+          "schema": "mmibkr.canonical_workload_request.v1",
+          "job_id": "breadth-mean-reversion-mnq-12min",
+          "capability_id": "REGISTRY_BACKTEST",
+          "mmibkr": {
+            "repository": "XoticHaze/mm-IBKR",
+            "commit": "ffb688a28a53fe0616e16370dd861b7c94423cfb",
+            "source_archive_sha256": "88a25e7586d5b1b3c15ce8067e9707a63b9062b0080f365171f2365c00b878b1"
+          },
+          "entrypoint": {
+            "path": "strategy_backtest_registry.py",
+            "module": "strategy_backtest_registry",
+            "callable": "run_strategy_backtest",
+            "git_blob_sha1": "a2771b6385770b1a50fa974cf00964f3a2b04298"
+          },
           "arguments": {
-            "dataset": {
-              "bytes": 18026715,
-              "relative_path": "mnq-strategy-backtest-12min.csv",
-              "scope": "input_root",
-              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-            },
-            "requested_end": null,
-            "requested_start": null,
             "strategy_spec": {
+              "strategy_id": "mean_reversion",
+              "symbol": "MNQ",
+              "timeframe": "12Min",
               "asset_type": "futures",
               "parameters": {
-                "COMMISSION_PER_SHARE": 0.3,
-                "DCA_BASE_QTY": 1,
-                "DCA_MAX_CONTRACTS": 3,
-                "DCA_TIER_DRAWDOWNS_PCT": [
-                  1,
-                  2
-                ],
-                "DCA_TRIGGER_MODE": "tiered_previous_buy",
-                "ENABLE_DCA": true,
-                "ENTRY_EXTREME": -2.52,
-                "EXIT_EXTREME": 4.5,
-                "SLIPPAGE_BPS": 2.5,
-                "SPREAD_BPS": 0,
-                "WINDOW": 96,
-                "commission_per_share": 0.3,
-                "spread_bps": 0
-              },
-              "strategy_id": "crw_score_multi_mode",
-              "symbol": "MNQ",
-              "timeframe": "12Min"
-            }
-          },
-          "authority": "research_only",
-          "capability_id": "REGISTRY_BACKTEST",
-          "entrypoint": {
-            "callable": "run_strategy_backtest",
-            "git_blob_sha1": "96ff78540154a7932ed9fcf2cb81c740ac0ab650",
-            "module": "strategy_backtest_registry",
-            "path": "strategy_backtest_registry.py"
-          },
-          "forbidden_authorities": {
-            "broker_cancel": false,
-            "broker_flatten": false,
-            "broker_submit": false,
-            "live_trading": false,
-            "promotion_mutation": false,
-            "runtime_activation": false,
-            "strategy_spec_write": false
-          },
-          "job_id": "w96-cost-2p5",
-          "mmibkr": {
-            "commit": "43565f2704e72b3b3990348b605089ca77a579c3",
-            "repository": "XoticHaze/mm-IBKR",
-            "source_archive_sha256": "84af54fa13c79b00e52cb6796784428a2acd4e9421208c80fad16a795943a23f"
+                "MR_MA_PERIOD": 20,
+                "MR_STD_MULT": 2
+              }
+            },
+            "dataset": {
+              "scope": "input_root",
+              "relative_path": "mnq-strategy-backtest-12min.csv",
+              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e",
+              "bytes": 18026715
+            },
+            "requested_start": null,
+            "requested_end": null
           },
           "resources": {
-            "max_output_bytes": 2000000,
-            "max_wall_seconds": 900
+            "max_wall_seconds": 900,
+            "max_output_bytes": 2000000
           },
-          "schema": "mmibkr.canonical_workload_request.v1"
+          "authority": "research_only",
+          "forbidden_authorities": {
+            "broker_submit": false,
+            "broker_cancel": false,
+            "broker_flatten": false,
+            "strategy_spec_write": false,
+            "runtime_activation": false,
+            "promotion_mutation": false,
+            "live_trading": false
+          }
         }
       },
       {
+        "job_id": "breadth-dual-thrust-mnq-12min",
+        "priority": 98,
         "depends_on": [],
         "external_artifact_dependency": {
+          "scope": "input_root",
+          "relative_path": "mnq-strategy-backtest-12min.csv",
+          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e",
           "bytes": 18026715,
           "producer": {
-            "identity": "XoticHaze/research-foundry run 33724144266 artifact 9881343496",
             "mechanism": "research_foundry_artifact",
-            "trigger": "materialize governed member before canonical session"
-          },
-          "relative_path": "mnq-strategy-backtest-12min.csv",
-          "scope": "input_root",
-          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
+            "repository": "XoticHaze/research-foundry",
+            "workflow_run_id": "33724144266",
+            "artifact_id": "9881343496"
+          }
         },
-        "job_id": "w96-cost-5",
-        "priority": 70,
         "request": {
+          "schema": "mmibkr.canonical_workload_request.v1",
+          "job_id": "breadth-dual-thrust-mnq-12min",
+          "capability_id": "REGISTRY_BACKTEST",
+          "mmibkr": {
+            "repository": "XoticHaze/mm-IBKR",
+            "commit": "ffb688a28a53fe0616e16370dd861b7c94423cfb",
+            "source_archive_sha256": "88a25e7586d5b1b3c15ce8067e9707a63b9062b0080f365171f2365c00b878b1"
+          },
+          "entrypoint": {
+            "path": "strategy_backtest_registry.py",
+            "module": "strategy_backtest_registry",
+            "callable": "run_strategy_backtest",
+            "git_blob_sha1": "a2771b6385770b1a50fa974cf00964f3a2b04298"
+          },
           "arguments": {
-            "dataset": {
-              "bytes": 18026715,
-              "relative_path": "mnq-strategy-backtest-12min.csv",
-              "scope": "input_root",
-              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-            },
-            "requested_end": null,
-            "requested_start": null,
             "strategy_spec": {
+              "strategy_id": "dual_thrust",
+              "symbol": "MNQ",
+              "timeframe": "12Min",
               "asset_type": "futures",
               "parameters": {
-                "COMMISSION_PER_SHARE": 0.3,
-                "DCA_BASE_QTY": 1,
-                "DCA_MAX_CONTRACTS": 3,
-                "DCA_TIER_DRAWDOWNS_PCT": [
-                  1,
-                  2
-                ],
-                "DCA_TRIGGER_MODE": "tiered_previous_buy",
-                "ENABLE_DCA": true,
-                "ENTRY_EXTREME": -2.52,
-                "EXIT_EXTREME": 4.5,
-                "SLIPPAGE_BPS": 5,
-                "SPREAD_BPS": 0,
-                "WINDOW": 96,
-                "commission_per_share": 0.3,
-                "spread_bps": 0
-              },
-              "strategy_id": "crw_score_multi_mode",
-              "symbol": "MNQ",
-              "timeframe": "12Min"
-            }
-          },
-          "authority": "research_only",
-          "capability_id": "REGISTRY_BACKTEST",
-          "entrypoint": {
-            "callable": "run_strategy_backtest",
-            "git_blob_sha1": "96ff78540154a7932ed9fcf2cb81c740ac0ab650",
-            "module": "strategy_backtest_registry",
-            "path": "strategy_backtest_registry.py"
-          },
-          "forbidden_authorities": {
-            "broker_cancel": false,
-            "broker_flatten": false,
-            "broker_submit": false,
-            "live_trading": false,
-            "promotion_mutation": false,
-            "runtime_activation": false,
-            "strategy_spec_write": false
-          },
-          "job_id": "w96-cost-5",
-          "mmibkr": {
-            "commit": "43565f2704e72b3b3990348b605089ca77a579c3",
-            "repository": "XoticHaze/mm-IBKR",
-            "source_archive_sha256": "84af54fa13c79b00e52cb6796784428a2acd4e9421208c80fad16a795943a23f"
+                "DT_LOOKBACK": 4,
+                "DT_K1": 0.5,
+                "DT_K2": 0.5
+              }
+            },
+            "dataset": {
+              "scope": "input_root",
+              "relative_path": "mnq-strategy-backtest-12min.csv",
+              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e",
+              "bytes": 18026715
+            },
+            "requested_start": null,
+            "requested_end": null
           },
           "resources": {
-            "max_output_bytes": 2000000,
-            "max_wall_seconds": 900
+            "max_wall_seconds": 900,
+            "max_output_bytes": 2000000
           },
-          "schema": "mmibkr.canonical_workload_request.v1"
+          "authority": "research_only",
+          "forbidden_authorities": {
+            "broker_submit": false,
+            "broker_cancel": false,
+            "broker_flatten": false,
+            "strategy_spec_write": false,
+            "runtime_activation": false,
+            "promotion_mutation": false,
+            "live_trading": false
+          }
         }
       },
       {
+        "job_id": "breadth-dynamic-breakout-ii-mnq-12min",
+        "priority": 97,
         "depends_on": [],
         "external_artifact_dependency": {
+          "scope": "input_root",
+          "relative_path": "mnq-strategy-backtest-12min.csv",
+          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e",
           "bytes": 18026715,
           "producer": {
-            "identity": "XoticHaze/research-foundry run 33724144266 artifact 9881343496",
             "mechanism": "research_foundry_artifact",
-            "trigger": "materialize governed member before canonical session"
-          },
-          "relative_path": "mnq-strategy-backtest-12min.csv",
-          "scope": "input_root",
-          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
+            "repository": "XoticHaze/research-foundry",
+            "workflow_run_id": "33724144266",
+            "artifact_id": "9881343496"
+          }
         },
-        "job_id": "w96-cost-10",
-        "priority": 70,
         "request": {
+          "schema": "mmibkr.canonical_workload_request.v1",
+          "job_id": "breadth-dynamic-breakout-ii-mnq-12min",
+          "capability_id": "REGISTRY_BACKTEST",
+          "mmibkr": {
+            "repository": "XoticHaze/mm-IBKR",
+            "commit": "ffb688a28a53fe0616e16370dd861b7c94423cfb",
+            "source_archive_sha256": "88a25e7586d5b1b3c15ce8067e9707a63b9062b0080f365171f2365c00b878b1"
+          },
+          "entrypoint": {
+            "path": "strategy_backtest_registry.py",
+            "module": "strategy_backtest_registry",
+            "callable": "run_strategy_backtest",
+            "git_blob_sha1": "a2771b6385770b1a50fa974cf00964f3a2b04298"
+          },
           "arguments": {
-            "dataset": {
-              "bytes": 18026715,
-              "relative_path": "mnq-strategy-backtest-12min.csv",
-              "scope": "input_root",
-              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-            },
-            "requested_end": null,
-            "requested_start": null,
             "strategy_spec": {
+              "strategy_id": "dynamic_breakout_ii",
+              "symbol": "MNQ",
+              "timeframe": "12Min",
               "asset_type": "futures",
               "parameters": {
-                "COMMISSION_PER_SHARE": 0.3,
-                "DCA_BASE_QTY": 1,
-                "DCA_MAX_CONTRACTS": 3,
-                "DCA_TIER_DRAWDOWNS_PCT": [
-                  1,
-                  2
-                ],
-                "DCA_TRIGGER_MODE": "tiered_previous_buy",
-                "ENABLE_DCA": true,
-                "ENTRY_EXTREME": -2.52,
-                "EXIT_EXTREME": 4.5,
-                "SLIPPAGE_BPS": 10,
-                "SPREAD_BPS": 0,
-                "WINDOW": 96,
-                "commission_per_share": 0.3,
-                "spread_bps": 0
-              },
-              "strategy_id": "crw_score_multi_mode",
-              "symbol": "MNQ",
-              "timeframe": "12Min"
-            }
-          },
-          "authority": "research_only",
-          "capability_id": "REGISTRY_BACKTEST",
-          "entrypoint": {
-            "callable": "run_strategy_backtest",
-            "git_blob_sha1": "96ff78540154a7932ed9fcf2cb81c740ac0ab650",
-            "module": "strategy_backtest_registry",
-            "path": "strategy_backtest_registry.py"
-          },
-          "forbidden_authorities": {
-            "broker_cancel": false,
-            "broker_flatten": false,
-            "broker_submit": false,
-            "live_trading": false,
-            "promotion_mutation": false,
-            "runtime_activation": false,
-            "strategy_spec_write": false
-          },
-          "job_id": "w96-cost-10",
-          "mmibkr": {
-            "commit": "43565f2704e72b3b3990348b605089ca77a579c3",
-            "repository": "XoticHaze/mm-IBKR",
-            "source_archive_sha256": "84af54fa13c79b00e52cb6796784428a2acd4e9421208c80fad16a795943a23f"
-          },
-          "resources": {
-            "max_output_bytes": 2000000,
-            "max_wall_seconds": 900
-          },
-          "schema": "mmibkr.canonical_workload_request.v1"
-        }
-      },
-      {
-        "depends_on": [],
-        "external_artifact_dependency": {
-          "bytes": 18026715,
-          "producer": {
-            "identity": "XoticHaze/research-foundry run 33724144266 artifact 9881343496",
-            "mechanism": "research_foundry_artifact",
-            "trigger": "materialize governed member before canonical session"
-          },
-          "relative_path": "mnq-strategy-backtest-12min.csv",
-          "scope": "input_root",
-          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-        },
-        "job_id": "w120-cost-0",
-        "priority": 70,
-        "request": {
-          "arguments": {
-            "dataset": {
-              "bytes": 18026715,
-              "relative_path": "mnq-strategy-backtest-12min.csv",
-              "scope": "input_root",
-              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
+                "DB2_LOOKBACK": 20,
+                "DB2_VOL_WINDOW": 20,
+                "DB2_BAND_MULT": 2
+              }
             },
-            "requested_end": null,
-            "requested_start": null,
-            "strategy_spec": {
-              "asset_type": "futures",
-              "parameters": {
-                "COMMISSION_PER_SHARE": 0.3,
-                "DCA_BASE_QTY": 1,
-                "DCA_MAX_CONTRACTS": 3,
-                "DCA_TIER_DRAWDOWNS_PCT": [
-                  1,
-                  2
-                ],
-                "DCA_TRIGGER_MODE": "tiered_previous_buy",
-                "ENABLE_DCA": true,
-                "ENTRY_EXTREME": -2.52,
-                "EXIT_EXTREME": 4.5,
-                "SLIPPAGE_BPS": 0,
-                "SPREAD_BPS": 0,
-                "WINDOW": 120,
-                "commission_per_share": 0.3,
-                "spread_bps": 0
-              },
-              "strategy_id": "crw_score_multi_mode",
-              "symbol": "MNQ",
-              "timeframe": "12Min"
-            }
-          },
-          "authority": "research_only",
-          "capability_id": "REGISTRY_BACKTEST",
-          "entrypoint": {
-            "callable": "run_strategy_backtest",
-            "git_blob_sha1": "96ff78540154a7932ed9fcf2cb81c740ac0ab650",
-            "module": "strategy_backtest_registry",
-            "path": "strategy_backtest_registry.py"
-          },
-          "forbidden_authorities": {
-            "broker_cancel": false,
-            "broker_flatten": false,
-            "broker_submit": false,
-            "live_trading": false,
-            "promotion_mutation": false,
-            "runtime_activation": false,
-            "strategy_spec_write": false
-          },
-          "job_id": "w120-cost-0",
-          "mmibkr": {
-            "commit": "43565f2704e72b3b3990348b605089ca77a579c3",
-            "repository": "XoticHaze/mm-IBKR",
-            "source_archive_sha256": "84af54fa13c79b00e52cb6796784428a2acd4e9421208c80fad16a795943a23f"
-          },
-          "resources": {
-            "max_output_bytes": 2000000,
-            "max_wall_seconds": 900
-          },
-          "schema": "mmibkr.canonical_workload_request.v1"
-        }
-      },
-      {
-        "depends_on": [],
-        "external_artifact_dependency": {
-          "bytes": 18026715,
-          "producer": {
-            "identity": "XoticHaze/research-foundry run 33724144266 artifact 9881343496",
-            "mechanism": "research_foundry_artifact",
-            "trigger": "materialize governed member before canonical session"
-          },
-          "relative_path": "mnq-strategy-backtest-12min.csv",
-          "scope": "input_root",
-          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-        },
-        "job_id": "w120-cost-2p5",
-        "priority": 80,
-        "request": {
-          "arguments": {
             "dataset": {
-              "bytes": 18026715,
-              "relative_path": "mnq-strategy-backtest-12min.csv",
               "scope": "input_root",
-              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
+              "relative_path": "mnq-strategy-backtest-12min.csv",
+              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e",
+              "bytes": 18026715
             },
-            "requested_end": null,
             "requested_start": null,
-            "strategy_spec": {
-              "asset_type": "futures",
-              "parameters": {
-                "COMMISSION_PER_SHARE": 0.3,
-                "DCA_BASE_QTY": 1,
-                "DCA_MAX_CONTRACTS": 3,
-                "DCA_TIER_DRAWDOWNS_PCT": [
-                  1,
-                  2
-                ],
-                "DCA_TRIGGER_MODE": "tiered_previous_buy",
-                "ENABLE_DCA": true,
-                "ENTRY_EXTREME": -2.52,
-                "EXIT_EXTREME": 4.5,
-                "SLIPPAGE_BPS": 2.5,
-                "SPREAD_BPS": 0,
-                "WINDOW": 120,
-                "commission_per_share": 0.3,
-                "spread_bps": 0
-              },
-              "strategy_id": "crw_score_multi_mode",
-              "symbol": "MNQ",
-              "timeframe": "12Min"
-            }
-          },
-          "authority": "research_only",
-          "capability_id": "REGISTRY_BACKTEST",
-          "entrypoint": {
-            "callable": "run_strategy_backtest",
-            "git_blob_sha1": "96ff78540154a7932ed9fcf2cb81c740ac0ab650",
-            "module": "strategy_backtest_registry",
-            "path": "strategy_backtest_registry.py"
-          },
-          "forbidden_authorities": {
-            "broker_cancel": false,
-            "broker_flatten": false,
-            "broker_submit": false,
-            "live_trading": false,
-            "promotion_mutation": false,
-            "runtime_activation": false,
-            "strategy_spec_write": false
-          },
-          "job_id": "w120-cost-2p5",
-          "mmibkr": {
-            "commit": "43565f2704e72b3b3990348b605089ca77a579c3",
-            "repository": "XoticHaze/mm-IBKR",
-            "source_archive_sha256": "84af54fa13c79b00e52cb6796784428a2acd4e9421208c80fad16a795943a23f"
+            "requested_end": null
           },
           "resources": {
-            "max_output_bytes": 2000000,
-            "max_wall_seconds": 900
-          },
-          "schema": "mmibkr.canonical_workload_request.v1"
-        }
-      },
-      {
-        "depends_on": [],
-        "external_artifact_dependency": {
-          "bytes": 18026715,
-          "producer": {
-            "identity": "XoticHaze/research-foundry run 33724144266 artifact 9881343496",
-            "mechanism": "research_foundry_artifact",
-            "trigger": "materialize governed member before canonical session"
-          },
-          "relative_path": "mnq-strategy-backtest-12min.csv",
-          "scope": "input_root",
-          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-        },
-        "job_id": "w120-cost-5",
-        "priority": 70,
-        "request": {
-          "arguments": {
-            "dataset": {
-              "bytes": 18026715,
-              "relative_path": "mnq-strategy-backtest-12min.csv",
-              "scope": "input_root",
-              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-            },
-            "requested_end": null,
-            "requested_start": null,
-            "strategy_spec": {
-              "asset_type": "futures",
-              "parameters": {
-                "COMMISSION_PER_SHARE": 0.3,
-                "DCA_BASE_QTY": 1,
-                "DCA_MAX_CONTRACTS": 3,
-                "DCA_TIER_DRAWDOWNS_PCT": [
-                  1,
-                  2
-                ],
-                "DCA_TRIGGER_MODE": "tiered_previous_buy",
-                "ENABLE_DCA": true,
-                "ENTRY_EXTREME": -2.52,
-                "EXIT_EXTREME": 4.5,
-                "SLIPPAGE_BPS": 5,
-                "SPREAD_BPS": 0,
-                "WINDOW": 120,
-                "commission_per_share": 0.3,
-                "spread_bps": 0
-              },
-              "strategy_id": "crw_score_multi_mode",
-              "symbol": "MNQ",
-              "timeframe": "12Min"
-            }
+            "max_wall_seconds": 900,
+            "max_output_bytes": 2000000
           },
           "authority": "research_only",
-          "capability_id": "REGISTRY_BACKTEST",
-          "entrypoint": {
-            "callable": "run_strategy_backtest",
-            "git_blob_sha1": "96ff78540154a7932ed9fcf2cb81c740ac0ab650",
-            "module": "strategy_backtest_registry",
-            "path": "strategy_backtest_registry.py"
-          },
           "forbidden_authorities": {
+            "broker_submit": false,
             "broker_cancel": false,
             "broker_flatten": false,
-            "broker_submit": false,
-            "live_trading": false,
-            "promotion_mutation": false,
+            "strategy_spec_write": false,
             "runtime_activation": false,
-            "strategy_spec_write": false
-          },
-          "job_id": "w120-cost-5",
-          "mmibkr": {
-            "commit": "43565f2704e72b3b3990348b605089ca77a579c3",
-            "repository": "XoticHaze/mm-IBKR",
-            "source_archive_sha256": "84af54fa13c79b00e52cb6796784428a2acd4e9421208c80fad16a795943a23f"
-          },
-          "resources": {
-            "max_output_bytes": 2000000,
-            "max_wall_seconds": 900
-          },
-          "schema": "mmibkr.canonical_workload_request.v1"
-        }
-      },
-      {
-        "depends_on": [],
-        "external_artifact_dependency": {
-          "bytes": 18026715,
-          "producer": {
-            "identity": "XoticHaze/research-foundry run 33724144266 artifact 9881343496",
-            "mechanism": "research_foundry_artifact",
-            "trigger": "materialize governed member before canonical session"
-          },
-          "relative_path": "mnq-strategy-backtest-12min.csv",
-          "scope": "input_root",
-          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-        },
-        "job_id": "w120-cost-10",
-        "priority": 70,
-        "request": {
-          "arguments": {
-            "dataset": {
-              "bytes": 18026715,
-              "relative_path": "mnq-strategy-backtest-12min.csv",
-              "scope": "input_root",
-              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-            },
-            "requested_end": null,
-            "requested_start": null,
-            "strategy_spec": {
-              "asset_type": "futures",
-              "parameters": {
-                "COMMISSION_PER_SHARE": 0.3,
-                "DCA_BASE_QTY": 1,
-                "DCA_MAX_CONTRACTS": 3,
-                "DCA_TIER_DRAWDOWNS_PCT": [
-                  1,
-                  2
-                ],
-                "DCA_TRIGGER_MODE": "tiered_previous_buy",
-                "ENABLE_DCA": true,
-                "ENTRY_EXTREME": -2.52,
-                "EXIT_EXTREME": 4.5,
-                "SLIPPAGE_BPS": 10,
-                "SPREAD_BPS": 0,
-                "WINDOW": 120,
-                "commission_per_share": 0.3,
-                "spread_bps": 0
-              },
-              "strategy_id": "crw_score_multi_mode",
-              "symbol": "MNQ",
-              "timeframe": "12Min"
-            }
-          },
-          "authority": "research_only",
-          "capability_id": "REGISTRY_BACKTEST",
-          "entrypoint": {
-            "callable": "run_strategy_backtest",
-            "git_blob_sha1": "96ff78540154a7932ed9fcf2cb81c740ac0ab650",
-            "module": "strategy_backtest_registry",
-            "path": "strategy_backtest_registry.py"
-          },
-          "forbidden_authorities": {
-            "broker_cancel": false,
-            "broker_flatten": false,
-            "broker_submit": false,
-            "live_trading": false,
             "promotion_mutation": false,
-            "runtime_activation": false,
-            "strategy_spec_write": false
-          },
-          "job_id": "w120-cost-10",
-          "mmibkr": {
-            "commit": "43565f2704e72b3b3990348b605089ca77a579c3",
-            "repository": "XoticHaze/mm-IBKR",
-            "source_archive_sha256": "84af54fa13c79b00e52cb6796784428a2acd4e9421208c80fad16a795943a23f"
-          },
-          "resources": {
-            "max_output_bytes": 2000000,
-            "max_wall_seconds": 900
-          },
-          "schema": "mmibkr.canonical_workload_request.v1"
-        }
-      },
-      {
-        "depends_on": [],
-        "external_artifact_dependency": {
-          "bytes": 18026715,
-          "producer": {
-            "identity": "XoticHaze/research-foundry run 33724144266 artifact 9881343496",
-            "mechanism": "research_foundry_artifact",
-            "trigger": "materialize governed member before canonical session"
-          },
-          "relative_path": "mnq-strategy-backtest-12min.csv",
-          "scope": "input_root",
-          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-        },
-        "job_id": "w124-cost-0",
-        "priority": 70,
-        "request": {
-          "arguments": {
-            "dataset": {
-              "bytes": 18026715,
-              "relative_path": "mnq-strategy-backtest-12min.csv",
-              "scope": "input_root",
-              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-            },
-            "requested_end": null,
-            "requested_start": null,
-            "strategy_spec": {
-              "asset_type": "futures",
-              "parameters": {
-                "COMMISSION_PER_SHARE": 0.3,
-                "DCA_BASE_QTY": 1,
-                "DCA_MAX_CONTRACTS": 3,
-                "DCA_TIER_DRAWDOWNS_PCT": [
-                  1,
-                  2
-                ],
-                "DCA_TRIGGER_MODE": "tiered_previous_buy",
-                "ENABLE_DCA": true,
-                "ENTRY_EXTREME": -2.52,
-                "EXIT_EXTREME": 4.5,
-                "SLIPPAGE_BPS": 0,
-                "SPREAD_BPS": 0,
-                "WINDOW": 124,
-                "commission_per_share": 0.3,
-                "spread_bps": 0
-              },
-              "strategy_id": "crw_score_multi_mode",
-              "symbol": "MNQ",
-              "timeframe": "12Min"
-            }
-          },
-          "authority": "research_only",
-          "capability_id": "REGISTRY_BACKTEST",
-          "entrypoint": {
-            "callable": "run_strategy_backtest",
-            "git_blob_sha1": "96ff78540154a7932ed9fcf2cb81c740ac0ab650",
-            "module": "strategy_backtest_registry",
-            "path": "strategy_backtest_registry.py"
-          },
-          "forbidden_authorities": {
-            "broker_cancel": false,
-            "broker_flatten": false,
-            "broker_submit": false,
-            "live_trading": false,
-            "promotion_mutation": false,
-            "runtime_activation": false,
-            "strategy_spec_write": false
-          },
-          "job_id": "w124-cost-0",
-          "mmibkr": {
-            "commit": "43565f2704e72b3b3990348b605089ca77a579c3",
-            "repository": "XoticHaze/mm-IBKR",
-            "source_archive_sha256": "84af54fa13c79b00e52cb6796784428a2acd4e9421208c80fad16a795943a23f"
-          },
-          "resources": {
-            "max_output_bytes": 2000000,
-            "max_wall_seconds": 900
-          },
-          "schema": "mmibkr.canonical_workload_request.v1"
-        }
-      },
-      {
-        "depends_on": [],
-        "external_artifact_dependency": {
-          "bytes": 18026715,
-          "producer": {
-            "identity": "XoticHaze/research-foundry run 33724144266 artifact 9881343496",
-            "mechanism": "research_foundry_artifact",
-            "trigger": "materialize governed member before canonical session"
-          },
-          "relative_path": "mnq-strategy-backtest-12min.csv",
-          "scope": "input_root",
-          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-        },
-        "job_id": "w124-cost-2p5",
-        "priority": 80,
-        "request": {
-          "arguments": {
-            "dataset": {
-              "bytes": 18026715,
-              "relative_path": "mnq-strategy-backtest-12min.csv",
-              "scope": "input_root",
-              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-            },
-            "requested_end": null,
-            "requested_start": null,
-            "strategy_spec": {
-              "asset_type": "futures",
-              "parameters": {
-                "COMMISSION_PER_SHARE": 0.3,
-                "DCA_BASE_QTY": 1,
-                "DCA_MAX_CONTRACTS": 3,
-                "DCA_TIER_DRAWDOWNS_PCT": [
-                  1,
-                  2
-                ],
-                "DCA_TRIGGER_MODE": "tiered_previous_buy",
-                "ENABLE_DCA": true,
-                "ENTRY_EXTREME": -2.52,
-                "EXIT_EXTREME": 4.5,
-                "SLIPPAGE_BPS": 2.5,
-                "SPREAD_BPS": 0,
-                "WINDOW": 124,
-                "commission_per_share": 0.3,
-                "spread_bps": 0
-              },
-              "strategy_id": "crw_score_multi_mode",
-              "symbol": "MNQ",
-              "timeframe": "12Min"
-            }
-          },
-          "authority": "research_only",
-          "capability_id": "REGISTRY_BACKTEST",
-          "entrypoint": {
-            "callable": "run_strategy_backtest",
-            "git_blob_sha1": "96ff78540154a7932ed9fcf2cb81c740ac0ab650",
-            "module": "strategy_backtest_registry",
-            "path": "strategy_backtest_registry.py"
-          },
-          "forbidden_authorities": {
-            "broker_cancel": false,
-            "broker_flatten": false,
-            "broker_submit": false,
-            "live_trading": false,
-            "promotion_mutation": false,
-            "runtime_activation": false,
-            "strategy_spec_write": false
-          },
-          "job_id": "w124-cost-2p5",
-          "mmibkr": {
-            "commit": "43565f2704e72b3b3990348b605089ca77a579c3",
-            "repository": "XoticHaze/mm-IBKR",
-            "source_archive_sha256": "84af54fa13c79b00e52cb6796784428a2acd4e9421208c80fad16a795943a23f"
-          },
-          "resources": {
-            "max_output_bytes": 2000000,
-            "max_wall_seconds": 900
-          },
-          "schema": "mmibkr.canonical_workload_request.v1"
-        }
-      },
-      {
-        "depends_on": [],
-        "external_artifact_dependency": {
-          "bytes": 18026715,
-          "producer": {
-            "identity": "XoticHaze/research-foundry run 33724144266 artifact 9881343496",
-            "mechanism": "research_foundry_artifact",
-            "trigger": "materialize governed member before canonical session"
-          },
-          "relative_path": "mnq-strategy-backtest-12min.csv",
-          "scope": "input_root",
-          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-        },
-        "job_id": "w124-cost-5",
-        "priority": 70,
-        "request": {
-          "arguments": {
-            "dataset": {
-              "bytes": 18026715,
-              "relative_path": "mnq-strategy-backtest-12min.csv",
-              "scope": "input_root",
-              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-            },
-            "requested_end": null,
-            "requested_start": null,
-            "strategy_spec": {
-              "asset_type": "futures",
-              "parameters": {
-                "COMMISSION_PER_SHARE": 0.3,
-                "DCA_BASE_QTY": 1,
-                "DCA_MAX_CONTRACTS": 3,
-                "DCA_TIER_DRAWDOWNS_PCT": [
-                  1,
-                  2
-                ],
-                "DCA_TRIGGER_MODE": "tiered_previous_buy",
-                "ENABLE_DCA": true,
-                "ENTRY_EXTREME": -2.52,
-                "EXIT_EXTREME": 4.5,
-                "SLIPPAGE_BPS": 5,
-                "SPREAD_BPS": 0,
-                "WINDOW": 124,
-                "commission_per_share": 0.3,
-                "spread_bps": 0
-              },
-              "strategy_id": "crw_score_multi_mode",
-              "symbol": "MNQ",
-              "timeframe": "12Min"
-            }
-          },
-          "authority": "research_only",
-          "capability_id": "REGISTRY_BACKTEST",
-          "entrypoint": {
-            "callable": "run_strategy_backtest",
-            "git_blob_sha1": "96ff78540154a7932ed9fcf2cb81c740ac0ab650",
-            "module": "strategy_backtest_registry",
-            "path": "strategy_backtest_registry.py"
-          },
-          "forbidden_authorities": {
-            "broker_cancel": false,
-            "broker_flatten": false,
-            "broker_submit": false,
-            "live_trading": false,
-            "promotion_mutation": false,
-            "runtime_activation": false,
-            "strategy_spec_write": false
-          },
-          "job_id": "w124-cost-5",
-          "mmibkr": {
-            "commit": "43565f2704e72b3b3990348b605089ca77a579c3",
-            "repository": "XoticHaze/mm-IBKR",
-            "source_archive_sha256": "84af54fa13c79b00e52cb6796784428a2acd4e9421208c80fad16a795943a23f"
-          },
-          "resources": {
-            "max_output_bytes": 2000000,
-            "max_wall_seconds": 900
-          },
-          "schema": "mmibkr.canonical_workload_request.v1"
-        }
-      },
-      {
-        "depends_on": [],
-        "external_artifact_dependency": {
-          "bytes": 18026715,
-          "producer": {
-            "identity": "XoticHaze/research-foundry run 33724144266 artifact 9881343496",
-            "mechanism": "research_foundry_artifact",
-            "trigger": "materialize governed member before canonical session"
-          },
-          "relative_path": "mnq-strategy-backtest-12min.csv",
-          "scope": "input_root",
-          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-        },
-        "job_id": "w124-cost-10",
-        "priority": 70,
-        "request": {
-          "arguments": {
-            "dataset": {
-              "bytes": 18026715,
-              "relative_path": "mnq-strategy-backtest-12min.csv",
-              "scope": "input_root",
-              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-            },
-            "requested_end": null,
-            "requested_start": null,
-            "strategy_spec": {
-              "asset_type": "futures",
-              "parameters": {
-                "COMMISSION_PER_SHARE": 0.3,
-                "DCA_BASE_QTY": 1,
-                "DCA_MAX_CONTRACTS": 3,
-                "DCA_TIER_DRAWDOWNS_PCT": [
-                  1,
-                  2
-                ],
-                "DCA_TRIGGER_MODE": "tiered_previous_buy",
-                "ENABLE_DCA": true,
-                "ENTRY_EXTREME": -2.52,
-                "EXIT_EXTREME": 4.5,
-                "SLIPPAGE_BPS": 10,
-                "SPREAD_BPS": 0,
-                "WINDOW": 124,
-                "commission_per_share": 0.3,
-                "spread_bps": 0
-              },
-              "strategy_id": "crw_score_multi_mode",
-              "symbol": "MNQ",
-              "timeframe": "12Min"
-            }
-          },
-          "authority": "research_only",
-          "capability_id": "REGISTRY_BACKTEST",
-          "entrypoint": {
-            "callable": "run_strategy_backtest",
-            "git_blob_sha1": "96ff78540154a7932ed9fcf2cb81c740ac0ab650",
-            "module": "strategy_backtest_registry",
-            "path": "strategy_backtest_registry.py"
-          },
-          "forbidden_authorities": {
-            "broker_cancel": false,
-            "broker_flatten": false,
-            "broker_submit": false,
-            "live_trading": false,
-            "promotion_mutation": false,
-            "runtime_activation": false,
-            "strategy_spec_write": false
-          },
-          "job_id": "w124-cost-10",
-          "mmibkr": {
-            "commit": "43565f2704e72b3b3990348b605089ca77a579c3",
-            "repository": "XoticHaze/mm-IBKR",
-            "source_archive_sha256": "84af54fa13c79b00e52cb6796784428a2acd4e9421208c80fad16a795943a23f"
-          },
-          "resources": {
-            "max_output_bytes": 2000000,
-            "max_wall_seconds": 900
-          },
-          "schema": "mmibkr.canonical_workload_request.v1"
-        }
-      },
-      {
-        "depends_on": [],
-        "external_artifact_dependency": {
-          "bytes": 18026715,
-          "producer": {
-            "identity": "XoticHaze/research-foundry run 33724144266 artifact 9881343496",
-            "mechanism": "research_foundry_artifact",
-            "trigger": "materialize governed member before canonical session"
-          },
-          "relative_path": "mnq-strategy-backtest-12min.csv",
-          "scope": "input_root",
-          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-        },
-        "job_id": "w96-dca-off",
-        "priority": 75,
-        "request": {
-          "arguments": {
-            "dataset": {
-              "bytes": 18026715,
-              "relative_path": "mnq-strategy-backtest-12min.csv",
-              "scope": "input_root",
-              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-            },
-            "requested_end": null,
-            "requested_start": null,
-            "strategy_spec": {
-              "asset_type": "futures",
-              "parameters": {
-                "COMMISSION_PER_SHARE": 0.3,
-                "DCA_BASE_QTY": 1,
-                "DCA_MAX_CONTRACTS": 3,
-                "DCA_TIER_DRAWDOWNS_PCT": [
-                  1,
-                  2
-                ],
-                "DCA_TRIGGER_MODE": "tiered_previous_buy",
-                "ENABLE_DCA": false,
-                "ENTRY_EXTREME": -2.52,
-                "EXIT_EXTREME": 4.5,
-                "SLIPPAGE_BPS": 2.5,
-                "SPREAD_BPS": 0,
-                "WINDOW": 96,
-                "commission_per_share": 0.3,
-                "spread_bps": 0
-              },
-              "strategy_id": "crw_score_multi_mode",
-              "symbol": "MNQ",
-              "timeframe": "12Min"
-            }
-          },
-          "authority": "research_only",
-          "capability_id": "REGISTRY_BACKTEST",
-          "entrypoint": {
-            "callable": "run_strategy_backtest",
-            "git_blob_sha1": "96ff78540154a7932ed9fcf2cb81c740ac0ab650",
-            "module": "strategy_backtest_registry",
-            "path": "strategy_backtest_registry.py"
-          },
-          "forbidden_authorities": {
-            "broker_cancel": false,
-            "broker_flatten": false,
-            "broker_submit": false,
-            "live_trading": false,
-            "promotion_mutation": false,
-            "runtime_activation": false,
-            "strategy_spec_write": false
-          },
-          "job_id": "w96-dca-off",
-          "mmibkr": {
-            "commit": "43565f2704e72b3b3990348b605089ca77a579c3",
-            "repository": "XoticHaze/mm-IBKR",
-            "source_archive_sha256": "84af54fa13c79b00e52cb6796784428a2acd4e9421208c80fad16a795943a23f"
-          },
-          "resources": {
-            "max_output_bytes": 2000000,
-            "max_wall_seconds": 900
-          },
-          "schema": "mmibkr.canonical_workload_request.v1"
-        }
-      },
-      {
-        "depends_on": [],
-        "external_artifact_dependency": {
-          "bytes": 18026715,
-          "producer": {
-            "identity": "XoticHaze/research-foundry run 33724144266 artifact 9881343496",
-            "mechanism": "research_foundry_artifact",
-            "trigger": "materialize governed member before canonical session"
-          },
-          "relative_path": "mnq-strategy-backtest-12min.csv",
-          "scope": "input_root",
-          "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-        },
-        "job_id": "w124-dca-off",
-        "priority": 75,
-        "request": {
-          "arguments": {
-            "dataset": {
-              "bytes": 18026715,
-              "relative_path": "mnq-strategy-backtest-12min.csv",
-              "scope": "input_root",
-              "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e"
-            },
-            "requested_end": null,
-            "requested_start": null,
-            "strategy_spec": {
-              "asset_type": "futures",
-              "parameters": {
-                "COMMISSION_PER_SHARE": 0.3,
-                "DCA_BASE_QTY": 1,
-                "DCA_MAX_CONTRACTS": 3,
-                "DCA_TIER_DRAWDOWNS_PCT": [
-                  1,
-                  2
-                ],
-                "DCA_TRIGGER_MODE": "tiered_previous_buy",
-                "ENABLE_DCA": false,
-                "ENTRY_EXTREME": -2.52,
-                "EXIT_EXTREME": 4.5,
-                "SLIPPAGE_BPS": 2.5,
-                "SPREAD_BPS": 0,
-                "WINDOW": 124,
-                "commission_per_share": 0.3,
-                "spread_bps": 0
-              },
-              "strategy_id": "crw_score_multi_mode",
-              "symbol": "MNQ",
-              "timeframe": "12Min"
-            }
-          },
-          "authority": "research_only",
-          "capability_id": "REGISTRY_BACKTEST",
-          "entrypoint": {
-            "callable": "run_strategy_backtest",
-            "git_blob_sha1": "96ff78540154a7932ed9fcf2cb81c740ac0ab650",
-            "module": "strategy_backtest_registry",
-            "path": "strategy_backtest_registry.py"
-          },
-          "forbidden_authorities": {
-            "broker_cancel": false,
-            "broker_flatten": false,
-            "broker_submit": false,
-            "live_trading": false,
-            "promotion_mutation": false,
-            "runtime_activation": false,
-            "strategy_spec_write": false
-          },
-          "job_id": "w124-dca-off",
-          "mmibkr": {
-            "commit": "43565f2704e72b3b3990348b605089ca77a579c3",
-            "repository": "XoticHaze/mm-IBKR",
-            "source_archive_sha256": "84af54fa13c79b00e52cb6796784428a2acd4e9421208c80fad16a795943a23f"
-          },
-          "resources": {
-            "max_output_bytes": 2000000,
-            "max_wall_seconds": 900
-          },
-          "schema": "mmibkr.canonical_workload_request.v1"
+            "live_trading": false
+          }
         }
       }
-    ],
-    "max_parallel": 8,
-    "reserve_seconds": 120,
-    "schema": "mmibkr.canonical_session.v1",
-    "session_id": "cr-w96-w120-w124-fullspan-post-r8-r5-pass-20260928-r1"
+    ]
   }
 }
