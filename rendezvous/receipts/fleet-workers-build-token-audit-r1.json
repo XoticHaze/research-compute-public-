@@ -1,9 +1,0 @@
-{
-  "http_status": 403,
-  "mutation_performed": false,
-  "read_only": true,
-  "schema": "fleet.workers_build_token_audit.r1",
-  "secrets_included": false,
-  "success": false,
-  "tokens": []
-}
