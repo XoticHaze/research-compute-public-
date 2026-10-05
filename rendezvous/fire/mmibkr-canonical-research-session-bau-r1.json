@@ -2,11 +2,11 @@
   "schema": "mmibkr.canonical_session_fire.v1",
   "source_ref": "ffb688a28a53fe0616e16370dd861b7c94423cfb",
   "expected_job_sha256": "c601eb3daafd4e083d0f3f6bc828099ca8cd1ac34f986643c253167737151843",
-  "request_nonce": "audit-generic-breadth-20261004T1233CDT-r1",
-  "purpose": "Evolution Auditor: execute bounded non-CRW/non-MA registry breadth canary on frozen governed MNQ 12Min corpus using current MM-IBKR source-vault identity; research only; no promotion/runtime/broker/live mutation.",
+  "request_nonce": "release-mnq-canonical-20261005T1351CDT-r1",
+  "purpose": "Continue Release: fresh governed MNQ 12Min canonical-session crossing using existing exact corpus identity and current generalized producer contract; research only; no promotion/runtime/broker/live mutation.",
   "session": {
     "schema": "mmibkr.canonical_session.v1",
-    "session_id": "audit-generic-breadth-20261004T1233CDT-r1",
+    "session_id": "release-mnq-canonical-20261005T1351CDT-r1",
     "budget_seconds": 3600,
     "reserve_seconds": 120,
     "max_parallel": 4,
@@ -21,10 +21,9 @@
           "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e",
           "bytes": 18026715,
           "producer": {
-            "mechanism": "research_foundry_artifact",
-            "repository": "XoticHaze/research-foundry",
-            "workflow_run_id": "33724144266",
-            "artifact_id": "9881343496"
+            "mechanism": "governed_mnq_corpus",
+            "identity": "sha256:c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e;bytes=18026715",
+            "trigger": "canonical_session_ephemeral_recipient"
           }
         },
         "request": {
@@ -87,10 +86,9 @@
           "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e",
           "bytes": 18026715,
           "producer": {
-            "mechanism": "research_foundry_artifact",
-            "repository": "XoticHaze/research-foundry",
-            "workflow_run_id": "33724144266",
-            "artifact_id": "9881343496"
+            "mechanism": "governed_mnq_corpus",
+            "identity": "sha256:c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e;bytes=18026715",
+            "trigger": "canonical_session_ephemeral_recipient"
           }
         },
         "request": {
@@ -154,10 +152,9 @@
           "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e",
           "bytes": 18026715,
           "producer": {
-            "mechanism": "research_foundry_artifact",
-            "repository": "XoticHaze/research-foundry",
-            "workflow_run_id": "33724144266",
-            "artifact_id": "9881343496"
+            "mechanism": "governed_mnq_corpus",
+            "identity": "sha256:c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e;bytes=18026715",
+            "trigger": "canonical_session_ephemeral_recipient"
           }
         },
         "request": {
@@ -222,10 +219,9 @@
           "sha256": "c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e",
           "bytes": 18026715,
           "producer": {
-            "mechanism": "research_foundry_artifact",
-            "repository": "XoticHaze/research-foundry",
-            "workflow_run_id": "33724144266",
-            "artifact_id": "9881343496"
+            "mechanism": "governed_mnq_corpus",
+            "identity": "sha256:c04a95debfde500aa245d187a1d30620a88703113013a63af0c3553b0509e44e;bytes=18026715",
+            "trigger": "canonical_session_ephemeral_recipient"
           }
         },
         "request": {
