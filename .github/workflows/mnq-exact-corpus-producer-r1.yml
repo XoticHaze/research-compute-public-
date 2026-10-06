@@ -7,12 +7,17 @@ on:
         description: Public canonical-session GitHub run id with a fresh MNQ recipient
         required: true
         type: string
+  push:
+    branches:
+      - main
+    paths:
+      - 'rendezvous/fire/mnq-exact-corpus-producer-r1.json'
 
 permissions:
   contents: write
 
 concurrency:
-  group: mnq-exact-corpus-producer-r1-${{ inputs.run_id }}
+  group: mnq-exact-corpus-producer-r1-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -33,10 +38,38 @@ jobs:
             pandas==2.3.3 \
             numpy==2.3.3
 
+      - name: Resolve exact target canonical run
+        env:
+          DISPATCH_RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          event = os.environ.get("GITHUB_EVENT_NAME", "")
+          if event == "workflow_dispatch":
+              run_id = str(os.environ.get("DISPATCH_RUN_ID") or "").strip()
+          elif event == "push":
+              fire = json.loads(
+                  Path("rendezvous/fire/mnq-exact-corpus-producer-r1.json")
+                  .read_text(encoding="utf-8")
+              )
+              if fire.get("schema") != "mnq.exact_corpus_producer_fire.v1":
+                  raise SystemExit("exact corpus producer fire schema rejected")
+              run_id = str(fire.get("target_run_id") or "").strip()
+          else:
+              raise SystemExit("unsupported producer event")
+          if not run_id.isdigit() or len(run_id) < 4:
+              raise SystemExit("exact corpus producer target run id rejected")
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as fh:
+              fh.write("TARGET_RUN_ID=" + run_id + "\n")
+          print("MNQ_EXACT_CORPUS_TARGET_RUN_ID=" + run_id)
+          PY
+
       - name: Refill exact admitted corpus and publish encrypted run-bound response
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET_RUN_ID: ${{ inputs.run_id }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/mnq-corpus-cache" "$RUNNER_TEMP/mnq-corpus-work"
