@@ -46,7 +46,9 @@ def test_producer_workflow_is_dispatch_only_and_cleans_plaintext():
     text = PRODUCER_WORKFLOW.read_text(encoding="utf-8")
     assert "workflow_dispatch:" in text
     assert "schedule:" not in text
-    assert "push:" not in text
+    assert "push:" in text
+    assert "rendezvous/fire/mnq-exact-corpus-producer-r1.json" in text
+    assert "mnq.exact_corpus_producer_fire.v1" in text
     assert "contents: write" in text
     assert "mnq_exact_corpus_producer_v1.py" in text
     assert "Remove plaintext producer work" in text
