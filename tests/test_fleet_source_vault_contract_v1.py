@@ -8,6 +8,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "cloudflare/fleet-authority/src/source_exchange.js"
 INDEX = ROOT / "cloudflare/fleet-authority/src/index.js"
+HEALTH_PROBE = ROOT / ".github/workflows/fleet-authority-health-probe.yml"
 
 
 class FleetSourceVaultContractTests(unittest.TestCase):
@@ -713,12 +714,19 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("XoticHaze/research-compute-public-", text)
         self.assertIn("refs/heads/ibkr-b1-authority-v1", text)
 
-    def test_health_exposes_vault_configuration_only(self):
+    def test_health_exposes_and_probe_requires_private_source_authority_configuration(self):
         text = INDEX.read_text(encoding="utf-8")
+        probe = HEALTH_PROBE.read_text(encoding="utf-8")
         self.assertIn("source_vault_configured", text)
         self.assertIn("private_source_authority_configured", text)
         self.assertIn("MMIBKR_PRIVATE_SOURCE_TOKEN", text)
         self.assertNotIn("vault:rsa-oaep:private-jwk", text)
+        self.assertIn(
+            "node.get('private_source_authority_configured') is True",
+            probe,
+        )
+        self.assertIn("PRIVATE_SOURCE_AUTHORITY_CONFIGURED=1", probe)
+        self.assertNotIn("MMIBKR_PRIVATE_SOURCE_TOKEN", probe)
 
     def test_registry_backtest_generic_selected_surface_is_attested_snapshot_and_unwrap_only(self):
         text = SOURCE.read_text(encoding="utf-8")
