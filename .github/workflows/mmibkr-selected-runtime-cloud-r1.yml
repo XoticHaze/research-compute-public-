@@ -6,7 +6,7 @@ on:
       source_ref:
         description: Exact approved private MM-IBKR source SHA to materialize from the reusable encrypted Fleet vault
         required: true
-        default: 35e6b44e5c2618f780a84c1c204fe14c76bdf0e5
+        default: b7225f4e855df7c7648fc9b5145f09181a92ef79
         type: string
       session_seconds:
         description: Bounded daemon session length
@@ -255,7 +255,7 @@ jobs:
       cancel-in-progress: false
     env:
       IBKR_REMOTE_EXCHANGE_TOKEN: ${{ github.token }}
-      CANONICAL_SOURCE_REF: 35e6b44e5c2618f780a84c1c204fe14c76bdf0e5
+      CANONICAL_SOURCE_REF: b7225f4e855df7c7648fc9b5145f09181a92ef79
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -1368,7 +1368,7 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
-      CANONICAL_SOURCE_REF: 35e6b44e5c2618f780a84c1c204fe14c76bdf0e5
+      CANONICAL_SOURCE_REF: b7225f4e855df7c7648fc9b5145f09181a92ef79
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -1718,7 +1718,7 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
-      CANONICAL_SOURCE_REF: 35e6b44e5c2618f780a84c1c204fe14c76bdf0e5
+      CANONICAL_SOURCE_REF: b7225f4e855df7c7648fc9b5145f09181a92ef79
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -2166,7 +2166,7 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
-      CANONICAL_SOURCE_REF: 35e6b44e5c2618f780a84c1c204fe14c76bdf0e5
+      CANONICAL_SOURCE_REF: b7225f4e855df7c7648fc9b5145f09181a92ef79
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 

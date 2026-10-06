@@ -115,6 +115,7 @@ jobs:
               raise SystemExit(0)
 
           checkpoint_prefix='mmibkr-selected-runtime-cloud-checkpoint-v1-'
+          canonical_source='b7225f4e855df7c7648fc9b5145f09181a92ef79'
 
           def receipt_for(run_id):
               path=f'rendezvous/receipts/{run_id}-mmibkr-selected-runtime-cloud.json'
@@ -135,6 +136,8 @@ jobs:
               receipt=json.loads(raw.decode())
               if receipt.get('schema') != 'mmibkr.selected_runtime_cloud_session_receipt.v2':
                   return None
+              if str(receipt.get('private_head') or '').strip().lower() != canonical_source:
+                  return None
               return receipt
 
           checkpoint_key=''
@@ -154,6 +157,7 @@ jobs:
               if (
                   receipt.get('checkpoint_cache_saved') is True
                   and saved_key.startswith(checkpoint_prefix)
+                  and saved_key.endswith('-' + canonical_source)
                   and len(saved_sha) == 64
                   and all(ch in '0123456789abcdef' for ch in saved_sha)
               ):
@@ -174,6 +178,7 @@ jobs:
                   and receipt.get('checkpoint_restored') is True
                   and receipt.get('predecessor_terminal_continuity_ready') is True
                   and predecessor_key.startswith(checkpoint_prefix)
+                  and predecessor_key.endswith('-' + canonical_source)
                   and len(predecessor_sha) == 64
                   and all(ch in '0123456789abcdef' for ch in predecessor_sha)
               ):
@@ -184,14 +189,14 @@ jobs:
                   break
 
           if not checkpoint_key or not checkpoint_sha:
-              raise SystemExit(
-                  'watchdog found no durable exact predecessor checkpoint identity'
-              )
+              print('MMIBKR_CLOUD_WATCHDOG=no_current_source_checkpoint')
+              print('MMIBKR_CLOUD_WATCHDOG_SOURCE_REF=' + canonical_source)
+              raise SystemExit(0)
 
           payload=json.dumps({
               'ref':'main',
               'inputs':{
-                  'source_ref':'35e6b44e5c2618f780a84c1c204fe14c76bdf0e5',
+                  'source_ref':'b7225f4e855df7c7648fc9b5145f09181a92ef79',
                   'session_seconds':'18000',
                   'max_cycles':'0',
                   'expected_checkpoint_cache_key':checkpoint_key,
