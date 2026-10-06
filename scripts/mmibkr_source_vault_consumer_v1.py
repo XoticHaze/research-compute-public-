@@ -87,25 +87,56 @@ def _oidc_token() -> str:
     return value
 
 
-def _unwrap_api(authority_base: str, run_id: str, token: str, payload: Mapping[str, Any]) -> dict[str, Any]:
-    req = Request(
-        authority_base.rstrip("/") + "/v1/source-vault/unwrap",
-        data=json.dumps(dict(payload), sort_keys=True, separators=(",", ":")).encode("utf-8"),
-        method="POST",
-        headers={
-            "Authorization": "Bearer " + token,
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "X-MMIBKR-Caller-Run-Id": str(run_id),
-            "User-Agent": "mmibkr-source-vault-consumer-v1",
-        },
-    )
-    try:
-        with urlopen(req, timeout=30) as response:
-            return json.load(response)
-    except HTTPError as exc:
-        detail = exc.read().decode("utf-8", "replace")
-        raise RuntimeError(f"source_vault_unwrap_http_{exc.code}:{detail[:300]}") from exc
+def _unwrap_api(
+    authority_base: str,
+    run_id: str,
+    token: str,
+    payload: Mapping[str, Any],
+    *,
+    max_attempts: int = 4,
+    retry_delay_sec: float = 1.0,
+    open_url=urlopen,
+    sleep=time.sleep,
+) -> dict[str, Any]:
+    """Unwrap one attested source key, retrying only transient server failures.
+
+    Policy/auth/identity failures are deterministic and must fail closed on the
+    first response. A bounded 5xx retry absorbs short Cloudflare deployment or
+    Durable Object convergence faults without weakening Source Vault policy.
+    """
+
+    endpoint = authority_base.rstrip("/") + "/v1/source-vault/unwrap"
+    body = json.dumps(
+        dict(payload),
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    attempts = max(1, int(max_attempts))
+    for attempt in range(attempts):
+        req = Request(
+            endpoint,
+            data=body,
+            method="POST",
+            headers={
+                "Authorization": "Bearer " + token,
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "X-MMIBKR-Caller-Run-Id": str(run_id),
+                "User-Agent": "mmibkr-source-vault-consumer-v1",
+            },
+        )
+        try:
+            with open_url(req, timeout=30) as response:
+                return json.load(response)
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", "replace")
+            if 500 <= int(exc.code) <= 599 and attempt + 1 < attempts:
+                sleep(max(0.0, float(retry_delay_sec)))
+                continue
+            raise RuntimeError(
+                f"source_vault_unwrap_http_{exc.code}:{detail[:300]}"
+            ) from exc
+    raise RuntimeError("source_vault_unwrap_retry_exhausted")
 
 
 def _validate_manifest(node: Mapping[str, Any], *, source_sha: str) -> dict[str, Any]:

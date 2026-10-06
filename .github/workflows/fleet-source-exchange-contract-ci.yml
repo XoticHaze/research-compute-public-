@@ -23,6 +23,7 @@ on:
       - tests/test_mmibkr_canonical_research_session_bau_workflow_v1.py
       - tests/test_fleet_source_vault_contract_v1.py
       - tests/test_fleet_authority_minimal_oidc_contract_v1.py
+      - .github/workflows/fleet-authority-health-probe.yml
       - .github/workflows/fleet-source-exchange-contract-ci.yml
   pull_request:
     branches:
@@ -44,6 +45,7 @@ on:
       - tests/test_mmibkr_canonical_research_session_bau_workflow_v1.py
       - tests/test_fleet_source_vault_contract_v1.py
       - tests/test_fleet_authority_minimal_oidc_contract_v1.py
+      - .github/workflows/fleet-authority-health-probe.yml
       - .github/workflows/fleet-source-exchange-contract-ci.yml
 
 permissions:

@@ -46,6 +46,7 @@ jobs:
                       and node.get('service') == 'mmibkr-fleet-authority'
                       and node.get('source_exchange_configured') is True
                       and node.get('source_vault_configured') is True
+                      and node.get('private_source_authority_configured') is True
                       and node.get('hfdl_authority_configured') is True
                       and node.get('hfdl_source_vault_unwrap_enabled') is True
                       and node.get('authority_policy_version') == 'hfdl-mm-canonical-v1'
@@ -74,6 +75,7 @@ jobs:
                       print('FLEET_AUTHORITY_DEPLOYMENT_PROVEN=1')
                       print('SOURCE_EXCHANGE_CONFIGURED=1')
                       print('SOURCE_VAULT_CONFIGURED=1')
+                      print('PRIVATE_SOURCE_AUTHORITY_CONFIGURED=1')
                       print('HFDL_AUTHORITY_CONFIGURED=1')
                       print('HFDL_SOURCE_VAULT_UNWRAP_ENABLED=1')
                       print('AUTHORITY_POLICY_VERSION=hfdl-mm-canonical-v1')
