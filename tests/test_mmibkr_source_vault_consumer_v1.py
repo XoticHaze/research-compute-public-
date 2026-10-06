@@ -8,6 +8,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from urllib.error import HTTPError
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -120,6 +121,60 @@ class ReusableSourceVaultConsumerTests(unittest.TestCase):
             self.assertFalse(result["private_repository_token_used"])
             self.assertFalse(result["plaintext_emitted"])
             self.assertFalse(result["live_execution_allowed"])
+
+    def test_unwrap_retries_transient_server_failure_then_succeeds(self):
+        calls = []
+
+        def open_url(_req, timeout=30):
+            calls.append(timeout)
+            if len(calls) == 1:
+                raise HTTPError(
+                    "https://fleet.example/v1/source-vault/unwrap",
+                    500,
+                    "worker exception",
+                    hdrs=None,
+                    fp=io.BytesIO(b"transient worker failure"),
+                )
+            return io.BytesIO(json.dumps({"ok": True, "approved": True}).encode("utf-8"))
+
+        result = mod._unwrap_api(
+            "https://fleet.example",
+            "12345",
+            "opaque-oidc",
+            {"schema": mod.UNWRAP_SCHEMA},
+            max_attempts=2,
+            retry_delay_sec=0,
+            open_url=open_url,
+            sleep=lambda _seconds: None,
+        )
+        self.assertTrue(result["ok"])
+        self.assertEqual(len(calls), 2)
+
+    def test_unwrap_does_not_retry_policy_rejection(self):
+        calls = []
+
+        def open_url(_req, timeout=30):
+            calls.append(timeout)
+            raise HTTPError(
+                "https://fleet.example/v1/source-vault/unwrap",
+                403,
+                "forbidden",
+                hdrs=None,
+                fp=io.BytesIO(b'{"error":"source_snapshot_not_approved"}'),
+            )
+
+        with self.assertRaisesRegex(RuntimeError, "source_vault_unwrap_http_403"):
+            mod._unwrap_api(
+                "https://fleet.example",
+                "12345",
+                "opaque-oidc",
+                {"schema": mod.UNWRAP_SCHEMA},
+                max_attempts=4,
+                retry_delay_sec=0,
+                open_url=open_url,
+                sleep=lambda _seconds: None,
+            )
+        self.assertEqual(len(calls), 1)
 
     def test_tampered_ciphertext_chunk_fails_before_unwrap(self):
         source = "b" * 40
