@@ -28,6 +28,7 @@ on:
         type: string
 
 permissions:
+  actions: write
   contents: write
   id-token: write
 
@@ -169,6 +170,46 @@ jobs:
             -H 'X-GitHub-Api-Version: 2022-11-28' \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${recipient_path}" -d "$body" >/dev/null
 
+      - name: Dispatch exact admitted MNQ corpus producer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from urllib.request import Request, urlopen
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          run_id = os.environ["GITHUB_RUN_ID"]
+          url = (
+              f"https://api.github.com/repos/{repo}/actions/workflows/"
+              "mnq-exact-corpus-producer-r1.yml/dispatches"
+          )
+          body = json.dumps(
+              {"ref": "main", "inputs": {"run_id": run_id}},
+              separators=(",", ":"),
+          ).encode("utf-8")
+          req = Request(
+              url,
+              data=body,
+              method="POST",
+              headers={
+                  "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                  "Accept": "application/vnd.github+json",
+                  "Content-Type": "application/json",
+                  "X-GitHub-Api-Version": "2022-11-28",
+                  "User-Agent": "mmibkr-canonical-session-corpus-dispatch/1",
+              },
+          )
+          with urlopen(req, timeout=30) as response:
+              if response.status != 204:
+                  raise SystemExit(
+                      f"MNQ corpus producer dispatch failed HTTP {response.status}"
+                  )
+          print("MNQ_EXACT_CORPUS_PRODUCER_DISPATCHED=1")
+          print("MNQ_EXACT_CORPUS_TARGET_RUN_ID=" + run_id)
+          PY
+
       - name: Wait for run-bound corpus envelope
         env:
           GH_TOKEN: ${{ github.token }}
@@ -178,7 +219,7 @@ jobs:
           envelope_path="${response_root}/mnq-corpus-envelope.json"
           api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${envelope_path}?ref=${EXCHANGE_REF}"
           found=0
-          for _ in $(seq 1 120); do
+          for _ in $(seq 1 360); do
             if curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github.raw+json' "$api" -o "$RUNNER_TEMP/mnq-corpus-envelope.json"; then found=1; break; fi
             sleep 5
           done
