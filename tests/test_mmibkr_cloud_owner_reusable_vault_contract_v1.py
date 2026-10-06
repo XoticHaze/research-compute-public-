@@ -5,7 +5,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_SHA = "35e6b44e5c2618f780a84c1c204fe14c76bdf0e5"
+SOURCE_SHA = "b7225f4e855df7c7648fc9b5145f09181a92ef79"
 
 
 class CloudOwnerReusableVaultContractTests(unittest.TestCase):
@@ -46,6 +46,15 @@ class CloudOwnerReusableVaultContractTests(unittest.TestCase):
         self.assertIn("'source_ref':'" + SOURCE_SHA + "'", text)
         self.assertNotIn("'source_ref':'main'", text)
 
+    def test_watchdog_rejects_checkpoints_from_older_private_source(self):
+        text = (ROOT / ".github/workflows/mmibkr-selected-runtime-cloud-watchdog-r1.yml").read_text(encoding="utf-8")
+        self.assertIn("canonical_source='" + SOURCE_SHA + "'", text)
+        self.assertIn("receipt.get('private_head')", text)
+        self.assertIn("!= canonical_source", text)
+        self.assertIn("saved_key.endswith('-' + canonical_source)", text)
+        self.assertIn("predecessor_key.endswith('-' + canonical_source)", text)
+        self.assertIn("MMIBKR_CLOUD_WATCHDOG=no_current_source_checkpoint", text)
+
     def test_watchdog_recovery_dispatch_is_pinned_to_durable_checkpoint_receipt(self):
         text = (ROOT / ".github/workflows/mmibkr-selected-runtime-cloud-watchdog-r1.yml").read_text(encoding="utf-8")
         self.assertIn("rendezvous/receipts/{run_id}-mmibkr-selected-runtime-cloud.json", text)
@@ -85,6 +94,24 @@ class CloudOwnerReusableVaultContractTests(unittest.TestCase):
             text,
         )
         self.assertIn("ENABLE_LIVE_TRADING=0", text)
+
+    def test_staged_push_fire_is_bounded_fresh_source_canary(self):
+        import json
+
+        node = json.loads(
+            (ROOT / "rendezvous/fire/mmibkr-selected-runtime-cloud-r1").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(node["source_ref"], SOURCE_SHA)
+        self.assertEqual(node["session_seconds"], "1200")
+        self.assertEqual(node["max_cycles"], "1")
+        self.assertFalse(node["self_handoff"])
+        self.assertEqual(node["expected_checkpoint_cache_key"], "")
+        self.assertEqual(node["expected_checkpoint_sha256"], "")
+        self.assertFalse(node["require_terminal_continuity"])
+        self.assertFalse(node["live_execution_allowed"])
+
 
 
 if __name__ == "__main__":
