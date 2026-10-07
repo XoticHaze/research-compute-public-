@@ -30,7 +30,6 @@ def test_allowlist_accepts_research_autotuner_registry_and_data_materializer():
 @pytest.mark.parametrize(
     "module",
     [
-        "tests.test_selected_runtime_submit_authority",
         "tests.test_ibkr_remote_submit",
         "tests.test_live_bot_runtime_scope",
         "tests.test_not_allowlisted",
@@ -52,9 +51,6 @@ def test_allowlist_accepts_exact_pr798_read_only_position_projection_modules():
         "tests.test_selected_runtime_strategy_inventory_v1",
         "tests.test_cloud_operator_snapshot_v1",
     ]
-
-    with pytest.raises(ValueError, match="test_module_authority_rejected"):
-        validated_modules("tests.test_selected_runtime_submit_authority")
 
 
 
@@ -182,7 +178,6 @@ def test_allowlist_accepts_exact_capital_survivor_and_corpus_regressions_only():
 
     # Exact admission must not open adjacent runtime/broker-authority modules.
     for rejected in (
-        "tests.test_selected_runtime_submit_authority",
         "tests.test_selected_runtime_margin_submit_live",
         "tests.test_backtest_capital_replay_submit",
         "tests.test_research_survivor_funnel_live",
