@@ -5,7 +5,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_SHA = "b7225f4e855df7c7648fc9b5145f09181a92ef79"
+SOURCE_SHA = "828228ee343be644ec3bec5c1967e299e8e3136d"
 
 
 class CloudOwnerReusableVaultContractTests(unittest.TestCase):
