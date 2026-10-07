@@ -1,8 +1,8 @@
 {
   "schema": "mmibkr.parity_export_fire.v1",
-  "source_sha": "e1c9b49b983122348d8180ef4dec7bcd857a10be",
+  "source_sha": "b7225f4e855df7c7648fc9b5145f09181a92ef79",
   "recipient_public_b64": "6oTp3V+wg0ewqIiaeg+iY3GKeeWLxc9TVLTFyS6yGyI=",
   "recipient_key_id": "sha256:967b85b36e176cce54d48235d8d87b49617d98053ed77adc0501c21e1888678c",
-  "requested_at_utc": "2026-10-07T10:03:00Z",
-  "purpose": "export latest vault-accepted MM source, then apply exact bounded delta to current main"
+  "requested_at_utc": "2026-10-07T10:05:00Z",
+  "purpose": "export current runtime-vault MM source, then apply exact 2-commit/6-path delta to private main"
 }
