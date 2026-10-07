@@ -13,7 +13,7 @@ permissions:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  PRIVATE_SOURCE_SHA: e0bcb22609345c3504ba69957d493d3e11c4b242
+  PRIVATE_SOURCE_SHA: e1c9b49b983122348d8180ef4dec7bcd857a10be
   RECIPIENT_PUBLIC_B64: 6oTp3V+wg0ewqIiaeg+iY3GKeeWLxc9TVLTFyS6yGyI=
 
 jobs:
