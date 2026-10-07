@@ -1,8 +1,8 @@
 {
   "schema": "mmibkr.parity_export_fire.v1",
-  "source_sha": "e0bcb22609345c3504ba69957d493d3e11c4b242",
+  "source_sha": "e1c9b49b983122348d8180ef4dec7bcd857a10be",
   "recipient_public_b64": "6oTp3V+wg0ewqIiaeg+iY3GKeeWLxc9TVLTFyS6yGyI=",
   "recipient_key_id": "sha256:967b85b36e176cce54d48235d8d87b49617d98053ed77adc0501c21e1888678c",
-  "requested_at_utc": "2026-10-07T09:01:00Z",
-  "purpose": "refresh maintained MM_IBKR_FLEET_PARITY_CURRENT.zip to exact private main"
+  "requested_at_utc": "2026-10-07T10:03:00Z",
+  "purpose": "export latest vault-accepted MM source, then apply exact bounded delta to current main"
 }
