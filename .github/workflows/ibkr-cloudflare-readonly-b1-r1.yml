@@ -170,7 +170,7 @@ jobs:
             tests/test_ibkr_remote_paper_proof_return_v1.py \
             tests/test_ibkr_warm_read_return_v1.py \
             tests/test_ibkr_account_snapshot_return_v1.py \
-            tests/test_ibkr_initial_selected_runtime_backfill_v1.py
+            tests/test_ibkr_initial_selected_runtime_backfill_v1.py \
             tests/test_ibkr_b1_live_readonly_workflow_v1.py
           python - <<'PY'
           from pathlib import Path
@@ -270,7 +270,7 @@ jobs:
             tests/test_ibkr_remote_paper_proof_return_v1.py \
             tests/test_ibkr_warm_read_return_v1.py \
             tests/test_ibkr_account_snapshot_return_v1.py \
-            tests/test_ibkr_initial_selected_runtime_backfill_v1.py
+            tests/test_ibkr_initial_selected_runtime_backfill_v1.py \
             tests/test_ibkr_b1_live_readonly_workflow_v1.py
           python -m unittest \
             tests.test_ibkr_b1_auth_contracts_v1 \
