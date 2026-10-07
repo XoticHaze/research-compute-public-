@@ -192,6 +192,25 @@ def test_allowlist_accepts_exact_capital_survivor_and_corpus_regressions_only():
             validated_modules(rejected)
 
 
+def test_allowlist_accepts_exact_production_live_migration_regressions_only():
+    exact = [
+        "tests.test_ibkr_account_context",
+        "tests.test_ibkr_production_live_account_context_v1",
+        "tests.test_selected_runtime_submit_authority",
+        "tests.test_paper_flatten_canonical_route_authority_667",
+    ]
+    assert validated_modules(" ".join(exact)) == exact
+
+    for rejected in (
+        "tests.test_ibkr_remote_submit",
+        "tests.test_live_bot_runtime_scope",
+        "tests.test_selected_runtime_live_submit",
+        "tests.test_paper_flatten_live_broker_mutation",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(rejected)
+
+
 def test_allowlist_accepts_exact_promotion_review_read_only_regressions():
     exact = [
         "tests.test_promotion_review_store",
