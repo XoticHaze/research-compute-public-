@@ -14,6 +14,8 @@ on:
       - cloudflare/fleet-authority/package.json
       - cloudflare/fleet-authority/package-lock.json
       - scripts/mmibkr_cloud_source_exchange_consumer_v1.py
+      - scripts/fleet_authority_envelope_consumer_v1.py
+      - tests/test_ibkr_live_readonly_fleet_authority_v1.py
       - tests/test_mmibkr_cloud_source_exchange_consumer_v1.py
       - scripts/mmibkr_source_vault_consumer_v1.py
       - tests/test_mmibkr_source_vault_consumer_v1.py
@@ -36,6 +38,8 @@ on:
       - cloudflare/fleet-authority/package.json
       - cloudflare/fleet-authority/package-lock.json
       - scripts/mmibkr_cloud_source_exchange_consumer_v1.py
+      - scripts/fleet_authority_envelope_consumer_v1.py
+      - tests/test_ibkr_live_readonly_fleet_authority_v1.py
       - tests/test_mmibkr_cloud_source_exchange_consumer_v1.py
       - scripts/mmibkr_source_vault_consumer_v1.py
       - tests/test_mmibkr_source_vault_consumer_v1.py
@@ -116,6 +120,7 @@ jobs:
           set -euo pipefail
           python -m pip install --disable-pip-version-check cryptography==46.0.1
           python -m py_compile \
+            scripts/fleet_authority_envelope_consumer_v1.py \
             scripts/mmibkr_cloud_source_exchange_consumer_v1.py \
             scripts/mmibkr_source_vault_consumer_v1.py \
             scripts/mmibkr_attested_source_to_canonical_receipt_v1.py
@@ -126,10 +131,12 @@ jobs:
           python - <<'PY'
           modules = []
           from tests import test_fleet_authority_minimal_oidc_contract_v1 as oidc_contract
+          from tests import test_ibkr_live_readonly_fleet_authority_v1 as ibkr_live_contract
           from tests import test_mmibkr_attested_source_to_canonical_receipt_v1 as receipt_contract
           from tests import test_mmibkr_canonical_research_session_bau_workflow_v1 as session_contract
           modules.extend([
               ('Fleet OIDC', oidc_contract),
+              ('IBKR live readonly', ibkr_live_contract),
               ('Attested receipt', receipt_contract),
               ('Canonical session', session_contract),
           ])
