@@ -1,16 +1,18 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "a8b6a327a5643a3fd674a329efe0720a991256c1",
+  "source_ref": "a61d493af14bcd1ec78d132dcf52fc73a55b4d37",
   "test_modules": [
-    "tests.test_s4_layered_mtf_matched_control_economics_20261004",
-    "tests.test_autotuner_composition_generator_vnext",
-    "tests.test_strategy_spec_mtf_registry_backtest_vnext"
+    "tests.test_ibkr_account_context",
+    "tests.test_ibkr_production_live_account_context_v1",
+    "tests.test_selected_runtime_submit_authority",
+    "tests.test_paper_flatten_canonical_route_authority_667"
   ],
   "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
   "s3_composition_economics": false,
-  "requested_by": "evolution-auditor",
-  "purpose": "Execute S4 108-evaluation layered StrategySpec multi-timeframe matched-control economics after PR #821 merge; research only",
+  "s4_layered_mtf_economics": false,
+  "requested_by": "chatgpt-mm-live-readiness",
+  "purpose": "Validate merged MM production-live account-context seam with live disabled and no broker credentials",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -18,9 +20,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "s4-layered-mtf-economics-20261004-r1",
+  "request_nonce": "mm-live-context-a61d493a-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "a8b6a327a5643a3fd674a329efe0720a991256c1",
-  "parity_public_key_b64": "",
-  "s4_layered_mtf_economics": true
+  "current_private_reference": "a61d493af14bcd1ec78d132dcf52fc73a55b4d37",
+  "parity_public_key_b64": ""
 }
