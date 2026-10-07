@@ -1,0 +1,33 @@
+name: MMIBKR Parity Ciphertext Pack R1
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/mmibkr-parity-ciphertext-pack-r1.yml
+permissions:
+  contents: read
+jobs:
+  pack:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Verify ciphertext-only inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find rendezvous/private-capsules/mmibkr-parity-e0bcb226 -maxdepth 1 -name 'chunk-*.json' | wc -l)" -eq 15
+          ! grep -R -F 'from __future__ import' rendezvous/private-capsules/mmibkr-parity-e0bcb226
+          echo 'MMIBKR_PARITY_CIPHERTEXT_CHUNKS=15'
+      - name: Upload ciphertext pack
+        id: pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmibkr-parity-ciphertext-pack-r1
+          path: rendezvous/private-capsules/mmibkr-parity-e0bcb226/chunk-*.json
+          if-no-files-found: error
+          retention-days: 1
+      - name: Emit boundary
+        run: |
+          echo 'MMIBKR_PARITY_PRIVATE_PLAINTEXT_PUBLISHED=0'
+          echo 'MMIBKR_PARITY_SOURCE_SHA=e0bcb22609345c3504ba69957d493d3e11c4b242'
