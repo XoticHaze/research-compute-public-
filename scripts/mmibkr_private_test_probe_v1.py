@@ -78,6 +78,13 @@ SAFE_EXACT = {
     "tests.test_admit_exact_pilot_to_promotion_review_13z",
     "tests.test_ibkr_remote_forward_exact_ticks_slot_v1",
     "tests.test_ibkr_remote_account_hygiene_slot_v1",
+    # Exact production-live migration regressions. These tests execute only
+    # pure/account-context logic and source/AST assertions with
+    # ENABLE_LIVE_TRADING=0; they do not connect to IBKR or mutate broker state.
+    "tests.test_ibkr_account_context",
+    "tests.test_ibkr_production_live_account_context_v1",
+    "tests.test_selected_runtime_submit_authority",
+    "tests.test_paper_flatten_canonical_route_authority_667",
 }
 STATUS_STAGE_MODULES = {
     "tests.test_market_features_provenance_contract",
