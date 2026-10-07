@@ -6,6 +6,7 @@ const GITHUB_JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwk
 const EXPECTED_AUDIENCE = 'mmibkr-fleet-authority';
 const EXPECTED_REPOSITORY = 'XoticHaze/research-compute-public-';
 const EXPECTED_AUTHORITY = 'ibkr-paper-readonly';
+const LIVE_READONLY_AUTHORITY = 'ibkr-live-readonly';
 const ALLOWED_REF = 'refs/heads/ibkr-b1-authority-v1';
 const ALLOWED_EVENTS = new Set(['push', 'workflow_dispatch']);
 const ALLOWED_WORKFLOW_REF = 'XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1';
@@ -14,6 +15,7 @@ const HFDL_ALLOWED_REF = 'refs/heads/hfdl-e1-authority-v1';
 const HFDL_ALLOWED_WORKFLOW_REF = 'XoticHaze/research-compute-public-/.github/workflows/hfdl-equity-history-e1-r1.yml@refs/heads/hfdl-e1-authority-v1';
 const REQUEST_SCHEMA = 'mmibkr-fleet-authority-seal-request-v1';
 const ENVELOPE_SCHEMA = 'mmibkr-ibkr-readonly-gateway-env-x25519-hkdf-aesgcm-v1';
+const LIVE_READONLY_ENVELOPE_SCHEMA = 'mmibkr-ibkr-live-readonly-gateway-env-x25519-hkdf-aesgcm-v1';
 const HFDL_ENVELOPE_SCHEMA = 'mmibkr-hfdl-api-key-x25519-hkdf-aesgcm-v1';
 
 function json(body, status = 200) {
@@ -244,6 +246,125 @@ async function sealIbkrGatewayEnv(body, env, oidc) {
 }
 
 
+async function sealIbkrLiveReadonlyGatewayEnv(body, env, oidc) {
+  if (body.schema !== REQUEST_SCHEMA || body.authority !== LIVE_READONLY_AUTHORITY) throw new Error('request_rejected');
+  const runId = String(body.run_id ?? '');
+  if (!/^\d{4,24}$/.test(runId)) throw new Error('run_id_rejected');
+
+  const recipientB64 = String(body.recipient_b64 ?? '');
+  const recipientKeyId = String(body.recipient_key_id ?? '');
+  let recipientRaw;
+  try {
+    recipientRaw = b64ToBytes(recipientB64);
+  } catch {
+    throw new Error('recipient_rejected');
+  }
+  if (recipientRaw.length !== 32) throw new Error('recipient_rejected');
+  const calculatedKeyId = `sha256:${await sha256Hex(recipientRaw)}`;
+  if (recipientKeyId !== calculatedKeyId) throw new Error('recipient_key_id_rejected');
+
+  if (!env.IBKR_LIVE_USERNAME || !env.IBKR_LIVE_PASSWORD || !env.IBKR_LIVE_ACCOUNT) {
+    throw new Error('authority_not_configured');
+  }
+  const userid = validateSecretValue(env.IBKR_LIVE_USERNAME, 'live_authority_userid');
+  const secret = validateSecretValue(env.IBKR_LIVE_PASSWORD, 'live_authority_secret');
+  const liveAccount = validateSecretValue(env.IBKR_LIVE_ACCOUNT, 'live_authority_account');
+  if (liveAccount.toUpperCase().startsWith('DU')) throw new Error('live_authority_account_rejected');
+
+  const twofactorCode = firstConfiguredValue(
+    env,
+    ['IBKR_LIVE_TWOFACTOR_CODE'],
+    'live_authority_twofactor_code',
+  );
+  const twofaDevice = firstConfiguredValue(
+    env,
+    ['IBKR_LIVE_TWOFA_DEVICE'],
+    'live_authority_twofa_device',
+  );
+  const liveServer = firstConfiguredValue(
+    env,
+    ['IBKR_LIVE_TWS_SERVER'],
+    'live_authority_server',
+  );
+
+  const recipientKey = await crypto.subtle.importKey('raw', recipientRaw, { name: 'X25519' }, false, []);
+  const ephemeral = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
+  const shared = await crypto.subtle.deriveBits(
+    { name: 'X25519', public: recipientKey },
+    ephemeral.privateKey,
+    256,
+  );
+
+  const salt = crypto.getRandomValues(new Uint8Array(32));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const aadText = `mmibkr-fleet-authority|${LIVE_READONLY_AUTHORITY}|${runId}|${recipientKeyId}`;
+  const aad = new TextEncoder().encode(aadText);
+
+  const hkdfBase = await crypto.subtle.importKey('raw', shared, 'HKDF', false, ['deriveKey']);
+  const aesKey = await crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt, info: aad },
+    hkdfBase,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt'],
+  );
+
+  const gatewayEnv = [
+    `TWS_USERID=${userid}`,
+    `TWS_PASSWORD=${secret}`,
+    `TWS_USERID_LIVE=${userid}`,
+    `TWS_PASSWORD_LIVE=${secret}`,
+    `MMIBKR_PRODUCTION_LIVE_ACCOUNT=${liveAccount}`,
+    'MMIBKR_ACCOUNT_MODE=production_live',
+    'TRADING_MODE=live',
+    'READ_ONLY_API=yes',
+    'ENABLE_LIVE_TRADING=0',
+    'TWS_ACCEPT_INCOMING=accept',
+    'TWOFA_TIMEOUT_ACTION=exit',
+    'RELOGIN_AFTER_TWOFA_TIMEOUT=yes',
+    'SAVE_TWS_SETTINGS=no',
+    'ENABLE_VNC=false',
+  ];
+  if (twofactorCode) gatewayEnv.push(`TWOFACTOR_CODE=${twofactorCode}`);
+  if (twofaDevice) gatewayEnv.push(`TWOFA_DEVICE=${twofaDevice}`);
+  if (liveServer) {
+    gatewayEnv.push(`TWS_SERVER_LIVE=${liveServer}`);
+    gatewayEnv.push(`TWS_SERVER=${liveServer}`);
+  }
+  gatewayEnv.push('');
+
+  const plaintext = new TextEncoder().encode(gatewayEnv.join('\n'));
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, additionalData: aad, tagLength: 128 },
+    aesKey,
+    plaintext,
+  ));
+  const ephemeralPublic = new Uint8Array(await crypto.subtle.exportKey('raw', ephemeral.publicKey));
+
+  return {
+    schema: LIVE_READONLY_ENVELOPE_SCHEMA,
+    authority: LIVE_READONLY_AUTHORITY,
+    run_id: runId,
+    recipient_key_id: recipientKeyId,
+    ephemeral_public_b64: bytesToB64(ephemeralPublic),
+    salt_b64: bytesToB64(salt),
+    iv_b64: bytesToB64(iv),
+    aad_b64: bytesToB64(aad),
+    ciphertext_b64: bytesToB64(ciphertext),
+    created_at: new Date().toISOString(),
+    oidc: {
+      repository: oidc.repository,
+      ref: oidc.ref,
+      workflow_ref: oidc.workflow_ref,
+      workflow_sha: oidc.workflow_sha,
+      event_name: oidc.event_name,
+      run_id: oidc.run_id,
+      run_attempt: oidc.run_attempt,
+    },
+  };
+}
+
+
 async function sealHfdlApiKey(body, env, oidc) {
   if (body.schema !== REQUEST_SCHEMA || body.authority !== HFDL_AUTHORITY) throw new Error('request_rejected');
   const runId = String(body.run_id ?? '');
@@ -328,6 +449,9 @@ export default {
         source_vault_configured: Boolean(env.SOURCE_EXCHANGE),
         private_source_authority_configured: Boolean(env.MMIBKR_PRIVATE_SOURCE_TOKEN),
         hfdl_authority_configured: Boolean(env.HFDL_API_KEY),
+        ibkr_live_readonly_authority_configured: Boolean(
+          env.IBKR_LIVE_USERNAME && env.IBKR_LIVE_PASSWORD && env.IBKR_LIVE_ACCOUNT
+        ),
         hfdl_source_vault_unwrap_enabled: true,
         authority_policy_version: 'hfdl-mm-canonical-v1',
       });
@@ -341,8 +465,9 @@ export default {
     }
 
     const isIbkrSeal = url.pathname === '/v1/authorities/ibkr-paper/seal';
+    const isIbkrLiveReadonlySeal = url.pathname === '/v1/authorities/ibkr-live-readonly/seal';
     const isHfdlSeal = url.pathname === '/v1/authorities/hfdl/seal';
-    if (request.method !== 'POST' || (!isIbkrSeal && !isHfdlSeal)) {
+    if (request.method !== 'POST' || (!isIbkrSeal && !isIbkrLiveReadonlySeal && !isHfdlSeal)) {
       return json({ error: 'not_found' }, 404);
     }
 
@@ -377,6 +502,8 @@ export default {
       const oidc = await verifyGithubOidc(auth.slice(7), runId, hfdlPolicy);
       const envelope = isHfdlSeal
         ? await sealHfdlApiKey(body, env, oidc)
+        : isIbkrLiveReadonlySeal
+        ? await sealIbkrLiveReadonlyGatewayEnv(body, env, oidc)
         : await sealIbkrGatewayEnv(body, env, oidc);
       return json(envelope, 200);
     } catch (error) {
