@@ -6,6 +6,15 @@ import unittest
 
 from scripts import mmibkr_cloud_session_acceptance_v1 as mod
 
+# Synthetic IDs are CI fixtures only. Production IDs are always sourced from
+# exact private MM selected_runtime_universe_14tu.json by the R5/R6 workflow.
+TEST_EXPECTED_RUNTIME_IDS = ["test_amat_selected", "test_aph_selected", "test_mnq_selected"]
+
+def _evaluate_with_ids(*args, **kwargs):
+    kwargs.setdefault("expected_runtime_ids", TEST_EXPECTED_RUNTIME_IDS)
+    return mod.evaluate(*args, **kwargs)
+
+
 
 class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
     def good_receipt(self, *, restored: bool) -> dict:
@@ -42,11 +51,20 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
                     mod.CHECKPOINT_CACHE_PREFIX + "35699999999-d81-initial-backfill-preowner"
                 ),
             },
+            "last_cycle": {
+                "boundary_key": "bar|test_mnq_selected",
+                "boundary_run_id": "RUN_1",
+            },
             "operator_snapshot_stream_publish_count": 2,
             "operator_snapshot_stream_attempt_count": 2,
             "operator_snapshot_publish": {
                 "status": "accepted",
                 "runtime_count": 3,
+                "received_runtime_count": 3,
+                "runtime_merge_applied": False,
+                "runtime_ids": TEST_EXPECTED_RUNTIME_IDS,
+                "boundary_run_id": "RUN_1",
+                "source_sha": mod.CANONICAL_PRIVATE_SHA,
                 "positions_count": 1,
                 "durable_readback_verified": True,
                 "account_identifiers_included": False,
@@ -60,7 +78,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         }
 
     def test_first_post_fix_accepts_self_healed_start(self):
-        result = mod.evaluate(
+        result = _evaluate_with_ids(
             self.good_receipt(restored=False),
             require_checkpoint_restored=False,
         )
@@ -68,7 +86,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         self.assertEqual(result["mode"], "first_post_fix")
 
     def test_steady_state_requires_prior_checkpoint_restore(self):
-        result = mod.evaluate(
+        result = _evaluate_with_ids(
             self.good_receipt(restored=False),
             require_checkpoint_restored=True,
         )
@@ -79,7 +97,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         previous = self.good_receipt(restored=False)
         previous["checkpoint_cache_sha256"] = current["checkpoint_restored_sha256"]
         previous["checkpoint_cache_key"] = current["checkpoint_restored_cache_key"]
-        accepted = mod.evaluate(
+        accepted = _evaluate_with_ids(
             current,
             require_checkpoint_restored=True,
             previous_receipt=previous,
@@ -92,7 +110,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         node = self.good_receipt(restored=True)
         node["operator_snapshot_publish"]["runtime_count"] = 2
         node["private_head"] = "0" * 40
-        result = mod.evaluate(node, require_checkpoint_restored=False)
+        result = _evaluate_with_ids(node, require_checkpoint_restored=False)
         self.assertFalse(result["accepted"])
         self.assertFalse(result["checks"]["operator_runtime_count"])
         self.assertFalse(result["checks"]["private_head"])
@@ -110,14 +128,14 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
             with self.subTest(key=key):
                 node = self.good_receipt(restored=True)
                 node["operator_snapshot_publish"][key] = True
-                result = mod.evaluate(node, require_checkpoint_restored=False)
+                result = _evaluate_with_ids(node, require_checkpoint_restored=False)
                 self.assertFalse(result["accepted"])
                 self.assertFalse(result["checks"]["operator_safety"])
 
     def test_rejects_missing_canonical_backfill_checkpoint(self):
         node = self.good_receipt(restored=False)
         node["initial_backfill_ingest"]["preowner_checkpoint_saved"] = False
-        result = mod.evaluate(node, require_checkpoint_restored=False)
+        result = _evaluate_with_ids(node, require_checkpoint_restored=False)
         self.assertFalse(result["accepted"])
         self.assertFalse(result["checks"]["initial_backfill_preowner_checkpoint_saved"])
 
@@ -125,7 +143,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         node = self.good_receipt(restored=False)
         node["initial_backfill_ingest"]["public_run_id"] = "wrong"
         node["initial_backfill_ingest"]["artifact_name"] = "wrong"
-        result = mod.evaluate(node, require_checkpoint_restored=False)
+        result = _evaluate_with_ids(node, require_checkpoint_restored=False)
         self.assertFalse(result["accepted"])
         self.assertFalse(result["checks"]["initial_backfill_public_run"])
         self.assertFalse(result["checks"]["initial_backfill_artifact"])
@@ -134,11 +152,11 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         node = self.good_receipt(restored=False)
         node["schema"] = mod.LEGACY_SCHEMA
         node.pop("initial_backfill_ingest")
-        rejected = mod.evaluate(node, require_checkpoint_restored=False)
+        rejected = _evaluate_with_ids(node, require_checkpoint_restored=False)
         self.assertFalse(rejected["accepted"])
         self.assertFalse(rejected["checks"]["schema"])
 
-        accepted = mod.evaluate(
+        accepted = _evaluate_with_ids(
             node,
             require_checkpoint_restored=False,
             allow_legacy_v1=True,
@@ -160,13 +178,13 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
             "expected_predecessor_checkpoint_sha256"
         ]
 
-        accepted = mod.evaluate(node, require_checkpoint_restored=False)
+        accepted = _evaluate_with_ids(node, require_checkpoint_restored=False)
         self.assertTrue(accepted["accepted"])
         self.assertTrue(accepted["checks"]["expected_predecessor_identity_reported"])
         self.assertTrue(accepted["checks"]["expected_predecessor_restore_match"])
 
         node["checkpoint_restored_sha256"] = "b" * 64
-        rejected = mod.evaluate(node, require_checkpoint_restored=False)
+        rejected = _evaluate_with_ids(node, require_checkpoint_restored=False)
         self.assertFalse(rejected["accepted"])
         self.assertFalse(rejected["checks"]["expected_predecessor_restore_match"])
 
@@ -177,7 +195,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         )
         node["expected_predecessor_checkpoint_sha256"] = ""
         node["expected_predecessor_checkpoint_match"] = True
-        result = mod.evaluate(node, require_checkpoint_restored=False)
+        result = _evaluate_with_ids(node, require_checkpoint_restored=False)
         self.assertFalse(result["accepted"])
         self.assertFalse(result["checks"]["expected_predecessor_identity_reported"])
 
@@ -198,7 +216,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         node["predecessor_terminal_continuity_ready"] = True
         node["predecessor_terminal_continuity_entry_count"] = 5
 
-        accepted = mod.evaluate(node, require_checkpoint_restored=False)
+        accepted = _evaluate_with_ids(node, require_checkpoint_restored=False)
         self.assertTrue(accepted["accepted"])
         self.assertTrue(
             accepted["checks"]["predecessor_terminal_continuity_ready"]
@@ -208,7 +226,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         )
 
         node["predecessor_terminal_continuity_entry_count"] = 0
-        rejected = mod.evaluate(node, require_checkpoint_restored=False)
+        rejected = _evaluate_with_ids(node, require_checkpoint_restored=False)
         self.assertFalse(rejected["accepted"])
         self.assertFalse(
             rejected["checks"]["predecessor_terminal_continuity_ready"]
@@ -219,7 +237,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         node["predecessor_terminal_continuity_required"] = True
         node["predecessor_terminal_continuity_ready"] = True
         node["predecessor_terminal_continuity_entry_count"] = 1
-        result = mod.evaluate(node, require_checkpoint_restored=False)
+        result = _evaluate_with_ids(node, require_checkpoint_restored=False)
         self.assertFalse(result["accepted"])
         self.assertFalse(
             result["checks"]["predecessor_terminal_continuity_has_exact_restore"]
@@ -228,7 +246,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
     def test_rejects_missing_cache_persistence(self):
         node = self.good_receipt(restored=True)
         node["checkpoint_cache_saved"] = False
-        result = mod.evaluate(node, require_checkpoint_restored=False)
+        result = _evaluate_with_ids(node, require_checkpoint_restored=False)
         self.assertFalse(result["accepted"])
         self.assertFalse(result["checks"]["checkpoint_cache_saved"])
 
@@ -237,7 +255,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         previous = self.good_receipt(restored=False)
         previous["checkpoint_cache_sha256"] = "c" * 64
         previous["checkpoint_cache_key"] = "wrong-cache-key"
-        result = mod.evaluate(
+        result = _evaluate_with_ids(
             current,
             require_checkpoint_restored=True,
             previous_receipt=previous,
@@ -251,7 +269,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         previous["checkpoint_cache_sha256"] = current["checkpoint_restored_sha256"]
         previous["checkpoint_cache_key"] = current["checkpoint_restored_cache_key"]
         previous["operator_snapshot_publish"]["status"] = "failed"
-        result = mod.evaluate(
+        result = _evaluate_with_ids(
             current,
             require_checkpoint_restored=True,
             previous_receipt=previous,
@@ -267,7 +285,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         previous = self.good_receipt(restored=False)
         previous["checkpoint_cache_sha256"] = current["checkpoint_restored_sha256"]
         previous["checkpoint_cache_key"] = current["checkpoint_restored_cache_key"]
-        result = mod.evaluate(
+        result = _evaluate_with_ids(
             current,
             require_checkpoint_restored=True,
             previous_receipt=previous,
@@ -278,13 +296,13 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
 
     def test_optional_public_head_expectation_fail_closes(self):
         node = self.good_receipt(restored=False)
-        accepted = mod.evaluate(
+        accepted = _evaluate_with_ids(
             node,
             require_checkpoint_restored=False,
             expected_public_sha="1" * 40,
         )
         self.assertTrue(accepted["accepted"])
-        rejected = mod.evaluate(
+        rejected = _evaluate_with_ids(
             node,
             require_checkpoint_restored=False,
             expected_public_sha="2" * 40,
@@ -295,7 +313,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
     def test_rejects_unverified_operator_durable_readback(self):
         node = self.good_receipt(restored=False)
         node["operator_snapshot_publish"]["durable_readback_verified"] = False
-        result = mod.evaluate(node, require_checkpoint_restored=False)
+        result = _evaluate_with_ids(node, require_checkpoint_restored=False)
         self.assertFalse(result["accepted"])
         self.assertFalse(result["checks"]["operator_durable_readback"])
 
@@ -303,7 +321,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         node = self.good_receipt(restored=False)
         node["operator_snapshot_stream_publish_count"] = 0
         node["operator_snapshot_stream_attempt_count"] = 3
-        result = mod.evaluate(node, require_checkpoint_restored=False)
+        result = _evaluate_with_ids(node, require_checkpoint_restored=False)
         self.assertFalse(result["accepted"])
         self.assertFalse(result["checks"]["operator_stream_publish"])
 
@@ -311,7 +329,7 @@ class MMIBKRCloudSessionAcceptanceTests(unittest.TestCase):
         node = self.good_receipt(restored=False)
         node["operator_snapshot_stream_publish_count"] = 3
         node["operator_snapshot_stream_attempt_count"] = 2
-        result = mod.evaluate(node, require_checkpoint_restored=False)
+        result = _evaluate_with_ids(node, require_checkpoint_restored=False)
         self.assertFalse(result["accepted"])
         self.assertFalse(result["checks"]["operator_stream_attempts"])
 

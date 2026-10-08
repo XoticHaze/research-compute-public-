@@ -800,6 +800,23 @@ jobs:
           docker logs -f "$owner_container" &
           log_pid=$!
 
+          # Exact MM source materialization already binds PRIVATE_HEAD.
+          # Derive expected active runtime IDs from MM-owned config, never
+          # from the received snapshot or a hard-coded public runtime list.
+          python - "$PRIVATE_SOURCE_ROOT/config/selected_runtime_universe_14tu.json" "$RUNNER_TEMP/expected-selected-runtime-ids.json" "$PRIVATE_HEAD" <<'PY_SELECTED_IDS'
+          import json, sys
+          from pathlib import Path
+          source = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          if source.get('schema') != 'selected_runtime_universe_14tu.v1':
+              raise SystemExit('canonical_selected_runtime_schema_mismatch')
+          rows = source.get('runtime_ids')
+          if not isinstance(rows, list):
+              raise SystemExit('canonical_selected_runtime_rows_missing')
+          ids = [x.get('runtime_id') for x in rows if isinstance(x, dict) and x.get('status') == 'active_selected']
+          if len(ids) != 3 or len(set(ids)) != len(ids) or not all(isinstance(x, str) and x for x in ids):
+              raise SystemExit('canonical_selected_runtime_set_invalid')
+          Path(sys.argv[2]).write_text(json.dumps({'source_sha':sys.argv[3],'runtime_ids':sorted(ids)})+'\n',encoding='utf-8')
+          PY_SELECTED_IDS
           while true; do
             running="$(docker inspect -f '{{.State.Running}}' "$owner_container" 2>/dev/null || printf 'false')"
             [ "$running" = 'true' ] || break
@@ -810,13 +827,46 @@ jobs:
                 snapshot_sha256="$(sha256sum "$snapshot_tmp" | awk '{print $1}')"
                 if [ "$snapshot_sha256" != "$last_seen_sha256" ]; then
                   last_seen_sha256="$snapshot_sha256"
-                  stream_attempt_count=$((stream_attempt_count + 1))
-                  rm -f "$stream_meta"
-                  if python scripts/mmibkr_operator_snapshot_publish_v1.py                     --snapshot "$snapshot_tmp"                     --operator-url "$OPERATOR_CONSOLE_URL"                     --caller-run-id "$GITHUB_RUN_ID"                     --output "$stream_meta"                     --mode stream; then
-                    stream_publish_count=$((stream_publish_count + 1))
-                    echo "MMIBKR_OPERATOR_SNAPSHOT_STREAM_ACCEPTED_COUNT=$stream_publish_count"
+                  # A one-cycle/no-handoff canary publishes only after terminal
+                  # session/snapshot identity can be checked before final POST.
+                  if [ "$MAX_CYCLES" = '1' ] && [ "$SELF_HANDOFF" = 'false' ]; then
+                    : # no streaming POST and no stream attempt credit
                   else
-                    echo "::warning::Operator snapshot stream publish failed; selected-runtime owner continues."
+                    stream_attempt_count=$((stream_attempt_count + 1))
+                    rm -f "$stream_meta"
+                    # Source-bound runtime identity before every normal stream POST.
+                    # The one-cycle/no-handoff canary has no stream POST.
+                    python - "$snapshot_tmp" "$RUNNER_TEMP/expected-selected-runtime-ids.json" "$PRIVATE_HEAD" <<'PY_STREAM_IDS'
+          import json, re, sys
+          from pathlib import Path
+          snapshot = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          selected = json.loads(Path(sys.argv[2]).read_text(encoding='utf-8'))
+          private_head = sys.argv[3]
+          runtime = snapshot.get('runtime') if isinstance(snapshot.get('runtime'), dict) else {}
+          rows = snapshot.get('runtimes')
+          ids = [row.get('runtime_id') if isinstance(row, dict) else None for row in rows] if isinstance(rows, list) else []
+          expected = selected.get('runtime_ids') if isinstance(selected, dict) else None
+          if not (
+              re.fullmatch(r'[0-9a-f]{40}', private_head)
+              and isinstance(selected, dict) and selected.get('source_sha') == private_head
+              and isinstance(expected, list) and len(expected) == 3 and len(set(expected)) == 3
+              and all(isinstance(x, str) and re.fullmatch(r'[A-Za-z0-9_]{1,80}', x) for x in expected)
+              and snapshot.get('mode') == 'paper' and snapshot.get('live_enabled') is False
+              and runtime.get('source_sha') == private_head
+              and isinstance(runtime.get('boundary_run_id'), str)
+              and re.fullmatch(r'[A-Za-z0-9_-]{1,80}', runtime['boundary_run_id'])
+              and isinstance(rows, list) and 1 <= len(ids) <= 3 and len(set(ids)) == len(ids)
+              and all(isinstance(x, str) and re.fullmatch(r'[A-Za-z0-9_]{1,80}', x) for x in ids)
+              and set(ids).issubset(set(expected))
+          ):
+              raise SystemExit('operator_snapshot_stream_pre_publish_canonical_identity_rejected')
+          PY_STREAM_IDS
+                    if python scripts/mmibkr_operator_snapshot_publish_v1.py                     --snapshot "$snapshot_tmp"                     --operator-url "$OPERATOR_CONSOLE_URL"                     --caller-run-id "$GITHUB_RUN_ID"                     --output "$stream_meta"                     --mode stream; then
+                      stream_publish_count=$((stream_publish_count + 1))
+                      echo "MMIBKR_OPERATOR_SNAPSHOT_STREAM_ACCEPTED_COUNT=$stream_publish_count"
+                    else
+                      echo "::warning::Operator snapshot stream publish failed; selected-runtime owner continues."
+                    fi
                   fi
                 fi
                 rm -f "$snapshot_tmp" "$stream_meta"
@@ -971,6 +1021,9 @@ jobs:
           umask 077
           publish_status='failed'
           runtime_count=''
+          received_runtime_count=''
+          runtime_ids_json='[]'
+          boundary_run_id=''
           positions_count=''
           durable_readback_verified='false'
           snapshot=''
@@ -980,6 +1033,9 @@ jobs:
             {
               printf 'publish_status=%s\n' "$publish_status"
               printf 'runtime_count=%s\n' "$runtime_count"
+              printf 'received_runtime_count=%s\n' "$received_runtime_count"
+              printf 'runtime_ids_json=%s\n' "$runtime_ids_json"
+              printf 'boundary_run_id=%s\n' "$boundary_run_id"
               printf 'positions_count=%s\n' "$positions_count"
               printf 'durable_readback_verified=%s\n' "$durable_readback_verified"
             } >> "$GITHUB_OUTPUT"
@@ -1000,6 +1056,52 @@ jobs:
           docker run --rm             -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro"             "mmibkr-cloud:${GITHUB_RUN_ID}"             python -c "from pathlib import Path; import sys; sys.stdout.buffer.write(Path('$snapshot_in_container').read_bytes())"             > "$snapshot"
           chmod 600 "$snapshot"
 
+          # Validate exact canonical boundary identity BEFORE the operator-console POST.
+          # R3's downstream receipt checks remain a separate post-publish gate.
+          python - "$snapshot" "$RUNNER_TEMP/mmibkr-data/strategy_runtime/selected_runtime_cloud_daemon_v1/session.json" "$RUNNER_TEMP/expected-selected-runtime-ids.json" "$PRIVATE_HEAD" "$MAX_CYCLES" "$SELF_HANDOFF" "$GITHUB_EVENT_NAME" <<'PY_PREFLIGHT'
+          import json, re, sys
+          from pathlib import Path
+          snapshot = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          session = json.loads(Path(sys.argv[2]).read_text(encoding='utf-8'))
+          cycle = session.get('last_cycle') if isinstance(session.get('last_cycle'), dict) else {}
+          runtime = snapshot.get('runtime') if isinstance(snapshot.get('runtime'), dict) else {}
+          rows = snapshot.get('runtimes')
+          selected = json.loads(Path(sys.argv[3]).read_text(encoding='utf-8'))
+          private_head = sys.argv[4]
+          partial_canary = sys.argv[5] == '1' and sys.argv[6] == 'false' and sys.argv[7] == 'push'
+          selected_ids = selected.get('runtime_ids') if isinstance(selected, dict) else None
+          canonical_set_ok = (
+              isinstance(private_head, str) and re.fullmatch(r'[0-9a-f]{40}', private_head)
+              and isinstance(selected, dict) and selected.get('source_sha') == private_head
+              and isinstance(selected_ids, list) and len(selected_ids) == 3
+              and len(set(selected_ids)) == 3
+              and all(isinstance(v, str) and re.fullmatch(r'[A-Za-z0-9_]{1,80}', v) for v in selected_ids)
+          )
+          ids = [row.get('runtime_id') if isinstance(row, dict) else None for row in rows] if isinstance(rows, list) else []
+          key = cycle.get('boundary_key')
+          expected_runtime = key.rsplit('|', 1)[-1] if isinstance(key, str) and '|' in key else ''
+          expected_run = str(cycle.get('boundary_run_id') or '')
+          actual_run = runtime.get('boundary_run_id')
+          if not (
+              canonical_set_ok
+              and runtime.get('source_sha') == private_head
+              and session.get('exact_private_source_sha') == private_head
+              and (set(ids).issubset(set(selected_ids)) if partial_canary else set(ids) == set(selected_ids))
+              and (len(ids) <= 3 if partial_canary else len(ids) == 3)
+              and session.get('ok') is True
+              and cycle.get('ok') is True
+              and cycle.get('broker_action') is False
+              and session.get('live_execution_allowed') is False
+              and isinstance(rows, list) and 1 <= len(rows) <= 3
+              and len(ids) == len(set(ids))
+              and all(isinstance(value, str) and re.fullmatch(r'[A-Za-z0-9_]{1,80}', value) for value in ids)
+              and expected_runtime in ids
+              and re.fullmatch(r'[A-Za-z0-9_-]{1,80}', expected_run)
+              and isinstance(actual_run, str)
+              and actual_run == expected_run
+          ):
+              raise SystemExit('operator_snapshot_pre_publish_boundary_identity_rejected')
+          PY_PREFLIGHT
           python scripts/mmibkr_operator_snapshot_publish_v1.py             --snapshot "$snapshot"             --operator-url "$OPERATOR_CONSOLE_URL"             --caller-run-id "$GITHUB_RUN_ID"             --output "$publish_meta"             --mode final
 
           read -r publish_status runtime_count positions_count durable_readback_verified < <(
@@ -1012,6 +1114,26 @@ jobs:
               int(node.get('positions_count') or 0),
               'true' if node.get('durable_readback_verified') is True else 'false',
           )
+          PY
+          )
+          # The existing publish helper verifies received versus stored counts.
+          # Bind the sanitized boundary identity to the actual source snapshot.
+          read -r received_runtime_count runtime_ids_json boundary_run_id < <(
+            python - "$publish_meta" "$snapshot" <<'PY'
+          import json, re, sys
+          meta = json.load(open(sys.argv[1], encoding='utf-8'))
+          snapshot = json.load(open(sys.argv[2], encoding='utf-8'))
+          ids = [str(row.get('runtime_id') or '') for row in snapshot.get('runtimes') or []]
+          if (
+              not ids or len(ids) > 3 or len(ids) != len(set(ids))
+              or any(not re.fullmatch(r'[A-Za-z0-9_]{1,80}', value) for value in ids)
+              or meta.get('received_runtime_count') != len(ids)
+          ):
+              raise SystemExit('operator_snapshot_boundary_runtime_identity_rejected')
+          boundary_run_id = str((snapshot.get('runtime') or {}).get('boundary_run_id') or '')
+          if not re.fullmatch(r'[A-Za-z0-9_-]{1,80}', boundary_run_id):
+              raise SystemExit('operator_snapshot_boundary_run_identity_rejected')
+          print(len(ids), json.dumps(sorted(ids), separators=(',', ':')), boundary_run_id)
           PY
           )
 
@@ -1046,6 +1168,9 @@ jobs:
           MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_STREAM_ATTEMPTS: ${{ steps.cloud_owner.outputs.stream_attempt_count || '0' }}
           MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_PUBLISH: ${{ steps.operator_snapshot.outputs.publish_status }}
           MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_RUNTIME_COUNT: ${{ steps.operator_snapshot.outputs.runtime_count }}
+          MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_RECEIVED_RUNTIME_COUNT: ${{ steps.operator_snapshot.outputs.received_runtime_count }}
+          MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_RUNTIME_IDS_JSON: ${{ steps.operator_snapshot.outputs.runtime_ids_json }}
+          MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_BOUNDARY_RUN_ID: ${{ steps.operator_snapshot.outputs.boundary_run_id }}
           MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_POSITIONS_COUNT: ${{ steps.operator_snapshot.outputs.positions_count }}
           MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_DURABLE_READBACK: ${{ steps.operator_snapshot.outputs.durable_readback_verified }}
         run: |
@@ -1249,6 +1374,15 @@ jobs:
               'runtime_count': optional_int(
                   'MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_RUNTIME_COUNT'
               ),
+              'received_runtime_count': optional_int(
+                  'MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_RECEIVED_RUNTIME_COUNT'
+              ),
+              'runtime_ids': json.loads(
+                  os.environ.get('MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_RUNTIME_IDS_JSON') or '[]'
+              ),
+              'boundary_run_id': (
+                  os.environ.get('MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_BOUNDARY_RUN_ID') or None
+              ),
               'positions_count': optional_int(
                   'MMIBKR_RECEIPT_OPERATOR_SNAPSHOT_POSITIONS_COUNT'
               ),
@@ -1288,12 +1422,23 @@ jobs:
         if: ${{ success() }}
         run: |
           set -euo pipefail
+          acceptance_mode='first-post-fix'
+          acceptance_marker='MMIBKR_CLOUD_V2_RECEIPT_ACCEPTED=1'
+          # An explicit push-fire one-cycle paper canary proves only one
+          # evaluated boundary. It cannot claim 3-runtime/stream readiness.
+          if [ "$GITHUB_EVENT_NAME" = 'push' ] \
+             && [ "$MAX_CYCLES" = '1' ] \
+             && [ "$SELF_HANDOFF" = 'false' ]; then
+            acceptance_mode='boundary-canary'
+            acceptance_marker='MMIBKR_CLOUD_BOUNDARY_CANARY_ACCEPTED=1_FULL_READINESS=0'
+          fi
           python scripts/mmibkr_cloud_session_acceptance_v1.py \
             --receipt "$RUNNER_TEMP/mmibkr-cloud-session-receipt.json" \
-            --mode first-post-fix \
+            --mode "$acceptance_mode" \
             --expected-public-sha "$GITHUB_SHA" \
-            --expected-private-sha "$PRIVATE_HEAD"
-          echo 'MMIBKR_CLOUD_V2_RECEIPT_ACCEPTED=1'
+            --expected-private-sha "$PRIVATE_HEAD" \
+            --expected-runtime-ids-file "$RUNNER_TEMP/expected-selected-runtime-ids.json"
+          echo "$acceptance_marker"
 
       - name: Queue successor bounded session
         if: ${{ success() && env.SELF_HANDOFF == 'true' }}
