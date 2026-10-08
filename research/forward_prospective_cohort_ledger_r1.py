@@ -82,7 +82,7 @@ def _adapter(path: Path) -> tuple[dict[str, Any], str]:
     if program not in SUPPORTED:
         raise RuntimeError(f"unsupported adapter program={program}")
     boundaries = x.get("boundaries") or {}
-    for key in ("broker_action", "live_trading_change", "runtime_mutation", "promotion_authority"):
+    for key in ("broker_action", "live_trading_change", "runtime_mutation", "promotion_authority", "allocation_authority"):
         if boundaries.get(key) is not False:
             raise RuntimeError(f"adapter boundary must remain false program={program} key={key}")
     return x, _sha(raw)
@@ -791,6 +791,32 @@ def _observed_market_data_asof(cohorts: list[dict[str, Any]], requested: date) -
     return min(observed) if observed else requested.isoformat()
 
 
+def _assert_unique_program_signal_identity(cohorts: list[dict[str, Any]]) -> None:
+    """Reject multiple prospective identities for the same program and signal date.
+
+    This check runs before any market-data load, preventing a revised adapter
+    from registering a second cohort after outcomes may have become knowable.
+    """
+    seen: dict[tuple[str, str], str] = {}
+    for cohort in cohorts:
+        program = str(cohort.get("program_id") or "")
+        signal_date = str(cohort.get("signal_date") or "")
+        cohort_id = str(cohort.get("cohort_id") or "")
+        adapter_digest = str(cohort.get("source_adapter_sha256") or "")
+        if not all((program, signal_date, cohort_id, adapter_digest)):
+            raise RuntimeError("forward cohort missing immutable program/date/id/adapter digest")
+        if cohort_id != f"{program}:{signal_date}:{adapter_digest[:16]}":
+            raise RuntimeError("forward cohort_id does not bind program/date/adapter digest")
+        key = (program, signal_date)
+        if key in seen:
+            raise RuntimeError(
+                "forward cohort duplicate program+signal_date; "
+                f"program={program} signal_date={signal_date} "
+                f"first={seen[key]} second={cohort_id}"
+            )
+        seen[key] = cohort_id
+
+
 def build(
     adapter_dir: Path,
     prior: dict[str, Any] | None,
@@ -798,7 +824,9 @@ def build(
     now_iso: str,
     loader: Callable[[str, date, date], pd.Series] = _download_close,
 ) -> dict[str, Any]:
-    existing = {str(c["cohort_id"]): dict(c) for c in ((prior or {}).get("cohorts") or [])}
+    prior_rows = list((prior or {}).get("cohorts") or [])
+    _assert_unique_program_signal_identity(prior_rows)
+    existing = {str(c["cohort_id"]): dict(c) for c in prior_rows}
     discovered: dict[str, dict[str, Any]] = {}
     for filename in ("homebuilders.json", "semiconductor_shared_ridge.json"):
         path = adapter_dir / filename
@@ -807,7 +835,14 @@ def build(
         adapter, digest = _adapter(path)
         cohort = _new_cohort(adapter, digest, now_iso)
         if cohort is not None:
+            if cohort["cohort_id"] in discovered:
+                raise RuntimeError("duplicate discovered cohort_id")
             discovered[cohort["cohort_id"]] = cohort
+
+    # New adapter digests on an existing signal date must not mint
+    # a second prospective registration. Reject before price loading.
+    new_only = [row for cid, row in discovered.items() if cid not in existing]
+    _assert_unique_program_signal_identity([*prior_rows, *new_only])
 
     cohorts: list[dict[str, Any]] = []
     for cohort_id in sorted(set(existing) | set(discovered)):
