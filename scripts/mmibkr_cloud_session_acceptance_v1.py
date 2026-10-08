@@ -182,6 +182,22 @@ def evaluate(
             node, publish, expected_runtime_count,
             stream_publish_count, stream_attempt_count,
         ))
+        # One-cycle canary is a canonical *subset*, never an arbitrary
+        # publisher-chosen runtime identity. Expected ids are bound to the
+        # exact private source by --expected-runtime-ids-file before evaluate.
+        canary_ids = publish.get("runtime_ids")
+        canary_expected = expected_runtime_ids
+        checks["canary_source_bound_selected_runtime_subset"] = (
+            isinstance(canary_ids, list)
+            and isinstance(canary_expected, list)
+            and len(canary_expected) == expected_runtime_count
+            and len(set(canary_expected)) == len(canary_expected)
+            and all(isinstance(x, str) and x for x in canary_expected)
+            and all(isinstance(x, str) and x for x in canary_ids)
+            and 1 <= len(canary_ids) <= expected_runtime_count
+            and len(set(canary_ids)) == len(canary_ids)
+            and set(canary_ids).issubset(set(canary_expected))
+        )
     if not boundary_canary:
         # Stored runtime_count may be a merge of stale prior-session rows.
         # Full readiness requires all expected runtimes in this final source
