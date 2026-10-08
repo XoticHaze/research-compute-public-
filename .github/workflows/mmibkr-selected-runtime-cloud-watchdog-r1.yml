@@ -115,7 +115,7 @@ jobs:
               raise SystemExit(0)
 
           checkpoint_prefix='mmibkr-selected-runtime-cloud-checkpoint-v1-'
-          canonical_source='b7225f4e855df7c7648fc9b5145f09181a92ef79'
+          canonical_source='a61d493af14bcd1ec78d132dcf52fc73a55b4d37'
 
           def receipt_for(run_id):
               path=f'rendezvous/receipts/{run_id}-mmibkr-selected-runtime-cloud.json'
@@ -196,7 +196,7 @@ jobs:
           payload=json.dumps({
               'ref':'main',
               'inputs':{
-                  'source_ref':'b7225f4e855df7c7648fc9b5145f09181a92ef79',
+                  'source_ref':'a61d493af14bcd1ec78d132dcf52fc73a55b4d37',
                   'session_seconds':'18000',
                   'max_cycles':'0',
                   'expected_checkpoint_cache_key':checkpoint_key,

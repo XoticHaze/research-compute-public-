@@ -81,7 +81,7 @@ class CheckpointAcceptanceJobTests(unittest.TestCase):
         text = WORKFLOW.read_text(encoding="utf-8")
         section = text[text.index("  checkpoint_acceptance:"):]
         self.assertIn(
-            "CANONICAL_SOURCE_REF: b7225f4e855df7c7648fc9b5145f09181a92ef79",
+            "CANONICAL_SOURCE_REF: a61d493af14bcd1ec78d132dcf52fc73a55b4d37",
             section,
         )
         self.assertIn('gh run download "$INITIAL_BACKFILL_RUN_ID"', section)
