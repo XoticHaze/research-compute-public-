@@ -1,9 +1,9 @@
 {
-  "source_ref": "b7225f4e855df7c7648fc9b5145f09181a92ef79",
+  "source_ref": "a61d493af14bcd1ec78d132dcf52fc73a55b4d37",
   "session_seconds": "1200",
   "max_cycles": "1",
   "self_handoff": false,
-  "requested_by": "assistant-current-strategyspec-cloud-canary",
+  "requested_by": "assistant-current-main-paper-canary",
   "source_public_run_id": "35407829303",
   "expected_checkpoint_cache_key": "",
   "expected_checkpoint_sha256": "",
@@ -11,7 +11,8 @@
   "predecessor_proof_run": null,
   "predecessor_v2_receipt_accepted": false,
   "failed_owner_run": null,
-  "recovery_reason": "fresh-source canary must not reuse a checkpoint produced by an older MM-IBKR source identity",
-  "purpose": "current-three-StrategySpec bounded paper canary after explicit maintenance-hold release",
-  "live_execution_allowed": false
+  "recovery_reason": "fresh current-source canary must not reuse an older-source checkpoint",
+  "purpose": "bounded one-cycle paper canary on current MM main after exact StrategySpec acceptance",
+  "live_execution_allowed": false,
+  "allow_unpinned_bootstrap": true
 }
