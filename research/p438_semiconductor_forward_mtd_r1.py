@@ -33,12 +33,23 @@ if len(pos)!=1: raise RuntimeError(f'signal bar not on exact common calendar: {S
 si=int(pos[0]); ei=si+DELAY; final_i=si+DELAY+HOLD
 if ei>=len(common): raise RuntimeError('entry session not available yet')
 entry_ts=common[ei]; latest_ts=common[-1]
+# Mark unresolved targets at the latest available bar, but pin resolved
+# fixed-HOLD outcomes to the exact frozen terminal common-session index.
+mark_i=min(final_i,len(common)-1); mark_ts=common[mark_i]
 rows=[]
 for s in PRED:
-    entry=float(px[s].loc[entry_ts]); latest=float(px[s].loc[latest_ts]); be=float(px[BENCH].loc[entry_ts]); bl=float(px[BENCH].loc[latest_ts])
-    path=px[s].reindex(common[ei:]).astype(float); path_bps=(path/entry-1)*10000
+    # The canonical Foundry scorer uses stock/SMH pairwise common dates.
+    # Fail closed if the public 7-way calendar would change this frozen path.
+    pair_common=px[s].index.intersection(px[BENCH].index).sort_values()
+    pair_pos=np.flatnonzero(pair_common==signal)
+    if len(pair_pos)!=1: raise RuntimeError(f'P438_MTD_CANONICAL_PAIRWISE_CALENDAR_DIVERGENCE {s}: signal missing')
+    pair_ei=int(pair_pos[0])+DELAY; pair_mark_i=min(int(pair_pos[0])+DELAY+HOLD,len(pair_common)-1)
+    if pair_ei>=len(pair_common) or not pair_common[pair_ei:pair_mark_i+1].equals(common[ei:mark_i+1]):
+        raise RuntimeError(f'P438_MTD_CANONICAL_PAIRWISE_CALENDAR_DIVERGENCE {s}: source-common target/path differs')
+    entry=float(px[s].loc[entry_ts]); latest=float(px[s].loc[mark_ts]); be=float(px[BENCH].loc[entry_ts]); bl=float(px[BENCH].loc[mark_ts])
+    path=px[s].reindex(common[ei:mark_i+1]).astype(float); path_bps=(path/entry-1)*10000
     net=(latest/entry-1)*10000-COST_BPS; smh=(bl/be-1)*10000
-    rows.append({'symbol':s,'frozen_descriptive_rank':RANK[s],'predicted_fixed20_net_value_bps':PRED[s],'entry_date':entry_ts.date().isoformat(),'latest_common_date':latest_ts.date().isoformat(),'elapsed_close_to_close_sessions':int(len(common[ei:])-1),'remaining_sessions_to_fixed20':int(max(0,final_i-(len(common)-1))),'mark_to_date_net25_bps':float(net),'mark_to_date_smh_gross_bps':float(smh),'mark_to_date_excess_vs_smh_bps':float(net-smh),'path_mfe_bps':float(path_bps.max()),'path_mae_bps':float(path_bps.min()),'final_target_resolved':bool(len(common)-1>=final_i)})
+    rows.append({'symbol':s,'frozen_descriptive_rank':RANK[s],'predicted_fixed20_net_value_bps':PRED[s],'entry_date':entry_ts.date().isoformat(),'latest_common_date':latest_ts.date().isoformat(),'target_mark_date':mark_ts.date().isoformat(),'frozen_target_pinned':bool(len(common)-1>=final_i),'elapsed_close_to_close_sessions':int(len(common[ei:])-1),'target_mark_elapsed_sessions':int(mark_i-ei),'return_basis':('frozen_h20_target' if len(common)-1>=final_i else 'asof_mark_to_date'),'remaining_sessions_to_fixed20':int(max(0,final_i-(len(common)-1))),'mark_to_date_net25_bps':float(net),'mark_to_date_smh_gross_bps':float(smh),'mark_to_date_excess_vs_smh_bps':float(net-smh),'path_mfe_bps':float(path_bps.max()),'path_mae_bps':float(path_bps.min()),'final_target_resolved':bool(len(common)-1>=final_i)})
 final_resolved=all(r['final_target_resolved'] for r in rows)
 out={'schema':'research.p438_semiconductor_forward_mtd_r1.v1','workload_id':'P438_SEMICONDUCTOR_FORWARD_MTD_R1','parent':'SEMICONDUCTOR_PREDICTED_VALUE_SCARCITY_FORWARD','frozen_prediction_identity':{'research_foundry_branch_commit':'0a4787db6d78ac843c8b60395b1ff83fc3c4f49d','prediction_blob_sha':'4d92ef44157590423cd13bbadc22594178b92dc0','generation_bar_date':SIGNAL,'delay_sessions':DELAY,'hold_sessions':HOLD,'cost_bps':COST_BPS},'source':'Nasdaq historical daily Close API, same source family as frozen observer','source_last_dates':{s:px[s].index.max().date().isoformat() for s in symbols},'rows':rows,'classification':'FIXED20_TARGET_RESOLVED' if final_resolved else 'FIXED20_TARGET_UNRESOLVED__DESCRIPTIVE_PATH_ONLY','scientific_rule':'No hit-rate, calibration, rank-IC, model pass/fail, refit, promotion, or rejection may be inferred from this mark-to-date artifact before the immutable delayed 20-session target resolves.','boundaries':{'research_only':True,'final_scorecard_authority':False,'portfolio_ranking':False,'allocation_authority':False,'runtime':False,'broker':False,'live_trading':False}}
 OUT.write_text(json.dumps(out,indent=2,sort_keys=True,allow_nan=False))
