@@ -1,7 +1,7 @@
 {
   "schema": "mmibkr.selected_runtime_maintenance_hold.v1",
-  "enabled": true,
-  "reason": "paper_account_hygiene_679",
+  "enabled": false,
+  "reason": "paper_account_hygiene_preflight_clean_strategy_inventory_flat",
   "scope": "selected_runtime_owner_dispatch",
   "broker_mutation_authority": false,
   "live_execution_allowed": false
