@@ -1,0 +1,1 @@
+{"broker_action": false, "command_intent_present": false, "generated_at_utc": "2026-10-08T00:24:57.890516Z", "live_execution_allowed": false, "public_authority_head": "b8e7a6c403f9e3c1e7f0eecf6d92a4d2af001be9", "reason": "natural_cycle_no_candidate", "run_id": "37707425925", "schema": "mmibkr.remote_selected_runtime_boundary_close.v1"}
