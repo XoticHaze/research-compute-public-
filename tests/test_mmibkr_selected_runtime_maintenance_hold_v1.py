@@ -18,11 +18,14 @@ WATCHDOG_WORKFLOW = ROOT / ".github/workflows/mmibkr-selected-runtime-cloud-watc
 
 
 class SelectedRuntimeMaintenanceHoldTests(unittest.TestCase):
-    def test_committed_hygiene_hold_is_fail_closed_and_non_authoritative(self):
+    def test_committed_hygiene_hold_is_released_and_non_authoritative(self):
         node = read_maintenance_hold(CONTROL)
         self.assertEqual(node["schema"], SCHEMA)
-        self.assertTrue(node["enabled"])
-        self.assertEqual(node["reason"], "paper_account_hygiene_679")
+        self.assertFalse(node["enabled"])
+        self.assertEqual(
+            node["reason"],
+            "paper_account_hygiene_preflight_clean_strategy_inventory_flat",
+        )
         self.assertFalse(node["broker_mutation_authority"])
         self.assertFalse(node["live_execution_allowed"])
 
