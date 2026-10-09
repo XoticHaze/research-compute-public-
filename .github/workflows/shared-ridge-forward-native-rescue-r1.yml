@@ -80,11 +80,36 @@ jobs:
           test "$found" = 1 || { echo 'Shared Ridge encrypted capsule did not arrive'; exit 42; }
           echo "SHARED_RIDGE_RESPONSE_ROOT=${root}" >> "$GITHUB_ENV"
       - name: Execute existing encrypted consumer
+        run: |
+          set -euo pipefail
+          python scripts/forward_native_ephemeral_consumer_v1.py \
+            --envelope "$RUNNER_TEMP/forward-native-envelope.json" \
+            --private-key "$RUNNER_TEMP/forward-native-private.b64" \
+            --run-id "$GITHUB_RUN_ID" \
+            --harness semiconductor_shared_ridge_three_book_v1 \
+            --adapter-script "$GITHUB_WORKSPACE/research/forward_native_program_adapter_r1.py" \
+            --return-envelope "$RUNNER_TEMP/forward-native-return.json"
+
+      - name: Publish encrypted return
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python scripts/forward_native_ephemeral_consumer_v1.py             --envelope "$RUNNER_TEMP/forward-native-envelope.json"             --private-key "$RUNNER_TEMP/forward-native-private.b64"             --run-id "$GITHUB_RUN_ID"             --harness semiconductor_shared_ridge_three_book_v1             --repo "XoticHaze/research-compute-public-"             --exchange-ref "$EXCHANGE_REF"             --response-root "$SHARED_RIDGE_RESPONSE_ROOT"
+          path="${SHARED_RIDGE_RESPONSE_ROOT}-return.json"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}"
+          payload="$(base64 -w0 "$RUNNER_TEMP/forward-native-return.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json,sys
+          print(json.dumps({'message':'rendezvous: publish encrypted Shared Ridge rescue return','content':sys.argv[1],'branch':sys.argv[2]}))
+          PY
+          )"
+          curl -fsSL -X PUT \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$api" -d "$body" >/dev/null
+          echo "SHARED_RIDGE_RETURN_PATH=${path}"
+
       - name: Remove private recipient material
         if: always()
-        run: rm -f "$RUNNER_TEMP/forward-native-private.b64" "$RUNNER_TEMP/forward-native-recipient.json" "$RUNNER_TEMP/forward-native-envelope.json"
+        run: rm -f "$RUNNER_TEMP/forward-native-private.b64" "$RUNNER_TEMP/forward-native-recipient.json" "$RUNNER_TEMP/forward-native-envelope.json" "$RUNNER_TEMP/forward-native-return.json"
