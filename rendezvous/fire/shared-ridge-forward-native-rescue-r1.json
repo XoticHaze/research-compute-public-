@@ -1,7 +1,8 @@
 {
   "schema": "shared-ridge.forward-native-rescue-fire.v1",
-  "requested_at_utc": "2026-10-09T06:50:00Z",
+  "requested_at_utc": "2026-10-09T08:38:00Z",
   "source_ref": "e73ec9b15180e208de541ce5d5304888e5550433",
   "no_backfill": true,
-  "research_only": true
+  "research_only": true,
+  "reason": "fresh first-seen Shared Ridge cohort repair; manual ephemeral private closure injection because private producer failed pre-step"
 }
