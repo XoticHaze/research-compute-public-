@@ -1,0 +1,145 @@
+{
+  "benchmarks": [
+    "cash",
+    "SMH",
+    "QQQ",
+    "equal_weight_13_name_semiconductor_universe"
+  ],
+  "boundaries": {
+    "allocation_authority": false,
+    "broker_action": false,
+    "live_trading_change": false,
+    "native": {
+      "broker_authority": false,
+      "live_trading_authority": false,
+      "promotion_authority": false,
+      "runtime_mutation": false,
+      "sizing_authority": false
+    },
+    "promotion_authority": false,
+    "research_only": true,
+    "runtime_mutation": false
+  },
+  "decision_use": "Use as semiconductor entry/timing evidence. Positive forecasts authorize only the frozen paper cohort rules; prediction magnitude is not ranking or sizing authority. Prefer sector-level corroboration unless prospective stock-selection excess versus SMH is established.",
+  "kind": "daily_entry_value_with_three_book_expression",
+  "paper_action": {
+    "industry_book": {
+      "cohort_cash_fraction_nav": 0.0,
+      "cohort_target_weight_nav": 0.05,
+      "instrument": "SMH",
+      "mapping": "daily_cohort_nav_fraction * positive_breadth",
+      "positive_breadth": 1.0,
+      "status": "PAPER_COHORT_READY"
+    },
+    "options_book": {
+      "eligible_underlyings": [
+        "AMAT",
+        "APH",
+        "KLAC",
+        "LRCX",
+        "TXN",
+        "NXPI",
+        "ADI",
+        "NVDA",
+        "AMD",
+        "MU",
+        "AVGO",
+        "MRVL",
+        "MCHP"
+      ],
+      "reason": "missing_point_in_time_chain_and_conditional_return_distribution",
+      "status": "FAIL_CLOSED",
+      "trade_authorized": false
+    },
+    "status": "PAPER_COHORT_READY",
+    "ticker_book": {
+      "cohort_cash_fraction_nav": 0.0,
+      "cohort_gross_exposure": 0.05,
+      "cohort_target_weights_nav": {
+        "ADI": 0.004408342737332261,
+        "AMAT": 0.003209008822422731,
+        "AMD": 0.0028950481269277278,
+        "APH": 0.004065777968163248,
+        "AVGO": 0.004052020583770156,
+        "KLAC": 0.003565271554936713,
+        "LRCX": 0.0029363695083015873,
+        "MCHP": 0.0037328269813200208,
+        "MRVL": 0.002897286833978571,
+        "MU": 0.003187691046752917,
+        "NVDA": 0.0061172757302932704,
+        "NXPI": 0.003760911323374399,
+        "TXN": 0.005172168782426403
+      },
+      "prediction_magnitude_used_for_sizing": false,
+      "realized_vol20_annualized": {
+        "ADI": 0.3388233383911432,
+        "AMAT": 0.4654550628214213,
+        "AMD": 0.5159324949186086,
+        "APH": 0.36737111931127836,
+        "AVGO": 0.3686184144813791,
+        "KLAC": 0.41894407761648916,
+        "LRCX": 0.5086721541047478,
+        "MCHP": 0.4001389323721282,
+        "MRVL": 0.5155338385962219,
+        "MU": 0.4685678069575613,
+        "NVDA": 0.24416904989889346,
+        "NXPI": 0.39715092290320786,
+        "TXN": 0.28878589734160925
+      },
+      "status": "PAPER_COHORT_READY",
+      "weighting": "inverse trailing 20-session realized volatility using only prices available on signal date"
+    }
+  },
+  "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+  "schema": "foundry.forward_program_adapter.v1",
+  "signal": {
+    "positive_breadth": 1.0,
+    "positive_count": 13,
+    "positive_symbols": [
+      "AMAT",
+      "APH",
+      "KLAC",
+      "LRCX",
+      "TXN",
+      "NXPI",
+      "ADI",
+      "NVDA",
+      "AMD",
+      "MU",
+      "AVGO",
+      "MRVL",
+      "MCHP"
+    ],
+    "predicted_fixed20_net_value_bps": {
+      "ADI": 79.64600675387612,
+      "AMAT": 456.70996017806476,
+      "AMD": 366.9418754632386,
+      "APH": 385.5638196268902,
+      "AVGO": 314.6054143112285,
+      "KLAC": 376.2594988794018,
+      "LRCX": 471.10956292395247,
+      "MCHP": 246.280861180064,
+      "MRVL": 341.2710737710697,
+      "MU": 612.1461885633092,
+      "NVDA": 264.2730113345899,
+      "NXPI": 284.4750877052788,
+      "TXN": 149.64971426148992
+    },
+    "universe_count": 13
+  },
+  "signal_date": "2026-10-08",
+  "timing": {
+    "cohort_nav_fraction": 0.05,
+    "decision_cadence": "daily close observation",
+    "entry_rule": "signal at close D; execute cohort on next common market session D+1",
+    "execution_delay_sessions": 1,
+    "exit_rule": "expire cohort exactly 20 common sessions after execution",
+    "holding_horizon_sessions": 20,
+    "max_concurrent_cohorts": 20
+  },
+  "validation": {
+    "prospective_start_signal_date": "2026-09-10",
+    "scientific_forward_credit": true,
+    "state": "PROSPECTIVE_ELIGIBLE"
+  }
+}
