@@ -88,7 +88,28 @@ jobs:
             --run-id "$GITHUB_RUN_ID" \
             --harness semiconductor_shared_ridge_three_book_v1 \
             --adapter-script "$GITHUB_WORKSPACE/research/forward_native_program_adapter_r1.py" \
-            --return-envelope "$RUNNER_TEMP/forward-native-return.json"
+            --return-envelope "$RUNNER_TEMP/forward-native-return.json" \
+            --sanitized-adapter-output "$RUNNER_TEMP/semiconductor_shared_ridge.sanitized.json"
+
+      - name: Publish sanitized adapter receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          path="rendezvous/sanitized/${GITHUB_RUN_ID}/semiconductor_shared_ridge.json"
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}"
+          payload="$(base64 -w0 "$RUNNER_TEMP/semiconductor_shared_ridge.sanitized.json")"
+          body="$(python - "$payload" "$EXCHANGE_REF" <<'PY'
+          import json,sys
+          print(json.dumps({'message':'rendezvous: publish sanitized Shared Ridge adapter receipt','content':sys.argv[1],'branch':sys.argv[2]}))
+          PY
+          )"
+          curl -fsSL -X PUT \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$api" -d "$body" >/dev/null
+          echo "SHARED_RIDGE_SANITIZED_PATH=${path}"
 
       - name: Publish encrypted return
         env:
@@ -112,4 +133,4 @@ jobs:
 
       - name: Remove private recipient material
         if: always()
-        run: rm -f "$RUNNER_TEMP/forward-native-private.b64" "$RUNNER_TEMP/forward-native-recipient.json" "$RUNNER_TEMP/forward-native-envelope.json" "$RUNNER_TEMP/forward-native-return.json"
+        run: rm -f "$RUNNER_TEMP/forward-native-private.b64" "$RUNNER_TEMP/forward-native-recipient.json" "$RUNNER_TEMP/forward-native-envelope.json" "$RUNNER_TEMP/forward-native-return.json" "$RUNNER_TEMP/semiconductor_shared_ridge.sanitized.json"
