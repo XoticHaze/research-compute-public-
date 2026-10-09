@@ -24,14 +24,14 @@
     "overlay_weight": 0.05
   },
   "decision_use": "Prospective portfolio-level falsifier: determine whether the replicated developed-ex-US currency hedge improves the actual frozen allocator target beyond both unchanged cash and an equal unhedged developed-ex-US overlay.",
-  "elapsed_close_to_close_sessions": 17,
+  "elapsed_close_to_close_sessions": 18,
   "entry_date": "2026-09-14",
   "forward_session_clock_semantics": "forward_sessions is legacy inclusive-entry count; elapsed_close_to_close_sessions is the cross-program comparable elapsed clock",
-  "forward_sessions": 18,
-  "generated_at": "2026-10-08T04:01:19.067805+00:00",
-  "latest_common_market_date": "2026-10-07",
-  "market_data_asof": "2026-10-07",
-  "market_sessions_observed_including_entry": 18,
+  "forward_sessions": 19,
+  "generated_at": "2026-10-09T04:06:41.617691+00:00",
+  "latest_common_market_date": "2026-10-08",
+  "market_data_asof": "2026-10-08",
+  "market_sessions_observed_including_entry": 19,
   "positions": {
     "hedged_challenger": {
       "AVDV": 0.1,
@@ -119,29 +119,29 @@
       "portfolio_roundtrip_cost_bps_if_flattened_now": 2.5
     },
     "hedged_challenger": {
-      "excess_vs_incumbent_bps": -2.8151,
-      "gross_return_bps": 435.6856,
-      "net_if_flattened_now_bps": 433.1856
+      "excess_vs_incumbent_bps": -5.1169,
+      "gross_return_bps": 301.3444,
+      "net_if_flattened_now_bps": 298.8444
     },
-    "incumbent_return_bps": 436.0007,
+    "incumbent_return_bps": 303.9613,
     "mechanism_attribution": {
-      "hedged_minus_spy_overlay_bps": -12.321,
-      "hedged_minus_unhedged_bps": 12.4628,
+      "hedged_minus_spy_overlay_bps": -12.4554,
+      "hedged_minus_unhedged_bps": 11.9418,
       "portfolio_improvement_and_hedge_edge_both_positive": false
     },
     "spy_opportunity_control": {
-      "excess_vs_incumbent_bps": 9.5058,
-      "gross_return_bps": 448.0066,
-      "net_if_flattened_now_bps": 445.5066
+      "excess_vs_incumbent_bps": 7.3385,
+      "gross_return_bps": 313.7998,
+      "net_if_flattened_now_bps": 311.2998
     },
     "unhedged_matched_control": {
-      "excess_vs_incumbent_bps": -15.278,
-      "gross_return_bps": 423.2228,
-      "net_if_flattened_now_bps": 420.7228
+      "excess_vs_incumbent_bps": -17.0587,
+      "gross_return_bps": 289.4025,
+      "net_if_flattened_now_bps": 286.9025
     }
   },
   "source": {
-    "panel_sha256": "4ffd0e41f0fcdb5a9907489fd2a6bdfaf8f74eed2b19753292ada89b605df06e",
+    "panel_sha256": "fc8cca54e2f1ebbdf8d71e581dded63e35eb725b33330397f2a3881f570f7810",
     "provider": "Yahoo Finance via yfinance; research-only public data",
     "symbols": [
       "AVDV",
