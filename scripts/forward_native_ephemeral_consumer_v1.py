@@ -245,7 +245,15 @@ def _encrypt_return(payload: bytes, manifest: dict, run_id: str, harness: str) -
     }
 
 
-def consume(envelope_path: Path, private_key_path: Path, run_id: str, harness: str, adapter_script: Path, output: Path) -> dict:
+def consume(
+    envelope_path: Path,
+    private_key_path: Path,
+    run_id: str,
+    harness: str,
+    adapter_script: Path,
+    output: Path,
+    sanitized_adapter_output: Path | None = None,
+) -> dict:
     if harness not in HARNESS_SPECS:
         raise RuntimeError(f"unsupported harness {harness}")
     private_raw = _b64d(private_key_path.read_text(encoding="ascii").strip())
@@ -257,6 +265,9 @@ def consume(envelope_path: Path, private_key_path: Path, run_id: str, harness: s
         root = Path(td)
         manifest = _safe_extract(plaintext, root, harness)
         native, book, adapter = _execute(root, harness, adapter_script)
+        if sanitized_adapter_output is not None:
+            sanitized_adapter_output.parent.mkdir(parents=True, exist_ok=True)
+            sanitized_adapter_output.write_bytes(adapter.read_bytes())
         receipt = {
             "schema": "forward-native-public-compute-receipt-v1",
             "authority": "research_only",
@@ -295,6 +306,7 @@ def main() -> None:
     p.add_argument("--harness")
     p.add_argument("--adapter-script", default="research/forward_native_program_adapter_r1.py")
     p.add_argument("--return-envelope")
+    p.add_argument("--sanitized-adapter-output")
     p.add_argument("--self-test", action="store_true")
     args = p.parse_args()
     if args.self_test:
@@ -302,7 +314,15 @@ def main() -> None:
         return
     if not all((args.envelope, args.private_key, args.run_id, args.harness, args.return_envelope)):
         p.error("live consume requires envelope, private-key, run-id, harness and return-envelope")
-    receipt = consume(Path(args.envelope), Path(args.private_key), args.run_id, args.harness, Path(args.adapter_script).resolve(), Path(args.return_envelope))
+    receipt = consume(
+        Path(args.envelope),
+        Path(args.private_key),
+        args.run_id,
+        args.harness,
+        Path(args.adapter_script).resolve(),
+        Path(args.return_envelope),
+        Path(args.sanitized_adapter_output) if args.sanitized_adapter_output else None,
+    )
     print("FORWARD_NATIVE_PUBLIC_RECEIPT=" + json.dumps(receipt, sort_keys=True))
 
 
