@@ -1,8 +1,8 @@
 {
   "schema": "shared-ridge.forward-native-rescue-fire.v1",
-  "requested_at_utc": "2026-10-09T08:57:00Z",
+  "requested_at_utc": "2026-10-09T09:04:00Z",
   "source_ref": "e73ec9b15180e208de541ce5d5304888e5550433",
   "no_backfill": true,
   "research_only": true,
-  "reason": "retry after deterministic rescue CLI/return-publication contract fix; fresh first-seen only"
+  "reason": "fresh first-seen Shared Ridge rescue with sanitized public adapter receipt; no backfill"
 }
