@@ -1,0 +1,1 @@
+SEMICONDUCTOR_SHARED_RIDGE one-shot encrypted rendezvous rescue. Use frozen source closure. No plaintext private source. No backfill. Research only.
