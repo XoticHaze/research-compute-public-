@@ -60,7 +60,7 @@
   "decision_at": "2026-09-10T07:25:00+00:00",
   "forward": {
     "first_close": "2026-09-10",
-    "latest_close": "2026-10-08",
+    "latest_close": "2026-10-09",
     "observations": [
       {
         "cost_detail": {
@@ -283,63 +283,73 @@
         "p249_plus_p266_gross": -0.010813280182284338,
         "p249_plus_p266_net": -0.010813280182284338,
         "satellite_increment_net": 0.0019152095354248722
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-10-09",
+        "holding_month": "2026-10",
+        "p249_core_gross": 0.0016456601678916446,
+        "p249_core_net": 0.0016456601678916446,
+        "p249_plus_p266_gross": 0.0028470825080610567,
+        "p249_plus_p266_net": 0.0028470825080610567,
+        "satellite_increment_net": 0.0012014223401694121
       }
     ],
     "p249_core_net": {
-      "annualized_vol": 0.18037741591305673,
-      "cumulative_return": 0.012835640010000038,
-      "days": 21,
+      "annualized_vol": 0.17606136410155515,
+      "cumulative_return": 0.014502423279385557,
+      "days": 22,
       "max_drawdown": -0.022376587413719062,
-      "sharpe_rf0": 0.9346665261029186
+      "sharpe_rf0": 1.021119635187829
     },
     "p249_plus_p266_net": {
-      "annualized_vol": 0.18202669027862986,
-      "cumulative_return": 0.009520679582939007,
-      "days": 21,
+      "annualized_vol": 0.17781528281499578,
+      "cumulative_return": 0.012394868251305535,
+      "days": 22,
       "max_drawdown": -0.022644004463825196,
-      "sharpe_rf0": 0.7114688545213415
+      "sharpe_rf0": 0.8786179871965137
     },
-    "satellite_increment_cumulative": -0.00328581969450803
+    "satellite_increment_cumulative": -0.0020883450115252167
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-10-09T09:21:52.351381+00:00",
+  "observed_at": "2026-10-10T01:51:29.931622+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_health": {
     "all_symbols_share_latest_date": true,
     "common_session_lags_source_max": false,
-    "completed_session_request_date": "2026-10-08",
+    "completed_session_request_date": "2026-10-09",
     "in_progress_session_excluded": true,
     "lagging_symbols_vs_source_max": [],
     "latest_by_symbol": {
-      "AVDV": "2026-10-08",
-      "AVUV": "2026-10-08",
-      "DBC": "2026-10-08",
-      "GLD": "2026-10-08",
-      "IGV": "2026-10-08",
-      "IHI": "2026-10-08",
-      "ITA": "2026-10-08",
-      "IYT": "2026-10-08",
-      "KRE": "2026-10-08",
-      "QQQ": "2026-10-08",
-      "SOXX": "2026-10-08",
-      "SPY": "2026-10-08",
-      "TLT": "2026-10-08",
-      "XAR": "2026-10-08",
-      "XBI": "2026-10-08",
-      "XHB": "2026-10-08",
-      "XME": "2026-10-08",
-      "XOP": "2026-10-08",
-      "XPH": "2026-10-08",
-      "XRT": "2026-10-08",
-      "XSD": "2026-10-08",
-      "XSW": "2026-10-08",
-      "XTN": "2026-10-08"
+      "AVDV": "2026-10-09",
+      "AVUV": "2026-10-09",
+      "DBC": "2026-10-09",
+      "GLD": "2026-10-09",
+      "IGV": "2026-10-09",
+      "IHI": "2026-10-09",
+      "ITA": "2026-10-09",
+      "IYT": "2026-10-09",
+      "KRE": "2026-10-09",
+      "QQQ": "2026-10-09",
+      "SOXX": "2026-10-09",
+      "SPY": "2026-10-09",
+      "TLT": "2026-10-09",
+      "XAR": "2026-10-09",
+      "XBI": "2026-10-09",
+      "XHB": "2026-10-09",
+      "XME": "2026-10-09",
+      "XOP": "2026-10-09",
+      "XPH": "2026-10-09",
+      "XRT": "2026-10-09",
+      "XSD": "2026-10-09",
+      "XSW": "2026-10-09",
+      "XTN": "2026-10-09"
     },
-    "latest_scored_common_session": "2026-10-08",
+    "latest_scored_common_session": "2026-10-09",
     "provider": "yfinance_adjusted_close",
-    "source_max_date": "2026-10-08"
+    "source_max_date": "2026-10-09"
   },
   "source_pins": {
     "P248_source_commit": "20490f115d901aac3b586c33072c1157ad4d10a6",
