@@ -1,5 +1,5 @@
 #!/bin/bash
-# Canonical authority: XoticHaze/CommandCenter@077c2cd09492f83bbb8ef1e656d85c23d61e016d
+# Canonical authority: XoticHaze/CommandCenter@8981323ba8294b5d721c673a19411bfc73054816
 set -euo pipefail
 
 BASE="/Users/cr0nix/Documents/pfSense"
@@ -119,24 +119,28 @@ CREATE_JSON="$WORK/cf-neutral-account-create.json"
 
 rm -f "$LIST_JSON" "$CREATE_JSON"
 
-"${CF[@]}" accounts list --name "$TARGET_ACCOUNT_NAME" > "$LIST_JSON"
-
-read -r MATCH_COUNT NEUTRAL_ACCOUNT_ID < <(
-  python3 - "$LIST_JSON" "$TARGET_ACCOUNT_NAME" <<'PY'
+parse_exact_account() {
+  python3 - "$1" "$TARGET_ACCOUNT_NAME" <<'PY'
 import json,sys
 p,name=sys.argv[1],sys.argv[2]
 with open(p,encoding="utf-8") as fh:
     data=json.load(fh)
 if isinstance(data,dict) and "result" in data:
-    data=data.get("result") or []
-if not isinstance(data,list):
-    raise SystemExit("ACCOUNT_LIST_SHAPE_INVALID")
-matches=[x for x in data if isinstance(x,dict) and x.get("name")==name]
-ids=[str(x.get("id") or "") for x in matches]
-valid=[x for x in ids if len(x)==32]
+    data=data.get("result")
+if isinstance(data,dict):
+    items=[data]
+elif isinstance(data,list):
+    items=data
+else:
+    items=[]
+matches=[x for x in items if isinstance(x,dict) and x.get("name")==name]
+valid=[str(x.get("id") or "") for x in matches if len(str(x.get("id") or ""))==32]
 print(len(matches), valid[0] if len(matches)==1 and len(valid)==1 else "")
 PY
-)
+}
+
+"${CF[@]}" accounts list --name "$TARGET_ACCOUNT_NAME" > "$LIST_JSON"
+read -r MATCH_COUNT NEUTRAL_ACCOUNT_ID < <(parse_exact_account "$LIST_JSON")
 
 if [[ "$MATCH_COUNT" -gt 1 ]]; then
   log "NEUTRAL_ACCOUNT_CREATE_FAIL=duplicate_exact_name"
@@ -158,33 +162,44 @@ else
     --dry-run | tee -a "$REPORT"
   log "NEUTRAL_ACCOUNT_CREATE_DRY_RUN_PASS=1"
 
+  # The idempotency key intentionally remains fixed across retries. If a prior
+  # run already created the account but list propagation lagged, Cloudflare
+  # replays the same create result instead of creating a duplicate.
   "${CF[@]}" accounts create \
     --name "$TARGET_ACCOUNT_NAME" \
     --standalone \
     --idempotency-key "$IDEMPOTENCY_KEY" > "$CREATE_JSON"
 
-  "${CF[@]}" accounts list --name "$TARGET_ACCOUNT_NAME" > "$LIST_JSON"
-
-  read -r MATCH_COUNT NEUTRAL_ACCOUNT_ID < <(
-    python3 - "$LIST_JSON" "$TARGET_ACCOUNT_NAME" <<'PY'
-import json,sys
-p,name=sys.argv[1],sys.argv[2]
-with open(p,encoding="utf-8") as fh:
-    data=json.load(fh)
-if isinstance(data,dict) and "result" in data:
-    data=data.get("result") or []
-if not isinstance(data,list):
-    raise SystemExit("ACCOUNT_LIST_SHAPE_INVALID")
-matches=[x for x in data if isinstance(x,dict) and x.get("name")==name]
-ids=[str(x.get("id") or "") for x in matches]
-valid=[x for x in ids if len(x)==32]
-print(len(matches), valid[0] if len(matches)==1 and len(valid)==1 else "")
-PY
-  )
-
-  if [[ "$MATCH_COUNT" -ne 1 || ! "$NEUTRAL_ACCOUNT_ID" =~ ^[0-9a-fA-F]{32}$ ]]; then
-    log "NEUTRAL_ACCOUNT_CREATE_FAIL=post_create_verification"
+  read -r CREATE_MATCH_COUNT CREATE_ACCOUNT_ID < <(parse_exact_account "$CREATE_JSON")
+  if [[ "$CREATE_MATCH_COUNT" -ne 1 || ! "$CREATE_ACCOUNT_ID" =~ ^[0-9a-fA-F]{32}$ ]]; then
+    log "NEUTRAL_ACCOUNT_CREATE_FAIL=create_response_missing_exact_account"
     exit 2
+  fi
+
+  NEUTRAL_ACCOUNT_ID="$CREATE_ACCOUNT_ID"
+  log "NEUTRAL_ACCOUNT_CREATE_RESPONSE_PASS=1"
+
+  # Account listing can lag immediately after successful creation. Retry for
+  # discovery, but do not discard the authoritative create response.
+  DISCOVERY_PASS=0
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    sleep 2
+    "${CF[@]}" accounts list --name "$TARGET_ACCOUNT_NAME" > "$LIST_JSON"
+    read -r MATCH_COUNT DISCOVERED_ACCOUNT_ID < <(parse_exact_account "$LIST_JSON")
+    if [[ "$MATCH_COUNT" -gt 1 ]]; then
+      log "NEUTRAL_ACCOUNT_CREATE_FAIL=duplicate_exact_name_after_create"
+      exit 2
+    fi
+    if [[ "$MATCH_COUNT" -eq 1 && "$DISCOVERED_ACCOUNT_ID" == "$NEUTRAL_ACCOUNT_ID" ]]; then
+      DISCOVERY_PASS=1
+      break
+    fi
+  done
+
+  if [[ "$DISCOVERY_PASS" -eq 1 ]]; then
+    log "NEUTRAL_ACCOUNT_POST_CREATE_DISCOVERY_PASS=1"
+  else
+    log "NEUTRAL_ACCOUNT_POST_CREATE_DISCOVERY_PENDING=1"
   fi
   log "NEUTRAL_ACCOUNT_STATE=CREATED"
 fi
