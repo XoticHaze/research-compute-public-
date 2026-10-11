@@ -4,6 +4,19 @@ const SOURCE_REPOSITORY = "XoticHaze/research-compute-public-";
 const SOURCE_FILES = ["index.js", "intent.js", "ticket.js"];
 const SOURCE_PREFIX = "cloudflare/reference-release-broker/src/";
 
+function brokerOrigin(env) {
+  const value = String(env?.BROKER_PUBLIC_ORIGIN || "");
+  let url;
+  try { url = new URL(value); } catch { throw new Error("broker_origin_unconfigured"); }
+  if (
+    url.protocol !== "https:" || url.port || url.username || url.password
+    || url.pathname !== "/" || url.search || url.hash
+    || !/^reference-release-broker-v1\.[a-z0-9-]+\.workers\.dev$/.test(url.hostname)
+  ) throw new Error("broker_origin_rejected");
+  return url.origin;
+}
+
+
 function json(body, status=200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -107,10 +120,10 @@ async function deployVersion(env, token, versionId, message) {
   const body = await response.json().catch(()=>({}));
   if (!response.ok || body?.success !== true) throw new Error("deployment_create_rejected_" + response.status);
 }
-async function verifyLive(manifest) {
-  const health = await fetch("https://reference-release-broker-v1.slenderiq.workers.dev/healthz", {headers:{"cache-control":"no-cache"}});
+async function verifyLive(env, manifest) {
+  const health = await fetch(brokerOrigin(env) + "/healthz", {headers:{"cache-control":"no-cache"}});
   if (!health.ok || (await health.json()).ok !== true) throw new Error("postdeploy_health_rejected");
-  const key = await fetch("https://reference-release-broker-v1.slenderiq.workers.dev/v1/public-key", {headers:{"cache-control":"no-cache"}});
+  const key = await fetch(brokerOrigin(env) + "/v1/public-key", {headers:{"cache-control":"no-cache"}});
   if (!key.ok || (await key.json()).key_id !== manifest.expected_broker_key_id) throw new Error("postdeploy_key_mismatch");
 }
 export class MaintenanceLedger {
@@ -152,7 +165,7 @@ async function maintainManifest(wrapper, env) {
     newVersion = await uploadVersion(env, token, manifest, contents);
     await deployVersion(env, token, newVersion, "reference broker maintenance promote");
     promoted = true;
-    await verifyLive(manifest);
+    await verifyLive(env, manifest);
     return json({
       ok:true, schema:"reference-release-maintenance-receipt-v1",
       maintenance_id:manifest.maintenance_id, source_sha:manifest.candidate_source_sha,
@@ -163,7 +176,7 @@ async function maintainManifest(wrapper, env) {
     if (promoted) {
       try {
         await deployVersion(env, token, manifest.rollback_version, "reference broker automatic rollback");
-        await verifyLive(manifest);
+        await verifyLive(env, manifest);
       } catch {
         throw new Error("maintenance_failed_and_rollback_failed");
       }
@@ -184,6 +197,21 @@ export default class ReferenceReleaseMaintainer extends WorkerEntrypoint {
       public_ingress:false,
       github_deploy_authority:false,
       host_dependency:false,
+    };
+  }
+
+  async brokerState() {
+    if (!this.env.BROKER_EDITOR_TOKEN || typeof this.env.BROKER_EDITOR_TOKEN.get !== "function") {
+      throw new Error("broker_editor_binding_unconfigured");
+    }
+    if (!this.env.CLOUDFLARE_ACCOUNT_ID) throw new Error("cloudflare_account_unconfigured");
+    const token = await this.env.BROKER_EDITOR_TOKEN.get();
+    if (!token) throw new Error("broker_editor_token_unavailable");
+    return {
+      ok: true,
+      target_worker: TARGET_WORKER,
+      version_id: await activeVersion(this.env, token),
+      secret_material_included: false,
     };
   }
 
