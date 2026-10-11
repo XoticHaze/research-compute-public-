@@ -493,6 +493,21 @@ jobs:
             api_read_only=no
           fi
           echo "IBKR_GATEWAY_READ_ONLY_API=${api_read_only}"
+          gateway_mode=paper
+          gateway_host_port=4002
+          gateway_container_port=4004
+          gateway_twofa_timeout_action=none
+          if [ "$IBKR_PRODUCTION_LIVE_READONLY_MODE" = "1" ]; then
+            test "$api_read_only" = yes
+            gateway_mode=live
+            gateway_host_port=4001
+            gateway_container_port=4003
+            gateway_twofa_timeout_action=exit
+          fi
+          export IBKR_GATEWAY_API_PORT="$gateway_host_port"
+          echo "IBKR_GATEWAY_API_PORT=$gateway_host_port" >> "$GITHUB_ENV"
+          echo "IBKR_GATEWAY_ACCOUNT_MODE=$gateway_mode" >> "$GITHUB_ENV"
+          echo "IBKR_GATEWAY_ACCOUNT_MODE_SELECTED=$gateway_mode"
 
           warm_state_args=()
           if [ "${{ steps.restore.outputs.restored }}" = "1" ]; then
@@ -505,9 +520,9 @@ jobs:
           docker run -d --name ibkr-cloudflare-b1 \
             --env-file "$RUNNER_TEMP/ibkr-gateway-bootstrap.env" \
             -e USE_IBG_CONTROLLER=yes \
-            -e TRADING_MODE=paper \
+            -e TRADING_MODE="$gateway_mode" \
             -e READ_ONLY_API="$api_read_only" \
-            -e TWOFA_TIMEOUT_ACTION=none \
+            -e TWOFA_TIMEOUT_ACTION="$gateway_twofa_timeout_action" \
             -e TWOFA_EXIT_INTERVAL=120 \
             -e RELOGIN_AFTER_TWOFA_TIMEOUT=yes \
             -e CONTROLLER_HEALTH_SERVER_PORT=8080 \
@@ -517,13 +532,13 @@ jobs:
             -e TIME_ZONE=America/Chicago \
             "${warm_state_args[@]}" \
             -v "$jts_volume:/home/ibgateway/Jts_b1" \
-            -p 127.0.0.1:4002:4004 \
+            -p "127.0.0.1:$gateway_host_port:$gateway_container_port" \
             -p 127.0.0.1:18080:8080 \
             "$IBKR_CONTROLLER_IMAGE" >/dev/null
 
           actual_read_only="$(docker exec ibkr-cloudflare-b1 /bin/sh -lc 'printf %s "$READ_ONLY_API"')"
           test "$actual_read_only" = "$api_read_only"
-          docker exec ibkr-cloudflare-b1 /bin/sh -lc 'test "$TRADING_MODE" = paper && test "$TWOFA_TIMEOUT_ACTION" = none && test "$TWOFA_EXIT_INTERVAL" = 120 && test "$RELOGIN_AFTER_TWOFA_TIMEOUT" = yes' >/dev/null
+          docker exec -e "EXPECTED_GATEWAY_MODE=$gateway_mode" -e "EXPECTED_TWOFA_TIMEOUT_ACTION=$gateway_twofa_timeout_action" ibkr-cloudflare-b1 /bin/sh -lc 'test "$TRADING_MODE" = "$EXPECTED_GATEWAY_MODE" && test "$TWOFA_TIMEOUT_ACTION" = "$EXPECTED_TWOFA_TIMEOUT_ACTION" && test "$TWOFA_EXIT_INTERVAL" = 120 && test "$RELOGIN_AFTER_TWOFA_TIMEOUT" = yes' >/dev/null
           if [ "${{ steps.restore.outputs.restored }}" = "1" ]; then
             docker exec ibkr-cloudflare-b1 /bin/sh -lc 'test "$GATEWAY_WARM_STATE" = /home/ibgateway/warm-state && test "$TWS_SETTINGS_PATH" = /home/ibgateway/Jts_b1 && test "$GATEWAY_WARM_STATE" != "$TWS_SETTINGS_PATH"' >/dev/null
             echo 'IBKR_CONTROLLER_NATIVE_WARM_SEED_BOUND=1'
@@ -537,10 +552,11 @@ jobs:
             [ "$running" = true ] || break
 
             if python - <<'PY'
+          import os
           from ib_insync import IB
           ib=IB()
           try:
-              ib.connect('127.0.0.1',4002,clientId=76,timeout=2,readonly=True)
+              ib.connect('127.0.0.1',int(os.environ['IBKR_GATEWAY_API_PORT']),clientId=76,timeout=2,readonly=True)
               ok=ib.isConnected()
           except Exception:
               ok=False
@@ -638,10 +654,11 @@ jobs:
             running="$(docker inspect -f '{{.State.Running}}' ibkr-cloudflare-b1 2>/dev/null || echo false)"
             [ "$running" = true ] || break
             if python - <<'PY'
+          import os
           from ib_insync import IB
           ib=IB()
           try:
-              ib.connect('127.0.0.1',4002,clientId=77,timeout=3,readonly=True)
+              ib.connect('127.0.0.1',int(os.environ['IBKR_GATEWAY_API_PORT']),clientId=77,timeout=3,readonly=True)
               ok=ib.isConnected()
           except Exception:
               ok=False
@@ -703,8 +720,59 @@ jobs:
           print('IBKR_SNAPSHOT_BOUNDARY_REACHED_UTC='+target.isoformat().replace('+00:00','Z'))
           PY
 
+      - name: Reject paper-only snapshot return contract in live mode
+        if: env.IBKR_PRODUCTION_LIVE_READONLY_MODE == '1' && env.IBKR_WARM_READ_RETURN_REQUESTED == '1'
+        run: |
+          echo 'IBKR_LIVE_READONLY_PAPER_SNAPSHOT_RETURN_UNSUPPORTED=1' >&2
+          exit 56
+
+      - name: Read live IBKR account from authenticated API without orders
+        if: env.IBKR_PRODUCTION_LIVE_READONLY_MODE == '1'
+        run: |
+          set -euo pipefail
+          test "$IBKR_GATEWAY_API_PORT" = 4001
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from ib_insync import IB
+          sealed = Path(os.environ['RUNNER_TEMP']) / 'ibkr-gateway.env'
+          expected = ''
+          for raw in sealed.read_text(encoding='utf-8').splitlines():
+              if raw.startswith('MMIBKR_PRODUCTION_LIVE_ACCOUNT='):
+                  expected = raw.split('=', 1)[1].strip()
+          if not expected or expected.upper().startswith('DU'):
+              raise RuntimeError('expected non-paper live account missing from sealed authority')
+          ib = IB()
+          try:
+              ib.connect('127.0.0.1', 4001, clientId=81, timeout=10, readonly=True)
+              if not ib.isConnected():
+                  raise RuntimeError('live IBKR API not connected')
+              accounts = [str(x).strip() for x in ib.managedAccounts()]
+              if expected not in accounts:
+                  raise RuntimeError('expected live account absent from managed accounts')
+              if ib.reqCurrentTime() is None:
+                  raise RuntimeError('live broker clock unavailable')
+              summary = list(ib.accountSummary())
+              if not any(str(getattr(x, 'account', '')).strip() == expected for x in summary):
+                  raise RuntimeError('selected live account summary unavailable')
+              list(ib.positions())
+              ib.reqAllOpenOrders()
+              ib.sleep(0.5)
+              list(ib.openOrders())
+              print('IBKR_LIVE_AUTHENTICATED_API=1')
+              print('IBKR_LIVE_EXPECTED_NON_DU_ACCOUNT_BOUND=1')
+              print('IBKR_LIVE_ACCOUNT_STATE_READ=1')
+              print('IBKR_LIVE_POSITIONS_OPEN_ORDERS_READ=1')
+              print('IBKR_LIVE_READ_ONLY_API=1')
+              print('IBKR_LIVE_ORDER_MUTATION_ATTEMPTED=0')
+              print('IBKR_LIVE_ACCOUNT_ID_EMITTED=0')
+          finally:
+              if ib.isConnected():
+                  ib.disconnect()
+          PY
+
       - name: Materialize canonical post-auth broker and forward-data handoff
-        if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1' && env.IBKR_PAPER_ACCOUNT_SNAPSHOT_MODE != '1' && env.IBKR_FORWARD_EXACT_TICKS_MODE != '1'
+        if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1' && env.IBKR_PAPER_ACCOUNT_SNAPSHOT_MODE != '1' && env.IBKR_FORWARD_EXACT_TICKS_MODE != '1' && env.IBKR_PRODUCTION_LIVE_READONLY_MODE != '1'
         run: |
           set -euo pipefail
           quote_args=()
@@ -725,7 +793,7 @@ jobs:
 
       - name: Encrypt optional detailed warm read snapshot for private consumer
         id: warm_read_return
-        if: env.IBKR_WARM_READ_RETURN_REQUESTED == '1'
+        if: env.IBKR_WARM_READ_RETURN_REQUESTED == '1' && env.IBKR_PRODUCTION_LIVE_READONLY_MODE != '1'
         env:
           READ_RETURN_RECIPIENT_B64: ${{ inputs.read_return_recipient_b64 }}
           READ_RETURN_RECIPIENT_KEY_ID: ${{ inputs.read_return_recipient_key_id }}
