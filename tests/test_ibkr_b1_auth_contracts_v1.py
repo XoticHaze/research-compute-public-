@@ -28,6 +28,30 @@ class AuthBoundaryTests(unittest.TestCase):
         self.assertFalse(result["terminal_prechallenge_blocker"])
         self.assertEqual(result["stage"], "ibkey_mobile_approval_wait")
 
+    def test_mobile_approval_followed_by_broker_authentication_is_not_still_pending(self):
+        controller = (
+            "IB Key 2FA dialog detected\n"
+            "Waiting for IB Key mobile approval — approve on your phone"
+        )
+        launcher = (
+            "Authenticating\n"
+            "Received NS_AUTH_START\n"
+            "JTS-PostAuthenticateS3 - Authentication complete"
+        )
+        result = classify(controller, launcher)
+        self.assertTrue(result["ibkey_mobile_approval_wait_signal"])
+        self.assertTrue(result["second_factor_challenge_observed"])
+        self.assertTrue(result["launcher_authentication_complete_observed"])
+        self.assertTrue(result["post_authenticate_observed"])
+        self.assertFalse(result["api_ready_observed"])
+        self.assertEqual(result["stage"], "post_authenticated_api_pending")
+
+    def test_broker_authentication_is_not_an_api_ready_signal(self):
+        result = classify("", "JTS-PostAuthenticate - Authentication complete")
+        self.assertTrue(result["launcher_authentication_complete_observed"])
+        self.assertFalse(result["api_ready_observed"])
+        self.assertEqual(result["stage"], "post_authenticated_api_pending")
+
     def test_concrete_ccp_lockout_is_terminal_prechallenge_blocker(self):
         result = classify(
             "[state: TWO_FA]\nCCP authentication lockout; retry later",
