@@ -487,6 +487,16 @@ jobs:
           warm_volume="ibkr-b1-warm-seed-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           docker pull "$IBKR_CONTROLLER_IMAGE" >/dev/null
           echo 'IBKR_CONTROLLER_IMAGE_PINNED=1'
+          # Paper prepares this volume inside the warm-restore step. Live
+          # intentionally skips that step, so give the isolated live JTS
+          # volume writable permissions before Gateway applies settings.
+          if [ "$IBKR_PRODUCTION_LIVE_READONLY_MODE" = "1" ]; then
+            docker volume create "$jts_volume" >/dev/null
+            docker run --rm --user 0 --entrypoint /bin/sh \
+              -v "$jts_volume:/state" "$IBKR_CONTROLLER_IMAGE" \
+              -lc 'chmod 0777 /state' >/dev/null
+            echo 'IBKR_LIVE_JTS_VOLUME_WRITABLE=1'
+          fi
 
           api_read_only=yes
           if [ "$IBKR_PAPER_PROOF_MODE" = "1" ] || [ "$IBKR_PAPER_EXECUTE_MODE" = "1" ] || [ "$IBKR_PAPER_ACCOUNT_HYGIENE_MODE" = "1" ]; then
