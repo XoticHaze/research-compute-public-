@@ -5,3 +5,4 @@ The dispatcher verifies `ibkr-b1-authority-v1` is still exactly `2cd779dc56b06c3
 
 2026-09-16 attended auth request: current sealed Paper Trading username/password have already passed IBKR password authentication in the 10.49.1c IBC comparator. Dispatch exactly one canonical read-only broker login to resolve the IB Key / post-auth boundary.
 [ibkr-live-readonly] attended API proof
+Attended live API proof retry
