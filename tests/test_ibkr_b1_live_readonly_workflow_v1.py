@@ -26,12 +26,15 @@ def test_live_readonly_mode_never_enables_paper_mutation_flags():
         assert "production_live_readonly" not in line
 
     start = WORKFLOW.index("api_read_only=yes")
-    end = WORKFLOW.index("IBKR_API_READ_ONLY=", start)
+    end = WORKFLOW.index("warm_state_args=()", start)
     scope = WORKFLOW[start:end]
     assert "IBKR_PAPER_PROOF_MODE" in scope
     assert "IBKR_PAPER_EXECUTE_MODE" in scope
     assert "IBKR_PAPER_ACCOUNT_HYGIENE_MODE" in scope
-    assert "IBKR_PRODUCTION_LIVE_READONLY_MODE" not in scope
+    assert 'test "$api_read_only" = yes' in scope
+    assert 'gateway_mode=live' in scope
+    assert 'gateway_host_port=4001' in scope
+    assert 'gateway_container_port=4003' in scope
 
 
 def test_live_readonly_never_reuses_or_publishes_paper_warm_state():
@@ -60,9 +63,31 @@ def test_live_readonly_detailed_broker_truth_uses_encrypted_return_only():
     assert "IBKR_PRODUCTION_LIVE_READONLY_MODE != '1'" in publish_scope
 
     assert "- name: Publish encrypted warm read return" in WORKFLOW
+    assert "if: env.IBKR_WARM_READ_RETURN_REQUESTED == '1' && env.IBKR_PRODUCTION_LIVE_READONLY_MODE != '1'" in WORKFLOW
+    assert "- name: Reject paper-only snapshot return contract in live mode" in WORKFLOW
+    assert "IBKR_LIVE_READONLY_PAPER_SNAPSHOT_RETURN_UNSUPPORTED=1" in WORKFLOW
 
 
 def test_live_readonly_mode_has_no_live_order_execution_step():
     assert "IBKR_LIVE_EXECUTE_MODE" not in WORKFLOW
     assert "IBKR_LIVE_SUBMIT_MODE" not in WORKFLOW
     assert "live_order_submit" not in WORKFLOW
+
+def test_live_readonly_uses_live_gateway_port_and_never_relabels_paper_reads():
+    assert '-e TRADING_MODE="$gateway_mode"' in WORKFLOW
+    assert '-p "127.0.0.1:$gateway_host_port:$gateway_container_port"' in WORKFLOW
+    assert "int(os.environ['IBKR_GATEWAY_API_PORT']),clientId=76" in WORKFLOW
+    assert "int(os.environ['IBKR_GATEWAY_API_PORT']),clientId=77" in WORKFLOW
+    assert "IBKR_PRODUCTION_LIVE_READONLY_MODE != '1'" in WORKFLOW
+    assert "IBKR_LIVE_AUTHENTICATED_API=1" in WORKFLOW
+    assert "IBKR_LIVE_EXPECTED_NON_DU_ACCOUNT_BOUND=1" in WORKFLOW
+    assert "IBKR_LIVE_ORDER_MUTATION_ATTEMPTED=0" in WORKFLOW
+    assert "if not expected or expected.upper().startswith('DU')" in WORKFLOW
+    assert "if expected not in accounts" in WORKFLOW
+
+
+def test_live_readonly_never_passes_through_paper_only_post_auth_or_snapshot():
+    paper_handoff = WORKFLOW.index("- name: Materialize canonical post-auth broker and forward-data handoff")
+    assert "IBKR_PRODUCTION_LIVE_READONLY_MODE != '1'" in WORKFLOW[paper_handoff:paper_handoff+350]
+    paper_return = WORKFLOW.index("- name: Encrypt optional detailed warm read snapshot for private consumer")
+    assert "IBKR_PRODUCTION_LIVE_READONLY_MODE != '1'" in WORKFLOW[paper_return:paper_return+260]
