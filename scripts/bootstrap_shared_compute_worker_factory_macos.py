@@ -1,4 +1,4 @@
-# Canonical authority: XoticHaze/CommandCenter@0a6563877e4a74d38e454c37f4ebb07baa210065
+# Canonical authority: XoticHaze/CommandCenter@54ce66ec07bee70c9c70f6a147234f8710095a3b
 #!/usr/bin/env python3
 from __future__ import annotations
 import getpass, json, os, secrets, subprocess, sys
@@ -22,9 +22,9 @@ PG={
 
 def die(msg): raise SystemExit(msg)
 def request(token, method, path, body=None, accepted=(200,)):
-    cfg=f'header = "Authorization: Bearer {token}"\\nheader = "Accept: application/json"\\n'
+    cfg=f'header = "Authorization: Bearer {token}"\nheader = "Accept: application/json"\n'
     if body is not None:
-        cfg+='header = "Content-Type: application/json"\\n'
+        cfg+='header = "Content-Type: application/json"\n'
     rfd,wfd=os.pipe()
     try:
         os.write(wfd,cfg.encode("utf-8"))
@@ -32,7 +32,7 @@ def request(token, method, path, body=None, accepted=(200,)):
         os.close(wfd)
     cmd=["/usr/bin/curl","--silent","--show-error","--connect-timeout","15","--max-time","45",
          "--config",f"/dev/fd/{rfd}","--request",method,
-         "--write-out","\\n__HTTP__:%{http_code}",API+path]
+         "--write-out","__CC_HTTP__%{http_code}",API+path]
     payload=None
     if body is not None:
         cmd += ["--data-binary","@-"]
@@ -43,7 +43,7 @@ def request(token, method, path, body=None, accepted=(200,)):
         os.close(rfd)
     if p.returncode:
         die(f"transport failure {method} {path}: curl={p.returncode}")
-    marker="\\n__HTTP__:"
+    marker="__CC_HTTP__"
     if marker not in p.stdout:
         die("HTTP status marker missing")
     raw,status=p.stdout.rsplit(marker,1)
@@ -70,9 +70,22 @@ def create_token(temp, account, name, policies, minutes=None):
 def delete_token(temp, account, tid):
     request(temp,"DELETE",f"/accounts/{account}/tokens/{tid}",None,(200,))
 
-account=input("Cloudflare Account ID: ").strip()
+account=(os.environ.get("CLOUDFLARE_ACCOUNT_ID") or "").strip()
+if not account:
+    account=input("Cloudflare Account ID: ").strip()
 if len(account)!=32 or any(c not in "0123456789abcdefABCDEF" for c in account): die("invalid account id")
-temp=getpass.getpass("Shared Compute Token Provisioner TEMP secret: ").strip()
+temp=""
+keychain_service=(os.environ.get("CLOUDFLARE_TEMP_KEYCHAIN_SERVICE") or "").strip()
+if keychain_service:
+    keychain=subprocess.run(
+        ["/usr/bin/security","find-generic-password","-a",getpass.getuser(),
+         "-s",keychain_service,"-w"],
+        text=True,capture_output=True
+    )
+    if keychain.returncode == 0:
+        temp=keychain.stdout.strip()
+if not temp:
+    temp=getpass.getpass("Shared Compute Token Provisioner TEMP secret: ").strip()
 if not temp: die("empty TEMP token")
 request(temp,"GET",f"/accounts/{account}/tokens/verify")
 print("TEMP_PROVISIONER_VERIFY_PASS=1")
