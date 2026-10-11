@@ -11,6 +11,7 @@ on:
       - '.github/workflows/mmibkr-selected-runtime-cloud-watchdog-r1.yml'
       - 'scripts/mmibkr_selected_runtime_cloud_watchdog_cooldown_v1.py'
       - 'tests/test_mmibkr_selected_runtime_cloud_watchdog_cooldown_v1.py'
+      - 'tests/test_mmibkr_selected_runtime_cloud_watchdog_visibility_v1.py'
       - 'scripts/mmibkr_selected_runtime_maintenance_hold_v1.py'
       - 'tests/test_mmibkr_selected_runtime_maintenance_hold_v1.py'
       - 'rendezvous/control/mmibkr-selected-runtime-cloud-maintenance-hold-r1.json'
@@ -34,6 +35,7 @@ jobs:
           set -euo pipefail
           python -m py_compile scripts/mmibkr_selected_runtime_cloud_watchdog_cooldown_v1.py
           python -m unittest -v tests.test_mmibkr_selected_runtime_cloud_watchdog_cooldown_v1
+          python -m unittest -v tests.test_mmibkr_selected_runtime_cloud_watchdog_visibility_v1
           python -m py_compile scripts/mmibkr_selected_runtime_maintenance_hold_v1.py
           python -m unittest -v tests.test_mmibkr_selected_runtime_maintenance_hold_v1
 
