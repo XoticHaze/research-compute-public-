@@ -290,6 +290,10 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         # Do not reinterpret post-authenticated evidence as a pending push;
         # broker authentication completion does not prove API readiness.
         stage = "post_authenticated_api_pending"
+    elif controller_twofa_relogin_observed:
+        stage = "ibkey_timeout_relogin"
+    elif controller_ibkey_timeout_observed:
+        stage = "ibkey_timeout"
     elif ibkey_mobile_approval_wait_signal:
         stage = "ibkey_mobile_approval_wait"
     elif second_factor_challenge_observed:
