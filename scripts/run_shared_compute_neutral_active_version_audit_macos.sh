@@ -38,12 +38,17 @@ if error or not isinstance(a,dict) or a.get('id')!=account or a.get('name')!='Sh
 print('NEUTRAL_ACCOUNT_READBACK_PASS=1',flush=True)
 def checked_read(cmd,role,suffix,extra):
  target=base+suffix
- candidates=[
-  ['--worker',role]+extra,
-  ['--script-name',role]+extra,
-  ['--worker-id',role]+extra,
-  [role]+extra,
- ]
+ if cmd == ['workers','versions','get']:
+  # cf@1.0.0-beta.14 help: cf workers versions get <version-id> --worker-id <name>
+  assert len(extra)==1 and re.fullmatch(r'[A-Za-z0-9-]{36}',extra[0])
+  candidates=[[extra[0],'--worker-id',role]]
+ else:
+  candidates=[
+   ['--worker',role]+extra,
+   ['--script-name',role]+extra,
+   ['--worker-id',role]+extra,
+   [role]+extra,
+  ]
  preview_paths=[]
  chosen=None
  for args in candidates:
@@ -86,7 +91,7 @@ for role in roles:
   raise SystemExit('ACTIVE_VERSION_ID_INVALID='+role)
  print('ACTIVE_DEPLOYMENT_READBACK_PASS='+role,flush=True)
  detail=checked_read(['workers','versions','get'],role,
-  '/workers/workers/'+role+'/versions/'+version,['--version-id',version])
+  '/workers/workers/'+role+'/versions/'+version,[version])
  if not isinstance(detail,dict):
   raise SystemExit('DEPLOYED_VERSION_SHAPE_INVALID='+role)
  if str(detail.get('id') or '')!=version:
