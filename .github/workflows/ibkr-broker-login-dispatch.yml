@@ -22,7 +22,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TARGET_REF: ibkr-b1-authority-v1
           TARGET_WORKFLOW: ibkr-cloudflare-readonly-b1-r1.yml
-          EXPECTED_TARGET_SHA: ae83bcbf200889866caa2d939e942754b9a3610b
+          EXPECTED_TARGET_SHA: e869fca6b6d40d7c583b91c964a4ca95b0d0cbfc
           TARGET_MODE: ${{ contains(github.event.head_commit.message, '[ibkr-live-readonly]') && 'production_live_readonly' || 'readonly' }}
         run: |
           set -euo pipefail
