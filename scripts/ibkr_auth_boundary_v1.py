@@ -187,6 +187,7 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
     ccp_timeout_observed = "AuthTimeoutMonitor-CCP: Timeout!" in launcher
     ns_auth_start_observed = "NS_AUTH_START" in launcher
     post_authenticate_observed = "PostAuthenticate" in launcher
+    launcher_authentication_complete_observed = "Authentication complete" in launcher
     authenticating_observed = "Authenticating" in launcher
     authorization_rejected_before_ns_auth = (
         _has(launcher, "DISCONNECT_AUTHORIZATION_FAILED")
@@ -266,6 +267,11 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
 
     if api_ready_observed:
         stage = "api_ready"
+    elif launcher_authentication_complete_observed:
+        # Earlier mobile-wait log lines remain in the transcript after 2FA.
+        # Do not reinterpret post-authenticated evidence as a pending push;
+        # broker authentication completion does not prove API readiness.
+        stage = "post_authenticated_api_pending"
     elif ibkey_mobile_approval_wait_signal:
         stage = "ibkey_mobile_approval_wait"
     elif second_factor_challenge_observed:
@@ -331,6 +337,7 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         "authenticating_observed": authenticating_observed,
         "ns_auth_start_observed": ns_auth_start_observed,
         "post_authenticate_observed": post_authenticate_observed,
+        "launcher_authentication_complete_observed": launcher_authentication_complete_observed,
         "api_ready_observed": api_ready_observed,
         "launcher_connected_host": _connected_host(launcher),
         "launcher_auth_transcript": transcript,
