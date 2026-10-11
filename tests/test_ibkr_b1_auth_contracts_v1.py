@@ -52,6 +52,34 @@ class AuthBoundaryTests(unittest.TestCase):
         self.assertFalse(result["api_ready_observed"])
         self.assertEqual(result["stage"], "post_authenticated_api_pending")
 
+    def test_mobile_timeout_and_retry_are_distinct_from_rejected_approval(self):
+        result = classify(
+            "Waiting for IB Key mobile approval\n"
+            "IB Key approval wait timed out\n"
+            "RELOGIN_AFTER_TWOFA_TIMEOUT=yes — in-JVM relogin",
+            "Authenticating\nNS_AUTH_START",
+        )
+        self.assertTrue(result["controller_ibkey_timeout_observed"])
+        self.assertTrue(result["controller_twofa_relogin_observed"])
+        self.assertFalse(result["launcher_authentication_complete_observed"])
+        self.assertFalse(result["api_ready_observed"])
+        self.assertEqual(result["stage"], "ibkey_mobile_approval_wait")
+
+    def test_postlogin_and_api_probe_have_separate_positive_markers(self):
+        result = classify(
+            "2FA dialog dismissed — IB Key approval detected, proceeding\n"
+            "Applying post-login configuration from env vars\n"
+            "Probing API port 4001 for readiness",
+            "Authenticating\nNS_AUTH_START\n"
+            "JTS-PostAuthenticate - Authentication complete",
+        )
+        self.assertTrue(result["controller_ibkey_dialog_dismissed_observed"])
+        self.assertTrue(result["controller_postlogin_config_started"])
+        self.assertTrue(result["controller_api_probe_started"])
+        self.assertFalse(result["controller_api_open_observed"])
+        self.assertFalse(result["api_ready_observed"])
+        self.assertEqual(result["stage"], "post_authenticated_api_pending")
+
     def test_concrete_ccp_lockout_is_terminal_prechallenge_blocker(self):
         result = classify(
             "[state: TWO_FA]\nCCP authentication lockout; retry later",
