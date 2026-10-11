@@ -18,6 +18,15 @@ MODULE_RE = re.compile(r"^tests\.test_[A-Za-z0-9_]+$")
 SAFE_PREFIXES = (
     "tests.test_autotuner_",
 )
+# Exact AST/mocked legacy-close regressions. No gateway credentials or broker calls.
+# These modules are run network-isolated even inside the existing public probe.
+SOURCE_ONLY_P0_MODULES = frozenset({
+    "tests.test_legacy_submit_fail_closed_r10",
+    "tests.test_legacy_strategy_live_guard_r11",
+    "tests.test_selected_runtime_mutation_boundary_inspect_v1",
+    "tests.test_live_seal_compose_runner_v1",
+})
+
 SAFE_EXACT = {
     "tests.test_strategy_backtest_registry_dispatch",
     "tests.test_canonical_data_materialize_v1",
@@ -89,6 +98,7 @@ SAFE_EXACT = {
     "tests.test_selected_runtime_cloud_bar_clock_v1",
     "tests.test_selected_runtime_cloud_runner_dry_plan_v1",
 }
+SAFE_EXACT.update(SOURCE_ONLY_P0_MODULES)
 STATUS_STAGE_MODULES = {
     "tests.test_market_features_provenance_contract",
 }
@@ -161,6 +171,7 @@ def pytest_container_command(image_tag: str, module: str) -> list[str]:
         "docker",
         "run",
         "--rm",
+        *(["--network", "none"] if module in SOURCE_ONLY_P0_MODULES else []),
         "-e",
         "ENABLE_LIVE_TRADING=0",
         "-e",

@@ -41,6 +41,24 @@ def test_allowlist_rejects_authority_or_unknown_modules(module):
         validated_modules(module)
 
 
+def test_exact_live_seal_source_only_p0_modules_run_without_network_or_live_authority():
+    exact = [
+        "tests.test_legacy_submit_fail_closed_r10",
+        "tests.test_legacy_strategy_live_guard_r11",
+        "tests.test_selected_runtime_mutation_boundary_inspect_v1",
+        "tests.test_live_seal_compose_runner_v1",
+    ]
+    assert validated_modules(" ".join(exact)) == exact
+    for module in exact:
+        cmd = pytest_container_command("sealed-test-image", module)
+        assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in cmd
+        assert cmd[-1] == module_file_path(module)
+    for rejected in ("tests.test_legacy_live_broker_submit", "tests.test_live_order_submit"):
+        with pytest.raises(ValueError):
+            validated_modules(rejected)
+
+
 def test_allowlist_accepts_exact_pr798_read_only_position_projection_modules():
     assert validated_modules(
         "tests.test_selected_runtime_strategy_spec_integrity_v1 "
