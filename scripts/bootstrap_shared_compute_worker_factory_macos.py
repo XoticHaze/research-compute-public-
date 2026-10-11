@@ -1,4 +1,4 @@
-# Canonical authority: XoticHaze/CommandCenter@54ce66ec07bee70c9c70f6a147234f8710095a3b
+# Canonical authority: XoticHaze/CommandCenter@ee11c0c1a95d0f4292958748dfc53fd6f0db9818
 #!/usr/bin/env python3
 from __future__ import annotations
 import getpass, json, os, secrets, subprocess, sys
@@ -60,7 +60,7 @@ def request(token, method, path, body=None, accepted=(200,)):
 def create_token(temp, account, name, policies, minutes=None):
     body={"name":name,"policies":policies}
     if minutes:
-        body["expires_on"]=(datetime.now(timezone.utc)+timedelta(minutes=minutes)).isoformat().replace("+00:00","Z")
+        body["expires_on"]=(datetime.now(timezone.utc)+timedelta(minutes=minutes)).replace(microsecond=0).isoformat().replace("+00:00","Z")
     _,node=request(temp,"POST",f"/accounts/{account}/tokens",body,(200,))
     result=node.get("result") or {}
     tid=str(result.get("id") or ""); value=str(result.get("value") or "")
