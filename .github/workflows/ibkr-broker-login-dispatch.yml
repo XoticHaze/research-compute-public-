@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   dispatch:
-    if: ${{ contains(github.event.head_commit.message, '[ibkr-login]') }}
+    if: ${{ contains(github.event.head_commit.message, '[ibkr-login]') || contains(github.event.head_commit.message, '[ibkr-live-readonly]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -22,7 +22,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TARGET_REF: ibkr-b1-authority-v1
           TARGET_WORKFLOW: ibkr-cloudflare-readonly-b1-r1.yml
-          EXPECTED_TARGET_SHA: 2cd779dc56b06c382c6320466c580c22edf19730
+          EXPECTED_TARGET_SHA: 0909d4a33e801066bf6e40dbde962d9f852662a5
+          TARGET_MODE: ${{ contains(github.event.head_commit.message, '[ibkr-live-readonly]') && 'production_live_readonly' || 'readonly' }}
         run: |
           set -euo pipefail
           actual_sha="$(gh api "/repos/${GITHUB_REPOSITORY}/git/ref/heads/${TARGET_REF}" --jq '.object.sha')"
@@ -32,6 +33,10 @@ jobs:
           fi
           gh api --method POST \
             "/repos/${GITHUB_REPOSITORY}/actions/workflows/${TARGET_WORKFLOW}/dispatches" \
-            -f ref="$TARGET_REF"
+            -f ref="$TARGET_REF" \
+            -f "inputs[mode]=$TARGET_MODE" \
+            -f "inputs[dispatch_nonce]=main-dispatch-${GITHUB_RUN_ID}"
+          echo "IBKR_BROKER_WORKFLOW_MODE=$TARGET_MODE"
+          echo "IBKR_BROKER_WORKFLOW_BRANCH=$TARGET_REF"
           echo 'IBKR_BROKER_WORKFLOW_DISPATCHED=1'
           echo "IBKR_BROKER_WORKFLOW_SHA=$actual_sha"
