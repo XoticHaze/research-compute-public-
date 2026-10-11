@@ -1,4 +1,4 @@
-# Canonical authority: XoticHaze/CommandCenter@c7d2f3e06429028bef386612013faba1e2686f3e
+# Canonical authority: XoticHaze/CommandCenter@077c2cd09492f83bbb8ef1e656d85c23d61e016d
 #!/bin/bash
 set -euo pipefail
 
@@ -91,15 +91,25 @@ CF=(npx --yes cf@latest)
 CF_VERSION="$("${CF[@]}" --version 2>&1 | tr '\n' ' ')"
 log "CF_VERSION=$CF_VERSION"
 
-if "${CF[@]}" auth whoami >/dev/null 2>&1; then
-  log "CF_OAUTH_SESSION=EXISTING"
+AUTH_PROBE="$WORK/cf-auth-probe.txt"
+rm -f "$AUTH_PROBE"
+
+if "${CF[@]}" accounts list --per-page 1 >"$AUTH_PROBE" 2>&1; then
+  log "CF_API_AUTH_STATE=READY"
 else
-  log "CF_OAUTH_SESSION=LOGIN_REQUIRED"
-  printf '%s\n' "A browser window will open for one-time Cloudflare CLI OAuth approval."
-  "${CF[@]}" auth login
-  "${CF[@]}" auth whoami >/dev/null
+  log "CF_API_AUTH_STATE=REAUTH_REQUIRED"
+  printf '%s\n' "Cloudflare CLI has no usable API token. A browser window will open for OAuth approval."
+  "${CF[@]}" auth login --force
+  if ! "${CF[@]}" accounts list --per-page 1 >"$AUTH_PROBE" 2>&1; then
+    log "CF_API_AUTH_STATE=FAILED_AFTER_LOGIN"
+    sed -n '1,40p' "$AUTH_PROBE" | tee -a "$REPORT"
+    rm -f "$AUTH_PROBE"
+    exit 2
+  fi
   log "CF_OAUTH_LOGIN_PASS=1"
+  log "CF_API_AUTH_STATE=READY_AFTER_LOGIN"
 fi
+rm -f "$AUTH_PROBE"
 
 TARGET_ACCOUNT_NAME="Shared Compute Neutral Authorization"
 TARGET_ACCOUNT_FILE="$WORK/cloudflare_neutral_account_id"
