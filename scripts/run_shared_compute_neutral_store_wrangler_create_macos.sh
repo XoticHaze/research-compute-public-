@@ -64,6 +64,17 @@ help_=subprocess.run([wrangler,'secrets-store','store','create','--help'],captur
 if help_.returncode or '--remote' not in (help_.stdout+help_.stderr):
  raise SystemExit('WRANGLER_REMOTE_STORE_CREATE_UNAVAILABLE=1')
 print('WRANGLER_STORE_CREATE_CONTRACT_PASS=1',flush=True)
+whoami=subprocess.run([wrangler,'whoami'],capture_output=True,text=True,cwd=str(stage),timeout=75)
+if whoami.returncode:
+ print('WRANGLER_OAUTH_SESSION_NOT_READY=1',flush=True)
+ print('CLOUDFLARE_MUTATIONS=NONE',flush=True)
+ raise SystemExit(2)
+if account not in (whoami.stdout+whoami.stderr):
+ print('WRANGLER_NEUTRAL_ACCOUNT_NOT_VISIBLE=1',flush=True)
+ print('CLOUDFLARE_MUTATIONS=NONE',flush=True)
+ raise SystemExit(2)
+print('WRANGLER_NEUTRAL_ACCOUNT_AUTH_PASS=1',flush=True)
+
 # User has explicitly approved this single account-local mutation. Wrangler
 # may require its own OAuth login; cf and wrangler do not share auth sessions.
 cmd=[wrangler,'secrets-store','store','create',name,'--remote']
