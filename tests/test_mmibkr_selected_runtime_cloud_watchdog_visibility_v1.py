@@ -22,6 +22,19 @@ class SelectedRuntimeCloudWatchdogVisibilityTests(unittest.TestCase):
         self.assertNotIn("dispatch=Request(", no_checkpoint)
         self.assertIn("dispatch=Request(", dispatch)
 
+    def test_inline_watchdog_python_is_syntactically_valid(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        owner_section = workflow.split(
+            "      - name: Ensure one selected-runtime cloud owner exists", 1
+        )[1]
+        inline = owner_section.split("          python - <<'PY'\n", 1)[1]
+        inline = inline.split("\n          PY", 1)[0]
+        code = "\n".join(
+            line[10:] if line.startswith("          ") else line
+            for line in inline.splitlines()
+        )
+        compile(code, "<MM-IBKR watchdog inline owner>", "exec")
+
     def test_warning_does_not_change_source_or_mutation_policy(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn(
