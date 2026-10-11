@@ -752,6 +752,46 @@ jobs:
               --controller-log-file "$RUNNER_TEMP/ibkr-controller.log" \
               --launcher-log-file "$RUNNER_TEMP/ibkr-launcher.log" \
               --output "$RUNNER_TEMP/ibkr-auth-boundary.json"
+            if [ "$IBKR_PRODUCTION_LIVE_READONLY_MODE" = "1" ]; then
+              # IB Key acceptance and Gateway API readiness are distinct proofs.
+              # Whitelist only fixed state fields; never print raw broker logs.
+              python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          from urllib.error import HTTPError
+          from urllib.request import urlopen
+          root = Path(os.environ["RUNNER_TEMP"])
+          launcher = (root / "ibkr-launcher.log").read_text(encoding="utf-8", errors="replace")
+          inspect = subprocess.run(
+              ["docker", "inspect", "-f", "{{.State.Running}}:{{.State.ExitCode}}:{{.State.OOMKilled}}", "ibkr-cloudflare-b1"],
+              capture_output=True, text=True, check=False, timeout=5)
+          state = inspect.stdout.strip() if inspect.returncode == 0 else "unavailable"
+          health = {}
+          health_error = ""
+          try:
+              try:
+                  response = urlopen("http://127.0.0.1:18080/health", timeout=3)
+              except HTTPError as e:
+                  response = e
+              with response:
+                  health = json.loads(response.read().decode("utf-8"))
+          except (OSError, ValueError, TimeoutError) as e:
+              health_error = type(e).__name__
+          allowed = ("status", "mode", "state", "jvm_alive", "api_port", "api_port_open",
+                     "socat_port", "socat_port_open", "last_auth_success_age_seconds")
+          print("IBKR_LIVE_POST_2FA_DIAGNOSTIC=" + json.dumps({
+              "container_state": state,
+              "launcher_authentication_complete": "Authentication complete" in launcher,
+              "launcher_post_authenticate": "JTS-PostAuthenticate" in launcher,
+              "controller_health": {k: health[k] for k in allowed if k in health},
+              "controller_health_error_type": health_error,
+              "api_ready_verified": False,
+              "broker_mutation_attempted": False,
+              "private_account_fields_emitted": False,
+          }, sort_keys=True))
+          PY
+            fi
+            echo 'IBKR_GATEWAY_API_READY_VERIFIED=0'
             echo 'IBKR_OPERATOR_APPROVAL_ACCEPTED=0'
             exit 48
           fi
