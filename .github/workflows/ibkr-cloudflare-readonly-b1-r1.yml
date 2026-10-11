@@ -653,6 +653,31 @@ jobs:
               "exception_types": exceptions[:12],
               "sensitive_content_emitted": False,
           }, sort_keys=True))
+          # Only emit controller launch-stage lines after masking all known
+          # sealed credential values and common account/token representations.
+          secrets_file = root / "ibkr-gateway.env"
+          redactions = []
+          if secrets_file.is_file():
+              for record in secrets_file.read_text(encoding="utf-8").splitlines():
+                  if "=" not in record:
+                      continue
+                  key, value = record.split("=", 1)
+                  if (any(k in key.upper() for k in ("USERID", "PASSWORD", "ACCOUNT", "TOKEN", "TWOFACTOR", "SECRET"))
+                      and len(value.strip()) > 2):
+                      redactions.append(value.strip())
+          clean = []
+          for line in log.splitlines():
+              if not re.search(r"(?i)\b(?:error|failed|fatal|stop|exit|gateway|controller|launcher|missing|invalid|xvfb|vnc|ready|starting|terminated|not found|settings)\b", line):
+                  continue
+              for value in sorted(set(redactions), key=len, reverse=True):
+                  line = re.sub(re.escape(value), "[REDACTED]", line, flags=re.I)
+              line = re.sub(r"\b(?:DU|DF|DI|U|F|I)[0-9]{5,10}\b", "[REDACTED_ACCOUNT]", line)
+              line = re.sub(r"(?i)\b(?:bearer|token|secret|password|userid|username|account)\s*[=:]\s*[^\s,;]+", "[REDACTED_FIELD]", line)
+              line = re.sub(r"(?i)(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})", "[REDACTED_EMAIL]", line)
+              if re.search(r"(?i)\b(?:TWS_PASSWORD|TWS_USERID|TWOFACTOR_CODE|API_KEY)\b", line):
+                  continue
+              clean.append(line[:220])
+          print("IBKR_GATEWAY_REDACTED_STARTUP=" + json.dumps(clean[-20:]))
           PY
             python scripts/ibkr_auth_boundary_v1.py \
               --controller-log-file "$RUNNER_TEMP/ibkr-controller.log" \
