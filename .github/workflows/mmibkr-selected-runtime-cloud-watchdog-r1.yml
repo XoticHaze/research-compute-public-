@@ -197,12 +197,12 @@ jobs:
               if summary_path:
                   with open(summary_path, 'a', encoding='utf-8') as summary:
                       summary.write(
-                          '### MM-IBKR selected-runtime watchdog: no owner dispatched\\n'
-                          + '\\n- State: \`no_current_source_checkpoint\`\\n'
-                          + '- Pinned source: \`' + canonical_source + '\`\\n'
-                          + '- Broker mutations: none\\n'
-                          + '- Resolution: exact private source admission and attested predecessor checkpoint\\n'
-                          + '- Related: CommandCenter #868 / MM-IBKR #842\\n'
+                          '### MM-IBKR selected-runtime watchdog: no owner dispatched\n'
+                          + '\n- State: `no_current_source_checkpoint`\n'
+                          + '- Pinned source: `' + canonical_source + '`\n'
+                          + '- Broker mutations: none\n'
+                          + '- Resolution: exact private source admission and attested predecessor checkpoint\n'
+                          + '- Related: CommandCenter #868 / MM-IBKR #842\n'
                       )
               raise SystemExit(0)
 
