@@ -1,18 +1,16 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "a61d493af14bcd1ec78d132dcf52fc73a55b4d37",
+  "source_ref": "91187cb2e56c9eacd6190d903b450ced001c0855",
   "test_modules": [
-    "tests.test_ibkr_account_context",
-    "tests.test_ibkr_production_live_account_context_v1",
-    "tests.test_selected_runtime_submit_authority",
-    "tests.test_paper_flatten_canonical_route_authority_667"
+    "tests.test_selected_runtime_cloud_bar_clock_v1",
+    "tests.test_selected_runtime_cloud_runner_dry_plan_v1"
   ],
   "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
   "s3_composition_economics": false,
   "s4_layered_mtf_economics": false,
-  "requested_by": "chatgpt-mm-live-readiness",
-  "purpose": "Validate merged MM production-live account-context seam with live disabled and no broker credentials",
+  "requested_by": "chatgpt-mm-live-incumbent-handoff",
+  "purpose": "Prove canonical read-only live handoff inventory; no broker requests or trade route reproof",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -20,8 +18,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "mm-live-context-a61d493a-r1",
+  "request_nonce": "mm-live-handoff-91187cb-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "a61d493af14bcd1ec78d132dcf52fc73a55b4d37",
+  "current_private_reference": "91187cb2e56c9eacd6190d903b450ced001c0855",
   "parity_public_key_b64": ""
 }
