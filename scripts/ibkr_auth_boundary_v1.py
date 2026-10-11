@@ -228,6 +228,24 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
 
     api_ready_observed = _has(combined, "api port open", "api ready", "api_ready", "session preserved")
 
+    # Controller-owned phase markers are read-only observations. An IBKR
+    # launcher "Authentication complete" is not equivalent to either a
+    # completed API handshake or approval of a new relogin attempt.
+    controller_ibkey_dialog_dismissed_observed = _has(
+        controller, "2FA dialog dismissed — IB Key approval detected")
+    controller_ibkey_timeout_observed = _has(
+        controller, "IB Key approval wait timed out")
+    controller_twofa_relogin_observed = _has(
+        controller, "RELOGIN_AFTER_TWOFA_TIMEOUT=yes — in-JVM relogin")
+    controller_postlogin_config_started = _has(
+        controller, "Applying post-login configuration from env vars")
+    controller_api_probe_started = _has(
+        controller, "Probing API port")
+    controller_api_open_observed = _has(
+        controller, "API port opened — IB Key approval succeeded",
+        "API port open — IB Key approval succeeded",
+        "API port 4001 accepting connections", "API port 4002 accepting connections")
+
     second_factor_challenge_observed = any(
         (
             ibkey_dialog_detected,
@@ -338,6 +356,12 @@ def classify(controller: str, launcher: str) -> dict[str, object]:
         "ns_auth_start_observed": ns_auth_start_observed,
         "post_authenticate_observed": post_authenticate_observed,
         "launcher_authentication_complete_observed": launcher_authentication_complete_observed,
+        "controller_ibkey_dialog_dismissed_observed": controller_ibkey_dialog_dismissed_observed,
+        "controller_ibkey_timeout_observed": controller_ibkey_timeout_observed,
+        "controller_twofa_relogin_observed": controller_twofa_relogin_observed,
+        "controller_postlogin_config_started": controller_postlogin_config_started,
+        "controller_api_probe_started": controller_api_probe_started,
+        "controller_api_open_observed": controller_api_open_observed,
         "api_ready_observed": api_ready_observed,
         "launcher_connected_host": _connected_host(launcher),
         "launcher_auth_transcript": transcript,
