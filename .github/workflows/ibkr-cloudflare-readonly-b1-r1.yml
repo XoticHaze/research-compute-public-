@@ -621,6 +621,39 @@ jobs:
             docker logs ibkr-cloudflare-b1 > "$RUNNER_TEMP/ibkr-controller.log" 2>&1 || true
             docker exec ibkr-cloudflare-b1 /bin/sh -lc 'cat "$TWS_SETTINGS_PATH/launcher.log" 2>/dev/null || true' \
               > "$RUNNER_TEMP/ibkr-launcher.log" 2>/dev/null || true
+            # Publish fixed-category early-exit evidence, not raw logs or private values.
+            container_state="$(docker inspect -f '{{.State.Running}}:{{.State.ExitCode}}:{{.State.OOMKilled}}' ibkr-cloudflare-b1 2>/dev/null || echo unavailable)"
+            export IBKR_DIAGNOSTIC_CONTAINER_STATE="$container_state"
+            python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"])
+          log = (root / "ibkr-controller.log").read_text(encoding="utf-8", errors="replace")
+          launcher = (root / "ibkr-launcher.log").read_text(encoding="utf-8", errors="replace")
+          evidence = log + "\n" + launcher
+          categories = {
+              "python_traceback": r"Traceback \(most recent call last\)",
+              "missing_runtime": r"ModuleNotFoundError|ImportError|FileNotFoundError|No such file or directory",
+              "display_failure": r"cannot open display|Xvfb.*(fail|error)|DISPLAY.*(fail|error)",
+              "jvm_failure": r"JVM.*(exit|error|fail)|java.*(exit|error|fail)",
+              "credential_config_failure": r"missing.*(password|userid)|invalid.*(password|userid)",
+              "region_or_network_failure": r"SSLHandshakeException|handshake fail|unknown host|No route to host|TWS_SERVER.*required",
+              "controller_error": r"\b(?:fatal|critical|exception|shutdown|crash)\b",
+              "controller_started": r"\b(?:controller|gateway)\b",
+          }
+          categories_seen = sorted(k for k, p in categories.items() if re.search(p, evidence, re.I))
+          alerts = sorted(set(re.findall(r"\bALERT_[A-Z0-9_]{2,48}\b", evidence)))
+          exceptions = sorted(set(re.findall(r"\b[A-Za-z_]{2,36}(?:Error|Exception)\b", evidence)))
+          print("IBKR_GATEWAY_BOOT_DIAGNOSTIC=" + json.dumps({
+              "container_state": os.environ["IBKR_DIAGNOSTIC_CONTAINER_STATE"],
+              "controller_log_bytes": len(log.encode()),
+              "launcher_log_bytes": len(launcher.encode()),
+              "categories": categories_seen,
+              "alert_tokens": alerts[:12],
+              "exception_types": exceptions[:12],
+              "sensitive_content_emitted": False,
+          }, sort_keys=True))
+          PY
             python scripts/ibkr_auth_boundary_v1.py \
               --controller-log-file "$RUNNER_TEMP/ibkr-controller.log" \
               --launcher-log-file "$RUNNER_TEMP/ibkr-launcher.log" \
