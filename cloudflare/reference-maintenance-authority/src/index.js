@@ -7,6 +7,19 @@ const SCHEMA = "reference-release-maintenance-v1";
 const ISSUER = "private-maintenance-authority-v1";
 const SIGNATURE_FORMAT = "ecdsa-p256-sha256-p1363";
 
+function brokerOrigin(env) {
+  const value = String(env?.BROKER_PUBLIC_ORIGIN || "");
+  let url;
+  try { url = new URL(value); } catch { throw new Error("broker_origin_unconfigured"); }
+  if (
+    url.protocol !== "https:" || url.port || url.username || url.password
+    || url.pathname !== "/" || url.search || url.hash
+    || !/^reference-release-broker-v1\.[a-z0-9-]+\.workers\.dev$/.test(url.hostname)
+  ) throw new Error("broker_origin_rejected");
+  return url.origin;
+}
+
+
 function json(body, status=200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -143,6 +156,21 @@ export class AuthorityState {
       const verified = await verifyWrapper(wrapper, await this.importPublic(), this.key.key_id);
       return json({ok:true, manifest:verified, key_id:this.key.key_id});
     }
+    if (request.method === "GET" && url.pathname === "/automation-state") {
+      return json({
+        ok:true,
+        last_applied_source_sha:String((await this.state.storage.get("last_applied_source_sha")) || ""),
+        last_deployed_version:String((await this.state.storage.get("last_deployed_version")) || ""),
+      });
+    }
+    if (request.method === "POST" && url.pathname === "/automation-state") {
+      const body = await request.json().catch(()=>null);
+      const sourceSha = validateSourceSha(body?.source_sha);
+      const deployedVersion = validateVersion(body?.deployed_version, "deployed_version");
+      await this.state.storage.put("last_applied_source_sha", sourceSha);
+      await this.state.storage.put("last_deployed_version", deployedVersion);
+      return json({ok:true});
+    }
     return json({error:"not_found"},404);
   }
 }
@@ -208,6 +236,34 @@ async function stateStub(env) {
   return env.AUTHORITY_STATE.get(env.AUTHORITY_STATE.idFromName("root"));
 }
 
+async function automationState(env) {
+  const stub = await stateStub(env);
+  const response = await stub.fetch("https://authority-state/automation-state");
+  if (!response.ok) throw new Error("automation_state_unavailable");
+  const body = await response.json();
+  if (body?.ok !== true) throw new Error("automation_state_rejected");
+  return body;
+}
+
+async function recordAutomationState(env, sourceSha, deployedVersion) {
+  const stub = await stateStub(env);
+  const response = await stub.fetch("https://authority-state/automation-state", {
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({source_sha:sourceSha, deployed_version:deployedVersion}),
+  });
+  if (!response.ok) throw new Error("automation_state_record_rejected");
+}
+
+async function liveBrokerKeyId(env) {
+  const response = await fetch(brokerOrigin(env) + "/v1/public-key", {
+    headers:{"cache-control":"no-cache"}
+  });
+  if (!response.ok) throw new Error("broker_public_key_unavailable");
+  const node = await response.json();
+  return validateBrokerKey(node?.key_id);
+}
+
 async function authorize(request, env) {
   const body = await request.json().catch(()=>null);
   if (!body || Object.keys(body).sort().join(",") !==
@@ -218,7 +274,7 @@ async function authorize(request, env) {
   const current = validateVersion(body.expected_current_version, "expected_current_version");
   const brokerKey = validateBrokerKey(body.expected_broker_key_id);
 
-  const liveKey = await fetch("https://reference-release-broker-v1.slenderiq.workers.dev/v1/public-key", {
+  const liveKey = await fetch(brokerOrigin(env) + "/v1/public-key", {
     headers:{"cache-control":"no-cache"}
   });
   if (!liveKey.ok) throw new Error("broker_public_key_unavailable");
@@ -317,5 +373,29 @@ export default class ReferenceMaintenanceAuthority extends WorkerEntrypoint {
     if (!this.env.MAINTAINER) throw new Error("maintainer_binding_unconfigured");
     const signed = await this.authorize(input);
     return this.env.MAINTAINER.maintain(signed);
+  }
+
+  async scheduled(controller) {
+    if (String(this.env.AUTO_APPLY_ENABLED || "0") !== "1") return;
+    const approvedSourceSha = validateSourceSha(this.env.APPROVED_BROKER_SOURCE_SHA);
+    const prior = await automationState(this.env);
+    if (prior.last_applied_source_sha === approvedSourceSha) return;
+
+    if (!this.env.MAINTAINER || typeof this.env.MAINTAINER.brokerState !== "function") {
+      throw new Error("maintainer_state_rpc_unavailable");
+    }
+    const brokerState = await this.env.MAINTAINER.brokerState();
+    const expectedCurrentVersion = validateVersion(brokerState?.version_id, "expected_current_version");
+    const expectedBrokerKeyId = await liveBrokerKeyId(this.env);
+
+    const response = await this.apply({
+      candidate_source_sha: approvedSourceSha,
+      expected_broker_key_id: expectedBrokerKeyId,
+      expected_current_version: expectedCurrentVersion,
+    });
+    if (!response || response.ok !== true) throw new Error("scheduled_maintenance_rejected");
+    const body = await response.json();
+    if (body?.ok !== true || !body?.deployed_version) throw new Error("scheduled_maintenance_receipt_rejected");
+    await recordAutomationState(this.env, approvedSourceSha, body.deployed_version);
   }
 }
