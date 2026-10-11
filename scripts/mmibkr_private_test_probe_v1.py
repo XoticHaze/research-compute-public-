@@ -85,6 +85,9 @@ SAFE_EXACT = {
     "tests.test_ibkr_production_live_account_context_v1",
     "tests.test_selected_runtime_submit_authority",
     "tests.test_paper_flatten_canonical_route_authority_667",
+    # Pure scheduler/dry-plan builders with no broker client or live enable.
+    "tests.test_selected_runtime_cloud_bar_clock_v1",
+    "tests.test_selected_runtime_cloud_runner_dry_plan_v1",
 }
 STATUS_STAGE_MODULES = {
     "tests.test_market_features_provenance_contract",
