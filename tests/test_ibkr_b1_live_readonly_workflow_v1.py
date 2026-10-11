@@ -91,3 +91,16 @@ def test_live_readonly_never_passes_through_paper_only_post_auth_or_snapshot():
     assert "IBKR_PRODUCTION_LIVE_READONLY_MODE != '1'" in WORKFLOW[paper_handoff:paper_handoff+350]
     paper_return = WORKFLOW.index("- name: Encrypt optional detailed warm read snapshot for private consumer")
     assert "IBKR_PRODUCTION_LIVE_READONLY_MODE != '1'" in WORKFLOW[paper_return:paper_return+260]
+
+
+def test_live_mobile_approval_is_distinct_from_verified_gateway_api_readiness():
+    # The broker may accept IB Key before the Gateway API becomes usable.
+    # An API timeout must preserve that distinction and emit no account data.
+    assert "IBKR_LIVE_POST_2FA_DIAGNOSTIC=" in WORKFLOW
+    assert '"launcher_authentication_complete"' in WORKFLOW
+    assert '"api_ready_verified": False' in WORKFLOW
+    assert '"controller_health"' in WORKFLOW
+    assert '"private_account_fields_emitted": False' in WORKFLOW
+    assert "IBKR_GATEWAY_API_READY_VERIFIED=0" in WORKFLOW
+    assert "IBKR_OPERATOR_APPROVAL_ACCEPTED=0" in WORKFLOW
+    assert "IBKR_LIVE_ORDER_MUTATION_ATTEMPTED=0" in WORKFLOW
