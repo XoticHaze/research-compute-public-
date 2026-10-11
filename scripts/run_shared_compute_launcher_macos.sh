@@ -1,5 +1,5 @@
-# Canonical authority: XoticHaze/CommandCenter@676abbb16111d6702908c3d3b3a20f47f01bc983
 #!/bin/bash
+# Canonical authority: XoticHaze/CommandCenter@676abbb16111d6702908c3d3b3a20f47f01bc983
 set -euo pipefail
 
 BASE="/Users/cr0nix/Documents/pfSense"
