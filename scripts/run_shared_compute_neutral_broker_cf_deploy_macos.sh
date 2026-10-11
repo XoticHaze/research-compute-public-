@@ -46,7 +46,7 @@ x=json.loads(Path(sys.argv[2]).read_text())
 assert isinstance(a,dict) and a.get('id')==sys.argv[3] and a.get('name')=='Shared Compute Neutral Authorization', 'wrong Cloudflare account'
 if isinstance(x,dict): x=x.get('result')
 assert isinstance(x,list), 'Worker search unrecognized'
-names={str(v.get('name') or v.get('id') or '') for v in x if isinstance(v,dict)}
+names={str(v.get('script_name') or v.get('name') or '') for v in x if isinstance(v,dict)}
 targets={'reference-release-broker-v1','reference-release-maintainer-v1','reference-maintenance-authority-v1'}
 assert not names.intersection(targets), 'target Worker already present'
 print('NEUTRAL_ACCOUNT_READBACK_PASS=1')
@@ -126,7 +126,7 @@ from pathlib import Path
 v=json.loads(Path(sys.argv[1]).read_text())
 if isinstance(v,dict): v=v.get('result')
 assert isinstance(v,list), 'invalid search response'
-assert any((r.get('name') or r.get('id'))=='reference-release-broker-v1' for r in v if isinstance(r,dict)), 'broker missing after deployment'
+assert any((r.get('script_name') or r.get('name'))=='reference-release-broker-v1' for r in v if isinstance(r,dict)), 'broker missing after deployment'
 print('NEUTRAL_BROKER_REMOTE_READBACK_PASS=1')
 PY
 echo "BROKER_SIGNER_CONFIGURED=NO"
