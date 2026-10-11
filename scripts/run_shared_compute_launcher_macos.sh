@@ -1,5 +1,5 @@
 #!/bin/bash
-# Canonical authority: XoticHaze/CommandCenter@676abbb16111d6702908c3d3b3a20f47f01bc983
+# Canonical authority: XoticHaze/CommandCenter@599406126690cf45c8c77ac10dc51de149644ad0
 set -euo pipefail
 
 BASE="/Users/cr0nix/Documents/pfSense"
@@ -16,7 +16,7 @@ find "$BASE" -maxdepth 1 -type f -name 'run_shared_compute*.sh' \
   ! -path "$BASE/run_shared_compute.sh" -delete 2>/dev/null || true
 
 cleanup() {
-  rm -f "$PAYLOAD"
+  rm -f /bin/bash "$PAYLOAD"
 }
 trap cleanup EXIT INT TERM
 
