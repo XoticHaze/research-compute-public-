@@ -63,7 +63,16 @@ class AuthBoundaryTests(unittest.TestCase):
         self.assertTrue(result["controller_twofa_relogin_observed"])
         self.assertFalse(result["launcher_authentication_complete_observed"])
         self.assertFalse(result["api_ready_observed"])
-        self.assertEqual(result["stage"], "ibkey_mobile_approval_wait")
+        self.assertEqual(result["stage"], "ibkey_timeout_relogin")
+
+    def test_expired_mobile_window_without_relogin_is_not_active_approval(self):
+        result = classify(
+            "Waiting for IB Key mobile approval\nIB Key approval wait timed out",
+            "Authenticating\nNS_AUTH_START",
+        )
+        self.assertTrue(result["controller_ibkey_timeout_observed"])
+        self.assertFalse(result["controller_twofa_relogin_observed"])
+        self.assertEqual(result["stage"], "ibkey_timeout")
 
     def test_postlogin_and_api_probe_have_separate_positive_markers(self):
         result = classify(
