@@ -46,10 +46,16 @@ print('NEUTRAL_ACCOUNT_AND_BROKER_VERIFIED=1')
 print('NEUTRAL_CONTROLLER_NAMES_ABSENT=1')
 PY
 for role in "$AUTH" "$MAINT"; do
+ case "$role" in
+  reference-maintenance-authority-v1) source_dir="reference-maintenance-authority" ;;
+  reference-release-maintainer-v1) source_dir="reference-release-maintainer" ;;
+  *) fail unexpected_worker_name ;;
+ esac
  mkdir -p "$STAGE/$role/src"
  for file in src/index.js wrangler.jsonc; do
-  /usr/bin/curl -fLsS --retry 3 "$RAW/$role/$file" -o "$STAGE/$role/$file"
+  /usr/bin/curl -fLsS --retry 3 "$RAW/$source_dir/$file" -o "$STAGE/$role/$file"
  done
+ echo "NEUTRAL_CONTROLLER_SOURCE_FETCH_PASS=$role"
 done
 python3 - "$STAGE" "$BROKER_ORIGIN" "$ID" <<'PY'
 import json,sys
