@@ -1,4 +1,4 @@
-# Canonical authority: XoticHaze/CommandCenter@8a51860bf3e73e343773a6806624ff75ab75ccf3
+# Canonical authority: XoticHaze/CommandCenter@c7d2f3e06429028bef386612013faba1e2686f3e
 #!/bin/bash
 set -euo pipefail
 
@@ -101,9 +101,95 @@ else
   log "CF_OAUTH_LOGIN_PASS=1"
 fi
 
-log "CF_ACCOUNT_CREATE_DISCOVERY_BEGIN"
-"${CF[@]}" cli search "create a standalone Free account named Shared Compute Neutral Authorization" | tee -a "$REPORT"
-log "CF_ACCOUNT_CREATE_DISCOVERY_END"
+TARGET_ACCOUNT_NAME="Shared Compute Neutral Authorization"
+TARGET_ACCOUNT_FILE="$WORK/cloudflare_neutral_account_id"
+IDEMPOTENCY_KEY="commandcenter-shared-compute-neutral-authorization-v1"
+LIST_JSON="$WORK/cf-neutral-account-list.json"
+CREATE_JSON="$WORK/cf-neutral-account-create.json"
+
+rm -f "$LIST_JSON" "$CREATE_JSON"
+
+"${CF[@]}" accounts list --name "$TARGET_ACCOUNT_NAME" > "$LIST_JSON"
+
+read -r MATCH_COUNT NEUTRAL_ACCOUNT_ID < <(
+  python3 - "$LIST_JSON" "$TARGET_ACCOUNT_NAME" <<'PY'
+import json,sys
+p,name=sys.argv[1],sys.argv[2]
+with open(p,encoding="utf-8") as fh:
+    data=json.load(fh)
+if isinstance(data,dict) and "result" in data:
+    data=data.get("result") or []
+if not isinstance(data,list):
+    raise SystemExit("ACCOUNT_LIST_SHAPE_INVALID")
+matches=[x for x in data if isinstance(x,dict) and x.get("name")==name]
+ids=[str(x.get("id") or "") for x in matches]
+valid=[x for x in ids if len(x)==32]
+print(len(matches), valid[0] if len(matches)==1 and len(valid)==1 else "")
+PY
+)
+
+if [[ "$MATCH_COUNT" -gt 1 ]]; then
+  log "NEUTRAL_ACCOUNT_CREATE_FAIL=duplicate_exact_name"
+  exit 2
+fi
+
+if [[ "$MATCH_COUNT" -eq 1 ]]; then
+  if [[ ! "$NEUTRAL_ACCOUNT_ID" =~ ^[0-9a-fA-F]{32}$ ]]; then
+    log "NEUTRAL_ACCOUNT_CREATE_FAIL=existing_account_id_invalid"
+    exit 2
+  fi
+  log "NEUTRAL_ACCOUNT_STATE=EXISTING"
+else
+  log "NEUTRAL_ACCOUNT_CREATE_DRY_RUN_BEGIN"
+  "${CF[@]}" accounts create \
+    --name "$TARGET_ACCOUNT_NAME" \
+    --standalone \
+    --idempotency-key "$IDEMPOTENCY_KEY" \
+    --dry-run | tee -a "$REPORT"
+  log "NEUTRAL_ACCOUNT_CREATE_DRY_RUN_PASS=1"
+
+  "${CF[@]}" accounts create \
+    --name "$TARGET_ACCOUNT_NAME" \
+    --standalone \
+    --idempotency-key "$IDEMPOTENCY_KEY" > "$CREATE_JSON"
+
+  "${CF[@]}" accounts list --name "$TARGET_ACCOUNT_NAME" > "$LIST_JSON"
+
+  read -r MATCH_COUNT NEUTRAL_ACCOUNT_ID < <(
+    python3 - "$LIST_JSON" "$TARGET_ACCOUNT_NAME" <<'PY'
+import json,sys
+p,name=sys.argv[1],sys.argv[2]
+with open(p,encoding="utf-8") as fh:
+    data=json.load(fh)
+if isinstance(data,dict) and "result" in data:
+    data=data.get("result") or []
+if not isinstance(data,list):
+    raise SystemExit("ACCOUNT_LIST_SHAPE_INVALID")
+matches=[x for x in data if isinstance(x,dict) and x.get("name")==name]
+ids=[str(x.get("id") or "") for x in matches]
+valid=[x for x in ids if len(x)==32]
+print(len(matches), valid[0] if len(matches)==1 and len(valid)==1 else "")
+PY
+  )
+
+  if [[ "$MATCH_COUNT" -ne 1 || ! "$NEUTRAL_ACCOUNT_ID" =~ ^[0-9a-fA-F]{32}$ ]]; then
+    log "NEUTRAL_ACCOUNT_CREATE_FAIL=post_create_verification"
+    exit 2
+  fi
+  log "NEUTRAL_ACCOUNT_STATE=CREATED"
+fi
+
+umask 077
+printf '%s\n' "$NEUTRAL_ACCOUNT_ID" > "$TARGET_ACCOUNT_FILE"
+chmod 600 "$TARGET_ACCOUNT_FILE"
+
+rm -f "$LIST_JSON" "$CREATE_JSON"
+
+log "NEUTRAL_ACCOUNT_NAME=$TARGET_ACCOUNT_NAME"
+log "NEUTRAL_ACCOUNT_ID_SUFFIX=${NEUTRAL_ACCOUNT_ID: -8}"
+log "NEUTRAL_ACCOUNT_ID_FILE=pfSense/tmp/cloudflare_neutral_account_id"
+log "NEUTRAL_ACCOUNT_CREATE_OR_REUSE_PASS=1"
+log "NEXT_GATE=neutral_account_worker_deployment_bootstrap"
 
 log "RUN_COMPLETE=1"
 log "REPORT=$REPORT"
