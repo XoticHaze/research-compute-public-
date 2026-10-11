@@ -16,7 +16,7 @@ find "$BASE" -maxdepth 1 -type f -name 'run_shared_compute*.sh' \
   ! -path "$BASE/run_shared_compute.sh" -delete 2>/dev/null || true
 
 cleanup() {
-  rm -f /bin/bash "$PAYLOAD"
+  rm -f "$PAYLOAD"
 }
 trap cleanup EXIT INT TERM
 
@@ -38,4 +38,4 @@ echo "TRANSIENT_PAYLOAD=$PAYLOAD"
 echo "REPORT=$REPORT"
 echo
 
-"$PAYLOAD"
+/bin/bash "$PAYLOAD"
