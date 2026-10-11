@@ -48,41 +48,70 @@ def cf(args):
  try:return json.loads(p.stdout)
  except Exception as e:raise RuntimeError('non-JSON cf output: '+' '.join(args)+': '+str(e))
 methods={
- 'settings':('/accounts/{account_id}/workers/scripts/{script_name}/settings','get Worker script and version settings bindings'),
- 'subdomain':('/accounts/{account_id}/workers/scripts/{script_name}/subdomain','get Worker script subdomain settings'),
- 'schedules':('/accounts/{account_id}/workers/scripts/{script_name}/schedules','get Worker script schedules cron triggers')
+ 'settings':('/accounts/{account_id}/workers/scripts/{script_name}/settings','Get Worker Script and Version Settings','script-and-version-settings'),
+ 'subdomain':('/accounts/{account_id}/workers/scripts/{script_name}/subdomain','Get Worker Script Subdomain','subdomain'),
+ 'schedules':('/accounts/{account_id}/workers/scripts/{script_name}/schedules','Get Worker Script Schedules','schedules')
 }
 commands={}
-for key,(expected,description) in methods.items():
- matches=cf(['cli','search',description])
- assert isinstance(matches,list), 'cf cli search returned invalid shape'
+for key,(expected,description,group) in methods.items():
+ # A ranked five-result search is not an exhaustive command catalog.
+ # Check the exact API group command first, then discover alternatives.
+ candidates=[['workers','scripts',group,'get']]
+ searches=[description,description+' for a named worker']
+ for query in searches:
+  try: matches=cf(['cli','search',query])
+  except Exception:matches=[]
+  if not isinstance(matches,list):continue
+  for match in matches:
+   if not isinstance(match,dict):continue
+   candidate=match.get('command')
+   if not isinstance(candidate,str):continue
+   parts=shlex.split(candidate)
+   if parts and parts[0]=='cf':parts=parts[1:]
+   if parts and not any(x.startswith('-') for x in parts) and parts not in candidates:
+    candidates.append(parts)
  found=None
- for match in matches:
-  if not isinstance(match,dict):continue
-  candidate=match.get('command')
-  if not isinstance(candidate,str):continue
-  parts=shlex.split(candidate)
-  if parts and parts[0]=='cf':parts=parts[1:]
-  if not parts or any(x.startswith('-') for x in parts):continue
-  try:
-   meta=cf(['schema']+parts)
-  except Exception:
-   continue
-  method=str(meta.get('httpMethod') or meta.get('http_method') or '').upper()
-  path=str(meta.get('path') or '')
-  if method=='GET' and path.lstrip('/')==expected.lstrip('/'):
+ for parts in candidates:
+  try:meta=cf(['schema']+parts)
+  except Exception:continue
+  if not isinstance(meta,dict):continue
+  method=str(meta.get('httpMethod') or meta.get('http_method') or meta.get('method') or '').upper()
+  path=str(meta.get('path') or '').lstrip('/')
+  if method=='GET' and path==expected.lstrip('/'):
    found=parts
    break
- assert found, 'read-only cf command not discovered for '+key+'; use cf cli search and cf schema, do not create tokens'
+ if not found:
+  print('NEUTRAL_READ_COMMAND_DISCOVERY_MISSING='+key,flush=True)
+  print('NEUTRAL_EXPECTED_GET_PATH='+expected,flush=True)
+  print('NEUTRAL_CANDIDATES_TRIED='+repr(candidates),flush=True)
+  raise RuntimeError('Exact API GET command not found; no Cloudflare mutation. Inspect cf workers scripts --help.')
  commands[key]=found
  print('NEUTRAL_READ_COMMAND_SCHEMA_PASS='+key,flush=True)
 def get(key,role):
- args=commands[key]+['--script-name',role]
- obj=cf(args)
+ # The CLI may represent script_name as an option or as a positional arg.
+ # Select the syntax using a strict GET request dry-run, never guess at runtime.
+ target='https://api.cloudflare.com/client/v4/accounts/'+account_id+'/workers/scripts/'+role+'/'+('settings' if key=='settings' else key)
+ choices=[
+   ['--script-name',role],
+   [role],
+   ['--script-name',role,'--account-id',account_id],
+   [role,'--account-id',account_id]
+ ]
+ selected=None
+ for args in choices:
+  try:preview=cf(commands[key]+args+['--dry-run'])
+  except Exception:continue
+  if not isinstance(preview,dict):continue
+  if preview.get('method')=='GET' and preview.get('url')==target:
+   selected=args
+   break
+ if selected is None:
+  raise RuntimeError('Read-only '+key+' request preview could not be matched to neutral account and '+role+'; no API call was made')
+ print('NEUTRAL_READ_REQUEST_DRY_RUN_PASS='+key+'_'+role,flush=True)
+ obj=cf(commands[key]+selected)
  if isinstance(obj,dict) and obj.get('success') is True and 'result' in obj:
   obj=obj['result']
  assert isinstance(obj,dict),key+' readback shape invalid'
- # Retain protected local evidence, never print raw setting values or secrets.
  (root/(key+'-'+role+'.json')).write_text(json.dumps(obj,indent=2)+'\n')
  return obj
 records={role:get('settings',role) for role in (auth,maint)}
