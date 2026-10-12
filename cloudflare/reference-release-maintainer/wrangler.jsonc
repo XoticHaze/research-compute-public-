@@ -39,6 +39,6 @@
     }
   },
   "vars": {
-    "BROKER_PUBLIC_ORIGIN": "https://reference-release-broker-v1.slenderiq.workers.dev"
+    "BROKER_PUBLIC_ORIGIN": "https://reference-release-broker-v1.shared-compute-neutral-authorization.workers.dev"
   }
 }
