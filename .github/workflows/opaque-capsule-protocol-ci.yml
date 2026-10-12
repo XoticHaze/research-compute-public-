@@ -51,6 +51,8 @@ jobs:
           python -m unittest -q             tests.test_opaque_bidirectional_capsule_v1             tests.test_opaque_bidirectional_capsule_p256_aesgcm_v1
       - name: Verify public runner RAM-only scratch guard and cleanup
         run: |
+          set -euo pipefail
+          sudo -n swapoff -a || { echo "PUBLIC_COMPUTE_SWAP=FAIL_CLOSED"; exit 1; }
           PYTHONDONTWRITEBYTECODE=1 python -B -m unittest -v tests.test_public_compute_memory_scratch_v1
       - name: Execute opaque roundtrip
         run: python scripts/opaque_bidirectional_capsule_smoke_v1.py
