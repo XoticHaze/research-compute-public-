@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - .github/workflows/mmibkr-checkpoint-checkpoint-readonly-r1.yml
+      - .github/workflows/mmibkr-paper-predecessor-checkpoint-readonly-r1.yml
 
 permissions:
   contents: read
