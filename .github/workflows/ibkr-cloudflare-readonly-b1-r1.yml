@@ -65,6 +65,14 @@ on:
         required: false
         default: ''
         type: string
+      read_return_envelope_profile:
+        description: Versioned encrypted return framing; v1 remains default for old clients
+        required: false
+        default: v1
+        type: choice
+        options:
+          - v1
+          - v2
   push:
     branches:
       - ibkr-b1-authority-v1
@@ -942,6 +950,7 @@ jobs:
         env:
           READ_RETURN_RECIPIENT_B64: ${{ inputs.read_return_recipient_b64 }}
           READ_RETURN_RECIPIENT_KEY_ID: ${{ inputs.read_return_recipient_key_id }}
+          READ_RETURN_ENVELOPE_PROFILE: ${{ inputs.read_return_envelope_profile }}
         run: |
           set -euo pipefail
           python scripts/ibkr_warm_read_return_v1.py \
@@ -954,6 +963,7 @@ jobs:
             --bars-file "$RUNNER_TEMP/ibkr-forward-bars-v2.jsonl" \
             --recipient-b64 "$READ_RETURN_RECIPIENT_B64" \
             --recipient-key-id "$READ_RETURN_RECIPIENT_KEY_ID" \
+            --return-profile "$READ_RETURN_ENVELOPE_PROFILE" \
             --output-dir "$RUNNER_TEMP/ibkr-warm-read-return"
           echo 'ready=1' >> "$GITHUB_OUTPUT"
           echo 'IBKR_WARM_READ_RETURN_ENCRYPTED=1'
