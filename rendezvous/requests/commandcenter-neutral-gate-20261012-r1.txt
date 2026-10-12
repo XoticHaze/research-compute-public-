@@ -1,0 +1,13 @@
+{
+  "schema": "commandcenter.neutral_gate_public_encrypted_request.v1",
+  "trust_mode": "public_encrypted",
+  "execution_plane": "public_research_compute_current",
+  "authority_issue": "XoticHaze/CommandCenter#809",
+  "suite": "commandcenter_neutral_broker_credential_gates_v1",
+  "input_delivery": "run_bound_ephemeral_x25519_hkdf_chacha20poly1305_capsule",
+  "source_contract": "exact_five_commandcenter_git_blobs_pinned_in_public_consumer",
+  "cloudflare_mutation_authority": false,
+  "token_creation_authority": false,
+  "expected_receipt": "commandcenter-neutral-broker-credential-gates-receipt-v1",
+  "failure_scope": "this_run_only"
+}
