@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PRIVATE_SOURCE_SHA: 935c756a63227dafb9fcbba024ef5c7ef865b3d5
+  PRIVATE_SOURCE_SHA: 7e91f4f0951cc7cace61f16e0737ca567c106ccf
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
   LIVE_SEAL_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-live-bot/seal
   IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
@@ -159,6 +159,7 @@ jobs:
           # This is the source-owned hostless compatibility builder already
           # used for paper. Network is disabled; no broker session or order.
           docker run --rm --network none \
+            --user "$(id -u):$(id -g)" \
             -v "$RUNNER_TEMP/mmibkr-live-data:/app/data" \
             "mmibkr-live-canonical:$GITHUB_RUN_ID" \
             python scripts/operator/selected_runtime_legacy_compat_config_v1.py \
