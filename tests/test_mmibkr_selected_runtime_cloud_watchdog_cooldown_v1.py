@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 import unittest
 
 from scripts.mmibkr_selected_runtime_cloud_watchdog_cooldown_v1 import (
@@ -95,6 +96,25 @@ class SelectedRuntimeCloudWatchdogCooldownV1Tests(unittest.TestCase):
         )
         self.assertFalse(result["suppress"])
         self.assertEqual(result["consecutive_failure_count"], 2)
+
+
+    def test_watchdog_reads_immutable_session_receipts_from_exchange_branch(self):
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github/workflows/mmibkr-selected-runtime-cloud-watchdog-r1.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "f'https://api.github.com/repos/{repo}/contents/{path}?ref=rendezvous-exchange'",
+            workflow,
+        )
+        self.assertNotIn(
+            "f'https://api.github.com/repos/{repo}/contents/{path}?ref=main'",
+            workflow,
+        )
+        self.assertIn("receipt.get('checkpoint_cache_saved') is True", workflow)
+        self.assertIn("saved_key.endswith('-' + canonical_source)", workflow)
+        self.assertIn("'require_terminal_continuity':True", workflow)
+
 
 
 if __name__ == "__main__":
