@@ -64,15 +64,22 @@ help_=subprocess.run([wrangler,'secrets-store','store','create','--help'],captur
 if help_.returncode or '--remote' not in (help_.stdout+help_.stderr):
  raise SystemExit('WRANGLER_REMOTE_STORE_CREATE_UNAVAILABLE=1')
 print('WRANGLER_STORE_CREATE_CONTRACT_PASS=1',flush=True)
-whoami=subprocess.run([wrangler,'whoami'],capture_output=True,text=True,cwd=str(stage),timeout=75)
-if whoami.returncode:
- print('WRANGLER_OAUTH_SESSION_NOT_READY=1',flush=True)
+# Wrangler whoami --account <id> --json has an authoritative loggedIn
+# boolean and validates membership for that account. Human-readable whoami
+# output is not a stable account-identifier contract.
+whoami=subprocess.run([wrangler,'whoami','--account',account,'--json'],
+                      capture_output=True,text=True,cwd=str(stage),timeout=75)
+try:
+ auth_info=json.loads(whoami.stdout)
+except Exception:
+ print('WRANGLER_ACCOUNT_SCOPED_JSON_INVALID=1',flush=True)
  print('CLOUDFLARE_MUTATIONS=NONE',flush=True)
  raise SystemExit(2)
-if account not in (whoami.stdout+whoami.stderr):
- print('WRANGLER_NEUTRAL_ACCOUNT_NOT_VISIBLE=1',flush=True)
+if whoami.returncode or auth_info.get('loggedIn') is not True:
+ print('WRANGLER_OAUTH_SESSION_NOT_READY_OR_ACCOUNT_UNAVAILABLE=1',flush=True)
  print('CLOUDFLARE_MUTATIONS=NONE',flush=True)
  raise SystemExit(2)
+# Do not print OAuth secrets, email, account roster, or grant credentials.
 print('WRANGLER_NEUTRAL_ACCOUNT_AUTH_PASS=1',flush=True)
 
 # User has explicitly approved this single account-local mutation. Wrangler
