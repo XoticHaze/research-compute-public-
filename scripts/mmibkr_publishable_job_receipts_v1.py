@@ -48,6 +48,13 @@ def _sha256(raw: bytes) -> str:
 
 
 def stage(session_terminal: Path, receipt_dir: Path, output_dir: Path) -> dict[str, Any]:
+    # Confidential canonical receipts include nested private results. The legacy
+    # exporter copied the entire receipt into public artifacts and job logs.
+    # A caller's "sanitized" label or local validation is not authorization to
+    # publish: fail before opening inputs, creating files, or printing values.
+    # The existing canonical session workflow also fails before job execution
+    # until authenticated encrypted request AND full private result return exist.
+    raise RuntimeError("two_sided_private_result_return_not_admitted")
     session = _load(session_terminal)
     if session.get("schema") != SESSION_SCHEMA or session.get("status") != "completed":
         raise ValueError("completed canonical session receipt required")
