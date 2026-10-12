@@ -3,6 +3,13 @@ run-name: >-
   IBKR B1 ${{ github.event_name == 'workflow_dispatch' && format('{0} {1}', inputs.mode, inputs.dispatch_nonce) || github.event_name }}
 
 on:
+  pull_request:
+    branches:
+      - ibkr-b1-authority-v1
+    paths:
+      - '.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml'
+      - 'scripts/**'
+      - 'tests/**'
   workflow_dispatch:
     inputs:
       mode:
@@ -108,6 +115,8 @@ on:
       - 'tests/test_ibkr_account_snapshot_return_v1.py'
       - 'tests/test_ibkr_initial_selected_runtime_backfill_v1.py'
       - 'tests/test_ibkr_b1_live_readonly_workflow_v1.py'
+      - 'scripts/ibkr_paper_warning_rescue_v1.py'
+      - 'tests/test_ibkr_paper_warning_rescue_v1.py'
       - 'ibkr_login_trigger.txt'
       - 'config/ibkr_initial_selected_runtime_backfill_v1.json'
 
@@ -142,6 +151,7 @@ jobs:
           python -m py_compile \
             scripts/fleet_authority_envelope_consumer_v1.py \
             scripts/ibkr_auth_boundary_v1.py \
+            scripts/ibkr_paper_warning_rescue_v1.py \
             scripts/ibkr_login_window_guard_v1.py \
             scripts/ibkr_post_auth_pipeline_v1.py \
             tests/test_ibkr_post_auth_pipeline_contracts_v1.py \
@@ -159,6 +169,7 @@ jobs:
             scripts/ibkr_account_snapshot_return_v1.py \
             research/forward_bar_contract_v2.py \
             tests/test_ibkr_b1_auth_contracts_v1.py \
+            tests/test_ibkr_paper_warning_rescue_v1.py \
             tests/test_ibkr_b1_warm_state_workflow_v2.py \
             tests/test_ibkr_warm_selected_runtime_activation_v1.py \
             tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py \
@@ -183,6 +194,7 @@ jobs:
           PY
           python -m unittest \
             tests.test_ibkr_b1_auth_contracts_v1 \
+            tests.test_ibkr_paper_warning_rescue_v1 \
             tests.test_ibkr_post_auth_pipeline_contracts_v1 \
             tests.test_forward_bar_multitimeframe_v2 \
             tests.test_ibkr_b1_warm_state_workflow_v2 \
@@ -243,6 +255,7 @@ jobs:
           python -m py_compile \
             scripts/fleet_authority_envelope_consumer_v1.py \
             scripts/ibkr_auth_boundary_v1.py \
+            scripts/ibkr_paper_warning_rescue_v1.py \
             scripts/ibkr_login_window_guard_v1.py \
             scripts/ibkr_post_auth_pipeline_v1.py \
             tests/test_ibkr_post_auth_pipeline_contracts_v1.py \
@@ -260,6 +273,7 @@ jobs:
             scripts/ibkr_account_snapshot_return_v1.py \
             research/forward_bar_contract_v2.py \
             tests/test_ibkr_b1_auth_contracts_v1.py \
+            tests/test_ibkr_paper_warning_rescue_v1.py \
             tests/test_ibkr_warm_selected_runtime_activation_v1.py \
             tests/test_ibkr_remote_selected_runtime_command_capsule_v2.py \
             tests/test_ibkr_remote_forward_exact_ticks_v1.py \
@@ -274,6 +288,7 @@ jobs:
             tests/test_ibkr_b1_live_readonly_workflow_v1.py
           python -m unittest \
             tests.test_ibkr_b1_auth_contracts_v1 \
+            tests.test_ibkr_paper_warning_rescue_v1 \
             tests.test_ibkr_post_auth_pipeline_contracts_v1 \
             tests.test_forward_bar_multitimeframe_v2 \
             tests.test_ibkr_warm_selected_runtime_activation_v1 \
@@ -530,6 +545,7 @@ jobs:
           docker run -d --name ibkr-cloudflare-b1 \
             --env-file "$RUNNER_TEMP/ibkr-gateway-bootstrap.env" \
             -e USE_IBG_CONTROLLER=yes \
+            -e IBKR_PAPER_DISCLAIMER_RESCUE="$([ "$gateway_mode" = paper ] && echo 1 || echo 0)" \
             -e TRADING_MODE="$gateway_mode" \
             -e READ_ONLY_API="$api_read_only" \
             -e TWOFA_TIMEOUT_ACTION="$gateway_twofa_timeout_action" \
@@ -546,6 +562,10 @@ jobs:
             -p 127.0.0.1:18080:8080 \
             "$IBKR_CONTROLLER_IMAGE" >/dev/null
 
+          if [ "$gateway_mode" = paper ]; then
+            docker cp scripts/ibkr_paper_warning_rescue_v1.py ibkr-cloudflare-b1:/tmp/ibkr_paper_warning_rescue_v1.py
+            echo 'IBKR_PAPER_WARNING_EXACT_MODAL_RESCUE_INSTALLED=1'
+          fi
           actual_read_only="$(docker exec ibkr-cloudflare-b1 /bin/sh -lc 'printf %s "$READ_ONLY_API"')"
           test "$actual_read_only" = "$api_read_only"
           docker exec -e "EXPECTED_GATEWAY_MODE=$gateway_mode" -e "EXPECTED_TWOFA_TIMEOUT_ACTION=$gateway_twofa_timeout_action" ibkr-cloudflare-b1 /bin/sh -lc 'test "$TRADING_MODE" = "$EXPECTED_GATEWAY_MODE" && test "$TWOFA_TIMEOUT_ACTION" = "$EXPECTED_TWOFA_TIMEOUT_ACTION" && test "$TWOFA_EXIT_INTERVAL" = 120 && test "$RELOGIN_AFTER_TWOFA_TIMEOUT" = yes' >/dev/null
@@ -556,6 +576,7 @@ jobs:
           echo 'IBKR_SESSION_RESOLUTION_STARTED=1'
 
           mode=none
+          last_paper_warning_rescue_at=0
           deadline=$((SECONDS + 900))
           while (( SECONDS < deadline )); do
             running="$(docker inspect -f '{{.State.Running}}' ibkr-cloudflare-b1 2>/dev/null || echo false)"
@@ -586,6 +607,13 @@ jobs:
               break
             fi
 
+            # The pinned controller already auto-dismisses standard warning
+            # buttons. Rescue an alternate IBC-era button only after proof of
+            # a specific paper-only modal; no arbitrary clicks or live access.
+            if [ "$gateway_mode" = paper ] && (( SECONDS - last_paper_warning_rescue_at >= 20 )); then
+              docker exec ibkr-cloudflare-b1 python3 /tmp/ibkr_paper_warning_rescue_v1.py --apply || true
+              last_paper_warning_rescue_at=$SECONDS
+            fi
             docker logs ibkr-cloudflare-b1 > "$RUNNER_TEMP/ibkr-controller.log" 2>&1 || true
             docker exec ibkr-cloudflare-b1 /bin/sh -lc 'cat "$TWS_SETTINGS_PATH/launcher.log" 2>/dev/null || true' \
               > "$RUNNER_TEMP/ibkr-launcher.log" 2>/dev/null || true
@@ -628,6 +656,13 @@ jobs:
           done
 
           if [ "$mode" = none ]; then
+            # The pinned controller already auto-dismisses standard warning
+            # buttons. Rescue an alternate IBC-era button only after proof of
+            # a specific paper-only modal; no arbitrary clicks or live access.
+            if [ "$gateway_mode" = paper ] && (( SECONDS - last_paper_warning_rescue_at >= 20 )); then
+              docker exec ibkr-cloudflare-b1 python3 /tmp/ibkr_paper_warning_rescue_v1.py --apply || true
+              last_paper_warning_rescue_at=$SECONDS
+            fi
             docker logs ibkr-cloudflare-b1 > "$RUNNER_TEMP/ibkr-controller.log" 2>&1 || true
             docker exec ibkr-cloudflare-b1 /bin/sh -lc 'cat "$TWS_SETTINGS_PATH/launcher.log" 2>/dev/null || true' \
               > "$RUNNER_TEMP/ibkr-launcher.log" 2>/dev/null || true
@@ -821,7 +856,9 @@ jobs:
           if delay > 600:
               raise SystemExit('snapshot boundary is more than 600 seconds in the future')
           if delay < -60:
-              raise SystemExit('snapshot boundary is more than 60 seconds stale')
+              print('IBKR_SNAPSHOT_BOUNDARY_STALE_AFTER_AUTH=1')
+              print('IBKR_CANONICAL_SNAPSHOT_REISSUE_REQUIRED=1')
+              raise SystemExit('snapshot boundary is more than 60 seconds stale; original producer must reissue a fresh approved boundary')
           if delay > 0:
               print('IBKR_SNAPSHOT_BOUNDARY_WAIT_SEC='+str(round(delay,3)))
               time.sleep(delay)
