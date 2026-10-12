@@ -63,3 +63,24 @@ def test_canonical_research_session_uses_attested_vault_snapshot_not_expiring_pi
     assert "_resolveVaultSnapshotApproval" in exchange
     assert "reusableExactShaBootstrapAttestation" in exchange
     assert "SOURCE_VAULT_BOOTSTRAP_IDENTITY" in exchange
+
+def test_production_live_bot_profile_is_distinct_and_strictly_oidc_bound():
+    worker = WORKER.read_text(encoding="utf-8")
+    consumer = (ROOT / "scripts/fleet_authority_envelope_consumer_v1.py").read_text(encoding="utf-8")
+    assert "LIVE_BOT_AUTHORITY = 'ibkr-live-bot'" in worker
+    assert "LIVE_BOT_ALLOWED_REF = 'refs/heads/main'" in worker
+    assert ".github/workflows/mmibkr-selected-runtime-live-owner-r1.yml@refs/heads/main" in worker
+    assert "LIVE_BOT_ALLOWED_EVENTS = new Set(['workflow_dispatch'])" in worker
+    assert "allowedEvents: LIVE_BOT_ALLOWED_EVENTS" in worker
+    assert "isIbkrLiveBotSeal" in worker
+    assert "sealIbkrLiveReadonlyGatewayEnv(body, env, oidc, { writable: true })" in worker
+    assert "const authority = writable ? LIVE_BOT_AUTHORITY : LIVE_READONLY_AUTHORITY" in worker
+    assert "writable ? 'READ_ONLY_API=no' : 'READ_ONLY_API=yes'" in worker
+    assert "writable ? 'ENABLE_LIVE_TRADING=1' : 'ENABLE_LIVE_TRADING=0'" in worker
+    assert "writable ? LIVE_BOT_ENVELOPE_SCHEMA : LIVE_READONLY_ENVELOPE_SCHEMA" in worker
+    assert '"production_live_readonly": {' in consumer
+    assert '"production_live_bot": {' in consumer
+    assert '"authority": LIVE_BOT_AUTHORITY' in consumer
+    assert '"envelope_schema": LIVE_BOT_ENVELOPE_SCHEMA' in consumer
+    assert "const isIbkrLiveReadonlySeal = url.pathname === '/v1/authorities/ibkr-live-readonly/seal'" in worker
+    assert "const isIbkrLiveBotSeal = url.pathname === '/v1/authorities/ibkr-live-bot/seal'" in worker

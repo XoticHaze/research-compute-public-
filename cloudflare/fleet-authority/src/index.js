@@ -7,6 +7,10 @@ const EXPECTED_AUDIENCE = 'mmibkr-fleet-authority';
 const EXPECTED_REPOSITORY = 'XoticHaze/research-compute-public-';
 const EXPECTED_AUTHORITY = 'ibkr-paper-readonly';
 const LIVE_READONLY_AUTHORITY = 'ibkr-live-readonly';
+const LIVE_BOT_AUTHORITY = 'ibkr-live-bot';
+const LIVE_BOT_ALLOWED_REF = 'refs/heads/main';
+const LIVE_BOT_ALLOWED_WORKFLOW_REF = 'XoticHaze/research-compute-public-/.github/workflows/mmibkr-selected-runtime-live-owner-r1.yml@refs/heads/main';
+const LIVE_BOT_ALLOWED_EVENTS = new Set(['workflow_dispatch']);
 const ALLOWED_REF = 'refs/heads/ibkr-b1-authority-v1';
 const ALLOWED_EVENTS = new Set(['push', 'workflow_dispatch']);
 const ALLOWED_WORKFLOW_REF = 'XoticHaze/research-compute-public-/.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml@refs/heads/ibkr-b1-authority-v1';
@@ -16,6 +20,7 @@ const HFDL_ALLOWED_WORKFLOW_REF = 'XoticHaze/research-compute-public-/.github/wo
 const REQUEST_SCHEMA = 'mmibkr-fleet-authority-seal-request-v1';
 const ENVELOPE_SCHEMA = 'mmibkr-ibkr-readonly-gateway-env-x25519-hkdf-aesgcm-v1';
 const LIVE_READONLY_ENVELOPE_SCHEMA = 'mmibkr-ibkr-live-readonly-gateway-env-x25519-hkdf-aesgcm-v1';
+const LIVE_BOT_ENVELOPE_SCHEMA = 'mmibkr-ibkr-live-bot-gateway-env-x25519-hkdf-aesgcm-v1';
 const HFDL_ENVELOPE_SCHEMA = 'mmibkr-hfdl-api-key-x25519-hkdf-aesgcm-v1';
 
 function json(body, status = 200) {
@@ -246,8 +251,10 @@ async function sealIbkrGatewayEnv(body, env, oidc) {
 }
 
 
-async function sealIbkrLiveReadonlyGatewayEnv(body, env, oidc) {
-  if (body.schema !== REQUEST_SCHEMA || body.authority !== LIVE_READONLY_AUTHORITY) throw new Error('request_rejected');
+async function sealIbkrLiveReadonlyGatewayEnv(body, env, oidc, { writable = false } = {}) {
+  // Profile is selected by an exact OIDC-scoped endpoint, not the request body.
+  const authority = writable ? LIVE_BOT_AUTHORITY : LIVE_READONLY_AUTHORITY;
+  if (body.schema !== REQUEST_SCHEMA || body.authority !== authority) throw new Error('request_rejected');
   const runId = String(body.run_id ?? '');
   if (!/^\d{4,24}$/.test(runId)) throw new Error('run_id_rejected');
 
@@ -297,7 +304,7 @@ async function sealIbkrLiveReadonlyGatewayEnv(body, env, oidc) {
 
   const salt = crypto.getRandomValues(new Uint8Array(32));
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const aadText = `mmibkr-fleet-authority|${LIVE_READONLY_AUTHORITY}|${runId}|${recipientKeyId}`;
+  const aadText = `mmibkr-fleet-authority|${authority}|${runId}|${recipientKeyId}`;
   const aad = new TextEncoder().encode(aadText);
 
   const hkdfBase = await crypto.subtle.importKey('raw', shared, 'HKDF', false, ['deriveKey']);
@@ -317,8 +324,10 @@ async function sealIbkrLiveReadonlyGatewayEnv(body, env, oidc) {
     `MMIBKR_PRODUCTION_LIVE_ACCOUNT=${liveAccount}`,
     'MMIBKR_ACCOUNT_MODE=production_live',
     'TRADING_MODE=live',
-    'READ_ONLY_API=yes',
-    'ENABLE_LIVE_TRADING=0',
+    // Writable Gateway supplies credentials only. Canonical bot alone owns
+    // selected policy, natural signals, position limits and order mutations.
+    writable ? 'READ_ONLY_API=no' : 'READ_ONLY_API=yes',
+    writable ? 'ENABLE_LIVE_TRADING=1' : 'ENABLE_LIVE_TRADING=0',
     'TWS_ACCEPT_INCOMING=accept',
     'TWOFA_TIMEOUT_ACTION=exit',
     'RELOGIN_AFTER_TWOFA_TIMEOUT=yes',
@@ -342,8 +351,8 @@ async function sealIbkrLiveReadonlyGatewayEnv(body, env, oidc) {
   const ephemeralPublic = new Uint8Array(await crypto.subtle.exportKey('raw', ephemeral.publicKey));
 
   return {
-    schema: LIVE_READONLY_ENVELOPE_SCHEMA,
-    authority: LIVE_READONLY_AUTHORITY,
+    schema: writable ? LIVE_BOT_ENVELOPE_SCHEMA : LIVE_READONLY_ENVELOPE_SCHEMA,
+    authority,
     run_id: runId,
     recipient_key_id: recipientKeyId,
     ephemeral_public_b64: bytesToB64(ephemeralPublic),
@@ -466,8 +475,9 @@ export default {
 
     const isIbkrSeal = url.pathname === '/v1/authorities/ibkr-paper/seal';
     const isIbkrLiveReadonlySeal = url.pathname === '/v1/authorities/ibkr-live-readonly/seal';
+    const isIbkrLiveBotSeal = url.pathname === '/v1/authorities/ibkr-live-bot/seal';
     const isHfdlSeal = url.pathname === '/v1/authorities/hfdl/seal';
-    if (request.method !== 'POST' || (!isIbkrSeal && !isIbkrLiveReadonlySeal && !isHfdlSeal)) {
+    if (request.method !== 'POST' || (!isIbkrSeal && !isIbkrLiveReadonlySeal && !isIbkrLiveBotSeal && !isHfdlSeal)) {
       return json({ error: 'not_found' }, 404);
     }
 
@@ -492,18 +502,26 @@ export default {
 
     try {
       const runId = String(body?.run_id ?? '');
-      const hfdlPolicy = isHfdlSeal
+      const routePolicy = isHfdlSeal
         ? {
             allowedRef: HFDL_ALLOWED_REF,
             allowedWorkflowRef: HFDL_ALLOWED_WORKFLOW_REF,
             allowedEvents: ALLOWED_EVENTS,
           }
+        : isIbkrLiveBotSeal
+        ? {
+            allowedRef: LIVE_BOT_ALLOWED_REF,
+            allowedWorkflowRef: LIVE_BOT_ALLOWED_WORKFLOW_REF,
+            allowedEvents: LIVE_BOT_ALLOWED_EVENTS,
+          }
         : null;
-      const oidc = await verifyGithubOidc(auth.slice(7), runId, hfdlPolicy);
+      const oidc = await verifyGithubOidc(auth.slice(7), runId, routePolicy);
       const envelope = isHfdlSeal
         ? await sealHfdlApiKey(body, env, oidc)
         : isIbkrLiveReadonlySeal
         ? await sealIbkrLiveReadonlyGatewayEnv(body, env, oidc)
+        : isIbkrLiveBotSeal
+        ? await sealIbkrLiveReadonlyGatewayEnv(body, env, oidc, { writable: true })
         : await sealIbkrGatewayEnv(body, env, oidc);
       return json(envelope, 200);
     } catch (error) {
