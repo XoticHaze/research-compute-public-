@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PRIVATE_SOURCE_SHA: 4ecf2fcdeff3387fc75cc5a4263c1a6c6ac33c0e
+  PRIVATE_SOURCE_SHA: 1ad9fbee1b2257c4040d3a82e71177988ca4a22f
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
   LIVE_SEAL_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-live-bot/seal
   IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
@@ -44,6 +44,8 @@ jobs:
               'MMIBKR_ACCOUNT_MODE=production_live',
               'ENABLE_LIVE_TRADING=1',
               'BOT_SELECTED_RUNTIME_LIVE_OPERATOR_INGRESS_VERIFIED=0',
+              'BOT_SELECTED_RUNTIME_LIVE_PRIVATE_NETWORK_ATTESTED=1',
+              'HEADLESS_LIVE_PRIVATE_NETWORK_ATTESTED=1',
               'python main.py',
           )
           for marker in required:
@@ -140,6 +142,12 @@ jobs:
           print('STRATEGYSPEC_AND_RISK_CAPS_UNCHANGED=1')
           PY
 
+      - name: Build exact canonical bot runtime
+        run: |
+          set -euo pipefail
+          docker build -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" --target bot -t "mmibkr-live-canonical:$GITHUB_RUN_ID" "$PRIVATE_SOURCE_ROOT" >/dev/null
+          echo 'CANONICAL_BOT_IMAGE_BUILT=1'
+
       - name: Obtain one-run writable live Gateway environment with existing IBKR credentials
         run: |
           set -euo pipefail
@@ -190,6 +198,11 @@ jobs:
             "$IBKR_CONTROLLER_IMAGE" >/dev/null
           docker exec mmibkr-live-gateway /bin/sh -lc \
             'test "$READ_ONLY_API" = no && test "$TRADING_MODE" = live' 
+          # Exact network proof. The only published socket is loopback TWS
+          # 4001:4003. Bot joins the Gateway namespace with no published
+          # control/API 8001 port and no public HTTP ingress.
+          docker inspect -f '{{json .HostConfig.PortBindings}}' mmibkr-live-gateway |
+            python -c "import json,sys; p=json.load(sys.stdin); assert set(p)=={'4003/tcp'},p; r=p['4003/tcp']; assert len(r)==1 and r[0]['HostIp']=='127.0.0.1' and r[0]['HostPort']=='4001',p; print('HEADLESS_LIVE_PRIVATE_NETWORK_ATTESTED=1')"
           echo 'WRITABLE_LIVE_GATEWAY_STARTED=1'
 
       - name: Bind and reconcile the expected existing production account without order mutation
@@ -223,20 +236,15 @@ jobs:
           if not authenticated: raise SystemExit('live_gateway_authenticated_account_read_failed')
           PY
 
-      - name: Build exact canonical bot runtime
-        run: |
-          set -euo pipefail
-          docker build -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" --target bot -t "mmibkr-live-canonical:$GITHUB_RUN_ID" "$PRIVATE_SOURCE_ROOT" >/dev/null
-          echo 'CANONICAL_BOT_IMAGE_BUILT=1'
-
       - name: Start unchanged canonical bot natural owner with three persisted live policies
         run: |
           set -euo pipefail
           # No separate execution capsule, strategy selector, broker client or submit route.
           # Gateway exposes only 4001 loopback on the runner. Bot shares its
           # private network namespace; its internal TWS port is 4003.
-          # Stock canary remains closed until its operator-ingress assertion is
-          # satisfied by an actual authenticated ingress, not a fabricated flag.
+          # Bot-only ingress alternative was independently attested above by
+          # checking the Gateway namespace has no published control/API port.
+          # Canonical live guard accepts this without claiming a Caddy 401.
           timeout --signal=INT --kill-after=90s "$SESSION_SECONDS" \
             docker run --rm --name mmibkr-live-bot \
               --network container:mmibkr-live-gateway \
@@ -250,6 +258,7 @@ jobs:
               -e BOT_SELECTED_RUNTIME_NATURAL_CANDIDATE_14TH31BV_ENABLED=1 \
               -e BOT_SELECTED_RUNTIME_LIVE_STOCK_CANARY_V1_ENABLED=1 \
               -e BOT_SELECTED_RUNTIME_LIVE_OPERATOR_INGRESS_VERIFIED=0 \
+              -e BOT_SELECTED_RUNTIME_LIVE_PRIVATE_NETWORK_ATTESTED=1 \
               -v "$RUNNER_TEMP/mmibkr-live-data:/app/data" \
               "mmibkr-live-canonical:$GITHUB_RUN_ID" \
               python main.py
