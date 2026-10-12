@@ -3,6 +3,13 @@ run-name: >-
   IBKR B1 ${{ github.event_name == 'workflow_dispatch' && format('{0} {1}', inputs.mode, inputs.dispatch_nonce) || github.event_name }}
 
 on:
+  pull_request:
+    branches:
+      - ibkr-b1-authority-v1
+    paths:
+      - '.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml'
+      - 'scripts/**'
+      - 'tests/**'
   workflow_dispatch:
     inputs:
       mode:
