@@ -9,6 +9,9 @@ on:
       - 'scripts/opaque_bidirectional_capsule_smoke_v1.py'
       - 'tests/test_opaque_bidirectional_capsule_v1.py'
       - 'tests/test_opaque_bidirectional_capsule_p256_aesgcm_v1.py'
+      - 'scripts/commandcenter_ephemeral_exchange_cleanup_v1.py'
+      - 'tests/test_commandcenter_ephemeral_exchange_cleanup_v1.py'
+      - '.github/workflows/commandcenter-ledger-ephemeral-rendezvous.yml'
       - 'docs/opaque-compute-profile-v1.md'
       - '.github/workflows/opaque-capsule-protocol-ci.yml'
       - 'proof/fire/opaque/**'
@@ -19,6 +22,9 @@ on:
       - 'scripts/opaque_bidirectional_capsule_smoke_v1.py'
       - 'tests/test_opaque_bidirectional_capsule_v1.py'
       - 'tests/test_opaque_bidirectional_capsule_p256_aesgcm_v1.py'
+      - 'scripts/commandcenter_ephemeral_exchange_cleanup_v1.py'
+      - 'tests/test_commandcenter_ephemeral_exchange_cleanup_v1.py'
+      - '.github/workflows/commandcenter-ledger-ephemeral-rendezvous.yml'
       - 'docs/opaque-compute-profile-v1.md'
       - '.github/workflows/opaque-capsule-protocol-ci.yml'
   workflow_dispatch:
@@ -39,10 +45,10 @@ jobs:
         run: python -m pip install --disable-pip-version-check cryptography==46.0.1
       - name: Compile
         run: |
-          python -m py_compile             scripts/opaque_bidirectional_capsule_v1.py             scripts/opaque_bidirectional_capsule_p256_aesgcm_v1.py             scripts/opaque_bidirectional_capsule_smoke_v1.py
+          python -m py_compile             scripts/opaque_bidirectional_capsule_v1.py             scripts/opaque_bidirectional_capsule_p256_aesgcm_v1.py             scripts/opaque_bidirectional_capsule_smoke_v1.py             scripts/commandcenter_ephemeral_exchange_cleanup_v1.py
       - name: Test
         run: |
-          python -m unittest -q             tests.test_opaque_bidirectional_capsule_v1             tests.test_opaque_bidirectional_capsule_p256_aesgcm_v1
+          python -m unittest -q             tests.test_opaque_bidirectional_capsule_v1             tests.test_opaque_bidirectional_capsule_p256_aesgcm_v1             tests.test_commandcenter_ephemeral_exchange_cleanup_v1
       - name: Execute opaque roundtrip
         run: python scripts/opaque_bidirectional_capsule_smoke_v1.py
       - name: Upload encrypted result envelope only
