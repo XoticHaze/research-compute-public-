@@ -95,8 +95,8 @@ jobs:
           assert 'placeOrder(' not in owner
           assert 'rendezvous/fire/mmibkr-live-writable-admission-r1' in s
           assert "if: github.event_name == 'workflow_dispatch'" in owner
-          assert "if: ${{ !inputs.admission_only }}" in owner
-          assert "if: ${{ inputs.admission_only }}" in owner
+          assert "if: " + chr(36) + "{{ !inputs.admission_only }}" in owner
+          assert "if: " + chr(36) + "{{ inputs.admission_only }}" in owner
           assert "'inputs[admission_only]=true'" in s
           assert 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1' in owner
           assert 'ib.reqAllOpenOrders()' in owner
