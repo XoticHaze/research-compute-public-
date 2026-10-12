@@ -50,9 +50,11 @@ jobs:
           )
           for marker in required:
               assert marker in s, marker
-          assert 'paper_execute' not in s
-          assert 'ibkr_remote_selected_runtime_paper_execute' not in s
-          assert 'placeOrder(' not in s
+          # Check the execution job, not these literal regression assertions.
+          owner=s.split('\n  owner:\n',1)[1]
+          assert 'paper_execute' not in owner
+          assert 'ibkr_remote_selected_runtime_paper_execute' not in owner
+          assert 'placeOrder(' not in owner
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
           PY
 
