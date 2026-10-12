@@ -1,0 +1,91 @@
+name: MM-IBKR Paper Predecessor Checkpoint Read-Only R1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/mmibkr-paper-predecessor-checkpoint-readonly-r1.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PAPER_PREDECESSOR_SOURCE: cd431670749a4c48d87c07b164ef1e4219bef7ca
+      PAPER_PREDECESSOR_CACHE_KEY: mmibkr-selected-runtime-cloud-checkpoint-v1-37706869542-cd431670749a4c48d87c07b164ef1e4219bef7ca
+      PAPER_PREDECESSOR_SHA256: 7d6667083173c64bfe203f932929ddbfc46051459108d5957d82406787072125
+    steps:
+      - name: Prove no broker/account/strategy mutation authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$PAPER_PREDECESSOR_SOURCE" = cd431670749a4c48d87c07b164ef1e4219bef7ca
+          test "$PAPER_PREDECESSOR_SHA256" = 7d6667083173c64bfe203f932929ddbfc46051459108d5957d82406787072125
+          echo 'MMIBKR_PAPER_PREDECESSOR_PROBE_NO_BROKER=1'
+
+      - name: Restore original exact paper predecessor cache without mutation
+        id: restore
+        uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57
+        with:
+          path: ${{ runner.temp }}/mmibkr-paper-predecessor
+          key: ${{ env.PAPER_PREDECESSOR_CACHE_KEY }}
+          fail-on-cache-miss: true
+
+      - name: Verify SHA, manifest, sanitized inventory and boundary lineage
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.restore.outputs.cache-hit }}" = true
+          python - <<'PY'
+          import hashlib, json, os, tarfile
+          from pathlib import Path
+          path=Path(os.environ['RUNNER_TEMP'])/'mmibkr-paper-predecessor/latest.tgz'
+          if not path.is_file():
+              raise SystemExit('paper_predecessor_cache_archive_missing')
+          if path.stat().st_size > 200_000_000:
+              raise SystemExit('paper_predecessor_unexpected_archive_size')
+          actual=hashlib.sha256(path.read_bytes()).hexdigest()
+          if actual != os.environ['PAPER_PREDECESSOR_SHA256']:
+              raise SystemExit('paper_predecessor_sha256_mismatch')
+          with tarfile.open(path,mode='r:gz') as archive:
+              names=archive.getnames()
+              if len(names)!=len(set(names)) or 'checkpoint-manifest.json' not in names:
+                  raise SystemExit('paper_predecessor_manifest_missing_or_duplicates')
+              if any(name.startswith('/') or '..' in Path(name).parts for name in names):
+                  raise SystemExit('paper_predecessor_unsafe_member')
+              if any(not x.isfile() for x in archive.getmembers()):
+                  raise SystemExit('paper_predecessor_unexpected_member_type')
+              source=archive.extractfile('checkpoint-manifest.json')
+              if source is None:
+                  raise SystemExit('paper_predecessor_manifest_unreadable')
+              manifest_bytes=source.read(2000000)
+              manifest=json.loads(manifest_bytes)
+          if manifest.get('schema') != 'mmibkr.runtime_market_data_cache_checkpoint.v1':
+              raise SystemExit('paper_predecessor_schema_mismatch')
+          if manifest.get('broker_account_positions_included') is not False or manifest.get('credentials_included') is not False:
+              raise SystemExit('paper_predecessor_privacy_gate_failed')
+          if manifest.get('terminal_boundary_continuity_included') is not True:
+              raise SystemExit('paper_predecessor_terminal_lineage_missing')
+          if manifest.get('strategy_inventory_included') is not True:
+              raise SystemExit('paper_predecessor_strategy_ownership_ledger_missing')
+          files=manifest.get('files') or []
+          if not isinstance(files,list) or not files:
+              raise SystemExit('paper_predecessor_empty_files')
+          print('MMIBKR_PAPER_PREDECESSOR_CACHE_RESTORED=1')
+          print('MMIBKR_PAPER_PREDECESSOR_SHA256_VERIFIED=1')
+          print('MMIBKR_PAPER_PREDECESSOR_TERMINAL_LINEAGE_PRESENT=1')
+          print('MMIBKR_PAPER_PREDECESSOR_STRATEGY_INVENTORY_PRESENT=1')
+          print('MMIBKR_PAPER_PREDECESSOR_FILE_COUNT='+str(len(files)))
+          print('MMIBKR_PAPER_PREDECESSOR_BROKER_MUTATIONS=0')
+          PY
+
+      - name: Delete temporary local restored archive
+        if: always()
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/mmibkr-paper-predecessor"
+          echo 'MMIBKR_PAPER_PREDECESSOR_EPHEMERAL_RESTORE_DESTROYED=1'
