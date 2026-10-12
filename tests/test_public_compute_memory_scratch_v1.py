@@ -79,6 +79,9 @@ class PublicComputeMemoryScratchTests(unittest.TestCase):
         self.assertIn("scripts/public_compute_memory_scratch_v1.py check", workflow)
         self.assertIn("scripts/public_compute_memory_scratch_v1.py cleanup", workflow)
         self.assertIn("PUBLIC_COMPUTE_REQUIRE_RAM_SCRATCH=1", workflow)
+        self.assertIn("sudo -n swapoff -a", workflow)
+        self.assertLess(workflow.index("sudo -n swapoff -a"),
+                        workflow.index("memory_scratch_v1.py init"))
         self.assertIn("PYTHONDONTWRITEBYTECODE=1", workflow)
         self.assertIn("if: always()", workflow)
         self.assertIn("ulimit -c 0", workflow)
