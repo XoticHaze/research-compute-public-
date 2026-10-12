@@ -7,11 +7,13 @@ on:
   pull_request:
     paths:
       - scripts/ibkr_remote_paper_capsule_v1.py
-      - scripts/ibkr_remote_paper_session_v1.py
+      - scripts/ibkr_remote_paper_session_v1.py scripts/ibkr_warm_read_return_v1.py
       - tests/test_ibkr_remote_paper_capsule_v1.py
-      - tests/test_ibkr_remote_paper_session_v1.py
+      - tests/test_ibkr_remote_paper_session_v1.py tests/test_ibkr_warm_read_return_v1.py
       - .github/workflows/ibkr-remote-paper-runtime-rendezvous-r1.yml
       - .github/workflows/ibkr-encrypted-return-ci.yml
+      - scripts/ibkr_warm_read_return_v1.py
+      - tests/test_ibkr_warm_read_return_v1.py
   workflow_dispatch:
 
 permissions:
