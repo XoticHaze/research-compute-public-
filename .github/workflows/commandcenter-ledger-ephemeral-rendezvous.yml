@@ -90,6 +90,15 @@ jobs:
           else
             python scripts/commandcenter_ledger_ephemeral_consumer_v1.py --envelope "$RUNNER_TEMP/cc-ledger-envelope.json" --private-key "$RUNNER_TEMP/cc-ledger-private.b64" --run-id "$GITHUB_RUN_ID"
           fi
+      - name: Retire consumed public exchange inputs
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/commandcenter_ephemeral_exchange_cleanup_v1.py \
+            --run-id "$GITHUB_RUN_ID" \
+            --proof-kind "$PROOF_KIND"
       - name: Remove one-run private material
         if: always()
         run: rm -f "$RUNNER_TEMP/cc-ledger-private.b64" "$RUNNER_TEMP/cc-ledger-recipient.json" "$RUNNER_TEMP/cc-ledger-envelope.json"
