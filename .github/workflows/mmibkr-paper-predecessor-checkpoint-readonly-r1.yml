@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - .github/workflows/mmibkr-paper-predecessor-checkpoint-readonly-r1.yml
+      - .github/workflows/mmibkr-checkpoint-checkpoint-readonly-r1.yml
 
 permissions:
   contents: read
@@ -31,7 +31,7 @@ jobs:
         id: restore
         uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57
         with:
-          path: ${{ runner.temp }}/mmibkr-paper-predecessor
+          path: ${{ runner.temp }}/mmibkr-checkpoint
           key: ${{ env.PAPER_PREDECESSOR_CACHE_KEY }}
           fail-on-cache-miss: true
 
@@ -43,7 +43,7 @@ jobs:
           python - <<'PY'
           import hashlib, json, os, tarfile
           from pathlib import Path
-          path=Path(os.environ['RUNNER_TEMP'])/'mmibkr-paper-predecessor/latest.tgz'
+          path=Path(os.environ['RUNNER_TEMP'])/'mmibkr-checkpoint/latest.tgz'
           if not path.is_file():
               raise SystemExit('paper_predecessor_cache_archive_missing')
           if path.stat().st_size > 200_000_000:
@@ -87,5 +87,5 @@ jobs:
         if: always()
         shell: bash
         run: |
-          rm -rf "$RUNNER_TEMP/mmibkr-paper-predecessor"
+          rm -rf "$RUNNER_TEMP/mmibkr-checkpoint"
           echo 'MMIBKR_PAPER_PREDECESSOR_EPHEMERAL_RESTORE_DESTROYED=1'
