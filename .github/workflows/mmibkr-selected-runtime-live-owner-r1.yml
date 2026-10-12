@@ -1,8 +1,15 @@
 name: MM-IBKR Canonical Production Live Owner R1
 
-# Explicit operator-authorized activation only. Never starts on push or on PR.
+# Live bot activation remains operator workflow_dispatch only. A distinct
+# path-scoped push runs the SAME owner preparation and read-only account
+# reconciliation, then exits BEFORE bot launch. It cannot submit orders.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - rendezvous/fire/mmibkr-live-writable-admission-r1
   pull_request:
     paths:
       - .github/workflows/mmibkr-selected-runtime-live-owner-r1.yml
@@ -60,11 +67,15 @@ jobs:
           assert 'paper_execute' not in owner
           assert 'ibkr_remote_selected_runtime_paper_execute' not in owner
           assert 'placeOrder(' not in owner
+          assert 'rendezvous/fire/mmibkr-live-writable-admission-r1' in s
+          assert "if: github.event_name == 'workflow_dispatch'" in owner
+          assert 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1' in owner
+          assert 'ib.reqAllOpenOrders()' in owner
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
           PY
 
   owner:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 110
     steps:
@@ -286,7 +297,16 @@ jobs:
           if not authenticated: raise SystemExit('live_gateway_authenticated_account_read_failed')
           PY
 
+      - name: Confirm push admission did not authorize live bot startup
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          echo 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1'
+          echo 'LIVE_WRT_ACCOUNT_READ_ONLY_RECONCILED=1'
+          echo 'LIVE_WRT_NO_LIVE_ORDER_DISPATCHED=1'
+
       - name: Start unchanged canonical bot natural owner with three persisted live policies
+        if: github.event_name == 'workflow_dispatch'
         run: |
           set -euo pipefail
           # No separate execution capsule, strategy selector, broker client or submit route.
