@@ -65,12 +65,12 @@ def _aad(run_id: str, recipient_key_id: str) -> bytes:
     ).encode("utf-8")
 
 
-def _derive(shared: bytes, aad: bytes) -> bytes:
+def _derive(shared: bytes, aad: bytes, *, info: bytes = INFO) -> bytes:
     return HKDF(
         algorithm=hashes.SHA256(),
         length=32,
         salt=hashlib.sha256(aad).digest(),
-        info=INFO,
+        info=info,
     ).derive(shared)
 
 
