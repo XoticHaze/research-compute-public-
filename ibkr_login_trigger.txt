@@ -9,3 +9,5 @@ Authority-branch acceptance: verify restored warm reuse through the canonical ad
 Seed-owner acceptance: prove the restored seed is readable by the pinned controller runtime user before launch, then require warm API/consumer reuse.
 2026-09-18T23:58Z canonical selected-runtime initial backfill trigger
 2026-09-19T00:01Z corrected full-session MNQ initial backfill trigger
+
+2026-10-12 paper read-only exact-modal recovery acceptance after PR #1849; no order command, no live authorization.
