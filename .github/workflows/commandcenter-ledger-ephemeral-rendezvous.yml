@@ -31,6 +31,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Guest swap is present on some hosted runners. Disable it before keys exist.
+          sudo -n swapoff -a || { echo "PUBLIC_COMPUTE_SWAP=FAIL_CLOSED"; exit 1; }
           scratch="$(python scripts/public_compute_memory_scratch_v1.py init)"
           {
             echo "TMPDIR=$scratch"
