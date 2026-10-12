@@ -1,10 +1,16 @@
 name: MM-IBKR Canonical Production Live Owner R1
 
-# Live bot activation remains operator workflow_dispatch only. A distinct
-# path-scoped push runs the SAME owner preparation and read-only account
-# reconciliation, then exits BEFORE bot launch. It cannot submit orders.
+# Live bot activation is workflow_dispatch-only. A path-scoped push is only
+# a dispatcher for admission_only=true, so Fleet OIDC never admits writable
+# credentials on push and the bot is never started in a pushed job.
 on:
   workflow_dispatch:
+    inputs:
+      admission_only:
+        description: Read expected live account through writable Gateway without launching bot or placing orders
+        type: boolean
+        required: true
+        default: false
   push:
     branches:
       - main
@@ -30,6 +36,26 @@ env:
   SESSION_SECONDS: "5400"
 
 jobs:
+  dispatch_admission:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch original live owner as no-order admission only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/mmibkr-selected-runtime-live-owner-r1.yml/dispatches" \
+            -f ref=main \
+            -f 'inputs[admission_only]=true'
+          echo 'LIVE_WRT_ADMISSION_WORKFLOW_DISPATCHED=1'
+          echo 'LIVE_WRT_LIVE_BOT_ON_PUSH=0'
+
   contract:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
@@ -69,13 +95,16 @@ jobs:
           assert 'placeOrder(' not in owner
           assert 'rendezvous/fire/mmibkr-live-writable-admission-r1' in s
           assert "if: github.event_name == 'workflow_dispatch'" in owner
+          assert "if: " + chr(36) + "{{ !inputs.admission_only }}" in owner
+          assert "if: " + chr(36) + "{{ inputs.admission_only }}" in owner
+          assert "'inputs[admission_only]=true'" in s
           assert 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1' in owner
           assert 'ib.reqAllOpenOrders()' in owner
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
           PY
 
   owner:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 110
     steps:
@@ -297,8 +326,8 @@ jobs:
           if not authenticated: raise SystemExit('live_gateway_authenticated_account_read_failed')
           PY
 
-      - name: Confirm push admission did not authorize live bot startup
-        if: github.event_name == 'push'
+      - name: Confirm no-order admission did not authorize live bot startup
+        if: ${{ inputs.admission_only }}
         run: |
           set -euo pipefail
           echo 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1'
@@ -306,7 +335,7 @@ jobs:
           echo 'LIVE_WRT_NO_LIVE_ORDER_DISPATCHED=1'
 
       - name: Start unchanged canonical bot natural owner with three persisted live policies
-        if: github.event_name == 'workflow_dispatch'
+        if: ${{ !inputs.admission_only }}
         run: |
           set -euo pipefail
           # No separate execution capsule, strategy selector, broker client or submit route.
