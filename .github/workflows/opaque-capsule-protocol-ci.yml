@@ -11,6 +11,9 @@ on:
       - 'tests/test_opaque_bidirectional_capsule_p256_aesgcm_v1.py'
       - 'scripts/commandcenter_ephemeral_exchange_cleanup_v1.py'
       - 'tests/test_commandcenter_ephemeral_exchange_cleanup_v1.py'
+      - 'scripts/public_compute_memory_scratch_v1.py'
+      - 'tests/test_public_compute_memory_scratch_v1.py'
+      - '.github/workflows/commandcenter-ledger-ephemeral-rendezvous.yml'
       - '.github/workflows/commandcenter-ledger-ephemeral-rendezvous.yml'
       - 'docs/opaque-compute-profile-v1.md'
       - '.github/workflows/opaque-capsule-protocol-ci.yml'
@@ -24,6 +27,9 @@ on:
       - 'tests/test_opaque_bidirectional_capsule_p256_aesgcm_v1.py'
       - 'scripts/commandcenter_ephemeral_exchange_cleanup_v1.py'
       - 'tests/test_commandcenter_ephemeral_exchange_cleanup_v1.py'
+      - 'scripts/public_compute_memory_scratch_v1.py'
+      - 'tests/test_public_compute_memory_scratch_v1.py'
+      - '.github/workflows/commandcenter-ledger-ephemeral-rendezvous.yml'
       - '.github/workflows/commandcenter-ledger-ephemeral-rendezvous.yml'
       - 'docs/opaque-compute-profile-v1.md'
       - '.github/workflows/opaque-capsule-protocol-ci.yml'
@@ -49,6 +55,11 @@ jobs:
       - name: Test
         run: |
           python -m unittest -q             tests.test_opaque_bidirectional_capsule_v1             tests.test_opaque_bidirectional_capsule_p256_aesgcm_v1             tests.test_commandcenter_ephemeral_exchange_cleanup_v1
+      - name: Verify guest memory-backed private scratch preflight and cleanup
+        run: |
+          set -euo pipefail
+          sudo -n swapoff -a || { echo "PUBLIC_COMPUTE_SWAP=FAIL_CLOSED"; exit 1; }
+          PYTHONDONTWRITEBYTECODE=1 python -B -m unittest -v tests.test_public_compute_memory_scratch_v1
       - name: Execute opaque roundtrip
         run: python scripts/opaque_bidirectional_capsule_smoke_v1.py
       - name: Upload encrypted result envelope only
