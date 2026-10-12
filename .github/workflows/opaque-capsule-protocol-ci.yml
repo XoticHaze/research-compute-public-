@@ -15,6 +15,8 @@ on:
       - 'tests/test_public_compute_memory_scratch_v1.py'
       - 'scripts/commandcenter_neutral_gate_ephemeral_consumer_v1.py'
       - 'tests/test_commandcenter_neutral_gate_canonical_envelope_v1.py'
+      - 'scripts/commandcenter_neutral_gate_canonical_sender_v1.py'
+      - 'tests/test_commandcenter_neutral_gate_canonical_sender_v1.py'
       - '.github/workflows/commandcenter-ledger-ephemeral-rendezvous.yml'
       - '.github/workflows/commandcenter-ledger-ephemeral-rendezvous.yml'
       - 'docs/opaque-compute-profile-v1.md'
@@ -33,6 +35,8 @@ on:
       - 'tests/test_public_compute_memory_scratch_v1.py'
       - 'scripts/commandcenter_neutral_gate_ephemeral_consumer_v1.py'
       - 'tests/test_commandcenter_neutral_gate_canonical_envelope_v1.py'
+      - 'scripts/commandcenter_neutral_gate_canonical_sender_v1.py'
+      - 'tests/test_commandcenter_neutral_gate_canonical_sender_v1.py'
       - '.github/workflows/commandcenter-ledger-ephemeral-rendezvous.yml'
       - '.github/workflows/commandcenter-ledger-ephemeral-rendezvous.yml'
       - 'docs/opaque-compute-profile-v1.md'
@@ -67,6 +71,9 @@ jobs:
       - name: Verify neutral policy consumer canonical encrypted-source execution
         run: |
           PYTHONDONTWRITEBYTECODE=1 python -B -m unittest -v tests.test_commandcenter_neutral_gate_canonical_envelope_v1
+      - name: Verify private in-memory canonical producer and public fixed-source consumer
+        run: |
+          PYTHONDONTWRITEBYTECODE=1 python -B -m unittest -v tests.test_commandcenter_neutral_gate_canonical_sender_v1
       - name: Execute opaque roundtrip
         run: python scripts/opaque_bidirectional_capsule_smoke_v1.py
       - name: Upload encrypted result envelope only
