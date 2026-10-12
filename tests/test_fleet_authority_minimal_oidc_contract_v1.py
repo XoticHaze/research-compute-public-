@@ -84,3 +84,19 @@ def test_production_live_bot_profile_is_distinct_and_strictly_oidc_bound():
     assert '"envelope_schema": LIVE_BOT_ENVELOPE_SCHEMA' in consumer
     assert "const isIbkrLiveReadonlySeal = url.pathname === '/v1/authorities/ibkr-live-readonly/seal'" in worker
     assert "const isIbkrLiveBotSeal = url.pathname === '/v1/authorities/ibkr-live-bot/seal'" in worker
+
+
+def test_live_bot_source_unwrap_is_exact_workflow_dispatch_only():
+    exchange = (
+        ROOT / "cloudflare" / "fleet-authority" / "src" / "source_exchange.js"
+    ).read_text(encoding="utf-8")
+    worker = WORKER.read_text(encoding="utf-8")
+    # Same original OIDC workflow identity, no changes to live seal admission.
+    assert "const LIVE_BOT_SOURCE_UNWRAP_IDENTITY = {" in exchange
+    assert "mmibkr-selected-runtime-live-owner-r1.yml@refs/heads/main" in exchange
+    assert "const matchedLiveBotSourceUnwrap = matchesIdentity(claims, LIVE_BOT_SOURCE_UNWRAP_IDENTITY);" in exchange
+    assert "const liveBotSourceUnwrapPathAllowed = (" in exchange
+    assert "pathname === '/v1/source-vault/unwrap'\n      && claims.event_name === 'workflow_dispatch'" in exchange
+    assert "matchedLiveBotSourceUnwrap && liveBotSourceUnwrapPathAllowed" in exchange
+    assert "LIVE_BOT_ALLOWED_EVENTS = new Set(['workflow_dispatch'])" in worker
+    assert "new Set(['workflow_dispatch', 'push'])" not in worker
