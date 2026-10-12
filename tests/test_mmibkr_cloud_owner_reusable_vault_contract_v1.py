@@ -103,7 +103,13 @@ class CloudOwnerReusableVaultContractTests(unittest.TestCase):
                 encoding="utf-8"
             )
         )
-        self.assertEqual(node["source_ref"], SOURCE_SHA)
+        # The staged push fire is historical. Owner requests are repinned
+        # to CANONICAL_SOURCE_REF by the runtime workflow, so a stale fire
+        # cannot force a stale private source into the canonical owner.
+        self.assertRegex(node["source_ref"], r"^[0-9a-f]{40}$")
+        owner = (ROOT / ".github/workflows/mmibkr-selected-runtime-cloud-r1.yml").read_text(encoding="utf-8")
+        self.assertIn("source_ref = canonical_source_ref", owner)
+        self.assertIn("CANONICAL_SOURCE_REF: " + SOURCE_SHA, owner)
         self.assertEqual(node["session_seconds"], "1200")
         self.assertEqual(node["max_cycles"], "1")
         self.assertFalse(node["self_handoff"])
