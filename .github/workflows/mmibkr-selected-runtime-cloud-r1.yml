@@ -1265,6 +1265,12 @@ jobs:
               'live_execution_allowed': False if publish_accepted else None,
           }
 
+          # The full private daemon session is evaluated locally, but only a
+          # constrained public projection may cross the GitHub publication edge.
+          # Do not copy arbitrary nested cycle, roll, broker or account details.
+          from scripts.mmibkr_public_cloud_receipt_projection_v1 import project
+          receipt = project(receipt)
+
           out = Path(os.environ['RUNNER_TEMP'], 'mmibkr-cloud-session-receipt.json')
           out.write_text(json.dumps(receipt, sort_keys=True) + '\n')
           PY
