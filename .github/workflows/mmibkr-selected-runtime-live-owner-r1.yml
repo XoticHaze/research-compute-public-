@@ -162,7 +162,7 @@ jobs:
             --user "$(id -u):$(id -g)" \
             -v "$RUNNER_TEMP/mmibkr-live-data:/app/data" \
             "mmibkr-live-canonical:$GITHUB_RUN_ID" \
-            python scripts/operator/selected_runtime_legacy_compat_config_v1.py \
+            python -m scripts.operator.selected_runtime_legacy_compat_config_v1 \
               --repo-root /app \
               --approved-live-selected-owner \
               --runtime-config-output /app/data/strategy_runtime/selected_runtime_authority_14th31jv/live_bot_runtime_config.json \
