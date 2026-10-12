@@ -1,0 +1,276 @@
+name: MM-IBKR Canonical Production Live Owner R1
+
+# Explicit operator-authorized activation only. Never starts on push or on PR.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/mmibkr-selected-runtime-live-owner-r1.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: mmibkr-production-live-canonical-owner
+  cancel-in-progress: false
+
+env:
+  PRIVATE_SOURCE_SHA: 1ad9fbee1b2257c4040d3a82e71177988ca4a22f
+  FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
+  LIVE_SEAL_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-live-bot/seal
+  IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
+  SESSION_SECONDS: "5400"
+
+jobs:
+  contract:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Confirm exclusive direct-bot live owner and existing credential path
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('.github/workflows/mmibkr-selected-runtime-live-owner-r1.yml').read_text()
+          required=(
+              'workflow_dispatch:', 'production_live_bot',
+              '/v1/authorities/ibkr-live-bot/seal',
+              'mmibkr_source_vault_consumer_v1.py',
+              'mmibkr-live-gateway',
+              'MM_IB_PORT=4003',
+              'MMIBKR_ACCOUNT_MODE=production_live',
+              'ENABLE_LIVE_TRADING=1',
+              'BOT_SELECTED_RUNTIME_LIVE_OPERATOR_INGRESS_VERIFIED=0',
+              'BOT_SELECTED_RUNTIME_LIVE_PRIVATE_NETWORK_ATTESTED=1',
+              'HEADLESS_LIVE_PRIVATE_NETWORK_ATTESTED=1',
+              'python main.py',
+          )
+          for marker in required:
+              assert marker in s, marker
+          # Check the execution job, not these literal regression assertions.
+          owner=s.split('\n  owner:\n',1)[1]
+          assert 'paper_execute' not in owner
+          assert 'ibkr_remote_selected_runtime_paper_execute' not in owner
+          assert 'placeOrder(' not in owner
+          print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
+          PY
+
+  owner:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+
+      - name: Install existing source and broker client dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check cryptography==46.0.1 ib_insync==0.9.86
+
+      - name: Materialize canonical exact private source through existing encrypted Fleet vault
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/mmibkr-live-source" "$RUNNER_TEMP/mmibkr-live-data"
+          python scripts/mmibkr_source_vault_consumer_v1.py \
+            --authority-base "$FLEET_AUTHORITY_BASE" \
+            --run-id "$GITHUB_RUN_ID" \
+            --source-sha "$PRIVATE_SOURCE_SHA" \
+            --public-repo XoticHaze/mm-ibkr-runtime \
+            --public-branch mmibkr-source-vault \
+            --destination "$RUNNER_TEMP/mmibkr-live-source/extracted" \
+            --archive-output "$RUNNER_TEMP/mmibkr-live-source/source.tar.gz" \
+            --output "$RUNNER_TEMP/mmibkr-live-source/materialization.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          base=Path(os.environ['RUNNER_TEMP'])/'mmibkr-live-source'
+          node=json.loads((base/'materialization.json').read_text())
+          assert node['ok'] is True
+          assert node['source_sha']==os.environ['PRIVATE_SOURCE_SHA']
+          assert node['vault_attestation_verified'] is True
+          assert node['plaintext_emitted'] is False
+          assert node['private_repository_token_used'] is False
+          assert node['broker_credentials_used'] is False
+          source=Path(node['source_root'])
+          assert (source/'Dockerfile.bot').is_file()
+          with open(os.environ['GITHUB_ENV'],'a') as out:
+              out.write('PRIVATE_SOURCE_ROOT='+str(source)+'\n')
+          print('LIVE_CANONICAL_SOURCE_ADMITTED=1')
+          PY
+
+      - name: Promote only the three approved persisted selected runtimes
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          source=Path(os.environ['PRIVATE_SOURCE_ROOT'])
+          original=json.loads((source/'config/selected_runtime_universe_14tu.json').read_text())
+          expected={'AMAT':('15Min','STK',False),'APH':('15Min','STK',False),'MNQ':('12Min','FUT',True)}
+          active=[row for row in original['runtime_ids'] if row.get('status')=='active_selected']
+          assert len(active)==3 and set(row['symbol'] for row in active)==set(expected)
+          frozen={row['symbol']:row['strategy_spec_digest'] for row in active}
+          for row in active:
+              symbol=row['symbol']
+              tf, instrument, dca=expected[symbol]
+              assert row['timeframe']==tf and row['instrument_class']==instrument
+              contract=row['execution_contract']
+              policy=row['execution_policy']
+              assert contract['symbol']==symbol and contract['secType']==instrument
+              assert policy['paper_submit_enabled'] is True and policy['live_submit_enabled'] is False
+              assert policy['dca_enabled'] is dca
+              if instrument=='STK':
+                  assert policy['max_shares']==1 and policy['dca_enabled'] is False
+              else:
+                  assert contract['localSymbol']=='MNQZ6'
+                  assert contract['lastTradeDateOrContractMonth']=='20261218'
+                  assert policy['base_qty']==1 and policy['max_contracts']==3
+                  assert policy['max_dca_adds']==2 and policy['continuous_symbol_execution_blocked'] is True
+              policy['live_submit_enabled']=True
+          assert {r['symbol']:r['strategy_spec_digest'] for r in active}==frozen
+          target=Path(os.environ['RUNNER_TEMP'])/'mmibkr-live-data/strategy_runtime/selected_runtime_authority_14th31jv/selected_runtime_universe_14tu.json'
+          target.parent.mkdir(parents=True,exist_ok=True)
+          target.write_text(json.dumps(original,sort_keys=True,indent=2)+'\n')
+          target.chmod(0o600)
+          print('PERSISTED_SELECTED_LIVE_FLAGS=AMAT,APH,MNQ')
+          print('STRATEGYSPEC_AND_RISK_CAPS_UNCHANGED=1')
+          PY
+
+      - name: Build exact canonical bot runtime
+        run: |
+          set -euo pipefail
+          docker build -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" --target bot -t "mmibkr-live-canonical:$GITHUB_RUN_ID" "$PRIVATE_SOURCE_ROOT" >/dev/null
+          echo 'CANONICAL_BOT_IMAGE_BUILT=1'
+
+      - name: Obtain one-run writable live Gateway environment with existing IBKR credentials
+        run: |
+          set -euo pipefail
+          umask 077
+          python scripts/fleet_authority_envelope_consumer_v1.py \
+            --authority-url "$LIVE_SEAL_URL" \
+            --profile production_live_bot \
+            --run-id "$GITHUB_RUN_ID" \
+            --output "$RUNNER_TEMP/mmibkr-live-gateway.env" \
+            --receipt "$RUNNER_TEMP/mmibkr-live-seal-receipt.json"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          lines=(root/'mmibkr-live-gateway.env').read_text().splitlines()
+          config=dict(line.split('=',1) for line in lines if '=' in line)
+          assert config['TRADING_MODE']=='live' and config['READ_ONLY_API']=='no'
+          assert config['ENABLE_LIVE_TRADING']=='1'
+          assert config['MMIBKR_ACCOUNT_MODE']=='production_live'
+          account=config['MMIBKR_PRODUCTION_LIVE_ACCOUNT']
+          assert account and not account.upper().startswith('DU')
+          (root/'mmibkr-live-bot.env').write_text('MMIBKR_PRODUCTION_LIVE_ACCOUNT='+account+'\n')
+          (root/'mmibkr-live-bot.env').chmod(0o600)
+          print('LIVE_EXISTING_CREDENTIALS_SEALED=1')
+          PY
+
+      - name: Start the established IBKR controller in writable live mode on host 4001
+        run: |
+          set -euo pipefail
+          docker pull "$IBKR_CONTROLLER_IMAGE" >/dev/null
+          vol="mmibkr-live-jts-$GITHUB_RUN_ID"
+          docker volume create "$vol" >/dev/null
+          docker run --rm --user 0 --entrypoint /bin/sh \
+            -v "$vol:/state" "$IBKR_CONTROLLER_IMAGE" -lc 'chmod 0777 /state' >/dev/null
+          docker run -d --name mmibkr-live-gateway \
+            --env-file "$RUNNER_TEMP/mmibkr-live-gateway.env" \
+            -e USE_IBG_CONTROLLER=yes \
+            -e TRADING_MODE=live \
+            -e READ_ONLY_API=no \
+            -e TWOFA_TIMEOUT_ACTION=exit \
+            -e TWOFA_EXIT_INTERVAL=120 \
+            -e RELOGIN_AFTER_TWOFA_TIMEOUT=yes \
+            -e CONTROLLER_HEALTH_SERVER_PORT=8080 \
+            -e TWS_SETTINGS_PATH=/home/ibgateway/Jts_b1 \
+            -e TIME_ZONE=America/Chicago \
+            -v "$vol:/home/ibgateway/Jts_b1" \
+            -p 127.0.0.1:4001:4003 \
+            "$IBKR_CONTROLLER_IMAGE" >/dev/null
+          docker exec mmibkr-live-gateway /bin/sh -lc \
+            'test "$READ_ONLY_API" = no && test "$TRADING_MODE" = live' 
+          # Exact network proof. The only published socket is loopback TWS
+          # 4001:4003. Bot joins the Gateway namespace with no published
+          # control/API 8001 port and no public HTTP ingress.
+          docker inspect -f '{{json .HostConfig.PortBindings}}' mmibkr-live-gateway |
+            python -c "import json,sys; p=json.load(sys.stdin); assert set(p)=={'4003/tcp'},p; r=p['4003/tcp']; assert len(r)==1 and r[0]['HostIp']=='127.0.0.1' and r[0]['HostPort']=='4001',p; print('HEADLESS_LIVE_PRIVATE_NETWORK_ATTESTED=1')"
+          echo 'WRITABLE_LIVE_GATEWAY_STARTED=1'
+
+      - name: Bind and reconcile the expected existing production account without order mutation
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os,time
+          from pathlib import Path
+          from ib_insync import IB
+          p=Path(os.environ['RUNNER_TEMP'])/'mmibkr-live-bot.env'
+          expected=p.read_text().strip().split('=',1)[1]
+          deadline=time.monotonic()+900
+          authenticated=False
+          while time.monotonic()<deadline:
+              ib=IB()
+              try:
+                  ib.connect('127.0.0.1',4001,clientId=78,timeout=5,readonly=True)
+                  accounts=ib.managedAccounts()
+                  if expected not in accounts: raise RuntimeError('expected_live_account_not_managed')
+                  ib.reqAccountSummary()
+                  ib.reqPositions()
+                  ib.reqAllOpenOrders()
+                  authenticated=True
+                  print('PRODUCTION_LIVE_EXPECTED_ACCOUNT_READ=1')
+                  print('PRODUCTION_LIVE_POSITIONS_AND_ORDERS_READ=1')
+                  break
+              except RuntimeError: raise
+              except Exception: time.sleep(5)
+              finally:
+                  if ib.isConnected(): ib.disconnect()
+          if not authenticated: raise SystemExit('live_gateway_authenticated_account_read_failed')
+          PY
+
+      - name: Start unchanged canonical bot natural owner with three persisted live policies
+        run: |
+          set -euo pipefail
+          # No separate execution capsule, strategy selector, broker client or submit route.
+          # Gateway exposes only 4001 loopback on the runner. Bot shares its
+          # private network namespace; its internal TWS port is 4003.
+          # Bot-only ingress alternative was independently attested above by
+          # checking the Gateway namespace has no published control/API port.
+          # Canonical live guard accepts this without claiming a Caddy 401.
+          timeout --signal=INT --kill-after=90s "$SESSION_SECONDS" \
+            docker run --rm --name mmibkr-live-bot \
+              --network container:mmibkr-live-gateway \
+              --env-file "$RUNNER_TEMP/mmibkr-live-bot.env" \
+              -e MMIBKR_ACCOUNT_MODE=production_live \
+              -e ENABLE_LIVE_TRADING=1 \
+              -e MM_IB_HOST=127.0.0.1 \
+              -e MM_IB_PORT=4003 \
+              -e STATUS_SERVICE_MODE=external \
+              -e CONTROL_RUNTIME_PORT=8001 \
+              -e BOT_SELECTED_RUNTIME_NATURAL_CANDIDATE_14TH31BV_ENABLED=1 \
+              -e BOT_SELECTED_RUNTIME_LIVE_STOCK_CANARY_V1_ENABLED=1 \
+              -e BOT_SELECTED_RUNTIME_LIVE_OPERATOR_INGRESS_VERIFIED=0 \
+              -e BOT_SELECTED_RUNTIME_LIVE_PRIVATE_NETWORK_ATTESTED=1 \
+              -v "$RUNNER_TEMP/mmibkr-live-data:/app/data" \
+              "mmibkr-live-canonical:$GITHUB_RUN_ID" \
+              python main.py
+
+      - name: Destroy one-run credentials, Gateway and account-scoped data
+        if: always()
+        run: |
+          set +e
+          docker rm -f mmibkr-live-bot mmibkr-live-gateway >/dev/null 2>&1
+          docker volume rm "mmibkr-live-jts-$GITHUB_RUN_ID" >/dev/null 2>&1
+          rm -rf "$RUNNER_TEMP/mmibkr-live-source" "$RUNNER_TEMP/mmibkr-live-data"
+          rm -f "$RUNNER_TEMP/mmibkr-live-gateway.env" "$RUNNER_TEMP/mmibkr-live-bot.env" "$RUNNER_TEMP/mmibkr-live-seal-receipt.json"
+          echo 'LIVE_RUN_ONE_RUN_PRIVATE_MATERIAL_DESTROYED=1'
