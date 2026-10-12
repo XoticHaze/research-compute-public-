@@ -38,17 +38,17 @@ class CanonicalSessionPushFireWorkflowContractTests(unittest.TestCase):
         self.assertIn("--input-root \"$RUNNER_TEMP/input-root\"", text)
         self.assertIn("mmibkr.canonical_session_receipt.v1", text)
 
-    def test_dispatcher_sanitized_job_receipts_are_published_before_cleanup(self):
+    def test_plaintext_result_publication_is_denied_before_any_job_executes(self):
         text = self.text
-        self.assertIn("mmibkr_publishable_job_receipts_v1.py", text)
-        self.assertIn("canonical-session-job-receipts-", text)
-        self.assertIn("JOB_RECEIPTS_ARTIFACT_ID=", text)
-        self.assertIn("JOB_RECEIPTS_ARTIFACT_DIGEST=", text)
-        self.assertIn('"$RUNNER_TEMP/public-job-receipts"', text)
+        self.assertIn("two_sided_private_transport_not_admitted", text)
+        self.assertIn("exit 78", text)
         self.assertLess(
-            text.index("Stage sanitized canonical job receipts"),
-            text.index("Remove one-run private material"),
+            text.index("Fail closed before private source materialization or job execution"),
+            text.index("Decode and validate bounded canonical session input"),
         )
+        # Keep historical implementation inspectable, but unreachable in this
+        # contained route until private encrypted result return is admitted.
+        self.assertIn("mmibkr_publishable_job_receipts_v1.py", text)
 
     def test_research_only_authority_is_preserved_in_terminal_receipt(self):
         text = self.text

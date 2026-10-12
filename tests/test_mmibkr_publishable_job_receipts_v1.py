@@ -63,25 +63,16 @@ class PublishableCanonicalJobReceiptTests(unittest.TestCase):
         terminal.write_text(json.dumps(session),encoding="utf-8")
         return terminal,receipt_dir,output
 
-    def test_stage_publishes_exact_sanitized_job_receipt_and_manifest(self):
+    def test_stage_fails_closed_before_public_receipt_artifact_or_log(self):
         with tempfile.TemporaryDirectory() as td:
             terminal,receipt_dir,output=self._fixture(Path(td))
             stream=io.StringIO()
             with contextlib.redirect_stdout(stream):
-                manifest=stage(terminal,receipt_dir,output)
-
-            self.assertEqual(manifest["job_count"],1)
-            self.assertEqual(manifest["jobs"][0]["job_id"],"w124")
-            published=json.loads((output/"w124.json").read_text())
-            self.assertEqual(published["result"]["capital_accounting"]["starting_nav"],100000)
-            self.assertIs(published["authority"]["broker_submit"],False)
-            self.assertEqual(
-                json.loads((output/"manifest.json").read_text())["schema"],
-                "mmibkr.publishable_canonical_job_receipts.v1",
-            )
-            stdout=stream.getvalue()
-            self.assertIn("MMIBKR_CANONICAL_JOB_RECEIPT_BEGIN=w124",stdout)
-            self.assertIn("MMIBKR_CANONICAL_JOB_RECEIPT_END=w124",stdout)
+                with self.assertRaisesRegex(RuntimeError, "two_sided_private_result_return_not_admitted"):
+                    stage(terminal,receipt_dir,output)
+            self.assertFalse(output.exists())
+            self.assertNotIn("capital_accounting", stream.getvalue())
+            self.assertNotIn("w124", stream.getvalue())
 
     def test_stage_rejects_authority_escalation(self):
         with tempfile.TemporaryDirectory() as td:
@@ -90,7 +81,7 @@ class PublishableCanonicalJobReceiptTests(unittest.TestCase):
             job=json.loads(path.read_text())
             job["authority"]["runtime_activation"]=True
             path.write_text(json.dumps(job),encoding="utf-8")
-            with self.assertRaisesRegex(ValueError,"authority escalation"):
+            with self.assertRaisesRegex(RuntimeError,"two_sided_private_result_return_not_admitted"):
                 stage(terminal,receipt_dir,output)
 
     def test_stage_rejects_session_job_result_digest_mismatch(self):
@@ -99,7 +90,7 @@ class PublishableCanonicalJobReceiptTests(unittest.TestCase):
             session=json.loads(terminal.read_text())
             session["jobs"]["w124"]["result_sha256"]="d"*64
             terminal.write_text(json.dumps(session),encoding="utf-8")
-            with self.assertRaisesRegex(ValueError,"session/job result digest mismatch"):
+            with self.assertRaisesRegex(RuntimeError,"two_sided_private_result_return_not_admitted"):
                 stage(terminal,receipt_dir,output)
 
 
