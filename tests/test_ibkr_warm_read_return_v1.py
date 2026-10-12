@@ -100,6 +100,58 @@ class WarmReadReturnTests(unittest.TestCase):
             },
         }
 
+    def test_digest_free_v2_round_trip_and_no_public_private_digest(self):
+        private, public_b64, key_id = self._recipient()
+        snapshot = self._snapshot()
+        snapshot["account_summary"][0]["value"] = "SYNTHETIC_PRIVATE_SENTINEL"
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            envelope = mod.encrypt_snapshot(
+                snapshot=snapshot, recipient_b64=public_b64,
+                recipient_key_id=key_id, run_id="12345", output_dir=root,
+                privacy_profile="digest_free_v2",
+            )
+            self.assertEqual(envelope["schema"], mod.RETURN_ENVELOPE_SCHEMA_V2)
+            self.assertEqual(set(envelope), {
+                "schema", "run_id", "recipient_key_id", "sender_public_b64",
+                "nonce_b64", "ciphertext_sha256", "chunks",
+            })
+            self.assertNotIn("SYNTHETIC_PRIVATE_SENTINEL", json.dumps(envelope))
+            ciphertext = base64.b64decode("".join(
+                (root / x["local_name"]).read_text(encoding="ascii")
+                for x in envelope["chunks"]
+            ).encode("ascii"), validate=True)
+            aad = mod._aad(
+                run_id="12345", recipient_key_id=key_id,
+                schema=mod.RETURN_ENVELOPE_SCHEMA_V2,
+            )
+            sender = x25519.X25519PublicKey.from_public_bytes(
+                base64.b64decode(envelope["sender_public_b64"])
+            )
+            key = HKDF(
+                algorithm=hashes.SHA256(), length=32,
+                salt=hashlib.sha256(aad).digest(), info=mod.RETURN_INFO
+            ).derive(private.exchange(sender))
+            decoded = ChaCha20Poly1305(key).decrypt(
+                base64.b64decode(envelope["nonce_b64"]), ciphertext, aad
+            )
+            self.assertEqual(json.loads(decoded), snapshot)
+            with self.assertRaises(Exception):
+                ChaCha20Poly1305(key).decrypt(
+                    base64.b64decode(envelope["nonce_b64"]),
+                    ciphertext[:-1] + bytes([ciphertext[-1] ^ 1]), aad,
+                )
+
+    def test_v2_rejects_unauthorized_privacy_profile(self):
+        _, public_b64, key_id = self._recipient()
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaisesRegex(RuntimeError, "privacy profile rejected"):
+                mod.encrypt_snapshot(
+                    snapshot=self._snapshot(), recipient_b64=public_b64,
+                    recipient_key_id=key_id, run_id="12345",
+                    output_dir=Path(td), privacy_profile="unreviewed",
+                )
+
     def test_encrypt_snapshot_round_trip_is_run_and_recipient_bound(self):
         private, recipient_b64, recipient_key_id = self._recipient()
         snapshot = self._snapshot()
