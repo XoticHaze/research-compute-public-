@@ -10,6 +10,11 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import x25519
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from commandcenter_ledger_ephemeral_consumer_v1 import _derive, _b64d, sha256_bytes
+from opaque_bidirectional_capsule_p256_aesgcm_v1 import (
+    SCHEMA as CANONICAL_SCHEMA,
+    FIELDS as CANONICAL_FIELDS,
+    open_capsule as open_canonical_capsule,
+)
 
 SCHEMA = "commandcenter-neutral-credential-gates-x25519-v1"
 HARNESS = "commandcenter_neutral_broker_credential_gates_v1"
@@ -37,8 +42,7 @@ def _aad(run_id: str, key_id: str) -> bytes:
                        "harness": HARNESS, "recipient_key_id": key_id},
                        separators=(",", ":"), sort_keys=True).encode()
 
-def consume(envelope: Path, private_key: Path, run_id: str) -> dict:
-    env = json.loads(envelope.read_text())
+def _open_legacy_capsule(env: dict, private_key: Path, run_id: str) -> bytes:
     required = {"schema","run_id","authority","harness","recipient_key_id",
                 "sender_public_b64","nonce_b64","ciphertext_b64","plaintext_sha256"}
     if set(env) != required or env["schema"] != SCHEMA or str(env["run_id"]) != str(run_id):
@@ -61,6 +65,29 @@ def consume(envelope: Path, private_key: Path, run_id: str) -> dict:
     content = ChaCha20Poly1305(_derive(shared,aad,info=INFO)).decrypt(nonce,ciphertext,aad)
     if len(content) > MAX_ARCHIVE or sha256_bytes(content) != env["plaintext_sha256"]:
         raise ValueError("decrypted capsule size/digest rejected")
+    return content
+
+
+def consume(envelope: Path, private_key: Path, run_id: str,
+            canonical_private_key: Path | None = None) -> dict:
+    env = json.loads(envelope.read_text())
+    if env.get("schema") == CANONICAL_SCHEMA:
+        # Reuse the already-governed P-256 / HKDF-SHA256 / AES-256-GCM
+        # profile. No public plaintext digest, purpose or source metadata.
+        if canonical_private_key is None or set(env) != CANONICAL_FIELDS:
+            raise ValueError("canonical capsule recipient or shape rejected")
+        content = open_canonical_capsule(
+            env, recipient_private_b64=canonical_private_key.read_text().strip(),
+            expected_run_id=str(run_id), expected_direction="request",
+        )
+        if len(content) > MAX_ARCHIVE:
+            raise ValueError("canonical capsule size rejected")
+        capsule_profile = "canonical_p256_aesgcm_v1"
+    else:
+        # Explicit, bounded compatibility for the previously proven
+        # X25519 rendezvous. Do NOT treat this as canonical-profile privacy.
+        content = _open_legacy_capsule(env, private_key, run_id)
+        capsule_profile = "legacy_x25519_v1"
     with tempfile.TemporaryDirectory() as folder:
         root = Path(folder)
         with tarfile.open(fileobj=io.BytesIO(content),mode="r:gz") as archive:
@@ -115,6 +142,7 @@ def consume(envelope: Path, private_key: Path, run_id: str) -> dict:
             "checks":checks,
             "pinned_source_member_count":len(selected),
             "encrypted_input":True,
+            "capsule_profile":capsule_profile,
             "private_plaintext_emitted":False,
             "cloudflare_mutations":False,
             "broker_token_created":False,
@@ -126,9 +154,11 @@ def main():
     p.add_argument("--envelope",required=True)
     p.add_argument("--private-key",required=True)
     p.add_argument("--run-id",required=True)
+    p.add_argument("--canonical-private-key")
     args=p.parse_args()
     try:
-        result=consume(Path(args.envelope),Path(args.private_key),args.run_id)
+        result=consume(Path(args.envelope),Path(args.private_key),args.run_id,
+            Path(args.canonical_private_key) if args.canonical_private_key else None)
     except Exception:
         result={"schema":"commandcenter-neutral-broker-credential-gates-receipt-v1",
                 "trust_mode":"public_encrypted","run_id":str(args.run_id),
