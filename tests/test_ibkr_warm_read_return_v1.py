@@ -143,6 +143,52 @@ class WarmReadReturnTests(unittest.TestCase):
             self.assertEqual(hashlib.sha256(plaintext).hexdigest(), envelope["plaintext_sha256"])
             self.assertEqual(json.loads(plaintext.decode("utf-8")), snapshot)
 
+    def test_v2_return_omits_sensitive_outer_metadata_and_preserves_authenticated_private_result(self):
+        private, recipient_b64, recipient_key_id = self._recipient()
+        snapshot = self._snapshot()
+        sentinel = "PRIVATE_ACCOUNT_CANARY_20261012"
+        snapshot["account_summary"][0]["value"] = sentinel
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            envelope = mod.encrypt_snapshot(
+                snapshot=snapshot, recipient_b64=recipient_b64,
+                recipient_key_id=recipient_key_id, run_id="12345",
+                output_dir=root, return_profile="v2",
+            )
+            self.assertEqual(envelope["schema"], mod.RETURN_ENVELOPE_SCHEMA_V2)
+            self.assertEqual(set(envelope), {
+                "schema", "run_id", "recipient_key_id", "sender_public_b64",
+                "nonce_b64", "ciphertext_sha256", "chunks",
+            })
+            self.assertNotIn("plaintext_sha256", envelope)
+            self.assertNotIn(sentinel, json.dumps(envelope))
+            ciphertext = base64.b64decode("".join(
+                (root / item["local_name"]).read_text(encoding="ascii")
+                for item in envelope["chunks"]
+            ).encode("ascii"), validate=True)
+            sender_raw = base64.b64decode(envelope["sender_public_b64"], validate=True)
+            nonce = base64.b64decode(envelope["nonce_b64"], validate=True)
+            aad = mod._aad(run_id="12345", recipient_key_id=recipient_key_id, return_profile="v2")
+            shared = private.exchange(x25519.X25519PublicKey.from_public_bytes(sender_raw))
+            key = HKDF(
+                algorithm=hashes.SHA256(), length=32,
+                salt=hashlib.sha256(aad).digest(), info=mod.RETURN_INFO_V2,
+            ).derive(shared)
+            plaintext = ChaCha20Poly1305(key).decrypt(nonce, ciphertext, aad)
+            self.assertEqual(json.loads(plaintext.decode("utf-8")), snapshot)
+            with self.assertRaises(Exception):
+                ChaCha20Poly1305(key).decrypt(nonce, ciphertext, aad + b"tampered")
+
+    def test_v2_profile_rejects_unknown_versions(self):
+        private, recipient_b64, recipient_key_id = self._recipient()
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaisesRegex(RuntimeError, "profile_rejected"):
+                mod.encrypt_snapshot(
+                    snapshot=self._snapshot(), recipient_b64=recipient_b64,
+                    recipient_key_id=recipient_key_id, run_id="12345",
+                    output_dir=Path(td), return_profile="v3",
+                )
+
     def test_encrypt_snapshot_normalizes_nested_nonfinite_broker_values_to_null(self):
         private, recipient_b64, recipient_key_id = self._recipient()
         snapshot = self._snapshot()

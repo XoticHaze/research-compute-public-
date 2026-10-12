@@ -27,9 +27,11 @@ from ib_insync import IB
 SNAPSHOT_SCHEMA = "mmibkr.ibkr_warm_read_snapshot.v1"
 RETURN_RECIPIENT_SCHEMA = "ibkr-remote-paper-return-recipient-v1"
 RETURN_ENVELOPE_SCHEMA = "ibkr-warm-read-return-x25519-v1"
+RETURN_ENVELOPE_SCHEMA_V2 = "ibkr-warm-read-return-x25519-v2"
 AUTHORITY = "mm_ibkr_paper_runtime"
 HARNESS = "mmibkr_warm_read_gateway_v1"
 RETURN_INFO = b"mm-ibkr-warm-read-return-v1"
+RETURN_INFO_V2 = b"mm-ibkr-warm-read-return-v2"
 CHUNK_CHARS = 8000
 
 
@@ -331,18 +333,19 @@ def _json_transport_safe(value: Any) -> Any:
     return value
 
 
-def _aad(*, run_id: str, recipient_key_id: str) -> bytes:
-    return json.dumps(
-        {
-            "schema": RETURN_ENVELOPE_SCHEMA,
-            "run_id": str(run_id),
-            "authority": AUTHORITY,
-            "harness": HARNESS,
-            "recipient_key_id": recipient_key_id,
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
+def _aad(*, run_id: str, recipient_key_id: str, return_profile: str = "v1") -> bytes:
+    if return_profile not in {"v1", "v2"}:
+        raise RuntimeError("warm_read_return_profile_rejected")
+    # V2 exposes only fixed routing/crypto fields. Private authority and
+    # source identity remain inside the authenticated encrypted snapshot.
+    header = {
+        "schema": RETURN_ENVELOPE_SCHEMA_V2 if return_profile == "v2" else RETURN_ENVELOPE_SCHEMA,
+        "run_id": str(run_id),
+        "recipient_key_id": recipient_key_id,
+    }
+    if return_profile == "v1":
+        header.update({"authority": AUTHORITY, "harness": HARNESS})
+    return json.dumps(header, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
 def encrypt_snapshot(
@@ -352,6 +355,7 @@ def encrypt_snapshot(
     recipient_key_id: str,
     run_id: str,
     output_dir: Path,
+    return_profile: str = "v1",
 ) -> dict[str, Any]:
     if snapshot.get("schema") != SNAPSHOT_SCHEMA or str(snapshot.get("run_id")) != str(run_id):
         raise RuntimeError("warm read snapshot identity mismatch")
@@ -393,13 +397,16 @@ def encrypt_snapshot(
     if computed_key_id != str(recipient_key_id):
         raise RuntimeError("warm read recipient fingerprint mismatch")
 
+    if return_profile not in {"v1", "v2"}:
+        raise RuntimeError("warm_read_return_profile_rejected")
     transport_snapshot = _json_transport_safe(dict(snapshot))
     plaintext = json.dumps(transport_snapshot, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
     sender = x25519.X25519PrivateKey.generate()
     sender_public = sender.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
-    aad = _aad(run_id=run_id, recipient_key_id=computed_key_id)
+    aad = _aad(run_id=run_id, recipient_key_id=computed_key_id, return_profile=return_profile)
     shared = sender.exchange(x25519.X25519PublicKey.from_public_bytes(raw_recipient))
-    key = HKDF(algorithm=hashes.SHA256(), length=32, salt=hashlib.sha256(aad).digest(), info=RETURN_INFO).derive(shared)
+    info = RETURN_INFO_V2 if return_profile == "v2" else RETURN_INFO
+    key = HKDF(algorithm=hashes.SHA256(), length=32, salt=hashlib.sha256(aad).digest(), info=info).derive(shared)
     nonce = os.urandom(12)
     ciphertext = ChaCha20Poly1305(key).encrypt(nonce, plaintext, aad)
     payload_b64 = base64.b64encode(ciphertext).decode("ascii")
@@ -427,17 +434,22 @@ def encrypt_snapshot(
         })
 
     envelope = {
-        "schema": RETURN_ENVELOPE_SCHEMA,
+        "schema": RETURN_ENVELOPE_SCHEMA_V2 if return_profile == "v2" else RETURN_ENVELOPE_SCHEMA,
         "run_id": str(run_id),
-        "authority": AUTHORITY,
-        "harness": HARNESS,
         "recipient_key_id": computed_key_id,
         "sender_public_b64": base64.b64encode(sender_public).decode("ascii"),
         "nonce_b64": base64.b64encode(nonce).decode("ascii"),
         "ciphertext_sha256": hashlib.sha256(ciphertext).hexdigest(),
-        "plaintext_sha256": hashlib.sha256(plaintext).hexdigest(),
         "chunks": manifest,
     }
+    if return_profile == "v1":
+        # Compatibility only: private consumers must explicitly opt into
+        # V2 before the legacy digest is retired.
+        envelope.update({
+            "authority": AUTHORITY,
+            "harness": HARNESS,
+            "plaintext_sha256": hashlib.sha256(plaintext).hexdigest(),
+        })
     envelope_path = output_dir / "ibkr-warm-read-envelope.json"
     envelope_path.write_text(json.dumps(envelope, sort_keys=True) + "\n", encoding="utf-8")
     try:
@@ -458,6 +470,7 @@ def main() -> None:
     parser.add_argument("--bars-file", required=True)
     parser.add_argument("--recipient-b64", required=True)
     parser.add_argument("--recipient-key-id", required=True)
+    parser.add_argument("--return-profile", choices=("v1", "v2"), default="v1")
     parser.add_argument("--output-dir", required=True)
     args = parser.parse_args()
 
@@ -476,6 +489,7 @@ def main() -> None:
         recipient_key_id=args.recipient_key_id,
         run_id=args.run_id,
         output_dir=Path(args.output_dir),
+        return_profile=args.return_profile,
     )
     print("IBKR_WARM_READ_RETURN_READY=" + json.dumps({
         "run_id": str(args.run_id),
