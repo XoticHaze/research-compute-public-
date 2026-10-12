@@ -54,6 +54,9 @@ jobs:
               assert marker in s, marker
           # Check the execution job, not these literal regression assertions.
           owner=s.split('\n  owner:\n',1)[1]
+          assert "contract['localSymbol']=='MNQZ6'" not in owner
+          assert "contract['lastTradeDateOrContractMonth']=='20261218'" not in owner
+          assert 'is_continuous_futures_symbol(local_symbol' in owner
           assert 'paper_execute' not in owner
           assert 'ibkr_remote_selected_runtime_paper_execute' not in owner
           assert 'placeOrder(' not in owner
@@ -112,9 +115,11 @@ jobs:
           set -euo pipefail
           umask 077
           python - <<'PY'
-          import json, os
+          import json, os, sys
           from pathlib import Path
           source=Path(os.environ['PRIVATE_SOURCE_ROOT'])
+          sys.path.insert(0, str(source))
+          from futures_contract_registry import is_continuous_futures_symbol
           original=json.loads((source/'config/selected_runtime_universe_14tu.json').read_text())
           expected={'AMAT':('15Min','STK',False),'APH':('15Min','STK',False),'MNQ':('12Min','FUT',True)}
           active=[row for row in original['runtime_ids'] if row.get('status')=='active_selected']
@@ -132,8 +137,14 @@ jobs:
               if instrument=='STK':
                   assert policy['max_shares']==1 and policy['dca_enabled'] is False
               else:
-                  assert contract['localSymbol']=='MNQZ6'
-                  assert contract['lastTradeDateOrContractMonth']=='20261218'
+                  # Private selected-runtime authority owns the execution quarter.
+                  local_symbol=str(contract.get('localSymbol') or '').strip()
+                  expiry=str(contract.get('lastTradeDateOrContractMonth') or '').strip()
+                  assert local_symbol and not is_continuous_futures_symbol(local_symbol,'FUT')
+                  assert len(expiry)==8 and expiry.isdigit()
+                  assert int(contract.get('conId') or 0)>0
+                  assert str(contract.get('exchange') or '').strip()
+                  assert str(contract.get('currency') or '').strip()
                   assert policy['base_qty']==1 and policy['max_contracts']==3
                   assert policy['max_dca_adds']==2 and policy['continuous_symbol_execution_blocked'] is True
               policy['live_submit_enabled']=True
