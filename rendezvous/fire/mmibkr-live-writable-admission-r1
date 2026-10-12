@@ -12,3 +12,7 @@ post_live_owner_source_vault_oidc_deploy_b3ea950: admission_only_true
 post_live_config_image_cli_fix_db32dc48: admission_only_true
 
 post_exact_image_file_permission_fix_e26882c2: admission_only_true
+
+2026-10-12 user_present_for_live_IBKR_Mobile_approval_no_order: true
+broker_orders: disabled_during_admission
+paper_checkpoint: preserve_unchanged
