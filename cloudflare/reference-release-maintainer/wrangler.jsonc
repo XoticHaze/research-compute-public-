@@ -14,7 +14,7 @@
   "secrets_store_secrets": [
     {
       "binding": "BROKER_EDITOR_TOKEN",
-      "store_id": "95f8a1ba7b0a48d29a574790245fcd55",
+      "store_id": "3bdb660e7b8d4de6a1688f922f3991f7",
       "secret_name": "REFERENCE_RELEASE_BROKER_EDITOR_TOKEN"
     }
   ],
