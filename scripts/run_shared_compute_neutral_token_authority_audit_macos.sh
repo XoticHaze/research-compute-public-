@@ -33,18 +33,18 @@ def call(args):
   # Return only machine-classified metadata. Never echo CLI output,
   # response token objects, OAuth state, bearer values, or arbitrary errors.
   raw=(p.stderr or '')+'\n'+(p.stdout or '')
-  match=re.search(r'(?i)\\b(?:HTTP(?:\\s+status)?|status(?:\\s+code)?)\\s*[:= ]\\s*([1-5][0-9]{2})\\b',raw)
+  match=re.search(r'(?i)\b(?:HTTP(?:\s+status)?|status(?:\s+code)?)\s*[:= ]\s*([1-5][0-9]{2})\b',raw)
   if not match:
-   match=re.search(r'\\b(401|403|404|429|500|502|503|504)\\s+(?:Forbidden|Unauthorized|Not Found|Too Many Requests|Internal Server Error|Bad Gateway|Service Unavailable|Gateway Timeout)\\b',raw,re.I)
+   match=re.search(r'\b(401|403|404|429|500|502|503|504)\s+(?:Forbidden|Unauthorized|Not Found|Too Many Requests|Internal Server Error|Bad Gateway|Service Unavailable|Gateway Timeout)\b',raw,re.I)
   status=match.group(1) if match else None
-  codes=sorted(set(re.findall(r'["\\']code["\\']\\s*:\\s*([0-9]{3,8})',raw)))[:5]
+  codes=sorted(set(re.findall(r"""["']code["']\s*:\s*([0-9]{3,8})""",raw)))[:5]
   if status:
    stage='http_'+status
-  elif re.search(r'(?i)\\b(?:forbidden|access denied|insufficient permissions|permission denied)\\b',raw):
+  elif re.search(r'(?i)\b(?:forbidden|access denied|insufficient permissions|permission denied)\b',raw):
    stage='access_denied_text_only'
-  elif re.search(r'(?i)\\b(?:not authenticated|not logged in|unauthorized)\\b',raw):
+  elif re.search(r'(?i)\b(?:not authenticated|not logged in|unauthorized)\b',raw):
    stage='auth_text_only'
-  elif re.search(r'(?i)\\b(?:ETIMEDOUT|ECONNRESET|ENOTFOUND|network error|fetch failed)\\b',raw):
+  elif re.search(r'(?i)\b(?:ETIMEDOUT|ECONNRESET|ENOTFOUND|network error|fetch failed)\b',raw):
    stage='network_failure'
   else:
    stage='cli_error_unclassified'
