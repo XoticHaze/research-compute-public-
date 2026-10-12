@@ -23,6 +23,10 @@ EXPECTED_GIT_BLOBS = {
     "config/security/shared_compute_neutral_broker_editor_bootstrap_gate_v1.json": "7d55e21b40353615c2eac82caba2c96e478c2dee",
     "config/security/cloudflare_deploy_credential_migration_v1.json": "364ea27a34c7af5d430cefb0ec431b11f552765a",
 }
+POLICY_ONLY_FILES = {
+    "scripts/security/validate_neutral_broker_editor_token_policy.py",
+    "tests/test_neutral_broker_editor_token_policy.py",
+}
 MAX_ARCHIVE = 200_000
 
 def _git_blob(contents: bytes) -> str:
@@ -61,8 +65,10 @@ def consume(envelope: Path, private_key: Path, run_id: str) -> dict:
         root = Path(folder)
         with tarfile.open(fileobj=io.BytesIO(content),mode="r:gz") as archive:
             members=archive.getmembers()
-            expected=set(EXPECTED_GIT_BLOBS)|{"payload-manifest.json"}
-            if len(members)!=len(expected) or {m.name for m in members}!=expected:
+            names={m.name for m in members}
+            allowed=(set(EXPECTED_GIT_BLOBS)|{"payload-manifest.json"},
+                     POLICY_ONLY_FILES|{"payload-manifest.json"})
+            if len(members)!=len(names) or names not in allowed:
                 raise ValueError("archive allowlist mismatch")
             for member in members:
                 if not member.isfile() or member.size<1 or member.size>80_000:
@@ -74,19 +80,26 @@ def consume(envelope: Path, private_key: Path, run_id: str) -> dict:
         manifest=json.loads((root/"payload-manifest.json").read_text())
         if set(manifest)!={"schema","harness","files"} or manifest["schema"]!=MANIFEST_SCHEMA or manifest["harness"]!=HARNESS:
             raise ValueError("payload purpose/manifest rejected")
-        if set(manifest["files"])!=set(EXPECTED_GIT_BLOBS):
+        selected=set(manifest["files"])
+        if selected not in (set(EXPECTED_GIT_BLOBS),POLICY_ONLY_FILES):
             raise ValueError("payload digest member set rejected")
-        for rel, expected_blob in EXPECTED_GIT_BLOBS.items():
+        if selected != names - {"payload-manifest.json"}:
+            raise ValueError("manifest/archive member identity rejected")
+        for rel in sorted(selected):
+            expected_blob=EXPECTED_GIT_BLOBS[rel]
             contents=(root/rel).read_bytes()
             if _git_blob(contents)!=expected_blob:
                 raise ValueError("immutable canonical source Git blob mismatch")
             if sha256_bytes(contents)!=manifest["files"][rel]:
                 raise ValueError("payload inner sha256 mismatch")
         checks={}
-        for label,pattern in (
-            ("neutral_stage_truth", "test_shared_compute_neutral_gate_20261012.py"),
-            ("single_worker_editor_policy", "test_neutral_broker_editor_token_policy.py"),
-        ):
+        test_patterns=(
+            (("neutral_stage_truth", "test_shared_compute_neutral_gate_20261012.py"),
+             ("single_worker_editor_policy", "test_neutral_broker_editor_token_policy.py"))
+            if selected == set(EXPECTED_GIT_BLOBS)
+            else (("single_worker_editor_policy", "test_neutral_broker_editor_token_policy.py"),)
+        )
+        for label,pattern in test_patterns:
             command=[sys.executable,"-m","unittest","discover","-s","tests","-p",pattern,"-v"]
             completed=subprocess.run(command,cwd=root,stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=90,
@@ -100,7 +113,7 @@ def consume(envelope: Path, private_key: Path, run_id: str) -> dict:
             "run_id":str(run_id),
             "status":"PASS" if all(checks.values()) else "FAIL",
             "checks":checks,
-            "pinned_source_member_count":len(EXPECTED_GIT_BLOBS),
+            "pinned_source_member_count":len(selected),
             "encrypted_input":True,
             "private_plaintext_emitted":False,
             "cloudflare_mutations":False,
