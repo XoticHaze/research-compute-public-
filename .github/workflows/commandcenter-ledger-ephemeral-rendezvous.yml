@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'rendezvous/requests/commandcenter-ledger-*.txt'
+      - 'rendezvous/requests/commandcenter-neutral-gate-*.txt'
 
 permissions:
   contents: write
@@ -12,6 +13,8 @@ env:
   RESPONSE_ROOT: rendezvous/responses
   RECIPIENT_ROOT: rendezvous/recipients
   EXCHANGE_REF: rendezvous-exchange
+  TRUST_MODE: public_encrypted
+  PROOF_KIND: ${{ startsWith(github.head_ref, 'assistant/neutral-broker-public-gate-') && 'neutral_gate' || 'ledger' }}
 
 jobs:
   consume:
@@ -66,7 +69,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/commandcenter-ledger-envelope.json"
+          if [ "$PROOF_KIND" = "neutral_gate" ]; then
+            path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/commandcenter-neutral-gate-envelope.json"
+          else
+            path="${RESPONSE_ROOT}/${GITHUB_RUN_ID}/commandcenter-ledger-envelope.json"
+          fi
           api="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${EXCHANGE_REF}"
           found=0
           for _ in $(seq 1 90); do
@@ -74,8 +81,15 @@ jobs:
             sleep 5
           done
           test "$found" = 1 || { echo 'run-bound CommandCenter ledger envelope did not arrive'; exit 42; }
-      - name: Execute fixed private ledger contract and emit sanitized receipt
-        run: python scripts/commandcenter_ledger_ephemeral_consumer_v1.py --envelope "$RUNNER_TEMP/cc-ledger-envelope.json" --private-key "$RUNNER_TEMP/cc-ledger-private.b64" --run-id "$GITHUB_RUN_ID"
+      - name: Execute fixed encrypted contract and emit sanitized receipt
+        run: |
+          set -euo pipefail
+          test "$TRUST_MODE" = "public_encrypted"
+          if [ "$PROOF_KIND" = "neutral_gate" ]; then
+            python scripts/commandcenter_neutral_gate_ephemeral_consumer_v1.py --envelope "$RUNNER_TEMP/cc-ledger-envelope.json" --private-key "$RUNNER_TEMP/cc-ledger-private.b64" --run-id "$GITHUB_RUN_ID"
+          else
+            python scripts/commandcenter_ledger_ephemeral_consumer_v1.py --envelope "$RUNNER_TEMP/cc-ledger-envelope.json" --private-key "$RUNNER_TEMP/cc-ledger-private.b64" --run-id "$GITHUB_RUN_ID"
+          fi
       - name: Remove one-run private material
         if: always()
         run: rm -f "$RUNNER_TEMP/cc-ledger-private.b64" "$RUNNER_TEMP/cc-ledger-recipient.json" "$RUNNER_TEMP/cc-ledger-envelope.json"
