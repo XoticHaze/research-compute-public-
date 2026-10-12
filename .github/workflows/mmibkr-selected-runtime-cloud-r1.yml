@@ -64,6 +64,8 @@ on:
       - tests/test_mmibkr_cloud_checkpoint_cache_handoff_v1.py
       - tests/test_mmibkr_operator_console_publisher_v1.py
       - tests/test_mmibkr_cloud_session_receipt_v1.py
+      - tests/test_mmibkr_public_cloud_receipt_projection_v1.py
+      - scripts/mmibkr_public_cloud_receipt_projection_v1.py
       - tests/test_mmibkr_cloud_session_acceptance_v1.py
       - tests/test_mmibkr_initial_backfill_ingest_workflow_v1.py
       - tests/test_mmibkr_initial_backfill_preowner_checkpoint_v1.py
@@ -213,6 +215,8 @@ jobs:
             tests/test_mmibkr_cloud_checkpoint_cache_handoff_v1.py \
             tests/test_mmibkr_operator_console_publisher_v1.py \
             tests/test_mmibkr_cloud_session_receipt_v1.py \
+            tests/test_mmibkr_public_cloud_receipt_projection_v1.py \
+            scripts/mmibkr_public_cloud_receipt_projection_v1.py \
             tests/test_mmibkr_cloud_session_acceptance_v1.py \
             tests/test_mmibkr_initial_backfill_ingest_workflow_v1.py \
             tests/test_mmibkr_initial_backfill_preowner_checkpoint_v1.py \
@@ -232,6 +236,7 @@ jobs:
             tests.test_mmibkr_cloud_checkpoint_cache_handoff_v1 \
             tests.test_mmibkr_operator_console_publisher_v1 \
             tests.test_mmibkr_cloud_session_receipt_v1 \
+            tests.test_mmibkr_public_cloud_receipt_projection_v1 \
             tests.test_mmibkr_cloud_session_acceptance_v1 \
             tests.test_mmibkr_initial_backfill_ingest_workflow_v1 \
             tests.test_mmibkr_initial_backfill_preowner_checkpoint_v1 \
