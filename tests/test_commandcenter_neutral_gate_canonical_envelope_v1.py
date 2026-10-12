@@ -14,6 +14,10 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+import sys
+
+# The production consumer is a fixed scripts/ entrypoint and uses sibling imports.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from scripts import commandcenter_neutral_gate_ephemeral_consumer_v1 as consumer
 from scripts.opaque_bidirectional_capsule_p256_aesgcm_v1 import (
