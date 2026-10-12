@@ -8,3 +8,5 @@ expected_private_source_sha: 7e91f4f0951cc7cace61f16e0737ca567c106ccf
 source: user_requested_live_readiness_20261012
 
 post_live_owner_source_vault_oidc_deploy_b3ea950: admission_only_true
+
+post_live_config_image_cli_fix_db32dc48: admission_only_true
