@@ -34,4 +34,4 @@ jobs:
         run: |
           python -m py_compile scripts/ephemeral_x25519_chunked_v1.py scripts/ibkr_remote_paper_capsule_v1.py scripts/ibkr_remote_paper_session_v1.py scripts/ibkr_warm_read_return_v1.py
       - name: Focused tests
-        run: pytest -q tests/test_ibkr_remote_paper_capsule_v1.py tests/test_ibkr_remote_paper_session_v1.py
+        run: pytest -q tests/test_ibkr_remote_paper_capsule_v1.py tests/test_ibkr_remote_paper_session_v1.py tests/test_ibkr_warm_read_return_v1.py
