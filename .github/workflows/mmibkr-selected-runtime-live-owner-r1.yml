@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PRIVATE_SOURCE_SHA: 1ad9fbee1b2257c4040d3a82e71177988ca4a22f
+  PRIVATE_SOURCE_SHA: 7e91f4f0951cc7cace61f16e0737ca567c106ccf
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
   LIVE_SEAL_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-live-bot/seal
   IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
@@ -46,6 +46,8 @@ jobs:
               'BOT_SELECTED_RUNTIME_LIVE_OPERATOR_INGRESS_VERIFIED=0',
               'BOT_SELECTED_RUNTIME_LIVE_PRIVATE_NETWORK_ATTESTED=1',
               'HEADLESS_LIVE_PRIVATE_NETWORK_ATTESTED=1',
+              'CANONICAL_EXISTING_LIVE_RUNTIME_CONFIG_VERIFIED=1',
+              'CONFIG_PATH=/app/data/strategy_runtime/selected_runtime_authority_14th31jv/live_bot_runtime_config.json',
               'python main.py',
           )
           for marker in required:
@@ -150,6 +152,41 @@ jobs:
           docker build -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" --target bot -t "mmibkr-live-canonical:$GITHUB_RUN_ID" "$PRIVATE_SOURCE_ROOT" >/dev/null
           echo 'CANONICAL_BOT_IMAGE_BUILT=1'
 
+      - name: Generate canonical selected-runtime config from existing paper-compatible owner
+        run: |
+          set -euo pipefail
+          umask 077
+          # This is the source-owned hostless compatibility builder already
+          # used for paper. Network is disabled; no broker session or order.
+          docker run --rm --network none \
+            --user "$(id -u):$(id -g)" \
+            -v "$RUNNER_TEMP/mmibkr-live-data:/app/data" \
+            "mmibkr-live-canonical:$GITHUB_RUN_ID" \
+            python scripts/operator/selected_runtime_legacy_compat_config_v1.py \
+              --repo-root /app \
+              --approved-live-selected-owner \
+              --runtime-config-output /app/data/strategy_runtime/selected_runtime_authority_14th31jv/live_bot_runtime_config.json \
+              --output /app/data/strategy_runtime/selected_runtime_authority_14th31jv/config_source_receipt.json
+          python - <<'PY'
+          import os,json
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'mmibkr-live-data/strategy_runtime/selected_runtime_authority_14th31jv'
+          config=json.loads((root/'live_bot_runtime_config.json').read_text())
+          receipt=json.loads((root/'config_source_receipt.json').read_text())
+          assert receipt['ok'] is True
+          assert receipt['approved_live_selected_owner_profile'] is True
+          assert receipt['selected_symbols']==['AMAT','APH','MNQ']
+          assert config['ENABLE_LIVE_TRADING'] is True
+          assert config['CLOSE_ALL_POSITIONS_ON_START'] is False
+          assert config['STRATEGY_AUTO_START_LOOPS_ENABLED'] is False
+          assert config['IB_HOST']=='127.0.0.1'
+          assert config['IB_PORT']==4003
+          assert config['FUTURES_ENABLED'] is True
+          assert all(config['SELECTED_STRATEGY_SETS'][symbol]['live_submit_enabled']
+                     for symbol in ('AMAT','APH','MNQ'))
+          print('CANONICAL_EXISTING_LIVE_RUNTIME_CONFIG_VERIFIED=1')
+          PY
+
       - name: Obtain one-run writable live Gateway environment with existing IBKR credentials
         run: |
           set -euo pipefail
@@ -252,6 +289,7 @@ jobs:
               --network container:mmibkr-live-gateway \
               --env-file "$RUNNER_TEMP/mmibkr-live-bot.env" \
               -e MMIBKR_ACCOUNT_MODE=production_live \
+              -e CONFIG_PATH=/app/data/strategy_runtime/selected_runtime_authority_14th31jv/live_bot_runtime_config.json \
               -e ENABLE_LIVE_TRADING=1 \
               -e MM_IB_HOST=127.0.0.1 \
               -e MM_IB_PORT=4003 \
