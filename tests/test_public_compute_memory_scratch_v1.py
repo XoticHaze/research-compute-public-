@@ -53,7 +53,9 @@ class PublicComputeMemoryScratchTests(unittest.TestCase):
                 }):
                     tempfile.tempdir = None
                     guard.check()
-                    payload_path = Path(tempfile.mkstemp(dir=None)[1])
+                    fd, payload_name = tempfile.mkstemp(dir=None)
+                    os.close(fd)
+                    payload_path = Path(payload_name)
                     try:
                         self.assertEqual(payload_path.parent, Path(path))
                         payload_path.write_bytes(b"synthetic-only-not-PHI")
