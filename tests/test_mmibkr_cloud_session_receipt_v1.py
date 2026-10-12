@@ -84,6 +84,19 @@ class CloudSessionReceiptTests(unittest.TestCase):
         self.assertIn("--expected-private-sha \"$PRIVATE_HEAD\"", section)
         self.assertIn("MMIBKR_CLOUD_V2_RECEIPT_ACCEPTED=1", section)
 
+
+    def test_private_nested_daemon_state_is_minimized_before_public_upload(self):
+        text = self.text
+        receipt = text.index("- name: Publish sanitized cloud-session receipt")
+        upload = text.index('receipt_path="${RECEIPT_ROOT}/', receipt)
+        projection = text.index(
+            "from scripts.mmibkr_public_cloud_receipt_projection_v1 import project",
+            receipt,
+        )
+        self.assertLess(receipt, projection)
+        self.assertLess(projection, upload)
+        self.assertIn("receipt = project(receipt)", text[projection:upload])
+
     def test_durable_receipt_remains_sanitized(self):
         start = self.text.index("- name: Publish sanitized cloud-session receipt")
         end = self.text.index("- name: Queue successor bounded session")
