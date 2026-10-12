@@ -32,6 +32,10 @@ LIVE_READONLY_ENVELOPE_SCHEMA = (
     "mmibkr-ibkr-live-readonly-gateway-env-x25519-hkdf-aesgcm-v1"
 )
 LIVE_READONLY_AUTHORITY = "ibkr-live-readonly"
+LIVE_BOT_ENVELOPE_SCHEMA = (
+    "mmibkr-ibkr-live-bot-gateway-env-x25519-hkdf-aesgcm-v1"
+)
+LIVE_BOT_AUTHORITY = "ibkr-live-bot"
 PROFILES = {
     "paper": {
         "authority": AUTHORITY,
@@ -40,6 +44,12 @@ PROFILES = {
     "production_live_readonly": {
         "authority": LIVE_READONLY_AUTHORITY,
         "envelope_schema": LIVE_READONLY_ENVELOPE_SCHEMA,
+    },
+    # Only the distinct, OIDC-pinned canonical bot-owner workflow can mint
+    # this. It reuses IBKR_LIVE_* credentials, never the readonly profile.
+    "production_live_bot": {
+        "authority": LIVE_BOT_AUTHORITY,
+        "envelope_schema": LIVE_BOT_ENVELOPE_SCHEMA,
     },
 }
 MAX_PLAINTEXT = 4096
