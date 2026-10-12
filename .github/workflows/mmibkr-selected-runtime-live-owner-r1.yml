@@ -100,6 +100,10 @@ jobs:
           assert "'inputs[admission_only]=true'" in s
           assert 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1' in owner
           assert 'python /app/scripts/operator/selected_runtime_legacy_compat_config_v1.py' in owner
+          assert "--entrypoint /bin/sh" in owner
+          assert "--user 0:0" in owner
+          assert "--network none" in owner
+          assert 'chown -R "$RUNNER_UID:$RUNNER_GID"' in owner
           assert 'python -m scripts.operator.selected_runtime_legacy_compat_config_v1' not in owner
           assert 'ib.reqAllOpenOrders()' in owner
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
@@ -211,16 +215,24 @@ jobs:
           umask 077
           # This is the source-owned hostless compatibility builder already
           # used for paper. Network is disabled; no broker session or order.
+          # Source Vault preserves restrictive source file permissions.
+          # Run the exact trusted image CLI as root in a networkless container,
+          # then return *only* generated private config files to runner UID.
           docker run --rm --network none \
-            --user "$(id -u):$(id -g)" \
+            --user 0:0 \
             -e PYTHONPATH=/app \
+            -e RUNNER_UID="$(id -u)" \
+            -e RUNNER_GID="$(id -g)" \
             -v "$RUNNER_TEMP/mmibkr-live-data:/app/data" \
+            --entrypoint /bin/sh \
             "mmibkr-live-canonical:$GITHUB_RUN_ID" \
-            python /app/scripts/operator/selected_runtime_legacy_compat_config_v1.py \
+            -ec 'python /app/scripts/operator/selected_runtime_legacy_compat_config_v1.py \
               --repo-root /app \
               --approved-live-selected-owner \
               --runtime-config-output /app/data/strategy_runtime/selected_runtime_authority_14th31jv/live_bot_runtime_config.json \
               --output /app/data/strategy_runtime/selected_runtime_authority_14th31jv/config_source_receipt.json
+              chown -R "$RUNNER_UID:$RUNNER_GID" /app/data/strategy_runtime/selected_runtime_authority_14th31jv
+              test "$(stat -c %a /app/data/strategy_runtime/selected_runtime_authority_14th31jv/live_bot_runtime_config.json)" = 600'
           python - <<'PY'
           import os,json
           from pathlib import Path
