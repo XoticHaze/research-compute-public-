@@ -21,6 +21,13 @@ const ALLOWED_RUNTIME_IDENTITIES = [
   CANONICAL_RUNTIME_IDENTITY,
 ];
 
+const LIVE_BOT_SOURCE_UNWRAP_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-selected-runtime-live-owner-r1.yml@refs/heads/main',
+};
+
 const UI_BUILD_VALIDATION_IDENTITY = {
   repository: 'XoticHaze/research-compute-public-',
   ref: 'refs/heads/main',
@@ -484,6 +491,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
       (identity) => matchesIdentity(claims, identity),
     );
     const matchedUiBuild = matchesIdentity(claims, UI_BUILD_VALIDATION_IDENTITY);
+    const matchedLiveBotSourceUnwrap = matchesIdentity(claims, LIVE_BOT_SOURCE_UNWRAP_IDENTITY);
     const matchedBootstrap = matchesIdentity(claims, SOURCE_VAULT_BOOTSTRAP_IDENTITY);
     const matchedOperatorDeploy = matchesIdentity(claims, OPERATOR_CONSOLE_DEPLOY_IDENTITY);
     const matchedMissedTradeAudit = matchesIdentity(claims, MISSED_TRADE_AUDIT_IDENTITY);
@@ -521,12 +529,20 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
       || pathname === '/v1/source-vault/private-archive/attest'
     );
     const operatorDeployPathAllowed = pathname === '/v1/source-vault/unwrap';
+    // The existing live owner only needs exact-source unwrap. Never grant it
+    // private-archive publishing, relay, or source exchange write authority.
+    // Keep its event restricted to the original operator workflow_dispatch.
+    const liveBotSourceUnwrapPathAllowed = (
+      pathname === '/v1/source-vault/unwrap'
+      && claims.event_name === 'workflow_dispatch'
+    );
     if (
       !(
         matchedRuntime
         || (matchedUiBuild && privateArchivePathAllowed)
         || (matchedBootstrap && privateArchivePathAllowed)
         || (matchedOperatorDeploy && operatorDeployPathAllowed)
+        || (matchedLiveBotSourceUnwrap && liveBotSourceUnwrapPathAllowed)
         || (matchedMissedTradeAudit && operatorDeployPathAllowed)
         || (
           matchedPaperAccountHygieneCoordinator
