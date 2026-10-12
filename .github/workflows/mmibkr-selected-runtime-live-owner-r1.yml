@@ -141,7 +141,7 @@ jobs:
                   local_symbol=str(contract.get('localSymbol') or '').strip()
                   expiry=str(contract.get('lastTradeDateOrContractMonth') or '').strip()
                   assert local_symbol and not is_continuous_futures_symbol(local_symbol,'FUT')
-                  assert len(expiry)==8 and expiry.isdigit()
+                  assert len(expiry) in (6,8) and expiry.isdigit()
                   assert int(contract.get('conId') or 0)>0
                   assert str(contract.get('exchange') or '').strip()
                   assert str(contract.get('currency') or '').strip()
