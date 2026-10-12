@@ -14,11 +14,15 @@ def http_error(code):
 
 
 class EphemeralExchangeCleanupTests(unittest.TestCase):
-    def test_cleanup_is_always_after_execution_and_before_runner_scratch_cleanup(self):
+    def test_cleanup_only_after_success_and_local_private_cleanup_remains_unconditional(self):
         from pathlib import Path
         path=Path(__file__).resolve().parents[1]/".github/workflows/commandcenter-ledger-ephemeral-rendezvous.yml"
         workflow=path.read_text(encoding="utf-8")
-        self.assertIn("if: always()",workflow)
+        retire = workflow[workflow.index("Retire consumed public exchange inputs"):]
+        self.assertTrue(retire.splitlines()[1].strip() == "if: success()")
+        scratch_cleanup = workflow[workflow.index("Remove one-run private material"):]
+        self.assertTrue(scratch_cleanup.splitlines()[1].strip() == "if: always()")
+
         self.assertLess(
             workflow.index("Execute fixed encrypted contract and emit sanitized receipt"),
             workflow.index("Retire consumed public exchange inputs"),

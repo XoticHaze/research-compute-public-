@@ -113,8 +113,10 @@ jobs:
           else
             python scripts/commandcenter_ledger_ephemeral_consumer_v1.py --envelope "$TMPDIR/cc-ledger-envelope.json" --private-key "$TMPDIR/cc-ledger-private.b64" --run-id "$GITHUB_RUN_ID"
           fi
+      # A consumer failure has no verified completion: retain encrypted input
+      # and recipient for bounded recovery rather than deleting pre-ACK data.
       - name: Retire consumed public exchange inputs
-        if: always()
+        if: success()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
