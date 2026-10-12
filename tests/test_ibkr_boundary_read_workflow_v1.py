@@ -31,10 +31,10 @@ class BoundaryReadWorkflowTests(unittest.TestCase):
 
     def test_boundary_snapshot_is_readonly_client_evidence_even_inside_paper_execute(self):
         self.assertIn(
-            "IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'paper_execute')",
+            "IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'paper_execute' || inputs.mode == 'production_live_readonly')",
             self.text,
         )
-        self.assertIn("mode not in {'readonly','paper_execute'}", self.text)
+        self.assertIn("mode not in {'readonly','paper_execute','production_live_readonly'}", self.text)
         writable = self.text.index("api_read_only=yes")
         writable_end = self.text.index('echo "IBKR_GATEWAY_READ_ONLY_API=${api_read_only}"', writable)
         block = self.text[writable:writable_end]
