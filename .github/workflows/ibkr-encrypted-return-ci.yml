@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: '3.11.16'
       - name: Install dependencies
-        run: python -m pip install --disable-pip-version-check cryptography pytest
+        run: python -m pip install --disable-pip-version-check 'cryptography==46.0.1' 'ib_insync==0.9.86' pytest
       - name: Compile
         run: |
           python -m py_compile scripts/ephemeral_x25519_chunked_v1.py scripts/ibkr_remote_paper_capsule_v1.py scripts/ibkr_remote_paper_session_v1.py scripts/ibkr_warm_read_return_v1.py
