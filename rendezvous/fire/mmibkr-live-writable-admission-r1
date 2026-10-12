@@ -1,0 +1,8 @@
+schema: mmibkr.live_writable_gateway_admission.fire.v1
+approved_scope: existing_canonical_owner_no_order
+mode: no_order_live_account_read
+trading_bot_launch: false
+broker_order_mutation: false
+paper_state_mutation: false
+expected_private_source_sha: 7e91f4f0951cc7cace61f16e0737ca567c106ccf
+source: user_requested_live_readiness_20261012
