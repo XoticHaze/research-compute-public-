@@ -120,7 +120,7 @@ jobs:
           def receipt_for(run_id):
               path=f'rendezvous/receipts/{run_id}-mmibkr-selected-runtime-cloud.json'
               req=Request(
-                  f'https://api.github.com/repos/{repo}/contents/{path}?ref=main',
+                  f'https://api.github.com/repos/{repo}/contents/{path}?ref=rendezvous-exchange',
                   headers=headers,
               )
               try:
