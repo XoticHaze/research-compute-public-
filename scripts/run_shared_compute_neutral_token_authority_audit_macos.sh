@@ -19,16 +19,41 @@ export CLOUDFLARE_ACCOUNT_ID="$ACCOUNT"
 export npm_config_cache="$ROOT/npm-cache" NPM_CONFIG_CACHE="$ROOT/npm-cache"
 cd "$CLI"
 python3 - "$ACCOUNT" <<'PY'
-import json,subprocess,sys,urllib.parse
+import json,subprocess,sys,urllib.parse,re
 account=sys.argv[1]
 cli=['npx','--yes','cf@1.0.0-beta.14']
 def call(args):
  try:
   p=subprocess.run(cli+args,capture_output=True,text=True,timeout=90)
- except Exception:
-  return None,'command_exception'
+ except subprocess.TimeoutExpired:
+  return None,'cli_timeout'
+ except (OSError,ValueError):
+  return None,'cli_spawn_failure'
  if p.returncode:
-  return None,'cli_exit_nonzero'
+  # Return only machine-classified metadata. Never echo CLI output,
+  # response token objects, OAuth state, bearer values, or arbitrary errors.
+  raw=(p.stderr or '')+'\n'+(p.stdout or '')
+  match=re.search(r'(?i)\\b(?:HTTP(?:\\s+status)?|status(?:\\s+code)?)\\s*[:= ]\\s*([1-5][0-9]{2})\\b',raw)
+  if not match:
+   match=re.search(r'\\b(401|403|404|429|500|502|503|504)\\s+(?:Forbidden|Unauthorized|Not Found|Too Many Requests|Internal Server Error|Bad Gateway|Service Unavailable|Gateway Timeout)\\b',raw,re.I)
+  status=match.group(1) if match else None
+  codes=sorted(set(re.findall(r'["\\']code["\\']\\s*:\\s*([0-9]{3,8})',raw)))[:5]
+  if status:
+   stage='http_'+status
+  elif re.search(r'(?i)\\b(?:forbidden|access denied|insufficient permissions|permission denied)\\b',raw):
+   stage='access_denied_text_only'
+  elif re.search(r'(?i)\\b(?:not authenticated|not logged in|unauthorized)\\b',raw):
+   stage='auth_text_only'
+  elif re.search(r'(?i)\\b(?:ETIMEDOUT|ECONNRESET|ENOTFOUND|network error|fetch failed)\\b',raw):
+   stage='network_failure'
+  else:
+   stage='cli_error_unclassified'
+  if args[:3]==['accounts','tokens','list']:
+   print('TOKEN_LIST_CLI_EXIT_CODE='+str(p.returncode),flush=True)
+   print('TOKEN_LIST_ERROR_CATEGORY='+stage.upper(),flush=True)
+   print('TOKEN_LIST_HTTP_STATUS='+str(status or 'UNDETERMINED'),flush=True)
+   print('TOKEN_LIST_CF_NUMERIC_ERROR_CODES='+(','.join(codes) if codes else 'NONE_EXTRACTED'),flush=True)
+  return None,stage
  try:
   return json.loads(p.stdout),None
  except Exception:
