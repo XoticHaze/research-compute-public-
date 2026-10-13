@@ -42,6 +42,17 @@ const SOURCE_VAULT_BOOTSTRAP_IDENTITY = {
     'XoticHaze/mm-ibkr-runtime/.github/workflows/mmibkr-source-vault-bootstrap-r1.yml@refs/heads/main',
 };
 
+// A single dedicated, no-broker Cloudflare canary deployer. Do NOT reuse
+// this identity for broker secrets, private-source publishing, or generic streams.
+const CLOUD_CANARY_DEPLOY_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref:
+    'XoticHaze/research-compute-public-/.github/workflows/mmibkr-cloudflare-live-canary-r1.yml@refs/heads/main',
+};
+const CLOUD_CANARY_DEPLOY_APPROVED_SOURCE =
+  '9a190fe66665c8f673d227a41c4544889a2cf2cb';
+
 const OPERATOR_CONSOLE_DEPLOY_IDENTITY = {
   repository: 'XoticHaze/research-compute-public-',
   ref: 'refs/heads/main',
@@ -494,6 +505,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     const matchedLiveBotSourceUnwrap = matchesIdentity(claims, LIVE_BOT_SOURCE_UNWRAP_IDENTITY);
     const matchedBootstrap = matchesIdentity(claims, SOURCE_VAULT_BOOTSTRAP_IDENTITY);
     const matchedOperatorDeploy = matchesIdentity(claims, OPERATOR_CONSOLE_DEPLOY_IDENTITY);
+    const matchedCloudCanaryDeploy = matchesIdentity(claims, CLOUD_CANARY_DEPLOY_IDENTITY);
     const matchedMissedTradeAudit = matchesIdentity(claims, MISSED_TRADE_AUDIT_IDENTITY);
     const matchedPaperAccountHygieneCoordinator = matchesIdentity(
       claims,
@@ -529,6 +541,10 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
       || pathname === '/v1/source-vault/private-archive/attest'
     );
     const operatorDeployPathAllowed = pathname === '/v1/source-vault/unwrap';
+    const cloudCanaryUnwrapPathAllowed = (
+      pathname === '/v1/source-vault/unwrap'
+      && claims.event_name === 'push'
+    );
     // The existing live owner only needs exact-source unwrap. Never grant it
     // private-archive publishing, relay, or source exchange write authority.
     // Keep its event restricted to the original operator workflow_dispatch.
@@ -542,6 +558,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
         || (matchedUiBuild && privateArchivePathAllowed)
         || (matchedBootstrap && privateArchivePathAllowed)
         || (matchedOperatorDeploy && operatorDeployPathAllowed)
+        || (matchedCloudCanaryDeploy && cloudCanaryUnwrapPathAllowed)
         || (matchedLiveBotSourceUnwrap && liveBotSourceUnwrapPathAllowed)
         || (matchedMissedTradeAudit && operatorDeployPathAllowed)
         || (
@@ -1016,6 +1033,10 @@ export class SourceExchange {
       throw new Error('vault_archive_bytes_rejected');
     }
     const requestIdentity = this._producerIdentity(request);
+    if (
+      matchesIdentity(requestIdentity, CLOUD_CANARY_DEPLOY_IDENTITY)
+      && sourceSha !== CLOUD_CANARY_DEPLOY_APPROVED_SOURCE
+    ) throw new Error('cloud_canary_exact_source_sha_rejected');
     // Canonical research sessions may unwrap only snapshots already accepted by
     // _resolveVaultSnapshotApproval.  That approval is exact-SHA + manifest +
     // archive identity and requires the dedicated Source Vault bootstrap
