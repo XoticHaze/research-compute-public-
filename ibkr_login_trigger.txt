@@ -12,3 +12,4 @@ Seed-owner acceptance: prove the restored seed is readable by the pinned control
 
 2026-10-12 paper read-only exact-modal recovery acceptance after PR #1849; no order command, no live authorization.
 2026-10-13T10:56:06Z independent MM-IBKR free-runner paper-only fresh Gateway admission test; approved exact OIDC, read-only mode, no order mutations; experiment A of B.
+2026-10-13T11:00:00Z independent MM-IBKR session successor trial B: after read-only run 38386762807 clean stop/sealed warm state, restore to another separate GH runner, no orders, same existing B1 OIDC identity.
