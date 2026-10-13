@@ -156,6 +156,9 @@ jobs:
           for marker in (
               b'STORAGE_DELETE_BATCH_LIMIT = 128',
               b'keys.slice(start, start + STORAGE_DELETE_BATCH_LIMIT)',
+              b'mmibkr-cloudflare-live-canary-r1.yml',
+              b'cloud_canary_exact_source_sha_rejected',
+              b'9a190fe66665c8f673d227a41c4544889a2cf2cb',
           ):
               if marker not in deployed:
                   raise SystemExit('fleet-authority deployed source marker missing')
