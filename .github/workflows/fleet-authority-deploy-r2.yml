@@ -9,6 +9,11 @@ on:
       - '.github/workflows/fleet-authority-deploy-r2.yml'
       - 'wrangler.jsonc'
       - 'cloudflare/fleet-authority/**'
+  pull_request:
+    paths:
+      - 'cloudflare/fleet-authority/src/source_exchange.js'
+      - 'tests/test_cloudflare_live_canary_vault_oidc_r1.py'
+      - '.github/workflows/fleet-authority-deploy-r2.yml'
 
 permissions:
   contents: write
@@ -18,7 +23,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Verify exact cloud canary OIDC unwrap-only contract before any deployment
+        run: |
+          set -euo pipefail
+          node --check cloudflare/fleet-authority/src/source_exchange.js
+          python -m unittest -v tests.test_cloudflare_live_canary_vault_oidc_r1
+          echo 'MMIBKR_CLOUD_CANARY_VAULT_OIDC_EXACT_SOURCE_SCOPE=PASS'
+
   r2_scope_audit:
+    needs: contract
     if: ${{ github.event_name != 'pull_request' }}
     permissions:
       contents: write
