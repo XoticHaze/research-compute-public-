@@ -24,9 +24,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Existing immutable legacy IBC Gateway image in the current auth comparator;
+  # Canonical immutable B1 IBG controller image in the current auth comparator;
   # only verify its image identity and filesystem, do NOT launch Gateway.
-  IBC_IMAGE: ghcr.io/gnzsnz/ib-gateway@sha256:b4ede803caf48279b4bdc21c8de1fb19edaef8bedbb2b49153e72b042f660bf3
+  IBC_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
 
 jobs:
   predecessor:
