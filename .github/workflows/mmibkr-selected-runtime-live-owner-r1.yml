@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
     inputs:
       admission_only:
-        description: Read expected live account through writable Gateway without launching bot or placing orders
+        description: Read expected live account without starting the bot (explicit false required for order-capable owner)
         type: boolean
         required: true
-        default: false
+        default: true
   push:
     branches:
       - main
@@ -29,7 +29,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PRIVATE_SOURCE_SHA: 7e91f4f0951cc7cace61f16e0737ca567c106ccf
+  PRIVATE_SOURCE_SHA: 46fcdf26cf84603b305a3ea20bcd3cf28c67bc0b
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
   LIVE_SEAL_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-live-bot/seal
   IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
