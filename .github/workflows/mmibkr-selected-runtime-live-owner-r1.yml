@@ -115,6 +115,12 @@ jobs:
     timeout-minutes: 110
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Retire disposable order-capable live owner in favor of persistent broker session
+        if: ${{ !inputs.admission_only }}
+        run: |
+          echo 'EPHEMERAL_LIVE_BROKER_MUTATION_DISABLED=1'
+          echo 'The existing persistent Docker Gateway is the broker session owner; this workflow is admission-only.'
+          exit 64
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.11.16'
