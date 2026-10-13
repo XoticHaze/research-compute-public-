@@ -17,6 +17,8 @@ on:
       - 'tests/test_commandcenter_neutral_gate_canonical_envelope_v1.py'
       - 'scripts/commandcenter_neutral_gate_canonical_sender_v1.py'
       - 'tests/test_commandcenter_neutral_gate_canonical_sender_v1.py'
+      - 'scripts/commandcenter_public_exchange_redacted_inventory_v1.py'
+      - 'tests/test_commandcenter_public_exchange_redacted_inventory_v1.py'
       - '.github/workflows/commandcenter-ledger-ephemeral-rendezvous.yml'
       - '.github/workflows/commandcenter-ledger-ephemeral-rendezvous.yml'
       - 'docs/opaque-compute-profile-v1.md'
@@ -37,6 +39,8 @@ on:
       - 'tests/test_commandcenter_neutral_gate_canonical_envelope_v1.py'
       - 'scripts/commandcenter_neutral_gate_canonical_sender_v1.py'
       - 'tests/test_commandcenter_neutral_gate_canonical_sender_v1.py'
+      - 'scripts/commandcenter_public_exchange_redacted_inventory_v1.py'
+      - 'tests/test_commandcenter_public_exchange_redacted_inventory_v1.py'
       - '.github/workflows/commandcenter-ledger-ephemeral-rendezvous.yml'
       - '.github/workflows/commandcenter-ledger-ephemeral-rendezvous.yml'
       - 'docs/opaque-compute-profile-v1.md'
@@ -74,6 +78,14 @@ jobs:
       - name: Verify private in-memory canonical producer and public fixed-source consumer
         run: |
           PYTHONDONTWRITEBYTECODE=1 python -B -m unittest -v tests.test_commandcenter_neutral_gate_canonical_sender_v1
+      - name: Verify redacted storage inventory regression suite
+        run: |
+          PYTHONDONTWRITEBYTECODE=1 python -B -m unittest -v tests.test_commandcenter_public_exchange_redacted_inventory_v1
+      - name: Audit real public exchange tree without printing file data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PYTHONDONTWRITEBYTECODE=1 python -B scripts/commandcenter_public_exchange_redacted_inventory_v1.py --live
       - name: Execute opaque roundtrip
         run: python scripts/opaque_bidirectional_capsule_smoke_v1.py
       - name: Upload encrypted result envelope only
