@@ -5,6 +5,7 @@ import json
 import pathlib
 import tempfile
 import unittest
+from unittest.mock import patch
 from contextlib import redirect_stdout
 
 SOURCE = pathlib.Path(__file__).resolve().parents[1] / "scripts/mmibkr_paper_gateway_handoff_probe_v1.py"
@@ -120,13 +121,13 @@ class HandoffTests(unittest.TestCase):
             checkpoint=root/"checkpoint.json"
             receipt=root/"pred.json"
             output=root/"succ.json"
-            with unittest.mock.patch("sys.argv",[
+            with patch("sys.argv",[
                 "probe", "predecessor", "--run-id", RUN, "--head", HEAD,
                 "--job", "predecessor", "--checkpoint", str(checkpoint),
                 "--receipt", str(receipt),
             ]), redirect_stdout(io.StringIO()):
                 self.assertEqual(m.main(),0)
-            with unittest.mock.patch("sys.argv",[
+            with patch("sys.argv",[
                 "probe", "successor", "--run-id", RUN, "--head", HEAD,
                 "--job", "successor", "--checkpoint", str(checkpoint),
                 "--receipt", str(receipt), "--output", str(output)
