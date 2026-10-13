@@ -1,0 +1,100 @@
+name: MM-IBKR Cloudflare Containers Access Probe R1
+
+# Read-only diagnostic of the already-enrolled dedicated canary token.
+# This is NOT the canary deploy, Source Vault, Gateway, or order execution.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mmibkr-cloudflare-containers-access-probe-r1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose-existing-canary-container-entitlement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_LIVE_CANARY_DEPLOY_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Preflight bound project credential only (no value echoed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo 'DEDICATED_CANARY_TOKEN_MISSING=1'; exit 71; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo 'PROJECT_ACCOUNT_ID_MISSING=1'; exit 72; }
+          [[ "$CLOUDFLARE_ACCOUNT_ID" =~ ^[0-9a-fA-F]{32}$ ]] || { echo 'PROJECT_ACCOUNT_ID_INVALID=1'; exit 73; }
+          echo 'CANARY_READ_ONLY_PREFLIGHT=PASS'
+
+      - name: Probe exact Containers access with no mutations or response-body logging
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          account=os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          bearer=os.environ["CLOUDFLARE_API_TOKEN"]
+          paths={
+              "TOKEN_VERIFY":f"/accounts/{account}/tokens/verify",
+              "CONTAINERS_ME":f"/accounts/{account}/containers/me",
+              "CONTAINERS_APPLICATIONS":f"/accounts/{account}/containers/applications",
+              "CONTAINERS_REGISTRIES":f"/accounts/{account}/containers/registries",
+          }
+          results={}
+          for label,path in paths.items():
+              request=Request(
+                  "https://api.cloudflare.com/client/v4"+path,
+                  headers={"Authorization":"Bearer "+bearer,
+                           "Accept":"application/json",
+                           "User-Agent":"mmibkr-canary-readonly-container-entitlement/1"},
+                  method="GET",
+              )
+              try:
+                  with urlopen(request,timeout=20) as response:
+                      status=response.status
+                      raw=response.read(4096)
+              except HTTPError as exc:
+                  status=exc.code
+                  raw=exc.read(4096)
+              except (URLError,TimeoutError):
+                  print(label+"_TRANSPORT=FAILED")
+                  results[label]="transport"
+                  continue
+              results[label]=status
+              print(label+"_HTTP_STATUS="+str(status))
+              try: node=json.loads(raw)
+              except (ValueError,UnicodeDecodeError): node={}
+              errors=node.get("errors") or []
+              if isinstance(errors,list):
+                  numbers=[e.get("code") for e in errors[:3] if isinstance(e,dict)
+                           and isinstance(e.get("code"),int)]
+                  if numbers: print(label+"_CLOUDFLARE_ERROR_CODES="+",".join(map(str,numbers)))
+              safe_message=" ".join(
+                  str(e.get("message") or "") for e in errors[:3] if isinstance(e,dict)
+              ).lower() if isinstance(errors,list) else ""
+              for keyword in ("workers paid","upgrade","subscription","billing",
+                              "authentication error","forbidden","permission","disabled"):
+                  if keyword in safe_message:
+                      print(label+"_ERROR_CLASS="+keyword.replace(" ","_").upper())
+              if isinstance(node,dict) and node.get("success") is False:
+                  print(label+"_API_SUCCESS=FALSE")
+              elif isinstance(node,dict) and node.get("success") is True:
+                  print(label+"_API_SUCCESS=TRUE")
+          print("CLOUDFLARE_API_METHOD=GET_ONLY")
+          print("CLOUDFLARE_CREDENTIAL_VALUE_PRINTED=NO")
+          print("BROKER_AUTH=NOT_ATTEMPTED")
+          print("LIVE_ORDERS=0")
+          if results.get("TOKEN_VERIFY")!=200:
+              raise SystemExit("DEDICATED_TOKEN_VERIFY_GATE=FAILED")
+          print("DEDICATED_TOKEN_VERIFY_GATE=PASS")
+          if results.get("CONTAINERS_ME")!=200:
+              print("CONTAINERS_ME_GATE=BLOCKED")
+          else:
+              print("CONTAINERS_ME_GATE=PASS")
+          PY
