@@ -1,0 +1,55 @@
+{
+  "schema": "commandcenter.public_synthetic_general_job.v1",
+  "job": {
+    "job_id": "synthetic-cc-router-001",
+    "lane": "PUBLIC_SYNTHETIC",
+    "workload": "PUBLIC_SYNTHETIC",
+    "package": {
+      "schema": "commandcenter.public_synthetic_abi.v1",
+      "tasks": [
+        {
+          "operation": "SUM",
+          "values": [
+            3,
+            4,
+            5
+          ]
+        },
+        {
+          "operation": "SORT",
+          "values": [
+            9,
+            2,
+            5
+          ]
+        },
+        {
+          "operation": "DIGEST",
+          "values": [
+            1,
+            2,
+            3
+          ]
+        }
+      ]
+    },
+    "dependencies": [],
+    "inputs": {},
+    "output_contract": {
+      "kind": "public_synthetic_artifact"
+    },
+    "provenance": {
+      "kind": "public_synthetic_only"
+    },
+    "compute_requirements": {
+      "trust_mode": "public_synthetic",
+      "runtime": [
+        "python"
+      ],
+      "features": [
+        "artifact_return"
+      ]
+    }
+  },
+  "job_sha256": "059988ba431b94e4597271ef938d45d84f3a9044fc0ada1deda528f9c68dc4b0"
+}
