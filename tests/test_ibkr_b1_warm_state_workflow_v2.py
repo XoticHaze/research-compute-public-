@@ -25,6 +25,19 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
         restore = self.text.index('name: Restore encrypted warm Gateway state if available')
         self.assertLess(obtain, restore)
 
+    def test_encrypted_warm_source_is_exact_prior_canonical_b1_run(self):
+        self.assertIn("warm_source_run=", self.text)
+        self.assertIn("warm_source_branch=", self.text)
+        self.assertIn("warm_source_sha=", self.text)
+        self.assertIn('IBKR_WARM_SOURCE_RUN_ID_INVALID=1', self.text)
+        self.assertIn('IBKR_WARM_SOURCE_HEAD_INVALID=1', self.text)
+        self.assertIn('IBKR_WARM_SELF_ARTIFACT_REFUSED=1', self.text)
+        self.assertIn('IBKR_WARM_FOREIGN_BRANCH_REFUSED=1', self.text)
+        self.assertIn('IBKR_WARM_SOURCE_EXACT_REPOSITORY_BRANCH=PASS', self.text)
+        self.assertIn('IBKR_WARM_SOURCE_RUN_ID=', self.text)
+        self.assertIn('IBKR_WARM_SOURCE_ARTIFACT_ID=', self.text)
+        self.assertLess(self.text.index('warm_source_run='), self.text.index('ibkr-b1-warm-state.zip'))
+
     def test_fresh_and_restored_sessions_are_classified_separately(self):
         self.assertIn('${{ steps.restore.outputs.restored }}', self.text)
         self.assertIn('IBKR_AUTH_PATH=WARM_STATE_RESTORED', self.text)
