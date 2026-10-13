@@ -7,6 +7,7 @@
   "requested_by": "chatgpt-full-cloud-resume-20261013",
   "purpose": "Deploy independent Cloudflare DO Container app without broker credentials/orders, test exact R2 scope and live account isolation",
   "source_attestation_run": 38350998106,
-  "attempt": 2,
-  "reason": "recover_pinned_source_consumer_crypto_dependency_in_public_canary_runner"
+  "attempt": 3,
+  "reason": "narrow_vault_oidc_exact_sha_unwrap_deployed_verified_38351800987",
+  "vault_source_scope_proof_run": 38351800987
 }
