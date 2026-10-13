@@ -18,7 +18,7 @@
 - Separate GitHub runner jobs: predecessor writes a fixed synthetic checkpoint and exact source/run-bound release receipt; successor restores via GitHub cache and validates content hash and source/run/job identity.
 - Reject altered checkpoint, unknown credential or account fields, stale source/run, duplicate predecessor/successor job identity, unreleased predecessor, active predecessor Gateway/owner, or order/broker-login claims.
 - Successor explicitly reports `gateway_authentication_transfer_proven=false`, `jts_transfer_proven=false`, `ibc_reauthentication_requirement=UNTESTED`, `execution_ownership_granted=false`, `production_handoff_ready=false`.
-- Existing immutable `ghcr.io/gnzsnz/ib-gateway@sha256:b4ede803caf48279b4bdc21c8de1fb19edaef8bedbb2b49153e72b042f660bf3` is pulled and inspected with `--network none` and a shell entrypoint, **not** logged in or started as Gateway.
+- Canonical B1 immutable `ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5` is pulled and inspected with `--network none` and a shell entrypoint, **not** logged in or started as Gateway.
 - No private source, Jts files, broker credentials, account ID, positions, or order data are included in GitHub cache. Even synthetic test output cannot grant live execution.
 
 ## Next empirical proof: real paper-only Gateway authentication on a successor VM
