@@ -169,122 +169,121 @@
       },
       "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
       "resolution": {
-        "common_market_latest_date": "2026-10-09",
-        "current_mark_metrics": {
-          "calibration_intercept_bps": 463.7726,
-          "calibration_interpretation": "partial-horizon diagnostic only; terminal fixed20 calibration remains authoritative",
-          "calibration_slope": 1.455846,
-          "count": 13,
-          "equal_weight_universe_return_bps": 1270.4343,
-          "mark_date": "2026-10-09",
-          "nonterminal": true,
-          "prediction_mae_bps": 740.8942,
-          "qqq_return_bps": 604.5415,
-          "rank_ic_spearman": 0.565934,
-          "smh_return_bps": 1141.8286,
-          "ticker_book_excess_vs_equal_weight_universe_bps": -180.112,
-          "ticker_book_matched_excess_vs_smh_bps": -51.5063,
-          "ticker_book_net_if_flattened_now_bps": 1090.3223,
-          "ticker_book_opportunity_excess_vs_qqq_bps": 485.7808,
-          "ticker_positive_hit_rate": 1.0
+        "benchmarks": {
+          "cash_return_bps": 0.0,
+          "equal_weight_13_return_bps": 1045.7918,
+          "qqq_buy_and_hold_return_bps": 530.7169,
+          "smh_buy_and_hold_return_bps": 913.9426
         },
-        "current_ticker_marks": {
+        "calibration_intercept_bps": 442.6727,
+        "calibration_slope": 1.076748,
+        "entry_date": "2026-09-14",
+        "exit_date": "2026-10-12",
+        "expression_variant_results": null,
+        "horizon_sessions": 20,
+        "industry_book_smh_net_return_bps": 903.9426,
+        "prediction_mae_bps": 628.3914,
+        "rank_ic_spearman": 0.412088,
+        "ticker_book_excess_vs_cash_bps": 895.5707,
+        "ticker_book_excess_vs_equal_weight_13_bps": -150.2211,
+        "ticker_book_excess_vs_qqq_bps": 364.8537,
+        "ticker_book_excess_vs_smh_bps": -18.3719,
+        "ticker_book_gross_return_bps": 920.5707,
+        "ticker_book_net_return_bps": 895.5707,
+        "ticker_observations": {
           "ADI": {
-            "gross_return_bps": 1251.1776,
-            "net_if_flattened_now_bps": 1226.1776,
-            "partial_prediction_error_bps_nonterminal": 1007.4066,
-            "predicted_fixed20_net_value_bps": 218.77104353915175,
-            "sign_hit_current": true
+            "gross_return_bps": 1252.8395,
+            "net_return_bps": 1227.8395,
+            "predicted_net_value_bps": 218.77104353915175,
+            "prediction_error_bps": 1009.0685,
+            "sign_hit": true
           },
           "AMAT": {
-            "gross_return_bps": 1952.3351,
-            "net_if_flattened_now_bps": 1927.3351,
-            "partial_prediction_error_bps_nonterminal": 1108.3505,
-            "predicted_fixed20_net_value_bps": 818.9846080097676,
-            "sign_hit_current": true
+            "gross_return_bps": 1728.3894,
+            "net_return_bps": 1703.3894,
+            "predicted_net_value_bps": 818.9846080097676,
+            "prediction_error_bps": 884.4048,
+            "sign_hit": true
           },
           "AMD": {
-            "gross_return_bps": 2324.4355,
-            "net_if_flattened_now_bps": 2299.4355,
-            "partial_prediction_error_bps_nonterminal": 1521.622,
-            "predicted_fixed20_net_value_bps": 777.8135296533924,
-            "sign_hit_current": true
+            "gross_return_bps": 2043.5335,
+            "net_return_bps": 2018.5335,
+            "predicted_net_value_bps": 777.8135296533924,
+            "prediction_error_bps": 1240.72,
+            "sign_hit": true
           },
           "APH": {
-            "gross_return_bps": 1123.527,
-            "net_if_flattened_now_bps": 1098.527,
-            "partial_prediction_error_bps_nonterminal": 875.7387,
-            "predicted_fixed20_net_value_bps": 222.7882890439323,
-            "sign_hit_current": true
+            "gross_return_bps": 989.6474,
+            "net_return_bps": 964.6474,
+            "predicted_net_value_bps": 222.7882890439323,
+            "prediction_error_bps": 741.8591,
+            "sign_hit": true
           },
           "AVGO": {
-            "gross_return_bps": 507.0308,
-            "net_if_flattened_now_bps": 482.0308,
-            "partial_prediction_error_bps_nonterminal": 22.6938,
-            "predicted_fixed20_net_value_bps": 459.3369995461853,
-            "sign_hit_current": true
+            "gross_return_bps": 309.1194,
+            "net_return_bps": 284.1194,
+            "predicted_net_value_bps": 459.3369995461853,
+            "prediction_error_bps": -175.2176,
+            "sign_hit": true
           },
           "KLAC": {
-            "gross_return_bps": 1566.0306,
-            "net_if_flattened_now_bps": 1541.0306,
-            "partial_prediction_error_bps_nonterminal": 841.0674,
-            "predicted_fixed20_net_value_bps": 699.963189765575,
-            "sign_hit_current": true
+            "gross_return_bps": 1243.7163,
+            "net_return_bps": 1218.7163,
+            "predicted_net_value_bps": 699.963189765575,
+            "prediction_error_bps": 518.7531,
+            "sign_hit": true
           },
           "LRCX": {
-            "gross_return_bps": 1670.5808,
-            "net_if_flattened_now_bps": 1645.5808,
-            "partial_prediction_error_bps_nonterminal": 924.595,
-            "predicted_fixed20_net_value_bps": 720.9858048249403,
-            "sign_hit_current": true
+            "gross_return_bps": 1330.9026,
+            "net_return_bps": 1305.9026,
+            "predicted_net_value_bps": 720.9858048249403,
+            "prediction_error_bps": 584.9168,
+            "sign_hit": true
           },
           "MCHP": {
-            "gross_return_bps": 569.39,
-            "net_if_flattened_now_bps": 544.39,
-            "partial_prediction_error_bps_nonterminal": 170.241,
-            "predicted_fixed20_net_value_bps": 374.14896443764127,
-            "sign_hit_current": true
+            "gross_return_bps": 328.7631,
+            "net_return_bps": 303.7631,
+            "predicted_net_value_bps": 374.14896443764127,
+            "prediction_error_bps": -70.3859,
+            "sign_hit": true
           },
           "MRVL": {
-            "gross_return_bps": 2582.9514,
-            "net_if_flattened_now_bps": 2557.9514,
-            "partial_prediction_error_bps_nonterminal": 1736.595,
-            "predicted_fixed20_net_value_bps": 821.3564577322178,
-            "sign_hit_current": true
+            "gross_return_bps": 2152.366,
+            "net_return_bps": 2127.366,
+            "predicted_net_value_bps": 821.3564577322178,
+            "prediction_error_bps": 1306.0095,
+            "sign_hit": true
           },
           "MU": {
-            "gross_return_bps": 1136.0017,
-            "net_if_flattened_now_bps": 1111.0017,
-            "partial_prediction_error_bps_nonterminal": 52.6319,
-            "predicted_fixed20_net_value_bps": 1058.369846656083,
-            "sign_hit_current": true
+            "gross_return_bps": 703.548,
+            "net_return_bps": 678.548,
+            "predicted_net_value_bps": 1058.369846656083,
+            "prediction_error_bps": -379.8218,
+            "sign_hit": true
           },
           "NVDA": {
-            "gross_return_bps": 868.4107,
-            "net_if_flattened_now_bps": 843.4107,
-            "partial_prediction_error_bps_nonterminal": 777.9268,
-            "predicted_fixed20_net_value_bps": 65.48382868127038,
-            "sign_hit_current": true
+            "gross_return_bps": 728.1001,
+            "net_return_bps": 703.1001,
+            "predicted_net_value_bps": 65.48382868127038,
+            "prediction_error_bps": 637.6163,
+            "sign_hit": true
           },
           "NXPI": {
-            "gross_return_bps": 192.3844,
-            "net_if_flattened_now_bps": 167.3844,
-            "partial_prediction_error_bps_nonterminal": -210.4185,
-            "predicted_fixed20_net_value_bps": 377.802871441368,
-            "sign_hit_current": true
+            "gross_return_bps": 88.9017,
+            "net_return_bps": 63.9017,
+            "predicted_net_value_bps": 377.802871441368,
+            "prediction_error_bps": -313.9012,
+            "sign_hit": true
           },
           "TXN": {
-            "gross_return_bps": 771.3908,
-            "net_if_flattened_now_bps": 746.3908,
-            "partial_prediction_error_bps_nonterminal": 382.3376,
-            "predicted_fixed20_net_value_bps": 364.0531406251399,
-            "sign_hit_current": true
+            "gross_return_bps": 695.4664,
+            "net_return_bps": 670.4664,
+            "predicted_net_value_bps": 364.0531406251399,
+            "prediction_error_bps": 306.4133,
+            "sign_hit": true
           }
         },
-        "entry_date": "2026-09-14",
-        "expression_variant_marks": null,
-        "horizon_sessions": 20,
-        "sessions_completed": 19
+        "ticker_positive_hit_rate": 1.0
       },
       "signal_date": "2026-09-11",
       "source_adapter_sha256": "aed8eb43d888d3c4d39c4db940c89e5d2247204567d4a0fcf129e9551f04e333",
@@ -292,27 +291,27 @@
         "all_symbols_share_latest_date": true,
         "lagging_symbols_vs_source_max": [],
         "latest_by_symbol": {
-          "ADI": "2026-10-09",
-          "AMAT": "2026-10-09",
-          "AMD": "2026-10-09",
-          "APH": "2026-10-09",
-          "AVGO": "2026-10-09",
-          "KLAC": "2026-10-09",
-          "LRCX": "2026-10-09",
-          "MCHP": "2026-10-09",
-          "MRVL": "2026-10-09",
-          "MU": "2026-10-09",
-          "NVDA": "2026-10-09",
-          "NXPI": "2026-10-09",
-          "QQQ": "2026-10-09",
-          "SMH": "2026-10-09",
-          "TXN": "2026-10-09"
+          "ADI": "2026-10-12",
+          "AMAT": "2026-10-12",
+          "AMD": "2026-10-12",
+          "APH": "2026-10-12",
+          "AVGO": "2026-10-12",
+          "KLAC": "2026-10-12",
+          "LRCX": "2026-10-12",
+          "MCHP": "2026-10-12",
+          "MRVL": "2026-10-12",
+          "MU": "2026-10-12",
+          "NVDA": "2026-10-12",
+          "NXPI": "2026-10-12",
+          "QQQ": "2026-10-12",
+          "SMH": "2026-10-12",
+          "TXN": "2026-10-12"
         },
         "provider": "yfinance_adjusted_close",
-        "source_max_date": "2026-10-09"
+        "source_max_date": "2026-10-12"
       },
       "source_ref": "e73ec9b15180e208de541ce5d5304888e5550433",
-      "status": "OPEN",
+      "status": "RESOLVED",
       "stock_round_trip_cost_bps": 25.0,
       "symbols": [
         "AMAT",
@@ -352,8 +351,8 @@
     "freshness_gap_visible": false,
     "in_progress_session_excluded": true,
     "lagging_symbols_by_program": {},
-    "observed_common_asof": "2026-10-09",
-    "requested_asof": "2026-10-09",
+    "observed_common_asof": "2026-10-12",
+    "requested_asof": "2026-10-12",
     "source_health_by_program": {
       "HOMEBUILDERS": {
         "all_symbols_share_latest_date": true,
@@ -373,30 +372,30 @@
         "all_symbols_share_latest_date": true,
         "lagging_symbols_vs_source_max": [],
         "latest_by_symbol": {
-          "ADI": "2026-10-09",
-          "AMAT": "2026-10-09",
-          "AMD": "2026-10-09",
-          "APH": "2026-10-09",
-          "AVGO": "2026-10-09",
-          "KLAC": "2026-10-09",
-          "LRCX": "2026-10-09",
-          "MCHP": "2026-10-09",
-          "MRVL": "2026-10-09",
-          "MU": "2026-10-09",
-          "NVDA": "2026-10-09",
-          "NXPI": "2026-10-09",
-          "QQQ": "2026-10-09",
-          "SMH": "2026-10-09",
-          "TXN": "2026-10-09"
+          "ADI": "2026-10-12",
+          "AMAT": "2026-10-12",
+          "AMD": "2026-10-12",
+          "APH": "2026-10-12",
+          "AVGO": "2026-10-12",
+          "KLAC": "2026-10-12",
+          "LRCX": "2026-10-12",
+          "MCHP": "2026-10-12",
+          "MRVL": "2026-10-12",
+          "MU": "2026-10-12",
+          "NVDA": "2026-10-12",
+          "NXPI": "2026-10-12",
+          "QQQ": "2026-10-12",
+          "SMH": "2026-10-12",
+          "TXN": "2026-10-12"
         },
         "provider": "yfinance_adjusted_close",
-        "source_max_date": "2026-10-09"
+        "source_max_date": "2026-10-12"
       }
     }
   },
-  "generated_at": "2026-10-10T08:43:29.484998+00:00",
-  "market_data_asof": "2026-10-09",
-  "requested_market_data_asof": "2026-10-09",
+  "generated_at": "2026-10-13T03:31:23.720740+00:00",
+  "market_data_asof": "2026-10-12",
+  "requested_market_data_asof": "2026-10-12",
   "schema": "research.forward_prospective_cohort_ledger_r1",
   "summary": {
     "HOMEBUILDERS": {
@@ -412,13 +411,13 @@
     },
     "SEMICONDUCTOR_SHARED_RIDGE": {
       "late_registration_rejections": 0,
-      "mean_ticker_book_excess_vs_smh_bps": null,
-      "mean_ticker_positive_hit_rate": null,
+      "mean_ticker_book_excess_vs_smh_bps": -18.3719,
+      "mean_ticker_positive_hit_rate": 1.0,
       "minimum_resolved_for_promotion": 20,
-      "open_cohorts": 1,
+      "open_cohorts": 0,
       "promotion_authority": false,
       "registered_cohorts": 1,
-      "resolved_cohorts": 0
+      "resolved_cohorts": 1
     }
   }
 }
