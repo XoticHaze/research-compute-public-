@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -37,14 +38,14 @@ class SelectedRuntimeCloudWatchdogVisibilityTests(unittest.TestCase):
 
     def test_warning_does_not_change_source_or_mutation_policy(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn(
-            "canonical_source='cd431670749a4c48d87c07b164ef1e4219bef7ca'",
-            workflow,
-        )
-        self.assertIn(
-            "'source_ref':'cd431670749a4c48d87c07b164ef1e4219bef7ca'",
-            workflow,
-        )
+        # A workflow pin can advance independently of this observability PR.
+        # Require one exact 40-hex owner pin and the SAME dispatch source,
+        # rather than freezing a retired commit in the visibility test.
+        source_pin = re.search(r"canonical_source='([0-9a-f]{40})'", workflow)
+        dispatch_pin = re.search(r"'source_ref':'([0-9a-f]{40})'", workflow)
+        self.assertIsNotNone(source_pin)
+        self.assertIsNotNone(dispatch_pin)
+        self.assertEqual(source_pin.group(1), dispatch_pin.group(1))
         self.assertNotIn("ENABLE_LIVE_TRADING=1", workflow)
         self.assertIn("Broker mutations: none", workflow)
 
