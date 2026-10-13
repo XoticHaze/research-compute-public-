@@ -1,0 +1,10 @@
+{
+  "schema": "mmibkr.cloudflare_live_canary_fire.v1",
+  "source_sha": "9a190fe66665c8f673d227a41c4544889a2cf2cb",
+  "no_broker": true,
+  "no_orders": true,
+  "canary_unarmed": true,
+  "requested_by": "chatgpt-full-cloud-resume-20261013",
+  "purpose": "Deploy independent Cloudflare DO Container app without broker credentials/orders, test exact R2 scope and live account isolation",
+  "source_attestation_run": 38350998106
+}
