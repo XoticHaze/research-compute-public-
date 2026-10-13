@@ -18,7 +18,7 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  PRIVATE_SOURCE_SHA: 096d2897430a87a4aa6973bc0cbd752cd1b83ac9
+  PRIVATE_SOURCE_SHA: 9a190fe66665c8f673d227a41c4544889a2cf2cb
   CLOUDFLARE_CANARY_URL: https://mmibkr-live-cloud-owner.slenderiq.workers.dev
 
 jobs:
