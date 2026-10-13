@@ -13,6 +13,8 @@ on:
     paths:
       - 'cloudflare/fleet-authority/src/source_exchange.js'
       - 'tests/test_cloudflare_live_canary_vault_oidc_r1.py'
+      - 'tests/test_fleet_authority_r2_deploy_receipt_v1.py'
+      - 'scripts/fleet_authority_r2_deploy_receipt_v1.py'
       - '.github/workflows/fleet-authority-deploy-r2.yml'
 
 permissions:
@@ -32,7 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           node --check cloudflare/fleet-authority/src/source_exchange.js
-          python -m unittest -v tests.test_cloudflare_live_canary_vault_oidc_r1
+          python -m unittest -v tests.test_cloudflare_live_canary_vault_oidc_r1 tests.test_fleet_authority_r2_deploy_receipt_v1
           echo 'MMIBKR_CLOUD_CANARY_VAULT_OIDC_EXACT_SOURCE_SCOPE=PASS'
 
   r2_scope_audit:
@@ -201,22 +203,18 @@ jobs:
           python - <<'PY'
           import json, os
           from pathlib import Path
-          node = {
-              "schema": "fleet_authority.deploy_receipt.r2",
-              "route": "github_actions",
-              "worker": "fleet-authority",
-              "deploy_pass": True,
-              "deployed_source_verified": True,
-              "wrangler_outcome": os.environ.get("FLEET_AUTHORITY_WRANGLER_OUTCOME", ""),
-              "control_plane_pass": True,
-              "health_pass": True,
-              "credential_selection": (
-                  "scoped_r2"
-                  if os.environ.get("CLOUDFLARE_DEPLOY_TOKEN_R2")
-                  else "legacy_fallback"
+          from scripts.fleet_authority_r2_deploy_receipt_v1 import make_receipt
+          node = make_receipt(
+              wrangler_outcome=os.environ['FLEET_AUTHORITY_WRANGLER_OUTCOME'],
+              credential_selection=(
+                  'scoped_r2' if os.environ.get('CLOUDFLARE_DEPLOY_TOKEN_R2')
+                  else 'legacy_fallback'
               ),
-              "workers_builds_required_for_future_redeploy": False,
-          }
+          )
+          # This is a health/source verification, not a TEE attestation.
+          print('FLEET_R2_FRESH_WRANGLER_DEPLOY_PASS=' +
+                ('1' if node['fresh_deploy_confirmed'] else '0'))
+          print('FLEET_R2_VERIFIED_EXISTING_SOURCE=1')
           Path("rendezvous/receipts").mkdir(parents=True, exist_ok=True)
           Path("rendezvous/receipts/fleet-authority-deploy-r2.json").write_text(
               json.dumps(node, indent=2, sort_keys=True) + "\n",
