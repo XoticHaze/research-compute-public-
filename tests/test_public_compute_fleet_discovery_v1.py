@@ -74,7 +74,7 @@ class PublicFleetDiscoveryTests(unittest.TestCase):
         def fetch(path):
             calls.append(path)
             if path.startswith("/users/"):
-                return first if "page=1" in path else last
+                return first if "&page=1&type=owner" in path else last
             raise HTTPError(path, 404, "Not found", None, None)
         got = mod.public_only_scan("XoticHaze", fetch)
         self.assertEqual(len(got["repositories"]), 101)
