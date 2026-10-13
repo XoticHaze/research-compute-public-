@@ -449,6 +449,20 @@ jobs:
             exit 0
           fi
 
+          # Bind the warm decrypt input to one exact prior B1 Actions run.
+          # GitHub artifact metadata is public non-secret provenance; Jts and
+          # credentials remain inside sealed material, never printed.
+          warm_source_run="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" --jq '.workflow_run.id // empty')"
+          warm_source_branch="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" --jq '.workflow_run.head_branch // empty')"
+          warm_source_sha="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" --jq '.workflow_run.head_sha // empty')"
+          [[ "$warm_source_run" =~ ^[0-9]{4,24}$ ]] || { echo 'IBKR_WARM_SOURCE_RUN_ID_INVALID=1'; exit 53; }
+          [[ "$warm_source_sha" =~ ^[0-9a-f]{40}$ ]] || { echo 'IBKR_WARM_SOURCE_HEAD_INVALID=1'; exit 54; }
+          test "$warm_source_run" != "$GITHUB_RUN_ID" || { echo 'IBKR_WARM_SELF_ARTIFACT_REFUSED=1'; exit 55; }
+          test "$warm_source_branch" = "ibkr-b1-authority-v1" || { echo 'IBKR_WARM_FOREIGN_BRANCH_REFUSED=1'; exit 56; }
+          echo "IBKR_WARM_SOURCE_RUN_ID=$warm_source_run"
+          echo "IBKR_WARM_SOURCE_ARTIFACT_ID=$artifact_id"
+          echo 'IBKR_WARM_SOURCE_EXACT_REPOSITORY_BRANCH=PASS'
+
           gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "$RUNNER_TEMP/ibkr-b1-warm-state.zip"
           unzip -q "$RUNNER_TEMP/ibkr-b1-warm-state.zip" -d "$RUNNER_TEMP/warm-artifact"
           python - <<'PY'
