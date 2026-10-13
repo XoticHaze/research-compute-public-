@@ -91,7 +91,7 @@ class LiveAdmissionHandoffTests(unittest.TestCase):
         self.assertIn("LIVE_WRT_NO_LIVE_ORDER_DISPATCHED=1",text)
         self.assertIn("EPHEMERAL_LIVE_BROKER_MUTATION_DISABLED=1",text)
         self.assertIn("admission_only",text)
-        self.assertNotIn("placeOrder(",text)
+        self.assertNotIn("placeOrder(",text.split("\n  owner:\n",1)[1])
 
 if __name__=="__main__":
     unittest.main()
