@@ -1,0 +1,50 @@
+name: CC Public Generic Job Wire Proof
+run-name: cc-general-public-synthetic-proof
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/cc-general-public-synthetic-v1.yml'
+      - 'scripts/cc_general_public_synthetic_v1.py'
+      - 'tests/test_cc_general_public_synthetic_v1.py'
+      - 'proof/fire/cc-general-public-synthetic-v1.json'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cc-general-public-synthetic-v1.yml'
+      - 'scripts/cc_general_public_synthetic_v1.py'
+      - 'tests/test_cc_general_public_synthetic_v1.py'
+      - 'proof/fire/cc-general-public-synthetic-v1.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-general-job-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Verify generic public-only job ABI and fail-closed negatives
+        run: python -m unittest discover -s tests -p 'test_cc_general_public_synthetic_v1.py' -v
+      - name: Execute three submitted synthetic operations
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -euo pipefail
+          python -B scripts/cc_general_public_synthetic_v1.py \
+            --packet proof/fire/cc-general-public-synthetic-v1.json \
+            --output terminal-receipt.json
+      - name: Publish public-synthetic terminal receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cc-general-public-synthetic-terminal
+          path: terminal-receipt.json
+          if-no-files-found: error
+          retention-days: 1
