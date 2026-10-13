@@ -35,7 +35,7 @@ class CloudCanaryOidcScope(unittest.TestCase):
         self.assertIn('if n.get("no_broker") is not True or n.get("no_orders") is not True:', CANARY)
         self.assertIn('assert config["vars"]["CANARY_START_ENABLED"] == "0"', CANARY)
         self.assertIn('assert config["vars"]["LIVE_ORDER_EXECUTION_ENABLED"] == "0"', CANARY)
-        self.assertIn("CLOUDFLARE_DEPLOY_TOKEN_R2", CANARY)
+        self.assertIn("CLOUDFLARE_LIVE_CANARY_DEPLOY_TOKEN", CANARY)
 
 
 if __name__ == "__main__":
