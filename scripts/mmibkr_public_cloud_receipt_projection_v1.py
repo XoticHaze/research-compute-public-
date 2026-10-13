@@ -10,6 +10,11 @@ receipt, unbounded nested cycle state, roll state, or raw failure messages.
 
 from typing import Any
 import re
+from scripts.mmibkr_cloud_session_acceptance_v1 import (
+    EXPECTED_INITIAL_BACKFILL_RUN_ID,
+    EXPECTED_INITIAL_BACKFILL_ARTIFACT,
+    CHECKPOINT_CACHE_PREFIX,
+)
 
 SCHEMA = "mmibkr.selected_runtime_cloud_session_receipt.v2"
 
@@ -70,6 +75,13 @@ def _checked_nested_public_field(key: str, value: Any) -> dict[str, Any]:
         elif field in _BACKFILL_TOKEN_RULES and key == "initial_backfill_ingest":
             if item is not None and (type(item) is not str or not re.fullmatch(_BACKFILL_TOKEN_RULES[field], item)):
                 raise ValueError("public_cloud_receipt_nested_value_rejected:" + field)
+    if key == "initial_backfill_ingest":
+        for field, expected in (
+            ("public_run_id", EXPECTED_INITIAL_BACKFILL_RUN_ID),
+            ("artifact_name", EXPECTED_INITIAL_BACKFILL_ARTIFACT),
+        ):
+            if value.get(field) is not None and value[field] != expected:
+                raise ValueError("public_cloud_receipt_nested_identity_rejected:" + field)
     return dict(value)
 
 
@@ -186,5 +198,11 @@ def project(receipt: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("public_cloud_receipt_unreviewed_fields_rejected")
     for nested in ("operator_snapshot_publish", "initial_backfill_ingest"):
         public[nested] = _checked_nested_public_field(nested, receipt.get(nested))
+    preowner = public["initial_backfill_ingest"].get("preowner_checkpoint_cache_key")
+    if preowner is not None:
+        run_id = public.get("run_id")
+        pattern = re.escape(CHECKPOINT_CACHE_PREFIX) + re.escape(str(run_id)) + r"-[a-f0-9]{3,40}-initial-backfill-preowner"
+        if type(run_id) is not str or not re.fullmatch(pattern, preowner):
+            raise ValueError("public_cloud_receipt_nested_identity_rejected:preowner_checkpoint_cache_key")
     _check_public_scalar_fields(public)
     return public

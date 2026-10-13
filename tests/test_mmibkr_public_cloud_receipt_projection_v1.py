@@ -126,6 +126,19 @@ class PublicReceiptProjectionTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "scalar_"):
                     project(receipt)
 
+    def test_allowed_nested_identity_cannot_launder_private_sentinel(self):
+        variants = (
+            ("artifact_name", "TEST_PRIVATE_SENTINEL"),
+            ("public_run_id", "12345678901"),
+            ("preowner_checkpoint_cache_key", "mmibkr-selected-runtime-cloud-checkpoint-v1-35699999999-TEST_PRIVATE_SENTINEL-initial-backfill-preowner"),
+        )
+        for field, value in variants:
+            with self.subTest(field=field):
+                receipt = self._fixture()
+                receipt["initial_backfill_ingest"][field] = value
+                with self.assertRaisesRegex(ValueError, "nested_identity_rejected"):
+                    project(receipt)
+
     def test_malformed_schema_and_acceptance_fail_closed(self):
         receipt = self._fixture()
         receipt["schema"] = "other"
