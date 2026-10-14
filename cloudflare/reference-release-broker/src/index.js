@@ -1,6 +1,7 @@
 import { verifyAuthorityIntent } from './intent.js';
 import {
   callerPolicySha256,
+  validateOidcCallerPolicy,
   signReleaseTicket,
 } from './ticket.js';
 
@@ -156,6 +157,10 @@ async function handleRelease(request, env) {
   const claims = await verifyGithubOidc(auth.slice(7));
   const signer = await importBrokerSigner(env.BROKER_SIGNING_PRIVATE_JWK);
   const now = Math.floor(Date.now() / 1000);
+  // Verify the signed GitHub JWT's immutable, public principal and exact
+  // reusable-workflow measurement before using it to match a private intent.
+  // A standalone clean-room synthetic ACK does not establish this authority.
+  validateOidcCallerPolicy(claims, policy, now);
 
   const intentWrapper = body.intent;
   const policyDigest = await callerPolicySha256(claims);
@@ -178,17 +183,6 @@ async function handleRelease(request, env) {
     now,
     Number(env.MAX_INTENT_SECONDS || 86400),
   );
-
-  // Static harness policy + live OIDC claims.
-  if (claims.iss !== GITHUB_ISSUER) throw new Error('oidc_issuer_rejected');
-  const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-  if (!aud.includes(policy.audience)) throw new Error('oidc_audience_rejected');
-  if (claims.job_workflow_ref !== policy.job_workflow_ref) throw new Error('oidc_harness_ref_rejected');
-  if (claims.job_workflow_sha !== policy.job_workflow_sha) throw new Error('oidc_harness_sha_rejected');
-  if (claims.runner_environment !== 'github-hosted') throw new Error('oidc_runner_rejected');
-  const iat = Number(claims.iat), nbf = Number(claims.nbf), exp = Number(claims.exp);
-  if (![iat,nbf,exp].every(Number.isFinite)) throw new Error('oidc_time_invalid');
-  if (iat > now + 30 || nbf > now + 30 || exp < now - 30 || exp - iat > 600) throw new Error('oidc_time_rejected');
 
   const admissionNotAfter = Math.min(
     now + Number(policy.max_admission_seconds),
