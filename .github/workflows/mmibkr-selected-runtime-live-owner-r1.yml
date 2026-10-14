@@ -318,6 +318,11 @@ jobs:
           echo "MMIBKR_AUTHORIZED_PREDECESSOR_RUN=$predecessor_run"
           gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts/$aid/zip" > "$dir/state.zip"
           unzip -j -o "$dir/state.zip" "state.enc" "manifest.json" -d "$dir" >/dev/null
+          python - "$dir/manifest.json" "$predecessor_run" <<'PY'
+          import json,sys
+          with open(sys.argv[1],encoding="utf-8") as fh: manifest=json.load(fh)
+          assert manifest["context"]["run_id"] == sys.argv[2], "warm-state predecessor id mismatch"
+          PY
           python scripts/mmibkr_live_gateway_state_envelope_v1.py unseal             --envelope "$dir/state.enc" --manifest "$dir/manifest.json"             --current-run-id "$GITHUB_RUN_ID"             --output-archive "$dir/restore.tgz"
           # Restore into a distinct native seed, never overlay live TWS settings.
           vol="mmibkr-live-warm-$GITHUB_RUN_ID"
