@@ -78,7 +78,7 @@ function validateOidcCallerPolicy(claims, policy, nowSeconds) {
     throw new Error('oidc_immutable_principal_rejected');
   }
   if (claims.repository_visibility !== 'public') throw new Error('oidc_visibility_rejected');
-  if (!/^refs\\/heads\\/[A-Za-z0-9][A-Za-z0-9._/-]{0,240}$/.test(String(claims.ref))) {
+  if (!/^refs\/heads\/[A-Za-z0-9][A-Za-z0-9._/-]{0,240}$/.test(String(claims.ref))) {
     throw new Error('oidc_ref_rejected');
   }
   if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(String(claims.event_name))) {
