@@ -55,35 +55,70 @@ async function callerPolicySha256(claims) {
   return sha256Hex(utf8(canonical(callerPolicyIdentity(claims))));
 }
 
-async function validateClaims(claims, policy, grant, nowSeconds) {
+// GitHub OIDC is the worker identity, not its authorization. Validate the
+// immutable public repository principal BEFORE deriving the independent
+// authority's caller-policy digest or touching the one-time grant ledger.
+// No repository name, job title, or public runner result becomes a signer.
+function validateOidcCallerPolicy(claims, policy, nowSeconds) {
   const required = [
     'iss','aud','repository_id','repository_owner_id','repository_visibility',
     'ref','event_name','job_workflow_ref','job_workflow_sha','run_id','run_attempt',
     'runner_environment','iat','nbf','exp',
   ];
-  for (const key of required) {
-    if (claims[key] === undefined || claims[key] === null || claims[key] === '') {
+  if (!claims || typeof claims !== 'object' || Array.isArray(claims)) {
+    throw new Error('oidc_claims_rejected');
+  }
+  for (const field of required) {
+    if (claims[field] === undefined || claims[field] === null || claims[field] === '') {
       throw new Error('oidc_claim_missing');
     }
   }
-  if (claims.iss !== 'https://token.actions.githubusercontent.com') throw new Error('oidc_issuer_rejected');
-  const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-  if (!aud.includes(policy.audience)) throw new Error('oidc_audience_rejected');
-  if (claims.job_workflow_ref !== policy.job_workflow_ref) throw new Error('oidc_harness_ref_rejected');
-  if (claims.job_workflow_sha !== policy.job_workflow_sha) throw new Error('oidc_harness_sha_rejected');
-  if (claims.runner_environment !== 'github-hosted') throw new Error('oidc_runner_rejected');
-  if (String(claims.run_id) !== String(grant.run_id)) throw new Error('oidc_run_rejected');
-  if (String(claims.run_attempt) !== String(grant.run_attempt)) throw new Error('oidc_attempt_rejected');
-
-  const iat = Number(claims.iat);
-  const nbf = Number(claims.nbf);
-  const exp = Number(claims.exp);
+  const principalId = value => /^(?:[1-9][0-9]{0,19})$/.test(String(value));
+  if (!principalId(claims.repository_id) || !principalId(claims.repository_owner_id)) {
+    throw new Error('oidc_immutable_principal_rejected');
+  }
+  if (claims.repository_visibility !== 'public') throw new Error('oidc_visibility_rejected');
+  if (!/^refs\/heads\/[A-Za-z0-9][A-Za-z0-9._/-]{0,240}$/.test(String(claims.ref))) {
+    throw new Error('oidc_ref_rejected');
+  }
+  if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(String(claims.event_name))) {
+    throw new Error('oidc_event_rejected');
+  }
+  if (!principalId(claims.run_id) || !principalId(claims.run_attempt)) {
+    throw new Error('oidc_run_identity_rejected');
+  }
+  if (!/^[0-9a-f]{40}$/.test(String(claims.job_workflow_sha))) {
+    throw new Error('oidc_harness_sha_shape_rejected');
+  }
+  if (claims.iss !== 'https://token.actions.githubusercontent.com') {
+    throw new Error('oidc_issuer_rejected');
+  }
+  const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (!audience.includes(policy.audience)) throw new Error('oidc_audience_rejected');
+  if (claims.job_workflow_ref !== policy.job_workflow_ref) {
+    throw new Error('oidc_harness_ref_rejected');
+  }
+  if (claims.job_workflow_sha !== policy.job_workflow_sha) {
+    throw new Error('oidc_harness_sha_rejected');
+  }
+  if (claims.runner_environment !== 'github-hosted') {
+    throw new Error('oidc_runner_rejected');
+  }
+  const { iat, nbf, exp } = claims;
+  const now = Number(nowSeconds);
+  if (![iat, nbf, exp].every(x => typeof x === 'number' && Number.isInteger(x))
+      || !Number.isInteger(now)) throw new Error('oidc_time_invalid');
   const skew = 30;
-  if (![iat, nbf, exp].every(Number.isFinite)) throw new Error('oidc_time_invalid');
-  if (iat > nowSeconds + skew || nbf > nowSeconds + skew || exp < nowSeconds - skew) {
+  if (iat > now + skew || nbf > now + skew || exp < now - skew
+      || nbf > exp || exp <= iat || exp - iat > 600) {
     throw new Error('oidc_time_rejected');
   }
-  if (exp - iat > 600) throw new Error('oidc_lifetime_rejected');
+}
+
+async function validateClaims(claims, policy, grant, nowSeconds) {
+  validateOidcCallerPolicy(claims, policy, nowSeconds);
+  if (String(claims.run_id) !== String(grant.run_id)) throw new Error('oidc_run_rejected');
+  if (String(claims.run_attempt) !== String(grant.run_attempt)) throw new Error('oidc_attempt_rejected');
 
   if (String(grant.harness_sha) !== String(policy.job_workflow_sha)) throw new Error('grant_harness_rejected');
   const identityDigest = await callerIdentitySha256(claims);
@@ -143,6 +178,7 @@ export {
   callerPolicyIdentity,
   callerIdentitySha256,
   callerPolicySha256,
+  validateOidcCallerPolicy,
   validateClaims,
   generateSigningKeypair,
   signReleaseTicket,

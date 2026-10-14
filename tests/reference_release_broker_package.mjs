@@ -21,6 +21,18 @@ for (const needle of [
 ]) {
   if (!brokerSource.includes(needle)) throw new Error('broker_contract_missing_' + needle);
 }
+// An independently signed intent may name a clean repository, but the
+// broker must validate a verified JWT's immutable principal before deriving
+// that policy hash or consuming a grant; a public ACK never satisfies it.
+const validateIndex = index.indexOf('validateOidcCallerPolicy(claims, policy, now)');
+const policyDigestIndex = index.indexOf('const policyDigest = await callerPolicySha256(claims)');
+const grantConsumeIndex = index.indexOf("const consumeResponse = await stub.fetch");
+if (validateIndex < 0 || policyDigestIndex <= validateIndex || grantConsumeIndex <= policyDigestIndex) {
+  throw new Error('oidc_immutable_principal_validation_order_rejected');
+}
+if (!ticket.includes('function validateOidcCallerPolicy(claims, policy, nowSeconds)')) {
+  throw new Error('oidc_strict_claim_validation_missing');
+}
 if (!wrangler.includes('"workers_dev": true')) throw new Error('neutral_workers_dev_endpoint_required');
 if (!wrangler.includes('"preview_urls": false')) throw new Error('preview_urls_must_be_false');
 if (!wrangler.includes('"keep_vars": false')) throw new Error('keep_vars_must_be_false');
