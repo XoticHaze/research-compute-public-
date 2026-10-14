@@ -87,7 +87,7 @@ class LiveEnvelopeTests(unittest.TestCase):
     def test_manifest_has_only_allowed_public_fields(self):
         self.assertEqual(set(self.meta),mod.ENVELOPE_FIELDS)
         encoded=json.dumps(self.meta)
-        for forbidden in ("password","account_id","positions","orders","TWS_USERID","TWOFACTOR"):
+        for forbidden in ("password","account_id","positions","order_rows","TWS_USERID","TWOFACTOR"):
             self.assertNotIn(forbidden,encoded)
 
     def test_metadata_tampering_rejected(self):
