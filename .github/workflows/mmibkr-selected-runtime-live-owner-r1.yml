@@ -22,6 +22,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   id-token: write
 
 concurrency:
@@ -285,6 +286,57 @@ jobs:
           print('LIVE_EXISTING_CREDENTIALS_SEALED=1')
           PY
 
+      - name: Restore existing encrypted live Gateway warm state (admission only)
+        if: ${{ inputs.admission_only }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MMIBKR_LIVE_GATEWAY_WARM_KEY_B64: ${{ secrets.MMIBKR_LIVE_GATEWAY_WARM_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          # Independent high-entropy key is mandatory even on first bootstrap;
+          # never reuse brokerage password as a public-artifact key.
+          python - <<'PY'
+          import os,sys
+          sys.path.insert(0,"scripts")
+          from mmibkr_live_gateway_state_envelope_v1 import read_master
+          read_master()
+          print("LIVE_WARM_INDEPENDENT_KEY_CONFIGURED=1")
+          PY
+          name="mmibkr-live-gateway-state-v1"
+          aid="$(gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts?name=$name&per_page=100"             --jq '[.artifacts[] | select(.expired == false and .workflow_run.head_branch == "main")] | sort_by(.created_at) | reverse | .[0].id // empty')"
+          if [ -z "$aid" ]; then
+            echo "LIVE_WARM_STATE_BOOTSTRAP=COLD_NO_PRIOR_SNAPSHOT"
+            echo "MMIBKR_LIVE_WARM_STATE_RESTORED=0" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          dir="$RUNNER_TEMP/live-warm-import"
+          mkdir -p "$dir"
+          predecessor_run="$(gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts/$aid" --jq '.workflow_run.id')"
+          [[ "$predecessor_run" =~ ^[0-9]+$ && "$predecessor_run" != "$GITHUB_RUN_ID" ]]
+          gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$predecessor_run" --jq '(.path == ".github/workflows/mmibkr-selected-runtime-live-owner-r1.yml") and (.event == "workflow_dispatch") and (.head_branch == "main") and (.conclusion == "success")' | grep -qx true
+          echo "MMIBKR_AUTHORIZED_PREDECESSOR_RUN=$predecessor_run"
+          gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts/$aid/zip" > "$dir/state.zip"
+          unzip -j -o "$dir/state.zip" "state.enc" "manifest.json" -d "$dir" >/dev/null
+          python - "$dir/manifest.json" "$predecessor_run" <<'PY'
+          import json,sys
+          with open(sys.argv[1],encoding="utf-8") as fh: manifest=json.load(fh)
+          assert manifest["context"]["run_id"] == sys.argv[2], "warm-state predecessor id mismatch"
+          PY
+          python scripts/mmibkr_live_gateway_state_envelope_v1.py unseal             --envelope "$dir/state.enc" --manifest "$dir/manifest.json"             --current-run-id "$GITHUB_RUN_ID"             --output-archive "$dir/restore.tgz"
+          # Restore into a distinct native seed, never overlay live TWS settings.
+          vol="mmibkr-live-warm-$GITHUB_RUN_ID"
+          docker volume create "$vol" >/dev/null
+          gateway_uid="$(docker run --rm --entrypoint /usr/bin/id "$IBKR_CONTROLLER_IMAGE" -u)"
+          gateway_gid="$(docker run --rm --entrypoint /usr/bin/id "$IBKR_CONTROLLER_IMAGE" -g)"
+          [[ "$gateway_uid" =~ ^[0-9]+$ && "$gateway_gid" =~ ^[0-9]+$ ]]
+          docker run --rm --network none --user 0:0 -e GATEWAY_UID="$gateway_uid" -e GATEWAY_GID="$gateway_gid" -v "$vol:/seed" -v "$dir:/import:ro" alpine:3.22 sh -ec 'tar -xzf /import/restore.tgz -C /seed; chown -R "$GATEWAY_UID:$GATEWAY_GID" /seed; chmod -R u+rwX,go-rwx /seed'
+          docker run --rm --network none --user "$gateway_uid:$gateway_gid" --entrypoint /bin/sh -v "$vol:/home/ibgateway/warm-state:ro" "$IBKR_CONTROLLER_IMAGE" -ec 'p="$(find /home/ibgateway/warm-state -type f -print -quit)"; test -n "$p" && test -r "$p"; dd if="$p" of=/dev/null bs=4096 count=1 2>/dev/null'
+          echo "MMIBKR_CONTROLLER_NATIVE_LIVE_WARM_SEED_READABLE=1"
+          rm -rf "$dir"
+          echo "MMIBKR_LIVE_WARM_STATE_RESTORED=1" >> "$GITHUB_ENV"
+          echo "MMIBKR_LIVE_STATE_BROKER_AUTH_RECHECK_REQUIRED=1"
+
       - name: Start the established IBKR controller in writable live mode on host 4001
         run: |
           set -euo pipefail
@@ -293,6 +345,11 @@ jobs:
           docker volume create "$vol" >/dev/null
           docker run --rm --user 0 --entrypoint /bin/sh \
             -v "$vol:/state" "$IBKR_CONTROLLER_IMAGE" -lc 'chmod 0777 /state' >/dev/null
+          warm_args=()
+          if [ "${MMIBKR_LIVE_WARM_STATE_RESTORED:-0}" = 1 ]; then
+            warm_args=(-e GATEWAY_WARM_STATE=/home/ibgateway/warm-state
+                       -v "mmibkr-live-warm-$GITHUB_RUN_ID:/home/ibgateway/warm-state:ro")
+          fi
           docker run -d --name mmibkr-live-gateway \
             --env-file "$RUNNER_TEMP/mmibkr-live-gateway.env" \
             -e USE_IBG_CONTROLLER=yes \
@@ -304,6 +361,7 @@ jobs:
             -e CONTROLLER_HEALTH_SERVER_PORT=8080 \
             -e TWS_SETTINGS_PATH=/home/ibgateway/Jts_b1 \
             -e TIME_ZONE=America/Chicago \
+            "${warm_args[@]}" \
             -v "$vol:/home/ibgateway/Jts_b1" \
             -p 127.0.0.1:4001:4003 \
             "$IBKR_CONTROLLER_IMAGE" >/dev/null
@@ -355,6 +413,39 @@ jobs:
           echo 'LIVE_WRT_ACCOUNT_READ_ONLY_RECONCILED=1'
           echo 'LIVE_WRT_NO_LIVE_ORDER_DISPATCHED=1'
 
+      - name: Cleanly stop authenticated no-order admission Gateway
+        if: ${{ inputs.admission_only }}
+        run: |
+          set -euo pipefail
+          docker stop --time 90 mmibkr-live-gateway >/dev/null
+          test "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = false
+          echo "MMIBKR_LIVE_GATEWAY_GRACEFUL_STOP=PASS"
+
+      - name: Encrypt real live Gateway state with independent protected key
+        if: ${{ inputs.admission_only }}
+        env:
+          MMIBKR_LIVE_GATEWAY_WARM_KEY_B64: ${{ secrets.MMIBKR_LIVE_GATEWAY_WARM_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          dir="$RUNNER_TEMP/live-warm-export"
+          mkdir -p "$dir"
+          docker run --rm --network none -v "mmibkr-live-jts-$GITHUB_RUN_ID:/state:ro"             -v "$dir:/export" alpine:3.22             sh -ec 'tar -C /state -czf /export/state.tgz .'
+          python scripts/mmibkr_live_gateway_state_envelope_v1.py seal             --archive "$dir/state.tgz" --run-id "$GITHUB_RUN_ID"             --envelope "$dir/state.enc" --manifest "$dir/manifest.json"
+          rm -f "$dir/state.tgz"
+          echo "MMIBKR_LIVE_GATEWAY_WARM_STATE_ENCRYPTED=PASS"
+
+      - name: Persist only encrypted Gateway warm-state for successor
+        if: ${{ inputs.admission_only }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mmibkr-live-gateway-state-v1
+          path: |
+            ${{ runner.temp }}/live-warm-export/state.enc
+            ${{ runner.temp }}/live-warm-export/manifest.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Start unchanged canonical bot natural owner with three persisted live policies
         if: ${{ !inputs.admission_only }}
         run: |
@@ -390,6 +481,8 @@ jobs:
           set +e
           docker rm -f mmibkr-live-bot mmibkr-live-gateway >/dev/null 2>&1
           docker volume rm "mmibkr-live-jts-$GITHUB_RUN_ID" >/dev/null 2>&1
+          docker volume rm "mmibkr-live-warm-$GITHUB_RUN_ID" >/dev/null 2>&1
+          rm -rf "$RUNNER_TEMP/live-warm-import" "$RUNNER_TEMP/live-warm-export"
           rm -rf "$RUNNER_TEMP/mmibkr-live-source" "$RUNNER_TEMP/mmibkr-live-data"
           rm -f "$RUNNER_TEMP/mmibkr-live-gateway.env" "$RUNNER_TEMP/mmibkr-live-bot.env" "$RUNNER_TEMP/mmibkr-live-seal-receipt.json"
           echo 'LIVE_RUN_ONE_RUN_PRIVATE_MATERIAL_DESTROYED=1'
