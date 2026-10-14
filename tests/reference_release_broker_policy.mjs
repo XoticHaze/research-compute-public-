@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import {
   callerIdentitySha256,
+  callerPolicySha256,
+  validateOidcCallerPolicy,
   validateClaims,
   generateSigningKeypair,
   signReleaseTicket,
@@ -43,6 +45,64 @@ const claims = {
 grant.identity_sha256 = await callerIdentitySha256(claims);
 
 await validateClaims(claims, policy, grant, now);
+
+await validateOidcCallerPolicy(claims, policy, now);
+
+// Immutable repository identity is signed into the independently provisioned
+// caller policy, not derived from mutable names or synthetic job success.
+const cleanClaims = {
+  ...claims,
+  repository_id: '1416551057',
+  run_id: '38371793948',
+  run_attempt: '1',
+  event_name: 'workflow_dispatch',
+};
+await validateOidcCallerPolicy(cleanClaims, policy, now);
+const legacyPolicyHash = await callerPolicySha256(claims);
+const cleanPolicyHash = await callerPolicySha256(cleanClaims);
+if (legacyPolicyHash === cleanPolicyHash) {
+  throw new Error('clean_repo_id_not_bound_to_caller_policy');
+}
+const cleanGrant = {
+  ...grant,
+  run_id: cleanClaims.run_id,
+  run_attempt: cleanClaims.run_attempt,
+  identity_sha256: await callerIdentitySha256(cleanClaims),
+};
+await validateClaims(cleanClaims, policy, cleanGrant, now);
+let crossRepoRejected = false;
+try { await validateClaims(claims, policy, cleanGrant, now); }
+catch { crossRepoRejected = true; }
+if (!crossRepoRejected) throw new Error('old_repository_replayed_clean_grant');
+
+for (const [label, mutate] of [
+  ['missing_immutable_repository_id', c => { delete c.repository_id; }],
+  ['missing_owner_id', c => { delete c.repository_owner_id; }],
+  ['non_decimal_immutable_id', c => { c.repository_id = '1A16551057'; }],
+  ['zero_repository_id', c => { c.repository_id = '0'; }],
+  ['negative_owner_id', c => { c.repository_owner_id = '-1'; }],
+  ['private_visibility', c => { c.repository_visibility = 'private'; }],
+  ['untrusted_pull_ref', c => { c.ref = 'refs/pull/1/merge'; }],
+  ['invalid_event_name', c => { c.event_name = 'a/b'; }],
+  ['empty_run_id', c => { c.run_id = ''; }],
+  ['zero_attempt', c => { c.run_attempt = '0'; }],
+  ['wrong_harness_sha', c => { c.job_workflow_sha = '0'.repeat(40); }],
+  ['wrong_reusable_harness', c => { c.job_workflow_ref = 'XoticHaze/fake/.github/workflows/f.yml@' + harnessSha; }],
+  ['unexpected_local_runner', c => { c.runner_environment = 'self-hosted'; }],
+  ['claim_iat_not_integer', c => { c.iat = String(now - 10); }],
+  ['inverted_expiry', c => { c.exp = c.iat; }],
+  ['future_nbf', c => { c.nbf = now + 90; }],
+  ['stale_exp', c => { c.exp = now - 31; }],
+]) {
+  const modified = structuredClone(cleanClaims);
+  mutate(modified);
+  let rejected = false;
+  try { await validateOidcCallerPolicy(modified, policy, now); }
+  catch { rejected = true; }
+  if (!rejected) throw new Error('invalid_caller_accepted_' + label);
+}
+console.log('REFERENCE_CLEAN_IMMUTABLE_OIDC_PRINCIPAL_NEGATIVES_PASS=17');
+
 
 for (const mutate of [
   c => { c.job_workflow_sha = '9'.repeat(40); },
