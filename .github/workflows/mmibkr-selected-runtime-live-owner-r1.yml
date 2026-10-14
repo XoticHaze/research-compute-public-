@@ -312,6 +312,10 @@ jobs:
           fi
           dir="$RUNNER_TEMP/live-warm-import"
           mkdir -p "$dir"
+          predecessor_run="$(gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts/$aid" --jq '.workflow_run.id')"
+          [[ "$predecessor_run" =~ ^[0-9]+$ && "$predecessor_run" != "$GITHUB_RUN_ID" ]]
+          gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$predecessor_run" --jq '(.path == ".github/workflows/mmibkr-selected-runtime-live-owner-r1.yml") and (.event == "workflow_dispatch") and (.head_branch == "main") and (.conclusion == "success")' | grep -qx true
+          echo "MMIBKR_AUTHORIZED_PREDECESSOR_RUN=$predecessor_run"
           gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts/$aid/zip" > "$dir/state.zip"
           unzip -j -o "$dir/state.zip" "state.enc" "manifest.json" -d "$dir" >/dev/null
           python scripts/mmibkr_live_gateway_state_envelope_v1.py unseal             --envelope "$dir/state.enc" --manifest "$dir/manifest.json"             --current-run-id "$GITHUB_RUN_ID"             --output-archive "$dir/restore.tgz"
