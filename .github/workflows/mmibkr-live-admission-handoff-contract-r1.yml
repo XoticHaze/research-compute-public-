@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - test/mmibkr-live-fresh-runner-admission-handoff-20261013
+      - fix/mmibkr-admission-receipt-synthetic-proof-r2-20261013
     paths:
       - '.github/workflows/mmibkr-live-admission-handoff-contract-r1.yml'
       - 'scripts/mmibkr_live_admission_handoff_v1.py'
@@ -81,10 +82,12 @@ jobs:
           from pathlib import Path
           p=Path(os.environ["RUNNER_TEMP"])/"mmibkr-admission-receipt/accepted.json"
           n=json.loads(p.read_text())
-          assert n["safe_for_new_readonly_gateway"] is True
+          assert n["safe_for_new_readonly_gateway"] is False
+          assert n["synthetic_cross_runner_receipt_accepted"] is True
           assert n["live_order_ownership_granted"] is False
           assert n["gateway_authentication_migration_proven"] is False
-          print("MMIBKR_FREE_CROSS_VM_SANITIZED_LIVE_ADMISSION_HANDOFF=PASS")
+          print("MMIBKR_FREE_CROSS_VM_SYNTHETIC_ADMISSION_FIXTURE=PASS")
+          print("MMIBKR_VERIFIED_LIVE_GATEWAY_HANDOFF=0")
           print("MMIBKR_LIVE_GATEWAY_AUTH_TRANSFER=NOT_TESTED")
           print("MMIBKR_LIVE_ORDER_DISPATCH=0")
           PY

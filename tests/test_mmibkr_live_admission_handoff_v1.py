@@ -20,7 +20,8 @@ class LiveAdmissionHandoffTests(unittest.TestCase):
 
     def test_live_admission_is_reconciliation_only(self):
         a=self.accept()
-        self.assertTrue(a["safe_for_new_readonly_gateway"])
+        self.assertFalse(a["safe_for_new_readonly_gateway"])
+        self.assertTrue(a["synthetic_cross_runner_receipt_accepted"])
         self.assertFalse(a["live_order_ownership_granted"])
         self.assertFalse(a["gateway_authentication_migration_proven"])
 
@@ -30,9 +31,13 @@ class LiveAdmissionHandoffTests(unittest.TestCase):
         self.assertFalse(self.old["credentials_included"])
         self.assertFalse(self.old["gateway_session_persisted"])
         self.assertFalse(self.old["ready_for_order_ownership"])
+        self.assertTrue(self.old["synthetic_only"])
+        self.assertTrue(self.old["gateway_release_simulated"])
+        for f in ("account_read_verified","positions_read_verified","open_orders_read_verified","gateway_released"):
+            self.assertFalse(self.old[f],f)
 
     def test_unreleased_gateway_rejected(self):
-        node=dict(self.old,gateway_released=False)
+        node=dict(self.old,gateway_released=True)
         with self.assertRaisesRegex(module.HandoffError,"predecessor_not_readonly_released"):
             self.accept(node)
 
@@ -48,13 +53,32 @@ class LiveAdmissionHandoffTests(unittest.TestCase):
         for key in ("account_read_verified","positions_read_verified","open_orders_read_verified"):
             with self.subTest(key=key):
                 with self.assertRaises(module.HandoffError):
-                    self.accept(dict(self.old,**{key:False}))
+                    self.accept(dict(self.old,**{key:True}))
 
     def test_stale_source_and_account_scope_rejected(self):
-        for key,value in (("source_sha","0"*40),("image","wrong"),("mode","paper")):
+        for key,value in (("source_sha","0"*40),("image","wrong"),("mode","production_live_readonly_admission")):
             with self.subTest(key=key):
                 with self.assertRaises(module.HandoffError):
                     self.accept(dict(self.old,**{key:value}))
+
+    def test_truthy_live_claims_cannot_be_generated_by_fixture(self):
+        receipt=module.record(RUN,HEAD)
+        for name in ("account_read_verified","positions_read_verified",
+                     "open_orders_read_verified","gateway_released",
+                     "ready_for_order_ownership"):
+            self.assertIs(receipt[name],False,name)
+        self.assertIs(receipt["synthetic_only"],True)
+        accepted=self.accept(receipt)
+        self.assertIs(accepted["safe_for_new_readonly_gateway"],False)
+        self.assertIs(accepted["live_order_ownership_granted"],False)
+
+    def test_synthetic_identity_cannot_be_relabelled_as_real_admission(self):
+        changes={"synthetic_only":False,"gateway_release_simulated":False,
+                 "mode":"production_live_readonly_admission"}
+        for field,value in changes.items():
+            with self.subTest(field=field):
+                with self.assertRaises(module.HandoffError):
+                    self.accept(dict(self.old,**{field:value}))
 
     def test_same_run_not_predecessor(self):
         with self.assertRaisesRegex(module.HandoffError,"predecessor_run_not_distinct"):
