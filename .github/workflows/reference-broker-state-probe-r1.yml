@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/reference-broker-state-probe-r1.yml'
+      - 'cloudflare/reference-release-broker/src/index.js'
+      - 'cloudflare/reference-release-broker/src/ticket.js'
+      - 'cloudflare/reference-release-broker/src/intent.js'
+      - 'cloudflare/reference-release-broker/wrangler.jsonc'
   workflow_dispatch:
 
 permissions:
@@ -24,10 +28,10 @@ jobs:
           key_url='https://reference-release-broker-v1.slenderiq.workers.dev/v1/public-key'
           health_body="$RUNNER_TEMP/health.json"
           key_body="$RUNNER_TEMP/key.json"
-          health_status="$(curl -sS -o "$health_body" -w '%{http_code}' "$health_url" || true)"
-          key_status="$(curl -sS -o "$key_body" -w '%{http_code}' "$key_url" || true)"
+          health_status="$(curl --max-time 15 -sS -o "$health_body" -w '%{http_code}' "$health_url" || true)"
+          key_status="$(curl --max-time 15 -sS -o "$key_body" -w '%{http_code}' "$key_url" || true)"
           python - "$health_body" "$key_body" "$health_status" "$key_status" <<'PY' > "$RUNNER_TEMP/receipt.json"
-          import json,sys,os
+          import json,sys,os,re
           health_path,key_path,health_status,key_status=sys.argv[1:]
           def load(path):
               try:
@@ -43,7 +47,7 @@ jobs:
               'health_http_status':int(health_status or 0),
               'health_ok':health.get('ok') is True,
               'public_key_http_status':int(key_status or 0),
-              'broker_signer_configured':bool(key_status=='200' and key_id.startswith('sha256:') and len(key_id)==71),
+              'broker_signer_configured':bool(key_status=='200' and re.fullmatch(r'sha256:[0-9a-f]{64}',key_id)),
               'broker_key_id':key_id if key_status=='200' else None,
               'mutation_performed':False,
               'secrets_included':False,
