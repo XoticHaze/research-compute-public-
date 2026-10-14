@@ -327,7 +327,12 @@ jobs:
           # Restore into a distinct native seed, never overlay live TWS settings.
           vol="mmibkr-live-warm-$GITHUB_RUN_ID"
           docker volume create "$vol" >/dev/null
-          docker run --rm --network none -v "$vol:/seed" -v "$dir:/import:ro"             alpine:3.22 sh -ec 'tar -xzf /import/restore.tgz -C /seed; chmod -R go-rwx /seed'
+          gateway_uid="$(docker run --rm --entrypoint /usr/bin/id "$IBKR_CONTROLLER_IMAGE" -u)"
+          gateway_gid="$(docker run --rm --entrypoint /usr/bin/id "$IBKR_CONTROLLER_IMAGE" -g)"
+          [[ "$gateway_uid" =~ ^[0-9]+$ && "$gateway_gid" =~ ^[0-9]+$ ]]
+          docker run --rm --network none --user 0:0 -e GATEWAY_UID="$gateway_uid" -e GATEWAY_GID="$gateway_gid" -v "$vol:/seed" -v "$dir:/import:ro" alpine:3.22 sh -ec 'tar -xzf /import/restore.tgz -C /seed; chown -R "$GATEWAY_UID:$GATEWAY_GID" /seed; chmod -R u+rwX,go-rwx /seed'
+          docker run --rm --network none --user "$gateway_uid:$gateway_gid" --entrypoint /bin/sh -v "$vol:/home/ibgateway/warm-state:ro" "$IBKR_CONTROLLER_IMAGE" -ec 'p="$(find /home/ibgateway/warm-state -type f -print -quit)"; test -n "$p" && test -r "$p"; dd if="$p" of=/dev/null bs=4096 count=1 2>/dev/null'
+          echo "MMIBKR_CONTROLLER_NATIVE_LIVE_WARM_SEED_READABLE=1"
           rm -rf "$dir"
           echo "MMIBKR_LIVE_WARM_STATE_RESTORED=1" >> "$GITHUB_ENV"
           echo "MMIBKR_LIVE_STATE_BROKER_AUTH_RECHECK_REQUIRED=1"
