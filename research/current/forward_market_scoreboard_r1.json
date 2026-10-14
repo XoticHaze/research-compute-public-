@@ -42,25 +42,25 @@
             "portfolio_roundtrip_cost_bps_if_flattened_now": 2.5
           },
           "hedged_challenger": {
-            "excess_vs_incumbent_bps": -1.5378,
-            "gross_return_bps": 191.857,
-            "net_if_flattened_now_bps": 189.357
+            "excess_vs_incumbent_bps": -0.978,
+            "gross_return_bps": 149.4003,
+            "net_if_flattened_now_bps": 146.9003
           },
-          "incumbent_return_bps": 190.8948,
+          "incumbent_return_bps": 147.8782,
           "mechanism_attribution": {
-            "hedged_minus_spy_overlay_bps": -11.6233,
-            "hedged_minus_unhedged_bps": 13.9089,
+            "hedged_minus_spy_overlay_bps": -11.0042,
+            "hedged_minus_unhedged_bps": 12.3114,
             "portfolio_improvement_and_hedge_edge_both_positive": false
           },
           "spy_opportunity_control": {
-            "excess_vs_incumbent_bps": 10.0855,
-            "gross_return_bps": 203.4804,
-            "net_if_flattened_now_bps": 200.9804
+            "excess_vs_incumbent_bps": 10.0263,
+            "gross_return_bps": 160.4045,
+            "net_if_flattened_now_bps": 157.9045
           },
           "unhedged_matched_control": {
-            "excess_vs_incumbent_bps": -15.4467,
-            "gross_return_bps": 177.9481,
-            "net_if_flattened_now_bps": 175.4481
+            "excess_vs_incumbent_bps": -13.2894,
+            "gross_return_bps": 137.0889,
+            "net_if_flattened_now_bps": 134.5889
           }
         }
       }
@@ -90,11 +90,11 @@
       }
     },
     "largecap_transport_observer": {
-      "generated_at": "2026-10-14T01:52:09.774294+00:00",
+      "generated_at": "2026-10-14T07:50:45.130154+00:00",
       "market_data_asof": "2026-10-13",
       "present": true,
       "sessions_completed": 20,
-      "sha256": "89d46cb5a96b76bc9e428bda751400ab393a444916a3046144a17cc92cf7591e",
+      "sha256": "d3382c78f7fbfeed83cce7f59a0fe4f7ab5ddbc97b4552f9f5c11dc56a672fb2",
       "source_health": {
         "all_symbols_share_latest_date": true,
         "common_session_lags_source_max": false,
@@ -120,14 +120,14 @@
       "P438_SEMICONDUCTOR_FORWARD_MTD_R1": true
     },
     "prospective_ledger": {
-      "generated_at": "2026-10-14T01:52:09.172219+00:00",
+      "generated_at": "2026-10-14T07:50:44.658527+00:00",
       "market_data_asof": "2026-10-13",
       "present": true,
       "programs": [
         "HOMEBUILDERS",
         "SEMICONDUCTOR_SHARED_RIDGE"
       ],
-      "sha256": "b2d5fa030410f8d28f111d4000fe7a2700421dacf1695981ecd5aa4580ef84e9"
+      "sha256": "3120a8a19ab0f03946fc5dffb0c30fa37e45baf50ea2253975b277b3592c5236"
     },
     "scored_now": [
       "P46",
@@ -166,16 +166,16 @@
         "role": "matched-control_mechanism_challenger",
         "scorecard": {
           "DBEF": {
-            "EFA_return_bps": -264.5248,
-            "gross_return_bps": 25.552,
-            "matched_excess_if_flattened_now_bps": 240.0768,
-            "net_if_flattened_now_bps": -24.448
+            "EFA_return_bps": -224.8462,
+            "gross_return_bps": 32.8528,
+            "matched_excess_if_flattened_now_bps": 207.699,
+            "net_if_flattened_now_bps": -17.1472
           },
           "HEFA": {
-            "IEFA_return_bps": -253.3441,
-            "gross_return_bps": 12.9361,
-            "matched_excess_if_flattened_now_bps": 216.2802,
-            "net_if_flattened_now_bps": -37.0639
+            "IEFA_return_bps": -206.7289,
+            "gross_return_bps": 28.0287,
+            "matched_excess_if_flattened_now_bps": 184.7576,
+            "net_if_flattened_now_bps": -21.9713
           },
           "cost_interpretation": {
             "entry_cost_bps": 25.0,
@@ -183,21 +183,21 @@
             "reported_net_is_if_flattened_now": true
           },
           "mechanism": {
-            "SPY_return_bps": 251.7109,
+            "SPY_return_bps": 250.5256,
             "both_implementations_positive_vs_matched": true,
-            "mean_matched_excess_if_flattened_now_bps": 228.1785,
-            "mean_net_if_flattened_now_bps": -30.756,
-            "opportunity_excess_vs_SPY_bps": -282.4668
+            "mean_matched_excess_if_flattened_now_bps": 196.2283,
+            "mean_net_if_flattened_now_bps": -19.5593,
+            "opportunity_excess_vs_SPY_bps": -270.0848
           }
         },
         "state": "PROSPECTIVE_OPEN"
       },
       "CURRENCY_HEDGE_ALLOCATOR_OVERLAY": {
-        "elapsed_close_to_close_sessions": 20,
+        "elapsed_close_to_close_sessions": 21,
         "entry_date": "2026-09-14",
-        "forward_sessions": 21,
+        "forward_sessions": 22,
         "funding_source": "CASH_ONLY",
-        "market_sessions_observed_including_entry": 21,
+        "market_sessions_observed_including_entry": 22,
         "overlay_weight": 0.05,
         "role": "portfolio_level_matched_control_challenger",
         "scorecard": {
@@ -208,25 +208,25 @@
             "portfolio_roundtrip_cost_bps_if_flattened_now": 2.5
           },
           "hedged_challenger": {
-            "excess_vs_incumbent_bps": -1.5378,
-            "gross_return_bps": 191.857,
-            "net_if_flattened_now_bps": 189.357
+            "excess_vs_incumbent_bps": -0.978,
+            "gross_return_bps": 149.4003,
+            "net_if_flattened_now_bps": 146.9003
           },
-          "incumbent_return_bps": 190.8948,
+          "incumbent_return_bps": 147.8782,
           "mechanism_attribution": {
-            "hedged_minus_spy_overlay_bps": -11.6233,
-            "hedged_minus_unhedged_bps": 13.9089,
+            "hedged_minus_spy_overlay_bps": -11.0042,
+            "hedged_minus_unhedged_bps": 12.3114,
             "portfolio_improvement_and_hedge_edge_both_positive": false
           },
           "spy_opportunity_control": {
-            "excess_vs_incumbent_bps": 10.0855,
-            "gross_return_bps": 203.4804,
-            "net_if_flattened_now_bps": 200.9804
+            "excess_vs_incumbent_bps": 10.0263,
+            "gross_return_bps": 160.4045,
+            "net_if_flattened_now_bps": 157.9045
           },
           "unhedged_matched_control": {
-            "excess_vs_incumbent_bps": -15.4467,
-            "gross_return_bps": 177.9481,
-            "net_if_flattened_now_bps": 175.4481
+            "excess_vs_incumbent_bps": -13.2894,
+            "gross_return_bps": 137.0889,
+            "net_if_flattened_now_bps": 134.5889
           }
         },
         "state": "PROSPECTIVE_OPEN"
@@ -278,11 +278,11 @@
       "JAAA_vs_incumbent_bps": -97.04,
       "KMLM_vs_cash_control_bps": 18.62,
       "KMLM_vs_incumbent_bps": -78.32,
-      "currency_hedge_mean_matched_excess_bps": 228.1785,
-      "currency_hedge_opportunity_excess_vs_spy_bps": -282.4668,
-      "currency_overlay_excess_vs_incumbent_bps": -1.5378,
-      "currency_overlay_hedged_minus_spy_bps": -11.6233,
-      "currency_overlay_hedged_minus_unhedged_bps": 13.9089,
+      "currency_hedge_mean_matched_excess_bps": 196.2283,
+      "currency_hedge_opportunity_excess_vs_spy_bps": -270.0848,
+      "currency_overlay_excess_vs_incumbent_bps": -0.978,
+      "currency_overlay_hedged_minus_spy_bps": -11.0042,
+      "currency_overlay_hedged_minus_unhedged_bps": 12.3114,
       "homebuilders_mean_excess_vs_itb_bps": 88.9639,
       "p266_increment_bps": -21.21,
       "semiconductor_mean_ticker_book_excess_vs_smh_bps": -18.3719
@@ -548,14 +548,14 @@
     },
     "rule": "A successful workflow is not sufficient freshness proof. Consumers must compare the common market-data date with the expected completed exchange session and inspect per-symbol source health."
   },
-  "generated_at": "2026-10-14T01:52:09.289904+00:00",
+  "generated_at": "2026-10-14T07:50:44.762783+00:00",
   "input_lineage": {
     "prospective_ledger": {
       "cohort_count": 2,
-      "generated_at": "2026-10-14T01:52:09.172219+00:00",
+      "generated_at": "2026-10-14T07:50:44.658527+00:00",
       "market_data_asof": "2026-10-13",
       "schema": "research.forward_prospective_cohort_ledger_r1",
-      "sha256": "b2d5fa030410f8d28f111d4000fe7a2700421dacf1695981ecd5aa4580ef84e9"
+      "sha256": "3120a8a19ab0f03946fc5dffb0c30fa37e45baf50ea2253975b277b3592c5236"
     }
   },
   "interpretation": {
@@ -592,8 +592,8 @@
       "kind": "cross_asset_selector",
       "observation_lineage": {
         "market_data_asof": "2026-10-13",
-        "prospective_ledger_generated_at": "2026-10-14T01:52:09.172219+00:00",
-        "prospective_ledger_sha256": "b2d5fa030410f8d28f111d4000fe7a2700421dacf1695981ecd5aa4580ef84e9"
+        "prospective_ledger_generated_at": "2026-10-14T07:50:44.658527+00:00",
+        "prospective_ledger_sha256": "3120a8a19ab0f03946fc5dffb0c30fa37e45baf50ea2253975b277b3592c5236"
       },
       "observation_status": "CONTEXT_ONLY",
       "paper_action": {
@@ -640,8 +640,8 @@
       "kind": "portfolio_construction_plus_industry_momentum_satellite",
       "observation_lineage": {
         "market_data_asof": "2026-10-13",
-        "prospective_ledger_generated_at": "2026-10-14T01:52:09.172219+00:00",
-        "prospective_ledger_sha256": "b2d5fa030410f8d28f111d4000fe7a2700421dacf1695981ecd5aa4580ef84e9"
+        "prospective_ledger_generated_at": "2026-10-14T07:50:44.658527+00:00",
+        "prospective_ledger_sha256": "3120a8a19ab0f03946fc5dffb0c30fa37e45baf50ea2253975b277b3592c5236"
       },
       "observation_status": "ACTIVE",
       "paper_action": {
@@ -737,8 +737,8 @@
       "kind": "portfolio_diversification_challenger",
       "observation_lineage": {
         "market_data_asof": "2026-10-13",
-        "prospective_ledger_generated_at": "2026-10-14T01:52:09.172219+00:00",
-        "prospective_ledger_sha256": "b2d5fa030410f8d28f111d4000fe7a2700421dacf1695981ecd5aa4580ef84e9"
+        "prospective_ledger_generated_at": "2026-10-14T07:50:44.658527+00:00",
+        "prospective_ledger_sha256": "3120a8a19ab0f03946fc5dffb0c30fa37e45baf50ea2253975b277b3592c5236"
       },
       "observation_status": "ACTIVE",
       "paper_action": {
@@ -791,8 +791,8 @@
       "kind": "portfolio_diversification_challenger",
       "observation_lineage": {
         "market_data_asof": "2026-10-13",
-        "prospective_ledger_generated_at": "2026-10-14T01:52:09.172219+00:00",
-        "prospective_ledger_sha256": "b2d5fa030410f8d28f111d4000fe7a2700421dacf1695981ecd5aa4580ef84e9"
+        "prospective_ledger_generated_at": "2026-10-14T07:50:44.658527+00:00",
+        "prospective_ledger_sha256": "3120a8a19ab0f03946fc5dffb0c30fa37e45baf50ea2253975b277b3592c5236"
       },
       "observation_status": "ACTIVE",
       "paper_action": {
@@ -862,8 +862,8 @@
         "cohort_id": "SEMICONDUCTOR_SHARED_RIDGE:2026-09-11:aed8eb43d888d3c4",
         "cohort_status": "RESOLVED",
         "market_data_asof": "2026-10-13",
-        "prospective_ledger_generated_at": "2026-10-14T01:52:09.172219+00:00",
-        "prospective_ledger_sha256": "b2d5fa030410f8d28f111d4000fe7a2700421dacf1695981ecd5aa4580ef84e9",
+        "prospective_ledger_generated_at": "2026-10-14T07:50:44.658527+00:00",
+        "prospective_ledger_sha256": "3120a8a19ab0f03946fc5dffb0c30fa37e45baf50ea2253975b277b3592c5236",
         "signal_date": "2026-09-11",
         "source_adapter_sha256": "aed8eb43d888d3c4d39c4db940c89e5d2247204567d4a0fcf129e9551f04e333",
         "source_ref": "e73ec9b15180e208de541ce5d5304888e5550433"
@@ -1109,8 +1109,8 @@
         "cohort_id": "HOMEBUILDERS:2026-09-11:00435d369ddcc3a3",
         "cohort_status": "RESOLVED",
         "market_data_asof": "2026-10-13",
-        "prospective_ledger_generated_at": "2026-10-14T01:52:09.172219+00:00",
-        "prospective_ledger_sha256": "b2d5fa030410f8d28f111d4000fe7a2700421dacf1695981ecd5aa4580ef84e9",
+        "prospective_ledger_generated_at": "2026-10-14T07:50:44.658527+00:00",
+        "prospective_ledger_sha256": "3120a8a19ab0f03946fc5dffb0c30fa37e45baf50ea2253975b277b3592c5236",
         "signal_date": "2026-09-11",
         "source_adapter_sha256": "00435d369ddcc3a3d8adbedb91a9662f047b292ff64fe6af6901bfd112466a59",
         "source_ref": "100e356239b2399c054c1a41a18e4e9a5d07d33a"
@@ -1243,7 +1243,7 @@
         "evaluation_date": "2026-10-12",
         "execution_delay_sessions": 1,
         "first_registered_at": "2026-09-18T05:03:20.113496+00:00",
-        "generated_at": "2026-10-14T01:52:09.774294+00:00",
+        "generated_at": "2026-10-14T07:50:45.130154+00:00",
         "holding_horizon_sessions": 20,
         "interpretation": {
           "current_mark_before_horizon_is_not_terminal_accuracy": false,
@@ -1368,11 +1368,11 @@
       "kind": "target_excluded_transport_corroboration",
       "observation_lineage": {
         "largecap_market_data_asof": "2026-10-13",
-        "largecap_observation_generated_at": "2026-10-14T01:52:09.774294+00:00",
-        "largecap_observation_sha256": "89d46cb5a96b76bc9e428bda751400ab393a444916a3046144a17cc92cf7591e",
+        "largecap_observation_generated_at": "2026-10-14T07:50:45.130154+00:00",
+        "largecap_observation_sha256": "d3382c78f7fbfeed83cce7f59a0fe4f7ab5ddbc97b4552f9f5c11dc56a672fb2",
         "market_data_asof": "2026-10-13",
-        "prospective_ledger_generated_at": "2026-10-14T01:52:09.172219+00:00",
-        "prospective_ledger_sha256": "b2d5fa030410f8d28f111d4000fe7a2700421dacf1695981ecd5aa4580ef84e9"
+        "prospective_ledger_generated_at": "2026-10-14T07:50:44.658527+00:00",
+        "prospective_ledger_sha256": "3120a8a19ab0f03946fc5dffb0c30fa37e45baf50ea2253975b277b3592c5236"
       },
       "observation_status": "ACTIVE",
       "paper_action": {
@@ -1468,8 +1468,8 @@
       "kind": "fixed_cross_asset_industry_combination_challenger",
       "observation_lineage": {
         "market_data_asof": "2026-10-13",
-        "prospective_ledger_generated_at": "2026-10-14T01:52:09.172219+00:00",
-        "prospective_ledger_sha256": "b2d5fa030410f8d28f111d4000fe7a2700421dacf1695981ecd5aa4580ef84e9"
+        "prospective_ledger_generated_at": "2026-10-14T07:50:44.658527+00:00",
+        "prospective_ledger_sha256": "3120a8a19ab0f03946fc5dffb0c30fa37e45baf50ea2253975b277b3592c5236"
       },
       "observation_status": "CONTEXT_ONLY",
       "paper_action": {
@@ -1549,8 +1549,8 @@
       "kind": "developed_exus_currency_hedge_mechanism_challenger",
       "observation_lineage": {
         "market_data_asof": "2026-10-13",
-        "prospective_ledger_generated_at": "2026-10-14T01:52:09.172219+00:00",
-        "prospective_ledger_sha256": "b2d5fa030410f8d28f111d4000fe7a2700421dacf1695981ecd5aa4580ef84e9"
+        "prospective_ledger_generated_at": "2026-10-14T07:50:44.658527+00:00",
+        "prospective_ledger_sha256": "3120a8a19ab0f03946fc5dffb0c30fa37e45baf50ea2253975b277b3592c5236"
       },
       "observation_status": "ACTIVE",
       "paper_action": {
@@ -1561,16 +1561,16 @@
       "scientific_forward_credit": true,
       "scorecard": {
         "DBEF": {
-          "EFA_return_bps": -264.5248,
-          "gross_return_bps": 25.552,
-          "matched_excess_if_flattened_now_bps": 240.0768,
-          "net_if_flattened_now_bps": -24.448
+          "EFA_return_bps": -224.8462,
+          "gross_return_bps": 32.8528,
+          "matched_excess_if_flattened_now_bps": 207.699,
+          "net_if_flattened_now_bps": -17.1472
         },
         "HEFA": {
-          "IEFA_return_bps": -253.3441,
-          "gross_return_bps": 12.9361,
-          "matched_excess_if_flattened_now_bps": 216.2802,
-          "net_if_flattened_now_bps": -37.0639
+          "IEFA_return_bps": -206.7289,
+          "gross_return_bps": 28.0287,
+          "matched_excess_if_flattened_now_bps": 184.7576,
+          "net_if_flattened_now_bps": -21.9713
         },
         "cost_interpretation": {
           "entry_cost_bps": 25.0,
@@ -1578,11 +1578,11 @@
           "reported_net_is_if_flattened_now": true
         },
         "mechanism": {
-          "SPY_return_bps": 251.7109,
+          "SPY_return_bps": 250.5256,
           "both_implementations_positive_vs_matched": true,
-          "mean_matched_excess_if_flattened_now_bps": 228.1785,
-          "mean_net_if_flattened_now_bps": -30.756,
-          "opportunity_excess_vs_SPY_bps": -282.4668
+          "mean_matched_excess_if_flattened_now_bps": 196.2283,
+          "mean_net_if_flattened_now_bps": -19.5593,
+          "opportunity_excess_vs_SPY_bps": -270.0848
         }
       },
       "signal": {
@@ -1605,13 +1605,13 @@
       "signal_date": "2026-09-13",
       "timing": {
         "clock_semantics": "cross-program comparisons use elapsed_close_to_close_sessions; forward_sessions is retained as legacy inclusive-entry count",
-        "elapsed_close_to_close_sessions": 20,
+        "elapsed_close_to_close_sessions": 21,
         "entry": {
           "date": "2026-09-14",
           "rule": "first common market-session close after registration"
         },
-        "forward_sessions": 21,
-        "market_sessions_observed_including_entry": 21,
+        "forward_sessions": 22,
+        "market_sessions_observed_including_entry": 22,
         "regime_is_not_timing_gate": true
       },
       "validation_grade": "PROSPECTIVE_OPEN"
@@ -1638,8 +1638,8 @@
       "kind": "portfolio_level_currency_hedge_allocator_challenger",
       "observation_lineage": {
         "market_data_asof": "2026-10-13",
-        "prospective_ledger_generated_at": "2026-10-14T01:52:09.172219+00:00",
-        "prospective_ledger_sha256": "b2d5fa030410f8d28f111d4000fe7a2700421dacf1695981ecd5aa4580ef84e9"
+        "prospective_ledger_generated_at": "2026-10-14T07:50:44.658527+00:00",
+        "prospective_ledger_sha256": "3120a8a19ab0f03946fc5dffb0c30fa37e45baf50ea2253975b277b3592c5236"
       },
       "observation_status": "ACTIVE",
       "paper_action": {
@@ -1656,25 +1656,25 @@
           "portfolio_roundtrip_cost_bps_if_flattened_now": 2.5
         },
         "hedged_challenger": {
-          "excess_vs_incumbent_bps": -1.5378,
-          "gross_return_bps": 191.857,
-          "net_if_flattened_now_bps": 189.357
+          "excess_vs_incumbent_bps": -0.978,
+          "gross_return_bps": 149.4003,
+          "net_if_flattened_now_bps": 146.9003
         },
-        "incumbent_return_bps": 190.8948,
+        "incumbent_return_bps": 147.8782,
         "mechanism_attribution": {
-          "hedged_minus_spy_overlay_bps": -11.6233,
-          "hedged_minus_unhedged_bps": 13.9089,
+          "hedged_minus_spy_overlay_bps": -11.0042,
+          "hedged_minus_unhedged_bps": 12.3114,
           "portfolio_improvement_and_hedge_edge_both_positive": false
         },
         "spy_opportunity_control": {
-          "excess_vs_incumbent_bps": 10.0855,
-          "gross_return_bps": 203.4804,
-          "net_if_flattened_now_bps": 200.9804
+          "excess_vs_incumbent_bps": 10.0263,
+          "gross_return_bps": 160.4045,
+          "net_if_flattened_now_bps": 157.9045
         },
         "unhedged_matched_control": {
-          "excess_vs_incumbent_bps": -15.4467,
-          "gross_return_bps": 177.9481,
-          "net_if_flattened_now_bps": 175.4481
+          "excess_vs_incumbent_bps": -13.2894,
+          "gross_return_bps": 137.0889,
+          "net_if_flattened_now_bps": 134.5889
         }
       },
       "signal": {
@@ -1722,12 +1722,12 @@
       "signal_date": "2026-09-13",
       "timing": {
         "clock_semantics": "cross-program comparisons use elapsed_close_to_close_sessions; forward_sessions is retained as legacy inclusive-entry count",
-        "elapsed_close_to_close_sessions": 20,
+        "elapsed_close_to_close_sessions": 21,
         "entry_date": "2026-09-14",
         "entry_rule": "first common market-session close after registration",
-        "forward_sessions": 21,
+        "forward_sessions": 22,
         "holding_rule": "buy-and-hold frozen registration weights; no rebalance or allocator mutation",
-        "market_sessions_observed_including_entry": 21
+        "market_sessions_observed_including_entry": 22
       },
       "validation_grade": "PROSPECTIVE_OPEN"
     }
