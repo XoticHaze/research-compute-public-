@@ -7,6 +7,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import exchange_calendars as xc
 import pandas as pd
 import yfinance as yf
 
@@ -23,6 +24,31 @@ UNIVERSE = tuple(dict.fromkeys(P46_UNIVERSE + P47_UNIVERSE))
 
 def _last_complete_month_end(asof: date) -> pd.Timestamp:
     return pd.Timestamp(asof).to_period("M").start_time - pd.Timedelta(days=1)
+
+
+def _require_last_xnys_session_for_every_symbol(panel: pd.DataFrame, cut: pd.Timestamp) -> pd.Timestamp:
+    """Reuse P46's XNYS final-session rule without changing P160 frozen factors.
+
+    A source panel can have a row in the correct month while missing its final
+    exchange session for one or more symbols. pandas month-end .last() would
+    silently use the prior symbol close; fail closed before factor generation.
+    """
+    cal = xc.get_calendar("XNYS")
+    sessions = cal.sessions_in_range(cut.to_period("M").start_time, cut)
+    if not len(sessions):
+        raise RuntimeError(f"P160 has no XNYS sessions for {cut.date()}")
+    expected = pd.Timestamp(sessions[-1]).tz_localize(None).normalize()
+    if panel.empty or panel.index.has_duplicates or expected not in panel.index:
+        raise RuntimeError(f"P160 final XNYS session {expected.date()} unavailable")
+    stale = [
+        symbol for symbol in UNIVERSE
+        if panel[symbol].dropna().empty or panel[symbol].dropna().index.max() != expected
+    ]
+    if stale:
+        raise RuntimeError(
+            f"P160 final XNYS session {expected.date()} missing for symbols: {stale}"
+        )
+    return expected
 
 
 def _download_panel(asof: date) -> tuple[pd.DataFrame, pd.Timestamp, str]:
@@ -51,8 +77,7 @@ def _download_panel(asof: date) -> tuple[pd.DataFrame, pd.Timestamp, str]:
         idx = idx.tz_convert(None)
     panel.index = pd.DatetimeIndex(idx).normalize()
     panel = panel.loc[panel.index <= cut]
-    if panel.empty or panel.index.max().to_period("M") != cut.to_period("M"):
-        raise RuntimeError(f"complete month data unavailable for {cut.date()}")
+    _require_last_xnys_session_for_every_symbol(panel, cut)
     digest = hashlib.sha256(
         panel.reset_index().to_csv(index=False, float_format="%.10g").encode("utf-8")
     ).hexdigest()
