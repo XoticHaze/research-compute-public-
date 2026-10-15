@@ -128,6 +128,10 @@ jobs:
           assert 'MMIBKR_SUPERVISED_GATEWAY_API_READONLY=1' in owner
           assert 'SUPERVISED_SHADOW_CANONICAL_SELECTED_SUBMIT_DISABLED=1' in owner
           assert 'SUPERVISED_FIVE_HOUR_SHADOW_COMPLETE=1' in owner
+          assert 'SUPERVISED_GATEWAY_HEALTH=' in owner
+          assert 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3' in owner
+          assert 'MMIBKR_CANONICAL_BOT_STATUS=' in owner
+          assert 'find /private-data -mindepth 1 -maxdepth 1' in owner
           assert 'timeout-minutes: 340' in owner
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
           PY
@@ -509,10 +513,24 @@ jobs:
             -v "$RUNNER_TEMP/mmibkr-live-data:/app/data" \
             "mmibkr-live-canonical:$GITHUB_RUN_ID" python main.py >/dev/null
           echo "SUPERVISED_CANONICAL_BOT_PROCESS_STARTED=1"
+          # Only project controller-owned status booleans/state; never return
+          # titles, credentials, accounts, user names, ports or raw logs.
+          gateway_status() {
+            local raw
+            raw="$(docker exec mmibkr-live-gateway curl -sS --max-time 4 http://127.0.0.1:8080/health 2>/dev/null)" || raw=''
+            printf '%s' "$raw" | python -c 'import json,sys
+          try: p=json.load(sys.stdin)
+          except (ValueError,TypeError): p={}
+          allowed=("status","state","jvm_alive","api_port_open","upstream_connected","upstream_recovery_active","ccp_lockout_streak")
+          a={k:p.get(k) for k in allowed}
+          assert isinstance(a["status"],(str,type(None)))
+          print("SUPERVISED_GATEWAY_HEALTH="+json.dumps(a,sort_keys=True,separators=(",",":")))' || true
+          }
           start="$(date +%s)"
           duration=18000
           deadline=$((start + duration))
           minute=0
+          probe_failures=0
           while [ "$(date +%s)" -lt "$deadline" ]; do
             minute=$((minute + 1))
             test "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = true || { echo 'SUPERVISED_GATEWAY_PROCESS_LOST=1'; exit 1; }
@@ -520,8 +538,9 @@ jobs:
             if [ "$minute" -ge 4 ]; then
               docker exec mmibkr-live-bot python -c "import urllib.request; assert urllib.request.urlopen('http://127.0.0.1:8001/healthz',timeout=8).status==200" || { echo 'SUPERVISED_CANONICAL_HEALTHZ_FAILED=1'; exit 1; }
             fi
-            if [ $((minute % 5)) -eq 1 ]; then
-              python - <<'PY'
+            gateway_status
+            if [ $((minute % 5)) -eq 1 ] || [ "$probe_failures" -gt 0 ]; then
+              if python - <<'PY'
           import os
           from pathlib import Path
           from ib_insync import IB
@@ -536,6 +555,17 @@ jobs:
           finally:
               if ib.isConnected(): ib.disconnect()
           PY
+              then
+                probe_failures=0
+              else
+                probe_failures=$((probe_failures + 1))
+                echo "SUPERVISED_ACCOUNT_READ_FAILURE_STREAK=$probe_failures"
+                gateway_status
+                if [ "$probe_failures" -ge 3 ]; then
+                  echo 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3'
+                  exit 1
+                fi
+              fi
             fi
             echo "SUPERVISED_LIVE_SHADOW_HEARTBEAT_MINUTE=$minute"
             sleep 60
@@ -585,6 +615,9 @@ jobs:
         if: ${{ always() && inputs.admission_only }}
         run: |
           set +e
+          if docker container inspect mmibkr-live-bot >/dev/null 2>&1; then
+            docker inspect -f 'MMIBKR_CANONICAL_BOT_STATUS={{.State.Status}} EXIT_CODE={{.State.ExitCode}} OOM={{.State.OOMKilled}}' mmibkr-live-bot
+          fi
           if docker container inspect mmibkr-live-gateway >/dev/null 2>&1; then
             docker inspect -f 'MMIBKR_CONTROLLER_CONTAINER_STATUS={{.State.Status}} EXIT_CODE={{.State.ExitCode}} OOM={{.State.OOMKilled}}' mmibkr-live-gateway
             if [ "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = true ]; then
@@ -625,11 +658,24 @@ jobs:
       - name: Destroy one-run credentials, Gateway and account-scoped data
         if: always()
         run: |
-          set +e
-          docker rm -f mmibkr-live-bot mmibkr-live-gateway >/dev/null 2>&1
-          docker volume rm "mmibkr-live-jts-$GITHUB_RUN_ID" >/dev/null 2>&1
-          docker volume rm "mmibkr-live-warm-$GITHUB_RUN_ID" >/dev/null 2>&1
+          set -euo pipefail
+          docker rm -f mmibkr-live-bot mmibkr-live-gateway >/dev/null 2>&1 || true
+          docker volume rm "mmibkr-live-jts-$GITHUB_RUN_ID" >/dev/null 2>&1 || true
+          docker volume rm "mmibkr-live-warm-$GITHUB_RUN_ID" >/dev/null 2>&1 || true
+          # The bot writes some artifacts as root. Host-side rm reported
+          # Permission denied in #40, while falsely claiming destruction.
+          # Delete the EXACT isolated mounted data tree using networkless
+          # root inside a throwaway container, never the worktree.
+          data_dir="$RUNNER_TEMP/mmibkr-live-data"
+          if [ -d "$data_dir" ]; then
+            docker run --rm --network none --user 0:0 \
+              -v "$data_dir:/private-data" alpine:3.22 \
+              sh -ec 'find /private-data -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +'
+            test -z "$(find "$data_dir" -mindepth 1 -maxdepth 1 -print -quit)"
+          fi
           rm -rf "$RUNNER_TEMP/live-warm-import" "$RUNNER_TEMP/live-warm-export"
           rm -rf "$RUNNER_TEMP/mmibkr-live-source" "$RUNNER_TEMP/mmibkr-live-data"
           rm -f "$RUNNER_TEMP/mmibkr-live-gateway.env" "$RUNNER_TEMP/mmibkr-live-bot.env" "$RUNNER_TEMP/mmibkr-live-seal-receipt.json"
+          test ! -e "$RUNNER_TEMP/mmibkr-live-gateway.env"
+          test ! -e "$RUNNER_TEMP/mmibkr-live-data"
           echo 'LIVE_RUN_ONE_RUN_PRIVATE_MATERIAL_DESTROYED=1'
