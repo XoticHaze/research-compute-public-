@@ -351,8 +351,8 @@
     "freshness_gap_visible": false,
     "in_progress_session_excluded": true,
     "lagging_symbols_by_program": {},
-    "observed_common_asof": "2026-10-13",
-    "requested_asof": "2026-10-13",
+    "observed_common_asof": "2026-10-14",
+    "requested_asof": "2026-10-14",
     "source_health_by_program": {
       "HOMEBUILDERS": {
         "all_symbols_share_latest_date": true,
@@ -393,9 +393,9 @@
       }
     }
   },
-  "generated_at": "2026-10-14T07:50:44.658527+00:00",
-  "market_data_asof": "2026-10-13",
-  "requested_market_data_asof": "2026-10-13",
+  "generated_at": "2026-10-15T01:26:15.359737+00:00",
+  "market_data_asof": "2026-10-14",
+  "requested_market_data_asof": "2026-10-14",
   "schema": "research.forward_prospective_cohort_ledger_r1",
   "summary": {
     "HOMEBUILDERS": {
