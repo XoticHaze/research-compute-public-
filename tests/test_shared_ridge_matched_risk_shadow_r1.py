@@ -36,7 +36,8 @@ class SharedRidgeMatchedRiskShadowTests(unittest.TestCase):
 
     def test_public_frozen_evidence_lineage_and_equal_matched_costs(self):
         before = copy.deepcopy(self.ledger)
-        out = shadow.compute(self.ledger, self.scoreboard, self.prices)
+        out = shadow.compute(self.ledger, self.scoreboard, self.prices,
+                             raw_close_prices=self.prices)
         self.assertEqual(before, self.ledger)
         self.assertEqual(out["scientific_disposition"], "HISTORICAL_MATCHED_RISK_DIAGNOSTIC_ONLY")
         self.assertEqual(out["observed_session_intervals"], 20)
@@ -52,6 +53,12 @@ class SharedRidgeMatchedRiskShadowTests(unittest.TestCase):
         self.assertTrue(all(row["max_close_to_close_drawdown"] <= 0 for row in r.values()))
         self.assertAlmostEqual(r["frozen_inverse_vol"]["excess_vs_smh_gross_bps"], -18.3719, delta=1.0)
         self.assertAlmostEqual(r["frozen_inverse_vol"]["excess_vs_smh_after_industry_cost_bps"], -8.3719, delta=1.0)
+        cap = out["capital_feasibility"]
+        self.assertEqual(cap["status"], "HISTORICAL_UNADJUSTED_CLOSE_PROXY_ONLY")
+        self.assertGreater(cap["minimum_nav_one_share_each_usd"], 0)
+        self.assertLess(cap["whole_share_scenarios"]["25000"]["symbols_buyable_at_least_one_share"], 13)
+        self.assertEqual(cap["whole_share_scenarios"]["500000"]["symbols_buyable_at_least_one_share"], 13)
+        self.assertFalse(cap["broker_quote_proven"])
         self.assertFalse(out["policy"]["broker_action"])
         self.assertFalse(out["policy"]["alternative_weight_promotion"])
 
