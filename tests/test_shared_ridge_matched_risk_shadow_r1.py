@@ -50,6 +50,8 @@ class SharedRidgeMatchedRiskShadowTests(unittest.TestCase):
         self.assertTrue(all(abs(sum(row["weights_within_cohort"].values()) - 1) < 1e-7
                             for row in r.values()))
         self.assertTrue(all(row["max_close_to_close_drawdown"] <= 0 for row in r.values()))
+        self.assertAlmostEqual(r["frozen_inverse_vol"]["excess_vs_smh_gross_bps"], -18.3719, delta=1.0)
+        self.assertAlmostEqual(r["frozen_inverse_vol"]["excess_vs_smh_after_industry_cost_bps"], -8.3719, delta=1.0)
         self.assertFalse(out["policy"]["broker_action"])
         self.assertFalse(out["policy"]["alternative_weight_promotion"])
 
