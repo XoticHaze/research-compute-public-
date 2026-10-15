@@ -122,6 +122,13 @@ jobs:
           assert 'chown -R "$RUNNER_UID:$RUNNER_GID"' in owner
           assert 'python -m scripts.operator.selected_runtime_legacy_compat_config_v1' not in owner
           assert 'ib.reqAllOpenOrders()' in owner
+          # Bounded authenticated shadow: explicit admission, independent denial
+          # at the broker and canonical submit policy, not merely a label.
+          assert 'supervised_5h' in owner
+          assert 'MMIBKR_SUPERVISED_GATEWAY_API_READONLY=1' in owner
+          assert 'SUPERVISED_SHADOW_CANONICAL_SELECTED_SUBMIT_DISABLED=1' in owner
+          assert 'SUPERVISED_FIVE_HOUR_SHADOW_COMPLETE=1' in owner
+          assert 'timeout-minutes: 340' in owner
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
           PY
 
