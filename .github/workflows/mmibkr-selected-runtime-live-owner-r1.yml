@@ -519,12 +519,12 @@ jobs:
             local raw
             raw="$(docker exec mmibkr-live-gateway curl -sS --max-time 4 http://127.0.0.1:8080/health 2>/dev/null)" || raw=''
             printf '%s' "$raw" | python -c 'import json,sys
-try: p=json.load(sys.stdin)
-except (ValueError,TypeError): p={}
-allowed=("status","state","jvm_alive","api_port_open","upstream_connected","upstream_recovery_active","ccp_lockout_streak")
-a={k:p.get(k) for k in allowed}
-assert isinstance(a["status"],(str,type(None)))
-print("SUPERVISED_GATEWAY_HEALTH="+json.dumps(a,sort_keys=True,separators=(",",":")))' || true
+          try: p=json.load(sys.stdin)
+          except (ValueError,TypeError): p={}
+          allowed=("status","state","jvm_alive","api_port_open","upstream_connected","upstream_recovery_active","ccp_lockout_streak")
+          a={k:p.get(k) for k in allowed}
+          assert isinstance(a["status"],(str,type(None)))
+          print("SUPERVISED_GATEWAY_HEALTH="+json.dumps(a,sort_keys=True,separators=(",",":")))' || true
           }
           start="$(date +%s)"
           duration=18000
