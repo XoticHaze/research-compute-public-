@@ -45,6 +45,7 @@ jobs:
               "CONTAINERS_ME":f"/accounts/{account}/containers/me",
               "CONTAINERS_APPLICATIONS":f"/accounts/{account}/containers/applications",
               "CONTAINERS_REGISTRIES":f"/accounts/{account}/containers/registries",
+              "ACCOUNT_ENTITLEMENTS":f"/accounts/{account}/entitlements",
           }
           results={}
           for label,path in paths.items():
@@ -97,4 +98,11 @@ jobs:
               print("CONTAINERS_ME_GATE=BLOCKED")
           else:
               print("CONTAINERS_ME_GATE=PASS")
+          # Actionable stage distinctions: an active deploy token does not imply
+          # a paid Containers entitlement. 403 may also be insufficient scope.
+          print("CONTAINERS_APPLICATIONS_READ="+(
+              "PASS" if results.get("CONTAINERS_APPLICATIONS")==200 else "BLOCKED_OR_UNAVAILABLE"))
+          print("ACCOUNT_ENTITLEMENTS_READ="+(
+              "PASS" if results.get("ACCOUNT_ENTITLEMENTS")==200 else "UNAVAILABLE_OR_NO_ACCOUNT_READ_SCOPE"))
+          print("CONTAINERS_DEPLOYMENT_AUTHORITY=NOT_PROVEN_BY_READ_ONLY_PROBE")
           PY
