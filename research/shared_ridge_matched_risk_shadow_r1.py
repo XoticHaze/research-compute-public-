@@ -98,7 +98,7 @@ def frozen_inputs(ledger, scoreboard):
     return c, r, variants
 
 
-def compute(ledger, scoreboard, prices: pd.DataFrame) -> dict:
+def compute(ledger, scoreboard, prices: pd.DataFrame, raw_close_prices: pd.DataFrame | None = None) -> dict:
     c, r, variants = frozen_inputs(ledger, scoreboard)
     symbols = sorted(variants["frozen_inverse_vol"])
     if not isinstance(prices, pd.DataFrame) or not set(symbols + ["SMH"]).issubset(set(prices.columns)):
@@ -141,6 +141,48 @@ def compute(ledger, scoreboard, prices: pd.DataFrame) -> dict:
             "weights_within_cohort": {s: round(weights[s], 10) for s in symbols},
             "evidence_stage": "FROZEN_FORWARD_MEASUREMENT" if name == "frozen_inverse_vol" else "RETROSPECTIVE_ONLY_NO_FORWARD_CREDIT",
         }
+    capital = {
+        "status": "NOT_MEASURED_NO_UNADJUSTED_ENTRY_CLOSE",
+        "broker_quote_proven": False,
+        "broker_position_readback_proven": False,
+    }
+    if raw_close_prices is not None:
+        raw = raw_close_prices.copy()
+        if not set(symbols).issubset(set(raw.columns)):
+            raise ValueError("unadjusted entry close missing symbols")
+        raw.index = pd.to_datetime(raw.index).tz_localize(None).normalize()
+        raw = raw.sort_index()
+        if pd.Timestamp(ENTRY) not in raw.index:
+            raise ValueError("unadjusted entry close missing entry date")
+        px = {s: _finite(raw.loc[pd.Timestamp(ENTRY), s], f"raw entry close {s}") for s in symbols}
+        base_weights = variants["frozen_inverse_vol"]
+        min_nav = {s: px[s] / (0.05 * base_weights[s]) for s in symbols}
+        scenarios = {}
+        for nav in (25_000, 50_000, 100_000, 250_000, 500_000):
+            qty = {s: math.floor((0.05 * nav * base_weights[s]) / px[s] + 1e-12) for s in symbols}
+            deployed = sum(qty[s] * px[s] for s in symbols)
+            scenarios[str(nav)] = {
+                "symbols_buyable_at_least_one_share": sum(qty[s] >= 1 for s in symbols),
+                "cohort_budget_usd": round(.05 * nav, 2),
+                "whole_share_deployed_notional_usd": round(deployed, 2),
+                "budget_used_fraction": round(deployed / (.05 * nav), 6),
+                "symbol_omissions_due_to_lot_size": [s for s in symbols if qty[s] < 1],
+            }
+        capital = {
+            "status": "HISTORICAL_UNADJUSTED_CLOSE_PROXY_ONLY",
+            "reference_close_date": ENTRY,
+            "unadjusted_entry_close_usd": {s: round(px[s], 6) for s in symbols},
+            "minimum_nav_one_share_each_usd": round(max(min_nav.values()), 2),
+            "binding_ticker_at_minimum_nav": max(min_nav, key=min_nav.get),
+            "minimum_nav_per_symbol_usd": {s: round(min_nav[s], 2) for s in symbols},
+            "whole_share_scenarios": scenarios,
+            "no_fractional_shares": True,
+            "no_max_shares_or_margin_caps_applied": True,
+            "broker_quote_proven": False,
+            "broker_position_readback_proven": False,
+            "caveat": "Unadjusted historical closing prices, not broker-executable quote; canonical sizing and current-account risk still govern",
+        }
+
     return {
         "schema": SCHEMA,
         "cohort_id": COHORT,
@@ -151,6 +193,7 @@ def compute(ledger, scoreboard, prices: pd.DataFrame) -> dict:
         "entry_date": ENTRY,
         "exit_date": EXIT,
         "observed_session_intervals": len(p) - 1,
+        "capital_feasibility": capital,
         "results": results,
         "baseline": "frozen_inverse_vol",
         "policy": {
@@ -176,10 +219,12 @@ def compute(ledger, scoreboard, prices: pd.DataFrame) -> dict:
 def download_history(symbols):
     import yfinance as yf
     raw = yf.download(sorted(symbols), start="2026-09-11", end="2026-10-15",
-                      auto_adjust=True, progress=False, threads=False)
+                      auto_adjust=False, progress=False, threads=False)
     if raw is None or raw.empty:
         raise ValueError("SOURCE_FAILURE_EMPTY")
-    return raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+    if not isinstance(raw.columns, pd.MultiIndex) or "Adj Close" not in raw.columns.get_level_values(0):
+        raise ValueError("adjusted/unadjusted source pairs required")
+    return raw["Adj Close"], raw["Close"]
 
 
 def main():
@@ -191,7 +236,8 @@ def main():
     lb, sb = a.ledger.read_bytes(), a.scoreboard.read_bytes()
     ledger, scoreboard = json.loads(lb), json.loads(sb)
     c, _, _ = frozen_inputs(ledger, scoreboard)
-    evidence = compute(ledger, scoreboard, download_history(set(c["symbols"]) | {"SMH"}))
+    adj, raw = download_history(set(c["symbols"]) | {"SMH"})
+    evidence = compute(ledger, scoreboard, adj, raw_close_prices=raw)
     evidence["input_sha256"] = {"ledger": hashlib.sha256(lb).hexdigest(), "scoreboard": hashlib.sha256(sb).hexdigest()}
     a.output.parent.mkdir(parents=True, exist_ok=True)
     a.output.write_text(json.dumps(evidence, indent=2, sort_keys=True, allow_nan=False) + "\n")
