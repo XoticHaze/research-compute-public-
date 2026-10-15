@@ -131,6 +131,7 @@ jobs:
           assert 'SUPERVISED_GATEWAY_HEALTH=' in owner
           assert 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3' in owner
           assert 'MMIBKR_CANONICAL_BOT_STATUS=' in owner
+          assert 'MMIBKR_FINAL_CONTROLLER_HEALTH=' in owner
           assert 'find /private-data -mindepth 1 -maxdepth 1' in owner
           assert 'timeout-minutes: 340' in owner
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
@@ -621,6 +622,11 @@ jobs:
           if docker container inspect mmibkr-live-gateway >/dev/null 2>&1; then
             docker inspect -f 'MMIBKR_CONTROLLER_CONTAINER_STATUS={{.State.Status}} EXIT_CODE={{.State.ExitCode}} OOM={{.State.OOMKilled}}' mmibkr-live-gateway
             if [ "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = true ]; then
+              # Sanitize controller state even if login/account bind failed BEFORE the 5h shadow.
+              # No user identities, dialog contents, network addresses or raw log text.
+              docker exec mmibkr-live-gateway /bin/sh -ec 'curl -sS --max-time 3 http://127.0.0.1:8080/health' |
+                python -c 'import json,sys; p=json.load(sys.stdin); keys=("jvm_alive","api_port_open","upstream_connected","upstream_recovery_active"); v={k:p.get(k) if type(p.get(k)) is bool else None for k in keys}; v["state"]=p.get("state") if p.get("state") in ("INIT","LAUNCHING","AGENT_WAIT","APP_DISCOVERY","LOGIN","POST_LOGIN","TWO_FA","DISCLAIMERS","API_WAIT","CONFIG","COMMAND_SERVER","READY","MONITORING","HALTED","UPSTREAM_DOWN") else "unknown"; v["status"]=p.get("status") if p.get("status") in ("healthy","unhealthy") else "unknown"; n=p.get("ccp_lockout_streak"); v["ccp_lockout_streak"]=n if type(n) is int and 0<=n<=1000 else None; print("MMIBKR_FINAL_CONTROLLER_HEALTH="+json.dumps(v,sort_keys=True,separators=(",",":")))' ||
+                echo 'MMIBKR_FINAL_CONTROLLER_HEALTH=unavailable'
               docker exec mmibkr-live-gateway /bin/sh -ec 'curl -sS --max-time 3 -o /dev/null -w "CONTROLLER_HEALTH_HTTP=%{http_code}\n" http://127.0.0.1:8080/health' || true
             fi
             # Only alert class names, never raw logs, account identifiers, UI titles or secrets.
