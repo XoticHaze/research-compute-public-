@@ -318,46 +318,43 @@
         "cost_detail": null,
         "date": "2026-10-14",
         "holding_month": "2026-10",
-        "p249_core_gross": -0.021243191990542594,
-        "p249_core_net": -0.021243191990542594,
-        "p249_plus_p266_gross": -0.021201914986367768,
-        "p249_plus_p266_net": -0.021201914986367768,
-        "satellite_increment_net": 4.127700417482644e-05
+        "p249_core_gross": -0.02520089806436577,
+        "p249_core_net": -0.02520089806436577,
+        "p249_plus_p266_gross": -0.02417019454173515,
+        "p249_plus_p266_net": -0.02417019454173515,
+        "satellite_increment_net": 0.0010307035226306202
       }
     ],
     "p249_core_net": {
-      "annualized_vol": 0.18240439906697872,
-      "cumulative_return": -0.01922798924468927,
+      "annualized_vol": 0.187444836735135,
+      "cumulative_return": -0.02319384400272284,
       "days": 25,
-      "max_drawdown": -0.053325493054086515,
-      "sharpe_rf0": -0.9848293492262595
+      "max_drawdown": -0.05715347096996248,
+      "sharpe_rf0": -1.1711759399565682
     },
     "p249_plus_p266_net": {
-      "annualized_vol": 0.18375510223215683,
-      "cumulative_return": -0.021257291384526145,
+      "annualized_vol": 0.18742147373007062,
+      "cumulative_return": -0.024225403006759016,
       "days": 25,
-      "max_drawdown": -0.05127652659296844,
-      "sharpe_rf0": -1.0898697781230804
+      "max_drawdown": -0.05415360260377,
+      "sharpe_rf0": -1.228191123650926
     },
-    "satellite_increment_cumulative": -0.0020794175357733424
+    "satellite_increment_cumulative": -0.001092089202126112
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-10-15T01:25:45.996590+00:00",
+  "observed_at": "2026-10-15T07:36:20.212591+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_health": {
-    "all_symbols_share_latest_date": false,
+    "all_symbols_share_latest_date": true,
     "common_session_lags_source_max": false,
     "completed_session_request_date": "2026-10-14",
     "in_progress_session_excluded": true,
-    "lagging_symbols_vs_source_max": [
-      "AVDV",
-      "AVUV"
-    ],
+    "lagging_symbols_vs_source_max": [],
     "latest_by_symbol": {
-      "AVDV": "2026-10-13",
-      "AVUV": "2026-10-13",
+      "AVDV": "2026-10-14",
+      "AVUV": "2026-10-14",
       "DBC": "2026-10-14",
       "GLD": "2026-10-14",
       "IGV": "2026-10-14",
