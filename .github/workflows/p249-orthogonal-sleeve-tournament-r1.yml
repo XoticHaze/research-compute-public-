@@ -6,6 +6,8 @@ on:
     paths:
       - 'research/p249_orthogonal_sleeve_tournament_r1.py'
       - 'tests/test_p249_orthogonal_sleeve_tournament_r1.py'
+      - 'research/p249_p266_monthly_outlier_fragility_r1.py'
+      - 'tests/test_p249_p266_monthly_outlier_fragility_r1.py'
       - 'research/p279_p249_p266_forward_shadow_observer_r1.py'
       - '.github/workflows/p249-orthogonal-sleeve-tournament-r1.yml'
   workflow_dispatch:
@@ -34,10 +36,16 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'],'a') as f:
               f.write('decision='+x['decision']+'\n')
           PY
+      - name: Diagnostic P266 month-ablation acceptance
+        run: python -m unittest discover -s tests -p 'test_p249_p266_monthly_outlier_fragility_r1.py' -v
+      - name: Diagnostic P266 after-outcome tail fragility
+        run: python -m research.p249_p266_monthly_outlier_fragility_r1 --output research/artifacts/p249_p266_monthly_outlier_fragility_r1.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: p249-orthogonal-sleeve-tournament__${{ steps.result.outputs.decision }}
-          path: research/artifacts/p249_orthogonal_sleeve_tournament_r1.json
+          path: |
+            research/artifacts/p249_orthogonal_sleeve_tournament_r1.json
+            research/artifacts/p249_p266_monthly_outlier_fragility_r1.json
           if-no-files-found: error
           retention-days: 90
