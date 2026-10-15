@@ -132,7 +132,8 @@ def compute(ledger, scoreboard, prices: pd.DataFrame) -> dict:
         results[name] = {
             "gross_terminal_bps": round(gross_terminal_bps, 4),
             "net_terminal_bps": round(net_terminal_bps, 4),
-            "excess_vs_smh_net_bps": round(net_terminal_bps - (smh_gross - SMH_COST_BPS), 4),
+            "excess_vs_smh_gross_bps": round(net_terminal_bps - smh_gross, 4),
+            "excess_vs_smh_after_industry_cost_bps": round(net_terminal_bps - (smh_gross - SMH_COST_BPS), 4),
             "realized_daily_vol_annualized": round(float(daily.std(ddof=1) * math.sqrt(252)), 6),
             "max_close_to_close_drawdown": round(float(drawdown.min()), 6),
             "worst_one_day_return": round(float(daily.min()), 6),
