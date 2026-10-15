@@ -11,6 +11,20 @@ on:
         type: boolean
         required: true
         default: true
+      warm_handoff_mode:
+        description: No-order warm-state handoff trial; legacy preserves prior behavior
+        type: choice
+        required: true
+        default: legacy
+        options:
+          - legacy
+          - producer
+          - successor
+      warm_predecessor_run:
+        description: Exact successful producer run ID required for successor mode
+        type: string
+        required: false
+        default: ''
   push:
     branches:
       - main
@@ -122,6 +136,20 @@ jobs:
           echo 'EPHEMERAL_LIVE_BROKER_MUTATION_DISABLED=1'
           echo 'The existing persistent Docker Gateway is the broker session owner; this workflow is admission-only.'
           exit 64
+      - name: Validate no-order handoff experiment inputs
+        if: ${{ inputs.admission_only }}
+        env:
+          HANDOFF_MODE: ${{ inputs.warm_handoff_mode }}
+          PREDECESSOR_RUN: ${{ inputs.warm_predecessor_run }}
+        run: |
+          set -euo pipefail
+          case "$HANDOFF_MODE" in legacy|producer|successor) ;; *) exit 64 ;; esac
+          if [ "$HANDOFF_MODE" = successor ]; then
+            [[ "$PREDECESSOR_RUN" =~ ^[0-9]+$ ]] || { echo 'EXACT_WARM_PRODUCER_RUN_REQUIRED=1'; exit 64; }
+          elif [ -n "$PREDECESSOR_RUN" ]; then
+            echo 'UNEXPECTED_WARM_PREDECESSOR_RUN=1'; exit 64
+          fi
+          echo "NO_ORDER_WARM_HANDOFF_MODE=$HANDOFF_MODE"
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.11.16'
@@ -287,7 +315,7 @@ jobs:
           PY
 
       - name: Restore existing encrypted live Gateway warm state (admission only)
-        if: ${{ inputs.admission_only }}
+        if: ${{ inputs.admission_only && inputs.warm_handoff_mode != 'producer' }}
         env:
           GH_TOKEN: ${{ github.token }}
           MMIBKR_LIVE_GATEWAY_WARM_KEY_B64: ${{ secrets.MMIBKR_LIVE_GATEWAY_WARM_KEY_B64 }}
@@ -304,15 +332,22 @@ jobs:
           print("LIVE_WARM_INDEPENDENT_KEY_CONFIGURED=1")
           PY
           name="mmibkr-live-gateway-state-v1"
-          aid="$(gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts?name=$name&per_page=100"             --jq '[.artifacts[] | select(.expired == false and .workflow_run.head_branch == "main")] | sort_by(.created_at) | reverse | .[0].id // empty')"
-          if [ -z "$aid" ]; then
-            echo "LIVE_WARM_STATE_BOOTSTRAP=COLD_NO_PRIOR_SNAPSHOT"
-            echo "MMIBKR_LIVE_WARM_STATE_RESTORED=0" >> "$GITHUB_ENV"
-            exit 0
+          if [ "${{ inputs.warm_handoff_mode }}" = successor ]; then
+            predecessor_run="${{ inputs.warm_predecessor_run }}"
+            aid="$(gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$predecessor_run/artifacts?per_page=100" --jq '[.artifacts[] | select(.name == "mmibkr-live-gateway-state-v1" and .expired == false)] | .[0].id // empty')"
+            [ -n "$aid" ] || { echo "EXACT_WARM_PRODUCER_ARTIFACT_MISSING=1"; exit 1; }
+            echo "MMIBKR_EXACT_WARM_PRODUCER_REQUIRED=$predecessor_run"
+          else
+            aid="$(gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts?name=$name&per_page=100" --jq '[.artifacts[] | select(.expired == false and .workflow_run.head_branch == "main")] | sort_by(.created_at) | reverse | .[0].id // empty')"
+            if [ -z "$aid" ]; then
+              echo "LIVE_WARM_STATE_BOOTSTRAP=COLD_NO_PRIOR_SNAPSHOT"
+              echo "MMIBKR_LIVE_WARM_STATE_RESTORED=0" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            predecessor_run="$(gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts/$aid" --jq '.workflow_run.id')"
           fi
           dir="$RUNNER_TEMP/live-warm-import"
           mkdir -p "$dir"
-          predecessor_run="$(gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts/$aid" --jq '.workflow_run.id')"
           [[ "$predecessor_run" =~ ^[0-9]+$ && "$predecessor_run" != "$GITHUB_RUN_ID" ]]
           gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$predecessor_run" --jq '(.path == ".github/workflows/mmibkr-selected-runtime-live-owner-r1.yml") and (.event == "workflow_dispatch") and (.head_branch == "main") and (.conclusion == "success")' | grep -qx true
           echo "MMIBKR_AUTHORIZED_PREDECESSOR_RUN=$predecessor_run"
@@ -414,7 +449,7 @@ jobs:
           echo 'LIVE_WRT_NO_LIVE_ORDER_DISPATCHED=1'
 
       - name: Cleanly stop authenticated no-order admission Gateway
-        if: ${{ inputs.admission_only }}
+        if: ${{ inputs.admission_only && inputs.warm_handoff_mode != 'producer' }}
         run: |
           set -euo pipefail
           docker stop --time 90 mmibkr-live-gateway >/dev/null
@@ -430,6 +465,11 @@ jobs:
           umask 077
           dir="$RUNNER_TEMP/live-warm-export"
           mkdir -p "$dir"
+          if [ "${{ inputs.warm_handoff_mode }}" = producer ]; then
+            test "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = true
+            echo "MMIBKR_LIVE_AUTHENTICATED_ONLINE_SNAPSHOT=1"
+            echo "MMIBKR_NO_GRACEFUL_LOGOUT_BEFORE_SNAPSHOT=1"
+          fi
           docker run --rm --network none -v "mmibkr-live-jts-$GITHUB_RUN_ID:/state:ro"             -v "$dir:/export" alpine:3.22             sh -ec 'tar -C /state -czf /export/state.tgz .'
           python scripts/mmibkr_live_gateway_state_envelope_v1.py seal             --archive "$dir/state.tgz" --run-id "$GITHUB_RUN_ID"             --envelope "$dir/state.enc" --manifest "$dir/manifest.json"
           rm -f "$dir/state.tgz"
@@ -446,6 +486,18 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Report sanitized no-order controller lifecycle observations
+        if: ${{ always() && inputs.admission_only }}
+        run: |
+          set +e
+          if docker container inspect mmibkr-live-gateway >/dev/null 2>&1; then
+            docker inspect -f 'MMIBKR_CONTROLLER_CONTAINER_STATUS={{.State.Status}} EXIT_CODE={{.State.ExitCode}} OOM={{.State.OOMKilled}}' mmibkr-live-gateway
+            if [ "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = true ]; then
+              docker exec mmibkr-live-gateway /bin/sh -ec 'curl -sS --max-time 3 -o /dev/null -w "CONTROLLER_HEALTH_HTTP=%{http_code}\n" http://127.0.0.1:8080/health' || true
+            fi
+            # Only alert class names, never raw logs, account identifiers, UI titles or secrets.
+            docker logs mmibkr-live-gateway 2>&1 | grep -oE 'ALERT_[A-Z0-9_]+' | sort -u | head -n 30 || true
+          fi
       - name: Start unchanged canonical bot natural owner with three persisted live policies
         if: ${{ !inputs.admission_only }}
         run: |
