@@ -84,6 +84,11 @@ function fake(overrides={}){
     }
     if(u===cf+target+'/deployments'&&method==='GET'){
       state.events.push('active_read');
+      state.activeReads=(state.activeReads||0)+1;
+      if((state.raceBeforeUpload&&state.activeReads===2)
+          || (state.raceBeforePromotion&&state.activeReads===3)){
+        state.active=other;
+      }
       return Response.json({success:true,result:{deployments:[
         {versions:[{version_id:state.active,percentage:100}]}
       ]}});
@@ -209,6 +214,18 @@ let checks=0;
   const s=await reject('rollback_fails_closed',{promotionHttpFailure:true,rollbackFails:true},'maintenance_failed_and_rollback_failed');
   assert.deepEqual(s.promotions,[newer,old]);assert.equal(s.active,newer);checks++;
 }
-assert.equal(checks,11);
+{
+  const s=await reject('raced_after_preflight_before_upload',
+                       {raceBeforeUpload:true},'preupload_version_mismatch');
+  assert.equal(s.consumes,1);assert.equal(s.uploads,0);
+  assert.equal(s.active,other);assert.equal(s.promotions.length,0);checks++;
+}
+{
+  const s=await reject('raced_after_upload_before_promotion',
+                       {raceBeforePromotion:true},'prepromotion_version_mismatch');
+  assert.equal(s.consumes,1);assert.equal(s.uploads,1);
+  assert.equal(s.active,other);assert.equal(s.promotions.length,0);checks++;
+}
+assert.equal(checks,13);
 console.log('REFERENCE_MAINTAINER_ACTUAL_SOURCE_PREFLIGHT_AND_ROLLBACK_PASS='+checks);
 console.log('REFERENCE_MAINTAINER_PUBLIC_CI_SYNTHETIC_ONLY=1');
