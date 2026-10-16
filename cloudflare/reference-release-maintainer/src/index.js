@@ -149,22 +149,35 @@ async function maintainManifest(wrapper, env) {
   if (!env.CLOUDFLARE_ACCOUNT_ID) throw new Error("cloudflare_account_unconfigured");
   if (!wrapper || typeof wrapper !== "object") throw new Error("request_rejected");
   const manifest = await verifyManifest(env, wrapper);
+  // Resolve every non-mutating precondition BEFORE consuming the unique
+  // independently signed manifest. A stale version, missing token, or bad
+  // immutable source must not burn authorization without any deployment.
+  const token = await env.BROKER_EDITOR_TOKEN.get();
+  if (!token) throw new Error("broker_editor_token_unavailable");
+  const current = await activeVersion(env, token);
+  if (current !== manifest.expected_current_version) throw new Error("current_version_mismatch");
+  const contents = await fetchCandidate(manifest);
+
+  // The only authoritative mutation boundary begins here. Consume the
+  // one-shot manifest before version upload; retries after this point require
+  // a NEW signed approval, never reusing stale authorization.
   const id = env.MAINTENANCE_LEDGER.idFromName(manifest.maintenance_id);
   const consume = await env.MAINTENANCE_LEDGER.get(id).fetch("https://maintenance-ledger/consume", {
     method:"POST", headers:{"content-type":"application/json"},
     body:JSON.stringify({maintenance_id:manifest.maintenance_id})
   });
   if (!consume.ok) throw new Error("maintenance_replay_rejected");
-  const token = await env.BROKER_EDITOR_TOKEN.get();
-  if (!token) throw new Error("broker_editor_token_unavailable");
-  const current = await activeVersion(env, token);
-  if (current !== manifest.expected_current_version) throw new Error("current_version_mismatch");
-  const contents = await fetchCandidate(manifest);
-  let newVersion = null, promoted = false;
+
+  let newVersion = null, promotionAttempted = false;
   try {
     newVersion = await uploadVersion(env, token, manifest, contents);
+    // Important: the HTTP POST can mutate Cloudflare successfully and THEN
+    // return an error/timeout. Mark the attempt BEFORE calling it.
+    promotionAttempted = true;
     await deployVersion(env, token, newVersion, "reference broker maintenance promote");
-    promoted = true;
+    if (await activeVersion(env, token) !== newVersion) {
+      throw new Error("postdeploy_version_mismatch");
+    }
     await verifyLive(env, manifest);
     return json({
       ok:true, schema:"reference-release-maintenance-receipt-v1",
@@ -173,13 +186,28 @@ async function maintainManifest(wrapper, env) {
       rollback_performed:false, secret_material_included:false
     });
   } catch (error) {
-    if (promoted) {
-      try {
-        await deployVersion(env, token, manifest.rollback_version, "reference broker automatic rollback");
-        await verifyLive(env, manifest);
-      } catch {
-        throw new Error("maintenance_failed_and_rollback_failed");
+    if (promotionAttempted) {
+      // Reconcile ambiguous deploy POST outcomes before attempting rollback.
+      // Never clobber a third-party/unexpected version via stale approval.
+      let observed;
+      try { observed = await activeVersion(env, token); }
+      catch { throw new Error("maintenance_rollback_state_unavailable"); }
+      if (observed !== current && observed !== newVersion) {
+        throw new Error("maintenance_unexpected_active_version");
       }
+      if (observed === newVersion) {
+        try {
+          await deployVersion(env, token, manifest.rollback_version, "reference broker automatic rollback");
+          if (await activeVersion(env, token) !== current) {
+            throw new Error("rollback_version_mismatch");
+          }
+        } catch {
+          throw new Error("maintenance_failed_and_rollback_failed");
+        }
+      }
+      // Restoring the EXACT deployed version can be proved independently
+      // even if the prior broker was PRESEAL (no healthy signer yet).
+      // Never misreport rollback as a successfully sealed live broker.
     }
     throw error;
   }
