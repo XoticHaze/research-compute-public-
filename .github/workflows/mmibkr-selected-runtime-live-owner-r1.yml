@@ -60,15 +60,27 @@ jobs:
       actions: write
       contents: read
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Dispatch original live owner as no-order admission only
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # Reuse the established path-scoped rendezvous trigger; an explicit
+          # newly ADDED request marker opts into supervised five-hour shadow.
+          # Persisted old markers cannot accidentally repeat a live session.
+          mode=legacy
+          if git show --format= --unified=0 "$GITHUB_SHA" -- \
+              rendezvous/fire/mmibkr-live-writable-admission-r1 |
+              grep -Fxq '+supervised_5h_dispatch_request: true'; then
+            mode=supervised_5h
+          fi
           gh api --method POST \
             "/repos/${GITHUB_REPOSITORY}/actions/workflows/mmibkr-selected-runtime-live-owner-r1.yml/dispatches" \
             -f ref=main \
-            -f 'inputs[admission_only]=true'
+            -f 'inputs[admission_only]=true' \
+            -f "inputs[warm_handoff_mode]=$mode"
+          echo "LIVE_WRT_DISPATCHED_NO_ORDER_MODE=$mode"
           echo 'LIVE_WRT_ADMISSION_WORKFLOW_DISPATCHED=1'
           echo 'LIVE_WRT_LIVE_BOT_ON_PUSH=0'
 
@@ -114,6 +126,9 @@ jobs:
           assert "if: " + chr(36) + "{{ !inputs.admission_only }}" in owner
           assert "if: " + chr(36) + "{{ inputs.admission_only }}" in owner
           assert "'inputs[admission_only]=true'" in s
+          assert "'inputs[warm_handoff_mode]=$mode'" in s or 'inputs[warm_handoff_mode]=$mode' in s
+          assert "'+supervised_5h_dispatch_request: true'" in s
+          assert 'mode=legacy' in s and 'mode=supervised_5h' in s
           assert 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1' in owner
           assert 'python /app/scripts/operator/selected_runtime_legacy_compat_config_v1.py' in owner
           assert "--entrypoint /bin/sh" in owner
