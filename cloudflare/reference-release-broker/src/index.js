@@ -141,6 +141,33 @@ function policyFromEnv(env) {
   return policy;
 }
 
+// Readiness is not network reachability. A broker may only answer healthy
+// when its deployed generic policy, one-use ledger namespace, private P256
+// signer, and independent authority verifier are all actually importable.
+// This performs NO Cloudflare mutation and publishes NO signing or verifier
+// bytes. Independent credential isolation still requires separate proof.
+async function assertBrokerReady(env) {
+  if (!env.GRANT_LEDGER
+      || typeof env.GRANT_LEDGER.idFromName !== 'function'
+      || typeof env.GRANT_LEDGER.get !== 'function') {
+    throw new Error('grant_ledger_unconfigured');
+  }
+  policyFromEnv(env);
+  if (typeof env.AUTHORITY_PUBLIC_B64 !== 'string' || !env.AUTHORITY_PUBLIC_B64) {
+    throw new Error('authority_key_unconfigured');
+  }
+  if (typeof env.BROKER_SIGNING_PRIVATE_JWK !== 'string' || !env.BROKER_SIGNING_PRIVATE_JWK) {
+    throw new Error('broker_signer_unconfigured');
+  }
+  const raw = b64ToBytes(env.AUTHORITY_PUBLIC_B64);
+  if (raw.length !== 33 && raw.length !== 65) {
+    throw new Error('authority_public_point_invalid');
+  }
+  await crypto.subtle.importKey('raw', raw, {name:'ECDSA',namedCurve:'P-256'},
+                                false,['verify']);
+  await importBrokerSigner(env.BROKER_SIGNING_PRIVATE_JWK);
+}
+
 async function handleRelease(request, env) {
   if (!env.GRANT_LEDGER) throw new Error('grant_ledger_unconfigured');
   if (typeof env.AUTHORITY_PUBLIC_B64 !== 'string' || !env.AUTHORITY_PUBLIC_B64) {
@@ -286,7 +313,14 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname === '/healthz') {
-      return json({ ok: true }, 200);
+      try {
+        await assertBrokerReady(env);
+        return json({ ok: true }, 200);
+      } catch {
+        // Deliberately indistinguishable missing signer / verifier / ledger /
+        // pinned workflow policy. No token/private-material echoes.
+        return json({ ok: false }, 503);
+      }
     }
     if (request.method === 'GET' && url.pathname === '/v1/public-key') {
       try {
