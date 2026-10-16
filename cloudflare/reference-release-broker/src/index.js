@@ -82,6 +82,20 @@ async function verifyGithubOidc(jwt) {
   return claims;
 }
 
+// WebCrypto-generated private JWKs carry key_ops:['sign']. Removing only 'd'
+// leaves a *public* JWK with forbidden signing-only usage metadata. Construct
+// the public verifier from the exact P-256 public coordinates, never by
+// shallow-copying private fields or trusting caller-supplied key_ops.
+function brokerPublicJwkFromPrivate(jwk) {
+  if (!jwk || jwk.kty !== 'EC' || jwk.crv !== 'P-256'
+      || typeof jwk.x !== 'string' || typeof jwk.y !== 'string'
+      || !/^[A-Za-z0-9_-]{43}$/.test(jwk.x)
+      || !/^[A-Za-z0-9_-]{43}$/.test(jwk.y)) {
+    throw new Error('broker_signer_unconfigured');
+  }
+  return { kty:'EC', crv:'P-256', x:jwk.x, y:jwk.y };
+}
+
 async function importBrokerSigner(privateJwkText) {
   let jwk;
   try { jwk = JSON.parse(privateJwkText); } catch { throw new Error('broker_signer_unconfigured'); }
@@ -95,8 +109,7 @@ async function importBrokerSigner(privateJwkText) {
     false,
     ['sign'],
   );
-  const publicJwk = { ...jwk };
-  delete publicJwk.d;
+  const publicJwk = brokerPublicJwkFromPrivate(jwk);
   const publicKey = await crypto.subtle.importKey(
     'jwk',
     publicJwk,
@@ -274,8 +287,7 @@ export default {
     if (request.method === 'GET' && url.pathname === '/v1/public-key') {
       try {
         const raw = JSON.parse(env.BROKER_SIGNING_PRIVATE_JWK || '{}');
-        const pub = { ...raw };
-        delete pub.d;
+        const pub = brokerPublicJwkFromPrivate(raw);
         const publicKey = await crypto.subtle.importKey(
           'jwk', pub, { name: 'ECDSA', namedCurve: 'P-256' }, true, ['verify']
         );
