@@ -3,7 +3,7 @@
 // deployment rights, PHI, or real private inputs are used or printed.
 import assert from 'node:assert/strict';
 import { createHash, webcrypto } from 'node:crypto';
-import broker, { GrantLedger } from '../cloudflare/reference-release-broker/src/index.js';
+import broker, { GrantLedger, verifyGithubOidc, importBrokerSigner } from '../cloudflare/reference-release-broker/src/index.js';
 import { callerPolicySha256, validateOidcCallerPolicy } from '../cloudflare/reference-release-broker/src/ticket.js';
 import { verifyAuthorityIntent } from '../cloudflare/reference-release-broker/src/intent.js';
 
@@ -124,6 +124,15 @@ await verifyAuthorityIntent(preparedIntent,encode(authorityPublicRaw),{
   harness_sha:harness,broker_key_id:brokerId,
 },now);
 console.log('BROKER_PRIVATE_INTENT_CRYPTO_AND_CANONICAL_PROBE_PASS=1');
+// These helpers are the exact ones called by broker.fetch(), not duplicate
+// test cryptography. Stage-only markers never disclose bearer/private bytes.
+const claimsFromJwt = await verifyGithubOidc(await jwt(claims));
+assert.equal(claimsFromJwt.repository_id,claims.repository_id);
+console.log('BROKER_SIGNED_GITHUB_OIDC_JWT_PROBE_PASS=1');
+const importedSigner = await importBrokerSigner(JSON.stringify(privateJwk));
+assert.equal(importedSigner.keyId,brokerId);
+console.log('BROKER_STANDARD_PRIVATE_JWK_SIGNER_IMPORT_PROBE_PASS=1');
+
 const positive=await makeCall(env);
 assert.equal(positive.status,200,'signed-release endpoint expected 200, ledger size='+store.size);
 const doc=await positive.json();
