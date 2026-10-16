@@ -74,7 +74,8 @@ function createEnv() {
   }});
   return {
     env: {
-      GRANT_LEDGER: {idFromName: name => name, get: () => ledger},
+      GRANT_LEDGER: {idFromName: name => name,
+        get: () => ({fetch: (uri, init) => ledger.fetch(new Request(uri, init))})},
       AUTHORITY_PUBLIC_B64:encode(authorityPublicRaw),
       BROKER_SIGNING_PRIVATE_JWK:JSON.stringify(privateJwk),
       ALLOWED_JOB_WORKFLOW_REF:workflow, ALLOWED_JOB_WORKFLOW_SHA:harness,
