@@ -143,10 +143,14 @@ jobs:
           assert 'MMIBKR_SUPERVISED_GATEWAY_API_READONLY=1' in owner
           assert 'SUPERVISED_SHADOW_CANONICAL_SELECTED_SUBMIT_DISABLED=1' in owner
           assert 'SUPERVISED_FIVE_HOUR_SHADOW_COMPLETE=1' in owner
+          assert 'SUPERVISED_GATEWAY_ONLY_EIGHT_MINUTES_PASS=1' in owner
+          assert 'SUPERVISED_GATEWAY_ONLY_API_UNSTABLE=1' in owner
+          assert 'SUPERVISED_GATEWAY_ONLY_BROKER_RECONCILED=1' in owner
           assert 'SUPERVISED_GATEWAY_HEALTH=' in owner
           assert 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3' in owner
           assert 'MMIBKR_CANONICAL_BOT_STATUS=' in owner
           assert 'MMIBKR_FINAL_CONTROLLER_HEALTH=' in owner
+          assert 'MMIBKR_SAFE_CONTROLLER_LIFECYCLE=' in owner
           assert 'MMIBKR_SUPERVISED_2FA_APPROVAL_WINDOW_SECONDS=300' in owner
           assert 'MMIBKR_SUPERVISED_AUTOMATIC_2FA_RELOGIN=0' in owner
           assert 'MMIBKR_SUPERVISED_CONTROLLER_UPGRADE_V0_16_2_VERIFIED=1' in owner
@@ -507,6 +511,64 @@ jobs:
           echo 'LIVE_WRT_ACCOUNT_READ_ONLY_RECONCILED=1'
           echo 'LIVE_WRT_NO_LIVE_ORDER_DISPATCHED=1'
 
+      - name: Observe authenticated Gateway without canonical bot for eight minutes (read only)
+        if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'supervised_5h' }}
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          # Distinguish broker/Gateway session instability from bot-triggered
+          # disconnects before starting canonical main.py. No submit route,
+          # order mutation, restart, login or controller commands here.
+          docker exec mmibkr-live-gateway /bin/sh -ec 'test "$READ_ONLY_API" = yes'
+          down_samples=0
+          for sample in $(seq 1 16); do
+            test "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = true || {
+              echo 'SUPERVISED_GATEWAY_ONLY_CONTROLLER_PROCESS_LOST=1'
+              exit 1
+            }
+            raw="$(docker exec mmibkr-live-gateway curl -sS --max-time 4 http://127.0.0.1:8080/health 2>/dev/null)" || raw=''
+            safe="$(printf '%s' "$raw" | python -c 'import json,sys
+          try: p=json.load(sys.stdin)
+          except (TypeError,ValueError): p={}
+          keys=("api_port_open","socat_port_open","upstream_connected","upstream_recovery_active","jvm_alive")
+          allowed={k:(p.get(k) if type(p.get(k)) is bool else None) for k in keys}
+          allowed["state"]=p.get("state") if p.get("state") in ("MONITORING","READY","LOGIN","TWO_FA","HALTED","UPSTREAM_DOWN") else "other"
+          allowed["status"]=p.get("status") if p.get("status") in ("healthy","unhealthy") else "unknown"
+          print(json.dumps(allowed,sort_keys=True,separators=(",",":")))' )" || safe='{}'
+            echo "SUPERVISED_GATEWAY_ONLY_HEALTH_SAMPLE=$sample $safe"
+            if [[ "$safe" != *'"api_port_open":true'* ]]; then
+              down_samples=$((down_samples + 1))
+            fi
+            # Fixed 8-minute no-bot control phase, even if the listener
+            # flaps: capture whether the controller actually recovers.
+            sleep 30
+          done
+          echo "SUPERVISED_GATEWAY_ONLY_API_DOWN_SAMPLES=$down_samples"
+          if [ "$down_samples" -gt 0 ]; then
+            echo 'SUPERVISED_GATEWAY_ONLY_API_UNSTABLE=1'
+            exit 1
+          fi
+          if ! python - <<'PY'
+          import os
+          from pathlib import Path
+          from ib_insync import IB
+          expected=(Path(os.environ["RUNNER_TEMP"])/"mmibkr-live-bot.env").read_text().strip().split("=",1)[1]
+          ib=IB()
+          try:
+              ib.connect("127.0.0.1",4001,clientId=78,timeout=10,readonly=True)
+              assert expected in ib.managedAccounts()
+              ib.reqPositions()
+              ib.reqAllOpenOrders()
+              print("SUPERVISED_GATEWAY_ONLY_BROKER_RECONCILED=1")
+          finally:
+              if ib.isConnected(): ib.disconnect()
+          PY
+          then
+            echo 'SUPERVISED_GATEWAY_ONLY_API_HANDSHAKE_FAILED=1'
+            exit 1
+          fi
+          echo 'SUPERVISED_GATEWAY_ONLY_EIGHT_MINUTES_PASS=1'
+
       - name: Run supervised five-hour live-account canonical bot shadow (no orders)
         if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'supervised_5h' }}
         run: |
@@ -672,6 +734,31 @@ jobs:
             fi
             # Only alert class names, never raw logs, account identifiers, UI titles or secrets.
             docker logs mmibkr-live-gateway 2>&1 | grep -oE 'ALERT_[A-Z0-9_]+' | sort -u | head -n 30 || true
+            # Never print raw Gateway/JTS logs on public runners: emit only
+            # predeclared event-class counts, even on an early 2FA failure.
+            docker logs mmibkr-live-gateway 2>&1 | python3 -c 'import sys,re,json
+          patterns={
+            "port_closed":r"API port [0-9]+ closed",
+            "port_recovered":r"API port [0-9]+ recovered",
+            "reauth_check":r"Sustained API port closure",
+            "login_dialog":r"Login dialog detected during monitor loop",
+            "wedged_no_login":r"Wedged failure",
+            "wedge_restart":r"Gateway appears wedged",
+            "recovery_relaunch":r"Recovery: .*Relaunching Gateway",
+            "upstream_down":r"ALERT_UPSTREAM_DOWN",
+            "upstream_restored":r"UPSTREAM_RESTORED",
+            "existing_session_conflict":r"ALERT_EXISTING_SESSION_CONFLICT",
+            "config_not_applied":r"ALERT_CONFIG_NOT_APPLIED",
+            "2fa_failed":r"ALERT_2FA_FAILED",
+            "controller_halted":r"ALERT_HALTED",
+            "ccp_lockout":r"ALERT_CCP",
+            "clean_logout":r"ALERT_CLEAN_LOGOUT",
+          }
+          counts={k:0 for k in patterns}
+          for line in sys.stdin:
+              for k,pat in patterns.items():
+                  if re.search(pat,line): counts[k]=min(999,counts[k]+1)
+          print("MMIBKR_SAFE_CONTROLLER_LIFECYCLE="+json.dumps(counts,sort_keys=True,separators=(",",":")))' || true
           fi
       - name: Start unchanged canonical bot natural owner with three persisted live policies
         if: ${{ !inputs.admission_only }}
