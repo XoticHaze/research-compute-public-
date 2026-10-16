@@ -1,5 +1,9 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
 const TARGET_WORKER = "reference-release-broker-v1";
+const EXPECTED_NEUTRAL_ACCOUNT_ID = "b33595eb85f346b0d1bf201810b4499a";
+// The protected Cloudflare account is a public resource identifier, NOT a
+// credential. A broker-only Editor token or stale original-account binding
+// must never switch this maintainer to another account by config accident.
 const SOURCE_REPOSITORY = "XoticHaze/research-compute-public-";
 const SOURCE_FILES = ["index.js", "intent.js", "ticket.js"];
 const SOURCE_PREFIX = "cloudflare/reference-release-broker/src/";
@@ -147,6 +151,9 @@ async function maintainManifest(wrapper, env) {
   if (!env.MAINTENANCE_AUTHORITY) throw new Error("maintenance_authority_binding_unconfigured");
   if (!env.BROKER_EDITOR_TOKEN || typeof env.BROKER_EDITOR_TOKEN.get !== "function") throw new Error("broker_editor_binding_unconfigured");
   if (!env.CLOUDFLARE_ACCOUNT_ID) throw new Error("cloudflare_account_unconfigured");
+  if (String(env.CLOUDFLARE_ACCOUNT_ID) !== EXPECTED_NEUTRAL_ACCOUNT_ID) {
+    throw new Error("neutral_cloudflare_account_mismatch");
+  }
   if (!wrapper || typeof wrapper !== "object") throw new Error("request_rejected");
   const manifest = await verifyManifest(env, wrapper);
   // Resolve every non-mutating precondition BEFORE consuming the unique
@@ -242,6 +249,9 @@ export default class ReferenceReleaseMaintainer extends WorkerEntrypoint {
       throw new Error("broker_editor_binding_unconfigured");
     }
     if (!this.env.CLOUDFLARE_ACCOUNT_ID) throw new Error("cloudflare_account_unconfigured");
+    if (String(this.env.CLOUDFLARE_ACCOUNT_ID) !== EXPECTED_NEUTRAL_ACCOUNT_ID) {
+      throw new Error("neutral_cloudflare_account_mismatch");
+    }
     const token = await this.env.BROKER_EDITOR_TOKEN.get();
     if (!token) throw new Error("broker_editor_token_unavailable");
     return {

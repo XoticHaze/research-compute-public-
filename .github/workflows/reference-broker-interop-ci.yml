@@ -6,6 +6,7 @@ on:
     paths:
       - 'cloudflare/reference-release-broker/**'
       - 'cloudflare/reference-release-maintainer/src/index.js'
+      - 'cloudflare/reference-maintenance-authority/src/index.js'
       - 'tests/reference_release_maintainer_runtime_interop.mjs'
       - 'scripts/reference_release_grant_v1.py'
       - 'tests/reference_release_intent_interop.mjs'
@@ -27,6 +28,7 @@ on:
     paths:
       - 'cloudflare/reference-release-broker/**'
       - 'cloudflare/reference-release-maintainer/src/index.js'
+      - 'cloudflare/reference-maintenance-authority/src/index.js'
       - 'tests/reference_release_maintainer_runtime_interop.mjs'
       - 'tests/reference_release_broker_policy.mjs'
       - 'tests/reference_release_broker_endpoint_interop.mjs'
