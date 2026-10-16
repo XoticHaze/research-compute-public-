@@ -142,6 +142,8 @@ function policyFromEnv(env) {
 }
 
 async function handleRelease(request, env) {
+  let syntheticStage = 'preflight';
+  try {
   if (!env.GRANT_LEDGER) throw new Error('grant_ledger_unconfigured');
   if (typeof env.AUTHORITY_PUBLIC_B64 !== 'string' || !env.AUTHORITY_PUBLIC_B64) {
     throw new Error('authority_key_unconfigured');
@@ -166,16 +168,21 @@ async function handleRelease(request, env) {
   if (!/^sha256:[0-9a-f]{64}$/.test(workerKeyId)) throw new Error('worker_key_rejected');
   if (!body.intent || typeof body.intent !== 'object') throw new Error('intent_rejected');
 
+  syntheticStage='policy';
   const policy = policyFromEnv(env);
+  syntheticStage='oidc';
   const claims = await verifyGithubOidc(auth.slice(7));
+  syntheticStage='signer';
   const signer = await importBrokerSigner(env.BROKER_SIGNING_PRIVATE_JWK);
   const now = Math.floor(Date.now() / 1000);
   // Verify the signed GitHub JWT's immutable, public principal and exact
   // reusable-workflow measurement before using it to match a private intent.
   // A standalone clean-room synthetic ACK does not establish this authority.
+  syntheticStage='claims';
   validateOidcCallerPolicy(claims, policy, now);
 
   const intentWrapper = body.intent;
+  syntheticStage='policy_digest';
   const policyDigest = await callerPolicySha256(claims);
   let intentPayload;
   try {
@@ -189,6 +196,7 @@ async function handleRelease(request, env) {
     harness_sha: String(policy.job_workflow_sha),
     broker_key_id: signer.keyId,
   };
+  syntheticStage='intent';
   const intent = await verifyAuthorityIntent(
     intentWrapper,
     env.AUTHORITY_PUBLIC_B64,
@@ -203,6 +211,7 @@ async function handleRelease(request, env) {
   );
   if (admissionNotAfter <= now) throw new Error('intent_expired');
 
+  syntheticStage='ledger';
   const id = env.GRANT_LEDGER.idFromName(String(intent.grant_id));
   const stub = env.GRANT_LEDGER.get(id);
   const consumeResponse = await stub.fetch('https://grant-ledger/consume', {
@@ -228,6 +237,7 @@ async function handleRelease(request, env) {
     worker_key_id: workerKeyId,
     admission_not_after: admissionNotAfter,
   };
+  syntheticStage='ticket';
   const ticket = await signReleaseTicket(
     signer.privateKey,
     signer.keyId,
@@ -235,6 +245,12 @@ async function handleRelease(request, env) {
     now,
   );
   return json({ ok: true, ticket }, 200);
+  } catch (error) {
+    if (env.__SYNTHETIC_TEST_STAGE_ONLY === true) {
+      throw new Error('synthetic_stage_' + syntheticStage);
+    }
+    throw error;
+  }
 }
 
 // Exposes pure testable module helpers only; no additional Cloudflare route,
@@ -315,6 +331,10 @@ export default {
       return await handleRelease(request, env);
     } catch (error) {
       const code = String(error?.message || 'rejected');
+      if (env.__SYNTHETIC_TEST_STAGE_ONLY === true
+          && code.startsWith('synthetic_stage_')) {
+        return json({error:code},400);
+      }
       if (
         code.includes('unconfigured')
         || code === 'oidc_jwks_unavailable'
