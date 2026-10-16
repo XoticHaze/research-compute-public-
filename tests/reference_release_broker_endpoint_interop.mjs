@@ -108,6 +108,27 @@ const {env,store}=createEnv();
 const health=await broker.fetch(new Request('https://synthetic.example/healthz'),env);
 assert.equal(health.status,200);
 assert.equal((await health.json()).ok,true);
+// Current deployed readiness must not report green just because a Worker URL
+// responds. Probe every actual signed-release dependency without disclosing
+// which neutral secret/binding is missing to public callers.
+const healthNegatives=[
+  ['missing_DO_namespace', e=>{delete e.GRANT_LEDGER;}],
+  ['non_DO_namespace', e=>{e.GRANT_LEDGER={};}],
+  ['missing_private_signer', e=>{delete e.BROKER_SIGNING_PRIVATE_JWK;}],
+  ['malformed_private_signer', e=>{e.BROKER_SIGNING_PRIVATE_JWK='{}';}],
+  ['missing_authority_verifier', e=>{delete e.AUTHORITY_PUBLIC_B64;}],
+  ['invalid_authority_verifier', e=>{e.AUTHORITY_PUBLIC_B64=encode(new Uint8Array(33));}],
+  ['unpinned_workflow_hash', e=>{e.ALLOWED_JOB_WORKFLOW_SHA='broken';}],
+  ['overlong_admission_policy', e=>{e.MAX_ADMISSION_SECONDS='901';}],
+];
+for(const [label,mutate] of healthNegatives){
+  const {env:bad}=createEnv();
+  mutate(bad);
+  const response=await broker.fetch(new Request('https://synthetic.example/healthz'),bad);
+  assert.equal(response.status,503,'health falsely ready: '+label);
+  assert.deepEqual(await response.json(),{ok:false},'health leaking configuration: '+label);
+}
+console.log('BROKER_HEALTH_SEALED_DEPENDENCY_NEGATIVES_PASS='+healthNegatives.length);
 const keyResp=await broker.fetch(new Request('https://synthetic.example/v1/public-key'),env);
 assert.equal(keyResp.status,200,'public-key endpoint must recognize standard private JWK');
 const publicKey=await keyResp.json();
