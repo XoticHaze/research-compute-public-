@@ -132,6 +132,10 @@ jobs:
           assert 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3' in owner
           assert 'MMIBKR_CANONICAL_BOT_STATUS=' in owner
           assert 'MMIBKR_FINAL_CONTROLLER_HEALTH=' in owner
+          assert 'MMIBKR_SUPERVISED_2FA_APPROVAL_WINDOW_SECONDS=300' in owner
+          assert 'MMIBKR_SUPERVISED_AUTOMATIC_2FA_RELOGIN=0' in owner
+          assert 'twofa_exit_interval=300' in owner
+          assert 'relogin_after_twofa_timeout=no' in owner
           assert 'find /private-data -mindepth 1 -maxdepth 1' in owner
           assert 'timeout-minutes: 340' in owner
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
@@ -399,9 +403,18 @@ jobs:
                        -v "mmibkr-live-warm-$GITHUB_RUN_ID:/home/ibgateway/warm-state:ro")
           fi
           read_only_api=no
+          twofa_exit_interval=120
+          relogin_after_twofa_timeout=yes
           if [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ]; then
             read_only_api=yes
+            # Attended approval: give a single challenge adequate time.
+            # Suppress an automatic second login (which can cause a new push).
+            # Fail closed on timeout, never bypass 2FA or authorize orders.
+            twofa_exit_interval=300
+            relogin_after_twofa_timeout=no
             echo 'MMIBKR_SUPERVISED_GATEWAY_API_READONLY=1'
+            echo 'MMIBKR_SUPERVISED_2FA_APPROVAL_WINDOW_SECONDS=300'
+            echo 'MMIBKR_SUPERVISED_AUTOMATIC_2FA_RELOGIN=0'
           fi
           docker run -d --name mmibkr-live-gateway \
             --env-file "$RUNNER_TEMP/mmibkr-live-gateway.env" \
@@ -409,8 +422,8 @@ jobs:
             -e TRADING_MODE=live \
             -e READ_ONLY_API="$read_only_api" \
             -e TWOFA_TIMEOUT_ACTION=exit \
-            -e TWOFA_EXIT_INTERVAL=120 \
-            -e RELOGIN_AFTER_TWOFA_TIMEOUT=yes \
+            -e TWOFA_EXIT_INTERVAL="$twofa_exit_interval" \
+            -e RELOGIN_AFTER_TWOFA_TIMEOUT="$relogin_after_twofa_timeout" \
             -e CONTROLLER_HEALTH_SERVER_PORT=8080 \
             -e TWS_SETTINGS_PATH=/home/ibgateway/Jts_b1 \
             -e TIME_ZONE=America/Chicago \
