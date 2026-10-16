@@ -170,7 +170,16 @@ async function maintainManifest(wrapper, env) {
 
   let newVersion = null, promotionAttempted = false;
   try {
+    // Separate authorized changes can race a candidate fetch or upload.
+    // Refuse to overwrite an unexpectedly active version. These checks
+    // are after one-time consumption, so a race requires fresh approval.
+    if (await activeVersion(env, token) !== current) {
+      throw new Error("preupload_version_mismatch");
+    }
     newVersion = await uploadVersion(env, token, manifest, contents);
+    if (await activeVersion(env, token) !== current) {
+      throw new Error("prepromotion_version_mismatch");
+    }
     // Important: the HTTP POST can mutate Cloudflare successfully and THEN
     // return an error/timeout. Mark the attempt BEFORE calling it.
     promotionAttempted = true;
