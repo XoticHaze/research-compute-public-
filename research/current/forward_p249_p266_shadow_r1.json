@@ -60,7 +60,7 @@
   "decision_at": "2026-09-10T07:25:00+00:00",
   "forward": {
     "first_close": "2026-09-10",
-    "latest_close": "2026-10-14",
+    "latest_close": "2026-10-15",
     "observations": [
       {
         "cost_detail": {
@@ -323,63 +323,76 @@
         "p249_plus_p266_gross": -0.02417019454173515,
         "p249_plus_p266_net": -0.02417019454173515,
         "satellite_increment_net": 0.0010307035226306202
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-10-15",
+        "holding_month": "2026-10",
+        "p249_core_gross": -0.0015142751516104799,
+        "p249_core_net": -0.0015142751516104799,
+        "p249_plus_p266_gross": -0.0007089807819044881,
+        "p249_plus_p266_net": -0.0007089807819044881,
+        "satellite_increment_net": 0.0008052943697059918
       }
     ],
     "p249_core_net": {
-      "annualized_vol": 0.187444836735135,
-      "cumulative_return": -0.02319384400272284,
-      "days": 25,
-      "max_drawdown": -0.05715347096996248,
-      "sharpe_rf0": -1.1711759399565682
+      "annualized_vol": 0.18366859537587857,
+      "cumulative_return": -0.02467299729268968,
+      "days": 26,
+      "max_drawdown": -0.05858120004065481,
+      "sharpe_rf0": -1.2291933065482294
     },
     "p249_plus_p266_net": {
-      "annualized_vol": 0.18742147373007062,
-      "cumulative_return": -0.024225403006759016,
-      "days": 25,
-      "max_drawdown": -0.05415360260377,
-      "sharpe_rf0": -1.228191123650926
+      "annualized_vol": 0.1836358942993186,
+      "cumulative_return": -0.024917208443497874,
+      "days": 26,
+      "max_drawdown": -0.05482418952215762,
+      "sharpe_rf0": -1.2427178960888488
     },
-    "satellite_increment_cumulative": -0.001092089202126112
+    "satellite_increment_cumulative": -0.0002876742857058634
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-10-15T07:36:20.212591+00:00",
+  "observed_at": "2026-10-16T00:34:43.317460+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_health": {
-    "all_symbols_share_latest_date": true,
+    "all_symbols_share_latest_date": false,
     "common_session_lags_source_max": false,
-    "completed_session_request_date": "2026-10-14",
+    "completed_session_request_date": "2026-10-15",
     "in_progress_session_excluded": true,
-    "lagging_symbols_vs_source_max": [],
+    "lagging_symbols_vs_source_max": [
+      "AVDV",
+      "AVUV"
+    ],
     "latest_by_symbol": {
       "AVDV": "2026-10-14",
       "AVUV": "2026-10-14",
-      "DBC": "2026-10-14",
-      "GLD": "2026-10-14",
-      "IGV": "2026-10-14",
-      "IHI": "2026-10-14",
-      "ITA": "2026-10-14",
-      "IYT": "2026-10-14",
-      "KRE": "2026-10-14",
-      "QQQ": "2026-10-14",
-      "SOXX": "2026-10-14",
-      "SPY": "2026-10-14",
-      "TLT": "2026-10-14",
-      "XAR": "2026-10-14",
-      "XBI": "2026-10-14",
-      "XHB": "2026-10-14",
-      "XME": "2026-10-14",
-      "XOP": "2026-10-14",
-      "XPH": "2026-10-14",
-      "XRT": "2026-10-14",
-      "XSD": "2026-10-14",
-      "XSW": "2026-10-14",
-      "XTN": "2026-10-14"
+      "DBC": "2026-10-15",
+      "GLD": "2026-10-15",
+      "IGV": "2026-10-15",
+      "IHI": "2026-10-15",
+      "ITA": "2026-10-15",
+      "IYT": "2026-10-15",
+      "KRE": "2026-10-15",
+      "QQQ": "2026-10-15",
+      "SOXX": "2026-10-15",
+      "SPY": "2026-10-15",
+      "TLT": "2026-10-15",
+      "XAR": "2026-10-15",
+      "XBI": "2026-10-15",
+      "XHB": "2026-10-15",
+      "XME": "2026-10-15",
+      "XOP": "2026-10-15",
+      "XPH": "2026-10-15",
+      "XRT": "2026-10-15",
+      "XSD": "2026-10-15",
+      "XSW": "2026-10-15",
+      "XTN": "2026-10-15"
     },
-    "latest_scored_common_session": "2026-10-14",
+    "latest_scored_common_session": "2026-10-15",
     "provider": "yfinance_adjusted_close",
-    "source_max_date": "2026-10-14"
+    "source_max_date": "2026-10-15"
   },
   "source_pins": {
     "P248_source_commit": "20490f115d901aac3b586c33072c1157ad4d10a6",
