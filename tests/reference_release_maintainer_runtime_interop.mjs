@@ -46,7 +46,7 @@ function fake(overrides={}){
     privateKeyRead:false, wrongBinding:false,...overrides,
   };
   const env={
-    CLOUDFLARE_ACCOUNT_ID:account,
+    CLOUDFLARE_ACCOUNT_ID:state.overrideAccount||account,
     BROKER_PUBLIC_ORIGIN:origin,
     MAINTENANCE_AUTHORITY:{
       verifyManifest:async wrapper=>{
@@ -226,6 +226,32 @@ let checks=0;
   assert.equal(s.consumes,1);assert.equal(s.uploads,1);
   assert.equal(s.active,other);assert.equal(s.promotions.length,0);checks++;
 }
-assert.equal(checks,13);
+{
+  const s=await reject('original_account_must_not_receive_maintenance',{
+    overrideAccount:'ce43cd7b917d98a4bb4866d30eed99c0',
+  },'neutral_cloudflare_account_mismatch');
+  assert.equal(s.consumes,0);assert.equal(s.rawReads,0);
+  assert.equal(s.events.includes('token_get'),false);checks++;
+}
+{
+  const s=await reject('other_account_even_with_editor_must_not_receive_maintenance',{
+    overrideAccount:'ffffffffffffffffffffffffffffffff',
+  },'neutral_cloudflare_account_mismatch');
+  assert.equal(s.consumes,0);assert.equal(s.rawReads,0);
+  assert.equal(s.events.includes('token_get'),false);checks++;
+}
+{
+  const {env,state}=fake({
+    overrideAccount:'ce43cd7b917d98a4bb4866d30eed99c0',
+  });
+  const maintainer=new module.default();
+  maintainer.env=env;
+  let rejected=false;
+  try{await maintainer.brokerState();}
+  catch(e){rejected=e.message==='neutral_cloudflare_account_mismatch';}
+  assert.equal(rejected,true,'read-only broker state must reject stale account');
+  assert.equal(state.events.includes('token_get'),false);checks++;
+}
+assert.equal(checks,16);
 console.log('REFERENCE_MAINTAINER_ACTUAL_SOURCE_PREFLIGHT_AND_ROLLBACK_PASS='+checks);
 console.log('REFERENCE_MAINTAINER_PUBLIC_CI_SYNTHETIC_ONLY=1');
