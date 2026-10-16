@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'cloudflare/reference-release-broker/**'
+      - 'cloudflare/reference-release-maintainer/src/index.js'
+      - 'tests/reference_release_maintainer_runtime_interop.mjs'
       - 'scripts/reference_release_grant_v1.py'
       - 'tests/reference_release_intent_interop.mjs'
       - 'tests/reference_release_intent_interop_prepare.py'
@@ -24,6 +26,8 @@ on:
   pull_request:
     paths:
       - 'cloudflare/reference-release-broker/**'
+      - 'cloudflare/reference-release-maintainer/src/index.js'
+      - 'tests/reference_release_maintainer_runtime_interop.mjs'
       - 'tests/reference_release_broker_policy.mjs'
       - 'tests/reference_release_broker_endpoint_interop.mjs'
       - 'tests/reference_release_ticket_interop.py'
@@ -54,6 +58,8 @@ jobs:
         run: node tests/reference_release_broker_policy.mjs
       - name: Prove actual broker endpoint with synthetic signed OIDC, authority intent and Durable Object replay
         run: node tests/reference_release_broker_endpoint_interop.mjs
+      - name: Prove actual neutral maintainer preflight, source integrity and remote-commit rollback behavior
+        run: node tests/reference_release_maintainer_runtime_interop.mjs
       - name: Prepare private-authority signed grant
         run: python tests/reference_release_grant_interop_prepare.py
       - name: Prove WebCrypto verifies private-authority grant
