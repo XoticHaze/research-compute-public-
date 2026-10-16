@@ -16,3 +16,9 @@ post_exact_image_file_permission_fix_e26882c2: admission_only_true
 2026-10-12 user_present_for_live_IBKR_Mobile_approval_no_order: true
 broker_orders: disabled_during_admission
 paper_checkpoint: preserve_unchanged
+
+# One-time operator-authorized supervised shadow; only NEW added marker dispatches.
+supervised_5h_dispatch_request: true
+supervised_5h_request_clock_cdt: 2026-10-15T19:31
+supervised_5h_order_mutation: false
+supervised_5h_enabled_execution_mode: read_only
