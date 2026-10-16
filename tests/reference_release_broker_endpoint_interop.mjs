@@ -4,7 +4,8 @@
 import assert from 'node:assert/strict';
 import { createHash, webcrypto } from 'node:crypto';
 import broker, { GrantLedger } from '../cloudflare/reference-release-broker/src/index.js';
-import { callerPolicySha256 } from '../cloudflare/reference-release-broker/src/ticket.js';
+import { callerPolicySha256, validateOidcCallerPolicy } from '../cloudflare/reference-release-broker/src/ticket.js';
+import { verifyAuthorityIntent } from '../cloudflare/reference-release-broker/src/intent.js';
 
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
 const wc = globalThis.crypto.subtle;
@@ -111,8 +112,20 @@ assert.equal(keyResp.status,200,'public-key endpoint must recognize standard pri
 const publicKey=await keyResp.json();
 assert.equal(publicKey.key_id,brokerId);
 assert.equal(publicKey.public_b64,encode(brokerPublicRaw));
+// Differential stage probes distinguish payload/identity defects from a
+// transport failure while never printing synthetic private keys or JWT bytes.
+validateOidcCallerPolicy(claims,{
+  audience:'secure-compute-reference-v1',job_workflow_ref:workflow,
+  job_workflow_sha:harness,max_admission_seconds:300,
+},now);
+const preparedIntent=await intentFor(claims);
+await verifyAuthorityIntent(preparedIntent,encode(authorityPublicRaw),{
+  grant_id:grantId,caller_policy_sha256:await callerPolicySha256(claims),
+  harness_sha:harness,broker_key_id:brokerId,
+},now);
+console.log('BROKER_PRIVATE_INTENT_CRYPTO_AND_CANONICAL_PROBE_PASS=1');
 const positive=await makeCall(env);
-assert.equal(positive.status,200,'signed-release endpoint must allow exact one-time identity');
+assert.equal(positive.status,200,'signed-release endpoint expected 200, ledger size='+store.size);
 const doc=await positive.json();
 assert.equal(doc.ok,true);
 assert.equal(doc.ticket.signer_key_id,brokerId);
