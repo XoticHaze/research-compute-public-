@@ -22,3 +22,8 @@ supervised_5h_dispatch_request: true
 supervised_5h_request_clock_cdt: 2026-10-15T19:31
 supervised_5h_order_mutation: false
 supervised_5h_enabled_execution_mode: read_only
+
+# One operator-approved canary of the immutable v0.16.2 recovery controller.
+supervised_5h_dispatch_request_20261015_c9f2ad: true
+controller_canary_v0_16_2_orders: disabled
+controller_canary_v0_16_2_scope: read_only_supervised_5h
