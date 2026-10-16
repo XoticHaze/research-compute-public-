@@ -149,6 +149,9 @@ jobs:
           assert 'MMIBKR_FINAL_CONTROLLER_HEALTH=' in owner
           assert 'MMIBKR_SUPERVISED_2FA_APPROVAL_WINDOW_SECONDS=300' in owner
           assert 'MMIBKR_SUPERVISED_AUTOMATIC_2FA_RELOGIN=0' in owner
+          assert 'MMIBKR_SUPERVISED_CONTROLLER_UPGRADE_V0_16_2_VERIFIED=1' in owner
+          assert 'ghcr.io/code-hustler-ft3d/ibg-controller@sha256:2e4f4911991386e941f6e95d58ee38a8242474dd3be239f21ad82557d24b4368' in owner
+          assert 'controller_image="$IBKR_CONTROLLER_IMAGE"' in owner
           assert 'twofa_exit_interval=300' in owner
           assert 'relogin_after_twofa_timeout=no' in owner
           assert 'find /private-data -mindepth 1 -maxdepth 1' in owner
@@ -407,11 +410,21 @@ jobs:
       - name: Start the established IBKR controller in writable live mode on host 4001
         run: |
           set -euo pipefail
-          docker pull "$IBKR_CONTROLLER_IMAGE" >/dev/null
+          controller_image="$IBKR_CONTROLLER_IMAGE"
+          if [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ]; then
+            # Exact CI-verified release digest; legacy controller remains unchanged.
+            controller_image='ghcr.io/code-hustler-ft3d/ibg-controller@sha256:2e4f4911991386e941f6e95d58ee38a8242474dd3be239f21ad82557d24b4368'
+          fi
+          docker pull "$controller_image" >/dev/null
+          if [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ]; then
+            controller_version="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$controller_image")"
+            test "$controller_version" = v0.16.2
+            echo 'MMIBKR_SUPERVISED_CONTROLLER_UPGRADE_V0_16_2_VERIFIED=1'
+          fi
           vol="mmibkr-live-jts-$GITHUB_RUN_ID"
           docker volume create "$vol" >/dev/null
           docker run --rm --user 0 --entrypoint /bin/sh \
-            -v "$vol:/state" "$IBKR_CONTROLLER_IMAGE" -lc 'chmod 0777 /state' >/dev/null
+            -v "$vol:/state" "$controller_image" -lc 'chmod 0777 /state' >/dev/null
           warm_args=()
           if [ "${MMIBKR_LIVE_WARM_STATE_RESTORED:-0}" = 1 ]; then
             warm_args=(-e GATEWAY_WARM_STATE=/home/ibgateway/warm-state
@@ -445,7 +458,7 @@ jobs:
             "${warm_args[@]}" \
             -v "$vol:/home/ibgateway/Jts_b1" \
             -p 127.0.0.1:4001:4003 \
-            "$IBKR_CONTROLLER_IMAGE" >/dev/null
+            "$controller_image" >/dev/null
           docker exec mmibkr-live-gateway /bin/sh -lc \
             'test "$READ_ONLY_API" = "${{ inputs.warm_handoff_mode == 'supervised_5h' && 'yes' || 'no' }}" && test "$TRADING_MODE" = live' 
           # Exact network proof. The only published socket is loopback TWS
