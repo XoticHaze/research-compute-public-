@@ -249,6 +249,9 @@ export default class ReferenceReleaseMaintainer extends WorkerEntrypoint {
       throw new Error("broker_editor_binding_unconfigured");
     }
     if (!this.env.CLOUDFLARE_ACCOUNT_ID) throw new Error("cloudflare_account_unconfigured");
+    if (String(this.env.CLOUDFLARE_ACCOUNT_ID) !== EXPECTED_NEUTRAL_ACCOUNT_ID) {
+      throw new Error("neutral_cloudflare_account_mismatch");
+    }
     const token = await this.env.BROKER_EDITOR_TOKEN.get();
     if (!token) throw new Error("broker_editor_token_unavailable");
     return {
