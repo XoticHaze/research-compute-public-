@@ -237,6 +237,10 @@ async function handleRelease(request, env) {
   return json({ ok: true, ticket }, 200);
 }
 
+// Exposes pure testable module helpers only; no additional Cloudflare route,
+// no signer state or credentials are exported from the deployed instance.
+export { verifyGithubOidc, importBrokerSigner };
+
 export class GrantLedger {
   constructor(state) {
     this.state = state;
