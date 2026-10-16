@@ -27,3 +27,8 @@ supervised_5h_enabled_execution_mode: read_only
 supervised_5h_dispatch_request_20261015_c9f2ad: true
 controller_canary_v0_16_2_orders: disabled
 controller_canary_v0_16_2_scope: read_only_supervised_5h
+
+# Attended Gateway-only eight-minute discriminator, then read-only canonical shadow.
+supervised_5h_dispatch_request_20261015_8b4e2c: true
+supervised_diagnostic_stage: gateway_before_bot
+supervised_live_order_mutation: disabled
