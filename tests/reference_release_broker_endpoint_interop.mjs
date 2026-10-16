@@ -103,7 +103,6 @@ async function expectFailure(label, env, badClaims, bodyIntent, expectedStatus) 
   checked++;
 }
 const {env,store}=createEnv();
-env.__SYNTHETIC_TEST_STAGE_ONLY=true;
 // Positive must test actual broker index.js, JWT/JWKS, authority-signed
 // intent, Durable Object single-consume, signed P256 ticket, not helper only.
 const health=await broker.fetch(new Request('https://synthetic.example/healthz'),env);
@@ -136,10 +135,6 @@ assert.equal(importedSigner.keyId,brokerId);
 console.log('BROKER_STANDARD_PRIVATE_JWK_SIGNER_IMPORT_PROBE_PASS=1');
 
 const positive=await makeCall(env);
-if(positive.status!==200) {
-  const safe=await positive.json();
-  console.log('BROKER_SYNTHETIC_ENDPOINT_FAIL_STAGE='+String(safe.error).replace(/[^a-z_]/g,''));
-}
 assert.equal(positive.status,200,'signed-release endpoint expected 200, ledger size='+store.size);
 const doc=await positive.json();
 assert.equal(doc.ok,true);
