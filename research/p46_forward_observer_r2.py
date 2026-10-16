@@ -3,8 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from datetime import datetime, timezone
+from datetime import date, datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -20,6 +21,19 @@ FORWARD_NOT_BEFORE_FEATURE_MONTH_END = pd.Timestamp("2026-09-30")
 SHAKEDOWN_ANCHOR_DATE = pd.Timestamp("2026-09-09")
 SHAKEDOWN_WEIGHTS = {"SPY": 0.0, "QQQ": 0.5, "TLT": 0.0, "GLD": 0.0, "DBC": 0.5}
 OUT = Path("artifacts")
+SESSION_SETTLE_ET = dt_time(16, 30)
+
+
+def _completed_market_data_date(now_utc: datetime) -> date:
+    """Reuse the existing public forward-observer completed-bar cutoff pattern.
+
+    P249/P266 and largecap/cohort use an 18:30 ET conservative cutoff.
+    P46 uses 16:30 ET to preserve its existing 21:30 UTC post-close
+    schedule in EST and EDT. Scheduled workflows can start late and
+    cross into a live session; never admit a partial daily candle.
+    """
+    eastern = now_utc.astimezone(ZoneInfo("America/New_York"))
+    return eastern.date() if eastern.time() >= SESSION_SETTLE_ET else eastern.date() - timedelta(days=1)
 
 
 def _utc_now() -> pd.Timestamp:
@@ -53,7 +67,35 @@ def _yahoo_normalized() -> pd.DataFrame:
                 "wap": np.nan,
                 "bar_count": np.nan,
             })
-    return normalize_frame(rows)
+    try:
+        return normalize_frame(rows)
+    except ValueError as exc:
+        # Source-quality diagnostic only. Never repair or drop a rejected bar.
+        if "invariant failed beyond numeric tolerance" not in str(exc):
+            raise
+        offenders = []
+        for row in rows:
+            o, h, l, c = (float(row[key]) for key in ("open", "high", "low", "close"))
+            scale = max(abs(o), abs(h), abs(l), abs(c), 1.0)
+            high_excess = max(o, c, l) - h
+            low_excess = l - min(o, c, h)
+            if high_excess > 1e-7 * scale or low_excess > 1e-7 * scale:
+                offenders.append({
+                    "symbol": row["symbol"],
+                    "session_timestamp_utc": pd.Timestamp(row["timestamp"]).isoformat(),
+                    "high_relative_excess": round(max(0.0, high_excess) / scale, 10),
+                    "low_relative_excess": round(max(0.0, low_excess) / scale, 10),
+                })
+        print("P46_PUBLIC_SOURCE_OHLC_INVARIANT=" + json.dumps({
+            "schema": "research.p46_public_ohlc_invariant_diagnostic.v1",
+            "source": "yahoo_adjusted_research_only",
+            "failure": str(exc),
+            "offender_count": len(offenders),
+            "first_three": offenders[:3],
+            "fail_closed": True,
+            "bars_modified": False,
+        }, sort_keys=True), flush=True)
+        raise
 
 
 def _ibkr_shape_fixture() -> dict:
@@ -79,10 +121,12 @@ def _ibkr_shape_fixture() -> dict:
     return row
 
 
-def _common_close_panel(bars: pd.DataFrame) -> pd.DataFrame:
+def _common_close_panel(bars: pd.DataFrame, observed_at: pd.Timestamp) -> pd.DataFrame:
     px = bars.pivot(index="timestamp", columns="symbol", values="close").reindex(columns=U)
     px = px.dropna(how="any").sort_index()
     px.index = pd.DatetimeIndex(px.index).tz_convert(None)
+    completed_cutoff = pd.Timestamp(_completed_market_data_date(observed_at.to_pydatetime()))
+    px = px.loc[px.index <= completed_cutoff]
     if px.empty:
         raise RuntimeError("no common completed daily bars across P46 universe")
     return px
@@ -192,7 +236,7 @@ def main() -> None:
     observed_at = _utc_now()
     bars = _yahoo_normalized()
     fixture = _ibkr_shape_fixture()
-    px = _common_close_panel(bars)
+    px = _common_close_panel(bars, observed_at)
     decision = _decision(px, observed_at)
     shakedown = _shakedown_mark(px)
     latest_bar = pd.Timestamp(px.index.max()).tz_localize("UTC")
