@@ -252,6 +252,85 @@ let checks=0;
   assert.equal(rejected,true,'read-only broker state must reject stale account');
   assert.equal(state.events.includes('token_get'),false);checks++;
 }
-assert.equal(checks,16);
+// Full independent authority-side MAINTENANCE signature integration. Unlike
+// the transport mocks above, this path uses the ACTUAL Cloudflare authority
+// Durable Object crypto source and independently verifies its signed manifest.
+const authSource=fs.readFileSync('cloudflare/reference-maintenance-authority/src/index.js','utf8');
+assert.ok(authSource.includes('import { WorkerEntrypoint } from "cloudflare:workers";'));
+const authCode=authSource.replace(
+  'import { WorkerEntrypoint } from "cloudflare:workers";','class WorkerEntrypoint {}'
+);
+const authModule=await import('data:text/javascript;base64,'+
+  Buffer.from(authCode).toString('base64'));
+const authStorage=new Map();
+const authState=new authModule.AuthorityState({
+  blockConcurrencyWhile:fn=>Promise.resolve().then(fn),
+  storage:{
+    get:async key=>authStorage.get(key),
+    put:async (key,value)=>authStorage.set(key,value),
+  },
+});
+const authEnv={
+  AUTHORITY_STATE:{
+    idFromName:name=>name,
+    get:()=>({fetch:(url,init)=>authState.fetch(new Request(url,init))}),
+  },
+  BROKER_PUBLIC_ORIGIN:origin,
+};
+const actualAuthority=new authModule.default();
+actualAuthority.env=authEnv;
+const authInput={
+  candidate_source_sha:candidate,
+  expected_current_version:old,
+  expected_broker_key_id:keyId,
+};
+{
+  const {env,state}=fake();
+  env.MAINTENANCE_AUTHORITY={
+    verifyManifest:wrapper=>actualAuthority.verifyManifest(wrapper),
+  };
+  const signed=await actualAuthority.authorize(authInput);
+  assert.deepEqual(Object.keys(signed).sort(),
+    ['payload_b64','signature_b64','signer_key_id','signature_format'].sort());
+  assert.equal(signed.signature_format,'ecdsa-p256-sha256-p1363');
+  const verified=await actualAuthority.verifyManifest(signed);
+  assert.equal(verified.expected_current_version,old);
+  assert.equal(verified.expected_broker_key_id,keyId);
+  assert.equal(verified.candidate_source_sha,candidate);
+  assert.equal(verified.rollback_version,old);
+  const response=await maintainManifest(signed,env);
+  assert.equal(response.status,200);
+  const result=await response.json();
+  assert.equal(result.ok,true);
+  assert.equal(result.secret_material_included,false);
+  assert.equal(state.active,newer);
+  assert.equal(state.consumes,1);
+  checks++;
+  console.log('REFERENCE_INDEPENDENT_MAINTENANCE_AUTHORITY_SIGNED_MANIFEST_CONSUMED_PASS=1');
+}
+{
+  const {env,state}=fake();
+  env.MAINTENANCE_AUTHORITY={
+    verifyManifest:wrapper=>actualAuthority.verifyManifest(wrapper),
+  };
+  const signed=await actualAuthority.authorize(authInput);
+  signed.signature_b64=Buffer.alloc(64).toString('base64');
+  let rejected=false;
+  try{await maintainManifest(signed,env);}
+  catch(e){rejected=/maintenance_signature_rejected|maintenance_manifest_rejected/.test(String(e.message));}
+  assert.equal(rejected,true,'tampered independently signed approval not denied');
+  assert.equal(state.consumes,0);
+  assert.equal(state.events.includes('token_get'),false);
+  checks++;
+  console.log('REFERENCE_INDEPENDENT_MAINTENANCE_SIGNATURE_TAMPER_REJECT_PASS=1');
+}
+{
+  let denied=false;
+  try{await actualAuthority.authorize({...authInput,expected_broker_key_id:'sha256:'+'9'.repeat(64)});}
+  catch(e){denied=e.message==='broker_public_key_mismatch';}
+  assert.equal(denied,true,'independent authority must check live broker key before signing');
+  checks++;
+}
+assert.equal(checks,19);
 console.log('REFERENCE_MAINTAINER_ACTUAL_SOURCE_PREFLIGHT_AND_ROLLBACK_PASS='+checks);
 console.log('REFERENCE_MAINTAINER_PUBLIC_CI_SYNTHETIC_ONLY=1');
