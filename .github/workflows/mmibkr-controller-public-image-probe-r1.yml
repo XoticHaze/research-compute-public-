@@ -1,0 +1,32 @@
+name: MM-IBKR Controller Public Image Digest Probe R1
+on:
+  pull_request:
+    paths:
+      - .github/workflows/mmibkr-controller-public-image-probe-r1.yml
+
+permissions:
+  contents: read
+
+jobs:
+  image_digest_probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Compare existing pinned controller and upstream release (no credentials)
+        run: |
+          set -euo pipefail
+          old='ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5'
+          new='ghcr.io/code-hustler-ft3d/ibg-controller:v0.16.2'
+          for image in "$old" "$new"; do
+            docker pull --quiet "$image" >/dev/null
+            echo "CONTROLLER_PROBE_IMAGE=$image"
+            docker image inspect --format 'CONTROLLER_PROBE_ID={{.Id}} ARCH={{.Architecture}}' "$image"
+            docker image inspect --format '{{range .RepoDigests}}CONTROLLER_PROBE_IMMUTABLE_DIGEST={{.}}{{println}}{{end}}' "$image"
+            docker image inspect --format 'CONTROLLER_PROBE_LABELS={{json .Config.Labels}}' "$image" |
+              python3 -c 'import json,sys
+          s=sys.stdin.read().strip().split("=",1)[1]
+          p=json.loads(s) or {}
+          wanted=("org.opencontainers.image.version","org.opencontainers.image.revision","org.opencontainers.image.source")
+          print("CONTROLLER_PROBE_SAFE_LABELS="+json.dumps({k:p.get(k) for k in wanted},sort_keys=True))'
+          done
+          echo 'CONTROLLER_IMAGE_PROBE_NO_BROKER_CREDENTIALS=1'
