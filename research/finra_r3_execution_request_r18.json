@@ -1,0 +1,36 @@
+{
+  "schema": "market_research.finra_r3_execution_request.r18.v1",
+  "contract": {
+    "path": "research/finra_daily_short_volume_r3_contract.json",
+    "blob": "5c23bb2a099834f0989fc18e00c2b16a6b500aea",
+    "commit": "c355151140c53389db61da727b5a7fd926539527"
+  },
+  "source_primitive": {
+    "path": "research/p568_finra_short_volume_source_r0.py",
+    "blob": "1ced651a0320c432eceaa26b8379f32a9eacf021"
+  },
+  "development_window": [
+    "2022-01-01",
+    "2025-12-31"
+  ],
+  "protected_holdout": "2026+ UNREAD",
+  "required_outputs": [
+    "source coverage/missing/update-vintage manifest",
+    "raw original-file hashes",
+    "1d and 5d capital-normalized after-cost portfolios",
+    "matched controls and sector-balanced permutations",
+    "5 chronology folds",
+    "time-aware block inference",
+    "symbol/year concentration",
+    "turnover/DD/risk"
+  ],
+  "no_rescue": true,
+  "authority": {
+    "research_only": true,
+    "allocation": false,
+    "promotion": false,
+    "runtime": false,
+    "broker": false,
+    "live": false
+  }
+}
