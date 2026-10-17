@@ -11,6 +11,7 @@ on:
       - '.github/workflows/mmibkr-selected-runtime-cloud-watchdog-r1.yml'
       - 'scripts/mmibkr_selected_runtime_cloud_watchdog_cooldown_v1.py'
       - 'tests/test_mmibkr_selected_runtime_cloud_watchdog_cooldown_v1.py'
+      - 'tests/test_mmibkr_selected_runtime_cloud_watchdog_visibility_v1.py'
       - 'scripts/mmibkr_selected_runtime_maintenance_hold_v1.py'
       - 'tests/test_mmibkr_selected_runtime_maintenance_hold_v1.py'
       - 'rendezvous/control/mmibkr-selected-runtime-cloud-maintenance-hold-r1.json'
@@ -34,6 +35,7 @@ jobs:
           set -euo pipefail
           python -m py_compile scripts/mmibkr_selected_runtime_cloud_watchdog_cooldown_v1.py
           python -m unittest -v tests.test_mmibkr_selected_runtime_cloud_watchdog_cooldown_v1
+          python -m unittest -v tests.test_mmibkr_selected_runtime_cloud_watchdog_visibility_v1
           python -m py_compile scripts/mmibkr_selected_runtime_maintenance_hold_v1.py
           python -m unittest -v tests.test_mmibkr_selected_runtime_maintenance_hold_v1
 
@@ -191,6 +193,19 @@ jobs:
           if not checkpoint_key or not checkpoint_sha:
               print('MMIBKR_CLOUD_WATCHDOG=no_current_source_checkpoint')
               print('MMIBKR_CLOUD_WATCHDOG_SOURCE_REF=' + canonical_source)
+              print('::warning title=MM-IBKR selected-runtime owner not dispatched::'
+                    'No exact-source predecessor checkpoint; watchdog succeeded as an observation only')
+              summary_path = os.environ.get('GITHUB_STEP_SUMMARY', '')
+              if summary_path:
+                  with open(summary_path, 'a', encoding='utf-8') as summary:
+                      summary.write(
+                          '### MM-IBKR selected-runtime watchdog: no owner dispatched\n'
+                          + '\n- State: `no_current_source_checkpoint`\n'
+                          + '- Pinned source: `' + canonical_source + '`\n'
+                          + '- Broker mutations: none\n'
+                          + '- Resolution: exact private source admission and attested predecessor checkpoint\n'
+                          + '- Related: CommandCenter #868 / MM-IBKR #842\n'
+                      )
               raise SystemExit(0)
 
           payload=json.dumps({
