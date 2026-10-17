@@ -155,6 +155,17 @@ def _month_costs(previous: dict[str, dict[str, float]] | None, current: dict[str
     }
 
 
+def _observed_close_returns(close: pd.DataFrame) -> pd.DataFrame:
+    """Missing daily closes must remain missing, never a synthetic flat return."""
+    return close.pct_change(fill_method=None)
+
+
+def _held_symbols_ready(day: pd.Series, state: dict[str, dict[str, float]]) -> bool:
+    """Only score a date when both frozen arms have actual paired daily closes."""
+    held = set(state["p249_core"]) | set(state["p249_plus_p266"])
+    return bool(held) and bool(day.reindex(sorted(held)).notna().all())
+
+
 def _metrics(returns: pd.Series) -> dict[str, float | int | None]:
     q = returns.dropna().astype(float)
     if q.empty:
@@ -193,7 +204,7 @@ def main() -> None:
     )
 
     decision_date = DECISION_AT.tz_convert(None).normalize()
-    ret = close.pct_change()
+    ret = _observed_close_returns(close)
     forward_ix = ret.index[ret.index >= decision_date]
     rows = []
     month_states: dict[str, dict[str, dict[str, float]]] = {}
@@ -206,6 +217,14 @@ def main() -> None:
         if key not in month_states:
             month_states[key] = _portfolio_weights(close.loc[:dt], period)
         state = month_states[key]
+        day = ret.loc[dt]
+        if not _held_symbols_ready(day, state):
+            continue
+        core_gross = sum(state["p249_core"].get(s, 0.0) * float(day.get(s, np.nan)) for s in state["p249_core"])
+        sat_gross = sum(state["p249_plus_p266"].get(s, 0.0) * float(day.get(s, np.nan)) for s in state["p249_plus_p266"])
+        if not np.isfinite(core_gross) or not np.isfinite(sat_gross):
+            continue
+        # A skipped/incomplete first session must not consume the monthly cost.
         core_cost = 0.0
         sat_cost = 0.0
         cost_detail = None
@@ -213,11 +232,6 @@ def main() -> None:
             core_cost, sat_cost, cost_detail = _month_costs(prev_state, state)
             seen_months.add(key)
             prev_state = state
-        day = ret.loc[dt]
-        core_gross = sum(state["p249_core"].get(s, 0.0) * float(day.get(s, np.nan)) for s in state["p249_core"])
-        sat_gross = sum(state["p249_plus_p266"].get(s, 0.0) * float(day.get(s, np.nan)) for s in state["p249_plus_p266"])
-        if np.isnan(core_gross) or np.isnan(sat_gross):
-            continue
         rows.append({
             "date": dt.date().isoformat(),
             "holding_month": key,
