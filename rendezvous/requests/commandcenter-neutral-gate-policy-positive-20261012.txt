@@ -1,0 +1,13 @@
+{
+  "schema": "commandcenter.neutral_gate_public_encrypted_request.v1",
+  "trust_mode": "public_encrypted",
+  "execution_plane": "public_research_compute_current",
+  "run_type": "IMMUTABLE_TWO_SOURCE_POLICY_POSITIVE",
+  "capsule": "run_bound_ephemeral_x25519_hkdf_chacha20poly1305",
+  "expected_private_git_blobs": [
+    "0df525a4ef7349b95b563554ac60aab36a8a42ce",
+    "949322273c704e830a14ed2ca70da6ef5cd0fe92"
+  ],
+  "authority_issue": "XoticHaze/CommandCenter#809",
+  "mutation_authority": false
+}
