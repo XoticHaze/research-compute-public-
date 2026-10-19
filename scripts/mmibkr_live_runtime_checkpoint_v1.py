@@ -17,7 +17,7 @@ import re
 import tarfile
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from mmibkr_live_gateway_state_envelope_v1 import read_master, derive
+from scripts.mmibkr_live_gateway_state_envelope_v1 import read_master, derive
 
 SCHEMA = "mmibkr.live_runtime_checkpoint.v1"
 CONTEXT_SCHEMA = "mmibkr.live_runtime_checkpoint_context.v1"
