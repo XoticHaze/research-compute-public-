@@ -148,6 +148,16 @@ jobs:
           assert 'SUPERVISED_GATEWAY_ONLY_BROKER_RECONCILED=1' in owner
           assert 'SUPERVISED_GATEWAY_HEALTH=' in owner
           assert 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3' in owner
+          assert 'AUTO_RESTART_ADOPT=yes' in owner
+          assert 'CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480' in owner
+          assert 'maintenance_grace_seconds=720' in owner
+          assert 'SUPERVISED_MAINTENANCE_RECOVERY_GRACE_STARTED=1' in owner
+          assert 'SUPERVISED_MAINTENANCE_RECOVERY_EXPIRED=1' in owner
+          assert 'SUPERVISED_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS=1' in owner
+          assert 'SUPERVISED_MAINTENANCE_RECOVERY_INCOMPLETE_AT_SESSION_END=1' in owner
+          assert 'docker logs --since 10m mmibkr-live-gateway' in owner
+          assert 'TZ=America/New_York date +%H%M' in owner
+          assert 'docker stop --time 90 mmibkr-live-gateway' in owner
           assert 'MMIBKR_CANONICAL_BOT_STATUS=' in owner
           assert 'MMIBKR_FINAL_CONTROLLER_HEALTH=' in owner
           assert 'MMIBKR_SAFE_CONTROLLER_LIFECYCLE=' in owner
