@@ -234,18 +234,6 @@ jobs:
             fi
             echo "NO_ORDER_WARM_HANDOFF_MODE=$HANDOFF_MODE"
           fi
-        env:
-          HANDOFF_MODE: ${{ inputs.warm_handoff_mode }}
-          PREDECESSOR_RUN: ${{ inputs.warm_predecessor_run }}
-        run: |
-          set -euo pipefail
-          case "$HANDOFF_MODE" in legacy|producer|successor|supervised_5h) ;; *) exit 64 ;; esac
-          if [ "$HANDOFF_MODE" = successor ]; then
-            [[ "$PREDECESSOR_RUN" =~ ^[0-9]+$ ]] || { echo 'EXACT_WARM_PRODUCER_RUN_REQUIRED=1'; exit 64; }
-          elif [ -n "$PREDECESSOR_RUN" ]; then
-            echo 'UNEXPECTED_WARM_PREDECESSOR_RUN=1'; exit 64
-          fi
-          echo "NO_ORDER_WARM_HANDOFF_MODE=$HANDOFF_MODE"
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.11.16'
