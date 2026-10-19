@@ -64,3 +64,20 @@ test("one successful synthetic completion is recognized without exposing text", 
   assert.equal(receipt.exact_reply_observed, true);
   assert.equal(JSON.stringify(receipt).includes(SECRET), false);
 });
+
+test("HTTP 200 without usable completion content is not an inference success", async () => {
+  for (const content of [undefined, "", "   ", null]) {
+    const requester = async (url) => url.endsWith("/models")
+      ? { ok: true, status: 200, async json() { return { data: [] }; } }
+      : { ok: true, status: 200, async json() {
+        return { choices: [{ message: { content } }] };
+      } };
+    const receipt = await probeNvidia(binding, requester);
+    assert.equal(receipt.completion_http_status, 200);
+    assert.equal(receipt.completion_response_valid, false);
+    assert.equal(receipt.exact_reply_observed, false);
+    assert.equal(receipt.classification, "completion_response_invalid");
+    assert.equal(receipt.calls_made, 2);
+    assert.equal(JSON.stringify(receipt).includes(SECRET), false);
+  }
+});
