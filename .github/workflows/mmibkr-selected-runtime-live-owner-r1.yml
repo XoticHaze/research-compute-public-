@@ -170,6 +170,15 @@ jobs:
           assert 'relogin_after_twofa_timeout=no' in owner
           assert 'find /private-data -mindepth 1 -maxdepth 1' in owner
           assert 'timeout-minutes: 340' in owner
+          # Parse the actual monitored shell block with bash -n (no execution,
+          # no broker session, no secrets). Literal string gates alone miss syntax.
+          import subprocess
+          step=owner.split('      - name: Run supervised five-hour live-account canonical bot shadow (no orders)',1)[1]
+          run=step.split('      - name: Cleanly stop authenticated no-order admission Gateway',1)[0]
+          run=run.split('        run: |',1)[1]
+          script="\n".join(line[10:] if line.startswith("          ") else line for line in run.splitlines())
+          subprocess.run(["bash","-n"],input=script,text=True,check=True)
+          print('SUPERVISED_MAINTENANCE_SHELL_PARSE=PASS')
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
           PY
 
