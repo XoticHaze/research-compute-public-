@@ -184,6 +184,21 @@ jobs:
           script="\n".join(line[10:] if line.startswith("          ") else line for line in run.splitlines())
           subprocess.run(["bash","-n"],input=script,text=True,check=True)
           print('SUPERVISED_MAINTENANCE_SHELL_PARSE=PASS')
+          assert 'PRODUCTION_CANONICAL_LIVE_BOT_STARTED=1' in owner
+          assert 'PRODUCTION_LIVE_OWNER_SESSION_COMPLETE=1' in owner
+          assert 'LIVE_RUNTIME_BROKER_LOST_BOT_FROZEN=1' in owner
+          assert 'LIVE_RUNTIME_BROKER_READ_RECONCILED=1' in owner
+          assert 'LIVE_RUNTIME_BOT_AND_GATEWAY_CHECKPOINT_SEALED=1' in owner
+          assert 'LIVE_RUNTIME_PREDECESSOR_GATEWAY_AND_BOT_DATA_RESTORED=1' in owner
+          assert 'mmibkr-live-runtime-checkpoint-v1' in owner
+          assert 'LIVE_RUNTIME_SUCCESSOR_AUTH_AND_BROKER_RECONCILIATION_REQUIRED=1' in owner
+          assert "SESSION_SECONDS: \"14400\"" in s
+          live=owner.split('      - name: Start unchanged canonical bot natural owner with three persisted live policies',1)[1]
+          live=live.split('      - name: Stop live owner and encrypt canonical Gateway and bot data for successor',1)[0]
+          live=live.split('        run: |',1)[1]
+          live_script="\n".join(line[10:] if line.startswith("          ") else line for line in live.splitlines())
+          subprocess.run(["bash","-n"],input=live_script,text=True,check=True)
+          print('CANONICAL_LIVE_SCRIPT_SHELL_PARSE=PASS')
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
           PY
           python -m unittest -v tests.test_mmibkr_live_runtime_checkpoint_v1
