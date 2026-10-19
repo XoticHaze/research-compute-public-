@@ -972,13 +972,13 @@ jobs:
             # handshake, even while bot is paused.
             raw="$(docker exec mmibkr-live-gateway curl -sS --max-time 4 http://127.0.0.1:8080/health 2>/dev/null)" || raw=''
             gateway_healthy="$(printf '%s' "$raw" | python -c 'import json,sys
-try: j=json.load(sys.stdin)
-except (ValueError,TypeError): j={}
-allowed=("jvm_alive","api_port_open","upstream_connected","upstream_recovery_active")
-v={k:(j.get(k) if type(j.get(k)) is bool else None) for k in allowed}
-v["state"]=j.get("state") if j.get("state") in ("MONITORING","UPSTREAM_DOWN","HALTED","LOGIN","TWO_FA","API_WAIT","INIT","READY") else "other"
-print("1" if all(v.get(k) is True for k in ("jvm_alive","api_port_open","upstream_connected")) else "0")
-print("LIVE_RUNTIME_CONTROLLER_HEALTH="+json.dumps(v,sort_keys=True,separators=(",",":")),file=sys.stderr)')" || gateway_healthy=0
+          try: j=json.load(sys.stdin)
+          except (ValueError,TypeError): j={}
+          allowed=("jvm_alive","api_port_open","upstream_connected","upstream_recovery_active")
+          v={k:(j.get(k) if type(j.get(k)) is bool else None) for k in allowed}
+          v["state"]=j.get("state") if j.get("state") in ("MONITORING","UPSTREAM_DOWN","HALTED","LOGIN","TWO_FA","API_WAIT","INIT","READY") else "other"
+          print("1" if all(v.get(k) is True for k in ("jvm_alive","api_port_open","upstream_connected")) else "0")
+          print("LIVE_RUNTIME_CONTROLLER_HEALTH="+json.dumps(v,sort_keys=True,separators=(",",":")),file=sys.stderr)')" || gateway_healthy=0
             # At startup and once per five minutes, prove real API/account
             # connectivity. A false/unknown controller field or paused bot
             # forces a read-only broker probe on EVERY cycle, not just once.
@@ -986,21 +986,21 @@ print("LIVE_RUNTIME_CONTROLLER_HEALTH="+json.dumps(v,sort_keys=True,separators=(
             if [ "$gateway_healthy" != 1 ] || [ "$bot_paused" -eq 1 ] ||
                [ $((iteration%5)) -eq 1 ]; then
               if python - <<'PY'
-import os
-from pathlib import Path
-from ib_insync import IB
-expected=(Path(os.environ["RUNNER_TEMP"])/"mmibkr-live-bot.env").read_text().strip().split("=",1)[1]
-ib=IB()
-try:
-    ib.connect("127.0.0.1",4001,clientId=78,timeout=10,readonly=True)
-    assert expected in ib.managedAccounts(), "expected_account_mismatch"
-    ib.reqPositions()
-    ib.reqAllOpenOrders()
-    ib.reqExecutions()
-    print("LIVE_RUNTIME_BROKER_READ_RECONCILED=1")
-finally:
-    if ib.isConnected(): ib.disconnect()
-PY
+          import os
+          from pathlib import Path
+          from ib_insync import IB
+          expected=(Path(os.environ["RUNNER_TEMP"])/"mmibkr-live-bot.env").read_text().strip().split("=",1)[1]
+          ib=IB()
+          try:
+              ib.connect("127.0.0.1",4001,clientId=78,timeout=10,readonly=True)
+              assert expected in ib.managedAccounts(), "expected_account_mismatch"
+              ib.reqPositions()
+              ib.reqAllOpenOrders()
+              ib.reqExecutions()
+              print("LIVE_RUNTIME_BROKER_READ_RECONCILED=1")
+          finally:
+              if ib.isConnected(): ib.disconnect()
+          PY
               then
                 last_verified="$(date +%s)"
                 if [ "$gateway_healthy" != 1 ]; then
