@@ -1073,7 +1073,7 @@ jobs:
           counts={k:0 for k in patterns}
           for line in sys.stdin:
               for k,p in patterns.items():
-        if re.search(p,line): counts[k]=min(999,counts[k]+1)
+                  if re.search(p,line): counts[k]=min(999,counts[k]+1)
           print("LIVE_RUNTIME_CONTROLLER_ALERT_COUNTS="+json.dumps(counts,sort_keys=True,separators=(",",":")))' || true
           fi
       - name: Stop live owner and encrypt canonical Gateway and bot data for successor
