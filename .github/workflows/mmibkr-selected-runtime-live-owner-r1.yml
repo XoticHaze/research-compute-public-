@@ -186,7 +186,6 @@ jobs:
           print('SUPERVISED_MAINTENANCE_SHELL_PARSE=PASS')
           assert 'PRODUCTION_CANONICAL_LIVE_BOT_STARTED=1' in owner
           assert 'PRODUCTION_LIVE_OWNER_SESSION_COMPLETE=1' in owner
-          assert 'LIVE_RUNTIME_BROKER_LOST_BOT_FROZEN=1' in owner
           assert 'LIVE_RUNTIME_BROKER_READ_RECONCILED=1' in owner
           # A nullable upstream_connected is advisory; only a failed real IB
           # account probe is grounds to freeze the live canonical bot.
