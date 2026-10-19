@@ -34,6 +34,8 @@ on:
   pull_request:
     paths:
       - .github/workflows/mmibkr-selected-runtime-live-owner-r1.yml
+      - scripts/mmibkr_live_runtime_checkpoint_v1.py
+      - tests/test_mmibkr_live_runtime_checkpoint_v1.py
 
 permissions:
   contents: read
@@ -181,6 +183,7 @@ jobs:
           print('SUPERVISED_MAINTENANCE_SHELL_PARSE=PASS')
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
           PY
+          python -m unittest -v tests.test_mmibkr_live_runtime_checkpoint_v1
 
   owner:
     if: github.event_name == 'workflow_dispatch'
