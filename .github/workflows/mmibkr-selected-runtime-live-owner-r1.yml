@@ -132,6 +132,9 @@ jobs:
           assert 'supervised_5h_dispatch_request_[0-9]{8}_[a-z0-9]{6}' in s
           assert 'mode=legacy' in s and 'mode=supervised_5h' in s
           assert 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1' in owner
+          assert 'EXPLICIT_APPROVED_CANONICAL_LIVE_OWNER=1' in owner
+          assert 'LIVE_MODE_REQUIRES_LEGACY_OR_EXACT_SUCCESSOR=1' in owner
+          assert 'EPHEMERAL_LIVE_BROKER_MUTATION_DISABLED=1' not in owner
           assert 'python /app/scripts/operator/selected_runtime_legacy_compat_config_v1.py' in owner
           assert "--entrypoint /bin/sh" in owner
           assert "--user 0:0" in owner
@@ -191,14 +194,31 @@ jobs:
     timeout-minutes: 340
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Retire disposable order-capable live owner in favor of persistent broker session
-        if: ${{ !inputs.admission_only }}
+      - name: Require explicit canonical owner activation and exact handoff scope
+        env:
+          ADMISSION_ONLY: ${{ inputs.admission_only }}
+          HANDOFF_MODE: ${{ inputs.warm_handoff_mode }}
+          PREDECESSOR_RUN: ${{ inputs.warm_predecessor_run }}
         run: |
-          echo 'EPHEMERAL_LIVE_BROKER_MUTATION_DISABLED=1'
-          echo 'The existing persistent Docker Gateway is the broker session owner; this workflow is admission-only.'
-          exit 64
-      - name: Validate no-order handoff experiment inputs
-        if: ${{ inputs.admission_only }}
+          set -euo pipefail
+          case "$HANDOFF_MODE" in legacy|producer|successor|supervised_5h) ;; *) exit 64 ;; esac
+          if [ "$ADMISSION_ONLY" = false ]; then
+            case "$HANDOFF_MODE" in
+              legacy)
+                test -z "$PREDECESSOR_RUN" || exit 64 ;;
+              successor)
+                [[ "$PREDECESSOR_RUN" =~ ^[0-9]+$ ]] || exit 64 ;;
+              *) echo 'LIVE_MODE_REQUIRES_LEGACY_OR_EXACT_SUCCESSOR=1'; exit 64 ;;
+            esac
+            echo 'EXPLICIT_APPROVED_CANONICAL_LIVE_OWNER=1'
+          else
+            if [ "$HANDOFF_MODE" = successor ]; then
+              [[ "$PREDECESSOR_RUN" =~ ^[0-9]+$ ]] || exit 64
+            elif [ -n "$PREDECESSOR_RUN" ]; then
+              exit 64
+            fi
+            echo "NO_ORDER_WARM_HANDOFF_MODE=$HANDOFF_MODE"
+          fi
         env:
           HANDOFF_MODE: ${{ inputs.warm_handoff_mode }}
           PREDECESSOR_RUN: ${{ inputs.warm_predecessor_run }}
