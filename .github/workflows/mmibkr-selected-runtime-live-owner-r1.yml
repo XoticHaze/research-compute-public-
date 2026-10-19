@@ -1,8 +1,7 @@
 name: MM-IBKR Canonical Production Live Owner R1
 
-# Live bot activation is workflow_dispatch-only. A path-scoped push is only
-# a dispatcher for admission_only=true, so Fleet OIDC never admits writable
-# credentials on push and the bot is never started in a pushed job.
+# Live order execution is always workflow_dispatch-only. A path-scoped push
+# only dispatches an explicit approved owner request; it does not start IBKR.
 on:
   workflow_dispatch:
     inputs:
@@ -34,6 +33,8 @@ on:
   pull_request:
     paths:
       - .github/workflows/mmibkr-selected-runtime-live-owner-r1.yml
+      - scripts/mmibkr_live_runtime_checkpoint_v1.py
+      - tests/test_mmibkr_live_runtime_checkpoint_v1.py
 
 permissions:
   contents: read
@@ -49,7 +50,7 @@ env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
   LIVE_SEAL_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-live-bot/seal
   IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
-  SESSION_SECONDS: "5400"
+  SESSION_SECONDS: "14400"
 
 jobs:
   dispatch_admission:
@@ -61,28 +62,29 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Dispatch original live owner as no-order admission only
+      - name: Dispatch explicitly authorized canonical owner
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Reuse the established path-scoped rendezvous trigger; an explicit
-          # newly ADDED request marker opts into supervised five-hour shadow.
-          # Persisted old markers cannot accidentally repeat a live session.
+          # Only a newly ADDED exact marker may request live. Existing historical
+          # fire markers and general source pushes cannot replay live startup.
           mode=legacy
-          if git show --format= --unified=0 "$GITHUB_SHA" -- \
-              rendezvous/fire/mmibkr-live-writable-admission-r1 |
-              grep -Eq '^\+supervised_5h_dispatch_request_[0-9]{8}_[a-z0-9]{6}: true$'; then
+          admission_only=true
+          changed="$(git show --format= --unified=0 "$GITHUB_SHA" -- rendezvous/fire/mmibkr-live-writable-admission-r1)"
+          if printf '%s\n' "$changed" | grep -Eq '^\+live_owner_approved_dispatch_request_20261019_[a-z0-9]{6}: true$'; then
+            admission_only=false
+            echo 'EXPLICIT_OPERATOR_LIVE_FIRE_MATCHED=1'
+          elif printf '%s\n' "$changed" | grep -Eq '^\+supervised_5h_dispatch_request_[0-9]{8}_[a-z0-9]{6}: true$'; then
             mode=supervised_5h
           fi
           gh api --method POST \
             "/repos/${GITHUB_REPOSITORY}/actions/workflows/mmibkr-selected-runtime-live-owner-r1.yml/dispatches" \
             -f ref=main \
-            -f 'inputs[admission_only]=true' \
+            -f "inputs[admission_only]=$admission_only" \
             -f "inputs[warm_handoff_mode]=$mode"
-          echo "LIVE_WRT_DISPATCHED_NO_ORDER_MODE=$mode"
-          echo 'LIVE_WRT_ADMISSION_WORKFLOW_DISPATCHED=1'
-          echo 'LIVE_WRT_LIVE_BOT_ON_PUSH=0'
+          echo "LIVE_OWNER_FIRE_DISPATCHED_ADMISSION_ONLY=$admission_only"
+          echo "LIVE_OWNER_FIRE_DISPATCHED_MODE=$mode"
 
   contract:
     if: github.event_name == 'pull_request'
@@ -125,11 +127,14 @@ jobs:
           assert "if: github.event_name == 'workflow_dispatch'" in owner
           assert "if: " + chr(36) + "{{ !inputs.admission_only }}" in owner
           assert "if: " + chr(36) + "{{ inputs.admission_only }}" in owner
-          assert "'inputs[admission_only]=true'" in s
+          assert '"inputs[admission_only]=$admission_only"' in s
           assert "'inputs[warm_handoff_mode]=$mode'" in s or 'inputs[warm_handoff_mode]=$mode' in s
           assert 'supervised_5h_dispatch_request_[0-9]{8}_[a-z0-9]{6}' in s
           assert 'mode=legacy' in s and 'mode=supervised_5h' in s
           assert 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1' in owner
+          assert 'EXPLICIT_APPROVED_CANONICAL_LIVE_OWNER=1' in owner
+          assert 'LIVE_MODE_REQUIRES_LEGACY_OR_EXACT_SUCCESSOR=1' in owner
+          assert 'EPHEMERAL_LIVE_BROKER_MUTATION_DISABLED=1' not in owner
           assert 'python /app/scripts/operator/selected_runtime_legacy_compat_config_v1.py' in owner
           assert "--entrypoint /bin/sh" in owner
           assert "--user 0:0" in owner
@@ -179,8 +184,36 @@ jobs:
           script="\n".join(line[10:] if line.startswith("          ") else line for line in run.splitlines())
           subprocess.run(["bash","-n"],input=script,text=True,check=True)
           print('SUPERVISED_MAINTENANCE_SHELL_PARSE=PASS')
+          assert 'PRODUCTION_CANONICAL_LIVE_BOT_STARTED=1' in owner
+          assert 'PRODUCTION_LIVE_OWNER_SESSION_COMPLETE=1' in owner
+          assert 'LIVE_RUNTIME_BROKER_LOST_BOT_FROZEN=1' in owner
+          assert 'LIVE_RUNTIME_BROKER_READ_RECONCILED=1' in owner
+          assert 'LIVE_RUNTIME_BOT_AND_GATEWAY_CHECKPOINT_SEALED=1' in owner
+          assert 'LIVE_RUNTIME_PREDECESSOR_GATEWAY_AND_BOT_DATA_RESTORED=1' in owner
+          assert 'mmibkr-live-runtime-checkpoint-v1' in owner
+          assert 'LIVE_RUNTIME_SUCCESSOR_AUTH_AND_BROKER_RECONCILIATION_REQUIRED=1' in owner
+          assert "SESSION_SECONDS: \"14400\"" in s
+          live=owner.split('      - name: Start unchanged canonical bot natural owner with three persisted live policies',1)[1]
+          live=live.split('      - name: Stop live owner and encrypt canonical Gateway and bot data for successor',1)[0]
+          live=live.split('        run: |',1)[1]
+          live_script="\n".join(line[10:] if line.startswith("          ") else line for line in live.splitlines())
+          subprocess.run(["bash","-n"],input=live_script,text=True,check=True)
+          print('CANONICAL_LIVE_SCRIPT_SHELL_PARSE=PASS')
+          admission=owner.split('      - name: Require explicit canonical owner activation and exact handoff scope',1)[1].split('      - uses: actions/setup-python',1)[0]
+          assert admission.count('        run: |') == 1
+          assert admission.count('        env:') == 1
+          for section, after in (
+              ('Restore exact encrypted live Gateway and bot-state predecessor', 'Promote only the three approved persisted selected runtimes'),
+              ('Stop live owner and encrypt canonical Gateway and bot data for successor', 'Persist exact encrypted production-live successor state'),
+          ):
+              block=owner.split('      - name: '+section,1)[1].split('      - name: '+after,1)[0]
+              script=block.split('        run: |',1)[1]
+              script="\n".join(line[10:] if line.startswith("          ") else line for line in script.splitlines())
+              subprocess.run(["bash","-n"],input=script,text=True,check=True)
+          print('LIVE_ACTIVATION_RESTORE_AND_CHECKPOINT_SHELL_PARSE=PASS')
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
           PY
+          python -m unittest -v tests.test_mmibkr_live_runtime_checkpoint_v1
 
   owner:
     if: github.event_name == 'workflow_dispatch'
@@ -188,26 +221,31 @@ jobs:
     timeout-minutes: 340
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Retire disposable order-capable live owner in favor of persistent broker session
-        if: ${{ !inputs.admission_only }}
-        run: |
-          echo 'EPHEMERAL_LIVE_BROKER_MUTATION_DISABLED=1'
-          echo 'The existing persistent Docker Gateway is the broker session owner; this workflow is admission-only.'
-          exit 64
-      - name: Validate no-order handoff experiment inputs
-        if: ${{ inputs.admission_only }}
+      - name: Require explicit canonical owner activation and exact handoff scope
         env:
+          ADMISSION_ONLY: ${{ inputs.admission_only }}
           HANDOFF_MODE: ${{ inputs.warm_handoff_mode }}
           PREDECESSOR_RUN: ${{ inputs.warm_predecessor_run }}
         run: |
           set -euo pipefail
           case "$HANDOFF_MODE" in legacy|producer|successor|supervised_5h) ;; *) exit 64 ;; esac
-          if [ "$HANDOFF_MODE" = successor ]; then
-            [[ "$PREDECESSOR_RUN" =~ ^[0-9]+$ ]] || { echo 'EXACT_WARM_PRODUCER_RUN_REQUIRED=1'; exit 64; }
-          elif [ -n "$PREDECESSOR_RUN" ]; then
-            echo 'UNEXPECTED_WARM_PREDECESSOR_RUN=1'; exit 64
+          if [ "$ADMISSION_ONLY" = false ]; then
+            case "$HANDOFF_MODE" in
+              legacy)
+                test -z "$PREDECESSOR_RUN" || exit 64 ;;
+              successor)
+                [[ "$PREDECESSOR_RUN" =~ ^[0-9]+$ ]] || exit 64 ;;
+              *) echo 'LIVE_MODE_REQUIRES_LEGACY_OR_EXACT_SUCCESSOR=1'; exit 64 ;;
+            esac
+            echo 'EXPLICIT_APPROVED_CANONICAL_LIVE_OWNER=1'
+          else
+            if [ "$HANDOFF_MODE" = successor ]; then
+              [[ "$PREDECESSOR_RUN" =~ ^[0-9]+$ ]] || exit 64
+            elif [ -n "$PREDECESSOR_RUN" ]; then
+              exit 64
+            fi
+            echo "NO_ORDER_WARM_HANDOFF_MODE=$HANDOFF_MODE"
           fi
-          echo "NO_ORDER_WARM_HANDOFF_MODE=$HANDOFF_MODE"
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.11.16'
@@ -248,6 +286,46 @@ jobs:
               out.write('PRIVATE_SOURCE_ROOT='+str(source)+'\n')
           print('LIVE_CANONICAL_SOURCE_ADMITTED=1')
           PY
+
+      - name: Restore exact encrypted live Gateway and bot-state predecessor
+        if: ${{ !inputs.admission_only && inputs.warm_handoff_mode == 'successor' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MMIBKR_LIVE_GATEWAY_WARM_KEY_B64: ${{ secrets.MMIBKR_LIVE_GATEWAY_WARM_KEY_B64 }}
+          PREDECESSOR_RUN: ${{ inputs.warm_predecessor_run }}
+        run: |
+          set -euo pipefail
+          umask 077
+          [[ "$PREDECESSOR_RUN" =~ ^[0-9]+$ && "$PREDECESSOR_RUN" != "$GITHUB_RUN_ID" ]]
+          gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$PREDECESSOR_RUN" \
+            --jq '(.path == ".github/workflows/mmibkr-selected-runtime-live-owner-r1.yml") and (.event == "workflow_dispatch") and (.head_branch == "main") and (.conclusion == "success")' | grep -qx true
+          archive_id="$(gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$PREDECESSOR_RUN/artifacts?per_page=100" \
+            --jq '[.artifacts[] | select(.name == "mmibkr-live-runtime-checkpoint-v1" and .expired == false)] | .[0].id // empty')"
+          test -n "$archive_id" || { echo 'LIVE_RUNTIME_EXACT_PREDECESSOR_ARTIFACT_MISSING=1'; exit 1; }
+          work="$RUNNER_TEMP/mmibkr-live-restore"
+          mkdir -p "$work"
+          gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts/$archive_id/zip" > "$work/encrypted.zip"
+          unzip -j -o "$work/encrypted.zip" checkpoint.enc manifest.json -d "$work" >/dev/null
+          python -m scripts.mmibkr_live_runtime_checkpoint_v1 unseal \
+            --envelope "$work/checkpoint.enc" --manifest "$work/manifest.json" \
+            --successor-run "$GITHUB_RUN_ID" --archive "$work/recovered.tgz"
+          controller_image='ghcr.io/code-hustler-ft3d/ibg-controller@sha256:2e4f4911991386e941f6e95d58ee38a8242474dd3be239f21ad82557d24b4368'
+          docker pull "$controller_image" >/dev/null
+          gateway_uid="$(docker run --rm --entrypoint /usr/bin/id "$controller_image" -u)"
+          gateway_gid="$(docker run --rm --entrypoint /usr/bin/id "$controller_image" -g)"
+          [[ "$gateway_uid" =~ ^[0-9]+$ && "$gateway_gid" =~ ^[0-9]+$ ]]
+          gateway_volume="mmibkr-live-jts-$GITHUB_RUN_ID"
+          docker volume create "$gateway_volume" >/dev/null
+          docker run --rm --network none --user 0:0 \
+            -e GATEWAY_UID="$gateway_uid" -e GATEWAY_GID="$gateway_gid" \
+            -v "$gateway_volume:/seed" -v "$work:/import:ro" alpine:3.22 \
+            sh -ec 'tar -xzf /import/recovered.tgz -C /seed --strip-components=1 gateway; chown -R "$GATEWAY_UID:$GATEWAY_GID" /seed; chmod -R u+rwX,go-rwx /seed'
+          mkdir -p "$RUNNER_TEMP/mmibkr-live-data"
+          tar -xzf "$work/recovered.tgz" -C "$RUNNER_TEMP/mmibkr-live-data" \
+            --strip-components=1 bot_data
+          rm -rf "$work"
+          echo 'LIVE_RUNTIME_PREDECESSOR_GATEWAY_AND_BOT_DATA_RESTORED=1'
+          echo 'LIVE_RUNTIME_SUCCESSOR_AUTH_AND_BROKER_RECONCILIATION_REQUIRED=1'
 
       - name: Promote only the three approved persisted selected runtimes
         run: |
@@ -434,12 +512,14 @@ jobs:
         run: |
           set -euo pipefail
           controller_image="$IBKR_CONTROLLER_IMAGE"
-          if [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ]; then
-            # Exact CI-verified release digest; legacy controller remains unchanged.
+          if [ "${{ inputs.admission_only }}" = false ] ||
+             { [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ]; }; then
+            # Exact CI-verified v0.16.2 recovery release for live and supervised.
             controller_image='ghcr.io/code-hustler-ft3d/ibg-controller@sha256:2e4f4911991386e941f6e95d58ee38a8242474dd3be239f21ad82557d24b4368'
           fi
           docker pull "$controller_image" >/dev/null
-          if [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ]; then
+          if [ "${{ inputs.admission_only }}" = false ] ||
+             { [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ]; }; then
             controller_version="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$controller_image")"
             test "$controller_version" = v0.16.2
             echo 'MMIBKR_SUPERVISED_CONTROLLER_UPGRADE_V0_16_2_VERIFIED=1'
@@ -457,6 +537,13 @@ jobs:
           twofa_exit_interval=120
           relogin_after_twofa_timeout=yes
           supervised_recovery_args=()
+          if [ "${{ inputs.admission_only }}" = false ]; then
+            twofa_exit_interval=300
+            relogin_after_twofa_timeout=no
+            supervised_recovery_args=(-e AUTO_RESTART_ADOPT=yes
+                                      -e CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480)
+            echo 'MMIBKR_LIVE_RECOVERY_CONTROLLER_ENABLED=1'
+          fi
           if [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ]; then
             read_only_api=yes
             # Attended approval: give a single challenge adequate time.
@@ -491,7 +578,7 @@ jobs:
             -p 127.0.0.1:4001:4003 \
             "$controller_image" >/dev/null
           docker exec mmibkr-live-gateway /bin/sh -lc \
-            'test "$READ_ONLY_API" = "${{ inputs.warm_handoff_mode == 'supervised_5h' && 'yes' || 'no' }}" && test "$TRADING_MODE" = live' 
+            'test "$READ_ONLY_API" = "${{ inputs.admission_only && inputs.warm_handoff_mode == 'supervised_5h' && 'yes' || 'no' }}" && test "$TRADING_MODE" = live' 
           # Exact network proof. The only published socket is loopback TWS
           # 4001:4003. Bot joins the Gateway namespace with no published
           # control/API 8001 port and no public HTTP ingress.
@@ -833,8 +920,7 @@ jobs:
           # Bot-only ingress alternative was independently attested above by
           # checking the Gateway namespace has no published control/API port.
           # Canonical live guard accepts this without claiming a Caddy 401.
-          timeout --signal=INT --kill-after=90s "$SESSION_SECONDS" \
-            docker run --rm --name mmibkr-live-bot \
+          docker run -d --name mmibkr-live-bot \
               --network container:mmibkr-live-gateway \
               --env-file "$RUNNER_TEMP/mmibkr-live-bot.env" \
               -e MMIBKR_ACCOUNT_MODE=production_live \
@@ -850,7 +936,120 @@ jobs:
               -e BOT_SELECTED_RUNTIME_LIVE_PRIVATE_NETWORK_ATTESTED=1 \
               -v "$RUNNER_TEMP/mmibkr-live-data:/app/data" \
               "mmibkr-live-canonical:$GITHUB_RUN_ID" \
-              python main.py
+              python main.py >/dev/null
+          echo 'PRODUCTION_CANONICAL_LIVE_BOT_STARTED=1'
+          start_epoch="$(date +%s)"
+          end_epoch="$((start_epoch + SESSION_SECONDS))"
+          last_verified=0
+          bot_paused=0
+          broker_outage_since=0
+          iteration=0
+          while [ "$(date +%s)" -lt "$end_epoch" ]; do
+            iteration=$((iteration+1))
+            test "$(docker inspect -f '{{.State.Running}}' mmibkr-live-bot)" = true || {
+              echo 'PRODUCTION_CANONICAL_BOT_LOST=1'; exit 1;
+            }
+            test "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = true || {
+              echo 'PRODUCTION_GATEWAY_CONTAINER_LOST=1'; exit 1;
+            }
+            raw="$(docker exec mmibkr-live-gateway curl -sS --max-time 4 http://127.0.0.1:8080/health 2>/dev/null)" || raw=''
+            gateway_healthy="$(printf '%s' "$raw" | python -c 'import json,sys
+          try: j=json.load(sys.stdin)
+          except (ValueError,TypeError): j={}
+          print("1" if all(j.get(k) is True for k in ("api_port_open","jvm_alive","upstream_connected")) else "0")')" || gateway_healthy=0
+            if [ "$gateway_healthy" != 1 ]; then
+              if [ "$bot_paused" -eq 0 ]; then
+                docker pause mmibkr-live-bot >/dev/null
+                bot_paused=1
+                broker_outage_since="$(date +%s)"
+                echo 'LIVE_RUNTIME_BROKER_LOST_BOT_FROZEN=1'
+              fi
+            elif [ "$bot_paused" -eq 1 ] || [ $((iteration%5)) -eq 1 ]; then
+              if python - <<'PY'
+          import os
+          from pathlib import Path
+          from ib_insync import IB
+          expected=(Path(os.environ["RUNNER_TEMP"])/"mmibkr-live-bot.env").read_text().strip().split("=",1)[1]
+          ib=IB()
+          try:
+              ib.connect("127.0.0.1",4001,clientId=78,timeout=10,readonly=True)
+              assert expected in ib.managedAccounts()
+              ib.reqPositions()
+              ib.reqAllOpenOrders()
+              ib.reqExecutions()
+              print("LIVE_RUNTIME_BROKER_READ_RECONCILED=1")
+          finally:
+              if ib.isConnected(): ib.disconnect()
+          PY
+              then
+                last_verified="$(date +%s)"
+                if [ "$bot_paused" -eq 1 ]; then
+                  docker unpause mmibkr-live-bot >/dev/null
+                  bot_paused=0
+                  broker_outage_since=0
+                  echo 'LIVE_RUNTIME_GATEWAY_RETURNED_BOT_UNFROZEN=1'
+                fi
+              elif [ "$bot_paused" -eq 0 ]; then
+                docker pause mmibkr-live-bot >/dev/null
+                bot_paused=1
+                broker_outage_since="$(date +%s)"
+                echo 'LIVE_RUNTIME_BROKER_ACCOUNT_READ_FAILED_BOT_FROZEN=1'
+              fi
+            fi
+            if [ "$bot_paused" -eq 1 ]; then
+              if [ "$(( $(date +%s) - broker_outage_since ))" -ge 720 ]; then
+                echo 'LIVE_RUNTIME_RECOVERY_EXPIRED_NEEDS_OPERATOR=1'
+                exit 1
+              fi
+              echo "LIVE_RUNTIME_BROKER_RECOVERY_OBSERVING=1"
+            fi
+            echo "PRODUCTION_LIVE_OWNER_HEARTBEAT_MINUTE=$iteration"
+            sleep 60
+          done
+          if [ "$bot_paused" -eq 1 ]; then
+            echo 'LIVE_RUNTIME_ENDS_WITH_UNRECONCILED_BROKER=1'
+            exit 1
+          fi
+          docker stop --time 90 mmibkr-live-bot >/dev/null
+          echo 'PRODUCTION_LIVE_OWNER_SESSION_COMPLETE=1'
+
+      - name: Stop live owner and encrypt canonical Gateway and bot data for successor
+        id: produce-live-checkpoint
+        if: ${{ always() && !inputs.admission_only }}
+        env:
+          MMIBKR_LIVE_GATEWAY_WARM_KEY_B64: ${{ secrets.MMIBKR_LIVE_GATEWAY_WARM_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          docker inspect mmibkr-live-gateway >/dev/null
+          test -d "$RUNNER_TEMP/mmibkr-live-data"
+          if docker inspect mmibkr-live-bot >/dev/null 2>&1; then
+            docker stop --time 90 mmibkr-live-bot >/dev/null 2>&1 || true
+          fi
+          docker stop --time 90 mmibkr-live-gateway >/dev/null 2>&1 || true
+          work="$RUNNER_TEMP/mmibkr-live-checkpoint"
+          mkdir -p "$work"
+          docker run --rm --network none --user 0:0 \
+            -v "mmibkr-live-jts-$GITHUB_RUN_ID:/snapshot/gateway:ro" \
+            -v "$RUNNER_TEMP/mmibkr-live-data:/snapshot/bot_data:ro" \
+            -v "$work:/export" alpine:3.22 \
+            sh -ec 'tar -C /snapshot -czf /export/runtime.tgz gateway bot_data'
+          python -m scripts.mmibkr_live_runtime_checkpoint_v1 seal \
+            --archive "$work/runtime.tgz" --producer-run "$GITHUB_RUN_ID" \
+            --envelope "$work/checkpoint.enc" --manifest "$work/manifest.json"
+          rm -f "$work/runtime.tgz"
+          echo 'LIVE_RUNTIME_BOT_AND_GATEWAY_CHECKPOINT_SEALED=1'
+
+      - name: Persist exact encrypted production-live successor state
+        if: ${{ always() && !inputs.admission_only && steps.produce-live-checkpoint.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mmibkr-live-runtime-checkpoint-v1
+          path: |
+            ${{ runner.temp }}/mmibkr-live-checkpoint/checkpoint.enc
+            ${{ runner.temp }}/mmibkr-live-checkpoint/manifest.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Destroy one-run credentials, Gateway and account-scoped data
         if: always()
