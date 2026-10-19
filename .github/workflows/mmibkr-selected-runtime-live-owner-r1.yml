@@ -272,6 +272,46 @@ jobs:
           print('LIVE_CANONICAL_SOURCE_ADMITTED=1')
           PY
 
+      - name: Restore exact encrypted live Gateway and bot-state predecessor
+        if: ${{ !inputs.admission_only && inputs.warm_handoff_mode == 'successor' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MMIBKR_LIVE_GATEWAY_WARM_KEY_B64: ${{ secrets.MMIBKR_LIVE_GATEWAY_WARM_KEY_B64 }}
+          PREDECESSOR_RUN: ${{ inputs.warm_predecessor_run }}
+        run: |
+          set -euo pipefail
+          umask 077
+          [[ "$PREDECESSOR_RUN" =~ ^[0-9]+$ && "$PREDECESSOR_RUN" != "$GITHUB_RUN_ID" ]]
+          gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$PREDECESSOR_RUN" \
+            --jq '(.path == ".github/workflows/mmibkr-selected-runtime-live-owner-r1.yml") and (.event == "workflow_dispatch") and (.head_branch == "main") and (.conclusion == "success")' | grep -qx true
+          archive_id="$(gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$PREDECESSOR_RUN/artifacts?per_page=100" \
+            --jq '[.artifacts[] | select(.name == "mmibkr-live-runtime-checkpoint-v1" and .expired == false)] | .[0].id // empty')"
+          test -n "$archive_id" || { echo 'LIVE_RUNTIME_EXACT_PREDECESSOR_ARTIFACT_MISSING=1'; exit 1; }
+          work="$RUNNER_TEMP/mmibkr-live-restore"
+          mkdir -p "$work"
+          gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts/$archive_id/zip" > "$work/encrypted.zip"
+          unzip -j -o "$work/encrypted.zip" checkpoint.enc manifest.json -d "$work" >/dev/null
+          python -m scripts.mmibkr_live_runtime_checkpoint_v1 unseal \
+            --envelope "$work/checkpoint.enc" --manifest "$work/manifest.json" \
+            --successor-run "$GITHUB_RUN_ID" --archive "$work/recovered.tgz"
+          controller_image='ghcr.io/code-hustler-ft3d/ibg-controller@sha256:2e4f4911991386e941f6e95d58ee38a8242474dd3be239f21ad82557d24b4368'
+          docker pull "$controller_image" >/dev/null
+          gateway_uid="$(docker run --rm --entrypoint /usr/bin/id "$controller_image" -u)"
+          gateway_gid="$(docker run --rm --entrypoint /usr/bin/id "$controller_image" -g)"
+          [[ "$gateway_uid" =~ ^[0-9]+$ && "$gateway_gid" =~ ^[0-9]+$ ]]
+          gateway_volume="mmibkr-live-jts-$GITHUB_RUN_ID"
+          docker volume create "$gateway_volume" >/dev/null
+          docker run --rm --network none --user 0:0 \
+            -e GATEWAY_UID="$gateway_uid" -e GATEWAY_GID="$gateway_gid" \
+            -v "$gateway_volume:/seed" -v "$work:/import:ro" alpine:3.22 \
+            sh -ec 'tar -xzf /import/recovered.tgz -C /seed --strip-components=1 gateway; chown -R "$GATEWAY_UID:$GATEWAY_GID" /seed; chmod -R u+rwX,go-rwx /seed'
+          mkdir -p "$RUNNER_TEMP/mmibkr-live-data"
+          tar -xzf "$work/recovered.tgz" -C "$RUNNER_TEMP/mmibkr-live-data" \
+            --strip-components=1 bot_data
+          rm -rf "$work"
+          echo 'LIVE_RUNTIME_PREDECESSOR_GATEWAY_AND_BOT_DATA_RESTORED=1'
+          echo 'LIVE_RUNTIME_SUCCESSOR_AUTH_AND_BROKER_RECONCILIATION_REQUIRED=1'
+
       - name: Promote only the three approved persisted selected runtimes
         run: |
           set -euo pipefail
