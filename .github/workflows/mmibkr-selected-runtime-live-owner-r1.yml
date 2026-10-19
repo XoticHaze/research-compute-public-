@@ -218,6 +218,13 @@ jobs:
               script="\n".join(line[10:] if line.startswith("          ") else line for line in script.splitlines())
               subprocess.run(["bash","-n"],input=script,text=True,check=True)
           print('LIVE_ACTIVATION_RESTORE_AND_CHECKPOINT_SHELL_PARSE=PASS')
+          live_evidence=owner.split('      - name: Report sanitized production-live controller recovery evidence',1)[1].split('      - name: Stop live owner and encrypt canonical Gateway and bot data for successor',1)[0]
+          live_evidence_script=live_evidence.split('        run: |',1)[1]
+          live_evidence_script="\n".join(line[10:] if line.startswith("          ") else line for line in live_evidence_script.splitlines())
+          subprocess.run(["bash","-n"],input=live_evidence_script,text=True,check=True)
+          assert 'LIVE_RUNTIME_CONTROLLER_ALERT_COUNTS=' in owner
+          assert 'LIVE_RUNTIME_FINAL_CONTROLLER_HEALTH=' in owner
+          print('LIVE_RUNTIME_RECOVERY_OBSERVABILITY_PARSE=PASS')
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
           PY
           python -m unittest -v tests.test_mmibkr_live_runtime_checkpoint_v1
