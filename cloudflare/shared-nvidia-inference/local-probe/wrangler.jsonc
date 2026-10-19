@@ -1,0 +1,15 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "cc-shared-nvidia-operator-local-caller",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-18",
+  "workers_dev": false,
+  "preview_urls": false,
+  "services": [
+    {
+      "binding": "NVIDIA_SERVICE",
+      "service": "cc-shared-nvidia-inference",
+      "remote": true
+    }
+  ]
+}
