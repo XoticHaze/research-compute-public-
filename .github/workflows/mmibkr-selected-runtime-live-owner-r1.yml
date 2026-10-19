@@ -924,6 +924,44 @@ jobs:
               "mmibkr-live-canonical:$GITHUB_RUN_ID" \
               python main.py
 
+      - name: Stop live owner and encrypt canonical Gateway and bot data for successor
+        id: produce-live-checkpoint
+        if: ${{ always() && !inputs.admission_only }}
+        env:
+          MMIBKR_LIVE_GATEWAY_WARM_KEY_B64: ${{ secrets.MMIBKR_LIVE_GATEWAY_WARM_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          docker inspect mmibkr-live-gateway >/dev/null
+          test -d "$RUNNER_TEMP/mmibkr-live-data"
+          if docker inspect mmibkr-live-bot >/dev/null 2>&1; then
+            docker stop --time 90 mmibkr-live-bot >/dev/null 2>&1 || true
+          fi
+          docker stop --time 90 mmibkr-live-gateway >/dev/null 2>&1 || true
+          work="$RUNNER_TEMP/mmibkr-live-checkpoint"
+          mkdir -p "$work"
+          docker run --rm --network none --user 0:0 \
+            -v "mmibkr-live-jts-$GITHUB_RUN_ID:/snapshot/gateway:ro" \
+            -v "$RUNNER_TEMP/mmibkr-live-data:/snapshot/bot_data:ro" \
+            -v "$work:/export" alpine:3.22 \
+            sh -ec 'tar -C /snapshot -czf /export/runtime.tgz gateway bot_data'
+          python -m scripts.mmibkr_live_runtime_checkpoint_v1 seal \
+            --archive "$work/runtime.tgz" --producer-run "$GITHUB_RUN_ID" \
+            --envelope "$work/checkpoint.enc" --manifest "$work/manifest.json"
+          rm -f "$work/runtime.tgz"
+          echo 'LIVE_RUNTIME_BOT_AND_GATEWAY_CHECKPOINT_SEALED=1'
+
+      - name: Persist exact encrypted production-live successor state
+        if: ${{ always() && !inputs.admission_only && steps.produce-live-checkpoint.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mmibkr-live-runtime-checkpoint-v1
+          path: |
+            ${{ runner.temp }}/mmibkr-live-checkpoint/checkpoint.enc
+            ${{ runner.temp }}/mmibkr-live-checkpoint/manifest.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Destroy one-run credentials, Gateway and account-scoped data
         if: always()
         run: |
