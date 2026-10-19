@@ -42,7 +42,7 @@ jobs:
               'EXACT_FIRST_SUCCESSOR_DISPATCHED=1',
           )
           for marker in required: assert marker in s, marker
-          assert 'RRULE' not in s
+          assert s.count('  workflow_run:') == 1
           print('EXACT_FIRST_SUCCESSOR_CONTRACT_PASS=1')
           PY
 
