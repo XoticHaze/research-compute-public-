@@ -905,8 +905,7 @@ jobs:
           # Bot-only ingress alternative was independently attested above by
           # checking the Gateway namespace has no published control/API port.
           # Canonical live guard accepts this without claiming a Caddy 401.
-          timeout --signal=INT --kill-after=90s "$SESSION_SECONDS" \
-            docker run --rm --name mmibkr-live-bot \
+          docker run -d --name mmibkr-live-bot \
               --network container:mmibkr-live-gateway \
               --env-file "$RUNNER_TEMP/mmibkr-live-bot.env" \
               -e MMIBKR_ACCOUNT_MODE=production_live \
@@ -922,7 +921,82 @@ jobs:
               -e BOT_SELECTED_RUNTIME_LIVE_PRIVATE_NETWORK_ATTESTED=1 \
               -v "$RUNNER_TEMP/mmibkr-live-data:/app/data" \
               "mmibkr-live-canonical:$GITHUB_RUN_ID" \
-              python main.py
+              python main.py >/dev/null
+          echo 'PRODUCTION_CANONICAL_LIVE_BOT_STARTED=1'
+          start_epoch="$(date +%s)"
+          end_epoch="$((start_epoch + SESSION_SECONDS))"
+          last_verified=0
+          bot_paused=0
+          broker_outage_since=0
+          iteration=0
+          while [ "$(date +%s)" -lt "$end_epoch" ]; do
+            iteration=$((iteration+1))
+            test "$(docker inspect -f '{{.State.Running}}' mmibkr-live-bot)" = true || {
+              echo 'PRODUCTION_CANONICAL_BOT_LOST=1'; exit 1;
+            }
+            test "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = true || {
+              echo 'PRODUCTION_GATEWAY_CONTAINER_LOST=1'; exit 1;
+            }
+            raw="$(docker exec mmibkr-live-gateway curl -sS --max-time 4 http://127.0.0.1:8080/health 2>/dev/null)" || raw=''
+            gateway_healthy="$(printf '%s' "$raw" | python -c 'import json,sys
+          try: j=json.load(sys.stdin)
+          except (ValueError,TypeError): j={}
+          print("1" if all(j.get(k) is True for k in ("api_port_open","jvm_alive","upstream_connected")) else "0")')" || gateway_healthy=0
+            if [ "$gateway_healthy" != 1 ]; then
+              if [ "$bot_paused" -eq 0 ]; then
+                docker pause mmibkr-live-bot >/dev/null
+                bot_paused=1
+                broker_outage_since="$(date +%s)"
+                echo 'LIVE_RUNTIME_BROKER_LOST_BOT_FROZEN=1'
+              fi
+            elif [ "$bot_paused" -eq 1 ] || [ $((iteration%5)) -eq 1 ]; then
+              if python - <<'PY'
+          import os
+          from pathlib import Path
+          from ib_insync import IB
+          expected=(Path(os.environ["RUNNER_TEMP"])/"mmibkr-live-bot.env").read_text().strip().split("=",1)[1]
+          ib=IB()
+          try:
+              ib.connect("127.0.0.1",4001,clientId=78,timeout=10,readonly=True)
+              assert expected in ib.managedAccounts()
+              ib.reqPositions()
+              ib.reqAllOpenOrders()
+              ib.reqExecutions()
+              print("LIVE_RUNTIME_BROKER_READ_RECONCILED=1")
+          finally:
+              if ib.isConnected(): ib.disconnect()
+          PY
+              then
+                last_verified="$(date +%s)"
+                if [ "$bot_paused" -eq 1 ]; then
+                  docker unpause mmibkr-live-bot >/dev/null
+                  bot_paused=0
+                  broker_outage_since=0
+                  echo 'LIVE_RUNTIME_GATEWAY_RETURNED_BOT_UNFROZEN=1'
+                fi
+              elif [ "$bot_paused" -eq 0 ]; then
+                docker pause mmibkr-live-bot >/dev/null
+                bot_paused=1
+                broker_outage_since="$(date +%s)"
+                echo 'LIVE_RUNTIME_BROKER_ACCOUNT_READ_FAILED_BOT_FROZEN=1'
+              fi
+            fi
+            if [ "$bot_paused" -eq 1 ]; then
+              if [ "$(( $(date +%s) - broker_outage_since ))" -ge 720 ]; then
+                echo 'LIVE_RUNTIME_RECOVERY_EXPIRED_NEEDS_OPERATOR=1'
+                exit 1
+              fi
+              echo "LIVE_RUNTIME_BROKER_RECOVERY_OBSERVING=1"
+            fi
+            echo "PRODUCTION_LIVE_OWNER_HEARTBEAT_MINUTE=$iteration"
+            sleep 60
+          done
+          if [ "$bot_paused" -eq 1 ]; then
+            echo 'LIVE_RUNTIME_ENDS_WITH_UNRECONCILED_BROKER=1'
+            exit 1
+          fi
+          docker stop --time 90 mmibkr-live-bot >/dev/null
+          echo 'PRODUCTION_LIVE_OWNER_SESSION_COMPLETE=1'
 
       - name: Stop live owner and encrypt canonical Gateway and bot data for successor
         id: produce-live-checkpoint
