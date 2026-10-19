@@ -103,3 +103,52 @@ separate states.
 From `cloudflare/shared-nvidia-inference`: `npm test`.
 Tests use fake Cloudflare bindings and fake NVIDIA responses, without any
 provider credentials. A green test is *not* a live NVIDIA call.
+
+## One-time private caller: no second permanent Worker (2026-10-19)
+
+After the dedicated `cc-shared-nvidia-inference` Worker is deployed with its
+verified account Secrets Store binding, the **first** diagnostic can use the
+checked-in `local-probe/` caller instead of creating a persistent public
+gateway or granting the NVIDIA secret to an existing neutral Worker.
+
+The caller has **no NVIDIA credential**, **no account Secrets Store binding**,
+and **no public hostname**. Its sole Cloudflare capability is a remote Service
+Binding to `cc-shared-nvidia-inference`. Only a local POST to `/run-once`
+with no body causes exactly one fixed upstream service call for that local
+process; the caller sanitizes upstream receipt fields again.
+
+Prerequisites: operator-approved Worker creation/deployment and secret binding
+to the **ordinary shared-compute account**; authorized Wrangler login to that
+account; and the private inference Worker's diagnostic flag temporarily
+enabled to `1` **only after** the private Service Binding route is approved.
+Cloudflare deployments attaching Secrets Store bindings require corresponding
+Secrets Store binding/edit authority, which is separate from ordinary Worker
+source-edit privileges. Do **not** expand existing neutral Worker deployment
+credentials to get around that gate.
+
+Start from the repository Worker directory on an operator-controlled machine:
+
+```sh
+npx wrangler@4 dev --config local-probe/wrangler.jsonc --ip 127.0.0.1 --port 8787
+```
+
+Once Wrangler reports the `NVIDIA_SERVICE` remote binding connected, run
+this from a second terminal **once**:
+
+```sh
+curl --silent --show-error -X POST http://127.0.0.1:8787/run-once
+```
+
+The result is a **local, sanitized** catalog + completion receipt, not a
+deployment promotion. Preserve only the approved receipt fields in the private
+capability ledger; do not put raw responses or the store ID in public CI logs.
+Immediately change `CC_NVIDIA_DIAGNOSTIC_ENABLED` back to `0` on the
+deployed inference Worker, stop the local `wrangler dev` session, and verify
+that a later diagnostic is unavailable. Do not deploy the local caller with
+`wrangler deploy`. It is a one-time operator test harness, not a runtime
+consumer. Home Assistant, Voice Engine and News Intelligence consumers still
+require separate runtime admission.
+
+The offline `npm test` suite covers caller ingress, single invocation, fixed
+remote destination and receipt redaction. It does **not** verify that remote
+bindings connect or that live NVIDIA inference works.
