@@ -32,3 +32,13 @@ controller_canary_v0_16_2_scope: read_only_supervised_5h
 supervised_5h_dispatch_request_20261015_8b4e2c: true
 supervised_diagnostic_stage: gateway_before_bot
 supervised_live_order_mutation: disabled
+
+# Fresh user-directed P0 restoration of the existing canonical live strategy owner.
+# Unlike the historical no-order approvals, this exact new marker authorizes
+# the workflow_dispatch live owner for the approved incumbent AMAT/APH/MNQ scope.
+live_owner_approved_dispatch_request_20261019_a62d91: true
+live_owner_activation_scope_20261019: AMAT_15Min_APH_15Min_MNQ_12Min
+live_owner_strategy_orders_20261019: natural_signals_only
+live_owner_discretionary_proof_orders_20261019: false
+live_owner_production_runtime_20261019: 4h_bounded_successor_checkpoint
+live_owner_private_source_sha_20261019: 46fcdf26cf84603b305a3ea20bcd3cf28c67bc0b
