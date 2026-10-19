@@ -87,7 +87,8 @@ export async function probeNvidia(env, doFetch = fetch) {
       const data = await result.json();
       const msg = data && Array.isArray(data.choices) && data.choices.length
         ? data.choices[0]?.message : null;
-      receipt.completion_response_valid = typeof msg?.content === "string";
+      receipt.completion_response_valid =
+        typeof msg?.content === "string" && msg.content.trim().length > 0;
       receipt.exact_reply_observed = receipt.completion_response_valid &&
         msg.content.trim() === "PING_OK";
     }
@@ -98,7 +99,7 @@ export async function probeNvidia(env, doFetch = fetch) {
   }
   const status = receipt.completion_http_status;
   receipt.classification = status === 200
-    ? "completion_http_200"
+    ? (receipt.completion_response_valid ? "completion_http_200" : "completion_response_invalid")
     : status === 401 || status === 403
       ? "provider_access_rejected"
       : status === 410 ? "model_retired"
