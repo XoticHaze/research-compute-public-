@@ -199,6 +199,18 @@ jobs:
           live_script="\n".join(line[10:] if line.startswith("          ") else line for line in live.splitlines())
           subprocess.run(["bash","-n"],input=live_script,text=True,check=True)
           print('CANONICAL_LIVE_SCRIPT_SHELL_PARSE=PASS')
+          admission=owner.split('      - name: Require explicit canonical owner activation and exact handoff scope',1)[1].split('      - uses: actions/setup-python',1)[0]
+          assert admission.count('        run: |') == 1
+          assert admission.count('        env:') == 1
+          for section, after in (
+              ('Restore exact encrypted live Gateway and bot-state predecessor', 'Promote only the three approved persisted selected runtimes'),
+              ('Stop live owner and encrypt canonical Gateway and bot data for successor', 'Persist exact encrypted production-live successor state'),
+          ):
+              block=owner.split('      - name: '+section,1)[1].split('      - name: '+after,1)[0]
+              script=block.split('        run: |',1)[1]
+              script="\n".join(line[10:] if line.startswith("          ") else line for line in script.splitlines())
+              subprocess.run(["bash","-n"],input=script,text=True,check=True)
+          print('LIVE_ACTIVATION_RESTORE_AND_CHECKPOINT_SHELL_PARSE=PASS')
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
           PY
           python -m unittest -v tests.test_mmibkr_live_runtime_checkpoint_v1
