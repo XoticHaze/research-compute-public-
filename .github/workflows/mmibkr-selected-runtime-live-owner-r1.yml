@@ -1031,6 +1031,44 @@ PY
           docker stop --time 90 mmibkr-live-bot >/dev/null
           echo 'PRODUCTION_LIVE_OWNER_SESSION_COMPLETE=1'
 
+      - name: Report sanitized production-live controller recovery evidence
+        if: ${{ always() && !inputs.admission_only }}
+        run: |
+          set +e
+          if docker container inspect mmibkr-live-bot >/dev/null 2>&1; then
+            docker inspect -f 'LIVE_RUNTIME_FINAL_CANONICAL_BOT={{.State.Status}} EXIT={{.State.ExitCode}} OOM={{.State.OOMKilled}}' mmibkr-live-bot
+          fi
+          if docker container inspect mmibkr-live-gateway >/dev/null 2>&1; then
+            docker inspect -f 'LIVE_RUNTIME_FINAL_GATEWAY={{.State.Status}} EXIT={{.State.ExitCode}} OOM={{.State.OOMKilled}}' mmibkr-live-gateway
+            if [ "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = true ]; then
+              docker exec mmibkr-live-gateway curl -sS --max-time 4 http://127.0.0.1:8080/health 2>/dev/null |
+                python -c 'import json,sys
+try: j=json.load(sys.stdin)
+except (ValueError,TypeError): j={}
+keys=("jvm_alive","api_port_open","upstream_connected","upstream_recovery_active")
+safe={k:(j.get(k) if type(j.get(k)) is bool else None) for k in keys}
+safe["state"]=j.get("state") if j.get("state") in ("INIT","LOGIN","TWO_FA","READY","MONITORING","UPSTREAM_DOWN","HALTED") else "unknown"
+print("LIVE_RUNTIME_FINAL_CONTROLLER_HEALTH="+json.dumps(safe,sort_keys=True,separators=(",",":")))' || true
+            fi
+            docker logs mmibkr-live-gateway 2>&1 | python -c 'import json,re,sys
+patterns={
+  "maintenance_recovery": r"ALERT_IBKR_MAINTENANCE_RECOVERY",
+  "auto_restart": r"ALERT_AUTO_RESTART",
+  "session_conflict": r"ALERT_EXISTING_SESSION_CONFLICT",
+  "ccp_lockout": r"ALERT_CCP_",
+  "upstream_down": r"ALERT_UPSTREAM_DOWN",
+  "upstream_restored": r"ALERT_UPSTREAM_RESTORED",
+  "login_failed": r"ALERT_LOGIN_FAILED",
+  "twofa_failed": r"ALERT_2FA_FAILED",
+  "clean_logout": r"ALERT_CLEAN_LOGOUT",
+  "config_not_applied": r"ALERT_CONFIG_NOT_APPLIED",
+}
+counts={k:0 for k in patterns}
+for line in sys.stdin:
+    for k,p in patterns.items():
+        if re.search(p,line): counts[k]=min(999,counts[k]+1)
+print("LIVE_RUNTIME_CONTROLLER_ALERT_COUNTS="+json.dumps(counts,sort_keys=True,separators=(",",":")))' || true
+          fi
       - name: Stop live owner and encrypt canonical Gateway and bot data for successor
         id: produce-live-checkpoint
         if: ${{ always() && !inputs.admission_only }}
