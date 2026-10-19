@@ -196,6 +196,8 @@ jobs:
           assert 'LIVE_RUNTIME_BROKER_LOST_BOT_FROZEN=1' not in owner
           assert 'LIVE_RUNTIME_BOT_AND_GATEWAY_CHECKPOINT_SEALED=1' in owner
           assert 'LIVE_RUNTIME_PREDECESSOR_GATEWAY_AND_BOT_DATA_RESTORED=1' in owner
+          assert 'LIVE_RUNTIME_FAILED_PREDECESSOR_CHECKPOINT_AND_CLEANUP_VERIFIED=1' in owner
+          assert 'PRODUCTION_LIVE_EXECUTION_HISTORY_READ=1' in owner
           assert 'mmibkr-live-runtime-checkpoint-v1' in owner
           assert 'LIVE_RUNTIME_SUCCESSOR_AUTH_AND_BROKER_RECONCILIATION_REQUIRED=1' in owner
           assert "SESSION_SECONDS: \"14400\"" in s
@@ -311,7 +313,20 @@ jobs:
           umask 077
           [[ "$PREDECESSOR_RUN" =~ ^[0-9]+$ && "$PREDECESSOR_RUN" != "$GITHUB_RUN_ID" ]]
           gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$PREDECESSOR_RUN" \
-            --jq '(.path == ".github/workflows/mmibkr-selected-runtime-live-owner-r1.yml") and (.event == "workflow_dispatch") and (.head_branch == "main") and (.conclusion == "success")' | grep -qx true
+            --jq '(.path == ".github/workflows/mmibkr-selected-runtime-live-owner-r1.yml") and (.event == "workflow_dispatch") and (.head_branch == "main") and (.conclusion == "success" or .conclusion == "failure")' | grep -qx true
+          predecessor_conclusion="$(gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$PREDECESSOR_RUN" --jq '.conclusion')"
+          if [ "$predecessor_conclusion" = failure ]; then
+            # Exact failed owner requires independent encrypted checkpoint
+            # upload and cleanup receipts before successor restores its state.
+            gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$PREDECESSOR_RUN/jobs?per_page=100" \
+              --jq '[.jobs[] | select(.name == "owner") | {conclusion,steps}] |
+                (length == 1 and .[0].conclusion == "failure" and
+                  (.[0].steps | any(.name == "Start unchanged canonical bot natural owner with three persisted live policies" and .conclusion == "failure")) and
+                  (.[0].steps | any(.name == "Stop live owner and encrypt canonical Gateway and bot data for successor" and .conclusion == "success")) and
+                  (.[0].steps | any(.name == "Persist exact encrypted production-live successor state" and .conclusion == "success")) and
+                  (.[0].steps | any(.name == "Destroy one-run credentials, Gateway and account-scoped data" and .conclusion == "success")))' | grep -qx true
+            echo 'LIVE_RUNTIME_FAILED_PREDECESSOR_CHECKPOINT_AND_CLEANUP_VERIFIED=1'
+          fi
           archive_id="$(gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$PREDECESSOR_RUN/artifacts?per_page=100" \
             --jq '[.artifacts[] | select(.name == "mmibkr-live-runtime-checkpoint-v1" and .expired == false)] | .[0].id // empty')"
           test -n "$archive_id" || { echo 'LIVE_RUNTIME_EXACT_PREDECESSOR_ARTIFACT_MISSING=1'; exit 1; }
@@ -619,6 +634,8 @@ jobs:
                   ib.reqAccountSummary()
                   ib.reqPositions()
                   ib.reqAllOpenOrders()
+                  ib.reqExecutions()
+                  print('PRODUCTION_LIVE_EXECUTION_HISTORY_READ=1')
                   authenticated=True
                   print('PRODUCTION_LIVE_EXPECTED_ACCOUNT_READ=1')
                   print('PRODUCTION_LIVE_POSITIONS_AND_ORDERS_READ=1')
