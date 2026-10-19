@@ -497,12 +497,14 @@ jobs:
         run: |
           set -euo pipefail
           controller_image="$IBKR_CONTROLLER_IMAGE"
-          if [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ]; then
-            # Exact CI-verified release digest; legacy controller remains unchanged.
+          if [ "${{ inputs.admission_only }}" = false ] ||
+             { [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ]; }; then
+            # Exact CI-verified v0.16.2 recovery release for live and supervised.
             controller_image='ghcr.io/code-hustler-ft3d/ibg-controller@sha256:2e4f4911991386e941f6e95d58ee38a8242474dd3be239f21ad82557d24b4368'
           fi
           docker pull "$controller_image" >/dev/null
-          if [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ]; then
+          if [ "${{ inputs.admission_only }}" = false ] ||
+             { [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ]; }; then
             controller_version="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$controller_image")"
             test "$controller_version" = v0.16.2
             echo 'MMIBKR_SUPERVISED_CONTROLLER_UPGRADE_V0_16_2_VERIFIED=1'
@@ -520,6 +522,13 @@ jobs:
           twofa_exit_interval=120
           relogin_after_twofa_timeout=yes
           supervised_recovery_args=()
+          if [ "${{ inputs.admission_only }}" = false ]; then
+            twofa_exit_interval=300
+            relogin_after_twofa_timeout=no
+            supervised_recovery_args=(-e AUTO_RESTART_ADOPT=yes
+                                      -e CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480)
+            echo 'MMIBKR_LIVE_RECOVERY_CONTROLLER_ENABLED=1'
+          fi
           if [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ]; then
             read_only_api=yes
             # Attended approval: give a single challenge adequate time.
@@ -554,7 +563,7 @@ jobs:
             -p 127.0.0.1:4001:4003 \
             "$controller_image" >/dev/null
           docker exec mmibkr-live-gateway /bin/sh -lc \
-            'test "$READ_ONLY_API" = "${{ inputs.warm_handoff_mode == 'supervised_5h' && 'yes' || 'no' }}" && test "$TRADING_MODE" = live' 
+            'test "$READ_ONLY_API" = "${{ inputs.admission_only && inputs.warm_handoff_mode == 'supervised_5h' && 'yes' || 'no' }}" && test "$TRADING_MODE" = live' 
           # Exact network proof. The only published socket is loopback TWS
           # 4001:4003. Bot joins the Gateway namespace with no published
           # control/API 8001 port and no public HTTP ingress.
