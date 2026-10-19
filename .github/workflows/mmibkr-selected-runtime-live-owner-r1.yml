@@ -1,8 +1,7 @@
 name: MM-IBKR Canonical Production Live Owner R1
 
-# Live bot activation is workflow_dispatch-only. A path-scoped push is only
-# a dispatcher for admission_only=true, so Fleet OIDC never admits writable
-# credentials on push and the bot is never started in a pushed job.
+# Live order execution is always workflow_dispatch-only. A path-scoped push
+# only dispatches an explicit approved owner request; it does not start IBKR.
 on:
   workflow_dispatch:
     inputs:
@@ -63,21 +62,29 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Dispatch original live owner as no-order admission only
+      - name: Dispatch explicitly authorized canonical owner
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Reuse the established path-scoped rendezvous trigger; an explicit
-          # newly ADDED request marker opts into supervised five-hour shadow.
-          # Persisted old markers cannot accidentally repeat a live session.
+          # Only a newly ADDED exact marker may request live. Existing historical
+          # fire markers and general source pushes cannot replay live startup.
           mode=legacy
           admission_only=true
-          # ONLY an added explicit 2026-10-19 approved live request changes
-          # mode to order-capable. Existing historic markers cannot replay.
-          if git show --format= --unified=0 "$GITHUB_SHA" -- \
-              rendezvous/fire/mmibkr-live-writable-admission-r1 |
-              grep -Eq '^\+live_owner_approved_dispatch_request_20261019_[a-z0-9]{6}: true
+          changed="$(git show --format= --unified=0 "$GITHUB_SHA" -- rendezvous/fire/mmibkr-live-writable-admission-r1)"
+          if printf '%s\n' "$changed" | grep -Eq '^\+live_owner_approved_dispatch_request_20261019_[a-z0-9]{6}: true$'; then
+            admission_only=false
+            echo 'EXPLICIT_OPERATOR_LIVE_FIRE_MATCHED=1'
+          elif printf '%s\n' "$changed" | grep -Eq '^\+supervised_5h_dispatch_request_[0-9]{8}_[a-z0-9]{6}: true$'; then
+            mode=supervised_5h
+          fi
+          gh api --method POST \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/mmibkr-selected-runtime-live-owner-r1.yml/dispatches" \
+            -f ref=main \
+            -f "inputs[admission_only]=$admission_only" \
+            -f "inputs[warm_handoff_mode]=$mode"
+          echo "LIVE_OWNER_FIRE_DISPATCHED_ADMISSION_ONLY=$admission_only"
+          echo "LIVE_OWNER_FIRE_DISPATCHED_MODE=$mode"
 
   contract:
     if: github.event_name == 'pull_request'
