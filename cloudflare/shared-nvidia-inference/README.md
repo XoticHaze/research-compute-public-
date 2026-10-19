@@ -29,7 +29,23 @@ It does NOT share a key globally among agents or put it on
    pre-existing deploy credentials / scopes). Its Wrangler config has
    `workers_dev: false`, `preview_urls: false`, no route, and
    `CC_NVIDIA_DIAGNOSTIC_ENABLED: "0"`.
-3. **Only after the Worker exists**, bind the account Secrets Store secret
+3. Before deploying, prepare the **reviewable store binding** using only the
+   Cloudflare account Secrets Store ID (NOT the NVIDIA API key). Copy the real
+   store ID from https://dash.cloudflare.com/?to=/:account/secrets-store .
+   From this Worker directory run:
+
+   ~~~sh
+   node scripts/render-secret-binding.mjs --store-id <32-character-store-id>
+   ~~~
+
+   This renders the locally ignored, owner-readable file `wrangler.bound.jsonc`.
+   It contains only the store ID, secret name and binding name; never a key
+   value. The generator does not deploy, authenticate or run an inference.
+   When an authorized deployment is later approved, use Wrangler's
+   `--config wrangler.bound.jsonc` rather than the default unbound manifest.
+   Never copy a store ID from a different/neutral security Cloudflare account.
+
+4. **Only after the Worker exists**, bind the account Secrets Store secret
    through Workers → `cc-shared-nvidia-inference` → Settings → Bindings →
    Add → Secrets Store. Binding variable **`NVIDIA_API_KEY`** and secret
    name **`NVIDIA_API_KEY`**. Deploy the reviewed binding; do NOT bind to
@@ -38,15 +54,15 @@ It does NOT share a key globally among agents or put it on
    verified in the source. Before any further Wrangler redeploy, reconcile
    binding source-of-truth to the real store ID or preserve it explicitly;
    never fabricate store IDs.
-4. Admit one private **Service Binding** from an approved internal
+5. Admit one private **Service Binding** from an approved internal
    CommandCenter test caller to this Worker. There is no public HTTP route.
    Do not enable diagnostics until that invocation/authentication path
    is proven and approved.
-5. Temporarily set `CC_NVIDIA_DIAGNOSTIC_ENABLED=1` only on the private
+6. Temporarily set `CC_NVIDIA_DIAGNOSTIC_ENABLED=1` only on the private
    Worker. Service-bound caller sends **POST**
    `/internal/diagnostics/nvidia` with no body. The request does not select
    the model, prompt or URL.
-6. Examine the sanitized receipt and disable diagnostics again. Only then
+7. Examine the sanitized receipt and disable diagnostics again. Only then
    publish operator-reviewed provider capabilities to CC; no raw provider
    responses, API key, HTTP error body or household prompts are published.
 
