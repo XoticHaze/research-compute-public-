@@ -188,6 +188,13 @@ jobs:
           assert 'PRODUCTION_LIVE_OWNER_SESSION_COMPLETE=1' in owner
           assert 'LIVE_RUNTIME_BROKER_LOST_BOT_FROZEN=1' in owner
           assert 'LIVE_RUNTIME_BROKER_READ_RECONCILED=1' in owner
+          # A nullable upstream_connected is advisory; only a failed real IB
+          # account probe is grounds to freeze the live canonical bot.
+          assert 'LIVE_RUNTIME_CONTROLLER_HEALTH_DISAGREES_WITH_BROKER_READ=1' in owner
+          assert 'LIVE_RUNTIME_BROKER_PROBE_FAILED_BOT_FROZEN=1' in owner
+          assert '"$gateway_healthy" != 1 ] || [ "$bot_paused" -eq 1' in owner
+          assert 'LIVE_RUNTIME_BROKER_VERIFIED_BOT_UNFROZEN=1' in owner
+          assert 'LIVE_RUNTIME_BROKER_LOST_BOT_FROZEN=1' not in owner
           assert 'LIVE_RUNTIME_BOT_AND_GATEWAY_CHECKPOINT_SEALED=1' in owner
           assert 'LIVE_RUNTIME_PREDECESSOR_GATEWAY_AND_BOT_DATA_RESTORED=1' in owner
           assert 'mmibkr-live-runtime-checkpoint-v1' in owner
