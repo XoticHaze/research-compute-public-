@@ -704,7 +704,7 @@ jobs:
                     echo 'SUPERVISED_MAINTENANCE_RECOVERY_OBSERVING=1'
                   elif [ "$maintenance_grace_used" -eq 0 ]; then
                     eastern_time="$(TZ=America/New_York date +%H%M)"
-                    if [[ "$eastern_time" > "0014" && "$eastern_time" < "0146" ]] &&
+                    if [[ "$eastern_time" > "2329" || "$eastern_time" < "0201" ]] &&
                        docker logs --since 10m mmibkr-live-gateway 2>&1 |
                          grep -F 'ALERT_IBKR_MAINTENANCE_RECOVERY' >/dev/null; then
                       maintenance_grace_used=1
