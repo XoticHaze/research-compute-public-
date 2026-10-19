@@ -148,6 +148,16 @@ jobs:
           assert 'SUPERVISED_GATEWAY_ONLY_BROKER_RECONCILED=1' in owner
           assert 'SUPERVISED_GATEWAY_HEALTH=' in owner
           assert 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3' in owner
+          assert 'AUTO_RESTART_ADOPT=yes' in owner
+          assert 'CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480' in owner
+          assert 'maintenance_grace_seconds=720' in owner
+          assert 'SUPERVISED_MAINTENANCE_RECOVERY_GRACE_STARTED=1' in owner
+          assert 'SUPERVISED_MAINTENANCE_RECOVERY_EXPIRED=1' in owner
+          assert 'SUPERVISED_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS=1' in owner
+          assert 'SUPERVISED_MAINTENANCE_RECOVERY_INCOMPLETE_AT_SESSION_END=1' in owner
+          assert 'docker logs --since 10m mmibkr-live-gateway' in owner
+          assert 'TZ=America/New_York date +%H%M' in owner
+          assert 'docker stop --time 90 mmibkr-live-gateway' in owner
           assert 'MMIBKR_CANONICAL_BOT_STATUS=' in owner
           assert 'MMIBKR_FINAL_CONTROLLER_HEALTH=' in owner
           assert 'MMIBKR_SAFE_CONTROLLER_LIFECYCLE=' in owner
@@ -160,6 +170,15 @@ jobs:
           assert 'relogin_after_twofa_timeout=no' in owner
           assert 'find /private-data -mindepth 1 -maxdepth 1' in owner
           assert 'timeout-minutes: 340' in owner
+          # Parse the actual monitored shell block with bash -n (no execution,
+          # no broker session, no secrets). Literal string gates alone miss syntax.
+          import subprocess
+          step=owner.split('      - name: Run supervised five-hour live-account canonical bot shadow (no orders)',1)[1]
+          run=step.split('      - name: Cleanly stop authenticated no-order admission Gateway',1)[0]
+          run=run.split('        run: |',1)[1]
+          script="\n".join(line[10:] if line.startswith("          ") else line for line in run.splitlines())
+          subprocess.run(["bash","-n"],input=script,text=True,check=True)
+          print('SUPERVISED_MAINTENANCE_SHELL_PARSE=PASS')
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
           PY
 
@@ -437,6 +456,7 @@ jobs:
           read_only_api=no
           twofa_exit_interval=120
           relogin_after_twofa_timeout=yes
+          supervised_recovery_args=()
           if [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ]; then
             read_only_api=yes
             # Attended approval: give a single challenge adequate time.
@@ -444,6 +464,12 @@ jobs:
             # Fail closed on timeout, never bypass 2FA or authorize orders.
             twofa_exit_interval=300
             relogin_after_twofa_timeout=no
+            # Keep the existing Gateway-internal restart/adoption logic active.
+            # Native v0.16.2 maintenance re-auth intentionally waits 480s.
+            supervised_recovery_args=(-e AUTO_RESTART_ADOPT=yes
+                                      -e CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480)
+            echo 'MMIBKR_SUPERVISED_MAINTENANCE_BACKOFF_SECONDS=480'
+            echo 'MMIBKR_SUPERVISED_AUTO_RESTART_ADOPT=1'
             echo 'MMIBKR_SUPERVISED_GATEWAY_API_READONLY=1'
             echo 'MMIBKR_SUPERVISED_2FA_APPROVAL_WINDOW_SECONDS=300'
             echo 'MMIBKR_SUPERVISED_AUTOMATIC_2FA_RELOGIN=0'
@@ -459,6 +485,7 @@ jobs:
             -e CONTROLLER_HEALTH_SERVER_PORT=8080 \
             -e TWS_SETTINGS_PATH=/home/ibgateway/Jts_b1 \
             -e TIME_ZONE=America/Chicago \
+            "${supervised_recovery_args[@]}" \
             "${warm_args[@]}" \
             -v "$vol:/home/ibgateway/Jts_b1" \
             -p 127.0.0.1:4001:4003 \
@@ -635,6 +662,10 @@ jobs:
           deadline=$((start + duration))
           minute=0
           probe_failures=0
+          maintenance_failure_since=0
+          maintenance_recovery_active=0
+          maintenance_grace_used=0
+          maintenance_grace_seconds=720
           while [ "$(date +%s)" -lt "$deadline" ]; do
             minute=$((minute + 1))
             test "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = true || { echo 'SUPERVISED_GATEWAY_PROCESS_LOST=1'; exit 1; }
@@ -660,20 +691,52 @@ jobs:
               if ib.isConnected(): ib.disconnect()
           PY
               then
+                if [ "$maintenance_recovery_active" -eq 1 ]; then
+                  echo 'SUPERVISED_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS=1'
+                  maintenance_recovery_active=0
+                fi
+                maintenance_failure_since=0
                 probe_failures=0
               else
                 probe_failures=$((probe_failures + 1))
+                [ "$maintenance_failure_since" -gt 0 ] ||
+                  maintenance_failure_since="$(date +%s)"
                 echo "SUPERVISED_ACCOUNT_READ_FAILURE_STREAK=$probe_failures"
                 gateway_status
                 if [ "$probe_failures" -ge 3 ]; then
-                  echo 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3'
-                  exit 1
+                  if [ "$maintenance_recovery_active" -eq 1 ]; then
+                    recovery_age=$(( $(date +%s) - maintenance_failure_since ))
+                    if [ "$recovery_age" -ge "$maintenance_grace_seconds" ]; then
+                      echo 'SUPERVISED_MAINTENANCE_RECOVERY_EXPIRED=1'
+                      exit 1
+                    fi
+                    echo 'SUPERVISED_MAINTENANCE_RECOVERY_OBSERVING=1'
+                  elif [ "$maintenance_grace_used" -eq 0 ]; then
+                    eastern_time="$(TZ=America/New_York date +%H%M)"
+                    if [[ "$eastern_time" > "2329" || "$eastern_time" < "0201" ]] &&
+                       docker logs --since 10m mmibkr-live-gateway 2>&1 |
+                         grep -F 'ALERT_IBKR_MAINTENANCE_RECOVERY' >/dev/null; then
+                      maintenance_grace_used=1
+                      maintenance_recovery_active=1
+                      echo 'SUPERVISED_MAINTENANCE_RECOVERY_GRACE_STARTED=1'
+                    else
+                      echo 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3'
+                      exit 1
+                    fi
+                  else
+                    echo 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3'
+                    exit 1
+                  fi
                 fi
               fi
             fi
             echo "SUPERVISED_LIVE_SHADOW_HEARTBEAT_MINUTE=$minute"
             sleep 60
           done
+          if [ "$maintenance_recovery_active" -eq 1 ]; then
+            echo 'SUPERVISED_MAINTENANCE_RECOVERY_INCOMPLETE_AT_SESSION_END=1'
+            exit 1
+          fi
           echo 'SUPERVISED_FIVE_HOUR_SHADOW_COMPLETE=1'
           docker stop --time 60 mmibkr-live-bot >/dev/null
 
@@ -793,6 +856,11 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
+          # Allow the Gateway controller's own clean-logout chain to finish.
+          # A hard remove after a failed shadow can strand a broker session slot.
+          if docker inspect mmibkr-live-gateway >/dev/null 2>&1; then
+            docker stop --time 90 mmibkr-live-gateway >/dev/null 2>&1 || true
+          fi
           docker rm -f mmibkr-live-bot mmibkr-live-gateway >/dev/null 2>&1 || true
           docker volume rm "mmibkr-live-jts-$GITHUB_RUN_ID" >/dev/null 2>&1 || true
           docker volume rm "mmibkr-live-warm-$GITHUB_RUN_ID" >/dev/null 2>&1 || true
