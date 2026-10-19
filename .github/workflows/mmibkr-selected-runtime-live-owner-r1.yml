@@ -643,6 +643,10 @@ jobs:
           deadline=$((start + duration))
           minute=0
           probe_failures=0
+          maintenance_failure_since=0
+          maintenance_recovery_active=0
+          maintenance_grace_used=0
+          maintenance_grace_seconds=720
           while [ "$(date +%s)" -lt "$deadline" ]; do
             minute=$((minute + 1))
             test "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = true || { echo 'SUPERVISED_GATEWAY_PROCESS_LOST=1'; exit 1; }
@@ -668,20 +672,52 @@ jobs:
               if ib.isConnected(): ib.disconnect()
           PY
               then
+                if [ "$maintenance_recovery_active" -eq 1 ]; then
+                  echo 'SUPERVISED_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS=1'
+                  maintenance_recovery_active=0
+                fi
+                maintenance_failure_since=0
                 probe_failures=0
               else
                 probe_failures=$((probe_failures + 1))
+                [ "$maintenance_failure_since" -gt 0 ] ||
+                  maintenance_failure_since="$(date +%s)"
                 echo "SUPERVISED_ACCOUNT_READ_FAILURE_STREAK=$probe_failures"
                 gateway_status
                 if [ "$probe_failures" -ge 3 ]; then
-                  echo 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3'
-                  exit 1
+                  if [ "$maintenance_recovery_active" -eq 1 ]; then
+                    recovery_age=$(( $(date +%s) - maintenance_failure_since ))
+                    if [ "$recovery_age" -ge "$maintenance_grace_seconds" ]; then
+                      echo 'SUPERVISED_MAINTENANCE_RECOVERY_EXPIRED=1'
+                      exit 1
+                    fi
+                    echo 'SUPERVISED_MAINTENANCE_RECOVERY_OBSERVING=1'
+                  elif [ "$maintenance_grace_used" -eq 0 ]; then
+                    eastern_time="$(TZ=America/New_York date +%H%M)"
+                    if [[ "$eastern_time" > "0014" && "$eastern_time" < "0146" ]] &&
+                       docker logs --since 10m mmibkr-live-gateway 2>&1 |
+                         grep -F 'ALERT_IBKR_MAINTENANCE_RECOVERY' >/dev/null; then
+                      maintenance_grace_used=1
+                      maintenance_recovery_active=1
+                      echo 'SUPERVISED_MAINTENANCE_RECOVERY_GRACE_STARTED=1'
+                    else
+                      echo 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3'
+                      exit 1
+                    fi
+                  else
+                    echo 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3'
+                    exit 1
+                  fi
                 fi
               fi
             fi
             echo "SUPERVISED_LIVE_SHADOW_HEARTBEAT_MINUTE=$minute"
             sleep 60
           done
+          if [ "$maintenance_recovery_active" -eq 1 ]; then
+            echo 'SUPERVISED_MAINTENANCE_RECOVERY_INCOMPLETE_AT_SESSION_END=1'
+            exit 1
+          fi
           echo 'SUPERVISED_FIVE_HOUR_SHADOW_COMPLETE=1'
           docker stop --time 60 mmibkr-live-bot >/dev/null
 
