@@ -208,6 +208,12 @@ jobs:
           # account probe is grounds to freeze the live canonical bot.
           assert 'LIVE_RUNTIME_CONTROLLER_HEALTH_DISAGREES_WITH_BROKER_READ=1' in owner
           assert 'LIVE_RUNTIME_BROKER_PROBE_FAILED_BOT_FROZEN=1' in owner
+          assert 'UPSTREAM_RELAUNCH=yes' in owner
+          assert 'MMIBKR_LIVE_ATTENDED_UPSTREAM_RELAUNCH_ENABLED=1' in owner
+          assert 'broker_recovery_budget_seconds=1800' in owner
+          assert 'LIVE_RUNTIME_BROKER_RECOVERY_BUDGET_SECONDS=' in owner
+          assert '"$broker_recovery_budget_seconds"' in owner
+          assert 'broker_outage_since ))" -ge 720' not in owner
           assert '"$gateway_healthy" != 1 ] || [ "$bot_paused" -eq 1' in owner
           assert 'LIVE_RUNTIME_BROKER_VERIFIED_BOT_UNFROZEN=1' in owner
           assert 'LIVE_RUNTIME_BROKER_LOST_BOT_FROZEN=1' not in owner
@@ -585,9 +591,14 @@ jobs:
           if [ "${{ inputs.admission_only }}" = false ]; then
             twofa_exit_interval=300
             relogin_after_twofa_timeout=no
+            # Attended IB Key still needs a human, but the controller must
+            # relaunch the disconnected upstream after its 10-minute grace.
+            # Otherwise it only reports UPSTREAM_DOWN and remains stuck.
             supervised_recovery_args=(-e AUTO_RESTART_ADOPT=yes
-                                      -e CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480)
+                                      -e CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480
+                                      -e UPSTREAM_RELAUNCH=yes)
             echo 'MMIBKR_LIVE_RECOVERY_CONTROLLER_ENABLED=1'
+            echo 'MMIBKR_LIVE_ATTENDED_UPSTREAM_RELAUNCH_ENABLED=1'
           fi
           if [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ]; then
             read_only_api=yes
@@ -990,6 +1001,11 @@ jobs:
           last_verified=0
           bot_paused=0
           broker_outage_since=0
+          # Upstream controller waits 600s before its first relaunch, then
+          # may need 300s for attended IB Key. Do not kill the controller at
+          # 720s before it can complete its own one-account recovery.
+          broker_recovery_budget_seconds=1800
+          echo "LIVE_RUNTIME_BROKER_RECOVERY_BUDGET_SECONDS=$broker_recovery_budget_seconds"
           iteration=0
           while [ "$(date +%s)" -lt "$end_epoch" ]; do
             iteration=$((iteration+1))
@@ -1055,7 +1071,7 @@ jobs:
               fi
             fi
             if [ "$bot_paused" -eq 1 ]; then
-              if [ "$(( $(date +%s) - broker_outage_since ))" -ge 720 ]; then
+              if [ "$(( $(date +%s) - broker_outage_since ))" -ge "$broker_recovery_budget_seconds" ]; then
                 echo 'LIVE_RUNTIME_RECOVERY_EXPIRED_NEEDS_OPERATOR=1'
                 exit 1
               fi
