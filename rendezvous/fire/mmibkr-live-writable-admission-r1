@@ -54,3 +54,10 @@ live_successor_approved_dispatch_request_20261020_b5c2d9: 39359585927
 live_successor_20261020_recovery_authority: canonical_approved_AMAT_APH_MNQ
 live_successor_20261020_discretionary_probe_orders: false
 live_successor_20261020_expected_checkpoint: 12238231121
+
+# Fresh attended retry after #86 2FA failure; one live owner and exact encrypted checkpoint.
+# Preserve approved AMAT APH MNQ canonical execution, no discretionary proof orders.
+live_successor_approved_dispatch_request_20261020_f86a27: 39394982732
+live_successor_20261020_retry_reason: attended_ibkey_available
+live_successor_20261020_predecessor_checkpoint: 12251784100
+live_successor_20261020_login_attempt_count: one
