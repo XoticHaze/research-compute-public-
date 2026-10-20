@@ -61,3 +61,10 @@ live_successor_approved_dispatch_request_20261020_f86a27: 39394982732
 live_successor_20261020_retry_reason: attended_ibkey_available
 live_successor_20261020_predecessor_checkpoint: 12251784100
 live_successor_20261020_login_attempt_count: one
+
+# Stage-corrected attended #86 successor retry after PR #1896.
+# Does not use #87: #87 has no complete encrypted successor checkpoint.
+live_successor_approved_dispatch_request_20261020_a86e42: 39394982732
+live_successor_20261020_recovery_revision: failed_authenticated_admission_allowed
+live_successor_20261020_exact_checkpoint: 12251784100
+live_successor_20261020_discretionary_orders: false
