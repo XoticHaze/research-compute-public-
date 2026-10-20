@@ -233,6 +233,7 @@ jobs:
           assert 'LIVE_RUNTIME_BOT_AND_GATEWAY_CHECKPOINT_SEALED=1' in owner
           assert 'LIVE_RUNTIME_PREDECESSOR_GATEWAY_AND_BOT_DATA_RESTORED=1' in owner
           assert 'LIVE_RUNTIME_FAILED_PREDECESSOR_CHECKPOINT_AND_CLEANUP_VERIFIED=1' in owner
+          assert 'Bind and reconcile the expected existing production account without order mutation")' in owner
           assert 'PRODUCTION_LIVE_EXECUTION_HISTORY_READ=1' in owner
           assert 'mmibkr-live-runtime-checkpoint-v1' in owner
           assert 'LIVE_RUNTIME_SUCCESSOR_AUTH_AND_BROKER_RECONCILIATION_REQUIRED=1' in owner
@@ -357,7 +358,10 @@ jobs:
             gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$PREDECESSOR_RUN/jobs?per_page=100" \
               --jq '[.jobs[] | select(.name == "owner") | {conclusion,steps}] |
                 (length == 1 and .[0].conclusion == "failure" and
-                  (.[0].steps | any(.name == "Start unchanged canonical bot natural owner with three persisted live policies" and .conclusion == "failure")) and
+                  (.[0].steps | any(
+                      (.name == "Start unchanged canonical bot natural owner with three persisted live policies" or
+                       .name == "Bind and reconcile the expected existing production account without order mutation")
+                       and .conclusion == "failure")) and
                   (.[0].steps | any(.name == "Stop live owner and encrypt canonical Gateway and bot data for successor" and .conclusion == "success")) and
                   (.[0].steps | any(.name == "Persist exact encrypted production-live successor state" and .conclusion == "success")) and
                   (.[0].steps | any(.name == "Destroy one-run credentials, Gateway and account-scoped data" and .conclusion == "success")))' | grep -qx true
