@@ -73,7 +73,12 @@ jobs:
           admission_only=true
           predecessor_run=''
           changed="$(git show --format= --unified=0 "$GITHUB_SHA" -- rendezvous/fire/mmibkr-live-writable-admission-r1)"
-          if printf '%s\n' "$changed" | grep -Eq '^\+live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39394982732$'; then
+          if printf '%s\n' "$changed" | grep -Eq '^\+live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39484631800$'; then
+            admission_only=false
+            mode=successor
+            predecessor_run=39484631800
+            echo 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39484631800'
+          elif printf '%s\n' "$changed" | grep -Eq '^\+live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39394982732$'; then
             admission_only=false
             mode=successor
             predecessor_run=39394982732
@@ -152,6 +157,8 @@ jobs:
           assert 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39231751596' in s
           assert 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39359585927' in s
           assert 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39394982732' in s
+          assert 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39484631800' in s
+          assert 'live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39484631800' in s
           assert 'live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39394982732' in s
           assert 'live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}' in s
           assert 'inputs[warm_predecessor_run]=$predecessor_run' in s
