@@ -47,3 +47,10 @@ live_owner_private_source_sha_20261019: 46fcdf26cf84603b305a3ea20bcd3cf28c67bc0b
 # No synthetic orders, no parallel live owner; canonical broker reconciliation required.
 live_successor_approved_dispatch_request_20261019_b274f1: 39231751596
 live_successor_reconcile_account_orders_executions_20261019: true
+
+# One attended production-live recovery of successor #85 after upstream relaunch fix PR #1894.
+# Read existing sealed Gateway/bot checkpoint and reconcile broker state before natural orders.
+live_successor_approved_dispatch_request_20261020_b5c2d9: 39359585927
+live_successor_20261020_recovery_authority: canonical_approved_AMAT_APH_MNQ
+live_successor_20261020_discretionary_probe_orders: false
+live_successor_20261020_expected_checkpoint: 12238231121
