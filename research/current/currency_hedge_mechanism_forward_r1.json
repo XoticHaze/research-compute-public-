@@ -26,13 +26,13 @@
     "regime_is_not_timing_gate": true
   },
   "decision_use": "Prospective replication monitor for the developed-ex-US currency-hedge mechanism. Judge HEFA and DBEF against their own unhedged controls; report SPY only as opportunity cost.",
-  "elapsed_close_to_close_sessions": 24,
+  "elapsed_close_to_close_sessions": 25,
   "entry": {
     "date": "2026-09-14",
     "rule": "first common market-session close after registration"
   },
   "forward_session_clock_semantics": "forward_sessions is legacy inclusive-entry count; elapsed_close_to_close_sessions is the cross-program comparable elapsed clock",
-  "forward_sessions": 25,
+  "forward_sessions": 26,
   "frozen_sources": {
     "P426_HEFA": {
       "blob": "8e783a07b78f4f6efee8963c1d05f07792c12bff",
@@ -50,10 +50,10 @@
       "ref": "fe674e9b9cff72e9cf758c8bc6548124c6f8cf53"
     }
   },
-  "generated_at": "2026-10-17T01:34:30.880201+00:00",
-  "latest_common_market_date": "2026-10-16",
-  "market_data_asof": "2026-10-16",
-  "market_sessions_observed_including_entry": 25,
+  "generated_at": "2026-10-20T02:07:16.820321+00:00",
+  "latest_common_market_date": "2026-10-19",
+  "market_data_asof": "2026-10-19",
+  "market_sessions_observed_including_entry": 26,
   "program_id": "DEVELOPED_EXUS_CURRENCY_HEDGE",
   "regime_context": {
     "prior_completed_12m_uup_return": 0.0815182273,
@@ -67,16 +67,16 @@
   "scientific_forward_credit": true,
   "scorecard": {
     "DBEF": {
-      "EFA_return_bps": -217.2882,
-      "gross_return_bps": 12.776,
-      "matched_excess_if_flattened_now_bps": 180.0642,
-      "net_if_flattened_now_bps": -37.224
+      "EFA_return_bps": -281.5301,
+      "gross_return_bps": -34.6783,
+      "matched_excess_if_flattened_now_bps": 196.8518,
+      "net_if_flattened_now_bps": -84.6783
     },
     "HEFA": {
-      "IEFA_return_bps": -217.8761,
-      "gross_return_bps": 10.7803,
-      "matched_excess_if_flattened_now_bps": 178.6565,
-      "net_if_flattened_now_bps": -39.2197
+      "IEFA_return_bps": -275.6386,
+      "gross_return_bps": -47.4345,
+      "matched_excess_if_flattened_now_bps": 178.204,
+      "net_if_flattened_now_bps": -97.4345
     },
     "cost_interpretation": {
       "entry_cost_bps": 25.0,
@@ -84,15 +84,15 @@
       "reported_net_is_if_flattened_now": true
     },
     "mechanism": {
-      "SPY_return_bps": 56.0578,
+      "SPY_return_bps": 98.6138,
       "both_implementations_positive_vs_matched": true,
-      "mean_matched_excess_if_flattened_now_bps": 179.3603,
-      "mean_net_if_flattened_now_bps": -38.2218,
-      "opportunity_excess_vs_SPY_bps": -94.2796
+      "mean_matched_excess_if_flattened_now_bps": 187.5279,
+      "mean_net_if_flattened_now_bps": -91.0564,
+      "opportunity_excess_vs_SPY_bps": -189.6702
     }
   },
   "source": {
-    "panel_sha256": "0a862ba9750a75025c7d5d91b94aa270b63ea888c5be4fb3ece09544dc4c5fa1",
+    "panel_sha256": "11962f04d1c796233b7df87f362217dff20f67fd3e3d7a7d93387f171302f244",
     "provider": "Yahoo Finance via yfinance; research-only public data",
     "symbols": [
       "HEFA",
