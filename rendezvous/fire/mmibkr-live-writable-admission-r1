@@ -68,3 +68,10 @@ live_successor_approved_dispatch_request_20261020_a86e42: 39394982732
 live_successor_20261020_recovery_revision: failed_authenticated_admission_allowed
 live_successor_20261020_exact_checkpoint: 12251784100
 live_successor_20261020_discretionary_orders: false
+
+# One attended IB Key attempt from #88 sealed state; explicit user available now.
+# No synthetic probe trades or parallel live owner; preserve canonical reconciliation.
+live_successor_approved_dispatch_request_20261020_f88d42: 39484631800
+live_successor_20261020_predecessor_checkpoint: 12294598189
+live_successor_20261020_scope: AMAT_15Min_APH_15Min_MNQ_12Min
+live_successor_20261020_automatic_repeat: false
