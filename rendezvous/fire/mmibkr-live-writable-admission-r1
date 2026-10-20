@@ -75,3 +75,9 @@ live_successor_approved_dispatch_request_20261020_f88d42: 39484631800
 live_successor_20261020_predecessor_checkpoint: 12294598189
 live_successor_20261020_scope: AMAT_15Min_APH_15Min_MNQ_12Min
 live_successor_20261020_automatic_repeat: false
+
+# Operator-attended one-time live Gateway successor from last #94 checkpoint.
+# No login loop or discretionary orders; exact predecessor with account reconciliation.
+live_successor_approved_dispatch_request_20261020_c94a71: 39492758670
+live_successor_20261020_from94_checkpoint: 12296953775
+live_successor_20261020_no_auto_second_login: true
