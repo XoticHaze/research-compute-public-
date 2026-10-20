@@ -18,6 +18,33 @@ CommandCenter, Voice Engine, HAOS role selection and future News Intelligence.
 It does NOT share a key globally among agents or put it on
 `fleet-authority`, `mmibkr-operator-console`, or any neutral security Worker.
 
+## Provisioning route order: cloud-first, operator terminal as fallback
+
+Cloudflare provisioning is **not tied to macOS**. First recover current
+CommandCenter ordinary-account Worker creation and deployment authority;
+reconcile with the successful October 13 canary provisioner/token scope
+evidence in [CC PR #912](https://github.com/XoticHaze/CommandCenter/pull/912).
+Those partial canary proofs do not establish a live reusable factory executor.
+Inspect the current source and live grant scope before reusing any credential.
+
+Preferred path is an already-authorized Cloudflare-side ordinary-account
+factory/executor and governed deploy route, using reviewed Secrets Store
+binding metadata and a private approved diagnostic caller. CI may deploy
+only if its specifically admitted deployment identity has sufficient
+ordinary-worker and binding authority; a generic public CI runner must
+not receive the NVIDIA key or unrestricted management credentials.
+Do not grant the NVIDIA key to neutral security Workers or widen existing
+neutral credentials. Keep the account separation selected in CommandCenter
+`docs/security/SHARED_COMPUTE_NEUTRAL_ACCOUNT_SEPARATION_V1.md`.
+
+If no suitable reusable deployment authority can be proven, a one-time
+operator-approved bootstrap is a separate explicitly identified gate;
+it may be done through the Cloudflare dashboard or an authorized CLI
+on any operator-controlled platform, **not necessarily the Mac**.
+The local Wrangler caller documented below is an optional diagnostic
+fallback, not a required or default route. Nothing in this PR alone
+proves that a remote factory or live cloud diagnostic has run.
+
 ## One-time Cloudflare admission
 
 1. Verify the name `NVIDIA_API_KEY` exists under the intended Cloudflare
@@ -104,7 +131,7 @@ From `cloudflare/shared-nvidia-inference`: `npm test`.
 Tests use fake Cloudflare bindings and fake NVIDIA responses, without any
 provider credentials. A green test is *not* a live NVIDIA call.
 
-## One-time private caller: no second permanent Worker (2026-10-19)
+## Optional operator-local fallback caller: no second permanent Worker (2026-10-19)
 
 After the dedicated `cc-shared-nvidia-inference` Worker is deployed with its
 verified account Secrets Store binding, the **first** diagnostic can use the
