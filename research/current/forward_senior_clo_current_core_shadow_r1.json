@@ -378,11 +378,11 @@
     ],
     "first_close": "2026-09-11",
     "incumbent": {
-      "annualized_vol": 0.18638058516788422,
+      "annualized_vol": 0.18278465720014134,
       "cumulative_return": -0.026308897723249514,
-      "days": 26,
+      "days": 27,
       "max_drawdown": -0.07282097653736341,
-      "sharpe_rf0": -1.2959528742287616
+      "sharpe_rf0": -1.2725056677732718
     },
     "latest_close": "2026-10-16",
     "matched_control_if_flattened_now": {
@@ -707,7 +707,7 @@
       }
     ]
   },
-  "observed_at": "2026-10-17T07:04:43.588287+00:00",
+  "observed_at": "2026-10-20T01:18:48.959540+00:00",
   "operator_note": "Research shadow only. Always display diversification deltas together with capital opportunity cost versus the unchanged incumbent. No allocation, runtime, broker, or live-trading authority.",
   "parent": "SENIOR_CLO_CARRY_ALPHA / P249+P266",
   "schema": "research.forward_senior_clo_current_core_shadow_r1",
