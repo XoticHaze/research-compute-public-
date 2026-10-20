@@ -71,8 +71,14 @@ jobs:
           # fire markers and general source pushes cannot replay live startup.
           mode=legacy
           admission_only=true
+          predecessor_run=''
           changed="$(git show --format= --unified=0 "$GITHUB_SHA" -- rendezvous/fire/mmibkr-live-writable-admission-r1)"
-          if printf '%s\n' "$changed" | grep -Eq '^\+live_owner_approved_dispatch_request_20261019_[a-z0-9]{6}: true$'; then
+          if printf '%s\n' "$changed" | grep -Eq '^\+live_successor_approved_dispatch_request_20261019_[a-z0-9]{6}: 39231751596$'; then
+            admission_only=false
+            mode=successor
+            predecessor_run=39231751596
+            echo 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39231751596'
+          elif printf '%s\n' "$changed" | grep -Eq '^\+live_owner_approved_dispatch_request_20261019_[a-z0-9]{6}: true$'; then
             admission_only=false
             echo 'EXPLICIT_OPERATOR_LIVE_FIRE_MATCHED=1'
           elif printf '%s\n' "$changed" | grep -Eq '^\+supervised_5h_dispatch_request_[0-9]{8}_[a-z0-9]{6}: true$'; then
@@ -82,9 +88,11 @@ jobs:
             "/repos/${GITHUB_REPOSITORY}/actions/workflows/mmibkr-selected-runtime-live-owner-r1.yml/dispatches" \
             -f ref=main \
             -f "inputs[admission_only]=$admission_only" \
-            -f "inputs[warm_handoff_mode]=$mode"
+            -f "inputs[warm_handoff_mode]=$mode" \
+            -f "inputs[warm_predecessor_run]=$predecessor_run"
           echo "LIVE_OWNER_FIRE_DISPATCHED_ADMISSION_ONLY=$admission_only"
           echo "LIVE_OWNER_FIRE_DISPATCHED_MODE=$mode"
+          echo "LIVE_OWNER_FIRE_DISPATCHED_PREDECESSOR=$predecessor_run"
 
   contract:
     if: github.event_name == 'pull_request'
@@ -131,6 +139,15 @@ jobs:
           assert "'inputs[warm_handoff_mode]=$mode'" in s or 'inputs[warm_handoff_mode]=$mode' in s
           assert 'supervised_5h_dispatch_request_[0-9]{8}_[a-z0-9]{6}' in s
           assert 'mode=legacy' in s and 'mode=supervised_5h' in s
+          assert 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39231751596' in s
+          assert 'inputs[warm_predecessor_run]=$predecessor_run' in s
+          assert 'mode=successor' in s
+          fire=s.split('      - name: Dispatch explicitly authorized canonical owner',1)[1].split('\n  contract:',1)[0]
+          run=fire.split('        run: |',1)[1]
+          import subprocess
+          script="\n".join(line[10:] if line.startswith("          ") else line for line in run.splitlines())
+          subprocess.run(["bash","-n"],input=script,text=True,check=True)
+          print('LIVE_EXACT_SUCCESSOR_DISPATCH_SHELL_PARSE=PASS')
           assert 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1' in owner
           assert 'EXPLICIT_APPROVED_CANONICAL_LIVE_OWNER=1' in owner
           assert 'LIVE_MODE_REQUIRES_LEGACY_OR_EXACT_SUCCESSOR=1' in owner
