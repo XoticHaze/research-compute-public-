@@ -42,3 +42,8 @@ live_owner_strategy_orders_20261019: natural_signals_only
 live_owner_discretionary_proof_orders_20261019: false
 live_owner_production_runtime_20261019: 4h_bounded_successor_checkpoint
 live_owner_private_source_sha_20261019: 46fcdf26cf84603b305a3ea20bcd3cf28c67bc0b
+
+# Exact, one-time, user-requested recovery of the failed #74 encrypted owner checkpoint.
+# No synthetic orders, no parallel live owner; canonical broker reconciliation required.
+live_successor_approved_dispatch_request_20261019_b274f1: 39231751596
+live_successor_reconcile_account_orders_executions_20261019: true
