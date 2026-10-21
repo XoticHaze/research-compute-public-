@@ -137,9 +137,9 @@ def main() -> int:
                 ib,expected,run_id=a.gateway_run_id,phase="B_AFTER_A" if a.phase == "B" else a.phase,
                 client_id=client_id,specs=specs,
             )
-        results["api_disconnected_utc"]=datetime.now(timezone.utc).isoformat()
     finally:
         if ib.isConnected():ib.disconnect()
+    results["api_disconnected_utc"]=datetime.now(timezone.utc).isoformat()
     out=Path(a.output)
     out.parent.mkdir(parents=True,exist_ok=True)
     out.write_text(json.dumps(results,sort_keys=True,indent=2)+"\n")
