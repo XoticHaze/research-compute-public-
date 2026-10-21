@@ -328,8 +328,8 @@ jobs:
         if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'gateway_pool_5h' }}
         uses: tailscale/github-action@v4
         with:
-          oauth-client-id: ${{ secrets.MMIBKR_TS_OIDC_CLIENT_ID }}
-          audience: ${{ secrets.MMIBKR_TS_OIDC_AUDIENCE }}
+          oauth-client-id: ${{ secrets.MMIBKR_TS_GATEWAY_OIDC_CLIENT_ID }}
+          audience: ${{ secrets.MMIBKR_TS_GATEWAY_OIDC_AUDIENCE }}
           tags: tag:mmibkr-gateway
           hostname: mmibkr-gw-${{ github.run_id }}
 
