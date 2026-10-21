@@ -10,6 +10,14 @@ on:
         description: Exact still-running Gateway pool owner workflow run ID
         type: string
         required: true
+      test_mode:
+        description: Full independent A/B overlap or an on-demand independent read
+        type: choice
+        required: true
+        default: handoff_ab
+        options:
+          - handoff_ab
+          - single_read
   pull_request:
     paths:
       - .github/workflows/mmibkr-selected-runtime-live-owner-r1.yml
@@ -89,10 +97,14 @@ jobs:
         with:
           python-version: '3.11.16'
       - run: python -m pip install --disable-pip-version-check ib_insync==0.9.86
-      - name: First isolated GitHub VM, read and hold client session
+      - name: First isolated GitHub VM, read and optionally hold client session
+        env:
+          TEST_MODE: ${{ inputs.test_mode }}
         run: |
           set -euo pipefail
           HOST="mmibkr-gw-$POOL_RUN"
+          hold_seconds=0
+          if [ "$TEST_MODE" = handoff_ab ]; then hold_seconds=210; fi
           tailscale ping "$HOST"
           contract_args=()
           if [ -n "$EXACT_CONTRACTS" ]; then
@@ -102,7 +114,7 @@ jobs:
           fi
           python -m scripts.mmibkr_gh_gateway_readonly_client_v1 \
             --gateway-run-id "$POOL_RUN" --host "$HOST" --phase A \
-            --hold-seconds 210 --output "$RUNNER_TEMP/mmibkr-gateway-client-a.json" \
+            --hold-seconds "$hold_seconds" --output "$RUNNER_TEMP/mmibkr-gateway-client-a.json" \
             "${contract_args[@]}"
       - if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -114,7 +126,7 @@ jobs:
         run: rm -f "$RUNNER_TEMP/reader-contracts.json"
 
   runner_b:
-    if: github.event_name == 'workflow_dispatch'
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.test_mode == 'handoff_ab' }}
     needs: [preflight]
     runs-on: ubuntu-24.04
     timeout-minutes: 14
@@ -161,7 +173,7 @@ jobs:
         run: rm -f "$RUNNER_TEMP/reader-contracts.json"
 
   verify:
-    if: github.event_name == 'workflow_dispatch'
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.test_mode == 'handoff_ab' }}
     needs: [runner_a, runner_b]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
