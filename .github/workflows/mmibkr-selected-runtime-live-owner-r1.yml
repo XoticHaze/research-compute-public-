@@ -326,7 +326,7 @@ jobs:
       # path is provisioned. Same workflow identity keeps existing Fleet seal.
       - name: Join restricted tailnet for Gateway-only research pool
         if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'gateway_pool_5h' }}
-        uses: tailscale/github-action@v4
+        uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd # v4.2.0
         with:
           oauth-client-id: ${{ secrets.MMIBKR_TS_GATEWAY_OIDC_CLIENT_ID }}
           audience: ${{ secrets.MMIBKR_TS_GATEWAY_OIDC_AUDIENCE }}
