@@ -47,6 +47,8 @@ def contract_scope(specs: list[dict]) -> list[dict]:
 
 
 def verify_contracts(ib, specs):
+    if not specs:
+        return []
     from ib_insync import Contract
     ret = []
     for row in contract_scope(specs):
