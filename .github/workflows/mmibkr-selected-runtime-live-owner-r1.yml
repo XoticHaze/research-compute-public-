@@ -20,6 +20,7 @@ on:
           - producer
           - successor
           - supervised_5h
+          - gateway_pool_5h
       warm_predecessor_run:
         description: Exact successful producer run ID required for successor mode
         type: string
@@ -294,7 +295,7 @@ jobs:
           PREDECESSOR_RUN: ${{ inputs.warm_predecessor_run }}
         run: |
           set -euo pipefail
-          case "$HANDOFF_MODE" in legacy|producer|successor|supervised_5h) ;; *) exit 64 ;; esac
+          case "$HANDOFF_MODE" in legacy|producer|successor|supervised_5h|gateway_pool_5h) ;; *) exit 64 ;; esac
           if [ "$ADMISSION_ONLY" = false ]; then
             case "$HANDOFF_MODE" in
               legacy)
@@ -320,6 +321,17 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --disable-pip-version-check cryptography==46.0.1 ib_insync==0.9.86
+
+      # Fail before requesting IBKR credentials if no private cloud-to-cloud
+      # path is provisioned. Same workflow identity keeps existing Fleet seal.
+      - name: Join restricted tailnet for Gateway-only research pool
+        if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'gateway_pool_5h' }}
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.MMIBKR_TS_OIDC_CLIENT_ID }}
+          audience: ${{ secrets.MMIBKR_TS_OIDC_AUDIENCE }}
+          tags: tag:mmibkr-gateway
+          hostname: mmibkr-gw-${{ github.run_id }}
 
       - name: Materialize canonical exact private source through existing encrypted Fleet vault
         run: |
@@ -533,7 +545,7 @@ jobs:
           PY
 
       - name: Restore existing encrypted live Gateway warm state (admission only)
-        if: ${{ inputs.admission_only && inputs.warm_handoff_mode != 'producer' && inputs.warm_handoff_mode != 'supervised_5h' }}
+        if: ${{ inputs.admission_only && inputs.warm_handoff_mode != 'producer' && inputs.warm_handoff_mode != 'supervised_5h' && inputs.warm_handoff_mode != 'gateway_pool_5h' }}
         env:
           GH_TOKEN: ${{ github.token }}
           MMIBKR_LIVE_GATEWAY_WARM_KEY_B64: ${{ secrets.MMIBKR_LIVE_GATEWAY_WARM_KEY_B64 }}
@@ -645,6 +657,17 @@ jobs:
             echo 'MMIBKR_SUPERVISED_2FA_APPROVAL_WINDOW_SECONDS=300'
             echo 'MMIBKR_SUPERVISED_AUTOMATIC_2FA_RELOGIN=0'
           fi
+          if [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = gateway_pool_5h ]; then
+            # Standby API must be broker-enforced read-only: different client
+            # IDs are not a privilege boundary. No canon bot here.
+            read_only_api=yes
+            twofa_exit_interval=300
+            relogin_after_twofa_timeout=no
+            supervised_recovery_args=(-e AUTO_RESTART_ADOPT=yes
+                                      -e CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480)
+            echo 'MMIBKR_SPLIT_GATEWAY_POOL_API_READ_ONLY=1'
+            echo 'MMIBKR_SPLIT_GATEWAY_POOL_AUTO_RELOGIN=0'
+          fi
           docker run -d --name mmibkr-live-gateway \
             --env-file "$RUNNER_TEMP/mmibkr-live-gateway.env" \
             -e USE_IBG_CONTROLLER=yes \
@@ -662,7 +685,7 @@ jobs:
             -p 127.0.0.1:4001:4003 \
             "$controller_image" >/dev/null
           docker exec mmibkr-live-gateway /bin/sh -lc \
-            'test "$READ_ONLY_API" = "${{ inputs.admission_only && inputs.warm_handoff_mode == 'supervised_5h' && 'yes' || 'no' }}" && test "$TRADING_MODE" = live' 
+            'test "$READ_ONLY_API" = "${{ inputs.admission_only && (inputs.warm_handoff_mode == 'supervised_5h' || inputs.warm_handoff_mode == 'gateway_pool_5h') && 'yes' || 'no' }}" && test "$TRADING_MODE" = live' 
           # Exact network proof. The only published socket is loopback TWS
           # 4001:4003. Bot joins the Gateway namespace with no published
           # control/API 8001 port and no public HTTP ingress.
@@ -702,6 +725,71 @@ jobs:
                   if ib.isConnected(): ib.disconnect()
           if not authenticated: raise SystemExit('live_gateway_authenticated_account_read_failed')
           PY
+
+      - name: Open Gateway's read-only API to permitted ephemeral tailnet clients
+        if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'gateway_pool_5h' }}
+        run: |
+          set -euo pipefail
+          docker exec mmibkr-live-gateway /bin/sh -lc 'test "$READ_ONLY_API" = yes'
+          TS_IP="$(tailscale ip -4 | head -n 1)"
+          python - "$TS_IP" <<'PY'
+          import sys
+          from scripts.mmibkr_split_gateway_tcp_relay_v1 import validate_tailnet_ip
+          assert validate_tailnet_ip(sys.argv[1]) == sys.argv[1]
+          print("MMIBKR_SPLIT_GATEWAY_VERIFIED_PRIVATE_TAILNET_ADDRESS=1")
+          PY
+          nohup python -m scripts.mmibkr_split_gateway_tcp_relay_v1 \
+            --private-ip "$TS_IP" --port 4001 \
+            > "$RUNNER_TEMP/mmibkr-gateway-relay.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/mmibkr-gateway-relay.pid"
+          for attempt in $(seq 1 20); do
+            if grep -q 'MMIBKR_SPLIT_GATEWAY_PRIVATE_RELAY_ACTIVE=1' \
+                  "$RUNNER_TEMP/mmibkr-gateway-relay.log"; then break; fi
+            sleep 1
+          done
+          grep -qx 'MMIBKR_SPLIT_GATEWAY_PRIVATE_RELAY_ACTIVE=1' \
+            "$RUNNER_TEMP/mmibkr-gateway-relay.log"
+          echo "MMIBKR_SPLIT_GATEWAY_READER_ENDPOINT=mmibkr-gw-$GITHUB_RUN_ID:4001"
+          echo 'MMIBKR_SPLIT_GATEWAY_BROKER_MUTATION=DISABLED'
+
+      - name: Hold one authenticated read-only Gateway for independent GitHub compute jobs
+        if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'gateway_pool_5h' }}
+        timeout-minutes: 290
+        run: |
+          set -euo pipefail
+          # 4h40m service window; leave generous teardown + state-seal
+          # margin under existing 340-minute owner-job limit.
+          start="$(date +%s)"
+          end="$((start + 16800))"
+          relay_pid="$(cat "$RUNNER_TEMP/mmibkr-gateway-relay.pid")"
+          echo "MMIBKR_GATEWAY_ONLY_POOL_READY=1"
+          echo "MMIBKR_GATEWAY_ONLY_POOL_SESSION_SECONDS=16800"
+          while [ "$(date +%s)" -lt "$end" ]; do
+            kill -0 "$relay_pid"
+            test "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = true
+            docker exec mmibkr-live-gateway /bin/sh -lc 'test "$READ_ONLY_API" = yes'
+            # A real broker-account read, not just open TCP/JVM, supplies liveness.
+            python - <<'PY'
+          import os
+          from pathlib import Path
+          from ib_insync import IB
+          env=(Path(os.environ["RUNNER_TEMP"])/"mmibkr-live-bot.env").read_text()
+          expected=env.strip().split("=",1)[1]
+          ib=IB()
+          try:
+              ib.connect("127.0.0.1",4001,clientId=79,readonly=True,timeout=12)
+              assert expected in ib.managedAccounts()
+              ib.reqPositions()
+              ib.reqAllOpenOrders()
+              ib.reqExecutions()
+              print("MMIBKR_GATEWAY_POOL_BROKER_READ_PASS=1")
+          finally:
+              if ib.isConnected(): ib.disconnect()
+          PY
+            echo "MMIBKR_GATEWAY_POOL_HEARTBEAT_SECONDS=$(( $(date +%s) - start ))"
+            sleep 90
+          done
+          echo 'MMIBKR_GATEWAY_ONLY_POOL_BOUNDED_SESSION_COMPLETE=1'
 
       - name: Confirm no-order admission did not authorize live bot startup
         if: ${{ inputs.admission_only && inputs.warm_handoff_mode != 'supervised_5h' }}
