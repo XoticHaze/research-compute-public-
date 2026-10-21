@@ -10,6 +10,7 @@ Never print private keys or Access service tokens.
 import argparse
 import base64
 import os
+import ipaddress
 from pathlib import Path
 import re
 import stat
@@ -24,6 +25,12 @@ def hostname(value: str) -> str:
         raise ValueError("cf_gateway_exact_hostname_required")
     if value.count(".") < 2 or ".." in value or value.endswith(".workers.dev"):
         raise ValueError("cf_gateway_zone_hostname_required")
+    try:
+        ipaddress.ip_address(value)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("cf_gateway_host_must_be_managed_zone_dns")
     return value
 
 
