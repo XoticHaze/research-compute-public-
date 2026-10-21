@@ -155,6 +155,19 @@ def _month_costs(previous: dict[str, dict[str, float]] | None, current: dict[str
     }
 
 
+def _complete_weighted_return(day: pd.Series, weights: dict[str, float]) -> float | None:
+    """Score a daily arm only when every held symbol has a finite actual return.
+
+    A provider-updated unheld ticker must not create a phantom zero session
+    when the held portfolio's latest daily closes have not arrived.
+    """
+    symbols = list(weights)
+    values = day.reindex(symbols).to_numpy(dtype=float)
+    if not np.isfinite(values).all():
+        return None
+    return float(sum(weights[symbol] * float(day[symbol]) for symbol in symbols))
+
+
 def _metrics(returns: pd.Series) -> dict[str, float | int | None]:
     q = returns.dropna().astype(float)
     if q.empty:
@@ -193,7 +206,7 @@ def main() -> None:
     )
 
     decision_date = DECISION_AT.tz_convert(None).normalize()
-    ret = close.pct_change()
+    ret = close.pct_change(fill_method=None)
     forward_ix = ret.index[ret.index >= decision_date]
     rows = []
     month_states: dict[str, dict[str, dict[str, float]]] = {}
@@ -206,6 +219,12 @@ def main() -> None:
         if key not in month_states:
             month_states[key] = _portfolio_weights(close.loc[:dt], period)
         state = month_states[key]
+        day = ret.loc[dt]
+        core_gross = _complete_weighted_return(day, state["p249_core"])
+        sat_gross = _complete_weighted_return(day, state["p249_plus_p266"])
+        if core_gross is None or sat_gross is None:
+            continue
+        # Only charge first-month costs on the first fully scored session.
         core_cost = 0.0
         sat_cost = 0.0
         cost_detail = None
@@ -213,11 +232,6 @@ def main() -> None:
             core_cost, sat_cost, cost_detail = _month_costs(prev_state, state)
             seen_months.add(key)
             prev_state = state
-        day = ret.loc[dt]
-        core_gross = sum(state["p249_core"].get(s, 0.0) * float(day.get(s, np.nan)) for s in state["p249_core"])
-        sat_gross = sum(state["p249_plus_p266"].get(s, 0.0) * float(day.get(s, np.nan)) for s in state["p249_plus_p266"])
-        if np.isnan(core_gross) or np.isnan(sat_gross):
-            continue
         rows.append({
             "date": dt.date().isoformat(),
             "holding_month": key,
