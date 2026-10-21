@@ -88,23 +88,30 @@ jobs:
         run: |
           set -euo pipefail
           python -u - <<'PY'
-          import socket,threading
+          import socket,threading,time
           srv=socket.socket()
           srv.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
           srv.bind(("127.0.0.1",4001))
           srv.listen(12)
+          srv.settimeout(5)
+          started=time.monotonic()
           print("NETWORK_ONLY_SYNTHETIC_TCP_ECHO_READY=1",flush=True)
           def handle(c):
               with c:
                   b=c.recv(256)
                   if b.startswith(b"MMIBKR_NETWORK_PROBE_V1:") and len(b)<200:
                       c.sendall(b)
-          while True:
-              c,_=srv.accept()
+          while time.monotonic()-started<315:
+              try:
+                  c,_=srv.accept()
+              except socket.timeout:
+                  continue
               threading.Thread(target=handle,args=(c,),daemon=True).start()
+          srv.close()
+          print("NETWORK_ONLY_SYNTHETIC_SESSION_CLEAN_END=1",flush=True)
           PY
-        timeout-minutes: 6
-        # Kept running until timeout; separate GitHub VMs attach meanwhile.
+        timeout-minutes: 7
+        # The synthetic test exits normally after a bounded observation window.
 
   reader_a:
     if: github.event_name == 'workflow_dispatch'
