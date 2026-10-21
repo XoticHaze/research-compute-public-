@@ -108,6 +108,8 @@ def main() -> int:
     p=argparse.ArgumentParser()
     p.add_argument("--gateway-run-id",required=True)
     p.add_argument("--host",required=True)
+    p.add_argument("--transport",choices=("tailscale","cloudflare_access_ssh"),default="tailscale")
+    p.add_argument("--port",type=int,default=4001)
     p.add_argument("--phase",choices=["A","B","B_AFTER_A"],required=True)
     p.add_argument("--hold-seconds",type=int,default=0)
     p.add_argument("--output",required=True)
@@ -115,8 +117,14 @@ def main() -> int:
     a=p.parse_args()
     if not 0 <= a.hold_seconds <= 420:
         raise SystemExit("invalid_hold_seconds")
-    if a.host != gateway_name(a.gateway_run_id):
-        raise SystemExit("gateway_host_not_run_bound")
+    if a.transport == "tailscale":
+        if a.host != gateway_name(a.gateway_run_id) or a.port != 4001:
+            raise SystemExit("gateway_host_not_run_bound")
+    else:
+        if a.host != "127.0.0.1" or a.port != 14001:
+            raise SystemExit("cloudflare_ssh_exact_local_forward_required")
+        if os.getenv("MMIBKR_CF_SSH_FORWARD_ATTESTED") != "1":
+            raise SystemExit("cloudflare_ssh_pinned_forward_required")
     expected=os.environ.get("MMIBKR_PRODUCTION_LIVE_ACCOUNT","")
     if not expected or expected.upper().startswith("DU"):
         raise SystemExit("exact_live_account_secret_missing_or_paper")
@@ -128,7 +136,7 @@ def main() -> int:
     ib=IB()
     results={}
     try:
-        ib.connect(a.host,4001,clientId=client_id,readonly=True,timeout=20)
+        ib.connect(a.host,a.port,clientId=client_id,readonly=True,timeout=20)
         if not ib.isConnected():
             raise RuntimeError("remote_broker_api_not_connected")
         results=account_receipt(ib,expected,run_id=a.gateway_run_id,
