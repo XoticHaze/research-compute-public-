@@ -35,7 +35,7 @@ jobs:
           python-version: '3.11.16'
       - name: No-broker, no-login API-client and pool contract suite
         run: |
-          python -m unittest -v tests.test_mmibkr_gh_gateway_split_v1
+          python -m unittest discover -s tests -p 'test_mmibkr_gh_gateway_split_v1.py' -v
           python -m py_compile scripts/mmibkr_split_gateway_tcp_relay_v1.py scripts/mmibkr_gh_gateway_readonly_client_v1.py
 
   preflight:
