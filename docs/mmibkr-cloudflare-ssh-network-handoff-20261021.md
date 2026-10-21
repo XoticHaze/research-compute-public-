@@ -6,6 +6,20 @@ This uses the **existing Cloudflare provider**, without managed Tailscale. A ded
 
 The existing production-owner workflow remains the **only** Fleet-authorized live credential consumer. Network configuration is checked *before* it requests private source/Gateway credentials. Provider selector `pool_transport` keeps the previously proven Tailscale implementation available as a fallback; default for the new proof is `cloudflare_access_ssh`.
 
+## Current-domain staging (no transfer or paid domain)
+
+The operator already owns a .com domain at Namecheap for an unrelated future website. Use a dedicated gateway-ops **subdomain** as the temporary Cloudflare Access SSH route. **Do not point the apex or www website records at the broker, or purchase another domain.** Put the exact owned hostname in the existing repository variable MMIBKR_CF_SSH_HOSTNAME, not in public source filenames.
+
+- **Registrar:** keep Namecheap during the initial 60-day transfer period. A later Porkbun vs Cloudflare Registrar price review does not block free Cloudflare DNS/Pages/Tunnel.
+- **Before touching nameservers:** export or manually record ALL entries visible under Namecheap Domain List -> Manage -> Advanced DNS, plus any email forwarding and parking configuration. Check apex, www, MX, SPF/DKIM, DMARC, TXT, CAA, verification tokens and DNSSEC/DS. Cloudflare automatic import may omit records; it must be reviewed against the old zone.
+- Add the existing registered domain to the existing Cloudflare account on the Free DNS plan without transferring domain registration. Cloudflare supplies exact nameservers. Only after importing/verifying DNS and mail settings should the operator update Namecheap -> Domain List -> Manage -> Domain -> Nameservers -> Custom DNS with those two Cloudflare nameservers.
+- Cloudflare Free requires full nameserver delegation; partial CNAME DNS requires a paid tier. Initial registrar-transfer lock does NOT prevent editing nameservers.
+- Once the Cloudflare DNS zone is Active, create the dedicated named Cloudflare Tunnel and Access Service Auth application for the subdomain. Its sole destination is SSH on localhost:2222; keep IBKR API exclusively on localhost:4001 inside the runner with pinned OpenSSH key and fixed forwarding as described below. No bypass policy, raw public broker port or redirect of the root domain.
+
+Use [Cloudflare Domain DNS Preflight](../.github/workflows/mmibkr-cf-domain-dns-preflight-r1.yml) before and after moving DNS. Set repo **variable** MMIBKR_CF_SSH_HOSTNAME to the exact dedicated SSH subdomain. The read-only action queries a public DNS resolver for nameserver delegation, DNSSEC/DS, mail and subdomain collision with SHA256-redacted record values. It is a public resolver SAMPLE, not an authoritative Namecheap zone backup, comprehensive wildcard detection or proof of account ownership. If a DS exists, follow DNSSEC migration instructions before changing nameservers.
+
+**Sequence:** backup current DNS + email settings -> add existing zone to Cloudflare DNS Free -> check imported records -> switch only registrar nameservers -> confirm zone Active -> set dedicated Tunnel + Access Service Auth -> synthetic three-GitHub-runner test -> single attended authenticated no-order Gateway session -> independent A/B broker reads -> later free-first VM work. Do not start a fresh IBKR login to overcome incomplete networking.
+
 ## One-time Cloudflare configuration (operator-held)
 
 1. In the existing Cloudflare account, create a **dedicated remotely managed Tunnel**, not a second Fleet Authority/Worker and not a generic Quick Tunnel. Configure a **published SSH route** on a hostname that belongs to an already Cloudflare-managed domain: `<chosen-subdomain>.<your-managed-zone>` → `ssh://localhost:2222`. A `*.workers.dev` Worker route is **not** a substitute for a managed-zone Access SSH app. Set that hostname as repo **variable** `MMIBKR_CF_SSH_HOSTNAME`.
