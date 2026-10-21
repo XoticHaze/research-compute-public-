@@ -21,6 +21,14 @@ on:
           - successor
           - supervised_5h
           - gateway_pool_5h
+      pool_transport:
+        description: Private network adapter for the read-only GitHub Gateway pool
+        type: choice
+        required: true
+        default: cloudflare_access_ssh
+        options:
+          - cloudflare_access_ssh
+          - tailscale
       warm_predecessor_run:
         description: Exact successful producer run ID required for successor mode
         type: string
@@ -325,13 +333,26 @@ jobs:
       # Fail before requesting IBKR credentials if no private cloud-to-cloud
       # path is provisioned. Same workflow identity keeps existing Fleet seal.
       - name: Join restricted tailnet for Gateway-only research pool
-        if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'gateway_pool_5h' }}
+        if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'gateway_pool_5h' && inputs.pool_transport == 'tailscale' }}
         uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd # v4.2.0
         with:
           oauth-client-id: ${{ secrets.MMIBKR_TS_GATEWAY_OIDC_CLIENT_ID }}
           audience: ${{ secrets.MMIBKR_TS_GATEWAY_OIDC_AUDIENCE }}
           tags: tag:mmibkr-gateway
           hostname: mmibkr-gw-${{ github.run_id }}
+
+      - name: Establish Cloudflare Access SSH tunnel before any IBKR credential is requested
+        if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'gateway_pool_5h' && inputs.pool_transport == 'cloudflare_access_ssh' }}
+        env:
+          MMIBKR_CF_SSH_HOSTNAME: ${{ vars.MMIBKR_CF_SSH_HOSTNAME }}
+          MMIBKR_CF_GATEWAY_TUNNEL_TOKEN: ${{ secrets.MMIBKR_CF_GATEWAY_TUNNEL_TOKEN }}
+          MMIBKR_CF_GATEWAY_SSH_HOST_KEY_B64: ${{ secrets.MMIBKR_CF_GATEWAY_SSH_HOST_KEY_B64 }}
+          MMIBKR_CF_READER_SSH_PUBKEY: ${{ secrets.MMIBKR_CF_READER_SSH_PUBKEY }}
+        run: |
+          set -euo pipefail
+          bash scripts/mmibkr_cf_install_cloudflared_v1.sh
+          bash scripts/mmibkr_cf_gateway_start_v1.sh
+          echo 'MMIBKR_CF_GATEWAY_BROKER_LOGIN_NOT_YET_REQUESTED=1'
 
       - name: Materialize canonical exact private source through existing encrypted Fleet vault
         run: |
@@ -727,7 +748,7 @@ jobs:
           PY
 
       - name: Open Gateway's read-only API to permitted ephemeral tailnet clients
-        if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'gateway_pool_5h' }}
+        if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'gateway_pool_5h' && inputs.pool_transport == 'tailscale' }}
         run: |
           set -euo pipefail
           docker exec mmibkr-live-gateway /bin/sh -lc 'test "$READ_ONLY_API" = yes'
@@ -754,6 +775,8 @@ jobs:
 
       - name: Hold one authenticated read-only Gateway for independent GitHub compute jobs
         if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'gateway_pool_5h' }}
+        env:
+          POOL_TRANSPORT: ${{ inputs.pool_transport }}
         timeout-minutes: 290
         run: |
           set -euo pipefail
@@ -761,11 +784,26 @@ jobs:
           # margin under existing 340-minute owner-job limit.
           start="$(date +%s)"
           end="$((start + 16800))"
-          relay_pid="$(cat "$RUNNER_TEMP/mmibkr-gateway-relay.pid")"
+          if [ "$POOL_TRANSPORT" = tailscale ]; then
+            relay_pid="$(cat "$RUNNER_TEMP/mmibkr-gateway-relay.pid")"
+            kill -0 "$relay_pid"
+          elif [ "$POOL_TRANSPORT" = cloudflare_access_ssh ]; then
+            cf_pid="$(cat "$RUNNER_TEMP/mmibkr-cf-ssh-host/cloudflared.pid")"
+            kill -0 "$cf_pid"
+            test "$(ss -lnt | awk '$4=="127.0.0.1:2222"{print $4}' | wc -l)" -eq 1
+          else
+            echo MMIBKR_POOL_TRANSPORT_INVALID=1; exit 64
+          fi
+          echo "MMIBKR_GATEWAY_ONLY_POOL_TRANSPORT=$POOL_TRANSPORT"
           echo "MMIBKR_GATEWAY_ONLY_POOL_READY=1"
           echo "MMIBKR_GATEWAY_ONLY_POOL_SESSION_SECONDS=16800"
           while [ "$(date +%s)" -lt "$end" ]; do
-            kill -0 "$relay_pid"
+            if [ "$POOL_TRANSPORT" = tailscale ]; then
+              kill -0 "$relay_pid"
+            else
+              kill -0 "$cf_pid"
+              test "$(ss -lnt | awk '$4=="127.0.0.1:2222"{print $4}' | wc -l)" -eq 1
+            fi
             test "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = true
             docker exec mmibkr-live-gateway /bin/sh -lc 'test "$READ_ONLY_API" = yes'
             # A real broker-account read, not just open TCP/JVM, supplies liveness.
