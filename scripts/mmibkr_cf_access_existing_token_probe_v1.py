@@ -43,8 +43,39 @@ class ScopedAPI:
                 status = getattr(resp, "status", 200)
                 response = json.load(resp)
         except HTTPError as exc:
-            # Never include response body, headers, names, secrets or IDs.
-            return False, int(exc.code), None
+            # An API 400 may be a collision, invalid hostname, validation
+            # schema, or wrong-zone account. Return only controlled categories,
+            # never raw HTTP bodies, headers, names, token values or IDs.
+            try:
+                error_doc = json.load(exc)
+            except (ValueError, OSError):
+                error_doc = {}
+            errors = error_doc.get("errors", []) if isinstance(error_doc, dict) else []
+            classified = []
+            for error in errors[:5]:
+                if not isinstance(error, dict):
+                    continue
+                raw = str(error.get("message") or "").lower()
+                code = error.get("code")
+                pointers = ((error.get("source") or {}).get("pointer")
+                            if isinstance(error.get("source"), dict) else "")
+                if "domain" in raw or "hostname" in raw or "zone" in raw:
+                    kind = "DOMAIN_OR_ZONE"
+                elif "policy" in raw or "policies" in raw:
+                    kind = "POLICY"
+                elif "permission" in raw or "auth" in raw:
+                    kind = "PERMISSION"
+                elif "exist" in raw or "duplicate" in raw:
+                    kind = "ALREADY_EXISTS"
+                elif "required" in raw or "missing" in raw:
+                    kind = "REQUIRED_FIELD"
+                elif "invalid" in raw or "validation" in raw:
+                    kind = "FIELD_VALIDATION"
+                else:
+                    kind = "OTHER"
+                safe_code = code if isinstance(code, int) and 0 <= code <= 999999 else 0
+                classified.append(f"CF{safe_code}_{kind}")
+            return False, int(exc.code), classified
         except (URLError, ValueError, TimeoutError, OSError):
             return False, 0, None
         if not isinstance(response, dict) or response.get("success") is not True:
@@ -101,7 +132,8 @@ def protect_gateway_deny_default(api: ScopedAPI, *, approved: bool) -> str:
     }
     ok, status, result = api.call("POST", f"/accounts/{api.account}/access/apps", body)
     if not ok:
-        return "POST_REJECTED_HTTP_" + str(status)
+        errors = "_".join(result) if isinstance(result, list) else "NO_DETAIL"
+        return "POST_REJECTED_HTTP_" + str(status) + "_" + errors
     if not isinstance(result, dict) or result.get("domain") != HOST:
         return "POST_RESPONSE_UNVERIFIED"
     return "CREATED_DENY_DEFAULT_NO_SERVICE_TOKEN"
@@ -116,6 +148,15 @@ def main() -> int:
     legacy = summarize_token(os.getenv("CLOUDFLARE_LEGACY_TOKEN", ""), account, "LEGACY")
     summarize_token(os.getenv("CLOUDFLARE_R2_TOKEN", ""), account, "R2")
     if legacy:
+        same_account_zone = any(
+            isinstance(x, dict) and x.get("name") == DOMAIN
+            and x.get("status") == "active"
+            and isinstance(x.get("account"), dict)
+            and x["account"].get("id") == account
+            for x in (legacy.zones or [])
+        )
+        print("MMIBKR_CF_GATEWAY_DOMAIN_ACTIVE_IN_EXISTING_ACCOUNT="
+              + ("YES" if same_account_zone else "NO_OR_UNVERIFIED"))
         status = protect_gateway_deny_default(
             legacy,
             approved=os.getenv("MMIBKR_CF_ACCESS_CREATE_DENY_DEFAULT") == "1",

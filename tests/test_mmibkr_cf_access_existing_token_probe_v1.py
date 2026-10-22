@@ -79,7 +79,7 @@ class ExistingCloudflareTokenProbeTests(unittest.TestCase):
 
     def test_access_write_denial_reported_exactly(self):
         api,calls=fake_api(post=(False,403,None))
-        self.assertEqual(protect_gateway_deny_default(api,approved=True),"POST_REJECTED_HTTP_403")
+        self.assertEqual(protect_gateway_deny_default(api,approved=True),"POST_REJECTED_HTTP_403_NO_DETAIL")
         self.assertEqual(len(calls),1)
 
     def test_service_token_create_never_called(self):
