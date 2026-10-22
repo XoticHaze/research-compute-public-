@@ -32,13 +32,13 @@ path = pathlib.Path(sys.argv[1])
 raw = path.read_bytes() if path.exists() else b""
 text = raw.decode("utf-8", "replace").lower()
 rules = (
-    ("INVALID_TUNNEL_TOKEN", r"(?:invalid|malformed|parse|decode)[^\\n]{0,120}(?:tunnel )?token|token[^\\n]{0,120}(?:invalid|malformed|parse|decode)"),
-    ("TUNNEL_TOKEN_MISSING", r"(?:token[^\\n]{0,100}(?:missing|not set|required)|(?:missing|required)[^\\n]{0,100}token)"),
-    ("TUNNEL_NOT_FOUND", r"tunnel[^\\n]{0,100}(?:not found|does not exist|unknown tunnel)"),
+    ("INVALID_TUNNEL_TOKEN", r"(?:invalid|malformed|parse|decode)[^\n]{0,120}(?:tunnel )?token|token[^\n]{0,120}(?:invalid|malformed|parse|decode)"),
+    ("TUNNEL_TOKEN_MISSING", r"(?:token[^\n]{0,100}(?:missing|not set|required)|(?:missing|required)[^\n]{0,100}token)"),
+    ("TUNNEL_NOT_FOUND", r"tunnel[^\n]{0,100}(?:not found|does not exist|unknown tunnel)"),
     ("TUNNEL_AUTH_REJECTED", r"unauthoriz|forbidden|authentication failed|permission denied"),
     ("CLIENT_COMMAND_REJECTED", r"incorrect usage|flag provided but not defined|unknown flag|cannot find tunnel"),
-    ("NETWORK_CONNECTIVITY", r"no such host|failed to (?:dial|connect)|network is unreachable|context deadline exceeded|i/o timeout|lookup[^\\n]{0,100}failed"),
-    ("TUNNEL_REGISTRATION_REJECTED", r"failed to register|registering tunnel[^\\n]{0,100}fail"),
+    ("NETWORK_CONNECTIVITY", r"no such host|failed to (?:dial|connect)|network is unreachable|context deadline exceeded|i/o timeout|lookup[^\n]{0,100}failed"),
+    ("TUNNEL_REGISTRATION_REJECTED", r"failed to register|registering tunnel[^\n]{0,100}fail"),
 )
 category = next((name for name, pattern in rules if re.search(pattern, text)), "UNCLASSIFIED")
 print("MMIBKR_CF_TUNNEL_STARTUP_FAILURE=" + category)
