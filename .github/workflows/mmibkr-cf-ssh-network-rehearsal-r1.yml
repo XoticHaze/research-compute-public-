@@ -9,6 +9,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/mmibkr-cf-ssh-network-rehearsal-r1.yml
+      - scripts/mmibkr_cf_gateway_start_v1.sh
   pull_request:
     paths:
       - .github/workflows/mmibkr-cf-ssh-network-rehearsal-r1.yml
