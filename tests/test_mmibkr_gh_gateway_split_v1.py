@@ -177,7 +177,7 @@ class GatewayPoolContractTests(unittest.TestCase):
         hold=owner.split("      - name: Hold one authenticated read-only Gateway for independent GitHub compute jobs",1)[1]
         hold=hold.split("      - name: Confirm no-order admission did not authorize live bot startup",1)[0]
         script=hold.split("        run: |",1)[1]
-        source="\\n".join(line[10:] if line.startswith("          ") else line
+        source="\n".join(line[10:] if line.startswith("          ") else line
                            for line in script.splitlines())
         subprocess.run(["bash","-n"],input=source,text=True,check=True)
         assert 'inputs[network_transport]=cloudflare_access_ssh' in source
