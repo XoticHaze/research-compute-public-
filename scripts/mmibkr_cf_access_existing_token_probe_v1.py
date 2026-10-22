@@ -139,7 +139,72 @@ def protect_gateway_deny_default(api: ScopedAPI, *, approved: bool) -> str:
     return "CREATED_DENY_DEFAULT_NO_SERVICE_TOKEN"
 
 
+
+def provision_exact_shared_compute() -> int:
+    """Dedicated operator-approved Shared Compute credential takes priority.
+
+    Never fall back to old Workers credentials or another account if the new
+    secret or account identity is wrong. Return a nonzero status for rejection
+    so the one-shot Actions job can't mistake a blocked API write for success.
+    """
+    token = os.environ.get("CLOUDFLARE_GATEWAY_ACCESS_TOKEN", "").strip()
+    account = os.environ.get("CLOUDFLARE_GATEWAY_ACCOUNT_ID", "").strip()
+    if not token or not (len(account) == 32 and all(c in "0123456789abcdefABCDEF" for c in account)):
+        print("MMIBKR_CF_SHARED_COMPUTE_SECRETS=NOT_CONFIGURED")
+        return 45
+    api = ScopedAPI(token, account)
+    ok, code, zones = api.call("GET", "/zones?" + urlencode({"name": DOMAIN, "per_page": 50}))
+    if not ok or not isinstance(zones, list):
+        print("MMIBKR_CF_SHARED_COMPUTE_ZONE_READ=HTTP_" + str(code))
+        return 46
+    selected = [
+        z for z in zones if isinstance(z, dict) and z.get("name") == DOMAIN
+        and z.get("status") == "active" and isinstance(z.get("account"), dict)
+        and z["account"].get("id") == account
+    ]
+    if len(selected) != 1:
+        print("MMIBKR_CF_SHARED_COMPUTE_EXACT_ACTIVE_ZONE=NOT_VERIFIED")
+        return 47
+    print("MMIBKR_CF_SHARED_COMPUTE_EXACT_ACTIVE_ZONE=PASS")
+    ok, code, apps = api.call("GET", f"/accounts/{account}/access/apps?per_page=100")
+    if not ok or not isinstance(apps, list):
+        print("MMIBKR_CF_SHARED_COMPUTE_APPS_READ=HTTP_" + str(code))
+        return 48
+    print("MMIBKR_CF_SHARED_COMPUTE_APPS_READ=PASS")
+    api.apps = apps
+    result = protect_gateway_deny_default(api, approved=True)
+    print("MMIBKR_CF_GATEWAY_ACCESS_CREATE=" + result)
+    if result not in ("CREATED_DENY_DEFAULT_NO_SERVICE_TOKEN", "EXISTS_PRESERVED_NO_MUTATION"):
+        return 49
+    # Independently read back and require no Allow/Bypass policy. Even if the
+    # POST succeeds, do not claim a protected app without this proof.
+    ok, code, after = api.call("GET", f"/accounts/{account}/access/apps?per_page=100")
+    if not ok or not isinstance(after, list):
+        print("MMIBKR_CF_GATEWAY_ACCESS_READBACK=HTTP_" + str(code))
+        return 50
+    matching = [
+        x for x in after if isinstance(x, dict) and x.get("name") == APP_NAME
+        and x.get("domain") == HOST and x.get("type") == "self_hosted"
+    ]
+    if len(matching) != 1:
+        print("MMIBKR_CF_GATEWAY_ACCESS_READBACK=EXACT_APP_NOT_VERIFIED")
+        return 51
+    app = matching[0]
+    policies = app.get("policies")
+    if not isinstance(policies, list) or len(policies) > 0:
+        print("MMIBKR_CF_GATEWAY_ACCESS_DENY_DEFAULT=POLICIES_UNVERIFIED")
+        return 52
+    print("MMIBKR_CF_GATEWAY_ACCESS_READBACK=EXACT_APP_VERIFIED")
+    print("MMIBKR_CF_GATEWAY_ACCESS_DENY_DEFAULT=NO_ALLOW_OR_BYPASS_POLICIES")
+    print("MMIBKR_CF_SERVICE_TOKEN_CREATE_ATTEMPTED=NO")
+    print("MMIBKR_CF_BROKER_AUTH_ATTEMPTED=NO")
+    print("MMIBKR_CF_DNS_MUTATION_ATTEMPTED=NO")
+    return 0
+
+
 def main() -> int:
+    if os.getenv("MMIBKR_CF_SHARED_COMPUTE_PROVISION") == "1":
+        return provision_exact_shared_compute()
     account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
     if not (len(account) == 32 and all(c in "0123456789abcdefABCDEF" for c in account)):
         print("MMIBKR_CF_ACCOUNT_ID_CONFIGURED=NO")
