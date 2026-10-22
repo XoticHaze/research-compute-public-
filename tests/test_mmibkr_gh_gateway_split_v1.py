@@ -75,7 +75,12 @@ class GatewayPoolContractTests(unittest.TestCase):
         calls=[]
         def verify(candidate,run_id):
             calls.append((candidate,run_id))
-        r=account_receipt(ReadOnlyFakeBroker(),"",
+        class SingleAccount(ReadOnlyFakeBroker):
+            def managedAccounts(self):
+                return ["U-EXPECTED"]
+            def reqPositions(self):
+                return [SimpleNamespace(account="U-EXPECTED")]
+        r=account_receipt(SingleAccount(),"",
                           run_id="39499524894",phase="A",client_id=101,
                           specs=[],attestor=verify)
         self.assertTrue(r["owner_attested_account_match"])
@@ -129,9 +134,9 @@ class GatewayPoolContractTests(unittest.TestCase):
     def test_owner_attestor_env_shape_and_permissions_contract(self):
         with tempfile.TemporaryDirectory() as td:
             p=Path(td)/"account.env"
-            p.write_text("MMIBKR_PRODUCTION_LIVE_ACCOUNT=U-EXPECTED\\n")
+            p.write_text("MMIBKR_PRODUCTION_LIVE_ACCOUNT=U-EXPECTED\n")
             self.assertEqual(read_expected(p),"U-EXPECTED")
-            p.write_text("MMIBKR_PRODUCTION_LIVE_ACCOUNT=DU1\\n")
+            p.write_text("MMIBKR_PRODUCTION_LIVE_ACCOUNT=DU1\n")
             with self.assertRaisesRegex(ValueError,"live_expected_account_required"):
                 read_expected(p)
 
