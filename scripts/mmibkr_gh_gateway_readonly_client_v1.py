@@ -17,6 +17,20 @@ from datetime import datetime, timezone
 from scripts.mmibkr_gateway_account_attestor_v1 import attest_account
 
 
+def reader_client_id(run_id: str, attempt: str, phase: str) -> int:
+    """Give each isolated runner and GitHub retry a distinct broker client ID.
+
+    A remote socket may disconnect while IBKR still retains the old client ID.
+    Reusing it is not evidence that Gateway authentication has failed.
+    """
+    if not run_id.isascii() or not run_id.isdigit() or not attempt.isascii() or not attempt.isdigit():
+        raise ValueError("exact_github_run_attempt_required")
+    a = int(attempt)
+    if not 1 <= a <= 99 or phase not in {"A", "B"}:
+        raise ValueError("bounded_reader_client_identity_required")
+    return (int(run_id) % 1_000_000) * 1000 + a * 2 + (0 if phase == "A" else 1)
+
+
 def gateway_name(run_id: str) -> str:
     if not run_id.isascii() or not run_id.isdigit() or not 8 <= len(run_id) <= 24:
         raise ValueError("gateway_pool_exact_run_id_required")
@@ -154,7 +168,7 @@ def main() -> int:
     specs=[]
     if a.contracts_file:
         specs=contract_scope(json.loads(Path(a.contracts_file).read_text(encoding="utf-8")))
-    client_id=(int(os.environ["GITHUB_RUN_ID"]) % 1000000)+ (100 if a.phase == "A" else 200)
+    client_id=reader_client_id(os.environ["GITHUB_RUN_ID"],os.environ.get("GITHUB_RUN_ATTEMPT","1"),a.phase)
     ib=IB()
     results={}
     try:
