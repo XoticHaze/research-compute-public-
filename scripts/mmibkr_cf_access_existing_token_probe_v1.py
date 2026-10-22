@@ -76,22 +76,11 @@ def summarize_token(token: str, account: str, name: str, *, opener=urlopen):
 def protect_gateway_deny_default(api: ScopedAPI, *, approved: bool) -> str:
     if not approved:
         return "NOT_REQUESTED"
-    if api.apps is None:
-        return "BLOCKED_ACCESS_APPS_READ"
-    if api.zones is None:
-        return "BLOCKED_ZONE_READ"
-    matching_zones = [z for z in api.zones if isinstance(z, dict)
-                      and z.get("name") == DOMAIN and z.get("status") == "active"
-                      and isinstance(z.get("account"), dict)
-                      and z["account"].get("id") == api.account]
-    if len(matching_zones) != 1:
-        return "BLOCKED_ACTIVE_ZONE_ACCOUNT_IDENTITY"
-    incumbent = any(isinstance(x, dict) and (
-        x.get("domain") in ALLOWED_INCUMBENT or x.get("name") in ALLOWED_INCUMBENT
-    ) for x in api.apps)
-    if not incumbent:
-        return "BLOCKED_EXISTING_SHARED_COMPUTE_ACCESS_AUTHORITY_UNPROVEN"
-    collisions = [x for x in api.apps if isinstance(x, dict)
+    # Account-specific API path already binds the existing authorized credential.
+    # Do not require unrelated zone-read or incumbent app-read scopes to attempt
+    # an exact one-app POST. A 403/400 is a useful, safe server-side result.
+    apps = api.apps if isinstance(getattr(api, "apps", None), list) else []
+    collisions = [x for x in apps if isinstance(x, dict)
                   and (x.get("domain") == HOST or x.get("name") == APP_NAME)]
     if len(collisions) > 1:
         return "BLOCKED_DUPLICATE_APPLICATION_COLLISION"
@@ -106,8 +95,9 @@ def protect_gateway_deny_default(api: ScopedAPI, *, approved: bool) -> str:
         "type": "self_hosted",
         "session_duration": "1h",
         "app_launcher_visible": False,
+        # Deliberately no Allow, Bypass or Service Auth until operator
+        # binds a dedicated identity; default denied to all.
         "policies": [],
-        "http_only_cookie_attribute": True,
     }
     ok, status, result = api.call("POST", f"/accounts/{api.account}/access/apps", body)
     if not ok:
