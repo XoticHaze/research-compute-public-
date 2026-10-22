@@ -5,6 +5,10 @@ name: MM-IBKR Cloudflare SSH Network-Only Rehearsal R1
 # only a synthetic echo server; no broker credentials or orders are loaded.
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/mmibkr-cf-ssh-network-rehearsal-r1.yml
   pull_request:
     paths:
       - .github/workflows/mmibkr-cf-ssh-network-rehearsal-r1.yml
@@ -38,7 +42,7 @@ jobs:
           python -m py_compile scripts/mmibkr_cf_ssh_transport_v1.py
 
   preflight:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     env:
@@ -69,7 +73,7 @@ jobs:
           PY
 
   gateway:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     needs: [preflight]
     runs-on: ubuntu-24.04
     timeout-minutes: 9
@@ -114,7 +118,7 @@ jobs:
         # The synthetic test exits normally after a bounded observation window.
 
   reader_a:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     needs: [preflight]
     runs-on: ubuntu-24.04
     timeout-minutes: 6
@@ -145,7 +149,7 @@ jobs:
           PY
 
   reader_b:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     needs: [preflight]
     runs-on: ubuntu-24.04
     timeout-minutes: 7
