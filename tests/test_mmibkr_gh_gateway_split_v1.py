@@ -3,12 +3,19 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 from types import SimpleNamespace
+import tempfile
+import socket
+import threading
+import subprocess
 import unittest
 
 from scripts.mmibkr_gh_gateway_readonly_client_v1 import (
     account_receipt,
     contract_scope,
     gateway_name,
+)
+from scripts.mmibkr_gateway_account_attestor_v1 import (
+    SCHEMA, HOST, AccountOracle, attest_account, matched, read_expected,
 )
 from scripts.mmibkr_split_gateway_tcp_relay_v1 import (
     bridge,
@@ -65,6 +72,75 @@ class GatewayPoolContractTests(unittest.TestCase):
             account_receipt(ReadOnlyFakeBroker(),"U-OTHER",
                             run_id="39499524894",phase="A",client_id=101,specs=[])
 
+    def test_owner_attestation_preserves_existing_exact_account_fence(self):
+        calls=[]
+        def verify(candidate,run_id):
+            calls.append((candidate,run_id))
+        class SingleAccount(ReadOnlyFakeBroker):
+            def managedAccounts(self):
+                return ["U-EXPECTED"]
+            def reqPositions(self):
+                return [SimpleNamespace(account="U-EXPECTED")]
+        r=account_receipt(SingleAccount(),"",
+                          run_id="39499524894",phase="A",client_id=101,
+                          specs=[],attestor=verify)
+        self.assertTrue(r["owner_attested_account_match"])
+        self.assertEqual(calls,[("U-EXPECTED","39499524894")])
+        self.assertNotIn("U-EXPECTED",str(r))
+
+    def test_owner_attestation_fails_closed_on_ambiguous_live_accounts(self):
+        class Multiple(ReadOnlyFakeBroker):
+            def managedAccounts(self):
+                return ["U-EXPECTED","U-OTHER"]
+        with self.assertRaisesRegex(RuntimeError,"ambiguous_live_account_identity"):
+            account_receipt(Multiple(),"",run_id="39499524894",
+                            phase="B",client_id=102,specs=[],
+                            attestor=lambda *_: None)
+
+    def test_owner_attestation_fails_on_other_account_positions(self):
+        class OtherPositions(ReadOnlyFakeBroker):
+            def reqPositions(self):
+                return [SimpleNamespace(account="U-OTHER")]
+        with self.assertRaisesRegex(RuntimeError,"cross_account_records_rejected"):
+            account_receipt(OtherPositions(),"",run_id="39499524894",
+                            phase="A",client_id=101,specs=[],
+                            attestor=lambda *_: None)
+
+    def test_identity_oracle_rejects_wrong_run_wrong_account_and_paper(self):
+        good={"schema":SCHEMA,"gateway_run_id":"39499524894","candidate":"U-EXPECTED"}
+        self.assertTrue(matched(good,run_id="39499524894",expected="U-EXPECTED"))
+        for row in (
+            {**good,"gateway_run_id":"39499524895"},
+            {**good,"candidate":"U-OTHER"},
+            {**good,"candidate":"DU123"},
+            {**good,"extra":"leak"},
+        ):
+            self.assertFalse(matched(row,run_id="39499524894",expected="U-EXPECTED"))
+
+    def test_identity_oracle_localhost_roundtrip_no_expected_disclosure(self):
+        with AccountOracle((HOST,0),expected="U-EXPECTED",
+                           run_id="39499524894") as server:
+            thread=threading.Thread(target=server.serve_forever,daemon=True)
+            thread.start()
+            port=server.server_address[1]
+            try:
+                attest_account("U-EXPECTED","39499524894",port=port)
+                for value,owner in (("U-OTHER","39499524894"),("U-EXPECTED","39499524895")):
+                    with self.assertRaisesRegex(RuntimeError,"expected_live_account_mismatch"):
+                        attest_account(value,owner,port=port)
+            finally:
+                server.shutdown()
+                thread.join(timeout=3)
+
+    def test_owner_attestor_env_shape_and_permissions_contract(self):
+        with tempfile.TemporaryDirectory() as td:
+            p=Path(td)/"account.env"
+            p.write_text("MMIBKR_PRODUCTION_LIVE_ACCOUNT=U-EXPECTED\n")
+            self.assertEqual(read_expected(p),"U-EXPECTED")
+            p.write_text("MMIBKR_PRODUCTION_LIVE_ACCOUNT=DU1\n")
+            with self.assertRaisesRegex(ValueError,"live_expected_account_required"):
+                read_expected(p)
+
     def test_three_asset_class_descriptor_rules(self):
         rows=contract_scope([
             {"symbol":"AMAT","secType":"STK","conId":11},
@@ -92,6 +168,20 @@ class GatewayPoolContractTests(unittest.TestCase):
         self.assertIn("gateway_pool_5h",owner)
         self.assertIn("read_only_api=yes",owner)
         self.assertIn("MMIBKR_GATEWAY_ONLY_POOL_READY=1",owner)
+        self.assertIn("MMIBKR_GATEWAY_POOL_BROKER_RECOVERY_BUDGET_EXPIRED=1",owner)
+        self.assertIn("MMIBKR_READONLY_AB_DISPATCHED_EXACT_OWNER=1",owner)
+        self.assertIn("actions: write",owner)
+        self.assertIn("mmibkr_gateway_account_attestor_v1",owner)
+        # CI must parse the exact holding shell, including heredoc and
+        # branch-only reader dispatch, before we ask for attended IB Key.
+        hold=owner.split("      - name: Hold one authenticated read-only Gateway for independent GitHub compute jobs",1)[1]
+        hold=hold.split("      - name: Confirm no-order admission did not authorize live bot startup",1)[0]
+        script=hold.split("        run: |",1)[1]
+        source="\n".join(line[10:] if line.startswith("          ") else line
+                           for line in script.splitlines())
+        subprocess.run(["bash","-n"],input=source,text=True,check=True)
+        assert 'inputs[network_transport]=cloudflare_access_ssh' in source
+        assert 'inputs[gateway_run_id]=$GITHUB_RUN_ID' in source
         self.assertIn("if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'gateway_pool_5h' }}",owner)
         self.assertIn('relogin_after_twofa_timeout=no',owner)
         self.assertIn("tag:mmibkr-gateway",owner)
@@ -103,6 +193,9 @@ class GatewayPoolContractTests(unittest.TestCase):
         self.assertIn("gateway_run_id",wf)
         self.assertIn("REAL_API_CLIENT_OVERLAP_AND_A_TO_B_HANDOFF=PASS",wf)
         self.assertIn("MMIBKR_GATEWAY_POOL", wf.upper())
+        self.assertIn("MMIBKR_CF_ACCOUNT_ATTESTOR_FORWARD=1",wf)
+        self.assertIn('test -n "$ACCOUNT" && test -n "$TS_ID"',wf)
+        self.assertNotIn('test -n "$ACCOUNT"\\n          if',wf)
         for line in wf.splitlines():
             if "docker run" in line or "gh api -X POST" in line:
                 raise AssertionError("independent runner must not start Gateway or dispatch work")
