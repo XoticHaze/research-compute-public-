@@ -168,10 +168,16 @@ def provision_exact_shared_compute() -> int:
     print("MMIBKR_CF_SHARED_COMPUTE_EXACT_ACTIVE_ZONE=PASS")
     ok, code, apps = api.call("GET", f"/accounts/{account}/access/apps?per_page=100")
     if not ok or not isinstance(apps, list):
-        print("MMIBKR_CF_SHARED_COMPUTE_APPS_READ=HTTP_" + str(code))
-        return 48
-    print("MMIBKR_CF_SHARED_COMPUTE_APPS_READ=PASS")
-    api.apps = apps
+        reason = "_".join(apps) if isinstance(apps, list) else "NO_DETAIL"
+        print("MMIBKR_CF_SHARED_COMPUTE_APPS_READ=HTTP_" + str(code) + "_" + reason)
+        # Operator explicitly requested attempting the exact app POST against
+        # the verified zone owner. A POST will not overwrite an existing app.
+        # The body contains no Allow/Bypass policy; no shell/login/broker.
+        print("MMIBKR_CF_GATEWAY_APP_POST_AFTER_GET_DENIED=ATTEMPT")
+        api.apps = []
+    else:
+        print("MMIBKR_CF_SHARED_COMPUTE_APPS_READ=PASS")
+        api.apps = apps
     result = protect_gateway_deny_default(api, approved=True)
     print("MMIBKR_CF_GATEWAY_ACCESS_CREATE=" + result)
     if result not in ("CREATED_DENY_DEFAULT_NO_SERVICE_TOKEN", "EXISTS_PRESERVED_NO_MUTATION"):
