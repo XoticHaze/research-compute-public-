@@ -316,6 +316,11 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 340
+    # Needed ONLY for bounded read-only reader dispatch after live account proof.
+    permissions:
+      contents: read
+      actions: write
+      id-token: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Require explicit canonical owner activation and exact handoff scope
@@ -799,13 +804,16 @@ jobs:
         if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'gateway_pool_5h' }}
         env:
           POOL_TRANSPORT: ${{ inputs.pool_transport }}
+          GH_TOKEN: ${{ github.token }}
         timeout-minutes: 290
         run: |
           set -euo pipefail
-          # 4h40m service window; leave generous teardown + state-seal
-          # margin under existing 340-minute owner-job limit.
+          # Bounded 4h40; transient API read timeouts do not kill a live
+          # authenticated Gateway on the first failed probe.
           start="$(date +%s)"
           end="$((start + 16800))"
+          outage_since=0
+          ready=0
           if [ "$POOL_TRANSPORT" = tailscale ]; then
             relay_pid="$(cat "$RUNNER_TEMP/mmibkr-gateway-relay.pid")"
             kill -0 "$relay_pid"
@@ -813,44 +821,93 @@ jobs:
             cf_pid="$(cat "$RUNNER_TEMP/mmibkr-cf-ssh-host/cloudflared.pid")"
             kill -0 "$cf_pid"
             test "$(ss -lnt | awk '$4=="127.0.0.1:2222"{print $4}' | wc -l)" -eq 1
+            # Sealed account is read only by this owner-local verification
+            # process. Remote readers learn only match/no-match via pinned SSH.
+            nohup python -m scripts.mmibkr_gateway_account_attestor_v1 \
+              --expected-env "$RUNNER_TEMP/mmibkr-live-bot.env" \
+              --gateway-run-id "$GITHUB_RUN_ID" \
+              > "$RUNNER_TEMP/mmibkr-account-attestor.log" 2>&1 &
+            echo "$!" > "$RUNNER_TEMP/mmibkr-account-attestor.pid"
+            for attempt in $(seq 1 25); do
+              if ss -lnt | grep -q '127.0.0.1:4002'; then break; fi
+              kill -0 "$(cat "$RUNNER_TEMP/mmibkr-account-attestor.pid")" || exit 1
+              sleep 1
+            done
+            test "$(ss -lnt | awk '$4=="127.0.0.1:4002"{print $4}' | wc -l)" -eq 1
+            echo 'MMIBKR_GATEWAY_ACCOUNT_ATTESTOR_LOOPBACK_ONLY=1'
           else
             echo MMIBKR_POOL_TRANSPORT_INVALID=1; exit 64
           fi
           echo "MMIBKR_GATEWAY_ONLY_POOL_TRANSPORT=$POOL_TRANSPORT"
-          echo "MMIBKR_GATEWAY_ONLY_POOL_READY=1"
-          echo "MMIBKR_GATEWAY_ONLY_POOL_SESSION_SECONDS=16800"
+          echo 'MMIBKR_GATEWAY_ONLY_POOL_SESSION_SECONDS=16800'
           while [ "$(date +%s)" -lt "$end" ]; do
             if [ "$POOL_TRANSPORT" = tailscale ]; then
               kill -0 "$relay_pid"
             else
               kill -0 "$cf_pid"
+              kill -0 "$(cat "$RUNNER_TEMP/mmibkr-account-attestor.pid")"
               test "$(ss -lnt | awk '$4=="127.0.0.1:2222"{print $4}' | wc -l)" -eq 1
+              test "$(ss -lnt | awk '$4=="127.0.0.1:4002"{print $4}' | wc -l)" -eq 1
             fi
             test "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = true
             docker exec mmibkr-live-gateway /bin/sh -lc 'test "$READ_ONLY_API" = yes'
-            # A real broker-account read, not just open TCP/JVM, supplies liveness.
-            python - <<'PY'
+            if python - <<'PY'
           import os
           from pathlib import Path
           from ib_insync import IB
-          env=(Path(os.environ["RUNNER_TEMP"])/"mmibkr-live-bot.env").read_text()
-          expected=env.strip().split("=",1)[1]
+          expected=(Path(os.environ['RUNNER_TEMP'])/'mmibkr-live-bot.env').read_text().strip().split('=',1)[1]
           ib=IB()
           try:
-              ib.connect("127.0.0.1",4001,clientId=79,readonly=True,timeout=12)
-              assert expected in ib.managedAccounts()
+              ib.connect('127.0.0.1',4001,clientId=79,readonly=True,timeout=25)
+              if expected not in ib.managedAccounts():
+                  raise SystemExit(70)  # fail closed: wrong account, not transient
               ib.reqPositions()
               ib.reqAllOpenOrders()
               ib.reqExecutions()
-              print("MMIBKR_GATEWAY_POOL_BROKER_READ_PASS=1")
+          except Exception:
+              print('MMIBKR_GATEWAY_POOL_BROKER_PROBE_RETRYABLE=1')
+              raise SystemExit(75)
           finally:
               if ib.isConnected(): ib.disconnect()
           PY
-            echo "MMIBKR_GATEWAY_POOL_HEARTBEAT_SECONDS=$(( $(date +%s) - start ))"
-            sleep 90
+            then
+              outage_since=0
+              echo 'MMIBKR_GATEWAY_POOL_BROKER_READ_PASS=1'
+              if [ "$ready" -eq 0 ]; then
+                echo 'MMIBKR_GATEWAY_ONLY_POOL_READY=1'
+                ready=1
+                if [ "$POOL_TRANSPORT" = cloudflare_access_ssh ]; then
+                  # In the same authenticated holding stage; no other login,
+                  # Gateway owner, or order-capable process is started.
+                  gh api --method POST \
+                    "/repos/${GITHUB_REPOSITORY}/actions/workflows/mmibkr-gh-independent-readers-r1.yml/dispatches" \
+                    -f ref=main \
+                    -f "inputs[gateway_run_id]=$GITHUB_RUN_ID" \
+                    -f "inputs[test_mode]=handoff_ab" \
+                    -f "inputs[network_transport]=cloudflare_access_ssh"
+                  echo 'MMIBKR_READONLY_AB_DISPATCHED_EXACT_OWNER=1'
+                fi
+              fi
+              echo "MMIBKR_GATEWAY_POOL_HEARTBEAT_SECONDS=$(( $(date +%s) - start ))"
+              sleep 90
+            else
+              result=$?
+              if [ "$result" -eq 70 ]; then
+                echo 'MMIBKR_GATEWAY_POOL_ACCOUNT_MISMATCH_FAIL_CLOSED=1'
+                exit 70
+              fi
+              if [ "$outage_since" -eq 0 ]; then outage_since="$(date +%s)"; fi
+              elapsed="$(( $(date +%s) - outage_since ))"
+              echo "MMIBKR_GATEWAY_POOL_API_UNAVAILABLE_SECONDS=$elapsed"
+              if [ "$elapsed" -ge 600 ]; then
+                echo 'MMIBKR_GATEWAY_POOL_BROKER_RECOVERY_BUDGET_EXPIRED=1'
+                exit 75
+              fi
+              sleep 45
+            fi
           done
+          test "$outage_since" -eq 0 || { echo 'MMIBKR_GATEWAY_POOL_ENDS_UNVERIFIED=1'; exit 75; }
           echo 'MMIBKR_GATEWAY_ONLY_POOL_BOUNDED_SESSION_COMPLETE=1'
-
       - name: Confirm no-order admission did not authorize live bot startup
         if: ${{ inputs.admission_only && inputs.warm_handoff_mode != 'supervised_5h' }}
         run: |
@@ -1343,6 +1400,10 @@ jobs:
           set -euo pipefail
           # Allow the Gateway controller's own clean-logout chain to finish.
           # A hard remove after a failed shadow can strand a broker session slot.
+          if [ -f "$RUNNER_TEMP/mmibkr-account-attestor.pid" ]; then
+            kill -TERM "$(cat "$RUNNER_TEMP/mmibkr-account-attestor.pid")" >/dev/null 2>&1 || true
+            rm -f "$RUNNER_TEMP/mmibkr-account-attestor.pid" "$RUNNER_TEMP/mmibkr-account-attestor.log"
+          fi
           if docker inspect mmibkr-live-gateway >/dev/null 2>&1; then
             docker stop --time 90 mmibkr-live-gateway >/dev/null 2>&1 || true
           fi
