@@ -26,6 +26,10 @@ on:
         options:
           - cloudflare_access_ssh
           - tailscale
+  push:
+    branches: [main]
+    paths:
+      - rendezvous/fire/mmibkr-independent-readers-r1
   pull_request:
     paths:
       - .github/workflows/mmibkr-selected-runtime-live-owner-r1.yml
@@ -41,6 +45,38 @@ permissions:
   id-token: write
 
 jobs:
+  dispatch_readonly_reader:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Dispatch read-only A/B against already authenticated owner
+        run: |
+          set -euo pipefail
+          patch="$(gh api "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" \
+            --jq '[.files[] | select(.filename == "rendezvous/fire/mmibkr-independent-readers-r1") | (.patch // "")] | join("\n")')"
+          count="$(printf '%s\n' "$patch" | grep -Ec '^\+reader_handoff_ab_request_20261022_[a-z0-9]{6}: [0-9]{8,24}$' || true)"
+          test "$count" = 1 || { echo 'READER_EXACT_NEW_REQUEST_INVALID=1'; exit 64; }
+          pool_run="$(printf '%s\n' "$patch" | sed -nE 's/^\+reader_handoff_ab_request_20261022_[a-z0-9]{6}: ([0-9]{8,24})$/\1/p')"
+          [[ "$pool_run" =~ ^[0-9]{8,24}$ ]]
+          gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$pool_run" --jq \
+            '(.status == "in_progress") and (.event == "workflow_dispatch") and (.head_branch == "main") and (.path == ".github/workflows/mmibkr-selected-runtime-live-owner-r1.yml")' | grep -qx true
+          gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$pool_run/jobs?per_page=100" --jq \
+            '[.jobs[] | select(.name == "owner") | .steps[]? | select(.name == "Hold one authenticated read-only Gateway for independent GitHub compute jobs" and .status == "in_progress")] | length == 1' | grep -qx true
+          gh api --method POST \
+            "/repos/$GITHUB_REPOSITORY/actions/workflows/mmibkr-gh-independent-readers-r1.yml/dispatches" \
+            -f ref=main \
+            -f "inputs[gateway_run_id]=$pool_run" \
+            -f "inputs[test_mode]=handoff_ab" \
+            -f "inputs[network_transport]=cloudflare_access_ssh"
+          echo "MMIBKR_EXACT_ACTIVE_READONLY_OWNER_DISPATCHED=$pool_run"
+
   contract:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
@@ -168,7 +204,7 @@ jobs:
             --gateway-run-id "$POOL_RUN" --host "$HOST" --port "$PORT" --transport "$NETWORK" --phase A \
             --hold-seconds "$hold_seconds" --output "$RUNNER_TEMP/mmibkr-gateway-client-a.json" \
             "${contract_args[@]}"
-      - if: success()
+      - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: mmibkr-gateway-client-a
@@ -239,7 +275,7 @@ jobs:
             --gateway-run-id "$POOL_RUN" --host "$HOST" --port "$PORT" --transport "$NETWORK" --phase B \
             --hold-seconds 300 --output "$RUNNER_TEMP/mmibkr-gateway-client-b.json" \
             "${contract_args[@]}"
-      - if: success()
+      - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: mmibkr-gateway-client-b

@@ -17,6 +17,20 @@ from datetime import datetime, timezone
 from scripts.mmibkr_gateway_account_attestor_v1 import attest_account
 
 
+def reader_client_id(run_id: str, attempt: str, phase: str) -> int:
+    """Give each isolated runner and GitHub retry a distinct broker client ID.
+
+    A remote socket may disconnect while IBKR still retains the old client ID.
+    Reusing it is not evidence that Gateway authentication has failed.
+    """
+    if not run_id.isascii() or not run_id.isdigit() or not attempt.isascii() or not attempt.isdigit():
+        raise ValueError("exact_github_run_attempt_required")
+    a = int(attempt)
+    if not 1 <= a <= 99 or phase not in {"A", "B"}:
+        raise ValueError("bounded_reader_client_identity_required")
+    return (int(run_id) % 1_000_000) * 1000 + a * 2 + (0 if phase == "A" else 1)
+
+
 def gateway_name(run_id: str) -> str:
     if not run_id.isascii() or not run_id.isdigit() or not 8 <= len(run_id) <= 24:
         raise ValueError("gateway_pool_exact_run_id_required")
@@ -154,17 +168,29 @@ def main() -> int:
     specs=[]
     if a.contracts_file:
         specs=contract_scope(json.loads(Path(a.contracts_file).read_text(encoding="utf-8")))
-    client_id=(int(os.environ["GITHUB_RUN_ID"]) % 1000000)+ (100 if a.phase == "A" else 200)
+    client_id=reader_client_id(os.environ["GITHUB_RUN_ID"],os.environ.get("GITHUB_RUN_ATTEMPT","1"),a.phase)
     ib=IB()
     results={}
+    out=Path(a.output)
+    out.parent.mkdir(parents=True,exist_ok=True)
     try:
         ib.connect(a.host,a.port,clientId=client_id,readonly=True,timeout=20)
         if not ib.isConnected():
             raise RuntimeError("remote_broker_api_not_connected")
         results=account_receipt(ib,expected,run_id=a.gateway_run_id,
                                 phase=a.phase,client_id=client_id,specs=specs,attestor=attestor)
+        # Retain source-backed initial read evidence if the socket disconnects
+        # during the hold. An interrupted hold is still a FAILED session.
+        out.write_text(json.dumps(results,sort_keys=True,indent=2)+"\n")
         if a.hold_seconds:
-            ib.sleep(a.hold_seconds)
+            try:
+                ib.sleep(a.hold_seconds)
+            except Exception as exc:
+                results["hold_interrupted_class"]=type(exc).__name__
+                results["api_disconnected_utc"]=datetime.now(timezone.utc).isoformat()
+                out.write_text(json.dumps(results,sort_keys=True,indent=2)+"\n")
+                print("MMIBKR_SPLIT_POOL_HOLD_INTERRUPTED=1")
+                raise
             results["post_hold"]=account_receipt(
                 ib,expected,run_id=a.gateway_run_id,phase="B_AFTER_A" if a.phase == "B" else a.phase,
                 client_id=client_id,specs=specs,attestor=attestor,
@@ -172,8 +198,6 @@ def main() -> int:
     finally:
         if ib.isConnected():ib.disconnect()
     results["api_disconnected_utc"]=datetime.now(timezone.utc).isoformat()
-    out=Path(a.output)
-    out.parent.mkdir(parents=True,exist_ok=True)
     out.write_text(json.dumps(results,sort_keys=True,indent=2)+"\n")
     print(f"MMIBKR_SPLIT_POOL_{a.phase}_REMOTE_ACCOUNT_READ={'PASS' if results.get('ok') else 'FAIL'}")
     print("MMIBKR_SPLIT_POOL_BROKER_MUTATIONS=0")
