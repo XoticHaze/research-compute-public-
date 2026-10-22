@@ -110,14 +110,27 @@ jobs:
           elif printf '%s\n' "$changed" | grep -Eq '^\+live_owner_approved_dispatch_request_20261019_[a-z0-9]{6}: true$'; then
             admission_only=false
             echo 'EXPLICIT_OPERATOR_LIVE_FIRE_MATCHED=1'
+          elif printf '%s\n' "$changed" | grep -Eq '^\+gateway_pool_5h_readonly_dispatch_request_20261022_[a-z0-9]{6}: true$'; then
+            mode=gateway_pool_5h
+            admission_only=true
+            echo 'EXPLICIT_OPERATOR_READONLY_CF_GATEWAY_POOL_REQUEST_MATCHED=1'
           elif printf '%s\n' "$changed" | grep -Eq '^\+supervised_5h_dispatch_request_[0-9]{8}_[a-z0-9]{6}: true$'; then
             mode=supervised_5h
+          fi
+          if [ "$mode" = gateway_pool_5h ]; then
+            active_owners="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/mmibkr-selected-runtime-live-owner-r1.yml/runs?per_page=100" \
+              --jq '[.workflow_runs[] | select(.event == "workflow_dispatch" and (.status == "in_progress" or .status == "queued" or .status == "waiting" or .status == "pending" or .status == "requested"))] | length')"
+            if [ "$active_owners" != 0 ]; then
+              echo 'READONLY_CF_GATEWAY_POOL_EXISTING_OWNER_BLOCK=1'
+              exit 1
+            fi
           fi
           gh api --method POST \
             "/repos/${GITHUB_REPOSITORY}/actions/workflows/mmibkr-selected-runtime-live-owner-r1.yml/dispatches" \
             -f ref=main \
             -f "inputs[admission_only]=$admission_only" \
             -f "inputs[warm_handoff_mode]=$mode" \
+            -f "inputs[pool_transport]=cloudflare_access_ssh" \
             -f "inputs[warm_predecessor_run]=$predecessor_run"
           echo "LIVE_OWNER_FIRE_DISPATCHED_ADMISSION_ONLY=$admission_only"
           echo "LIVE_OWNER_FIRE_DISPATCHED_MODE=$mode"
