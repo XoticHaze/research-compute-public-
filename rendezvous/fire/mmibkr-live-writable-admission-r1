@@ -85,3 +85,7 @@ live_successor_20261020_no_auto_second_login: true
 # One operator-attended, read-only Cloudflare Gateway pool request.
 # Trading bot and broker order mutation must remain disabled.
 gateway_pool_5h_readonly_dispatch_request_20261022_a4cf21: true
+
+# User present for a single attended read-only Gateway pool after authenticated successor failure.
+# No canonical bot, no writable gateway API, no parallel owner; Cloudflare SSH only.
+gateway_pool_5h_readonly_dispatch_request_20261022_c6f8a2: true
