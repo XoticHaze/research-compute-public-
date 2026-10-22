@@ -1,9 +1,39 @@
-# Shared NVIDIA inference — private Cloudflare smoke (staged)
+# Shared NVIDIA inference — private Cloudflare source deployed, binding pending
 
-**State: SOURCE STAGED ONLY. NO WORKER DEPLOYED, NO SECRET BINDING VERIFIED,
-NO NVIDIA INFERENCE CLAIM.** CommandCenter canonical provider registry:
+**State (2026-10-22 CDT): reviewed Worker source DEPLOYED on ordinary SlenderIQ Cloudflare account, live settings readback PASS. NVIDIA_API_KEY Secrets Store binding NOT attached, no authenticated NVIDIA inference yet.** CommandCenter canonical provider registry:
 `XoticHaze/CommandCenter/config/providers/nvidia_shared_inference.v1.json`;
 tracking: [CC #929](https://github.com/XoticHaze/CommandCenter/issues/929).
+
+## Live deployment evidence (2026-10-22 CDT)
+
+The operator saved the existing NVIDIA_API_KEY to the **ordinary SlenderIQ
+compute-account Secrets Store** and created a dedicated Worker named
+`cc-shared-nvidia-inference`. Neither action required a new NVIDIA key.
+
+The existing WaterBoys GitHub deployment identity was successfully reused
+without creating or altering a Cloudflare credential. GitHub Actions run
+[39757354625](https://github.com/XoticHaze/waterboys-fantasy-compute/actions/runs/39757354625)
+checked out this reviewed source at pinned commit
+`1cd9cdf3839bca98c74d3b75d153bddc1a05543a`, passed offline tests and
+private-manifest checks, deployed with Wrangler, and read back Cloudflare
+settings. Live output: `NVIDIA_SOURCE_DEPLOY=PASS`,
+`NVIDIA_WORKER_SETTINGS_READBACK=PASS`, `NVIDIA_SECRET_BOUND=false`.
+No model request occurred and the test-only diagnostic remains disabled
+in the deployed configuration; both public workers.dev and preview URLs
+are set to false in the deployed manifest.
+
+**Remaining operator action, no code paste or key reentry:** select
+`cc-shared-nvidia-inference` in **SlenderIQ** Cloudflare Workers & Pages,
+then **Settings → Bindings → Add → Secrets Store**. Set Variable name
+`NVIDIA_API_KEY`, select existing secret `NVIDIA_API_KEY`, and choose
+**Deploy**. Do not use plain Worker Variables and Secrets, and do not attach
+anything in the **Shared Compute Neutral Authorization** account.
+Only the already-provisioned account-level secret is selected; no key value is
+entered. The existing GitHub Cloudflare credential receives HTTP 403 for
+Secrets Store metadata and lacks proven Secrets Store Edit permission.
+Do not broaden it or copy key contents into CI to bypass this permission
+boundary. After the binding, verify it by readback and safely admit a
+private service-binding-only synthetic diagnostic before any consumer use.
 
 ## Operator-established facts (2026-10-19 CDT)
 
