@@ -148,20 +148,38 @@ def main() -> int:
     legacy = summarize_token(os.getenv("CLOUDFLARE_LEGACY_TOKEN", ""), account, "LEGACY")
     summarize_token(os.getenv("CLOUDFLARE_R2_TOKEN", ""), account, "R2")
     if legacy:
-        same_account_zone = any(
-            isinstance(x, dict) and x.get("name") == DOMAIN
+        visible = [
+            x for x in (legacy.zones or [])
+            if isinstance(x, dict)
+            and x.get("name") == DOMAIN
             and x.get("status") == "active"
             and isinstance(x.get("account"), dict)
-            and x["account"].get("id") == account
-            for x in (legacy.zones or [])
-        )
-        print("MMIBKR_CF_GATEWAY_DOMAIN_ACTIVE_IN_EXISTING_ACCOUNT="
-              + ("YES" if same_account_zone else "NO_OR_UNVERIFIED"))
-        status = protect_gateway_deny_default(
-            legacy,
-            approved=os.getenv("MMIBKR_CF_ACCESS_CREATE_DENY_DEFAULT") == "1",
-        )
-        print("MMIBKR_CF_GATEWAY_ACCESS_RECONCILE=" + status)
+            and isinstance(x["account"].get("id"), str)
+            and len(x["account"]["id"]) == 32
+            and all(c in "0123456789abcdefABCDEF" for c in x["account"]["id"])
+        ]
+        print("MMIBKR_CF_ACTIVE_EXACT_GATEWAY_ZONE_VISIBLE="
+              + ("YES" if len(visible) == 1 else "NO_OR_AMBIGUOUS"))
+        if len(visible) != 1:
+            print("MMIBKR_CF_GATEWAY_ACCESS_RECONCILE=BLOCKED_ACTIVE_ZONE_NOT_VISIBLE_TO_LEGACY_TOKEN")
+        else:
+            actual_account = visible[0]["account"]["id"]
+            print("MMIBKR_CF_GATEWAY_ZONE_ACCOUNT_MATCHES_WORKERS_CONFIG="
+                  + ("YES" if actual_account == account else "NO"))
+            # Discover the correct account exclusively through Cloudflare's
+            # own scoped GET /zones response; never embed or log account IDs.
+            exact = ScopedAPI(legacy._token, actual_account)
+            ok, code, apps = exact.call(
+                "GET", f"/accounts/{actual_account}/access/apps?per_page=100"
+            )
+            print("MMIBKR_CF_EXACT_ACCOUNT_ACCESS_APPS_READ="
+                  + ("PASS" if ok else "HTTP_" + str(code)))
+            exact.apps = apps if ok and isinstance(apps, list) else None
+            status = protect_gateway_deny_default(
+                exact,
+                approved=os.getenv("MMIBKR_CF_ACCESS_CREATE_DENY_DEFAULT") == "1",
+            )
+            print("MMIBKR_CF_GATEWAY_ACCESS_RECONCILE=" + status)
     else:
         print("MMIBKR_CF_GATEWAY_ACCESS_RECONCILE=BLOCKED_LEGACY_TOKEN_MISSING")
     print("MMIBKR_CF_SERVICE_TOKEN_CREATE_ATTEMPTED=NO")
