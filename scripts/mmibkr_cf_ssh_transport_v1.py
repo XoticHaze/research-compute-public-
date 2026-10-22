@@ -81,7 +81,7 @@ def setup_gateway(state_dir: Path, *, login_user: str = "runner") -> Path:
         f"PidFile {state_dir / 'sshd.pid'}\n"
         "PubkeyAuthentication yes\nPasswordAuthentication no\n"
         "KbdInteractiveAuthentication no\nPermitRootLogin no\n"
-        "AllowUsers runner\nUsePAM no\nPermitUserEnvironment no\n"
+        "AllowUsers runner\nUsePAM yes\nAuthenticationMethods publickey\nPermitUserEnvironment no\n"
         "AllowTcpForwarding local\nPermitOpen 127.0.0.1:4001\n"
         "PermitTTY no\nAllowAgentForwarding no\n"
         "X11Forwarding no\nGatewayPorts no\n"
