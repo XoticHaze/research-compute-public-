@@ -13,6 +13,7 @@ from scripts.mmibkr_gh_gateway_readonly_client_v1 import (
     account_receipt,
     contract_scope,
     gateway_name,
+    reader_client_id,
 )
 from scripts.mmibkr_gateway_account_attestor_v1 import (
     SCHEMA, HOST, AccountOracle, attest_account, matched, read_expected,
@@ -53,6 +54,18 @@ class GatewayPoolContractTests(unittest.TestCase):
         for bad in ("", "abc", "1", "1.2.3", "00000abc", "2"*25):
             with self.assertRaises(ValueError):
                 gateway_name(bad)
+
+    def test_github_reader_client_identity_is_attempt_and_phase_scoped(self):
+        first_a=reader_client_id("39864112329","1","A")
+        retry_a=reader_client_id("39864112329","2","A")
+        first_b=reader_client_id("39864112329","1","B")
+        self.assertEqual(len({first_a,retry_a,first_b}),3)
+        self.assertLess(max(first_a,retry_a,first_b),2**31)
+        for attempt in ("0","100","-1","abc"):
+            with self.assertRaises(ValueError):
+                reader_client_id("39864112329",attempt,"A")
+        with self.assertRaises(ValueError):
+            reader_client_id("39864112329","1","WRITE")
 
     def test_existing_account_read_no_mutation_surface(self):
         r=account_receipt(ReadOnlyFakeBroker(),"U-EXPECTED",
@@ -194,6 +207,12 @@ class GatewayPoolContractTests(unittest.TestCase):
         self.assertIn("REAL_API_CLIENT_OVERLAP_AND_A_TO_B_HANDOFF=PASS",wf)
         self.assertIn("MMIBKR_GATEWAY_POOL", wf.upper())
         self.assertIn("MMIBKR_CF_ACCOUNT_ATTESTOR_FORWARD=1",wf)
+        self.assertIn("MMIBKR_EXACT_ACTIVE_READONLY_OWNER_DISPATCHED=",wf)
+        self.assertIn("READER_EXACT_NEW_REQUEST_INVALID=1",wf)
+        fire=wf.split("  dispatch_readonly_reader:",1)[1].split("  contract:",1)[0]
+        script=fire.split("        run: |",1)[1]
+        source="\n".join(line[10:] if line.startswith("          ") else line for line in script.splitlines())
+        subprocess.run(["bash","-n"],input=source,text=True,check=True)
         self.assertIn('test -n "$ACCOUNT" && test -n "$TS_ID"',wf)
         self.assertNotIn('test -n "$ACCOUNT"\\n          if',wf)
         for line in wf.splitlines():
