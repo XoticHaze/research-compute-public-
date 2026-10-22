@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Fail-closed Cloudflare Access SSH transport for a broker-read-only Gateway.
 
-Cloudflare carries SSH, and SSH carries a *single* local TCP forward.
+Cloudflare carries SSH with two EXACT loopback-only local forwards: broker API\nand a run-bound account-match oracle (never account/password disclosure).
 No IBKR credentials, strategy changes, orders, or live-mutation permissions.
 Never print private keys or Access service tokens.
 """
@@ -82,7 +82,7 @@ def setup_gateway(state_dir: Path, *, login_user: str = "runner") -> Path:
         "PubkeyAuthentication yes\nPasswordAuthentication no\n"
         "KbdInteractiveAuthentication no\nPermitRootLogin no\n"
         "AllowUsers runner\nUsePAM yes\nAuthenticationMethods publickey\nPermitUserEnvironment no\n"
-        "AllowTcpForwarding local\nPermitOpen 127.0.0.1:4001\n"
+        "AllowTcpForwarding local\nPermitOpen 127.0.0.1:4001 127.0.0.1:4002\n"
         "PermitTTY no\nAllowAgentForwarding no\n"
         "X11Forwarding no\nGatewayPorts no\n"
         "ForceCommand /bin/false\n"
