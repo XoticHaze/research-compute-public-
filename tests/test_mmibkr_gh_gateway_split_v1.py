@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import tempfile
 import socket
 import threading
+import subprocess
 import unittest
 
 from scripts.mmibkr_gh_gateway_readonly_client_v1 import (
@@ -171,6 +172,16 @@ class GatewayPoolContractTests(unittest.TestCase):
         self.assertIn("MMIBKR_READONLY_AB_DISPATCHED_EXACT_OWNER=1",owner)
         self.assertIn("actions: write",owner)
         self.assertIn("mmibkr_gateway_account_attestor_v1",owner)
+        # CI must parse the exact holding shell, including heredoc and
+        # branch-only reader dispatch, before we ask for attended IB Key.
+        hold=owner.split("      - name: Hold one authenticated read-only Gateway for independent GitHub compute jobs",1)[1]
+        hold=hold.split("      - name: Confirm no-order admission did not authorize live bot startup",1)[0]
+        script=hold.split("        run: |",1)[1]
+        source="\\n".join(line[10:] if line.startswith("          ") else line
+                           for line in script.splitlines())
+        subprocess.run(["bash","-n"],input=source,text=True,check=True)
+        assert 'inputs[network_transport]=cloudflare_access_ssh' in source
+        assert 'inputs[gateway_run_id]=$GITHUB_RUN_ID' in source
         self.assertIn("if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'gateway_pool_5h' }}",owner)
         self.assertIn('relogin_after_twofa_timeout=no',owner)
         self.assertIn("tag:mmibkr-gateway",owner)
