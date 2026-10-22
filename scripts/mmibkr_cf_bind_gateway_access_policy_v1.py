@@ -19,9 +19,14 @@ POLICY_NAME = "mmibkr-github-service-only"
 
 
 def is_hex_id(value: object) -> bool:
-    return isinstance(value, str) and len(value) == 32 and all(
-        c in "0123456789abcdefABCDEF" for c in value
-    )
+    """Accept Cloudflare's 32-hex or canonical UUID resource identifiers."""
+    if not isinstance(value, str):
+        return False
+    compact = value.replace("-", "")
+    if not (len(compact) == 32 and all(c in "0123456789abcdefABCDEF" for c in compact)):
+        return False
+    return len(value) == 32 or (len(value) == 36 and
+                                [i for i, c in enumerate(value) if c == "-"] == [8, 13, 18, 23])
 
 
 def approved_policy(policy: object, token_id: str) -> bool:
