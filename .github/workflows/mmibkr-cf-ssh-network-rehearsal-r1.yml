@@ -59,9 +59,11 @@ jobs:
       - name: Assert all Cloudflare/SSH credentials configured (never print them)
         run: |
           set -euo pipefail
+          missing=0
           for v in CF_HOST CF_TUNNEL CF_HOST_KEY CF_READER_PUBLIC CF_READER_PRIVATE CF_HOST_PUBLIC CF_ACCESS_ID CF_ACCESS_SECRET; do
-            test -n "${!v}" || { echo "NETWORK_REHEARSAL_MISSING_$v=1"; exit 1; }
+            test -n "${!v}" || { echo "NETWORK_REHEARSAL_MISSING_$v=1"; missing=1; }
           done
+          test "$missing" -eq 0 || exit 1
           python - <<'PY'
           import os
           from scripts.mmibkr_cf_ssh_transport_v1 import hostname,ed25519_pubkey
