@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     env:
-      CF_HOST: ${{ vars.MMIBKR_CF_SSH_HOSTNAME }}
+      CF_HOST: ${{ vars.MMIBKR_CF_SSH_HOSTNAME || 'gateway-ops.lifelatelycounseling.com' }}
       CF_TUNNEL: ${{ secrets.MMIBKR_CF_GATEWAY_TUNNEL_TOKEN }}
       CF_HOST_KEY: ${{ secrets.MMIBKR_CF_GATEWAY_SSH_HOST_KEY_B64 }}
       CF_READER_PUBLIC: ${{ secrets.MMIBKR_CF_READER_SSH_PUBKEY }}
@@ -78,7 +78,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 9
     env:
-      MMIBKR_CF_SSH_HOSTNAME: ${{ vars.MMIBKR_CF_SSH_HOSTNAME }}
+      MMIBKR_CF_SSH_HOSTNAME: ${{ vars.MMIBKR_CF_SSH_HOSTNAME || 'gateway-ops.lifelatelycounseling.com' }}
       MMIBKR_CF_GATEWAY_TUNNEL_TOKEN: ${{ secrets.MMIBKR_CF_GATEWAY_TUNNEL_TOKEN }}
       MMIBKR_CF_GATEWAY_SSH_HOST_KEY_B64: ${{ secrets.MMIBKR_CF_GATEWAY_SSH_HOST_KEY_B64 }}
       MMIBKR_CF_READER_SSH_PUBKEY: ${{ secrets.MMIBKR_CF_READER_SSH_PUBKEY }}
@@ -123,7 +123,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     env:
-      MMIBKR_CF_SSH_HOSTNAME: ${{ vars.MMIBKR_CF_SSH_HOSTNAME }}
+      MMIBKR_CF_SSH_HOSTNAME: ${{ vars.MMIBKR_CF_SSH_HOSTNAME || 'gateway-ops.lifelatelycounseling.com' }}
       MMIBKR_CF_READER_SSH_PRIVKEY_B64: ${{ secrets.MMIBKR_CF_READER_SSH_PRIVKEY_B64 }}
       MMIBKR_CF_GATEWAY_SSH_HOST_PUBKEY: ${{ secrets.MMIBKR_CF_GATEWAY_SSH_HOST_PUBKEY }}
       TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.MMIBKR_CF_ACCESS_SERVICE_TOKEN_ID }}
@@ -154,7 +154,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 7
     env:
-      MMIBKR_CF_SSH_HOSTNAME: ${{ vars.MMIBKR_CF_SSH_HOSTNAME }}
+      MMIBKR_CF_SSH_HOSTNAME: ${{ vars.MMIBKR_CF_SSH_HOSTNAME || 'gateway-ops.lifelatelycounseling.com' }}
       MMIBKR_CF_READER_SSH_PRIVKEY_B64: ${{ secrets.MMIBKR_CF_READER_SSH_PRIVKEY_B64 }}
       MMIBKR_CF_GATEWAY_SSH_HOST_PUBKEY: ${{ secrets.MMIBKR_CF_GATEWAY_SSH_HOST_PUBKEY }}
       TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.MMIBKR_CF_ACCESS_SERVICE_TOKEN_ID }}
