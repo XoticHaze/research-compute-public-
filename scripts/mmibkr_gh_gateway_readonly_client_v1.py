@@ -14,6 +14,8 @@ from pathlib import Path
 from time import sleep, time
 from datetime import datetime, timezone
 
+from scripts.mmibkr_gateway_account_attestor_v1 import attest_account
+
 
 def gateway_name(run_id: str) -> str:
     if not run_id.isascii() or not run_id.isdigit() or not 8 <= len(run_id) <= 24:
@@ -71,9 +73,19 @@ def verify_contracts(ib, specs):
 
 
 def account_receipt(ib, expected: str, *, run_id: str, phase: str, client_id: int,
-                    specs: list[dict]) -> dict:
+                    specs: list[dict], attestor=None) -> dict:
     accounts = [str(a) for a in ib.managedAccounts()]
-    if not expected or expected.startswith("DU") or expected not in accounts:
+    verified_by_owner = False
+    if attestor is not None:
+        # Owner-validated identity over the existing pinned SSH connection.
+        # Multiple production accounts are ambiguous; never guess one.
+        live = [a for a in accounts if a and not a.upper().startswith("DU")]
+        if len(live) != 1:
+            raise RuntimeError("gateway_pool_ambiguous_live_account_identity")
+        expected = live[0]
+        attestor(expected, run_id)
+        verified_by_owner = True
+    if not expected or expected.upper().startswith("DU") or expected not in accounts:
         raise RuntimeError("gateway_pool_expected_live_account_mismatch")
     positions = list(ib.reqPositions())
     orders = list(ib.reqAllOpenOrders())
@@ -83,6 +95,8 @@ def account_receipt(ib, expected: str, *, run_id: str, phase: str, client_id: in
     execacc = [str(getattr(getattr(x,"execution",None),"acctNumber","")) for x in executions]
     if not all(posacc+ordacc+execacc):
         raise RuntimeError("gateway_pool_ambiguous_order_position_or_execution_account")
+    if verified_by_owner and any(a != expected for a in posacc+ordacc+execacc):
+        raise RuntimeError("gateway_pool_cross_account_records_rejected")
     contracts=verify_contracts(ib,specs)
     return {
         "schema":"mmibkr.github_split_gateway_api_readonly.v1",
@@ -92,6 +106,7 @@ def account_receipt(ib, expected: str, *, run_id: str, phase: str, client_id: in
         "client_id":client_id,
         "ok":all(c["exact_con_id_matched"] for c in contracts),
         "account_matched":True,
+        "owner_attested_account_match":verified_by_owner,
         "managed_account_count":len(accounts),
         "account_positions":posacc.count(expected),
         "account_orders":ordacc.count(expected),
@@ -125,9 +140,16 @@ def main() -> int:
             raise SystemExit("cloudflare_ssh_exact_local_forward_required")
         if os.getenv("MMIBKR_CF_SSH_FORWARD_ATTESTED") != "1":
             raise SystemExit("cloudflare_ssh_pinned_forward_required")
-    expected=os.environ.get("MMIBKR_PRODUCTION_LIVE_ACCOUNT","")
-    if not expected or expected.upper().startswith("DU"):
-        raise SystemExit("exact_live_account_secret_missing_or_paper")
+    attestor = None
+    if a.transport == "cloudflare_access_ssh":
+        if os.getenv("MMIBKR_CF_ACCOUNT_ATTESTOR_FORWARD") != "1":
+            raise SystemExit("owner_account_attestor_forward_not_verified")
+        expected = ""
+        attestor = attest_account
+    else:
+        expected = os.environ.get("MMIBKR_PRODUCTION_LIVE_ACCOUNT","")
+        if not expected or expected.upper().startswith("DU"):
+            raise SystemExit("exact_live_account_secret_missing_or_paper")
     from ib_insync import IB
     specs=[]
     if a.contracts_file:
@@ -140,12 +162,12 @@ def main() -> int:
         if not ib.isConnected():
             raise RuntimeError("remote_broker_api_not_connected")
         results=account_receipt(ib,expected,run_id=a.gateway_run_id,
-                                phase=a.phase,client_id=client_id,specs=specs)
+                                phase=a.phase,client_id=client_id,specs=specs,attestor=attestor)
         if a.hold_seconds:
             ib.sleep(a.hold_seconds)
             results["post_hold"]=account_receipt(
                 ib,expected,run_id=a.gateway_run_id,phase="B_AFTER_A" if a.phase == "B" else a.phase,
-                client_id=client_id,specs=specs,
+                client_id=client_id,specs=specs,attestor=attestor,
             )
     finally:
         if ib.isConnected():ib.disconnect()
