@@ -82,6 +82,65 @@ class ExistingCloudflareTokenProbeTests(unittest.TestCase):
         self.assertEqual(protect_gateway_deny_default(api,approved=True),"POST_REJECTED_HTTP_403_NO_DETAIL")
         self.assertEqual(len(calls),1)
 
+    def test_shared_compute_account_fail_closed_without_secrets(self):
+        import os
+        from scripts.mmibkr_cf_access_existing_token_probe_v1 import provision_exact_shared_compute
+        with patch.dict(os.environ, {"CLOUDFLARE_GATEWAY_ACCESS_TOKEN": "",
+                                    "CLOUDFLARE_GATEWAY_ACCOUNT_ID": ""}, clear=True):
+            self.assertEqual(provision_exact_shared_compute(), 45)
+
+    def test_shared_compute_exact_zone_readback_and_denied_app(self):
+        import os
+        from scripts.mmibkr_cf_access_existing_token_probe_v1 import provision_exact_shared_compute
+        account="b"*32
+        calls=[]
+        def api_call(api,method,path,data=None):
+            calls.append((method,path,data))
+            if path.startswith("/zones?"):
+                return True,200,[{"name":DOMAIN,"status":"active","account":{"id":account}}]
+            if method=="GET" and "/access/apps" in path:
+                if any(m=="POST" for m,_,_ in calls):
+                    return True,200,[{"name":APP_NAME,"domain":HOST,"type":"self_hosted","policies":[]}]
+                return True,200,[]
+            if method=="POST" and "/access/apps" in path:
+                return True,201,{"domain":HOST}
+            raise AssertionError("unexpected request")
+        with patch.dict(os.environ, {"CLOUDFLARE_GATEWAY_ACCESS_TOKEN":"FAKE_TEST_ONLY",
+                                    "CLOUDFLARE_GATEWAY_ACCOUNT_ID":account}, clear=True), \
+             patch.object(ScopedAPI, "call", api_call):
+            self.assertEqual(provision_exact_shared_compute(),0)
+        self.assertEqual(len([c for c in calls if c[0]=="POST"]),1)
+        self.assertEqual([c for c in calls if c[0]=="POST"][0][2]["policies"],[])
+
+    def test_shared_compute_does_not_create_if_wrong_account_zone(self):
+        import os
+        from scripts.mmibkr_cf_access_existing_token_probe_v1 import provision_exact_shared_compute
+        calls=[]
+        def api_call(api,method,path,data=None):
+            calls.append(method)
+            return True,200,[{"name":DOMAIN,"status":"active","account":{"id":"c"*32}}]
+        with patch.dict(os.environ, {"CLOUDFLARE_GATEWAY_ACCESS_TOKEN":"FAKE_TEST_ONLY",
+                                    "CLOUDFLARE_GATEWAY_ACCOUNT_ID":"b"*32},clear=True), \
+             patch.object(ScopedAPI,"call",api_call):
+            self.assertEqual(provision_exact_shared_compute(),47)
+        self.assertEqual(calls,["GET"])
+
+    def test_shared_compute_requires_readback_no_policy(self):
+        import os
+        from scripts.mmibkr_cf_access_existing_token_probe_v1 import provision_exact_shared_compute
+        account="b"*32
+        def api_call(api,method,path,data=None):
+            if path.startswith("/zones?"):
+                return True,200,[{"name":DOMAIN,"status":"active","account":{"id":account}}]
+            if method=="GET":
+                return True,200,[{"name":APP_NAME,"domain":HOST,"type":"self_hosted",
+                                 "policies":[{"decision":"allow"}]}]
+            raise AssertionError("unexpected mutation")
+        with patch.dict(os.environ, {"CLOUDFLARE_GATEWAY_ACCESS_TOKEN":"FAKE_TEST_ONLY",
+                                    "CLOUDFLARE_GATEWAY_ACCOUNT_ID":account},clear=True), \
+             patch.object(ScopedAPI,"call",api_call):
+            self.assertEqual(provision_exact_shared_compute(),52)
+
     def test_service_token_create_never_called(self):
         api,calls=fake_api()
         protect_gateway_deny_default(api,approved=True)
