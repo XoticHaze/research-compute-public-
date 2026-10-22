@@ -60,7 +60,7 @@
   "decision_at": "2026-09-10T07:25:00+00:00",
   "forward": {
     "first_close": "2026-09-10",
-    "latest_close": "2026-10-20",
+    "latest_close": "2026-10-21",
     "observations": [
       {
         "cost_detail": {
@@ -363,35 +363,68 @@
         "p249_plus_p266_gross": 0.005671308379276734,
         "p249_plus_p266_net": 0.005671308379276734,
         "satellite_increment_net": 0.0028913670516656892
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-10-21",
+        "holding_month": "2026-10",
+        "p249_core_gross": 0.0,
+        "p249_core_net": 0.0,
+        "p249_plus_p266_gross": 0.0,
+        "p249_plus_p266_net": 0.0,
+        "satellite_increment_net": 0.0
       }
     ],
     "p249_core_net": {
-      "annualized_vol": 0.18673702364577224,
+      "annualized_vol": 0.1835165071818378,
       "cumulative_return": -0.0330937675214924,
-      "days": 29,
+      "days": 30,
       "max_drawdown": -0.07718417124554688,
-      "sharpe_rf0": -1.474688246272949
+      "sharpe_rf0": -1.4505485176155613
     },
     "p249_plus_p266_net": {
-      "annualized_vol": 0.18684455327008992,
+      "annualized_vol": 0.1836151504386718,
       "cumulative_return": -0.02886380030487168,
-      "days": 29,
+      "days": 30,
       "max_drawdown": -0.07282097653736341,
-      "sharpe_rf0": -1.271019161354611
+      "sharpe_rf0": -1.2502612480825865
     },
     "satellite_increment_cumulative": 0.004329668471021009
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-10-21T07:51:49.105493+00:00",
+  "observed_at": "2026-10-22T00:48:10.676113+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_health": {
-    "all_symbols_share_latest_date": true,
+    "all_symbols_share_latest_date": false,
     "common_session_lags_source_max": false,
-    "completed_session_request_date": "2026-10-20",
+    "completed_session_request_date": "2026-10-21",
     "in_progress_session_excluded": true,
-    "lagging_symbols_vs_source_max": [],
+    "lagging_symbols_vs_source_max": [
+      "AVDV",
+      "AVUV",
+      "DBC",
+      "GLD",
+      "IGV",
+      "IHI",
+      "ITA",
+      "IYT",
+      "KRE",
+      "QQQ",
+      "SOXX",
+      "SPY",
+      "TLT",
+      "XAR",
+      "XBI",
+      "XHB",
+      "XME",
+      "XOP",
+      "XPH",
+      "XRT",
+      "XSD",
+      "XSW"
+    ],
     "latest_by_symbol": {
       "AVDV": "2026-10-20",
       "AVUV": "2026-10-20",
@@ -415,11 +448,11 @@
       "XRT": "2026-10-20",
       "XSD": "2026-10-20",
       "XSW": "2026-10-20",
-      "XTN": "2026-10-20"
+      "XTN": "2026-10-21"
     },
-    "latest_scored_common_session": "2026-10-20",
+    "latest_scored_common_session": "2026-10-21",
     "provider": "yfinance_adjusted_close",
-    "source_max_date": "2026-10-20"
+    "source_max_date": "2026-10-21"
   },
   "source_pins": {
     "P248_source_commit": "20490f115d901aac3b586c33072c1157ad4d10a6",
