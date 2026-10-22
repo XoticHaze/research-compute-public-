@@ -45,15 +45,15 @@ class ExistingCloudflareTokenProbeTests(unittest.TestCase):
         self.assertEqual(protect_gateway_deny_default(api,approved=False),"NOT_REQUESTED")
         self.assertEqual(calls,[])
 
-    def test_wrong_account_zone_blocks_write(self):
+    def test_existing_token_attempts_creation_without_unrelated_zone_permission(self):
         api,calls=fake_api(zone=False)
-        self.assertEqual(protect_gateway_deny_default(api,approved=True),"BLOCKED_ACTIVE_ZONE_ACCOUNT_IDENTITY")
-        self.assertEqual(calls,[])
+        self.assertEqual(protect_gateway_deny_default(api,approved=True),"CREATED_DENY_DEFAULT_NO_SERVICE_TOKEN")
+        self.assertEqual(len(calls),1)
 
-    def test_existing_access_authority_absent_blocks_write(self):
+    def test_existing_token_attempts_creation_without_incumbent_read_authority(self):
         api,calls=fake_api(incumbent=False)
-        self.assertIn("UNPROVEN",protect_gateway_deny_default(api,approved=True))
-        self.assertEqual(calls,[])
+        self.assertEqual(protect_gateway_deny_default(api,approved=True),"CREATED_DENY_DEFAULT_NO_SERVICE_TOKEN")
+        self.assertEqual(len(calls),1)
 
     def test_matching_existing_gateway_app_preserved(self):
         api,calls=fake_api(collision={"name":APP_NAME,"domain":HOST,"policies":[{"decision":"service_auth"}]})
@@ -76,6 +76,11 @@ class ExistingCloudflareTokenProbeTests(unittest.TestCase):
         self.assertIn("HTTP_403",text.getvalue())
         self.assertNotIn("VERY_SECRET_TOKEN",text.getvalue())
         self.assertNotIn("a"*32,text.getvalue())
+
+    def test_access_write_denial_reported_exactly(self):
+        api,calls=fake_api(post=(False,403,None))
+        self.assertEqual(protect_gateway_deny_default(api,approved=True),"POST_REJECTED_HTTP_403")
+        self.assertEqual(len(calls),1)
 
     def test_service_token_create_never_called(self):
         api,calls=fake_api()
