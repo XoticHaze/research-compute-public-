@@ -81,3 +81,7 @@ live_successor_20261020_automatic_repeat: false
 live_successor_approved_dispatch_request_20261020_c94a71: 39492758670
 live_successor_20261020_from94_checkpoint: 12296953775
 live_successor_20261020_no_auto_second_login: true
+
+# One operator-attended, read-only Cloudflare Gateway pool request.
+# Trading bot and broker order mutation must remain disabled.
+gateway_pool_5h_readonly_dispatch_request_20261022_a4cf21: true
