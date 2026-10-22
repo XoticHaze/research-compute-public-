@@ -171,14 +171,26 @@ def main() -> int:
     client_id=reader_client_id(os.environ["GITHUB_RUN_ID"],os.environ.get("GITHUB_RUN_ATTEMPT","1"),a.phase)
     ib=IB()
     results={}
+    out=Path(a.output)
+    out.parent.mkdir(parents=True,exist_ok=True)
     try:
         ib.connect(a.host,a.port,clientId=client_id,readonly=True,timeout=20)
         if not ib.isConnected():
             raise RuntimeError("remote_broker_api_not_connected")
         results=account_receipt(ib,expected,run_id=a.gateway_run_id,
                                 phase=a.phase,client_id=client_id,specs=specs,attestor=attestor)
+        # Retain source-backed initial read evidence if the socket disconnects
+        # during the hold. An interrupted hold is still a FAILED session.
+        out.write_text(json.dumps(results,sort_keys=True,indent=2)+"\n")
         if a.hold_seconds:
-            ib.sleep(a.hold_seconds)
+            try:
+                ib.sleep(a.hold_seconds)
+            except Exception as exc:
+                results["hold_interrupted_class"]=type(exc).__name__
+                results["api_disconnected_utc"]=datetime.now(timezone.utc).isoformat()
+                out.write_text(json.dumps(results,sort_keys=True,indent=2)+"\n")
+                print("MMIBKR_SPLIT_POOL_HOLD_INTERRUPTED=1")
+                raise
             results["post_hold"]=account_receipt(
                 ib,expected,run_id=a.gateway_run_id,phase="B_AFTER_A" if a.phase == "B" else a.phase,
                 client_id=client_id,specs=specs,attestor=attestor,
@@ -186,8 +198,6 @@ def main() -> int:
     finally:
         if ib.isConnected():ib.disconnect()
     results["api_disconnected_utc"]=datetime.now(timezone.utc).isoformat()
-    out=Path(a.output)
-    out.parent.mkdir(parents=True,exist_ok=True)
     out.write_text(json.dumps(results,sort_keys=True,indent=2)+"\n")
     print(f"MMIBKR_SPLIT_POOL_{a.phase}_REMOTE_ACCOUNT_READ={'PASS' if results.get('ok') else 'FAIL'}")
     print("MMIBKR_SPLIT_POOL_BROKER_MUTATIONS=0")
