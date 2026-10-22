@@ -81,7 +81,16 @@ jobs:
           mode=legacy
           admission_only=true
           predecessor_run=''
-          changed="$(git show --format= --unified=0 "$GITHUB_SHA" -- rendezvous/fire/mmibkr-live-writable-admission-r1)"
+          # GitHub Actions checkout is shallow: git show can wrongly treat this
+          # commit as a root and mark every historical fire marker as newly added.
+          # Use the authoritative GitHub commit PATCH; fail closed if unavailable.
+          changed="$(gh api "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" \
+            --jq '[.files[] | select(.filename == "rendezvous/fire/mmibkr-live-writable-admission-r1") | (.patch // "")] | join("\n")')"
+          marker_count="$(printf '%s\n' "$changed" | grep -Ec '^\+(live_successor_approved_dispatch_request|live_owner_approved_dispatch_request|supervised_5h_dispatch_request|gateway_pool_5h_readonly_dispatch_request)' || true)"
+          if [ "$marker_count" != 1 ]; then
+            echo "LIVE_OWNER_EXACT_NEW_MARKER_COUNT_INVALID=$marker_count"
+            exit 64
+          fi
           if printf '%s\n' "$changed" | grep -Eq '^\+live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39492758670$'; then
             admission_only=false
             mode=successor
