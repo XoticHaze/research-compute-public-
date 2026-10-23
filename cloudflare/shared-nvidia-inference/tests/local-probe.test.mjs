@@ -28,6 +28,28 @@ test("local caller rejects wrong ingress and body without invoking the service",
   assert.equal(calls, 0);
 });
 
+test("a zero-byte POST stream is admissible but no request data is forwarded", async () => {
+  const caller = createCaller();
+  const received = [];
+  const empty = new Request(url, {
+    method: "POST",
+    body: "",
+    headers: { "content-length": "0" },
+  });
+  const env = { NVIDIA_SERVICE: { async fetch(request) {
+    received.push({ url: request.url, method: request.method, body: request.body });
+    return new Response(JSON.stringify({ error: "diagnostic_not_admitted" }), { status: 503 });
+  } } };
+  const reply = await caller.fetch(empty, env);
+  assert.equal(reply.status, 502);
+  assert.equal((await reply.json()).classification, "unexpected_upstream_receipt");
+  assert.deepEqual(received, [{
+    url: "https://cc-shared-nvidia-inference.invalid/internal/diagnostics/nvidia",
+    method: "POST", body: null,
+  }]);
+  assert.equal((await caller.fetch(call(), env)).status, 409);
+});
+
 test("missing service binding fails closed and does not consume one-shot slot", async () => {
   const caller = createCaller();
   assert.equal((await caller.fetch(call(), {})).status, 503);
