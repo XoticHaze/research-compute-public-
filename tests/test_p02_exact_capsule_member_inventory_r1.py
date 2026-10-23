@@ -67,7 +67,7 @@ def _fixture(*, replace: tuple[str, str] | None = None,
         original, alternate = replace
         members[alternate] = members.pop(original)
     output = io.BytesIO()
-    with tarfile.open(fileobj=output, mode="w") as tf:
+    with tarfile.open(fileobj=output, mode="w:gz") as tf:
         for name, raw in members.items():
             emitted_name = duplicate_name if name == "timeframe_adapters.py" and duplicate_name else name
             info = tarfile.TarInfo(emitted_name)
