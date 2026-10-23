@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
 jobs:
   evaluate:
+    # Legacy confidential P01 EXIT hold inherited from merged #1953.
+    # Historical research PR source remains provenance, not dispatch authority.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
