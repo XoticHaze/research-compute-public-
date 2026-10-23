@@ -1,6 +1,6 @@
-# Shared NVIDIA inference — private Cloudflare source deployed, binding pending
+# Shared NVIDIA inference — private Cloudflare source and binding verified
 
-**State (2026-10-22 CDT): reviewed Worker source DEPLOYED on ordinary SlenderIQ Cloudflare account, live settings readback PASS. NVIDIA_API_KEY Secrets Store binding NOT attached, no authenticated NVIDIA inference yet.** CommandCenter canonical provider registry:
+**State (2026-10-23 CDT): reviewed Worker source DEPLOYED on ordinary SlenderIQ Cloudflare account, and NVIDIA_API_KEY Secrets Store binding VERIFIED by live Cloudflare settings readback. No authenticated NVIDIA catalog/completion has run yet. No consumer activation.** CommandCenter canonical provider registry:
 `XoticHaze/CommandCenter/config/providers/nvidia_shared_inference.v1.json`;
 tracking: [CC #929](https://github.com/XoticHaze/CommandCenter/issues/929).
 
@@ -22,18 +22,36 @@ No model request occurred and the test-only diagnostic remains disabled
 in the deployed configuration; both public workers.dev and preview URLs
 are set to false in the deployed manifest.
 
-**Remaining operator action, no code paste or key reentry:** select
-`cc-shared-nvidia-inference` in **SlenderIQ** Cloudflare Workers & Pages,
-then **Settings → Bindings → Add → Secrets Store**. Set Variable name
-`NVIDIA_API_KEY`, select existing secret `NVIDIA_API_KEY`, and choose
-**Deploy**. Do not use plain Worker Variables and Secrets, and do not attach
-anything in the **Shared Compute Neutral Authorization** account.
-Only the already-provisioned account-level secret is selected; no key value is
-entered. The existing GitHub Cloudflare credential receives HTTP 403 for
-Secrets Store metadata and lacks proven Secrets Store Edit permission.
-Do not broaden it or copy key contents into CI to bypass this permission
-boundary. After the binding, verify it by readback and safely admit a
-private service-binding-only synthetic diagnostic before any consumer use.
+**Secret binding completed, no operator actions outstanding:** Operator
+selected the actual Secrets Store resource binding in SlenderIQ and deployed
+it. Live read-only GitHub Actions run
+[39932980757](https://github.com/XoticHaze/waterboys-fantasy-compute/actions/runs/39932980757)
+returned Worker settings HTTP 200, binding type `secrets_store_secret`,
+variable name `NVIDIA_API_KEY`, matching `secret_name`, and valid store ID
+reference. It did **not** read the key value. The current deployment token
+is Workers-scoped but gets Secrets Store listing HTTP 403; that is an
+expected permission distinction and not a missing secret. No model call yet.
+
+The optional local-probe workflow ran its 13 offline tests and confirmed
+the production Worker diagnostic variable remains `0`, but the
+GitHub-hosted Wrangler local loopback listener failed to start (first run
+[39933296141](https://github.com/XoticHaze/waterboys-fantasy-compute/actions/runs/39933296141),
+second sanitized startup-class probe
+[39933568547](https://github.com/XoticHaze/waterboys-fantasy-compute/actions/runs/39933568547)).
+Those failures are caller-infrastructure only: **no production Worker
+mutation, secret-value read, public ingress or NVIDIA request**. Do not
+interpret the tests as provider success. Recover this specific caller launch
+issue or choose another private service-binding invocation before allowing
+the fixed authenticated catalog + one synthetic completion.
+
+**Critical redeploy safeguard:** the original unbound `wrangler.jsonc`
+must NOT be redeployed over the now bound production Worker; its default
+manifest omits `secrets_store_secrets`. The old one-shot WaterBoys deploy
+workflow has been retired from push triggers and fails closed if any
+`NVIDIA_API_KEY` binding already exists. Any approved future deployment
+must explicitly preserve the true account store ID/name/binding from live
+Cloudflare metadata and stay private. Never copy key values into CI.
+
 
 ## Operator-established facts (2026-10-19 CDT)
 
