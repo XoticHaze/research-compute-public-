@@ -342,6 +342,9 @@ jobs:
           PY
           python -m unittest -v tests.test_mmibkr_live_runtime_checkpoint_v1
 
+      - name: Verify writable push replay denial and read-only preservation (brokerless)
+        run: python -m unittest discover -s tests -p 'test_mmibkr_live_writable_push_replay_guard_v1.py' -v
+
   owner:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
