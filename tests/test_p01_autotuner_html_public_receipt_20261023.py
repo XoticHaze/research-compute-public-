@@ -103,6 +103,127 @@ class PublicReceiptAllowlistTests(unittest.TestCase):
         oversized.size = consumer.MAX_MEMBER_BYTES + 1
         self.assertFalse(consumer.safe_tar_members([oversized]))
 
+    def test_tar_header_count_and_total_expansion_are_bounded(self):
+        import tarfile
+        def directory(name):
+            item = tarfile.TarInfo(name)
+            item.type = tarfile.DIRTYPE
+            return item
+        def regular(name, size):
+            item = tarfile.TarInfo(name)
+            item.type = tarfile.REGTYPE
+            item.size = size
+            return item
+
+        self.assertFalse(consumer.safe_tar_members([
+            directory(f'dir{i}/') for i in range(consumer.MAX_TAR_MEMBERS + 1)
+        ]))
+        self.assertFalse(consumer.safe_tar_members([
+            regular(f'file{i}', consumer.MAX_MEMBER_BYTES) for i in range(3)
+        ]))
+        self.assertTrue(consumer.safe_tar_members([
+            regular('manifest.json', 4),
+            regular('input/data.json', consumer.MAX_MEMBER_BYTES),
+            directory('input/'),
+        ]))
+        self.assertFalse(consumer.safe_tar_members([directory('.')]))
+
+    def test_tar_iteration_rejects_before_parsing_next_unbounded_header(self):
+        import tarfile
+        def oversized_header_stream():
+            for i in range(consumer.MAX_TAR_MEMBERS + 1):
+                item = tarfile.TarInfo(f'dir{i}/')
+                item.type = tarfile.DIRTYPE
+                yield item
+            raise AssertionError('parsed beyond bounded tar header limit')
+
+        with self.assertRaisesRegex(RuntimeError, 'unsafe payload members'):
+            consumer.validated_tar_members(oversized_header_stream())
+
+        def expanded_stream():
+            for i in range(3):
+                item = tarfile.TarInfo(f'file{i}')
+                item.type = tarfile.REGTYPE
+                item.size = consumer.MAX_MEMBER_BYTES
+                yield item
+            raise AssertionError('parsed beyond aggregate tar expansion limit')
+
+        with self.assertRaisesRegex(RuntimeError, 'unsafe payload members'):
+            consumer.validated_tar_members(expanded_stream())
+
+    def test_real_encrypted_synthetic_tar_header_bomb_rejects_before_extract(self):
+        """Exercise authenticated envelope -> tar header guard -> constant public CLI."""
+        import base64
+        import hashlib
+        import io
+        import os
+        import tarfile
+        import tempfile
+        from pathlib import Path
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import x25519
+        from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+
+        stream = io.BytesIO()
+        with tarfile.open(fileobj=stream, mode='w:gz') as archive:
+            for i in range(consumer.MAX_TAR_MEMBERS + 1):
+                name = f'private_dir_{i}/'
+                if i == consumer.MAX_TAR_MEMBERS:
+                    name = SENTINEL + '/'
+                member = tarfile.TarInfo(name)
+                member.type = tarfile.DIRTYPE
+                archive.addfile(member)
+        plain = stream.getvalue()
+        self.assertLess(len(plain), consumer.MAX_PLAINTEXT_BYTES)
+
+        recipient = x25519.X25519PrivateKey.generate()
+        sender = x25519.X25519PrivateKey.generate()
+        recipient_raw = recipient.public_key().public_bytes(
+            serialization.Encoding.Raw, serialization.PublicFormat.Raw
+        )
+        sender_raw = sender.public_key().public_bytes(
+            serialization.Encoding.Raw, serialization.PublicFormat.Raw
+        )
+        key_id = 'sha256:' + hashlib.sha256(recipient_raw).hexdigest()
+        run_id = 'synthetic-tar-bomb-run'
+        associated = consumer.aad(run_id, key_id)
+        nonce = os.urandom(12)
+        ciphertext = ChaCha20Poly1305(
+            consumer.derive(sender.exchange(recipient.public_key()), associated)
+        ).encrypt(nonce, plain, associated)
+        encode = lambda raw: base64.b64encode(raw).decode('ascii')
+        envelope = {
+            'schema': consumer.SCHEMA, 'run_id': run_id,
+            'authority': consumer.AUTHORITY, 'harness': consumer.HARNESS,
+            'recipient_key_id': key_id, 'sender_public_b64': encode(sender_raw),
+            'nonce_b64': encode(nonce), 'ciphertext_b64': encode(ciphertext),
+            'plaintext_sha256': hashlib.sha256(plain).hexdigest(),
+        }
+
+        with tempfile.TemporaryDirectory(prefix='synthetic-p01-tar-') as tmp:
+            root = Path(tmp)
+            envelope_path = root / 'envelope.json'
+            private_path = root / 'recipient.key'
+            envelope_path.write_text(json.dumps(envelope), encoding='utf-8')
+            private_path.write_text(encode(recipient.private_bytes(
+                serialization.Encoding.Raw,
+                serialization.PrivateFormat.Raw,
+                serialization.NoEncryption(),
+            )), encoding='ascii')
+            out, err = StringIO(), StringIO()
+            argv = ['p01_autotuner_html_consumer_v1.py', '--envelope', str(envelope_path),
+                    '--private-key', str(private_path), '--run-id', run_id]
+            with (patch('sys.argv', argv),
+                  patch('tarfile.TarFile.extractall') as extract,
+                  redirect_stdout(out), redirect_stderr(err)):
+                code = consumer.main()
+            extract.assert_not_called()
+        self.assertEqual(code, 1)
+        self.assertEqual(err.getvalue(), '')
+        self.assertNotIn(SENTINEL, out.getvalue())
+        self.assertEqual(json.loads(out.getvalue().split('=', 1)[1]),
+                         {'schema': consumer.RECEIPT_SCHEMA, 'status': 'REJECTED'})
+
     def test_unknown_confidential_cli_argument_is_not_echoed(self):
         from unittest.mock import patch
         out, err = StringIO(), StringIO()
