@@ -10,7 +10,8 @@ on:
       - 'research/forward_p558_current_core_shadow_r1.py'
       - '.github/workflows/forward-p558-current-core-shadow-r1.yml'
   schedule:
-    - cron: '40 22 * * 1-5'
+    # Mon-Fri 20:25 EST / 21:25 EDT, after the canonical 18:30 America/New_York completed-session cutoff.
+    - cron: '25 1 * * 2-6'
   workflow_dispatch:
 permissions: {contents: read}
 jobs:
