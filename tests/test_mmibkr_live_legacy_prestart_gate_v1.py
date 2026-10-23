@@ -13,8 +13,11 @@ NEXT = "      - uses: actions/setup-python@"
 
 def _owner_prestart_script() -> str:
     source = WORKFLOW.read_text(encoding="utf-8")
-    assert source.count(STEP) == 1
-    section = source.split(STEP, 1)[1].split(NEXT, 1)[0]
+    # Match the actual YAML step boundary, not quoted references inside
+    # the workflow's embedded contract-test Python source.
+    anchor = "\n" + STEP + "\n"
+    assert source.count(anchor) == 1
+    section = source.split(anchor, 1)[1].split("\n" + NEXT, 1)[0]
     shell = section.split("        run: |\n", 1)[1]
     return "\n".join(line[10:] for line in shell.splitlines() if line.startswith("          ")) + "\n"
 
