@@ -126,5 +126,25 @@ class P02ExactCapsuleInventoryTest(unittest.TestCase):
                 consumer._validate(root)
 
 
+    def test_private_subprocess_output_is_never_public_stdio(self):
+        private = types.SimpleNamespace(
+            returncode=0, stdout=b"SECRET_PRIVATE_RESULT", stderr=b"SECRET_PRIVATE_ERROR"
+        )
+        with patch.object(consumer.subprocess, "run", return_value=private) as run:
+            consumer._run_private_consumer(["python", "private_consumer.py"], Path("/tmp"))
+            self.assertEqual(run.call_args.kwargs["stdout"], consumer.subprocess.DEVNULL)
+            self.assertEqual(run.call_args.kwargs["stderr"], consumer.subprocess.DEVNULL)
+            self.assertIs(run.call_args.kwargs["check"], False)
+
+    def test_private_subprocess_failure_is_generic(self):
+        private = types.SimpleNamespace(
+            returncode=17, stdout=b"SECRET_PRIVATE_RESULT", stderr=b"SECRET_PRIVATE_ERROR"
+        )
+        with patch.object(consumer.subprocess, "run", return_value=private):
+            with self.assertRaisesRegex(RuntimeError, "private consumer failed; output withheld") as error:
+                consumer._run_private_consumer(["python", "private_consumer.py"], Path("/tmp"))
+            self.assertNotIn("SECRET_PRIVATE", str(error.exception))
+
+
 if __name__ == "__main__":
     unittest.main()
