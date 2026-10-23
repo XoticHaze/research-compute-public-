@@ -411,6 +411,7 @@ jobs:
           python - "$scoreboard" "$allocator" "$ledger" "$p249" "$p558" "$clo" "$largecap" <<'PY'
           import hashlib,json,sys
           from pathlib import Path
+          from research.forward_p249_p266_shadow_r1 import current_publication_admitted
           score,allocator,ledger,p249,p558,clo,largecap=(json.load(open(p)) for p in sys.argv[1:])
           ledger_sha=hashlib.sha256(Path(sys.argv[3]).read_bytes()).hexdigest()
           assert score['input_lineage']['prospective_ledger']['sha256']==ledger_sha
@@ -423,10 +424,17 @@ jobs:
           assert zero['GENERALIZED_LARGECAP_RIDGE']=='ACTIVE'
           def bp(value): return round(float(value)*10000.0,2)
           p=lanes['P249_P266']; f=p249['forward']
-          assert p['forward_days']==f['p249_plus_p266_net']['days']
-          assert p['scorecard']['p249_core_net_cumulative_bps']==bp(f['p249_core_net']['cumulative_return'])
-          assert p['scorecard']['p249_plus_p266_net_cumulative_bps']==bp(f['p249_plus_p266_net']['cumulative_return'])
-          assert p['scorecard']['p266_increment_cumulative_bps']==bp(f['satellite_increment_cumulative'])
+          if current_publication_admitted(p249):
+              assert p['economic_current_admitted'] is True
+              assert p['forward_days']==f['p249_plus_p266_net']['days']
+              assert p['scorecard']['p249_core_net_cumulative_bps']==bp(f['p249_core_net']['cumulative_return'])
+              assert p['scorecard']['p249_plus_p266_net_cumulative_bps']==bp(f['p249_plus_p266_net']['cumulative_return'])
+              assert p['scorecard']['p266_increment_cumulative_bps']==bp(f['satellite_increment_cumulative'])
+          else:
+              assert p['economic_current_admitted'] is False
+              assert p['validation_grade'] in ('SOURCE_GAP_UNRESOLVED','ECONOMIC_SOURCE_NOT_ADMITTED')
+              assert p['forward_days'] is None
+              assert all(value is None for value in p['scorecard'].values())
           for program,raw in [('P558',p558),('SENIOR_CLO',clo)]:
               lane=lanes[program]
               assert lane['forward_days']==raw['forward']['challenger_if_flattened_now']['days']
@@ -486,7 +494,15 @@ jobs:
           fi
           cp "$scoreboard" "$history_dir/$session_date.json"
           cp "$allocator" "$history_dir/$session_date.allocator.json"
-          cp "$p249" research/current/forward_p249_p266_shadow_r1.json
+          # Only the canonical standalone predicate may advance funded-NAV economic CURRENT.
+          # A gap remains visible in the fresh scoreboard lane but retains the last stable P249 CURRENT.
+          if python -c 'import json,sys; from research.forward_p249_p266_shadow_r1 import current_publication_admitted; sys.exit(0 if current_publication_admitted(json.load(open(sys.argv[1]))) else 10)' "$p249"; then
+            cp "$p249" research/current/forward_p249_p266_shadow_r1.json
+          else
+            p249_admission_rc=$?
+            test "$p249_admission_rc" -eq 10 || exit "$p249_admission_rc"
+            echo "P249_ECONOMIC_CURRENT_HELD_UNADMITTED=1"
+          fi
           cp "$p558" research/current/forward_p558_current_core_shadow_r1.json
           cp "$clo" research/current/forward_senior_clo_current_core_shadow_r1.json
           git config user.name 'github-actions[bot]'
