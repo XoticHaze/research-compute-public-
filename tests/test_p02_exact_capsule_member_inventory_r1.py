@@ -5,16 +5,31 @@ Synthetic regular tar members only; no private source, real corpus or broker.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import io
 import json
 from pathlib import Path
 import sys
 import tarfile
 import tempfile
+import types
 import unittest
+from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-import p02_model_lab_xgboost_capsule_consumer_v1 as consumer
+# These tests exercise archive validation only, not private-key decryption.
+# Import the exact consumer source without requiring crypto dependencies.
+consumer_path = (
+    Path(__file__).resolve().parents[1]
+    / "scripts"
+    / "p02_model_lab_xgboost_capsule_consumer_v1.py"
+)
+spec = importlib.util.spec_from_file_location("p02_consumer_under_test", consumer_path)
+assert spec is not None and spec.loader is not None
+consumer = importlib.util.module_from_spec(spec)
+crypto_stub = types.ModuleType("ephemeral_x25519_chunked_v1")
+crypto_stub.decrypt_assembled_ciphertext = lambda **kwargs: b""
+with patch.dict(sys.modules, {"ephemeral_x25519_chunked_v1": crypto_stub}):
+    spec.loader.exec_module(consumer)
 
 
 def _sha(raw: bytes) -> str:
