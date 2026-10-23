@@ -515,6 +515,38 @@ jobs:
           path: ${{ runner.temp }}/mmibkr-private-test-probe-sanitized-receipt.txt
           retention-days: 7
 
+      - name: PR-only exact-source live successor unit gate (network isolated)
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          expected="b82672cf3c4cea573f51c160f65035b3198c4a90"
+          probe="$RUNNER_TEMP/mmibkr-successor-source"
+          receipt="$RUNNER_TEMP/mmibkr-successor-source.json"
+          python scripts/mmibkr_fleet_private_archive_materialize_v1.py \
+            --authority-base "$FLEET_AUTHORITY_BASE" \
+            --source-sha "$expected" --run-id "$GITHUB_RUN_ID" \
+            --destination "$probe" --output "$receipt" --timeout-sec 75
+          source_root="$(python - "$receipt" "$expected" <<'PY'
+          import json,sys
+          record=json.load(open(sys.argv[1]))
+          assert record['ok'] is True and record['source_sha']==sys.argv[2]
+          assert record['broker_credentials_used'] is False
+          assert record['private_repository_token_used'] is False
+          print(record['source_root'])
+          PY
+          )"
+          test -f "$source_root/tests/test_ibkr_live_successor_ledger_reconcile_v1.py"
+          docker run --rm --network none \
+            -e ENABLE_LIVE_TRADING=0 \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            -v "$source_root:/app:ro" -w /app \
+            python:3.11.16-slim-bookworm \
+            python -m unittest -v tests.test_ibkr_live_successor_ledger_reconcile_v1
+          echo 'MMIBKR_LIVE_SUCCESSOR_EXACT_PRIVATE_UNIT_TESTS_PASSED=1'
+          sudo rm -rf "$probe" "$receipt"
+
       - name: Destroy one-run private material
         if: always()
         shell: bash
