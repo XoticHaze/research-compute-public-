@@ -22,6 +22,16 @@ MAX_PLAINTEXT_BYTES=4*1024*1024
 MAX_MEMBER_BYTES=2*1024*1024
 
 
+class _PublicSafeArgumentParser(argparse.ArgumentParser):
+    """Never echo caller-provided private CLI argument text into public stderr."""
+
+    def __init__(self):
+        super().__init__(add_help=False)
+
+    def error(self, _message):
+        raise ValueError('invalid_public_cli_arguments')
+
+
 def b64d(v:str)->bytes: return base64.b64decode(v.encode('ascii'),validate=True)
 def safe_name(n:str)->bool:
     p=Path(n); return bool(n) and not p.is_absolute() and '..' not in p.parts and '' not in p.parts
@@ -135,8 +145,9 @@ def public_receipt(value:dict)->dict:
 
 
 def main()->int:
-    p=argparse.ArgumentParser(); p.add_argument('--envelope',type=Path,required=True); p.add_argument('--private-key',type=Path,required=True); p.add_argument('--run-id',required=True); a=p.parse_args()
+    p=_PublicSafeArgumentParser(); p.add_argument('--envelope',type=Path,required=True); p.add_argument('--private-key',type=Path,required=True); p.add_argument('--run-id',required=True)
     try:
+        a=p.parse_args()
         public=public_receipt(consume(a.envelope,a.private_key,a.run_id))
     except Exception:
         # Constant public failure, not a traceback containing private key names
