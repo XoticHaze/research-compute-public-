@@ -165,6 +165,8 @@ def main() -> int:
         expected = os.environ.get("MMIBKR_PRODUCTION_LIVE_ACCOUNT","")
         if not expected or expected.upper().startswith("DU"):
             raise SystemExit("exact_live_account_secret_missing_or_paper")
+    from scripts.mmibkr_public_broker_log_guard_v1 import install
+    install()
     from ib_insync import IB, util
     # IB sync timeout messages can contain the real broker account ID.
     # This public read-only worker emits only its sanitized fixed-field receipt.

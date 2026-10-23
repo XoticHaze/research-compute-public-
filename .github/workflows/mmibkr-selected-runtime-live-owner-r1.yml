@@ -773,6 +773,7 @@ jobs:
           python - <<'PY'
           import os,time,logging
           from pathlib import Path
+          from scripts.mmibkr_public_broker_log_guard_v1 import install; install()
           from ib_insync import IB
           # ib_insync may log raw broker account IDs on sync timeout.
           # Only sanitized fixed-field markers may enter public Actions logs.
@@ -897,6 +898,7 @@ jobs:
             if python - <<'PY'
           import os,logging
           from pathlib import Path
+          from scripts.mmibkr_public_broker_log_guard_v1 import install; install()
           from ib_insync import IB, util
           # Suppress ib_insync's raw-account timeout diagnostics in public logs.
           # Sanitized failure stage/class below remain visible via print().
@@ -1020,6 +1022,7 @@ jobs:
           if ! python - <<'PY'
           import os
           from pathlib import Path
+          from scripts.mmibkr_public_broker_log_guard_v1 import install; install()
           from ib_insync import IB
           expected=(Path(os.environ["RUNNER_TEMP"])/"mmibkr-live-bot.env").read_text().strip().split("=",1)[1]
           ib=IB()
@@ -1120,6 +1123,7 @@ jobs:
               if python - <<'PY'
           import os
           from pathlib import Path
+          from scripts.mmibkr_public_broker_log_guard_v1 import install; install()
           from ib_insync import IB
           expected=(Path(os.environ["RUNNER_TEMP"])/"mmibkr-live-bot.env").read_text().strip().split("=",1)[1]
           ib=IB()
@@ -1358,6 +1362,7 @@ jobs:
               if python - <<'PY'
           import os
           from pathlib import Path
+          from scripts.mmibkr_public_broker_log_guard_v1 import install; install()
           from ib_insync import IB
           expected=(Path(os.environ["RUNNER_TEMP"])/"mmibkr-live-bot.env").read_text().strip().split("=",1)[1]
           ib=IB()

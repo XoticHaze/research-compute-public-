@@ -285,7 +285,7 @@ jobs:
         run: rm -f "$RUNNER_TEMP/reader-contracts.json"
 
   verify:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.test_mode == 'handoff_ab' }}
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.test_mode == 'handoff_ab' }}
     needs: [runner_a, runner_b]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -301,16 +301,35 @@ jobs:
           import json
           from datetime import datetime
           from pathlib import Path
-          a=json.loads(Path('receipt/mmibkr-gateway-client-a.json').read_text())
-          b=json.loads(Path('receipt/mmibkr-gateway-client-b.json').read_text())
-          ts=lambda s:datetime.fromisoformat(s)
-          assert a['gateway_run_id']==b['gateway_run_id']
-          assert a['client_id']!=b['client_id']
-          assert a['ok'] and b['ok']
-          assert a['post_hold']['ok'] and b['post_hold']['ok']
-          assert ts(a['at_utc']) < ts(b['at_utc']) < ts(a['api_disconnected_utc']) < ts(b['post_hold']['at_utc'])
-          assert a['broker_mutations_attempted'] is False
-          assert b['broker_mutations_attempted'] is False
+          paths=[Path('receipt/mmibkr-gateway-client-a.json'),Path('receipt/mmibkr-gateway-client-b.json')]
+          if not all(p.is_file() for p in paths):
+              print('MMIBKR_AB_RECEIPT_MISSING_FAIL_CLOSED=1')
+              raise SystemExit(75)
+          a,b=(json.loads(p.read_text()) for p in paths)
+          def require(ok,stage):
+              if not ok:
+                  print('MMIBKR_AB_'+stage+'=FAIL')
+                  raise SystemExit(75)
+          require(a.get('gateway_run_id')==b.get('gateway_run_id'),'OWNER_IDENTITY')
+          require(a.get('client_id')!=b.get('client_id'),'CLIENT_IDENTITY')
+          require(a.get('ok') is True and b.get('ok') is True,'INITIAL_ACCOUNT_READ')
+          require(a.get('broker_mutations_attempted') is False and b.get('broker_mutations_attempted') is False,'NO_ORDER')
+          ap=a.get('post_hold') if isinstance(a.get('post_hold'),dict) else {}
+          bp=b.get('post_hold') if isinstance(b.get('post_hold'),dict) else {}
+          try:
+              ts=lambda s:datetime.fromisoformat(s)
+              chronology=(ts(a['at_utc']) < ts(b['at_utc']) < ts(a['api_disconnected_utc']) < ts(bp['at_utc']))
+          except (KeyError,ValueError,TypeError):
+              chronology=False
+          require(chronology,'CHRONOLOGY')
+          if not ap.get('ok') and a.get('hold_interrupted_class') and bp.get('ok') is True:
+              print('MMIBKR_AB_B_AFTER_A_DISCONNECT_ACCOUNT_RECONCILED=PASS')
+              print('MMIBKR_AB_A_HOLD_INTERRUPTED=1')
+              print('MMIBKR_AB_FULL_ACCEPTANCE=NOT_PROVEN')
+              print('BROKER_MUTATIONS=ZERO')
+              raise SystemExit(75)
+          require(ap.get('ok') is True and bp.get('ok') is True,'BOTH_POST_HOLD_READS')
+          require(ap.get('broker_mutations_attempted') is False and bp.get('broker_mutations_attempted') is False,'POST_HOLD_NO_ORDER')
           print('TWO_INDEPENDENT_GITHUB_VM_SAME_GATEWAY_READ=PASS')
           print('REAL_API_CLIENT_OVERLAP_AND_A_TO_B_HANDOFF=PASS')
           print('BROKER_MUTATIONS=ZERO')
