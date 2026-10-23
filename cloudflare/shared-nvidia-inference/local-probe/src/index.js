@@ -26,7 +26,11 @@ export function createCaller() {
           !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) {
         return reply(404, { classification: "local_route_unavailable" });
       }
-      if (request.body !== null) return reply(400, { classification: "request_body_not_allowed" });
+      // Wrangler/workerd may represent a zero-byte POST as an empty stream.
+      // Admit only a declared zero-length body; reject content-bearing posts.
+      if (request.body !== null && request.headers.get("content-length") !== "0") {
+        return reply(400, { classification: "request_body_not_allowed" });
+      }
       if (invoked) return reply(409, { classification: "caller_already_invoked" });
       if (typeof env?.NVIDIA_SERVICE?.fetch !== "function") {
         return reply(503, { classification: "remote_service_binding_missing" });
