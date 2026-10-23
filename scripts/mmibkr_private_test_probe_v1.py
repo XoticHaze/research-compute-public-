@@ -18,13 +18,15 @@ MODULE_RE = re.compile(r"^tests\.test_[A-Za-z0-9_]+$")
 SAFE_PREFIXES = (
     "tests.test_autotuner_",
 )
-# Exact AST/mocked legacy-close regressions. No gateway credentials or broker calls.
+# Exact brokerless source/ledger regressions. No gateway credentials or broker calls.
 # These modules are run network-isolated even inside the existing public probe.
 SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_legacy_submit_fail_closed_r10",
     "tests.test_legacy_strategy_live_guard_r11",
     "tests.test_selected_runtime_mutation_boundary_inspect_v1",
     "tests.test_live_seal_compose_runner_v1",
+    # Brokerless exact successor ledger tests; never permit test network I/O.
+    "tests.test_ibkr_live_successor_ledger_reconcile_v1",
 })
 
 SAFE_EXACT = {
@@ -82,8 +84,6 @@ SAFE_EXACT = {
     "tests.test_operator_snapshot_api",
     "tests.test_cloud_operator_snapshot_v1",
     "tests.test_selected_runtime_strategy_inventory_v1",
-    # Reviewed brokerless successor ledger reconciliation: mocked broker rows only.
-    "tests.test_ibkr_live_successor_ledger_reconcile_v1",
     "tests.test_promotion_review_stale_status",
     "tests.test_research_ui_backend_restore",
     "tests.test_admit_exact_pilot_to_promotion_review_13z",
