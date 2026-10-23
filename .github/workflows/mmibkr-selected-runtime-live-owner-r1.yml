@@ -229,8 +229,11 @@ jobs:
           assert 'SUPERVISED_MAINTENANCE_RECOVERY_INCOMPLETE_AT_SESSION_END=1' in owner
           # The independent read-only pool may outlast the controller's 480s
           # maintenance delay only on an exact in-window post-outage alert.
-          pool=owner.split('      - name: Hold one authenticated read-only Gateway for independent GitHub compute jobs',1)[1]
-          pool=pool.split('      - name: Confirm no-order admission did not authorize live bot startup',1)[0]
+          # Compose the step delimiters so source-contract readers searching
+          # the workflow cannot accidentally select this assertion block.
+          pool_start='      - name: ' + 'Hold one authenticated read-only Gateway for independent GitHub compute jobs'
+          pool_end='      - name: ' + 'Confirm no-order admission did not authorize live bot startup'
+          pool=owner.split(pool_start,1)[1].split(pool_end,1)[0]
           for marker in ('maintenance_grace_used=0', 'maintenance_evidence_seen=0',
                          'pool_maintenance_budget=600', 'pool_maintenance_budget=720',
                          'ALERT_IBKR_MAINTENANCE_RECOVERY',
