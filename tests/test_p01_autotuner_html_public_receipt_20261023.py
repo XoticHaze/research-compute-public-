@@ -103,6 +103,20 @@ class PublicReceiptAllowlistTests(unittest.TestCase):
         oversized.size = consumer.MAX_MEMBER_BYTES + 1
         self.assertFalse(consumer.safe_tar_members([oversized]))
 
+    def test_unknown_confidential_cli_argument_is_not_echoed(self):
+        from unittest.mock import patch
+        out, err = StringIO(), StringIO()
+        argv = ['p01_autotuner_html_consumer_v1.py', '--envelope', 'synthetic.json',
+                '--private-key', 'synthetic.key', '--run-id', 'synthetic-run',
+                '--unexpected', SENTINEL]
+        with (patch('sys.argv', argv), redirect_stdout(out), redirect_stderr(err)):
+            code = consumer.main()
+        self.assertEqual(code, 1)
+        self.assertNotIn(SENTINEL, out.getvalue() + err.getvalue())
+        self.assertEqual(err.getvalue(), '')
+        self.assertEqual(json.loads(out.getvalue().split('=', 1)[1]),
+                         {'schema': consumer.RECEIPT_SCHEMA, 'status': 'REJECTED'})
+
     def test_noncanonical_types_digests_and_authority_fail_closed(self):
         variants = [('runtime_count', True), ('runtime_count', 0),
                     ('runtime_count', 2.5), ('snapshot_sha256', SENTINEL),
