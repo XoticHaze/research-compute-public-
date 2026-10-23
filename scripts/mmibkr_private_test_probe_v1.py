@@ -82,6 +82,8 @@ SAFE_EXACT = {
     "tests.test_operator_snapshot_api",
     "tests.test_cloud_operator_snapshot_v1",
     "tests.test_selected_runtime_strategy_inventory_v1",
+    # Reviewed brokerless successor ledger reconciliation: mocked broker rows only.
+    "tests.test_ibkr_live_successor_ledger_reconcile_v1",
     "tests.test_promotion_review_stale_status",
     "tests.test_research_ui_backend_restore",
     "tests.test_admit_exact_pilot_to_promotion_review_13z",
