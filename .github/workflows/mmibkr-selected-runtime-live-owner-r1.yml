@@ -220,6 +220,7 @@ jobs:
           assert 'SUPERVISED_GATEWAY_HEALTH=' in owner
           assert 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3' in owner
           assert 'AUTO_RESTART_ADOPT=yes' in owner
+          assert sum(1 for line in owner.splitlines() if line.strip().startswith('supervised_recovery_args=(-e AUTO_RESTART_TIME=')) == 3
           assert 'CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480' in owner
           assert 'maintenance_grace_seconds=720' in owner
           assert 'SUPERVISED_MAINTENANCE_RECOVERY_GRACE_STARTED=1' in owner
@@ -713,7 +714,8 @@ jobs:
           if [ "${{ inputs.admission_only }}" = false ]; then
             twofa_exit_interval=300
             relogin_after_twofa_timeout=no
-            supervised_recovery_args=(-e AUTO_RESTART_ADOPT=yes
+            supervised_recovery_args=(-e AUTO_RESTART_TIME="11:45 PM"
+                                      -e AUTO_RESTART_ADOPT=yes
                                       -e CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480 \
                                       -e UPSTREAM_RELAUNCH=yes)
             echo 'MMIBKR_LIVE_RECOVERY_CONTROLLER_ENABLED=1'
@@ -728,7 +730,8 @@ jobs:
             relogin_after_twofa_timeout=no
             # Keep the existing Gateway-internal restart/adoption logic active.
             # Native v0.16.2 maintenance re-auth intentionally waits 480s.
-            supervised_recovery_args=(-e AUTO_RESTART_ADOPT=yes
+            supervised_recovery_args=(-e AUTO_RESTART_TIME="11:45 PM"
+                                      -e AUTO_RESTART_ADOPT=yes
                                       -e CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480)
             echo 'MMIBKR_SUPERVISED_MAINTENANCE_BACKOFF_SECONDS=480'
             echo 'MMIBKR_SUPERVISED_AUTO_RESTART_ADOPT=1'
@@ -742,7 +745,8 @@ jobs:
             read_only_api=yes
             twofa_exit_interval=300
             relogin_after_twofa_timeout=no
-            supervised_recovery_args=(-e AUTO_RESTART_ADOPT=yes
+            supervised_recovery_args=(-e AUTO_RESTART_TIME="11:45 PM"
+                                      -e AUTO_RESTART_ADOPT=yes
                                       -e CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480)
             echo 'MMIBKR_SPLIT_GATEWAY_POOL_API_READ_ONLY=1'
             echo 'MMIBKR_SPLIT_GATEWAY_POOL_AUTO_RELOGIN=0'
