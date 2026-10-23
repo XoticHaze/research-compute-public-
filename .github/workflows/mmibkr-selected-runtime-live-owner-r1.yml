@@ -253,7 +253,7 @@ jobs:
                          'docker logs --since "$outage_utc" mmibkr-live-gateway',
                          'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_GRACE_STARTED=1',
                          'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_EXPIRED=1',
-                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS_EXECUTIONS=1'):
+                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_BROKER_READBACK_ONLY=1'):
               assert marker in pool, marker
           # A real reset late in a 15m session must not be cut short by
           # the nominal session end before the 480s controller delay finishes.
@@ -1027,9 +1027,10 @@ jobs:
           PY
             then
               if [ "$maintenance_evidence_seen" -eq 1 ]; then
-                # This exact successful broker probe included account identity,
-                # positions, open orders and executions from the same owner.
-                echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS_EXECUTIONS=1'
+                # This same-client probe confirmed a managed account and fresh
+                # positions/open-orders/executions API reads. It does NOT bind
+                # orderRef/permId/execId to durable inventory or prove takeover.
+                echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_BROKER_READBACK_ONLY=1'
               fi
               outage_since=0
               maintenance_evidence_seen=0
