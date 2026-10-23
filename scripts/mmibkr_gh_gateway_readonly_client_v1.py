@@ -10,6 +10,7 @@ import argparse
 import ipaddress
 import json
 import os
+import logging
 from pathlib import Path
 from time import sleep, time
 from datetime import datetime, timezone
@@ -164,17 +165,24 @@ def main() -> int:
         expected = os.environ.get("MMIBKR_PRODUCTION_LIVE_ACCOUNT","")
         if not expected or expected.upper().startswith("DU"):
             raise SystemExit("exact_live_account_secret_missing_or_paper")
-    from ib_insync import IB
+    from ib_insync import IB, util
+    # IB sync timeout messages can contain the real broker account ID.
+    # This public read-only worker emits only its sanitized fixed-field receipt.
+    logging.disable(logging.CRITICAL)
     specs=[]
     if a.contracts_file:
         specs=contract_scope(json.loads(Path(a.contracts_file).read_text(encoding="utf-8")))
     client_id=reader_client_id(os.environ["GITHUB_RUN_ID"],os.environ.get("GITHUB_RUN_ATTEMPT","1"),a.phase)
     ib=IB()
+    ib.RequestTimeout=25
     results={}
     out=Path(a.output)
     out.parent.mkdir(parents=True,exist_ok=True)
     try:
-        ib.connect(a.host,a.port,clientId=client_id,readonly=True,timeout=20)
+        # Two sequential IB sync phases can exceed one 20s outer deadline.
+        # Keep each broker request bounded while allowing the whole read-only
+        # connect/sync 65s; account and order reads below remain mandatory.
+        util.run(ib.connectAsync(a.host,a.port,clientId=client_id,readonly=True,timeout=20),timeout=65)
         if not ib.isConnected():
             raise RuntimeError("remote_broker_api_not_connected")
         results=account_receipt(ib,expected,run_id=a.gateway_run_id,
