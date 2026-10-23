@@ -196,6 +196,15 @@ jobs:
           import subprocess
           script="\n".join(line[10:] if line.startswith("          ") else line for line in run.splitlines())
           subprocess.run(["bash","-n"],input=script,text=True,check=True)
+          # Every admission-only handoff must set broker READ_ONLY_API=yes,
+          # including legacy/producer/successor, not only supervised/pool.
+          gateway=owner.split('      - name: Start the established IBKR controller in writable live mode on host 4001',1)[1].split('      - name: Bind and reconcile the expected existing production account without order mutation',1)[0]
+          assert 'read_only_api=yes' in gateway
+          mode=chr(36)+'{{ inputs.admission_only }}'
+          assert ('if [ "'+mode+'" = false ]; then\\n            read_only_api=no').replace('\\n','\n') in gateway
+          assert 'READONLY_LIVE_GATEWAY_STARTED=1' in gateway
+          assert 'WRITABLE_LIVE_GATEWAY_STARTED=1' in gateway
+          assert "inputs.admission_only && 'yes' || 'no'" in gateway
           print('LIVE_EXACT_SUCCESSOR_DISPATCH_SHELL_PARSE=PASS')
           assert 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1' in owner
           assert 'EXPLICIT_APPROVED_CANONICAL_LIVE_OWNER=1' in owner
@@ -726,11 +735,14 @@ jobs:
             warm_args=(-e GATEWAY_WARM_STATE=/home/ibgateway/warm-state
                        -v "mmibkr-live-warm-$GITHUB_RUN_ID:/home/ibgateway/warm-state:ro")
           fi
-          read_only_api=no
+          # Admission-only is broker-enforced read-only for EVERY handoff mode.
+          # A label/no-bot guard alone is not an IBKR API mutation boundary.
+          read_only_api=yes
           twofa_exit_interval=120
           relogin_after_twofa_timeout=yes
           supervised_recovery_args=()
           if [ "${{ inputs.admission_only }}" = false ]; then
+            read_only_api=no
             twofa_exit_interval=300
             relogin_after_twofa_timeout=no
             supervised_recovery_args=(-e AUTO_RESTART_TIME="11:45 PM"
@@ -787,13 +799,17 @@ jobs:
             -p 127.0.0.1:4001:4003 \
             "$controller_image" >/dev/null
           docker exec mmibkr-live-gateway /bin/sh -lc \
-            'test "$READ_ONLY_API" = "${{ inputs.admission_only && (inputs.warm_handoff_mode == 'supervised_5h' || inputs.warm_handoff_mode == 'gateway_pool_5h') && 'yes' || 'no' }}" && test "$TRADING_MODE" = live' 
+            'test "$READ_ONLY_API" = "${{ inputs.admission_only && 'yes' || 'no' }}" && test "$TRADING_MODE" = live' 
           # Exact network proof. The only published socket is loopback TWS
           # 4001:4003. Bot joins the Gateway namespace with no published
           # control/API 8001 port and no public HTTP ingress.
           docker inspect -f '{{json .HostConfig.PortBindings}}' mmibkr-live-gateway |
             python -c "import json,sys; p=json.load(sys.stdin); assert set(p)=={'4003/tcp'},p; r=p['4003/tcp']; assert len(r)==1 and r[0]['HostIp']=='127.0.0.1' and r[0]['HostPort']=='4001',p; print('HEADLESS_LIVE_PRIVATE_NETWORK_ATTESTED=1')"
-          echo 'WRITABLE_LIVE_GATEWAY_STARTED=1'
+          if [ "${{ inputs.admission_only }}" = true ]; then
+            echo 'READONLY_LIVE_GATEWAY_STARTED=1'
+          else
+            echo 'WRITABLE_LIVE_GATEWAY_STARTED=1'
+          fi
           if [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = gateway_pool_5h ]; then
             docker stats --no-stream --format 'MMIBKR_POOL_GATEWAY_START_MEM={{.MemUsage}} CPU={{.CPUPerc}} NET_IO={{.NetIO}} PIDS={{.PIDs}}' mmibkr-live-gateway || echo 'MMIBKR_POOL_GATEWAY_START_STATS_UNAVAILABLE=1'
           fi
