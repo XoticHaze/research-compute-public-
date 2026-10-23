@@ -27,6 +27,10 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_live_seal_compose_runner_v1",
     # Brokerless exact successor ledger tests; never permit test network I/O.
     "tests.test_ibkr_live_successor_ledger_reconcile_v1",
+    # Exact source-only P0 journal / fill validator / same-owner broker readback.
+    "tests.test_selected_runtime_live_order_intent_journal_v1",
+    "tests.test_selected_runtime_live_execution_ledger_v1",
+    "tests.test_selected_runtime_live_broker_provenance_v1",
 })
 
 SAFE_EXACT = {
