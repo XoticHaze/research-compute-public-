@@ -264,6 +264,34 @@ jobs:
                          'MMIBKR_GATEWAY_POOL_MAINTENANCE_OBSERVATION_INCOMPLETE=1'):
               assert marker in pool, marker
           assert 'timeout-minutes: 300' in pool
+          # Privacy regression: upstream IB timeout/account text is never
+          # emitted from public owner steps, even when Python exits nonzero.
+          for private_marker in (
+              'python - >"$RUNNER_TEMP/mmibkr-live-initial-account-read-private.log" 2>&1',
+              'if python - >"$private_probe_log" 2>&1',
+              'if ! python - >"$RUNNER_TEMP/mmibkr-live-supervised-read-private.log" 2>&1',
+              'if python - >"$RUNNER_TEMP/mmibkr-live-supervised-loop-read-private.log" 2>&1',
+              'if python - >"$RUNNER_TEMP/mmibkr-live-runtime-read-private.log" 2>&1',
+              'rm -f "$private_probe_log"',
+          ):
+              assert private_marker in owner, private_marker
+          assert "grep -xE 'MMIBKR_GATEWAY_POOL_BROKER_FAILURE_STAGE=" in pool
+          assert "grep -xE 'MMIBKR_GATEWAY_POOL_BROKER_FAILURE_CLASS=" in pool
+          assert "grep -xF 'MMIBKR_GATEWAY_POOL_BROKER_PROBE_RETRYABLE=1'" in pool
+          import tempfile
+          with tempfile.TemporaryDirectory() as temp_dir:
+              private_path=Path(temp_dir)/'broker-read-private.log'
+              shell = "\n".join((
+                  "umask 077",
+                  "python -c 'print(\"PRIVATE_IBKR_ACCOUNT_SENTINEL\")' >\"$1\" 2>&1",
+                  "grep -xE 'MMIBKR_GATEWAY_POOL_BROKER_FAILURE_STAGE=(api_connect_and_sync|account_identity)' \"$1\" || true",
+                  "rm -f \"$1\"",
+              ))
+              private_test=subprocess.run(['bash','-c',shell,'_',str(private_path)],
+                                          capture_output=True,text=True,check=True)
+              assert 'PRIVATE_IBKR_ACCOUNT_SENTINEL' not in private_test.stdout+private_test.stderr
+              assert not private_path.exists()
+          print('READONLY_GATEWAY_PRIVATE_BROKER_LOG_SENTINEL=PASS')
           pool_run=pool.split('        run: |',1)[1]
           pool_script="\n".join(line[10:] if line.startswith("          ") else line for line in pool_run.splitlines())
           subprocess.run(["bash","-n"],input=pool_script,text=True,check=True)
