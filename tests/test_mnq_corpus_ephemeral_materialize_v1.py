@@ -107,3 +107,49 @@ def test_mnq_public_cli_failure_has_fixed_fields(tmp_path, script, prefix, schem
     assert len(lines) == 1 and lines[0].startswith(prefix)
     assert json.loads(lines[0][len(prefix):]) == {"schema": schema, "status": "REJECTED"}
     assert not output_root.exists()
+
+
+@pytest.mark.parametrize("script,prefix,schema", [
+    ("consumer", "MNQ_CORPUS_EPHEMERAL_RECEIPT=", "mnq-corpus-ephemeral-receipt-v1"),
+    ("materializer", "MNQ_CORPUS_INPUT_ROOT_MATERIALIZED=", "mnq-corpus-input-root-materialization-v1"),
+])
+def test_mnq_public_nested_private_exception_is_constant(tmp_path, monkeypatch, capsys,
+                                                         script, prefix, schema):
+    """Even a nested confidential exception must not appear in public output."""
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
+    import mnq_corpus_ephemeral_consumer_v1 as consumer
+    import mnq_corpus_ephemeral_materialize_v1 as materializer
+    sentinel = "NESTED_PRIVATE_MEMBER_ACCOUNT_SENTINEL_DO_NOT_ECHO"
+    envelope = tmp_path / "envelope.json"
+    ciphertext = tmp_path / "ciphertext.bin"
+    envelope.write_text("{}", encoding="utf-8")
+    ciphertext.write_bytes(b"synthetic")
+
+    def private_failure(*args, **kwargs):
+        raise RuntimeError(sentinel)
+
+    argv = [
+        "--envelope", str(envelope), "--ciphertext", str(ciphertext),
+        "--private-key", str(tmp_path / "unused.key"),
+        "--run-id", "synthetic-run", "--response-root", "synthetic-root",
+    ]
+    if script == "consumer":
+        monkeypatch.setattr(consumer, "decrypt_assembled_ciphertext",
+                            lambda **kwargs: b"synthetic-ticket")
+        monkeypatch.setattr(consumer, "_fetch_artifact", lambda _: b"synthetic-archive")
+        monkeypatch.setattr(consumer, "_validate_zip", private_failure)
+        target = consumer
+    else:
+        monkeypatch.setattr(materializer, "decrypt_assembled_ciphertext",
+                            lambda **kwargs: b"synthetic-corpus")
+        monkeypatch.setattr(materializer, "materialize_payload", private_failure)
+        argv += ["--output-root", str(tmp_path / "output")]
+        target = materializer
+    monkeypatch.setattr(sys, "argv", [script, *argv])
+    assert target.main() == 1
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert sentinel not in captured.out + captured.err
+    lines = captured.out.splitlines()
+    assert len(lines) == 1 and lines[0].startswith(prefix)
+    assert json.loads(lines[0][len(prefix):]) == {"schema": schema, "status": "REJECTED"}
