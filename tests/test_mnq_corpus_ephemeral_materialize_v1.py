@@ -153,3 +153,44 @@ def test_mnq_public_nested_private_exception_is_constant(tmp_path, monkeypatch, 
     lines = captured.out.splitlines()
     assert len(lines) == 1 and lines[0].startswith(prefix)
     assert json.loads(lines[0][len(prefix):]) == {"schema": schema, "status": "REJECTED"}
+
+
+@pytest.mark.parametrize("script", ["consumer", "materializer"])
+def test_mnq_public_cli_success_receipt_unchanged(tmp_path, monkeypatch, capsys, script):
+    """The new fail-close wrapper must preserve the existing success output."""
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
+    import mnq_corpus_ephemeral_consumer_v1 as consumer
+    import mnq_corpus_ephemeral_materialize_v1 as materializer
+    envelope = tmp_path / "envelope.json"
+    ciphertext = tmp_path / "ciphertext.bin"
+    envelope.write_text("{}", encoding="utf-8")
+    ciphertext.write_bytes(b"synthetic")
+    argv = [
+        "--envelope", str(envelope), "--ciphertext", str(ciphertext),
+        "--private-key", str(tmp_path / "unused.key"),
+        "--run-id", "synthetic-run", "--response-root", "synthetic-root",
+    ]
+    if script == "consumer":
+        expected = {"schema": "mnq-corpus-ephemeral-receipt-v1",
+                    "authority": "research_only", "broker_submit": False}
+        prefix = "MNQ_CORPUS_EPHEMERAL_RECEIPT="
+        monkeypatch.setattr(consumer, "decrypt_assembled_ciphertext",
+                            lambda **kwargs: b"synthetic-ticket")
+        monkeypatch.setattr(consumer, "_fetch_artifact", lambda _: b"synthetic-archive")
+        monkeypatch.setattr(consumer, "_validate_zip", lambda _: expected)
+        target = consumer
+    else:
+        expected = {"schema": "mnq-corpus-input-root-materialization-v1",
+                    "research_only": True, "broker_submit": False}
+        prefix = "MNQ_CORPUS_INPUT_ROOT_MATERIALIZED="
+        monkeypatch.setattr(materializer, "decrypt_assembled_ciphertext",
+                            lambda **kwargs: b"synthetic-corpus")
+        monkeypatch.setattr(materializer, "materialize_payload",
+                            lambda *args, **kwargs: expected)
+        argv += ["--output-root", str(tmp_path / "output")]
+        target = materializer
+    monkeypatch.setattr(sys, "argv", [script, *argv])
+    assert target.main() == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert captured.out.strip() == prefix + json.dumps(expected, sort_keys=True)
