@@ -106,35 +106,7 @@ jobs:
             echo 'LIVE_WRITABLE_PUSH_DISPATCH_REQUIRES_INDEPENDENT_ADMISSION=1'
             exit 64
           fi
-          if printf '%s\n' "$changed" | grep -Eq '^\+live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39492758670$'; then
-            admission_only=false
-            mode=successor
-            predecessor_run=39492758670
-            echo 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39492758670'
-          elif printf '%s\n' "$changed" | grep -Eq '^\+live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39484631800$'; then
-            admission_only=false
-            mode=successor
-            predecessor_run=39484631800
-            echo 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39484631800'
-          elif printf '%s\n' "$changed" | grep -Eq '^\+live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39394982732$'; then
-            admission_only=false
-            mode=successor
-            predecessor_run=39394982732
-            echo 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39394982732'
-          elif printf '%s\n' "$changed" | grep -Eq '^\+live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39359585927$'; then
-            admission_only=false
-            mode=successor
-            predecessor_run=39359585927
-            echo 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39359585927'
-          elif printf '%s\n' "$changed" | grep -Eq '^\+live_successor_approved_dispatch_request_20261019_[a-z0-9]{6}: 39231751596$'; then
-            admission_only=false
-            mode=successor
-            predecessor_run=39231751596
-            echo 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39231751596'
-          elif printf '%s\n' "$changed" | grep -Eq '^\+live_owner_approved_dispatch_request_20261019_[a-z0-9]{6}: true$'; then
-            admission_only=false
-            echo 'EXPLICIT_OPERATOR_LIVE_FIRE_MATCHED=1'
-          elif printf '%s\n' "$changed" | grep -Eq '^\+gateway_pool_5h_readonly_dispatch_request_20261022_[a-z0-9]{6}: (true|15m)$'; then
+          if printf '%s\n' "$changed" | grep -Eq '^\+gateway_pool_5h_readonly_dispatch_request_20261022_[a-z0-9]{6}: (true|15m)$'; then
             mode=gateway_pool_5h
             admission_only=true
             if printf '%s\n' "$changed" | grep -Eq '^\+gateway_pool_5h_readonly_dispatch_request_20261022_[a-z0-9]{6}: 15m$'; then
@@ -215,18 +187,11 @@ jobs:
           assert "'inputs[warm_handoff_mode]=$mode'" in s or 'inputs[warm_handoff_mode]=$mode' in s
           assert 'supervised_5h_dispatch_request_[0-9]{8}_[a-z0-9]{6}' in s
           assert 'mode=legacy' in s and 'mode=supervised_5h' in s
-          assert 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39231751596' in s
-          assert 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39359585927' in s
-          assert 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39394982732' in s
-          assert 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39484631800' in s
-          assert 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39492758670' in s
-          assert 'live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39492758670' in s
-          assert 'live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39484631800' in s
-          assert 'live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39394982732' in s
-          assert 'live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}' in s
           assert 'inputs[warm_predecessor_run]=$predecessor_run' in s
-          assert 'mode=successor' in s
           fire=s.split('      - name: Dispatch explicitly authorized canonical owner',1)[1].split('\n  contract:',1)[0]
+          assert 'LIVE_WRITABLE_PUSH_DISPATCH_REQUIRES_INDEPENDENT_ADMISSION=1' in fire
+          assert 'live_owner_approved_dispatch_request_20261019_' not in fire
+          assert 'live_successor_approved_dispatch_request_20261020_' not in fire
           run=fire.split('        run: |',1)[1]
           import subprocess
           script="\n".join(line[10:] if line.startswith("          ") else line for line in run.splitlines())
