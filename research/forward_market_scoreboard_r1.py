@@ -6,6 +6,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+try:
+    from .forward_p249_p266_shadow_r1 import current_publication_admitted
+except ImportError:  # direct-script workflow entry point
+    from forward_p249_p266_shadow_r1 import current_publication_admitted
+
 SCHEMA = "research.forward_market_scoreboard_r1"
 ADAPTER_SCHEMA = "foundry.forward_program_adapter.v1"
 LEDGER_SCHEMA = "research.forward_prospective_cohort_ledger_r1"
@@ -137,6 +142,21 @@ def _p249(x: dict[str, Any] | None) -> dict[str, Any]:
     combo = fwd.get("p249_plus_p266_net", {})
     days = int(combo.get("days", 0) or 0)
     state = x.get("current_state", {})
+    if not current_publication_admitted(x):
+        return {
+            "program_id": "P249_P266",
+            "kind": "portfolio_construction_plus_industry_momentum_satellite",
+            "status": "SOURCE_GAP_UNRESOLVED",
+            "signal": {"p249_core_weights": state.get("p249_core", {}), "p266_industry_weights": state.get("p266", {})},
+            "paper_action": state.get("p249_plus_p266", {}),
+            "action_text": "Frozen portfolio weights retained; prospective funded NAV is not continuous and has no new economic credit.",
+            "forward_days": None,
+            "scorecard": {},
+            "validation_grade": "SOURCE_GAP_UNRESOLVED",
+            "source_health": x.get("source_health", {}),
+            "decision_use": "Source readiness failure, not negative alpha or forced cash. Preserve prior admitted economic CURRENT.",
+            "boundaries": x.get("boundaries", {}),
+        }
     increment_stats = _positive_session_stats([
         float(row.get("satellite_increment_net", 0.0))
         for row in (fwd.get("observations") or [])
@@ -622,9 +642,10 @@ def self_test() -> None:
             "operational_shadow": {"anchor_date": "2026-09-09", "latest_date": "2026-09-09"},
         }))
         (root / "forward_p249_p266_shadow_r1.json").write_text(json.dumps({
+            "schema": "research.forward_p249_p266_shadow_r1", "parent": "P249/P266/P278", "workload_id": "FORWARD_P249_P266_SHADOW_R1", "status": "FORWARD_OBSERVING",
             "current_state": {"p249_core": {"SOXX": 0.4}, "p266": {"XBI": 1.0}, "p249_plus_p266": {"SOXX": 0.3, "XBI": 0.1}},
-            "source_health": {"source_max_date": "2026-09-13", "latest_scored_common_session": "2026-09-12", "lagging_symbols_vs_source_max": ["XBI"], "common_session_lags_source_max": True},
-            "forward": {"p249_core_net": {"cumulative_return": 0.01}, "p249_plus_p266_net": {"cumulative_return": 0.009, "days": 2}, "satellite_increment_cumulative": -0.001},
+            "source_health": {"source_max_date": "2026-09-13", "latest_scored_common_session": "2026-09-12", "unresolved_forward_gap": None, "lagging_symbols_vs_source_max": ["XBI"], "common_session_lags_source_max": True},
+            "forward": {"economic_continuity_verified": True, "latest_close": "2026-09-12", "observations": [{"date": "2026-09-11"}, {"date": "2026-09-12"}], "p249_core_net": {"cumulative_return": 0.01, "days": 2}, "p249_plus_p266_net": {"cumulative_return": 0.009, "days": 2}, "satellite_increment_cumulative": -0.001},
         }))
         semi = {
             "schema": ADAPTER_SCHEMA,
