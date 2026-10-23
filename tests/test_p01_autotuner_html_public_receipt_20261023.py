@@ -103,6 +103,54 @@ class PublicReceiptAllowlistTests(unittest.TestCase):
         oversized.size = consumer.MAX_MEMBER_BYTES + 1
         self.assertFalse(consumer.safe_tar_members([oversized]))
 
+    def test_tar_header_count_and_total_expansion_are_bounded(self):
+        import tarfile
+        def directory(name):
+            item = tarfile.TarInfo(name)
+            item.type = tarfile.DIRTYPE
+            return item
+        def regular(name, size):
+            item = tarfile.TarInfo(name)
+            item.type = tarfile.REGTYPE
+            item.size = size
+            return item
+
+        self.assertFalse(consumer.safe_tar_members([
+            directory(f'dir{i}/') for i in range(consumer.MAX_TAR_MEMBERS + 1)
+        ]))
+        self.assertFalse(consumer.safe_tar_members([
+            regular(f'file{i}', consumer.MAX_MEMBER_BYTES) for i in range(3)
+        ]))
+        self.assertTrue(consumer.safe_tar_members([
+            regular('manifest.json', 4),
+            regular('input/data.json', consumer.MAX_MEMBER_BYTES),
+            directory('input/'),
+        ]))
+        self.assertFalse(consumer.safe_tar_members([directory('.')]))
+
+    def test_tar_iteration_rejects_before_parsing_next_unbounded_header(self):
+        import tarfile
+        def oversized_header_stream():
+            for i in range(consumer.MAX_TAR_MEMBERS + 1):
+                item = tarfile.TarInfo(f'dir{i}/')
+                item.type = tarfile.DIRTYPE
+                yield item
+            raise AssertionError('parsed beyond bounded tar header limit')
+
+        with self.assertRaisesRegex(RuntimeError, 'unsafe payload members'):
+            consumer.validated_tar_members(oversized_header_stream())
+
+        def expanded_stream():
+            for i in range(3):
+                item = tarfile.TarInfo(f'file{i}')
+                item.type = tarfile.REGTYPE
+                item.size = consumer.MAX_MEMBER_BYTES
+                yield item
+            raise AssertionError('parsed beyond aggregate tar expansion limit')
+
+        with self.assertRaisesRegex(RuntimeError, 'unsafe payload members'):
+            consumer.validated_tar_members(expanded_stream())
+
     def test_unknown_confidential_cli_argument_is_not_echoed(self):
         from unittest.mock import patch
         out, err = StringIO(), StringIO()
