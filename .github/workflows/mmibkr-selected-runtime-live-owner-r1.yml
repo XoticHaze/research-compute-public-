@@ -97,6 +97,15 @@ jobs:
             echo "LIVE_OWNER_EXACT_NEW_MARKER_COUNT_INVALID=$marker_count"
             exit 64
           fi
+          # A fresh random suffix on an old marker is not independent operator
+          # authorization. Never let a public Git push replay a writable owner
+          # or successor, even if the marker's historical predecessor ID matches.
+          # Preserve explicit workflow_dispatch for the canonical operator and
+          # the separately bounded read-only pool/supervised push markers.
+          if printf '%s\n' "$changed" | grep -Eq '^\+(live_successor_approved_dispatch_request|live_owner_approved_dispatch_request)'; then
+            echo 'LIVE_WRITABLE_PUSH_DISPATCH_REQUIRES_INDEPENDENT_ADMISSION=1'
+            exit 64
+          fi
           if printf '%s\n' "$changed" | grep -Eq '^\+live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39492758670$'; then
             admission_only=false
             mode=successor
