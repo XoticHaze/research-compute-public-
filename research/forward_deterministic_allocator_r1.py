@@ -121,11 +121,16 @@ def _hold_prior_for_unadmitted_p249(scoreboard: dict[str, Any], prior: dict[str,
         if isinstance(row, dict):
             if row.get("action") in {"ADD", "EXIT", "REDUCE"}:
                 row["action"] = "HOLD_PRIOR"
-            row["reason"] = "P249 economic source unadmitted: prior frozen allocation only; no new action"
-    result.setdefault("constraints_applied", []).append({
-        "rule": "p249_economic_current_admission",
-        "result": "hold_prior_targets_no_new_rebalance",
-    })
+                row["reason"] = "Prior action held, not replayed: P249 economic source unadmitted"
+            elif row.get("sleeve") == "P249_P266_CORE":
+                row["reason"] = "Prior frozen strategic core held; no fresh P249 economic admission"
+            row["new_action_authorized"] = False
+    constraints = result.setdefault("constraints_applied", [])
+    if not any(isinstance(row, dict) and row.get("rule") == "p249_economic_current_admission" for row in constraints):
+        constraints.append({
+            "rule": "p249_economic_current_admission",
+            "result": "hold_prior_targets_no_new_rebalance",
+        })
     result.setdefault("boundaries", {})["new_allocation_authority"] = False
     result["boundaries"]["p249_source_gap_hold_prior"] = True
     return result
