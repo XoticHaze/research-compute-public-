@@ -89,7 +89,46 @@ def consume(envelope_path:Path,private_key_path:Path,run_id:str)->dict:
             if b'Fail-closed authority boundary' not in html or b'Automatic promotion: false' not in html: raise RuntimeError('HTML safety presentation missing')
             return {'schema':RECEIPT_SCHEMA,'authority':AUTHORITY,'harness':HARNESS,'mm_head_sha':MM_HEAD_SHA,'status':'PASS','runtime_count':int(snapshot['runtime_count']),'snapshot_sha256':hashlib.sha256((root/SNAPSHOT).read_bytes()).hexdigest(),'html_sha256':hashlib.sha256(html).hexdigest(),'automatic_promotion':False,'strategy_spec_write':False,'runtime_activation':False,'broker_submit':False,'live_unlock':False}
 
+# Public GitHub logs must never interpolate private snapshot keys, tar member
+# names, subprocess errors, or nested consumer data, even on rejection.
+_PUBLIC_KEYS = frozenset({
+    'schema', 'authority', 'harness', 'mm_head_sha', 'status', 'runtime_count',
+    'snapshot_sha256', 'html_sha256', 'automatic_promotion',
+    'strategy_spec_write', 'runtime_activation', 'broker_submit', 'live_unlock',
+})
+_PUBLIC_FALSE = ('automatic_promotion', 'strategy_spec_write',
+                 'runtime_activation', 'broker_submit', 'live_unlock')
+
+
+def public_receipt(value:dict)->dict:
+    """Fixed-field public success projection; no nested/private passthrough."""
+    if not isinstance(value,dict) or set(value)!=_PUBLIC_KEYS:
+        raise RuntimeError('PUBLIC_RECEIPT_FIELD_SET_REJECTED')
+    expected={'schema':RECEIPT_SCHEMA,'authority':AUTHORITY,'harness':HARNESS,
+              'mm_head_sha':MM_HEAD_SHA,'status':'PASS'}
+    if any(value.get(k)!=v for k,v in expected.items()):
+        raise RuntimeError('PUBLIC_RECEIPT_IDENTITY_REJECTED')
+    if any(value.get(k) is not False for k in _PUBLIC_FALSE):
+        raise RuntimeError('PUBLIC_RECEIPT_AUTHORITY_REJECTED')
+    count=value.get('runtime_count')
+    if type(count) is not int or not 1<=count<=100000:
+        raise RuntimeError('PUBLIC_RECEIPT_COUNT_REJECTED')
+    for key in ('snapshot_sha256','html_sha256'):
+        digest=value.get(key)
+        if not isinstance(digest,str) or len(digest)!=64 or any(c not in '0123456789abcdef' for c in digest):
+            raise RuntimeError('PUBLIC_RECEIPT_DIGEST_REJECTED')
+    return {k:value[k] for k in sorted(_PUBLIC_KEYS)}
+
+
 def main()->int:
     p=argparse.ArgumentParser(); p.add_argument('--envelope',type=Path,required=True); p.add_argument('--private-key',type=Path,required=True); p.add_argument('--run-id',required=True); a=p.parse_args()
-    print('P01_AUTOTUNER_HTML_RECEIPT='+json.dumps(consume(a.envelope,a.private_key,a.run_id),sort_keys=True)); return 0
+    try:
+        public=public_receipt(consume(a.envelope,a.private_key,a.run_id))
+    except Exception:
+        # Constant public failure, not a traceback containing private key names
+        # or user-controlled error messages. No result artifact is published.
+        print('P01_AUTOTUNER_HTML_RECEIPT='+json.dumps({'schema':RECEIPT_SCHEMA,'status':'REJECTED'},sort_keys=True))
+        return 1
+    print('P01_AUTOTUNER_HTML_RECEIPT='+json.dumps(public,sort_keys=True))
+    return 0
 if __name__=='__main__': raise SystemExit(main())
