@@ -28,15 +28,55 @@ MANIFEST_FIELDS = {
     "data_identity", "files"
 }
 
+# Exact inventory emitted by the pinned private MM packager at fc8890d5.
+# Archive paths are fixed independent of the caller-authored manifest.
+EXPECTED_SOURCE_FILES = frozenset({
+    EXPECTED_ENTRYPOINT,
+    "model_lab_training_matrix.py",
+    "model_lab_canonical_data.py",
+    "model_lab_xgboost.py",
+    "model_lab_canonical_trainer.py",
+    "model_lab_validation.py",
+    "predictive_target_spec.py",
+    "feature_contract.py",
+    "timeframe_adapters.py",
+})
+EXPECTED_DATA_FILES = {
+    "raw_sha256": "data_root/futures/MNQ-CONTINUOUS/12Min.csv",
+    "features_sha256": "data_root/futures/MNQ-CONTINUOUS/12Min.features.csv",
+    "sidecar_sha256": "data_root/futures/MNQ-CONTINUOUS/12Min.features.csv.manifest.json",
+}
+EXPECTED_DATA_IDENTITY_FIELDS = frozenset({
+    *EXPECTED_DATA_FILES, "feature_manifest_hash", "feature_semantic_hash",
+})
+EXPECTED_ARCHIVE_FILES = frozenset({
+    "payload_manifest.json", *EXPECTED_SOURCE_FILES, *EXPECTED_DATA_FILES.values(),
+})
+
 
 def _safe_extract(blob: bytes, root: Path) -> None:
+    """Accept only the pinned packager's exact regular-file inventory."""
     with tarfile.open(fileobj=io.BytesIO(blob), mode="r:*") as tf:
         members = tf.getmembers()
+        if len(members) != len(EXPECTED_ARCHIVE_FILES):
+            raise RuntimeError("P02 capsule archive member count mismatch")
+        seen: set[str] = set()
         for member in members:
-            p = Path(member.name)
-            if p.is_absolute() or ".." in p.parts or member.issym() or member.islnk():
-                raise RuntimeError("unsafe capsule member")
-        tf.extractall(root)
+            name = member.name
+            if name not in EXPECTED_ARCHIVE_FILES or name in seen or not member.isfile():
+                raise RuntimeError("P02 capsule archive member inventory mismatch")
+            seen.add(name)
+        if seen != EXPECTED_ARCHIVE_FILES:
+            raise RuntimeError("P02 capsule archive member inventory incomplete")
+        # Explicit regular-file writes avoid extractall's platform-dependent
+        # special-member handling and never follow archive-provided links.
+        for member in members:
+            stream = tf.extractfile(member)
+            if stream is None:
+                raise RuntimeError("P02 capsule archive regular member unreadable")
+            node = root / member.name
+            node.parent.mkdir(parents=True, exist_ok=True)
+            node.write_bytes(stream.read())
 
 
 def _validate(root: Path) -> dict:
@@ -50,16 +90,57 @@ def _validate(root: Path) -> dict:
     if manifest["symbol"] != EXPECTED_SYMBOL or manifest["timeframe"] != EXPECTED_TIMEFRAME:
         raise RuntimeError("P02 symbol/timeframe mismatch")
     files = manifest["files"]
-    if not isinstance(files, dict) or not files or EXPECTED_ENTRYPOINT not in files:
-        raise RuntimeError("P02 file identity map missing")
+    if not isinstance(files, dict) or set(files) != EXPECTED_SOURCE_FILES:
+        raise RuntimeError("P02 source file identity map mismatch")
     for rel, expected in files.items():
-        p = Path(rel)
-        if p.is_absolute() or ".." in p.parts:
-            raise RuntimeError("P02 file path invalid")
-        raw = (root / p).read_bytes()
-        if hashlib.sha256(raw).hexdigest() != expected:
+        raw = (root / rel).read_bytes()
+        if not isinstance(expected, str) or hashlib.sha256(raw).hexdigest() != expected:
             raise RuntimeError("P02 file digest mismatch: " + rel)
+    data_identity = manifest["data_identity"]
+    if not isinstance(data_identity, dict) or set(data_identity) != EXPECTED_DATA_IDENTITY_FIELDS:
+        raise RuntimeError("P02 data identity map mismatch")
+    for key, rel in EXPECTED_DATA_FILES.items():
+        expected = data_identity[key]
+        raw = (root / rel).read_bytes()
+        if not isinstance(expected, str) or hashlib.sha256(raw).hexdigest() != expected:
+            raise RuntimeError("P02 data digest mismatch: " + key)
     return manifest
+
+
+
+def _run_private_consumer(cmd: list[str], root: Path) -> None:
+    """Do not forward the private consumer's full JSON or error text to public logs."""
+    completed = subprocess.run(
+        cmd,
+        cwd=root,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError("P02 private consumer failed; output withheld")
+
+
+
+# Minimum public receipt while no independently approved P02 result-field
+# classification or authenticated private full-result return is available.
+PUBLIC_RECEIPT_FIELDS = frozenset({
+    "schema", "run_id", "mm_commit", "symbol", "timeframe", "status",
+})
+
+
+def _public_receipt_projection(run_id: str, manifest: dict) -> dict:
+    result = {
+        "schema": "p02-public-consumer-receipt-v1",
+        "run_id": str(run_id),
+        "mm_commit": EXPECTED_MM_COMMIT,
+        "symbol": EXPECTED_SYMBOL,
+        "timeframe": EXPECTED_TIMEFRAME,
+        "status": "PRIVATE_RESULT_WITHHELD_PENDING_TWO_SIDED_ADMISSION",
+    }
+    if set(result) != PUBLIC_RECEIPT_FIELDS:
+        raise RuntimeError("P02 public receipt field contract mismatch")
+    return result
 
 
 def main() -> int:
@@ -82,7 +163,6 @@ def main() -> int:
     )
     with tempfile.TemporaryDirectory(prefix="p02-model-lab-") as td:
         root = Path(td)
-        manifest = _validate(root) if False else None
         _safe_extract(plaintext, root)
         manifest = _validate(root)
         data_root = root / "data_root"
@@ -97,21 +177,11 @@ def main() -> int:
             "--test-span-years", "1", "--min-test-rows", "200",
             "--output", str(out),
         ]
-        subprocess.run(cmd, cwd=root, check=True)
+        _run_private_consumer(cmd, root)
         receipt = json.loads(out.read_text())
         if receipt.get("schema") != "mm.model_lab_xgboost_first_consumer.v1":
             raise RuntimeError("P02 receipt schema mismatch")
-        print(json.dumps({
-            "schema": "p02-public-consumer-receipt-v1",
-            "run_id": str(args.run_id),
-            "mm_commit": manifest["mm_commit"],
-            "data_identity": manifest["data_identity"],
-            "symbol": receipt.get("symbol"),
-            "timeframe": receipt.get("timeframe"),
-            "matched_window": receipt.get("matched_window"),
-            "incremental_predictive_value": receipt.get("incremental_predictive_value"),
-            "economic_evidence": receipt.get("economic_evidence"),
-        }, sort_keys=True))
+        print(json.dumps(_public_receipt_projection(args.run_id, manifest), sort_keys=True))
     return 0
 
 
