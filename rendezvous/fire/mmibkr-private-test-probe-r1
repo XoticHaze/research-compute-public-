@@ -1,21 +1,18 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "48dbc66c3f5a3809a232768c6fd03f1d0abf5ed4",
+  "source_ref": "f932a4178cb87fdfca9e93787add008fc8e4fa6b",
   "test_modules": [
-    "tests.test_legacy_submit_fail_closed_r10",
-    "tests.test_legacy_strategy_live_guard_r11",
-    "tests.test_selected_runtime_mutation_boundary_inspect_v1",
-    "tests.test_live_seal_compose_runner_v1",
-    "tests.test_selected_runtime_cloud_bar_clock_v1",
-    "tests.test_selected_runtime_submit_authority",
-    "tests.test_ibkr_production_live_account_context_v1"
+    "tests.test_selected_runtime_live_order_intent_journal_v1",
+    "tests.test_selected_runtime_live_execution_ledger_v1",
+    "tests.test_selected_runtime_live_broker_provenance_v1",
+    "tests.test_selected_runtime_live_p0_integrated_checkpoint_v1"
   ],
   "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
   "s3_composition_economics": false,
   "s4_layered_mtf_economics": false,
-  "requested_by": "chatgpt-mm-live-execution-p0",
-  "purpose": "Exact PR843 cloud-only isolated legacy regression and source mutation guard validation after frozen-main test repair; zero broker and zero activation",
+  "requested_by": "continue-release-clocked-20261023",
+  "purpose": "Exact encrypted Source Vault f932a417 journal writer provenance and cross-component successor freeze; no broker or live order",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -23,8 +20,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "mm-pr843-current-source-48dbc66c-20261011-cloud-r1",
+  "request_nonce": "p0-883-f932a417-20261023-clocked-integrated-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "48dbc66c3f5a3809a232768c6fd03f1d0abf5ed4",
+  "current_private_reference": "f932a4178cb87fdfca9e93787add008fc8e4fa6b",
   "parity_public_key_b64": ""
 }
