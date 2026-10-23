@@ -107,6 +107,18 @@ jobs:
           npx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/mmibkr-canary-bundle" >/dev/null
           echo 'MMIBKR_CLOUD_CANARY_WRANGLER_DRYRUN=PASS'
 
+      # User-owned FREE-only policy: a scoped token and an unarmed Worker
+      # do not establish Containers entitlement or a zero-overage ceiling.
+      # Keep the existing brokerless source/dry-run checks above executable,
+      # but stop before any token-backed managed Container deployment.
+      - name: Enforce free-only Containers deployment hold
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'MMIBKR_CLOUDFLARE_CONTAINERS_FREE_ONLY_HOLD=1'
+          echo 'Managed Containers deployment requires separate verified entitlement and explicit user authorization.'
+          exit 64
+
       - name: Require currently scoped Cloudflare deployment authority
         shell: bash
         run: |
