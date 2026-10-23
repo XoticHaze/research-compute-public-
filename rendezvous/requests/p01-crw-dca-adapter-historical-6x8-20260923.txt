@@ -1,0 +1,14 @@
+P01 CRW DCA historical-parity economics request
+
+Purpose:
+- preserve current W96 / ENTRY_EXTREME=-2.52 survivor/control unchanged
+- execute historical legacy_pine_v0_2 challenger with TradingView operator ladder [6,6,8,4,5,6,7,8,9,10]
+- execute corrected tiered_previous_buy challenger [6,8]
+- fixed matched capital controls from admitted W96 seed
+- costs 0/2.5/5/10 bp
+- chronology folds enabled by existing consumer
+- protected post-cutoff holdout unread
+- research-only; no StrategySpec/runtime/broker/paper/live mutation
+
+Provenance:
+historical V0.2 shifted lookup realizes first two adds 6% then 8% nominal from previous buy signal-close, with historical 0.0005 buffer.

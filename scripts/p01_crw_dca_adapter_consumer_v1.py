@@ -102,12 +102,25 @@ def _metrics(result: dict[str, Any], source_root: Path) -> dict[str, Any]:
     }
 
 
-def _arm(seed: dict[str, Any], *, trigger_mode: str, slippage_bps: float) -> dict[str, Any]:
+HISTORICAL_TV_DCA_LADDER = [6.0, 6.0, 8.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+CORRECTED_TWO_ADD_LADDER = [6.0, 8.0]
+
+
+def _arm(
+    seed: dict[str, Any],
+    *,
+    slippage_bps: float,
+    trigger_mode: str | None = None,
+    tier_drawdowns_pct: list[float] | None = None,
+) -> dict[str, Any]:
     req = copy.deepcopy(seed)
     params = req.setdefault("params", {})
     if not bool(params.get("ENABLE_DCA", False)):
-        raise SystemExit("W96 seed is not DCA-enabled; DCA_TRIGGER_MODE discriminator is inadmissible")
-    params["DCA_TRIGGER_MODE"] = trigger_mode
+        raise SystemExit("W96 seed is not DCA-enabled; DCA discriminator is inadmissible")
+    if trigger_mode is not None:
+        params["DCA_TRIGGER_MODE"] = trigger_mode
+    if tier_drawdowns_pct is not None:
+        params["DCA_TIER_DRAWDOWNS_PCT"] = list(tier_drawdowns_pct)
     # Cost sensitivity is absolute, not additive, so 0 really means the 0 bp slippage arm.
     params["slippage_bps"] = float(slippage_bps)
     params["SLIPPAGE_BPS"] = float(slippage_bps)
@@ -152,19 +165,30 @@ def main() -> int:
     symbols = seed.get("symbols") or [seed.get("symbol") or "MNQ"]
     seed["_verified_source_paths"] = {str(s): str(corpus) for s in symbols}
 
-    arms = {
-        "control": "tiered_previous_buy",
-        "challenger": "legacy_pine_v0_2",
+    arm_specs = {
+        # Frozen current survivor/control: preserve every DCA setting from the admitted W96 seed.
+        "control": {},
+        # Historical TradingView/Pine V0.2 operator settings. With legacy shifted lookup,
+        # the first two realized adds are nominal 6% then 8% from prior buy signal-close.
+        "challenger": {
+            "trigger_mode": "legacy_pine_v0_2",
+            "tier_drawdowns_pct": HISTORICAL_TV_DCA_LADDER,
+        },
+        # Corrected modular semantics for the same realized two-add 6% then 8% behavior.
+        "corrected_6_8": {
+            "trigger_mode": "tiered_previous_buy",
+            "tier_drawdowns_pct": CORRECTED_TWO_ADD_LADDER,
+        },
     }
     primary_requests = {
-        name: _arm(seed, trigger_mode=mode, slippage_bps=2.5)
-        for name, mode in arms.items()
+        name: _arm(seed, slippage_bps=2.5, **spec)
+        for name, spec in arm_specs.items()
     }
     scenarios: dict[str, Any] = {}
     for cost in COST_BPS:
         pair: dict[str, Any] = {}
-        for name, mode in arms.items():
-            request = _arm(seed, trigger_mode=mode, slippage_bps=cost)
+        for name, spec in arm_specs.items():
+            request = _arm(seed, slippage_bps=cost, **spec)
             result = _canonical(source_root, request, root)
             pair[name] = _metrics(result, source_root)
         pair["challenger_minus_control_return_points"] = (
@@ -172,6 +196,12 @@ def main() -> int:
         )
         pair["challenger_minus_control_net_pnl"] = (
             pair["challenger"]["after_cost_net_pnl"] - pair["control"]["after_cost_net_pnl"]
+        )
+        pair["corrected_6_8_minus_control_return_points"] = (
+            pair["corrected_6_8"]["after_cost_return_points"] - pair["control"]["after_cost_return_points"]
+        )
+        pair["corrected_6_8_minus_control_net_pnl"] = (
+            pair["corrected_6_8"]["after_cost_net_pnl"] - pair["control"]["after_cost_net_pnl"]
         )
         scenarios[str(cost)] = pair
 
@@ -188,8 +218,21 @@ def main() -> int:
             "expected_bytes": args.expected_corpus_bytes,
             "observed_bytes": observed_bytes,
         },
-        "dca_discriminator": "DCA_TRIGGER_MODE",
-        "arms": arms,
+        "dca_discriminator": "historical_parity_and_trigger_semantics",
+        "arms": {
+            "control": "frozen_w96_seed",
+            "challenger": {
+                "trigger_mode": "legacy_pine_v0_2",
+                "tier_drawdowns_pct": HISTORICAL_TV_DCA_LADDER,
+                "realized_first_two_adds_pct": CORRECTED_TWO_ADD_LADDER,
+                "reference": "previous_buy_signal_close",
+                "historical_buffer": 0.0005,
+            },
+            "corrected_6_8": {
+                "trigger_mode": "tiered_previous_buy",
+                "tier_drawdowns_pct": CORRECTED_TWO_ADD_LADDER,
+            },
+        },
         "exact_dca_parameters_at_primary_2_5bp": {
             name: _dca_params(request) for name, request in primary_requests.items()
         },
