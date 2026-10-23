@@ -1,6 +1,9 @@
 name: tlt-rate-shock-reversal-r1
 on:
   pull_request:
+    paths:
+      - .github/workflows/tlt-rate-shock-reversal-r1.yml
+      - research/tlt_rate_shock_reversal_r1.py
   workflow_dispatch:
 jobs:
   evaluate:
