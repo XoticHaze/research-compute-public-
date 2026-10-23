@@ -890,6 +890,7 @@ jobs:
         timeout-minutes: 290
         run: |
           set -euo pipefail
+          umask 077
           # Same authenticated production owner and A/B consumers for short
           # acceptance (15m) or the original long continuity (280m).
           case "$POOL_SESSION_MINUTES" in 15|280) ;; *) echo 'MMIBKR_POOL_DURATION_INVALID=1'; exit 64 ;; esac
@@ -906,6 +907,7 @@ jobs:
           maintenance_evidence_seen=0
           ready=0
           owner_probe_sample=0
+          private_probe_log="$RUNNER_TEMP/mmibkr-gateway-read-probe-private.log"
           if [ "$POOL_TRANSPORT" = tailscale ]; then
             relay_pid="$(cat "$RUNNER_TEMP/mmibkr-gateway-relay.pid")"
             kill -0 "$relay_pid"
@@ -948,7 +950,9 @@ jobs:
             pool_resource_sample interval
             owner_probe_sample=$((owner_probe_sample + 1))
             export MMIBKR_OWNER_PROBE_SAMPLE="$owner_probe_sample"
-            if python - <<'PY'
+            # Capture upstream IBKR stdout AND stderr; logger.disable alone
+            # cannot guarantee account-number-bearing timeout text stays private.
+            if python - >"$private_probe_log" 2>&1 <<'PY'
           import os,logging
           from pathlib import Path
           from scripts.mmibkr_public_broker_log_guard_v1 import install; install()
@@ -988,6 +992,7 @@ jobs:
               if ib.isConnected(): ib.disconnect()
           PY
             then
+              rm -f "$private_probe_log"
               if [ "$maintenance_evidence_seen" -eq 1 ]; then
                 # This exact successful broker probe included account identity,
                 # positions, open orders and executions from the same owner.
@@ -1015,6 +1020,14 @@ jobs:
               sleep 90
             else
               result=$?
+              # Only exact allowlisted stage/class markers may leave the private
+              # runner-local log. Never cat/tail upstream IB timeout messages.
+              if [ -f "$private_probe_log" ]; then
+                grep -xE 'MMIBKR_GATEWAY_POOL_BROKER_FAILURE_STAGE=(api_connect_and_sync|account_identity|positions_read|orders_read|executions_read)' "$private_probe_log" || true
+                grep -xE 'MMIBKR_GATEWAY_POOL_BROKER_FAILURE_CLASS=(TimeoutError|ConnectionError|RuntimeError|OSError|ValueError|AssertionError)' "$private_probe_log" || true
+                grep -xF 'MMIBKR_GATEWAY_POOL_BROKER_PROBE_RETRYABLE=1' "$private_probe_log" || true
+                rm -f "$private_probe_log"
+              fi
               if [ "$result" -eq 70 ]; then
                 echo 'MMIBKR_GATEWAY_POOL_ACCOUNT_MISMATCH_FAIL_CLOSED=1'
                 exit 70
@@ -1624,7 +1637,7 @@ jobs:
           fi
           rm -rf "$RUNNER_TEMP/live-warm-import" "$RUNNER_TEMP/live-warm-export"
           rm -rf "$RUNNER_TEMP/mmibkr-live-source" "$RUNNER_TEMP/mmibkr-live-data"
-          rm -f "$RUNNER_TEMP/mmibkr-live-gateway.env" "$RUNNER_TEMP/mmibkr-live-bot.env" "$RUNNER_TEMP/mmibkr-live-seal-receipt.json"
+          rm -f "$RUNNER_TEMP/mmibkr-live-gateway.env" "$RUNNER_TEMP/mmibkr-live-bot.env" "$RUNNER_TEMP/mmibkr-live-seal-receipt.json" "$RUNNER_TEMP/mmibkr-gateway-read-probe-private.log"
           test ! -e "$RUNNER_TEMP/mmibkr-live-gateway.env"
           test ! -e "$RUNNER_TEMP/mmibkr-live-data"
           echo 'LIVE_RUN_ONE_RUN_PRIVATE_MATERIAL_DESTROYED=1'
