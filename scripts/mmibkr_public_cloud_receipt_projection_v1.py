@@ -198,11 +198,13 @@ def project(receipt: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("public_cloud_receipt_unreviewed_fields_rejected")
     for nested in ("operator_snapshot_publish", "initial_backfill_ingest"):
         public[nested] = _checked_nested_public_field(nested, receipt.get(nested))
+    # Validate each scalar before checking cross-field identity. Invalid run_id
+    # must fail at its own typed allowlist gate, not via a derived key regex.
+    _check_public_scalar_fields(public)
     preowner = public["initial_backfill_ingest"].get("preowner_checkpoint_cache_key")
     if preowner is not None:
         run_id = public.get("run_id")
         pattern = re.escape(CHECKPOINT_CACHE_PREFIX) + re.escape(str(run_id)) + r"-[a-f0-9]{3,40}-initial-backfill-preowner"
         if type(run_id) is not str or not re.fullmatch(pattern, preowner):
             raise ValueError("public_cloud_receipt_nested_identity_rejected:preowner_checkpoint_cache_key")
-    _check_public_scalar_fields(public)
     return public
