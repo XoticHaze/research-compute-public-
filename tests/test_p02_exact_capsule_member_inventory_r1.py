@@ -1,0 +1,113 @@
+"""Focused P02 encrypted-capsule source/data identity acceptance.
+
+Synthetic regular tar members only; no private source, real corpus or broker.
+"""
+from __future__ import annotations
+
+import hashlib
+import io
+import json
+from pathlib import Path
+import sys
+import tarfile
+import tempfile
+import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+import p02_model_lab_xgboost_capsule_consumer_v1 as consumer
+
+
+def _sha(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _fixture(*, replace: tuple[str, str] | None = None,
+             special: str | None = None, tamper_data: bool = False,
+             extra_manifest_file: bool = False) -> bytes:
+    source = {name: ("source:" + name).encode() for name in consumer.EXPECTED_SOURCE_FILES}
+    data = {name: ("data:" + name).encode() for name in consumer.EXPECTED_DATA_FILES.values()}
+    manifest = {
+        "schema": consumer.SCHEMA,
+        "mm_commit": consumer.EXPECTED_MM_COMMIT,
+        "entrypoint": consumer.EXPECTED_ENTRYPOINT,
+        "symbol": consumer.EXPECTED_SYMBOL,
+        "timeframe": consumer.EXPECTED_TIMEFRAME,
+        "data_identity": {
+            **{key: _sha(data[name]) for key, name in consumer.EXPECTED_DATA_FILES.items()},
+            "feature_manifest_hash": "synthetic-manifest",
+            "feature_semantic_hash": "synthetic-semantics",
+        },
+        "files": {name: _sha(raw) for name, raw in source.items()},
+    }
+    if extra_manifest_file:
+        manifest["files"]["unlisted.py"] = _sha(b"unlisted")
+    members = {
+        "payload_manifest.json": (json.dumps(manifest, sort_keys=True) + "\n").encode(),
+        **source, **data,
+    }
+    if tamper_data:
+        members[consumer.EXPECTED_DATA_FILES["raw_sha256"]] = b"altered raw source"
+    if replace:
+        original, alternate = replace
+        members[alternate] = members.pop(original)
+    output = io.BytesIO()
+    with tarfile.open(fileobj=output, mode="w") as tf:
+        for name, raw in members.items():
+            info = tarfile.TarInfo(name)
+            if name == special:
+                info.type = tarfile.SYMTYPE
+                info.linkname = "payload_manifest.json"
+                tf.addfile(info)
+            else:
+                info.size = len(raw)
+                tf.addfile(info, io.BytesIO(raw))
+    return output.getvalue()
+
+
+class P02ExactCapsuleInventoryTest(unittest.TestCase):
+    def test_pinned_private_packager_shape_is_accepted(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            consumer._safe_extract(_fixture(), root)
+            self.assertEqual(consumer._validate(root)["schema"], consumer.SCHEMA)
+
+    def test_undeclared_executable_member_rejected_before_extraction(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            archive = _fixture(replace=("timeframe_adapters.py", "sitecustomize.py"))
+            with self.assertRaisesRegex(RuntimeError, "member inventory"):
+                consumer._safe_extract(archive, root)
+            self.assertFalse((root / "sitecustomize.py").exists())
+
+    def test_duplicate_name_rejected_even_with_same_member_count(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            # A same-count duplicate is a real ambiguous tar-member attack.
+            archive = _fixture(replace=("timeframe_adapters.py", "payload_manifest.json"))
+            with self.assertRaisesRegex(RuntimeError, "member inventory"):
+                consumer._safe_extract(archive, root)
+
+    def test_nonregular_expected_member_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaisesRegex(RuntimeError, "member inventory"):
+                consumer._safe_extract(
+                    _fixture(special="timeframe_adapters.py"), Path(td)
+                )
+
+    def test_data_bytes_bound_to_declared_digest(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            consumer._safe_extract(_fixture(tamper_data=True), root)
+            with self.assertRaisesRegex(RuntimeError, "data digest mismatch"):
+                consumer._validate(root)
+
+    def test_source_manifest_must_match_exact_nine_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            consumer._safe_extract(_fixture(extra_manifest_file=True), root)
+            with self.assertRaisesRegex(RuntimeError, "source file identity map mismatch"):
+                consumer._validate(root)
+
+
+if __name__ == "__main__":
+    unittest.main()
