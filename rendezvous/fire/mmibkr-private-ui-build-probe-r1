@@ -1,10 +1,10 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "de26ac3c5de3c9eb4caf2f2d70d91039142e3b58",
+  "source_ref": "f87378b1ecc724a4f856b42c698e16d11f103842",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
-  "requested_by": "continue-release-clocked-20261023",
-  "purpose": "Re-execute exact selected UI #888 after one-line Bot Console acceptance marker correction from actual failed run 40036561716. Existing Bot Console Node acceptance then production Vite build; no broker/runtime/served deploy.",
-  "request_nonce": "ui-888-de26ac3c-20261023-vite-r2",
+  "requested_by": "continue-release-20261023-clock-231551",
+  "purpose": "Exact selected #888 93-path registry provenance + five-key forward PnL identity + scoped Builder Save/Load + current controller test pin, one Vault-attested private Node/Vite build; no broker/live/served deploy",
+  "request_nonce": "ui-888-f87378b1-20261023-vite-r1",
   "authority": {
     "research_only": true,
     "broker": false,
