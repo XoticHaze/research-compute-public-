@@ -206,6 +206,10 @@ jobs:
           assert 'WRITABLE_LIVE_GATEWAY_STARTED=1' in gateway
           assert "inputs.admission_only && 'yes' || 'no'" in gateway
           print('LIVE_EXACT_SUCCESSOR_DISPATCH_SHELL_PARSE=PASS')
+          checkpoint=owner.split('      - name: Stop live owner and encrypt canonical Gateway and bot data for successor',1)[1].split('      - name: Persist exact encrypted production-live successor state',1)[0]
+          assert 'LIVE_RUNTIME_CHECKPOINT_SOURCE_QUIESCENT=1' in checkpoint
+          assert 'LIVE_RUNTIME_CHECKPOINT_GATEWAY_STILL_RUNNING=1' in checkpoint
+          assert 'docker stop --time 90 mmibkr-live-gateway >/dev/null 2>&1 || true' not in checkpoint
           assert 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1' in owner
           assert 'EXPLICIT_APPROVED_CANONICAL_LIVE_OWNER=1' in owner
           assert 'LIVE_MODE_REQUIRES_LEGACY_OR_EXACT_SUCCESSOR=1' in owner
@@ -1541,10 +1545,32 @@ jobs:
           umask 077
           docker inspect mmibkr-live-gateway >/dev/null
           test -d "$RUNNER_TEMP/mmibkr-live-data"
+          # Never seal a moving Gateway/bot volume after a masked stop error.
+          # This proves disk quiescence only, not broker logout or cross-runner
+          # authenticated session continuity; successor admission stays fenced.
           if docker inspect mmibkr-live-bot >/dev/null 2>&1; then
-            docker stop --time 90 mmibkr-live-bot >/dev/null 2>&1 || true
+            if [ "$(docker inspect -f '{{.State.Running}}' mmibkr-live-bot)" = true ]; then
+              if ! docker stop --time 90 mmibkr-live-bot >/dev/null 2>&1; then
+                echo 'LIVE_RUNTIME_CHECKPOINT_BOT_STOP_FAILED=1'
+                exit 75
+              fi
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' mmibkr-live-bot)" != false ]; then
+              echo 'LIVE_RUNTIME_CHECKPOINT_BOT_STILL_RUNNING=1'
+              exit 75
+            fi
           fi
-          docker stop --time 90 mmibkr-live-gateway >/dev/null 2>&1 || true
+          if [ "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = true ]; then
+            if ! docker stop --time 90 mmibkr-live-gateway >/dev/null 2>&1; then
+              echo 'LIVE_RUNTIME_CHECKPOINT_GATEWAY_STOP_FAILED=1'
+              exit 75
+            fi
+          fi
+          if [ "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" != false ]; then
+            echo 'LIVE_RUNTIME_CHECKPOINT_GATEWAY_STILL_RUNNING=1'
+            exit 75
+          fi
+          echo 'LIVE_RUNTIME_CHECKPOINT_SOURCE_QUIESCENT=1'
           work="$RUNNER_TEMP/mmibkr-live-checkpoint"
           mkdir -p "$work"
           docker run --rm --network none --user 0:0 \
