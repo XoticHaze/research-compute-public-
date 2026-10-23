@@ -7,6 +7,9 @@ on:
   workflow_dispatch:
 jobs:
   evaluate:
+    # Exact legacy confidential P01 EXIT job hold; same scope as merged #1953.
+    # No public plaintext full-result artifact until independent two-sided admission.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
