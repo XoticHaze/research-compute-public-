@@ -2,17 +2,14 @@
   "schema": "mmibkr.private_test_probe_fire.v1",
   "source_ref": "f932a4178cb87fdfca9e93787add008fc8e4fa6b",
   "test_modules": [
-    "tests.test_selected_runtime_live_order_intent_journal_v1",
-    "tests.test_selected_runtime_live_execution_ledger_v1",
-    "tests.test_selected_runtime_live_broker_provenance_v1",
-    "tests.test_selected_runtime_live_p0_integrated_checkpoint_v1"
+    "tests.test_ibkr_live_successor_ledger_reconcile_v1"
   ],
   "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
   "s3_composition_economics": false,
   "s4_layered_mtf_economics": false,
   "requested_by": "continue-release-clocked-20261023",
-  "purpose": "Exact encrypted Source Vault f932a417 journal writer provenance and cross-component successor freeze; no broker or live order",
+  "purpose": "One exact selected-head read-only successor ledger reconciliation module; source and archive already admitted, no broker",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -20,7 +17,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "p0-883-f932a417-20261023-clocked-integrated-r1",
+  "request_nonce": "p0-883-f932a417-20261023-successor-fence-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
   "current_private_reference": "f932a4178cb87fdfca9e93787add008fc8e4fa6b",
   "parity_public_key_b64": ""
