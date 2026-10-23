@@ -655,16 +655,24 @@ jobs:
           set -euo pipefail
           controller_image="$IBKR_CONTROLLER_IMAGE"
           if [ "${{ inputs.admission_only }}" = false ] ||
-             { [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ]; }; then
-            # Exact CI-verified v0.16.2 recovery release for live and supervised.
+             { [ "${{ inputs.admission_only }}" = true ] &&
+               { [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ] ||
+                 [ "${{ inputs.warm_handoff_mode }}" = gateway_pool_5h ]; }; }; then
+            # Reuse the existing CI-verified v0.16.2 recovery release for live,
+            # supervised, and no-order split Gateway pool; no new login path.
             controller_image='ghcr.io/code-hustler-ft3d/ibg-controller@sha256:2e4f4911991386e941f6e95d58ee38a8242474dd3be239f21ad82557d24b4368'
           fi
           docker pull "$controller_image" >/dev/null
           if [ "${{ inputs.admission_only }}" = false ] ||
-             { [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ]; }; then
+             { [ "${{ inputs.admission_only }}" = true ] &&
+               { [ "${{ inputs.warm_handoff_mode }}" = supervised_5h ] ||
+                 [ "${{ inputs.warm_handoff_mode }}" = gateway_pool_5h ]; }; }; then
             controller_version="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$controller_image")"
             test "$controller_version" = v0.16.2
             echo 'MMIBKR_SUPERVISED_CONTROLLER_UPGRADE_V0_16_2_VERIFIED=1'
+            if [ "${{ inputs.warm_handoff_mode }}" = gateway_pool_5h ]; then
+              echo 'MMIBKR_READONLY_GATEWAY_POOL_CONTROLLER_V0_16_2_VERIFIED=1'
+            fi
           fi
           vol="mmibkr-live-jts-$GITHUB_RUN_ID"
           docker volume create "$vol" >/dev/null
