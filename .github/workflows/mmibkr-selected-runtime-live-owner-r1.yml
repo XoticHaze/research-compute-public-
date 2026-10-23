@@ -292,7 +292,8 @@ jobs:
           assert 'LIVE_RUNTIME_BROKER_RECOVERY_BUDGET_SECONDS=' in owner
           assert 'broker_outage_since ))" -ge 720' not in owner
           assert '"$gateway_healthy" != 1 ] || [ "$bot_paused" -eq 1' in owner
-          assert 'LIVE_RUNTIME_BROKER_VERIFIED_BOT_UNFROZEN=1' in owner
+          assert 'LIVE_RUNTIME_CANONICAL_LEDGER_RECONCILIATION_REQUIRED_BOT_STAYS_FROZEN=1' in owner
+          assert 'docker unpause mmibkr-live-bot' not in owner
           assert 'LIVE_RUNTIME_BROKER_LOST_BOT_FROZEN=1' not in owner
           assert 'LIVE_RUNTIME_BOT_AND_GATEWAY_CHECKPOINT_SEALED=1' in owner
           assert 'LIVE_RUNTIME_PREDECESSOR_GATEWAY_AND_BOT_DATA_RESTORED=1' in owner
@@ -1355,10 +1356,13 @@ jobs:
                   echo 'LIVE_RUNTIME_CONTROLLER_HEALTH_DISAGREES_WITH_BROKER_READ=1'
                 fi
                 if [ "$bot_paused" -eq 1 ]; then
-                  docker unpause mmibkr-live-bot >/dev/null
-                  bot_paused=0
-                  broker_outage_since=0
-                  echo 'LIVE_RUNTIME_BROKER_VERIFIED_BOT_UNFROZEN=1'
+                  # Fresh account/position/order/execution reads establish API
+                  # health, NOT reconciliation to persisted bot orderRef/permId/
+                  # execId intent and inventory. Never resume a paused live bot
+                  # from a connectivity-only receipt after an unknown outage.
+                  # The canonical MM owner must first bind the exact account,
+                  # open orders, positions and fills to its persisted intent.
+                  echo 'LIVE_RUNTIME_CANONICAL_LEDGER_RECONCILIATION_REQUIRED_BOT_STAYS_FROZEN=1'
                 fi
               else
                 if [ "$bot_paused" -eq 0 ]; then
