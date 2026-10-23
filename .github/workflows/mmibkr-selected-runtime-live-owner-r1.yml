@@ -278,7 +278,26 @@ jobs:
           assert 'LIVE_RUNTIME_SUCCESSOR_AUTH_AND_BROKER_RECONCILIATION_REQUIRED=1' in owner
           assert 'LIVE_RUNTIME_SUCCESSOR_PRESTART_LEDGER_RECONCILIATION_REQUIRED=1' in owner
           assert "SESSION_SECONDS: \"14400\"" in s
-          live=owner.split('      - name: Start unchanged canonical bot natural owner with three persisted live policies',1)[1]
+          live=owner.split('      - name: Reconcile restored live successor with canonical broker-ledger read-only gate
+        if: ${{ !inputs.admission_only && inputs.warm_handoff_mode == 'successor' }}
+        run: |
+          set -euo pipefail
+          # No broker mutation and no submit enable. Execute only *restored* MM
+          # source authority before attempting any successor bot startup.
+          checker="$PRIVATE_SOURCE_ROOT/scripts/operator/ibkr_live_successor_ledger_reconcile_v1.py"
+          test -f "$checker" || {
+            echo 'LIVE_RUNTIME_SUCCESSOR_CANONICAL_RECONCILER_SOURCE_NOT_ADMITTED=1'
+            exit 1
+          }
+          data="$RUNNER_TEMP/mmibkr-live-data"
+          universe="$data/strategy_runtime/selected_runtime_authority_14th31jv/selected_runtime_universe_14tu.json"
+          PYTHONPATH="$PRIVATE_SOURCE_ROOT" python "$checker" \
+            --data-root "$data" --universe "$universe" \
+            --account-env-file "$RUNNER_TEMP/mmibkr-live-bot.env"
+          echo 'LIVE_RUNTIME_SUCCESSOR_READ_ONLY_RECONCILIATION_PASSED=1'
+          # Intentionally no order submit or owner unfreeze here: predecessor
+          # authority and same-owner position/order reconciliation are separate.
+      - name: Start unchanged canonical bot natural owner with three persisted live policies',1)[1]
           live=live.split('      - name: Stop live owner and encrypt canonical Gateway and bot data for successor',1)[0]
           live=live.split('        run: |',1)[1]
           live_script="\n".join(line[10:] if line.startswith("          ") else line for line in live.splitlines())
