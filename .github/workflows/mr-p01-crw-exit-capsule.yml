@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
 jobs:
   evaluate:
+    # Legacy confidential P01 EXIT output remains held pending authenticated private return.
+    # Reuse the selected main #1953 job-level hold on this legacy ref.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
