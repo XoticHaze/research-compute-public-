@@ -274,6 +274,9 @@ jobs:
           assert 'PRODUCTION_CANONICAL_LIVE_BOT_STARTED=1' in owner
           assert 'PRODUCTION_LIVE_OWNER_SESSION_COMPLETE=1' in owner
           assert 'LIVE_RUNTIME_BROKER_READ_RECONCILED=1' in owner
+          assert owner.count('logging.disable(logging.CRITICAL)') >= 2
+          assert 'util.run(ib.connectAsync(' in owner
+          assert 'ib.RequestTimeout=25' in owner
           # A nullable upstream_connected is advisory; only a failed real IB
           # account probe is grounds to freeze the live canonical bot.
           assert 'LIVE_RUNTIME_CONTROLLER_HEALTH_DISAGREES_WITH_BROKER_READ=1' in owner
@@ -767,9 +770,12 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import os,time
+          import os,time,logging
           from pathlib import Path
           from ib_insync import IB
+          # ib_insync may log raw broker account IDs on sync timeout.
+          # Only sanitized fixed-field markers may enter public Actions logs.
+          logging.disable(logging.CRITICAL)
           p=Path(os.environ['RUNNER_TEMP'])/'mmibkr-live-bot.env'
           expected=p.read_text().strip().split('=',1)[1]
           deadline=time.monotonic()+900
@@ -888,17 +894,25 @@ jobs:
             owner_probe_sample=$((owner_probe_sample + 1))
             export MMIBKR_OWNER_PROBE_SAMPLE="$owner_probe_sample"
             if python - <<'PY'
-          import os
+          import os,logging
           from pathlib import Path
-          from ib_insync import IB
+          from ib_insync import IB, util
+          # Suppress ib_insync's raw-account timeout diagnostics in public logs.
+          # Sanitized failure stage/class below remain visible via print().
+          logging.disable(logging.CRITICAL)
           expected=(Path(os.environ['RUNNER_TEMP'])/'mmibkr-live-bot.env').read_text().strip().split('=',1)[1]
           # Avoid reusing a broker client ID retained after an interrupted probe.
           # This pool is read-only and never launches the canonical trading bot.
           client_id=79+int(os.environ['MMIBKR_OWNER_PROBE_SAMPLE'])
           ib=IB()
+          ib.RequestTimeout=25
           stage='api_connect_and_sync'
           try:
-              ib.connect('127.0.0.1',4001,clientId=client_id,readonly=True,timeout=25)
+              # ib_insync performs account-update sync and then executions
+              # sequentially. Give the *whole* read-only sync 75s while
+              # bounding each internal request to 25s; never infer success
+              # from a connected TCP socket without the explicit reads below.
+              util.run(ib.connectAsync('127.0.0.1',4001,clientId=client_id,readonly=True,timeout=25),timeout=75)
               stage='account_identity'
               if expected not in ib.managedAccounts():
                   raise SystemExit(70)  # fail closed: wrong account, not transient
