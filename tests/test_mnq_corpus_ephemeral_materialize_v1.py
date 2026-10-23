@@ -1,5 +1,6 @@
 from __future__ import annotations
-import hashlib,io,zipfile
+import hashlib,io,zipfile,json,subprocess,sys
+import pytest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 def test_materialize_ticket_writes_exact_member(tmp_path,monkeypatch):
@@ -72,3 +73,37 @@ def test_materialize_payload_rejects_gzip_identity_mismatch(tmp_path,monkeypatch
     monkeypatch.setattr(mod,"DATASET_BYTES",len(raw))
     with pytest.raises(RuntimeError,match="MNQ gzip corpus identity mismatch"):
         mod.materialize_payload(gzip.compress(raw,mtime=0),tmp_path)
+
+
+@pytest.mark.parametrize("script,prefix,schema", [
+    ("mnq_corpus_ephemeral_consumer_v1.py", "MNQ_CORPUS_EPHEMERAL_RECEIPT=", "mnq-corpus-ephemeral-receipt-v1"),
+    ("mnq_corpus_ephemeral_materialize_v1.py", "MNQ_CORPUS_INPUT_ROOT_MATERIALIZED=", "mnq-corpus-input-root-materialization-v1"),
+])
+@pytest.mark.parametrize("failure", ["unknown_arg", "missing_private_file"])
+def test_mnq_public_cli_failure_has_fixed_fields(tmp_path, script, prefix, schema, failure):
+    """Nested/private argv or file names must never escape into public stdout/stderr."""
+    sentinel = "PRIVATE_SENTINEL_MNQ_ACCOUNT_PATH_DO_NOT_ECHO"
+    output_root = tmp_path / "materialized"
+    if failure == "unknown_arg":
+        argv = ["--not-allowed", sentinel]
+    else:
+        argv = [
+            "--envelope", str(tmp_path / (sentinel + ".json")),
+            "--ciphertext", str(tmp_path / "missing.enc"),
+            "--private-key", str(tmp_path / "missing.key"),
+            "--run-id", "synthetic-run",
+            "--response-root", "synthetic-root",
+        ]
+        if "materialize" in script:
+            argv += ["--output-root", str(output_root)]
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / script), *argv],
+        cwd=str(ROOT / "scripts"), capture_output=True, text=True, timeout=20,
+    )
+    assert result.returncode == 1
+    assert result.stderr == ""
+    assert sentinel not in result.stdout + result.stderr
+    lines = result.stdout.splitlines()
+    assert len(lines) == 1 and lines[0].startswith(prefix)
+    assert json.loads(lines[0][len(prefix):]) == {"schema": schema, "status": "REJECTED"}
+    assert not output_root.exists()
