@@ -6,6 +6,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+# Use the already-merged standalone economic CURRENT admission, never a parallel source gate.
+if __package__:
+    from .forward_p249_p266_shadow_r1 import current_publication_admitted
+else:
+    from forward_p249_p266_shadow_r1 import current_publication_admitted
+
 SCHEMA = "research.forward_market_scoreboard_r1"
 ADAPTER_SCHEMA = "foundry.forward_program_adapter.v1"
 LEDGER_SCHEMA = "research.forward_prospective_cohort_ledger_r1"
@@ -132,6 +138,9 @@ def _p46(x: dict[str, Any] | None) -> dict[str, Any]:
 def _p249(x: dict[str, Any] | None) -> dict[str, Any]:
     if not x:
         return {"program_id": "P249_P266", "status": "MISSING", "decision_use": "unavailable"}
+    admitted = current_publication_admitted(x)
+    health = x.get("source_health") if isinstance(x.get("source_health"), dict) else {}
+    blocked_grade = ("SOURCE_GAP_UNRESOLVED" if x.get("status") == "SOURCE_GAP_UNRESOLVED" or health.get("unresolved_forward_gap") is not None else "ECONOMIC_SOURCE_NOT_ADMITTED")
     fwd = x.get("forward", {})
     core = fwd.get("p249_core_net", {})
     combo = fwd.get("p249_plus_p266_net", {})
@@ -142,6 +151,9 @@ def _p249(x: dict[str, Any] | None) -> dict[str, Any]:
         for row in (fwd.get("observations") or [])
         if row.get("satellite_increment_net") is not None
     ])
+    def economic(value: Any) -> Any:
+        return value if admitted else None
+
     return {
         "program_id": "P249_P266",
         "kind": "portfolio_construction_plus_industry_momentum_satellite",
@@ -155,19 +167,22 @@ def _p249(x: dict[str, Any] | None) -> dict[str, Any]:
             "holding_rule": "keep frozen weights through the decision period; daily closes update forward PnL and excess only",
         },
         "paper_action": state.get("p249_plus_p266", {}),
-        "action_text": f"Frozen combined portfolio: {_weights_text(state.get('p249_plus_p266', {}), 10)}.",
-        "forward_days": days,
+        "paper_action_authority": "frozen_monthly_context" if admitted else "prior_frozen_context_only_not_new_economic_current",
+        "action_text": (f"Frozen combined portfolio: {_weights_text(state.get('p249_plus_p266', {}), 10)}." if admitted else "Economic CURRENT held: source gap/unadmitted; frozen weights are prior context, not a new rebalance."),
+        "forward_days": days if admitted else None,
+        "economic_current_admitted": admitted,
+        "source_status": x.get("status"),
         "scorecard": {
-            "p249_core_net_cumulative_bps": _bp(core.get("cumulative_return")),
-            "p249_plus_p266_net_cumulative_bps": _bp(combo.get("cumulative_return")),
-            "p266_increment_cumulative_bps": _bp(fwd.get("satellite_increment_cumulative")),
-            "p266_increment_observed_sessions": increment_stats["observed_sessions"],
-            "p266_increment_positive_sessions": increment_stats["positive_sessions"],
-            "p266_increment_session_hit_rate": increment_stats["hit_rate"],
-            "p249_core_annualized_vol": core.get("annualized_vol"),
-            "p249_plus_p266_annualized_vol": combo.get("annualized_vol"),
+            "p249_core_net_cumulative_bps": economic(_bp(core.get("cumulative_return"))),
+            "p249_plus_p266_net_cumulative_bps": economic(_bp(combo.get("cumulative_return"))),
+            "p266_increment_cumulative_bps": economic(_bp(fwd.get("satellite_increment_cumulative"))),
+            "p266_increment_observed_sessions": economic(increment_stats["observed_sessions"]),
+            "p266_increment_positive_sessions": economic(increment_stats["positive_sessions"]),
+            "p266_increment_session_hit_rate": economic(increment_stats["hit_rate"]),
+            "p249_core_annualized_vol": economic(core.get("annualized_vol")),
+            "p249_plus_p266_annualized_vol": economic(combo.get("annualized_vol")),
         },
-        "validation_grade": _grade(days),
+        "validation_grade": _grade(days) if admitted else blocked_grade,
         "source_health": x.get("source_health", {}),
         "decision_use": (
             "This is not a price target. Weights are the frozen portfolio expression. "
@@ -695,8 +710,9 @@ def self_test() -> None:
         out = build(root)
         assert out["schema"] == SCHEMA
         assert out["lanes"][0]["validation_grade"] == "SHAKEDOWN_ONLY"
-        assert out["lanes"][1]["scorecard"]["p266_increment_cumulative_bps"] == -10.0
-        assert out["lanes"][1]["scorecard"]["p266_increment_observed_sessions"] == 0
+        assert out["lanes"][1]["economic_current_admitted"] is False
+        assert out["lanes"][1]["validation_grade"] == "ECONOMIC_SOURCE_NOT_ADMITTED"
+        assert all(v is None for v in out["lanes"][1]["scorecard"].values())
         stats = _challenger_session_stats({
             "challenger_observations": [
                 {"date": "2026-09-10", "net_return": 0.02, "core_return": 0.01},
