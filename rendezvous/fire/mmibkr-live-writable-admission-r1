@@ -93,3 +93,7 @@ gateway_pool_5h_readonly_dispatch_request_20261022_c6f8a2: true
 # Attended read-only production-account Gateway + one chained independent A/B.
 # No trading bot, live order mutation, prior successor or automatic relogin.
 gateway_pool_5h_readonly_dispatch_request_20261022_f38e29: true
+
+# One attended no-order continuation after retry-safe reader IDs and stage-visible owner fix.
+# Exact read-only Cloudflare pool; no bot, order capability, relogin loop or predecessor.
+gateway_pool_5h_readonly_dispatch_request_20261022_e7b31f: true
