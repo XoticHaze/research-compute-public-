@@ -65,6 +65,31 @@ test("one successful synthetic completion is recognized without exposing text", 
   assert.equal(JSON.stringify(receipt).includes(SECRET), false);
 });
 
+test("transport failure gets fixed safe category without exporting exception data", async () => {
+  const leak = "Bearer PRIVATE_SECRET_SHOULD_NOT_BE_EXPORTED";
+  const receipt = await probeNvidia(binding, async () => {
+    throw new TypeError("fetch failed " + leak);
+  });
+  assert.equal(receipt.catalog_attempt_started, true);
+  assert.equal(receipt.catalog_failure_stage, "outbound_fetch");
+  assert.equal(receipt.catalog_failure_kind, "fetch_type_error");
+  assert.equal(receipt.calls_made, 0);
+  assert.equal(receipt.classification, "catalog_transport_or_response_failure");
+  assert.equal(JSON.stringify(receipt).includes(leak), false);
+});
+
+test("JSON decode failure is distinguished from outbound transport failure", async () => {
+  const receipt = await probeNvidia(binding, async () => ({
+    ok: true, status: 200, async json() { throw new SyntaxError("PRIVATE_SECRET_SHOULD_NOT_BE_EXPORTED"); }
+  }));
+  assert.equal(receipt.catalog_attempt_started, true);
+  assert.equal(receipt.catalog_http_status, 200);
+  assert.equal(receipt.calls_made, 1);
+  assert.equal(receipt.catalog_failure_stage, "catalog_json");
+  assert.equal(receipt.catalog_failure_kind, "other_runtime_exception");
+  assert.equal(JSON.stringify(receipt).includes(SECRET), false);
+});
+
 test("HTTP 200 without usable completion content is not an inference success", async () => {
   for (const content of [undefined, "", "   ", null]) {
     const requester = async (url) => url.endsWith("/models")
