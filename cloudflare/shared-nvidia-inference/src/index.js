@@ -17,6 +17,22 @@ function boundedStatus(value) {
   return Number.isInteger(value) && value >= 100 && value <= 599 ? value : null;
 }
 
+// Only emit fixed classifications. Error names/messages from runtimes or
+// providers can contain URLs, credentials, headers or sensitive payloads.
+export function classifyCatalogException(error) {
+  if (error && error.name === "TimeoutError") return "timeout";
+  if (error && error.name === "AbortError") return "aborted";
+  if (error && error.name === "TypeError") {
+    const msg = typeof error.message === "string" ? error.message.toLowerCase() : "";
+    if (msg.includes("abortsignal") || msg.includes("timeout is not a function"))
+      return "abort_api_unavailable";
+    if (msg.includes("redirect")) return "redirect_rejected";
+    if (msg.includes("fetch")) return "fetch_type_error";
+    return "runtime_type_error";
+  }
+  return "other_runtime_exception";
+}
+
 export async function probeNvidia(env, doFetch = fetch) {
   const receipt = {
     schema: "commandcenter.shared_nvidia_private_diagnostic.v1",
@@ -26,6 +42,9 @@ export async function probeNvidia(env, doFetch = fetch) {
     completion_http_status: null,
     catalog_includes_model: null,
     catalog_count: null,
+    catalog_attempt_started: false,
+    catalog_failure_stage: null,
+    catalog_failure_kind: null,
     completion_response_valid: false,
     exact_reply_observed: false,
     elapsed_ms: null,
@@ -54,23 +73,38 @@ export async function probeNvidia(env, doFetch = fetch) {
   }
   const start = performance.now();
   const headers = { "Authorization": "Bearer " + key, "Content-Type": "application/json" };
+  // Separate construction/transport failures from response JSON failures.
+  // This removes unsupported AbortSignal.timeout from the critical path:
+  // caller has its own bounded request timeout and this fixed probe has
+  // no user-selected destination, URL, model, or request body.
+  let catalogResponse;
+  receipt.catalog_attempt_started = true;
   try {
-    const result = await doFetch(ORIGIN + "/v1/models", {
-      method: "GET", headers, redirect: "error", signal: AbortSignal.timeout(12000),
+    catalogResponse = await doFetch(ORIGIN + "/v1/models", {
+      method: "GET", headers, redirect: "error",
     });
     receipt.calls_made++;
-    receipt.catalog_http_status = boundedStatus(result.status);
-    if (result.ok) {
-      // Read ID strings from a bounded JSON catalog; never publish descriptions.
-      const value = await result.json();
-      const rows = value && Array.isArray(value.data) ? value.data : [];
-      receipt.catalog_count = Math.min(rows.length, 100000);
-      receipt.catalog_includes_model = rows.some(r => r && r.id === MODEL);
-    }
-  } catch {
+    receipt.catalog_http_status = boundedStatus(catalogResponse.status);
+  } catch (error) {
+    receipt.catalog_failure_stage = "outbound_fetch";
+    receipt.catalog_failure_kind = classifyCatalogException(error);
     receipt.classification = "catalog_transport_or_response_failure";
     receipt.elapsed_ms = Math.round(performance.now() - start);
     return receipt;
+  }
+  if (catalogResponse.ok) {
+    try {
+      const value = await catalogResponse.json();
+      const rows = value && Array.isArray(value.data) ? value.data : [];
+      receipt.catalog_count = Math.min(rows.length, 100000);
+      receipt.catalog_includes_model = rows.some(r => r && r.id === MODEL);
+    } catch (error) {
+      receipt.catalog_failure_stage = "catalog_json";
+      receipt.catalog_failure_kind = classifyCatalogException(error);
+      receipt.classification = "catalog_transport_or_response_failure";
+      receipt.elapsed_ms = Math.round(performance.now() - start);
+      return receipt;
+    }
   }
   try {
     const result = await doFetch(ORIGIN + "/v1/chat/completions", {
