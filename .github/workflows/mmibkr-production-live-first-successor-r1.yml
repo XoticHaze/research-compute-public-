@@ -1,78 +1,33 @@
-name: MM-IBKR Production Live First Successor R1
+name: MM-IBKR First Successor Auto-Fire Retired (Contract Only)
 
-# One exact successful production owner is eligible. No recurring login loop.
+# Historical one-shot auto-dispatch was pinned to failed run 39231751596
+# and an obsolete workflow head. It is not independent current operator
+# authorization. Only the existing canonical owner's explicitly admitted
+# workflow_dispatch may start a live successor; this file must never fire one.
 on:
-  workflow_run:
-    workflows:
-      - MM-IBKR Canonical Production Live Owner R1
-    types: [completed]
   pull_request:
     paths:
       - .github/workflows/mmibkr-production-live-first-successor-r1.yml
 
 permissions:
   contents: read
-  actions: write
-
-concurrency:
-  group: mmibkr-first-live-successor-r1
-  cancel-in-progress: false
 
 jobs:
   contract:
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Validate exact one-shot successor selection
+      - name: Verify historical first-successor auto-fire is retired
         run: |
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
           s=Path('.github/workflows/mmibkr-production-live-first-successor-r1.yml').read_text()
-          required=(
-              '39231751596',
-              'mmibkr-live-runtime-checkpoint-v1',
-              'workflow_run.conclusion == \'success\'',
-              "workflow_run.event == 'workflow_dispatch'",
-              'inputs[admission_only]=false',
-              'inputs[warm_handoff_mode]=successor',
-              'inputs[warm_predecessor_run]',
-              'EXACT_FIRST_SUCCESSOR_DISPATCHED=1',
-          )
-          for marker in required: assert marker in s, marker
-          assert s.splitlines().count("  workflow_run:") == 1
-          print('EXACT_FIRST_SUCCESSOR_CONTRACT_PASS=1')
+          assert 'workflow_run:' not in s
+          assert 'dispatch-successor:' not in s
+          assert 'gh api --method POST' not in s
+          assert 'inputs[admission_only]=false' not in s
+          assert 'on:\n  pull_request:' in s
+          print('STALE_LIVE_FIRST_SUCCESSOR_AUTOFIRE_RETIRED=PASS')
           PY
-
-  dispatch-successor:
-    if: >-
-      github.event_name == 'workflow_run' &&
-      github.event.workflow_run.id == 39231751596 &&
-      github.event.workflow_run.event == 'workflow_dispatch' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.head_sha == '96c2fdbd66e0221b1b8628e346d82fb31f5d058f'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 8
-    steps:
-      - name: Require encrypted checkpoint from exact first live owner
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          predecessor=39231751596
-          repo="$GITHUB_REPOSITORY"
-          gh api "/repos/$repo/actions/runs/$predecessor" \
-            --jq '(.event == "workflow_dispatch") and (.head_branch == "main") and (.conclusion == "success")' | grep -qx true
-          aid="$(gh api "/repos/$repo/actions/runs/$predecessor/artifacts?per_page=100" \
-            --jq '[.artifacts[] | select(.name == "mmibkr-live-runtime-checkpoint-v1" and .expired == false)] | .[0].id // empty')"
-          test -n "$aid" || { echo 'EXACT_FIRST_LIVE_CHECKPOINT_MISSING=1'; exit 1; }
-          gh api --method POST \
-            "/repos/$repo/actions/workflows/mmibkr-selected-runtime-live-owner-r1.yml/dispatches" \
-            -f ref=main \
-            -f 'inputs[admission_only]=false' \
-            -f 'inputs[warm_handoff_mode]=successor' \
-            -f "inputs[warm_predecessor_run]=$predecessor"
-          echo 'EXACT_FIRST_SUCCESSOR_DISPATCHED=1'
