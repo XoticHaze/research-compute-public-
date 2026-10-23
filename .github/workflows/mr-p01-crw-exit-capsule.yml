@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
 jobs:
   evaluate:
+    # Confidential P01 EXIT result publication is held on this historical ref.
+    # Reuse merged #1953's job-level hold pending private encrypted return.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
