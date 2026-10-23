@@ -79,6 +79,30 @@ class PublicReceiptAllowlistTests(unittest.TestCase):
         self.assertNotIn(SENTINEL, out + err)
         self.assertEqual(err, '')
 
+    def test_tar_member_types_and_duplicate_normalized_paths_fail_preextract(self):
+        import tarfile
+        from pathlib import Path
+        regular = tarfile.TarInfo('manifest.json')
+        regular.type = tarfile.REGTYPE
+        regular.size = 4
+        directory = tarfile.TarInfo('input/')
+        directory.type = tarfile.DIRTYPE
+        self.assertTrue(consumer.safe_tar_members([regular, directory]))
+        for kind in (tarfile.FIFOTYPE, tarfile.CHRTYPE, tarfile.BLKTYPE,
+                     tarfile.SYMTYPE, tarfile.LNKTYPE):
+            with self.subTest(kind=kind):
+                unsafe = tarfile.TarInfo('private_member')
+                unsafe.type = kind
+                self.assertFalse(consumer.safe_tar_members([regular, unsafe]))
+        alias = tarfile.TarInfo('./manifest.json')
+        alias.type = tarfile.REGTYPE
+        self.assertFalse(consumer.safe_tar_members([regular, alias]))
+        self.assertFalse(consumer.safe_tar_members([regular, regular]))
+        oversized = tarfile.TarInfo('oversized')
+        oversized.type = tarfile.REGTYPE
+        oversized.size = consumer.MAX_MEMBER_BYTES + 1
+        self.assertFalse(consumer.safe_tar_members([oversized]))
+
     def test_noncanonical_types_digests_and_authority_fail_closed(self):
         variants = [('runtime_count', True), ('runtime_count', 0),
                     ('runtime_count', 2.5), ('snapshot_sha256', SENTINEL),
