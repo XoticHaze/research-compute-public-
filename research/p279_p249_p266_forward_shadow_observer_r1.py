@@ -210,6 +210,7 @@ def main() -> None:
     month_states: dict[str, dict[str, dict[str, float]]] = {}
     prev_state = None
     seen_months: set[str] = set()
+    unresolved_gap: dict[str, object] | None = None
 
     for dt in forward_ix:
         period = dt.to_period("M")
@@ -219,11 +220,24 @@ def main() -> None:
         state = month_states[key]
         day = ret.loc[dt]
         if not _held_symbols_ready(day, state):
-            continue
+            # A later complete daily return cannot repair exposure lost across
+            # an earlier missing held close. Stop, do not resume one-day NAV.
+            held = sorted(set(state["p249_core"]) | set(state["p249_plus_p266"]))
+            unresolved_gap = {
+                "first_unresolved_session": dt.date().isoformat(),
+                "reason": "MISSING_HELD_SYMBOL_RETURN",
+                "missing_held_symbols": [symbol for symbol in held if pd.isna(day.get(symbol, np.nan))],
+            }
+            break
         core_gross = sum(state["p249_core"].get(s, 0.0) * float(day.get(s, np.nan)) for s in state["p249_core"])
         sat_gross = sum(state["p249_plus_p266"].get(s, 0.0) * float(day.get(s, np.nan)) for s in state["p249_plus_p266"])
         if not np.isfinite(core_gross) or not np.isfinite(sat_gross):
-            continue
+            unresolved_gap = {
+                "first_unresolved_session": dt.date().isoformat(),
+                "reason": "NONFINITE_HELD_PORTFOLIO_RETURN",
+                "missing_held_symbols": [],
+            }
+            break
         # A skipped/incomplete first session must not consume the monthly cost.
         core_cost = 0.0
         sat_cost = 0.0
@@ -260,7 +274,7 @@ def main() -> None:
         "parent": "P249/P266/P278/P279",
         "decision_at": DECISION_AT.isoformat(),
         "observed_at": now.isoformat(),
-        "status": "FORWARD_OBSERVING" if len(rows) else "BASELINE_FROZEN_NO_FORWARD_CLOSES",
+        "status": "SOURCE_GAP_UNRESOLVED" if unresolved_gap else ("FORWARD_OBSERVING" if len(rows) else "BASELINE_FROZEN_NO_FORWARD_CLOSES"),
         "source_health": {
             "provider": "yfinance_adjusted_close",
             "completed_session_request_date": completed_data_date.isoformat(),
@@ -270,6 +284,7 @@ def main() -> None:
             "lagging_symbols_vs_source_max": lagging_symbols,
             "all_symbols_share_latest_date": not lagging_symbols and len(dated) == len(ALL),
             "latest_scored_common_session": rows[-1]["date"] if rows else None,
+            "unresolved_forward_gap": unresolved_gap,
             "common_session_lags_source_max": bool(rows and source_max_date and rows[-1]["date"] < source_max_date),
         },
         "contract": {
@@ -291,6 +306,7 @@ def main() -> None:
         "current_holding_month": str(current_month),
         "current_state": current_state,
         "forward": {
+            "economic_continuity_verified": unresolved_gap is None,
             "first_close": rows[0]["date"] if rows else None,
             "latest_close": rows[-1]["date"] if rows else None,
             "p249_core_net": _metrics(core_net),
