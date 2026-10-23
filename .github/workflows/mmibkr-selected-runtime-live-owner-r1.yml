@@ -302,6 +302,7 @@ jobs:
           assert 'PRODUCTION_LIVE_EXECUTION_HISTORY_READ=1' in owner
           assert 'mmibkr-live-runtime-checkpoint-v1' in owner
           assert 'LIVE_RUNTIME_SUCCESSOR_AUTH_AND_BROKER_RECONCILIATION_REQUIRED=1' in owner
+          assert 'LIVE_RUNTIME_SUCCESSOR_PRESTART_LEDGER_RECONCILIATION_REQUIRED=1' in owner
           assert "SESSION_SECONDS: \"14400\"" in s
           live=owner.split('      - name: Start unchanged canonical bot natural owner with three persisted live policies',1)[1]
           live=live.split('      - name: Stop live owner and encrypt canonical Gateway and bot data for successor',1)[0]
@@ -1274,6 +1275,14 @@ jobs:
         if: ${{ !inputs.admission_only }}
         run: |
           set -euo pipefail
+          # An authenticated broker read is not an attribution of restored
+          # orderRef/permId/execId intent, fills, open orders and positions.
+          # Until the owning MM consumer produces that same-owner proof, an
+          # encrypted predecessor checkpoint cannot safely resume live.
+          if [ "${{ inputs.warm_handoff_mode }}" = successor ]; then
+            echo 'LIVE_RUNTIME_SUCCESSOR_PRESTART_LEDGER_RECONCILIATION_REQUIRED=1'
+            exit 1
+          fi
           # No separate execution capsule, strategy selector, broker client or submit route.
           # Gateway exposes only 4001 loopback on the runner. Bot shares its
           # private network namespace; its internal TWS port is 4003.
