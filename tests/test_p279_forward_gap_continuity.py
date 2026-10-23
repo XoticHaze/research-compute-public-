@@ -53,6 +53,34 @@ class TestForwardGapContinuity(unittest.TestCase):
         self.assertEqual([r["date"] for r in result["forward"]["observations"]], ["2026-09-10"])
         self.assertEqual(result["forward"]["latest_close"], "2026-09-10")
 
+    def test_economic_current_publisher_rejects_gap_and_incomplete_receipts(self):
+        from copy import deepcopy
+        from research.forward_p249_p266_shadow_r1 import current_publication_admitted
+        valid = {
+            "schema": "research.forward_p249_p266_shadow_r1",
+            "parent": "P249/P266/P278",
+            "workload_id": "FORWARD_P249_P266_SHADOW_R1",
+            "status": "FORWARD_OBSERVING",
+            "source_health": {"unresolved_forward_gap": None, "latest_scored_common_session": "2026-09-10"},
+            "forward": {
+                "economic_continuity_verified": True, "latest_close": "2026-09-10",
+                "observations": [{"date": "2026-09-10"}],
+                "p249_core_net": {"days": 1}, "p249_plus_p266_net": {"days": 1},
+            },
+        }
+        self.assertTrue(current_publication_admitted(valid))
+        gap = deepcopy(valid)
+        gap["status"] = "SOURCE_GAP_UNRESOLVED"
+        gap["source_health"]["unresolved_forward_gap"] = {"first_unresolved_session": "2026-09-11"}
+        gap["forward"]["economic_continuity_verified"] = False
+        self.assertFalse(current_publication_admitted(gap))
+        missing = deepcopy(valid)
+        del missing["source_health"]["unresolved_forward_gap"]
+        self.assertFalse(current_publication_admitted(missing))
+        partial = deepcopy(valid)
+        partial["forward"]["observations"] = []
+        self.assertFalse(current_publication_admitted(partial))
+
     def test_complete_held_closes_continue_scoring(self):
         result = self._run({"A": [100, 101, 102, 103, 104], "B": [100, 101, 102, 103, 104]})
         self.assertEqual(result["status"], "FORWARD_OBSERVING")

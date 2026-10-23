@@ -60,7 +60,26 @@ jobs:
         with:
           name: forward-p249-p266-shadow__${{ needs.observe.outputs.tag }}
           path: /tmp/forward-p249-p266-shadow
+      - name: Validate continuous economic CURRENT admission
+        id: source_admission
+        run: |
+          python - <<'PY'
+          import json, os
+          from research.forward_p249_p266_shadow_r1 import current_publication_admitted
+          p='/tmp/forward-p249-p266-shadow/forward_p249_p266_shadow_r1.json'
+          try:
+              with open(p, encoding='utf-8') as f:
+                  admitted=current_publication_admitted(json.load(f))
+          except (OSError, ValueError, TypeError):
+              admitted=False
+          print('FORWARD_ECONOMIC_CURRENT_ADMITTED='+str(admitted).lower())
+          if not admitted:
+              print('FORWARD_CURRENT_HELD_SOURCE_GAP_OR_INVALID_RECEIPT=1')
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
+              f.write('admitted='+str(admitted).lower()+'\\n')
+          PY
       - name: Publish stable current snapshot
+        if: steps.source_admission.outputs.admitted == 'true'
         run: |
           test -f /tmp/forward-p249-p266-shadow/forward_p249_p266_shadow_r1.json
           git fetch origin main
