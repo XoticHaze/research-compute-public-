@@ -1,10 +1,10 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "7c7f97512586d070f8e96f1af3be416c609ec9dc",
+  "source_ref": "24736d773f53801445ee7d4ef463048fc0eb9021",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
-  "requested_by": "continue-release-20261023-clock-231551",
-  "purpose": "Changed selected #888 acceptance test now asserts exact five-key forward identity and duplicate/mismatch fail-close after actual f873 stale literal failure; one Node/Vite build; no broker/live/deploy",
-  "request_nonce": "ui-888-7c7f9751-20261023-vite-r2",
+  "requested_by": "continue-release-20261023-clock-20261023234744647",
+  "purpose": "Exact selected #888 24736d after consuming #930 Model Lab activity and #931 registry-authority gates: existing Node acceptance plus Vite production integration build, no broker/live/deploy",
+  "request_nonce": "ui-888-24736d77-20261023-vite-r1",
   "authority": {
     "research_only": true,
     "broker": false,
