@@ -303,6 +303,23 @@ jobs:
           assert 'LIVE_RUNTIME_CONTROLLER_ALERT_COUNTS=' in owner
           assert 'LIVE_RUNTIME_FINAL_CONTROLLER_HEALTH=' in owner
           print('LIVE_RUNTIME_RECOVERY_OBSERVABILITY_PARSE=PASS')
+          prestart='      - name: Reconcile restored live successor with canonical broker-ledger read-only gate'
+          start='      - name: Start unchanged canonical bot natural owner with three persisted live policies'
+          assert owner.count(prestart) == 1
+          assert owner.rfind(prestart) < owner.rfind(start)
+          checked=owner.split(prestart,1)[1].split(start,1)[0]
+          assert "if: ${{ !inputs.admission_only && inputs.warm_handoff_mode == 'successor' }}" in checked
+          assert "ibkr_live_successor_ledger_reconcile_v1.py" in checked
+          assert "--account-env-file" in checked and "--universe" in checked and "--data-root" in checked
+          assert "LIVE_RUNTIME_SUCCESSOR_CANONICAL_RECONCILER_SOURCE_NOT_ADMITTED=1" in checked
+          assert "LIVE_RUNTIME_SUCCESSOR_READ_ONLY_RECONCILIATION_PASSED=1" in checked
+          assert "LIVE_RUNTIME_SUCCESSOR_PRESTART_LEDGER_RECONCILIATION_REQUIRED=1" in owner
+          assert "ENABLE_LIVE_TRADING=1" not in checked
+          assert "placeOrder" not in checked and "cancelOrder" not in checked
+          prestart_shell=checked.split('        run: |',1)[1]
+          prestart_shell="\\n".join(line[10:] if line.startswith("          ") else line for line in prestart_shell.splitlines())
+          subprocess.run(["bash","-n"],input=prestart_shell,text=True,check=True)
+          print('LIVE_SUCCESSOR_READONLY_PRESTART_STEP_CONTRACT_PASS=1')
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
           PY
           python -m unittest -v tests.test_mmibkr_live_runtime_checkpoint_v1
