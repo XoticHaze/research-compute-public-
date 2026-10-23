@@ -39,6 +39,13 @@ EXPECTED_FILES = {
 }
 
 
+class _PublicSafeArgumentParser(argparse.ArgumentParser):
+    """Never echo caller-supplied confidential argv into public stderr."""
+
+    def error(self, message: str) -> None:
+        raise ValueError("MNQ_CORPUS_CLI_ARGUMENT_REJECTED")
+
+
 def _fetch_artifact(ticket_bytes: bytes) -> bytes:
     ticket = json.loads(ticket_bytes.decode("utf-8"))
     if not isinstance(ticket, dict) or set(ticket) != {"schema", "download_url", "artifact_archive_sha256"}:
@@ -143,30 +150,36 @@ def _validate_zip(payload: bytes) -> dict:
     }
 
 
-def main() -> None:
-    p = argparse.ArgumentParser()
+def main() -> int:
+    p = _PublicSafeArgumentParser(add_help=False)
     p.add_argument("--envelope", required=True)
     p.add_argument("--ciphertext", required=True)
     p.add_argument("--private-key", required=True)
     p.add_argument("--run-id", required=True)
     p.add_argument("--response-root", required=True)
-    args = p.parse_args()
-
-    envelope = json.loads(Path(args.envelope).read_text(encoding="utf-8"))
-    ciphertext = Path(args.ciphertext).read_bytes()
-    ticket = decrypt_assembled_ciphertext(
-        envelope=envelope,
-        ciphertext=ciphertext,
-        private_key_path=Path(args.private_key),
-        expected_schema=SCHEMA,
-        expected_run_id=args.run_id,
-        expected_harness=HARNESS,
-        response_root=args.response_root,
-    )
-    payload = _fetch_artifact(ticket)
-    receipt = _validate_zip(payload)
+    try:
+        args = p.parse_args()
+        envelope = json.loads(Path(args.envelope).read_text(encoding="utf-8"))
+        ciphertext = Path(args.ciphertext).read_bytes()
+        ticket = decrypt_assembled_ciphertext(
+            envelope=envelope,
+            ciphertext=ciphertext,
+            private_key_path=Path(args.private_key),
+            expected_schema=SCHEMA,
+            expected_run_id=args.run_id,
+            expected_harness=HARNESS,
+            response_root=args.response_root,
+        )
+        payload = _fetch_artifact(ticket)
+        receipt = _validate_zip(payload)
+    except Exception:
+        # Never publish raw exception text, member names, ticket URLs or argv.
+        print("MNQ_CORPUS_EPHEMERAL_RECEIPT=" + json.dumps(
+            {"schema": "mnq-corpus-ephemeral-receipt-v1", "status": "REJECTED"}, sort_keys=True))
+        return 1
     print("MNQ_CORPUS_EPHEMERAL_RECEIPT=" + json.dumps(receipt, sort_keys=True))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
