@@ -317,7 +317,7 @@ jobs:
           assert "ENABLE_LIVE_TRADING=1" not in checked
           assert "placeOrder" not in checked and "cancelOrder" not in checked
           prestart_shell=checked.split('        run: |',1)[1]
-          prestart_shell="\\n".join(line[10:] if line.startswith("          ") else line for line in prestart_shell.splitlines())
+          prestart_shell="\n".join(line[10:] if line.startswith("          ") else line for line in prestart_shell.splitlines())
           subprocess.run(["bash","-n"],input=prestart_shell,text=True,check=True)
           print('LIVE_SUCCESSOR_READONLY_PRESTART_STEP_CONTRACT_PASS=1')
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
