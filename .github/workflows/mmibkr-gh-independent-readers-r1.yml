@@ -182,6 +182,7 @@ jobs:
           NETWORK: ${{ inputs.network_transport }}
         run: |
           set -euo pipefail
+          umask 077
           HOST="mmibkr-gw-$POOL_RUN"
           PORT=4001
           if [ "$NETWORK" = cloudflare_access_ssh ]; then
@@ -200,10 +201,19 @@ jobs:
             printf '%s' "$EXACT_CONTRACTS" > "$RUNNER_TEMP/reader-contracts.json"
             contract_args=(--contracts-file "$RUNNER_TEMP/reader-contracts.json")
           fi
-          python -m scripts.mmibkr_gh_gateway_readonly_client_v1 \
+          # Upstream broker stdout/stderr can bypass Python logging.disable and
+          # expose live account IDs. Only fixed success/failure markers escape.
+          if python -m scripts.mmibkr_gh_gateway_readonly_client_v1 \
             --gateway-run-id "$POOL_RUN" --host "$HOST" --port "$PORT" --transport "$NETWORK" --phase A \
             --hold-seconds "$hold_seconds" --output "$RUNNER_TEMP/mmibkr-gateway-client-a.json" \
-            "${contract_args[@]}"
+            "${contract_args[@]}" >"$RUNNER_TEMP/mmibkr-reader-a-private.log" 2>&1; then
+            rm -f "$RUNNER_TEMP/mmibkr-reader-a-private.log"
+            echo 'MMIBKR_SPLIT_POOL_A_REMOTE_ACCOUNT_READ=PASS'
+            echo 'MMIBKR_SPLIT_POOL_BROKER_MUTATIONS=0'
+          else
+            echo 'MMIBKR_SPLIT_POOL_A_REMOTE_ACCOUNT_READ=FAIL'
+            exit 1
+          fi
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -211,7 +221,7 @@ jobs:
           path: ${{ runner.temp }}/mmibkr-gateway-client-a.json
           retention-days: 7
       - if: always()
-        run: rm -f "$RUNNER_TEMP/reader-contracts.json"
+        run: rm -f "$RUNNER_TEMP/reader-contracts.json" "$RUNNER_TEMP/mmibkr-reader-a-private.log"
 
   runner_b:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.test_mode == 'handoff_ab' }}
@@ -255,6 +265,7 @@ jobs:
           NETWORK: ${{ inputs.network_transport }}
         run: |
           set -euo pipefail
+          umask 077
           HOST="mmibkr-gw-$POOL_RUN"
           PORT=4001
           if [ "$NETWORK" = cloudflare_access_ssh ]; then
@@ -271,10 +282,17 @@ jobs:
             printf '%s' "$EXACT_CONTRACTS" > "$RUNNER_TEMP/reader-contracts.json"
             contract_args=(--contracts-file "$RUNNER_TEMP/reader-contracts.json")
           fi
-          python -m scripts.mmibkr_gh_gateway_readonly_client_v1 \
+          if python -m scripts.mmibkr_gh_gateway_readonly_client_v1 \
             --gateway-run-id "$POOL_RUN" --host "$HOST" --port "$PORT" --transport "$NETWORK" --phase B \
             --hold-seconds 300 --output "$RUNNER_TEMP/mmibkr-gateway-client-b.json" \
-            "${contract_args[@]}"
+            "${contract_args[@]}" >"$RUNNER_TEMP/mmibkr-reader-b-private.log" 2>&1; then
+            rm -f "$RUNNER_TEMP/mmibkr-reader-b-private.log"
+            echo 'MMIBKR_SPLIT_POOL_B_REMOTE_ACCOUNT_READ=PASS'
+            echo 'MMIBKR_SPLIT_POOL_BROKER_MUTATIONS=0'
+          else
+            echo 'MMIBKR_SPLIT_POOL_B_REMOTE_ACCOUNT_READ=FAIL'
+            exit 1
+          fi
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -282,7 +300,7 @@ jobs:
           path: ${{ runner.temp }}/mmibkr-gateway-client-b.json
           retention-days: 7
       - if: always()
-        run: rm -f "$RUNNER_TEMP/reader-contracts.json"
+        run: rm -f "$RUNNER_TEMP/reader-contracts.json" "$RUNNER_TEMP/mmibkr-reader-b-private.log"
 
   verify:
     if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.test_mode == 'handoff_ab' }}
