@@ -303,12 +303,12 @@ jobs:
           assert 'LIVE_RUNTIME_CONTROLLER_ALERT_COUNTS=' in owner
           assert 'LIVE_RUNTIME_FINAL_CONTROLLER_HEALTH=' in owner
           print('LIVE_RUNTIME_RECOVERY_OBSERVABILITY_PARSE=PASS')
-          prestart='      - name: Reconcile restored live successor with canonical broker-ledger read-only gate'
-          start='      - name: Start unchanged canonical bot natural owner with three persisted live policies'
+          prestart='      - name: ' + 'Reconcile restored live successor with canonical broker-ledger read-only gate'
+          start='      - name: ' + 'Start unchanged canonical bot natural owner with three persisted live policies'
           assert owner.count(prestart) == 1
           assert owner.rfind(prestart) < owner.rfind(start)
-          checked=owner.split(prestart,1)[1].split(start,1)[0]
-          assert "if: ${{ !inputs.admission_only && inputs.warm_handoff_mode == 'successor' }}" in checked
+          checked=owner.rsplit(prestart,1)[1].split(start,1)[0]
+          assert ('if: ' + chr(36) + "{{ !inputs.admission_only && inputs.warm_handoff_mode == 'successor' }}") in checked
           assert "ibkr_live_successor_ledger_reconcile_v1.py" in checked
           assert "--account-env-file" in checked and "--universe" in checked and "--data-root" in checked
           assert "LIVE_RUNTIME_SUCCESSOR_CANONICAL_RECONCILER_SOURCE_NOT_ADMITTED=1" in checked
