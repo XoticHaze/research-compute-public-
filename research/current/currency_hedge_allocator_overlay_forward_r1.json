@@ -28,9 +28,9 @@
   "entry_date": "2026-09-14",
   "forward_session_clock_semantics": "forward_sessions is legacy inclusive-entry count; elapsed_close_to_close_sessions is the cross-program comparable elapsed clock",
   "forward_sessions": 26,
-  "generated_at": "2026-10-22T02:53:37.338467+00:00",
+  "generated_at": "2026-10-23T02:57:41.745442+00:00",
   "latest_common_market_date": "2026-10-19",
-  "market_data_asof": "2026-10-21",
+  "market_data_asof": "2026-10-22",
   "market_sessions_observed_including_entry": 26,
   "positions": {
     "hedged_challenger": {
@@ -141,7 +141,7 @@
     }
   },
   "source": {
-    "panel_sha256": "8e2fc5c4c0a3d3e8bae8b9cbfeab6c110652d240056207b2586c4fcb5e24f9e8",
+    "panel_sha256": "9dbd584891fdbc08e4bc53f48c7ff79fe448fc3577746829cd60ada161258efb",
     "provider": "Yahoo Finance via yfinance; research-only public data",
     "symbols": [
       "AVDV",
