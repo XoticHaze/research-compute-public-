@@ -34,6 +34,8 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 MAX_TREE_BYTES = 12_000_000
 MAX_SAMPLE_BYTES = 150_000
 MAX_TOTAL_SAMPLES = 24
+MAX_NESTED_NODES = 4096
+MAX_NESTED_DEPTH = 16
 
 
 class AuditRejected(RuntimeError):
@@ -89,18 +91,44 @@ def _kind(path: str) -> str:
     return "other"
 
 
-def _sample(entry: dict, raw: bytes) -> tuple[str, bool]:
+def _nested_forbidden(value: dict) -> bool | None:
+    """Detect nested prohibited field names without retaining or emitting values.
+
+    None means the bounded traversal was incomplete, never "clean".
+    """
+    pending = [(value, 0)]
+    visited = 0
+    while pending:
+        node, depth = pending.pop()
+        visited += 1
+        if visited > MAX_NESTED_NODES or depth > MAX_NESTED_DEPTH:
+            return None
+        if isinstance(node, dict):
+            if depth and any(isinstance(key, str) and key.casefold() in FORBIDDEN_OUTER
+                             for key in node):
+                return True
+            pending.extend((child, depth + 1) for child in node.values()
+                           if isinstance(child, (dict, list)))
+        elif isinstance(node, list):
+            pending.extend((child, depth + 1) for child in node
+                           if isinstance(child, (dict, list)))
+    return False
+
+
+def _sample(entry: dict, raw: bytes) -> tuple[str, bool, bool | None]:
     if not isinstance(raw, bytes):
         raise AuditRejected("blob_sample_type")
     if str(entry["path"]).lower().endswith(".json"):
         try:
             value = json.loads(raw)
         except (UnicodeError, ValueError):
-            return "json_parse_failed", False
+            return "json_parse_failed", False, False
         if not isinstance(value, dict):
-            return "json_non_object", False
-        return "json_object", bool(FORBIDDEN_OUTER & value.keys())
-    return "other_extension_unclassified", False
+            return "json_non_object", False, False
+        outer = any(isinstance(key, str) and key.casefold() in FORBIDDEN_OUTER
+                    for key in value)
+        return "json_object", outer, _nested_forbidden(value)
+    return "other_extension_unclassified", False, False
 
 
 def audit_tree(tree: dict, fetch_blob=None) -> dict:
@@ -136,7 +164,8 @@ def audit_tree(tree: dict, fetch_blob=None) -> dict:
 
     samples = {"inspected": 0, "json_object": 0, "json_parse_failed": 0,
                "json_non_object": 0, "other_extension_unclassified": 0,
-               "forbidden_outer_metadata": 0, "coverage": "bounded_not_exhaustive"}
+               "forbidden_outer_metadata": 0, "forbidden_nested_metadata": 0,
+               "nested_scan_incomplete": 0, "coverage": "bounded_not_exhaustive"}
     if fetch_blob:
         selected = []
         for kind in sorted(candidates):
@@ -148,10 +177,12 @@ def audit_tree(tree: dict, fetch_blob=None) -> dict:
             if entry["sha"] in already:
                 continue
             already.add(entry["sha"])
-            type_label, forbidden = _sample(entry, fetch_blob(entry["sha"]))
+            type_label, outer_forbidden, nested_forbidden = _sample(entry, fetch_blob(entry["sha"]))
             samples["inspected"] += 1
             samples[type_label] += 1
-            samples["forbidden_outer_metadata"] += int(forbidden)
+            samples["forbidden_outer_metadata"] += int(outer_forbidden)
+            samples["forbidden_nested_metadata"] += int(nested_forbidden is True)
+            samples["nested_scan_incomplete"] += int(nested_forbidden is None)
     return {
         "schema": "cc-public-exchange-redacted-inventory-v1",
         "status": "OBSERVATION_PASS_NOT_STORAGE_CERTIFICATION",
