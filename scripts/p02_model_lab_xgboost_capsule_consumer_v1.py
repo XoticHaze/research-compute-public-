@@ -107,6 +107,20 @@ def _validate(root: Path) -> dict:
     return manifest
 
 
+
+def _run_private_consumer(cmd: list[str], root: Path) -> None:
+    """Do not forward the private consumer's full JSON or error text to public logs."""
+    completed = subprocess.run(
+        cmd,
+        cwd=root,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError("P02 private consumer failed; output withheld")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--envelope", required=True)
@@ -141,7 +155,7 @@ def main() -> int:
             "--test-span-years", "1", "--min-test-rows", "200",
             "--output", str(out),
         ]
-        subprocess.run(cmd, cwd=root, check=True)
+        _run_private_consumer(cmd, root)
         receipt = json.loads(out.read_text())
         if receipt.get("schema") != "mm.model_lab_xgboost_first_consumer.v1":
             raise RuntimeError("P02 receipt schema mismatch")
