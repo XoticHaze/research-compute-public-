@@ -146,5 +146,21 @@ class P02ExactCapsuleInventoryTest(unittest.TestCase):
             self.assertNotIn("SECRET_PRIVATE", str(error.exception))
 
 
+    def test_public_receipt_is_fixed_field_and_nested_sentinel_free(self):
+        manifest = {
+            "data_identity": {"nested": {"secret": "P02_PRIVATE_SENTINEL"}},
+            "files": {"model.py": "P02_PRIVATE_SENTINEL"},
+        }
+        projected = consumer._public_receipt_projection("safe-run", manifest)
+        self.assertEqual(set(projected), consumer.PUBLIC_RECEIPT_FIELDS)
+        self.assertEqual(
+            projected["status"], "PRIVATE_RESULT_WITHHELD_PENDING_TWO_SIDED_ADMISSION"
+        )
+        self.assertNotIn("P02_PRIVATE_SENTINEL", json.dumps(projected))
+        self.assertNotIn("matched_window", projected)
+        self.assertNotIn("incremental_predictive_value", projected)
+        self.assertNotIn("economic_evidence", projected)
+
+
 if __name__ == "__main__":
     unittest.main()
