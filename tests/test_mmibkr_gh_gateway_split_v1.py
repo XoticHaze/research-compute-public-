@@ -7,6 +7,7 @@ import tempfile
 import socket
 import threading
 import subprocess
+import sys
 import unittest
 
 from scripts.mmibkr_gh_gateway_readonly_client_v1 import (
@@ -229,6 +230,32 @@ class PublicBrokerLogPrivacyTests(unittest.TestCase):
         self.assertIn("util.run(ib.connectAsync(", source)
         self.assertIn("timeout=20),timeout=65)", source)
         self.assertNotIn("print(expected)", source)
+
+
+    def test_upstream_logger_and_exception_sentinel_not_public(self):
+        sentinel = "SYNTHETIC_ACCOUNT_SENTINEL_DO_NOT_LOG"
+        source = (
+            "import logging\n"
+            "from scripts.mmibkr_public_broker_log_guard_v1 import install\n"
+            "install()\n"
+            f"logging.getLogger('ib_insync.ib').error({sentinel!r})\n"
+            f"raise RuntimeError({sentinel!r})\n"
+        )
+        run = subprocess.run([sys.executable, "-c", source], text=True,
+                             capture_output=True, check=False)
+        self.assertNotEqual(run.returncode, 0)
+        self.assertNotIn(sentinel, run.stdout + run.stderr)
+        self.assertIn("MMIBKR_PUBLIC_BROKER_EXCEPTION_CLASS=RuntimeError", run.stderr)
+
+    def test_all_five_owner_probes_and_independent_reader_use_guard(self):
+        root = Path(__file__).resolve().parents[1]
+        owner = (root / ".github/workflows/mmibkr-selected-runtime-live-owner-r1.yml").read_text()
+        reader = (root / "scripts/mmibkr_gh_gateway_readonly_client_v1.py").read_text()
+        self.assertEqual(owner.count("from ib_insync import IB"), 5)
+        self.assertEqual(owner.count(
+            "from scripts.mmibkr_public_broker_log_guard_v1 import install; install()"), 5)
+        self.assertIn("from scripts.mmibkr_public_broker_log_guard_v1 import install", reader)
+        self.assertIn("    install()\n    from ib_insync import IB", reader)
 
 
 class GatewayTCPRelayTests(unittest.IsolatedAsyncioTestCase):
