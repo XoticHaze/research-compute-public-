@@ -59,6 +59,7 @@
   },
   "decision_at": "2026-09-10T07:25:00+00:00",
   "forward": {
+    "economic_continuity_verified": true,
     "first_close": "2026-09-10",
     "latest_close": "2026-10-22",
     "observations": [
@@ -403,7 +404,7 @@
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-10-23T07:46:24.291961+00:00",
+  "observed_at": "2026-10-23T08:16:58.105117+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_health": {
@@ -439,7 +440,8 @@
     },
     "latest_scored_common_session": "2026-10-22",
     "provider": "yfinance_adjusted_close",
-    "source_max_date": "2026-10-22"
+    "source_max_date": "2026-10-22",
+    "unresolved_forward_gap": null
   },
   "source_pins": {
     "P248_source_commit": "20490f115d901aac3b586c33072c1157ad4d10a6",
