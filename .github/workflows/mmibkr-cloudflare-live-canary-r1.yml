@@ -23,6 +23,11 @@ env:
 
 jobs:
   deploy_canary_only:
+    # USER FREE-ONLY HOLD: paid Containers entitlement and an enforceable
+    # zero-overage budget have not been independently authenticated.
+    # This optional Cloudflare deploy is not an incumbent live P0 dependency.
+    # An existing fire file or workflow_dispatch is not user billing approval.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
