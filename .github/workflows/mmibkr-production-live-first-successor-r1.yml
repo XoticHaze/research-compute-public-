@@ -24,10 +24,12 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           s=Path('.github/workflows/mmibkr-production-live-first-successor-r1.yml').read_text()
-          assert 'workflow_run:' not in s
-          assert 'dispatch-successor:' not in s
-          assert 'gh api --method POST' not in s
-          assert 'inputs[admission_only]=false' not in s
+          # Match actual YAML/command lines, not the test's own literals.
+          lines=s.splitlines()
+          assert not any(line == '  workflow_run:' for line in lines)
+          assert not any(line == '  dispatch-successor:' for line in lines)
+          assert not any(line.strip().startswith('gh api --method POST') for line in lines)
+          assert not any(line.strip().startswith("-f 'inputs[admission_only]=false'") for line in lines)
           assert 'on:\n  pull_request:' in s
           print('STALE_LIVE_FIRST_SUCCESSOR_AUTOFIRE_RETIRED=PASS')
           PY
