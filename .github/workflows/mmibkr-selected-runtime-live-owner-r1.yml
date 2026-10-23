@@ -327,6 +327,9 @@ jobs:
       - name: Verify writable push replay denial and read-only preservation (brokerless)
         run: python -m unittest discover -s tests -p 'test_mmibkr_live_writable_push_replay_guard_v1.py' -v
 
+      - name: Verify direct legacy writable prestart denial (brokerless)
+        run: python -m unittest -v tests.test_mmibkr_live_legacy_prestart_gate_v1
+
   owner:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
@@ -349,7 +352,12 @@ jobs:
           if [ "$ADMISSION_ONLY" = false ]; then
             case "$HANDOFF_MODE" in
               legacy)
-                test -z "$PREDECESSOR_RUN" || exit 64 ;;
+                test -z "$PREDECESSOR_RUN" || exit 64
+                # Explicit user approval is preserved, but an old writable
+                # legacy dispatch cannot skip same-account live journal/fill
+                # reconciliation or the fenced successor-only prestart gate.
+                echo 'LIVE_LEGACY_WRITABLE_ACCOUNT_LEDGER_NOT_ADMITTED=1'
+                exit 64 ;;
               successor)
                 [[ "$PREDECESSOR_RUN" =~ ^[0-9]+$ ]] || exit 64 ;;
               *) echo 'LIVE_MODE_REQUIRES_LEGACY_OR_EXACT_SUCCESSOR=1'; exit 64 ;;
