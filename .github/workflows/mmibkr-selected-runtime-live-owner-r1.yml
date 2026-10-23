@@ -134,6 +134,11 @@ jobs:
             echo 'EXPLICIT_OPERATOR_READONLY_CF_GATEWAY_POOL_REQUEST_MATCHED=1'
           elif printf '%s\n' "$changed" | grep -Eq '^\+supervised_5h_dispatch_request_[0-9]{8}_[a-z0-9]{6}: true$'; then
             mode=supervised_5h
+          else
+            # An accepted prefix with an unapproved value must never start
+            # even a read-only production Gateway or request an IB Key login.
+            echo 'LIVE_OWNER_UNRECOGNIZED_NEW_MARKER=1'
+            exit 64
           fi
           if [ "$mode" = gateway_pool_5h ]; then
             active_owners="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/mmibkr-selected-runtime-live-owner-r1.yml/runs?per_page=100" \
