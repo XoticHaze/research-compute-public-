@@ -18,6 +18,11 @@ env:
 
 jobs:
   consume:
+    # Free-only and confidential-research admission hold. The legacy consumer
+    # prints full private StrategySpec/economics receipts to public logs/artifacts.
+    # Keep this existing job inert until owning Release admits original source,
+    # authenticated two-sided encrypted return and fixed-field public projection.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
