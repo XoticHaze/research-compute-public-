@@ -20,6 +20,8 @@ VIEW_MODEL='ui-react/src/components/autotuner-operator-status-view-model.js'
 MAX_FILES=8
 MAX_PLAINTEXT_BYTES=4*1024*1024
 MAX_MEMBER_BYTES=2*1024*1024
+MAX_TAR_MEMBERS=32
+MAX_TOTAL_MEMBER_BYTES=MAX_PLAINTEXT_BYTES
 
 
 class _PublicSafeArgumentParser(argparse.ArgumentParser):
@@ -53,15 +55,20 @@ def reject_authority(v,p='root'):
         for i,c in enumerate(v): reject_authority(c,f'{p}[{i}]')
 
 def safe_tar_members(members)->bool:
-    """Reject non-file/directory tar types and duplicate normalized paths before extraction."""
+    """Bound tar headers, aggregate expansion and normalized paths before extraction."""
     seen=set()
-    for member in members:
-        if not (member.isfile() or member.isdir()) or not safe_name(member.name):
+    total_bytes=0
+    for count,member in enumerate(members,1):
+        if count>MAX_TAR_MEMBERS or not (member.isfile() or member.isdir()) or not safe_name(member.name):
             return False
-        if member.isfile() and (member.size<0 or member.size>MAX_MEMBER_BYTES):
-            return False
+        if member.isfile():
+            if member.size<0 or member.size>MAX_MEMBER_BYTES:
+                return False
+            total_bytes+=member.size
+            if total_bytes>MAX_TOTAL_MEMBER_BYTES:
+                return False
         canonical=str(Path(member.name))
-        if canonical in seen:
+        if canonical in seen or canonical=='.':
             return False
         seen.add(canonical)
     return True
@@ -87,9 +94,16 @@ def consume(envelope_path:Path,private_key_path:Path,run_id:str)->dict:
     plain_sha=hashlib.sha256(plain).hexdigest()
     if len(plain)>MAX_PLAINTEXT_BYTES or plain_sha!=env['plaintext_sha256']: raise RuntimeError('payload size/digest mismatch')
     with tarfile.open(fileobj=io.BytesIO(plain),mode='r:gz') as ar:
-        members=ar.getmembers(); files=[m for m in members if m.isfile()]
-        if len(files)>MAX_FILES: raise RuntimeError('payload file count exceeds limit')
-        if not safe_tar_members(members): raise RuntimeError('unsafe payload members')
+        # Validate each tar header as it arrives. getmembers() would parse an
+        # unbounded gzip member list before any safety predicate could reject it.
+        members=[]; file_count=0
+        for member in ar:
+            members.append(member)
+            if not safe_tar_members(members): raise RuntimeError('unsafe payload members')
+            if member.isfile():
+                file_count+=1
+                if file_count>MAX_FILES: raise RuntimeError('payload file count exceeds limit')
+        files=[m for m in members if m.isfile()]
         names={m.name for m in files}
         if 'manifest.json' not in names: raise RuntimeError('manifest missing')
         manifest=json.loads(ar.extractfile('manifest.json').read().decode())
@@ -99,7 +113,7 @@ def consume(envelope_path:Path,private_key_path:Path,run_id:str)->dict:
         required_files={ENTRYPOINT,VIEW_MODEL,SNAPSHOT}
         if not isinstance(declared,dict) or names!=set(declared)|{'manifest.json'} or not required_files.issubset(names): raise RuntimeError('payload file-set mismatch')
         with tempfile.TemporaryDirectory(prefix='p01-autotuner-html-') as td:
-            root=Path(td); ar.extractall(root)
+            root=Path(td); ar.extractall(root,members=members)
             for rel,expected in declared.items():
                 if not safe_name(rel) or hashlib.sha256((root/rel).read_bytes()).hexdigest()!=str(expected).lower(): raise RuntimeError(f'payload digest mismatch: {rel}')
             snapshot=load_obj(root/SNAPSHOT)
