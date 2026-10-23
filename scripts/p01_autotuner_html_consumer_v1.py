@@ -74,6 +74,19 @@ def safe_tar_members(members)->bool:
     return True
 
 
+
+def validated_tar_members(archive):
+    """Stop on the first unsafe header, before parsing the rest of a gzip tar."""
+    members=[]; file_count=0
+    for member in archive:
+        members.append(member)
+        if not safe_tar_members(members): raise RuntimeError('unsafe payload members')
+        if member.isfile():
+            file_count+=1
+            if file_count>MAX_FILES: raise RuntimeError('payload file count exceeds limit')
+    return members
+
+
 def load_obj(path:Path)->dict:
     v=json.loads(path.read_text(encoding='utf-8-sig'))
     if not isinstance(v,dict): raise RuntimeError(f'JSON root must be object: {path}')
@@ -94,15 +107,8 @@ def consume(envelope_path:Path,private_key_path:Path,run_id:str)->dict:
     plain_sha=hashlib.sha256(plain).hexdigest()
     if len(plain)>MAX_PLAINTEXT_BYTES or plain_sha!=env['plaintext_sha256']: raise RuntimeError('payload size/digest mismatch')
     with tarfile.open(fileobj=io.BytesIO(plain),mode='r:gz') as ar:
-        # Validate each tar header as it arrives. getmembers() would parse an
-        # unbounded gzip member list before any safety predicate could reject it.
-        members=[]; file_count=0
-        for member in ar:
-            members.append(member)
-            if not safe_tar_members(members): raise RuntimeError('unsafe payload members')
-            if member.isfile():
-                file_count+=1
-                if file_count>MAX_FILES: raise RuntimeError('payload file count exceeds limit')
+        # getmembers() would exhaustively parse untrusted gzip headers first.
+        members=validated_tar_members(ar)
         files=[m for m in members if m.isfile()]
         names={m.name for m in files}
         if 'manifest.json' not in names: raise RuntimeError('manifest missing')
