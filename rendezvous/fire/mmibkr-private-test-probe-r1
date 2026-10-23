@@ -12,8 +12,8 @@
   "crw_consumer_reprobe": false,
   "s3_composition_economics": false,
   "s4_layered_mtf_economics": false,
-  "requested_by": "continue-release-clocked-20261023",
-  "purpose": "Re-execute exact selected P0 successor after source-only correction of three stale negative assertions from run 40036051957; preserve four already PASS modules, no broker.",
+  "requested_by": "continue-release-r19-clock-20261023",
+  "purpose": "Five exact P0 modules journal writer readback integrated successor on corrected selected source under Docker network none; no IBKR",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -21,7 +21,7 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "p0-883-ee1ac47a-20261023-early-failclose-r1",
+  "request_nonce": "p0-ee1ac47-successor-five-module-safe-20261023",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
   "current_private_reference": "ee1ac47aba314a22f5a54fc7d8d3651a3f3d3f8a",
   "parity_public_key_b64": ""
