@@ -76,7 +76,7 @@ jobs:
           if not admitted:
               print('FORWARD_CURRENT_HELD_SOURCE_GAP_OR_INVALID_RECEIPT=1')
           with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
-              f.write('admitted='+str(admitted).lower()+'\\n')
+              f.write('admitted='+str(admitted).lower()+'\n')
           PY
       - name: Publish stable current snapshot
         if: steps.source_admission.outputs.admitted == 'true'
