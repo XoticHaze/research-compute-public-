@@ -69,6 +69,27 @@ class PublicExchangeInventoryTests(unittest.TestCase):
         self.assertFalse(result["storage_privacy_certified"])
         self.assertFalse(result["private_consumer_ack_proven"])
 
+    def test_nested_metadata_is_detected_without_values_or_false_clean_depth(self):
+        secret = PRIVATE_MARKER
+        fixture = tree(("rendezvous/returns/private.json", SHA, 150))
+        nested = json.dumps({"ciphertext_b64": "ciphertext", "wrapper": {
+            "entries": [{"PLAINTEXT_SHA256": secret, "harness": secret}]
+        }}).encode()
+        result = audit.audit_tree(fixture, fetch_blob=lambda sha: nested)
+        self.assertEqual(result["samples"]["forbidden_outer_metadata"], 0)
+        self.assertEqual(result["samples"]["forbidden_nested_metadata"], 1)
+        self.assertEqual(result["samples"]["nested_scan_incomplete"], 0)
+        self.assertNotIn(secret, json.dumps(result))
+        self.assertNotIn("private.json", json.dumps(result))
+
+        too_deep = {"ciphertext_b64": "ciphertext"}
+        for _ in range(audit.MAX_NESTED_DEPTH + 2):
+            too_deep = {"wrapper": too_deep}
+        result = audit.audit_tree(fixture, fetch_blob=lambda sha: json.dumps(too_deep).encode())
+        self.assertEqual(result["samples"]["nested_scan_incomplete"], 1)
+        self.assertEqual(result["samples"]["forbidden_nested_metadata"], 0)
+        self.assertFalse(result["storage_privacy_certified"])
+
     def test_truncation_and_missing_tree_fail_closed(self):
         for broken in (None, {}, {"sha": TREE, "truncated": True, "tree": []},
                        {"sha": "invalid", "truncated": False, "tree": []},
