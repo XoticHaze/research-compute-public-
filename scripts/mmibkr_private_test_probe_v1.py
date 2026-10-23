@@ -31,6 +31,7 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_selected_runtime_live_order_intent_journal_v1",
     "tests.test_selected_runtime_live_execution_ledger_v1",
     "tests.test_selected_runtime_live_broker_provenance_v1",
+    "tests.test_selected_runtime_live_p0_integrated_checkpoint_v1",
 })
 
 SAFE_EXACT = {
