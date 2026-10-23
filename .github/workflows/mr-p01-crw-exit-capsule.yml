@@ -5,6 +5,10 @@ on:
   workflow_dispatch:
 jobs:
   evaluate:
+    # Existing P01 legacy EXIT job emits confidential results on public surfaces.
+    # Preserve workflow/ref provenance; block execution pending authenticated
+    # original-source admission and two-sided encrypted private-result return.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
