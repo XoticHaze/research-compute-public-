@@ -253,8 +253,17 @@ jobs:
                          'docker logs --since "$outage_utc" mmibkr-live-gateway',
                          'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_GRACE_STARTED=1',
                          'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_EXPIRED=1',
-                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS_EXECUTIONS=1'):
+                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_BROKER_READBACK_ONLY=1'):
               assert marker in pool, marker
+          # A real reset late in a 15m session must not be cut short by
+          # the nominal session end before the 480s controller delay finishes.
+          for marker in ('while :; do', 'pool_maintenance_alert_after_outage()',
+                         '[ "$now" -ge "$end" ]', '[ "$now" -ge "$((end + 720))" ]',
+                         '[ "$now" -ge "$((outage_since + 720))" ]',
+                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_BOUNDED_OBSERVATION=1',
+                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_OBSERVATION_INCOMPLETE=1'):
+              assert marker in pool, marker
+          assert 'timeout-minutes: 300' in pool
           pool_run=pool.split('        run: |',1)[1]
           pool_script="\n".join(line[10:] if line.startswith("          ") else line for line in pool_run.splitlines())
           subprocess.run(["bash","-n"],input=pool_script,text=True,check=True)
@@ -887,7 +896,7 @@ jobs:
           POOL_TRANSPORT: ${{ inputs.pool_transport }}
           GH_TOKEN: ${{ github.token }}
           POOL_SESSION_MINUTES: ${{ inputs.pool_session_minutes }}
-        timeout-minutes: 290
+        timeout-minutes: 300
         run: |
           set -euo pipefail
           # Same authenticated production owner and A/B consumers for short
@@ -934,7 +943,36 @@ jobs:
           echo "MMIBKR_GATEWAY_ONLY_POOL_SESSION_SECONDS=$((POOL_SESSION_MINUTES * 60))"
           pool_resource_sample initial
           docker exec mmibkr-live-gateway du -sm /home/ibgateway/Jts_b1 2>/dev/null | awk '{print "MMIBKR_POOL_JTS_DISK_MIB_INITIAL="$1}' || true
-          while [ "$(date +%s)" -lt "$end" ]; do
+          # A short acceptance can reach a real 480s maintenance reset near
+          # its nominal end. Extend observation only for a fresh in-window
+          # post-outage controller alert, never for an ordinary API outage.
+          pool_maintenance_alert_after_outage() {
+            [ "$outage_since" -gt 0 ] && [ "$maintenance_grace_used" -eq 0 ] || return 1
+            local eastern_time outage_utc
+            eastern_time="$(TZ=America/New_York date +%H%M)"
+            outage_utc="$(date -u -d "@$outage_since" +%Y-%m-%dT%H:%M:%SZ)"
+            { [[ "$eastern_time" > "2329" ]] || [[ "$eastern_time" < "0201" ]]; } &&
+              docker logs --since "$outage_utc" mmibkr-live-gateway 2>&1 |
+                grep -F 'ALERT_IBKR_MAINTENANCE_RECOVERY' >/dev/null
+          }
+          while :; do
+            now="$(date +%s)"
+            if [ "$now" -ge "$end" ]; then
+              if [ "$outage_since" -eq 0 ]; then break; fi
+              if [ "$maintenance_evidence_seen" -eq 0 ] && pool_maintenance_alert_after_outage; then
+                maintenance_grace_used=1
+                maintenance_evidence_seen=1
+                echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_GRACE_STARTED=1'
+              fi
+              # Hard stop: nominal end + 720s AND outage start + 720s.
+              if [ "$maintenance_evidence_seen" -eq 0 ] ||
+                 [ "$now" -ge "$((end + 720))" ] ||
+                 [ "$now" -ge "$((outage_since + 720))" ]; then
+                echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_OBSERVATION_INCOMPLETE=1'
+                break
+              fi
+              echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_BOUNDED_OBSERVATION=1'
+            fi
             if [ "$POOL_TRANSPORT" = tailscale ]; then
               kill -0 "$relay_pid"
             else
@@ -989,9 +1027,10 @@ jobs:
           PY
             then
               if [ "$maintenance_evidence_seen" -eq 1 ]; then
-                # This exact successful broker probe included account identity,
-                # positions, open orders and executions from the same owner.
-                echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS_EXECUTIONS=1'
+                # This same-client probe confirmed a managed account and fresh
+                # positions/open-orders/executions API reads. It does NOT bind
+                # orderRef/permId/execId to durable inventory or prove takeover.
+                echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_BROKER_READBACK_ONLY=1'
               fi
               outage_since=0
               maintenance_evidence_seen=0
@@ -1026,16 +1065,10 @@ jobs:
               # usual 600s outage ceiling to 720s only for one authenticated
               # maintenance/reset-window alert arising AFTER this outage began.
               # No broker action, new login, or owner handoff is performed here.
-              if [ "$maintenance_grace_used" -eq 0 ] && [ "$maintenance_evidence_seen" -eq 0 ]; then
-                eastern_time="$(TZ=America/New_York date +%H%M)"
-                outage_utc="$(date -u -d "@$outage_since" +%Y-%m-%dT%H:%M:%SZ)"
-                if { [[ "$eastern_time" > "2329" ]] || [[ "$eastern_time" < "0201" ]]; } &&
-                   docker logs --since "$outage_utc" mmibkr-live-gateway 2>&1 |
-                     grep -F 'ALERT_IBKR_MAINTENANCE_RECOVERY' >/dev/null; then
-                  maintenance_grace_used=1
-                  maintenance_evidence_seen=1
-                  echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_GRACE_STARTED=1'
-                fi
+              if [ "$maintenance_evidence_seen" -eq 0 ] && pool_maintenance_alert_after_outage; then
+                maintenance_grace_used=1
+                maintenance_evidence_seen=1
+                echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_GRACE_STARTED=1'
               fi
               pool_maintenance_budget=600
               if [ "$maintenance_evidence_seen" -eq 1 ]; then
