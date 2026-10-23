@@ -220,12 +220,32 @@ jobs:
           assert 'SUPERVISED_GATEWAY_HEALTH=' in owner
           assert 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3' in owner
           assert 'AUTO_RESTART_ADOPT=yes' in owner
+          assert sum(1 for line in owner.splitlines() if line.strip().startswith('supervised_recovery_args=(-e AUTO_RESTART_TIME=')) == 3
           assert 'CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480' in owner
           assert 'maintenance_grace_seconds=720' in owner
           assert 'SUPERVISED_MAINTENANCE_RECOVERY_GRACE_STARTED=1' in owner
           assert 'SUPERVISED_MAINTENANCE_RECOVERY_EXPIRED=1' in owner
           assert 'SUPERVISED_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS=1' in owner
           assert 'SUPERVISED_MAINTENANCE_RECOVERY_INCOMPLETE_AT_SESSION_END=1' in owner
+          # The independent read-only pool may outlast the controller's 480s
+          # maintenance delay only on an exact in-window post-outage alert.
+          # Compose the step delimiters so source-contract readers searching
+          # the workflow cannot accidentally select this assertion block.
+          pool_start='      - name: ' + 'Hold one authenticated read-only Gateway for independent GitHub compute jobs'
+          pool_end='      - name: ' + 'Confirm no-order admission did not authorize live bot startup'
+          pool=owner.split(pool_start,1)[1].split(pool_end,1)[0]
+          for marker in ('maintenance_grace_used=0', 'maintenance_evidence_seen=0',
+                         'pool_maintenance_budget=600', 'pool_maintenance_budget=720',
+                         'ALERT_IBKR_MAINTENANCE_RECOVERY',
+                         'docker logs --since "$outage_utc" mmibkr-live-gateway',
+                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_GRACE_STARTED=1',
+                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_EXPIRED=1',
+                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS_EXECUTIONS=1'):
+              assert marker in pool, marker
+          pool_run=pool.split('        run: |',1)[1]
+          pool_script="\n".join(line[10:] if line.startswith("          ") else line for line in pool_run.splitlines())
+          subprocess.run(["bash","-n"],input=pool_script,text=True,check=True)
+          print('READONLY_GATEWAY_POOL_MAINTENANCE_SHELL_PARSE=PASS')
           assert 'docker logs --since 10m mmibkr-live-gateway' in owner
           assert 'TZ=America/New_York date +%H%M' in owner
           assert 'docker stop --time 90 mmibkr-live-gateway' in owner
@@ -713,7 +733,8 @@ jobs:
           if [ "${{ inputs.admission_only }}" = false ]; then
             twofa_exit_interval=300
             relogin_after_twofa_timeout=no
-            supervised_recovery_args=(-e AUTO_RESTART_ADOPT=yes
+            supervised_recovery_args=(-e AUTO_RESTART_TIME="11:45 PM"
+                                      -e AUTO_RESTART_ADOPT=yes
                                       -e CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480 \
                                       -e UPSTREAM_RELAUNCH=yes)
             echo 'MMIBKR_LIVE_RECOVERY_CONTROLLER_ENABLED=1'
@@ -728,7 +749,8 @@ jobs:
             relogin_after_twofa_timeout=no
             # Keep the existing Gateway-internal restart/adoption logic active.
             # Native v0.16.2 maintenance re-auth intentionally waits 480s.
-            supervised_recovery_args=(-e AUTO_RESTART_ADOPT=yes
+            supervised_recovery_args=(-e AUTO_RESTART_TIME="11:45 PM"
+                                      -e AUTO_RESTART_ADOPT=yes
                                       -e CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480)
             echo 'MMIBKR_SUPERVISED_MAINTENANCE_BACKOFF_SECONDS=480'
             echo 'MMIBKR_SUPERVISED_AUTO_RESTART_ADOPT=1'
@@ -742,7 +764,8 @@ jobs:
             read_only_api=yes
             twofa_exit_interval=300
             relogin_after_twofa_timeout=no
-            supervised_recovery_args=(-e AUTO_RESTART_ADOPT=yes
+            supervised_recovery_args=(-e AUTO_RESTART_TIME="11:45 PM"
+                                      -e AUTO_RESTART_ADOPT=yes
                                       -e CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480)
             echo 'MMIBKR_SPLIT_GATEWAY_POOL_API_READ_ONLY=1'
             echo 'MMIBKR_SPLIT_GATEWAY_POOL_AUTO_RELOGIN=0'
@@ -859,6 +882,8 @@ jobs:
             docker stats --no-stream --format "MMIBKR_POOL_GATEWAY_RESOURCES_PHASE=${phase} ELAPSED_SECONDS=${elapsed} MEM={{.MemUsage}} CPU={{.CPUPerc}} NET_IO={{.NetIO}} PIDS={{.PIDs}}" mmibkr-live-gateway || echo 'MMIBKR_POOL_GATEWAY_STATS_UNAVAILABLE=1'
           }
           outage_since=0
+          maintenance_grace_used=0
+          maintenance_evidence_seen=0
           ready=0
           owner_probe_sample=0
           if [ "$POOL_TRANSPORT" = tailscale ]; then
@@ -943,7 +968,13 @@ jobs:
               if ib.isConnected(): ib.disconnect()
           PY
             then
+              if [ "$maintenance_evidence_seen" -eq 1 ]; then
+                # This exact successful broker probe included account identity,
+                # positions, open orders and executions from the same owner.
+                echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS_EXECUTIONS=1'
+              fi
               outage_since=0
+              maintenance_evidence_seen=0
               echo 'MMIBKR_GATEWAY_POOL_BROKER_READ_PASS=1'
               if [ "$ready" -eq 0 ]; then
                 echo 'MMIBKR_GATEWAY_ONLY_POOL_READY=1'
@@ -971,7 +1002,29 @@ jobs:
               if [ "$outage_since" -eq 0 ]; then outage_since="$(date +%s)"; fi
               elapsed="$(( $(date +%s) - outage_since ))"
               echo "MMIBKR_GATEWAY_POOL_API_UNAVAILABLE_SECONDS=$elapsed"
-              if [ "$elapsed" -ge 600 ]; then
+              # Native controller re-auth deliberately waits 480s. Extend the
+              # usual 600s outage ceiling to 720s only for one authenticated
+              # maintenance/reset-window alert arising AFTER this outage began.
+              # No broker action, new login, or owner handoff is performed here.
+              if [ "$maintenance_grace_used" -eq 0 ] && [ "$maintenance_evidence_seen" -eq 0 ]; then
+                eastern_time="$(TZ=America/New_York date +%H%M)"
+                outage_utc="$(date -u -d "@$outage_since" +%Y-%m-%dT%H:%M:%SZ)"
+                if { [[ "$eastern_time" > "2329" ]] || [[ "$eastern_time" < "0201" ]]; } &&
+                   docker logs --since "$outage_utc" mmibkr-live-gateway 2>&1 |
+                     grep -F 'ALERT_IBKR_MAINTENANCE_RECOVERY' >/dev/null; then
+                  maintenance_grace_used=1
+                  maintenance_evidence_seen=1
+                  echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_GRACE_STARTED=1'
+                fi
+              fi
+              pool_maintenance_budget=600
+              if [ "$maintenance_evidence_seen" -eq 1 ]; then
+                pool_maintenance_budget=720
+              fi
+              if [ "$elapsed" -ge "$pool_maintenance_budget" ]; then
+                if [ "$maintenance_evidence_seen" -eq 1 ]; then
+                  echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_EXPIRED=1'
+                fi
                 echo 'MMIBKR_GATEWAY_POOL_BROKER_RECOVERY_BUDGET_EXPIRED=1'
                 exit 75
               fi
