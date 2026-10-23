@@ -2,6 +2,9 @@ name: MR gold miner volatility information B6 20260918
 on:
   pull_request:
     branches: [main]
+    paths:
+      - .github/workflows/mr-gold-miner-volatility-information-b6-20260918.yml
+      - research/mr_gold_miner_volatility_information_b6_20260918.py
   workflow_dispatch:
 jobs:
   research:
