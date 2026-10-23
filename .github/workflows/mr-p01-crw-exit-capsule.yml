@@ -5,6 +5,10 @@ on:
   workflow_dispatch:
 jobs:
   evaluate:
+    # Legacy EXIT capsule publishes private evaluation JSON as a public artifact.
+    # Keep this exact job inert pending source/issuer admission and encrypted
+    # full-result return with a fixed-field safe public receipt projection.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
