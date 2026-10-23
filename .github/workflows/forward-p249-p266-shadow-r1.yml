@@ -13,7 +13,8 @@ on:
       - 'research/current/forward_p249_p266_shadow_r1.json'
       - '.github/workflows/forward-p249-p266-shadow-r1.yml'
   schedule:
-    - cron: '30 22 * * 1-5'
+    # Mon-Fri 20:15 EST / 21:15 EDT, after the canonical 18:30 America/New_York completed-session cutoff.
+    - cron: '15 1 * * 2-6'
   workflow_dispatch:
 permissions: {contents: read}
 jobs:
