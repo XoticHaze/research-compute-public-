@@ -121,6 +121,28 @@ def _run_private_consumer(cmd: list[str], root: Path) -> None:
         raise RuntimeError("P02 private consumer failed; output withheld")
 
 
+
+# Minimum public receipt while no independently approved P02 result-field
+# classification or authenticated private full-result return is available.
+PUBLIC_RECEIPT_FIELDS = frozenset({
+    "schema", "run_id", "mm_commit", "symbol", "timeframe", "status",
+})
+
+
+def _public_receipt_projection(run_id: str, manifest: dict) -> dict:
+    result = {
+        "schema": "p02-public-consumer-receipt-v1",
+        "run_id": str(run_id),
+        "mm_commit": EXPECTED_MM_COMMIT,
+        "symbol": EXPECTED_SYMBOL,
+        "timeframe": EXPECTED_TIMEFRAME,
+        "status": "PRIVATE_RESULT_WITHHELD_PENDING_TWO_SIDED_ADMISSION",
+    }
+    if set(result) != PUBLIC_RECEIPT_FIELDS:
+        raise RuntimeError("P02 public receipt field contract mismatch")
+    return result
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--envelope", required=True)
@@ -159,17 +181,7 @@ def main() -> int:
         receipt = json.loads(out.read_text())
         if receipt.get("schema") != "mm.model_lab_xgboost_first_consumer.v1":
             raise RuntimeError("P02 receipt schema mismatch")
-        print(json.dumps({
-            "schema": "p02-public-consumer-receipt-v1",
-            "run_id": str(args.run_id),
-            "mm_commit": manifest["mm_commit"],
-            "data_identity": manifest["data_identity"],
-            "symbol": receipt.get("symbol"),
-            "timeframe": receipt.get("timeframe"),
-            "matched_window": receipt.get("matched_window"),
-            "incremental_predictive_value": receipt.get("incremental_predictive_value"),
-            "economic_evidence": receipt.get("economic_evidence"),
-        }, sort_keys=True))
+        print(json.dumps(_public_receipt_projection(args.run_id, manifest), sort_keys=True))
     return 0
 
 
