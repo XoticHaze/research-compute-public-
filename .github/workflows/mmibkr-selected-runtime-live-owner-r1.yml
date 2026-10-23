@@ -821,7 +821,8 @@ jobs:
       - name: Bind and reconcile the expected existing production account without order mutation
         run: |
           set -euo pipefail
-          python - <<'PY'
+          umask 077
+          python - >"$RUNNER_TEMP/mmibkr-live-initial-account-read-private.log" 2>&1 <<'PY'
           import os,time,logging
           from pathlib import Path
           from scripts.mmibkr_public_broker_log_guard_v1 import install; install()
@@ -854,6 +855,10 @@ jobs:
                   if ib.isConnected(): ib.disconnect()
           if not authenticated: raise SystemExit('live_gateway_authenticated_account_read_failed')
           PY
+          rm -f "$RUNNER_TEMP/mmibkr-live-initial-account-read-private.log"
+          echo 'PRODUCTION_LIVE_EXECUTION_HISTORY_READ=1'
+          echo 'PRODUCTION_LIVE_EXPECTED_ACCOUNT_READ=1'
+          echo 'PRODUCTION_LIVE_POSITIONS_AND_ORDERS_READ=1
 
       - name: Open Gateway's read-only API to permitted ephemeral tailnet clients
         if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'gateway_pool_5h' && inputs.pool_transport == 'tailscale' }}
@@ -890,6 +895,7 @@ jobs:
         timeout-minutes: 290
         run: |
           set -euo pipefail
+          umask 077
           # Same authenticated production owner and A/B consumers for short
           # acceptance (15m) or the original long continuity (280m).
           case "$POOL_SESSION_MINUTES" in 15|280) ;; *) echo 'MMIBKR_POOL_DURATION_INVALID=1'; exit 64 ;; esac
@@ -906,6 +912,7 @@ jobs:
           maintenance_evidence_seen=0
           ready=0
           owner_probe_sample=0
+          private_probe_log="$RUNNER_TEMP/mmibkr-gateway-read-probe-private.log"
           if [ "$POOL_TRANSPORT" = tailscale ]; then
             relay_pid="$(cat "$RUNNER_TEMP/mmibkr-gateway-relay.pid")"
             kill -0 "$relay_pid"
@@ -948,7 +955,9 @@ jobs:
             pool_resource_sample interval
             owner_probe_sample=$((owner_probe_sample + 1))
             export MMIBKR_OWNER_PROBE_SAMPLE="$owner_probe_sample"
-            if python - <<'PY'
+            # Capture upstream IBKR stdout AND stderr; logger.disable alone
+            # cannot guarantee account-number-bearing timeout text stays private.
+            if python - >"$private_probe_log" 2>&1 <<'PY'
           import os,logging
           from pathlib import Path
           from scripts.mmibkr_public_broker_log_guard_v1 import install; install()
@@ -988,6 +997,7 @@ jobs:
               if ib.isConnected(): ib.disconnect()
           PY
             then
+              rm -f "$private_probe_log"
               if [ "$maintenance_evidence_seen" -eq 1 ]; then
                 # This exact successful broker probe included account identity,
                 # positions, open orders and executions from the same owner.
@@ -1015,6 +1025,14 @@ jobs:
               sleep 90
             else
               result=$?
+              # Only exact allowlisted stage/class markers may leave the private
+              # runner-local log. Never cat/tail upstream IB timeout messages.
+              if [ -f "$private_probe_log" ]; then
+                grep -xE 'MMIBKR_GATEWAY_POOL_BROKER_FAILURE_STAGE=(api_connect_and_sync|account_identity|positions_read|orders_read|executions_read)' "$private_probe_log" || true
+                grep -xE 'MMIBKR_GATEWAY_POOL_BROKER_FAILURE_CLASS=(TimeoutError|ConnectionError|RuntimeError|OSError|ValueError|AssertionError)' "$private_probe_log" || true
+                grep -xF 'MMIBKR_GATEWAY_POOL_BROKER_PROBE_RETRYABLE=1' "$private_probe_log" || true
+                rm -f "$private_probe_log"
+              fi
               if [ "$result" -eq 70 ]; then
                 echo 'MMIBKR_GATEWAY_POOL_ACCOUNT_MISMATCH_FAIL_CLOSED=1'
                 exit 70
@@ -1068,6 +1086,7 @@ jobs:
         timeout-minutes: 12
         run: |
           set -euo pipefail
+          umask 077
           # Distinguish broker/Gateway session instability from bot-triggered
           # disconnects before starting canonical main.py. No submit route,
           # order mutation, restart, login or controller commands here.
@@ -1100,7 +1119,7 @@ jobs:
             echo 'SUPERVISED_GATEWAY_ONLY_API_UNSTABLE=1'
             exit 1
           fi
-          if ! python - <<'PY'
+          if ! python - >"$RUNNER_TEMP/mmibkr-live-supervised-read-private.log" 2>&1 <<'PY'
           import os
           from pathlib import Path
           from scripts.mmibkr_public_broker_log_guard_v1 import install; install()
@@ -1120,6 +1139,8 @@ jobs:
             echo 'SUPERVISED_GATEWAY_ONLY_API_HANDSHAKE_FAILED=1'
             exit 1
           fi
+          rm -f "$RUNNER_TEMP/mmibkr-live-supervised-read-private.log"
+          echo 'SUPERVISED_GATEWAY_ONLY_BROKER_RECONCILED=1'
           echo 'SUPERVISED_GATEWAY_ONLY_EIGHT_MINUTES_PASS=1'
 
       - name: Run supervised five-hour live-account canonical bot shadow (no orders)
@@ -1201,7 +1222,7 @@ jobs:
             fi
             gateway_status
             if [ $((minute % 5)) -eq 1 ] || [ "$probe_failures" -gt 0 ]; then
-              if python - <<'PY'
+              if python - >"$RUNNER_TEMP/mmibkr-live-supervised-loop-read-private.log" 2>&1 <<'PY'
           import os
           from pathlib import Path
           from scripts.mmibkr_public_broker_log_guard_v1 import install; install()
@@ -1218,6 +1239,8 @@ jobs:
               if ib.isConnected(): ib.disconnect()
           PY
               then
+                rm -f "$RUNNER_TEMP/mmibkr-live-supervised-loop-read-private.log"
+                echo 'SUPERVISED_LIVE_ACCOUNT_RECONCILED=1'
                 if [ "$maintenance_recovery_active" -eq 1 ]; then
                   echo 'SUPERVISED_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS=1'
                   maintenance_recovery_active=0
@@ -1225,6 +1248,7 @@ jobs:
                 maintenance_failure_since=0
                 probe_failures=0
               else
+                rm -f "$RUNNER_TEMP/mmibkr-live-supervised-loop-read-private.log"
                 probe_failures=$((probe_failures + 1))
                 [ "$maintenance_failure_since" -gt 0 ] ||
                   maintenance_failure_since="$(date +%s)"
@@ -1372,6 +1396,7 @@ jobs:
         if: ${{ !inputs.admission_only }}
         run: |
           set -euo pipefail
+          umask 077
           # An authenticated broker read is not an attribution of restored
           # orderRef/permId/execId intent, fills, open orders and positions.
           # Until the owning MM consumer produces that same-owner proof, an
@@ -1440,7 +1465,7 @@ jobs:
             # A successful broker reconciliation overrides uncertain status.
             if [ "$gateway_healthy" != 1 ] || [ "$bot_paused" -eq 1 ] ||
                [ $((iteration%5)) -eq 1 ]; then
-              if python - <<'PY'
+              if python - >"$RUNNER_TEMP/mmibkr-live-runtime-read-private.log" 2>&1 <<'PY'
           import os
           from pathlib import Path
           from scripts.mmibkr_public_broker_log_guard_v1 import install; install()
@@ -1458,6 +1483,8 @@ jobs:
               if ib.isConnected(): ib.disconnect()
           PY
               then
+                rm -f "$RUNNER_TEMP/mmibkr-live-runtime-read-private.log"
+                echo 'LIVE_RUNTIME_BROKER_READ_RECONCILED=1'
                 last_verified="$(date +%s)"
                 if [ "$gateway_healthy" != 1 ]; then
                   echo 'LIVE_RUNTIME_CONTROLLER_HEALTH_DISAGREES_WITH_BROKER_READ=1'
@@ -1472,6 +1499,7 @@ jobs:
                   echo 'LIVE_RUNTIME_CANONICAL_LEDGER_RECONCILIATION_REQUIRED_BOT_STAYS_FROZEN=1'
                 fi
               else
+                rm -f "$RUNNER_TEMP/mmibkr-live-runtime-read-private.log"
                 if [ "$bot_paused" -eq 0 ]; then
                   docker pause mmibkr-live-bot >/dev/null
                   bot_paused=1
@@ -1624,7 +1652,7 @@ jobs:
           fi
           rm -rf "$RUNNER_TEMP/live-warm-import" "$RUNNER_TEMP/live-warm-export"
           rm -rf "$RUNNER_TEMP/mmibkr-live-source" "$RUNNER_TEMP/mmibkr-live-data"
-          rm -f "$RUNNER_TEMP/mmibkr-live-gateway.env" "$RUNNER_TEMP/mmibkr-live-bot.env" "$RUNNER_TEMP/mmibkr-live-seal-receipt.json"
+          rm -f "$RUNNER_TEMP/mmibkr-live-gateway.env" "$RUNNER_TEMP/mmibkr-live-bot.env" "$RUNNER_TEMP/mmibkr-live-seal-receipt.json" "$RUNNER_TEMP/mmibkr-gateway-read-probe-private.log" "$RUNNER_TEMP/mmibkr-live-initial-account-read-private.log" "$RUNNER_TEMP/mmibkr-live-supervised-read-private.log" "$RUNNER_TEMP/mmibkr-live-supervised-loop-read-private.log" "$RUNNER_TEMP/mmibkr-live-runtime-read-private.log"
           test ! -e "$RUNNER_TEMP/mmibkr-live-gateway.env"
           test ! -e "$RUNNER_TEMP/mmibkr-live-data"
           echo 'LIVE_RUN_ONE_RUN_PRIVATE_MATERIAL_DESTROYED=1'
