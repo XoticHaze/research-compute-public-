@@ -20,6 +20,9 @@ env:
 
 jobs:
   consume:
+    # Exact legacy confidential P01 DCA job hold; same scope as merged #1953.
+    # Private full-result return and source/issuer gates are not admitted.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
