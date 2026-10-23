@@ -38,9 +38,9 @@ class PublicReceiptAllowlistTests(unittest.TestCase):
         out, err = StringIO(), StringIO()
         argv = ['p01_autotuner_html_consumer_v1.py', '--envelope', 'synthetic.json',
                 '--private-key', 'synthetic.key', '--run-id', 'synthetic-run']
-        with patch('sys.argv', argv), patch.object(consumer, 'consume',
-                                                return_value=result, side_effect=error), \\
-             redirect_stdout(out), redirect_stderr(err):
+        with (patch('sys.argv', argv),
+              patch.object(consumer, 'consume', return_value=result, side_effect=error),
+              redirect_stdout(out), redirect_stderr(err)):
             code = consumer.main()
         return code, out.getvalue(), err.getvalue()
 
