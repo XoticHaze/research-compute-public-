@@ -42,6 +42,21 @@ def reject_authority(v,p='root'):
     elif isinstance(v,list):
         for i,c in enumerate(v): reject_authority(c,f'{p}[{i}]')
 
+def safe_tar_members(members)->bool:
+    """Reject non-file/directory tar types and duplicate normalized paths before extraction."""
+    seen=set()
+    for member in members:
+        if not (member.isfile() or member.isdir()) or not safe_name(member.name):
+            return False
+        if member.isfile() and (member.size<0 or member.size>MAX_MEMBER_BYTES):
+            return False
+        canonical=str(Path(member.name))
+        if canonical in seen:
+            return False
+        seen.add(canonical)
+    return True
+
+
 def load_obj(path:Path)->dict:
     v=json.loads(path.read_text(encoding='utf-8-sig'))
     if not isinstance(v,dict): raise RuntimeError(f'JSON root must be object: {path}')
@@ -64,8 +79,7 @@ def consume(envelope_path:Path,private_key_path:Path,run_id:str)->dict:
     with tarfile.open(fileobj=io.BytesIO(plain),mode='r:gz') as ar:
         members=ar.getmembers(); files=[m for m in members if m.isfile()]
         if len(files)>MAX_FILES: raise RuntimeError('payload file count exceeds limit')
-        for m in members:
-            if m.issym() or m.islnk() or not safe_name(m.name) or (m.isfile() and m.size>MAX_MEMBER_BYTES): raise RuntimeError(f'unsafe payload member: {m.name}')
+        if not safe_tar_members(members): raise RuntimeError('unsafe payload members')
         names={m.name for m in files}
         if 'manifest.json' not in names: raise RuntimeError('manifest missing')
         manifest=json.loads(ar.extractfile('manifest.json').read().decode())
