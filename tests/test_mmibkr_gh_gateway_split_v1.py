@@ -220,6 +220,17 @@ class GatewayPoolContractTests(unittest.TestCase):
                 raise AssertionError("independent runner must not start Gateway or dispatch work")
 
 
+class PublicBrokerLogPrivacyTests(unittest.TestCase):
+    def test_reader_logs_sanitized_and_bounded_two_phase_ib_sync(self):
+        source = (Path(__file__).resolve().parents[1] /
+                  "scripts/mmibkr_gh_gateway_readonly_client_v1.py").read_text()
+        self.assertIn("logging.disable(logging.CRITICAL)", source)
+        self.assertIn("ib.RequestTimeout=25", source)
+        self.assertIn("util.run(ib.connectAsync(", source)
+        self.assertIn("timeout=20),timeout=65)", source)
+        self.assertNotIn("print(expected)", source)
+
+
 class GatewayTCPRelayTests(unittest.IsolatedAsyncioTestCase):
     async def test_opaque_bytes_roundtrip_without_broker_logic(self):
         async def echo(r, w):
