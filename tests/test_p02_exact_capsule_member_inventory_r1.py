@@ -23,7 +23,8 @@ def _sha(raw: bytes) -> str:
 
 def _fixture(*, replace: tuple[str, str] | None = None,
              special: str | None = None, tamper_data: bool = False,
-             extra_manifest_file: bool = False) -> bytes:
+             extra_manifest_file: bool = False,
+             duplicate_name: str | None = None) -> bytes:
     source = {name: ("source:" + name).encode() for name in consumer.EXPECTED_SOURCE_FILES}
     data = {name: ("data:" + name).encode() for name in consumer.EXPECTED_DATA_FILES.values()}
     manifest = {
@@ -53,7 +54,8 @@ def _fixture(*, replace: tuple[str, str] | None = None,
     output = io.BytesIO()
     with tarfile.open(fileobj=output, mode="w") as tf:
         for name, raw in members.items():
-            info = tarfile.TarInfo(name)
+            emitted_name = duplicate_name if name == "timeframe_adapters.py" and duplicate_name else name
+            info = tarfile.TarInfo(emitted_name)
             if name == special:
                 info.type = tarfile.SYMTYPE
                 info.linkname = "payload_manifest.json"
@@ -83,7 +85,7 @@ class P02ExactCapsuleInventoryTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             # A same-count duplicate is a real ambiguous tar-member attack.
-            archive = _fixture(replace=("timeframe_adapters.py", "payload_manifest.json"))
+            archive = _fixture(duplicate_name="payload_manifest.json")
             with self.assertRaisesRegex(RuntimeError, "member inventory"):
                 consumer._safe_extract(archive, root)
 
