@@ -814,6 +814,7 @@ jobs:
           end="$((start + 16800))"
           outage_since=0
           ready=0
+          owner_probe_sample=0
           if [ "$POOL_TRANSPORT" = tailscale ]; then
             relay_pid="$(cat "$RUNNER_TEMP/mmibkr-gateway-relay.pid")"
             kill -0 "$relay_pid"
@@ -851,21 +852,34 @@ jobs:
             fi
             test "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = true
             docker exec mmibkr-live-gateway /bin/sh -lc 'test "$READ_ONLY_API" = yes'
+            owner_probe_sample=$((owner_probe_sample + 1))
+            export MMIBKR_OWNER_PROBE_SAMPLE="$owner_probe_sample"
             if python - <<'PY'
           import os
           from pathlib import Path
           from ib_insync import IB
           expected=(Path(os.environ['RUNNER_TEMP'])/'mmibkr-live-bot.env').read_text().strip().split('=',1)[1]
+          # Avoid reusing a broker client ID retained after an interrupted probe.
+          # This pool is read-only and never launches the canonical trading bot.
+          client_id=79+int(os.environ['MMIBKR_OWNER_PROBE_SAMPLE'])
           ib=IB()
+          stage='api_connect_and_sync'
           try:
-              ib.connect('127.0.0.1',4001,clientId=79,readonly=True,timeout=25)
+              ib.connect('127.0.0.1',4001,clientId=client_id,readonly=True,timeout=25)
+              stage='account_identity'
               if expected not in ib.managedAccounts():
                   raise SystemExit(70)  # fail closed: wrong account, not transient
+              stage='positions_read'
               ib.reqPositions()
+              stage='orders_read'
               ib.reqAllOpenOrders()
+              stage='executions_read'
               ib.reqExecutions()
-          except Exception:
-              print('MMIBKR_GATEWAY_POOL_BROKER_PROBE_RETRYABLE=1')
+          except Exception as exc:
+              # Only stable stage/type metadata; no account IDs or broker payloads.
+              print('MMIBKR_GATEWAY_POOL_BROKER_FAILURE_STAGE='+stage,flush=True)
+              print('MMIBKR_GATEWAY_POOL_BROKER_FAILURE_CLASS='+type(exc).__name__,flush=True)
+              print('MMIBKR_GATEWAY_POOL_BROKER_PROBE_RETRYABLE=1',flush=True)
               raise SystemExit(75)
           finally:
               if ib.isConnected(): ib.disconnect()
