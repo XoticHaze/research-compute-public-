@@ -10,7 +10,8 @@ on:
       - 'research/forward_senior_clo_current_core_shadow_r1.py'
       - '.github/workflows/forward-senior-clo-current-core-shadow-r1.yml'
   schedule:
-    - cron: '50 22 * * 1-5'
+    # Mon-Fri 20:35 EST / 21:35 EDT, after the canonical 18:30 America/New_York completed-session cutoff.
+    - cron: '35 1 * * 2-6'
   workflow_dispatch:
 permissions: {contents: read}
 jobs:
