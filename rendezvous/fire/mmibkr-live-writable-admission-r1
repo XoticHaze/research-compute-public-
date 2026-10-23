@@ -97,3 +97,7 @@ gateway_pool_5h_readonly_dispatch_request_20261022_f38e29: true
 # One attended no-order continuation after retry-safe reader IDs and stage-visible owner fix.
 # Exact read-only Cloudflare pool; no bot, order capability, relogin loop or predecessor.
 gateway_pool_5h_readonly_dispatch_request_20261022_e7b31f: true
+
+# One existing real production read-only Gateway + independent A/B acceptance.
+# Fifteen-minute hold and measured Gateway resource samples; no bot or orders.
+gateway_pool_5h_readonly_dispatch_request_20261022_b74a2c: 15m
