@@ -50,6 +50,13 @@ export function createCaller() {
           completion_http_status: status(value.completion_http_status),
           catalog_includes_model: bool(value.catalog_includes_model),
           catalog_count: bounded(value.catalog_count, 100000),
+          catalog_attempt_started: bool(value.catalog_attempt_started),
+          catalog_failure_stage: ["outbound_fetch", "catalog_json"].includes(value.catalog_failure_stage)
+            ? value.catalog_failure_stage : null,
+          catalog_failure_kind: [
+            "timeout", "aborted", "abort_api_unavailable", "redirect_rejected",
+            "fetch_type_error", "runtime_type_error", "other_runtime_exception",
+          ].includes(value.catalog_failure_kind) ? value.catalog_failure_kind : null,
           completion_response_valid: bool(value.completion_response_valid),
           exact_reply_observed: bool(value.exact_reply_observed),
           elapsed_ms: bounded(value.elapsed_ms, 60000),
