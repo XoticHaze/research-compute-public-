@@ -209,7 +209,7 @@ jobs:
           # Parse the actual source block, never execute a Gateway/login.
           initial=owner.split('      - name: Bind and reconcile the expected existing production account without order mutation',1)[1].split("      - name: Open Gateway's read-only API",1)[0]
           initial_run=initial.split('        run: |',1)[1]
-          initial_script="\\n".join(line[10:] if line.startswith("          ") else line for line in initial_run.splitlines())
+          initial_script="\n".join(line[10:] if line.startswith("          ") else line for line in initial_run.splitlines())
           subprocess.run(["bash","-n"],input=initial_script,text=True,check=True)
           print('LIVE_INITIAL_ACCOUNT_READ_SHELL_PARSE=PASS')
           checkpoint=owner.split('      - name: Stop live owner and encrypt canonical Gateway and bot data for successor',1)[1].split('      - name: Persist exact encrypted production-live successor state',1)[0]
