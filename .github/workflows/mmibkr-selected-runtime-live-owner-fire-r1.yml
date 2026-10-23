@@ -1,67 +1,35 @@
-name: MM-IBKR Canonical Live Owner Fire R1
+name: MM-IBKR Legacy Live Owner Fire Retired (Contract Only)
 
-# Existing GitHub rendezvous/fire mechanism: transport only, no broker action.
+# Historical push marker asserted operator approval in its own JSON and
+# invoked gh workflow run without independent authorization or exact inputs.
+# The marker is absent from current main. The canonical selected owner has
+# a separate current explicit workflow_dispatch and guarded admission route.
+# Do not resurrect this parallel launcher or a fresh IB Key login trigger.
 on:
   pull_request:
     paths:
       - .github/workflows/mmibkr-selected-runtime-live-owner-fire-r1.yml
-  push:
-    branches: [main]
-    paths:
-      - rendezvous/fire/mmibkr-selected-runtime-live-owner-r1
 
 permissions:
   contents: read
-  actions: write
-
-concurrency:
-  group: mmibkr-canonical-live-owner-fire-r1
-  cancel-in-progress: false
 
 jobs:
-  dispatch:
-    if: github.event_name == 'push'
+  contract:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Require exact preapproved three-selected-runtime fire
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          p=Path('rendezvous/fire/mmibkr-selected-runtime-live-owner-r1')
-          req=json.loads(p.read_text())
-          assert req['schema']=='mmibkr.live_canonical_owner_dispatch.v1'
-          assert req['private_source_sha']=='1ad9fbee1b2257c4040d3a82e71177988ca4a22f'
-          assert req['selected_symbols']==['AMAT','APH','MNQ']
-          assert req['operator_live_activation_approved'] is True
-          assert req['force_trade'] is False
-          assert req['new_order_route'] is False
-          print('EXACT_APPROVED_LIVE_OWNER_FIRE=1')
-          PY
-      - name: Dispatch the one canonical live owner workflow on main
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh workflow run mmibkr-selected-runtime-live-owner-r1.yml --repo "$GITHUB_REPOSITORY" --ref main
-          echo 'CANONICAL_LIVE_OWNER_DISPATCH_REQUESTED=1'
-
-  contract:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - name: Prove fire dispatch cannot run on PR
+      - name: Verify legacy owner push-fire route is retired
         run: |
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-          text=Path('.github/workflows/mmibkr-selected-runtime-live-owner-fire-r1.yml').read_text()
-          assert "if: github.event_name == 'push'" in text
-          assert "if: github.event_name == 'pull_request'" in text
-          assert 'gh workflow run mmibkr-selected-runtime-live-owner-r1.yml' in text
-          print('LIVE_OWNER_DISPATCH_CONTRACT_PASS=1')
+          s=Path('.github/workflows/mmibkr-selected-runtime-live-owner-fire-r1.yml').read_text()
+          lines=s.splitlines()
+          assert not any(line == '  push:' for line in lines)
+          assert not any(line == '  dispatch:' for line in lines)
+          assert not any(line.strip().startswith('gh workflow run') for line in lines)
+          assert not any(line.strip() == 'actions: write' for line in lines)
+          assert 'on:\n  pull_request:' in s
+          print('LEGACY_LIVE_OWNER_PUSH_FIRE_RETIRED=PASS')
           PY
