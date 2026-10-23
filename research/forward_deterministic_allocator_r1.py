@@ -11,6 +11,7 @@ Policy authority: XoticHaze/CommandCenter#770.
 
 import argparse
 import json
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -86,8 +87,54 @@ def _delta_actions(targets: dict[str, float], prior: dict[str, float]) -> list[d
     return rows
 
 
+def _hold_prior_for_unadmitted_p249(scoreboard: dict[str, Any], prior: dict[str, Any] | None) -> dict[str, Any]:
+    """A source gap is not an instruction to liquidate, default to cash or rebalance.
+
+    The previous *explicitly approved paper/manual target* is the only permitted
+    fallback. No prior means no allocator CURRENT can be produced from a gap.
+    """
+    if not isinstance(prior, dict) or prior.get("schema") != SCHEMA or prior.get("policy_id") != POLICY_ID:
+        raise RuntimeError("P249_ECONOMIC_CURRENT_UNADMITTED_VALID_PRIOR_ALLOCATOR_REQUIRED")
+    if (prior.get("boundaries") or {}).get("broker_action") is not False:
+        raise RuntimeError("P249_UNADMITTED_PRIOR_AUTHORITY_INVALID")
+    weights = prior.get("final_target_weights")
+    if not isinstance(weights, dict) or "CASH" not in weights or not weights:
+        raise RuntimeError("P249_UNADMITTED_PRIOR_TARGETS_MISSING")
+    try:
+        clean = {str(k): float(v) for k, v in weights.items()}
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise RuntimeError("P249_UNADMITTED_PRIOR_TARGETS_INVALID") from exc
+    if any(not math.isfinite(v) or v < 0 for v in clean.values()) or abs(sum(clean.values()) - 1.0) > 1e-8:
+        raise RuntimeError("P249_UNADMITTED_PRIOR_TARGETS_INVALID")
+
+    # Preserve explicit cash and incumbent participation; do not create a new
+    # target or replay a prior ADD/EXIT as a fresh instruction.
+    result = json.loads(json.dumps(prior, allow_nan=False))
+    result["generated_at"] = datetime.now(timezone.utc).isoformat()
+    result["source_scoreboard_schema"] = scoreboard.get("schema")
+    result["source_scoreboard_generated_at"] = scoreboard.get("generated_at")
+    result["status"] = "P249_SOURCE_UNADMITTED_HOLD_PRIOR_NO_REBALANCE"
+    result["source_p249_economic_current_admitted"] = False
+    result["position_actions_vs_prior_allocator_target"] = _delta_actions(clean, clean)
+    result["prior_allocator_target_available"] = True
+    for row in result.get("sleeve_actions") or []:
+        if isinstance(row, dict):
+            if row.get("action") in {"ADD", "EXIT", "REDUCE"}:
+                row["action"] = "HOLD_PRIOR"
+            row["reason"] = "P249 economic source unadmitted: prior frozen allocation only; no new action"
+    result.setdefault("constraints_applied", []).append({
+        "rule": "p249_economic_current_admission",
+        "result": "hold_prior_targets_no_new_rebalance",
+    })
+    result.setdefault("boundaries", {})["new_allocation_authority"] = False
+    result["boundaries"]["p249_source_gap_hold_prior"] = True
+    return result
+
+
 def build(scoreboard: dict[str, Any], prior: dict[str, Any] | None = None) -> dict[str, Any]:
     p249 = _lane(scoreboard, "P249_P266") or {}
+    if p249.get("economic_current_admitted") is False:
+        return _hold_prior_for_unadmitted_p249(scoreboard, prior)
     base = _normalized(p249.get("paper_action") or {})
     if not base:
         raise RuntimeError("P249_P266 frozen core weights are required")
@@ -339,6 +386,25 @@ def _self_test() -> None:
     y = build(missing_native)
     assert abs(y["final_target_weights"]["CASH"] - 0.20) < 1e-8
     assert y["tactical_used"] == 0.0
+
+    # A held-close source gap cannot turn partial P249 economics into a fresh
+    # rebalance or default an unfinished research book into cash.
+    gap = json.loads(json.dumps(scoreboard))
+    gap["lanes"][0]["economic_current_admitted"] = False
+    gap["lanes"][0]["paper_action"] = {"XBI": 1.0}
+    held = build(gap, prior=x)
+    assert held["status"] == "P249_SOURCE_UNADMITTED_HOLD_PRIOR_NO_REBALANCE"
+    assert held["final_target_weights"] == x["final_target_weights"]
+    assert held["cash_weight"] == x["cash_weight"]
+    assert held["boundaries"]["new_allocation_authority"] is False
+    assert all(row["action"] in {"HOLD", "NO_ACTION"} for row in held["position_actions_vs_prior_allocator_target"])
+    assert all(row.get("action") not in {"ADD", "EXIT", "REDUCE"} for row in held["sleeve_actions"])
+    try:
+        build(gap)
+    except RuntimeError as exc:
+        assert str(exc) == "P249_ECONOMIC_CURRENT_UNADMITTED_VALID_PRIOR_ALLOCATOR_REQUIRED"
+    else:
+        raise AssertionError("gap without prior allocator must fail closed")
     print("FORWARD_DETERMINISTIC_ALLOCATOR_SELF_TEST=PASS")
 
 
