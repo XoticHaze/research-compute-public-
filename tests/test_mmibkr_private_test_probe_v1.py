@@ -75,6 +75,7 @@ def test_exact_live_owner_journal_writer_and_broker_provenance_are_source_only()
         "tests.test_selected_runtime_live_order_intent_journal_v1",
         "tests.test_selected_runtime_live_execution_ledger_v1",
         "tests.test_selected_runtime_live_broker_provenance_v1",
+        "tests.test_selected_runtime_live_p0_integrated_checkpoint_v1",
     )
     for module in modules:
         assert validated_modules(module) == [module]
