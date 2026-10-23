@@ -268,13 +268,23 @@ jobs:
             --source-receipt "$RUNNER_TEMP/mmibkr-source/canonical-source-receipt.json" \
             --receipt-dir "$RUNNER_TEMP/receipts" \
             --input-root "$RUNNER_TEMP/input-root" \
-            > "$RUNNER_TEMP/session-terminal.json"
+            > "$RUNNER_TEMP/session-terminal.json" \
+            2> "$RUNNER_TEMP/session-runner-private-stderr.log"
           session_rc=$?
           set -e
           if [ -s "$RUNNER_TEMP/session-terminal.json" ]; then
-            echo 'MMIBKR_CANONICAL_SESSION_TERMINAL_BEGIN'
-            cat "$RUNNER_TEMP/session-terminal.json"
-            echo 'MMIBKR_CANONICAL_SESSION_TERMINAL_END'
+            python - <<'PY'
+          import json,os
+          from pathlib import Path
+          node=json.loads((Path(os.environ['RUNNER_TEMP'])/'session-terminal.json').read_text())
+          jobs=node.get('jobs') or {}
+          safe={'schema':'mmibkr.public_canonical_session_status.v1',
+            'status':node.get('status') if node.get('status') in {'completed','failed'} else 'failed',
+            'job_count':len(jobs),
+            'completed_count':sum(1 for state in jobs.values() if isinstance(state,dict) and state.get('state') in {'completed','cached'}),
+            'failed_count':sum(1 for state in jobs.values() if isinstance(state,dict) and state.get('state')=='failed')}
+          print('MMIBKR_CANONICAL_SESSION_STATUS='+json.dumps(safe,sort_keys=True))
+          PY
           fi
           test "$session_rc" = 0 || exit "$session_rc"
           python - <<'PY'
@@ -284,11 +294,43 @@ jobs:
           node=json.loads((root/'session-terminal.json').read_text())
           if node.get('schema')!='mmibkr.canonical_session_receipt.v1' or node.get('status')!='completed':
               raise SystemExit('canonical session not completed')
+          # Public terminal must use the same digest-only identifiers as the
+          # selected publisher successor. Private job/session IDs never cross.
+          import re
+          session_fp=str(node.get('session_fingerprint') or '').lower()
+          if not re.fullmatch(r'[0-9a-f]{64}',session_fp):
+              raise SystemExit('canonical session fingerprint invalid')
+          safe_jobs={}
+          for private_job_id,state in (node.get('jobs') or {}).items():
+              if not isinstance(state,dict):
+                  raise SystemExit('canonical session job state invalid')
+              fingerprint=str(state.get('job_fingerprint') or '').lower()
+              if not re.fullmatch(r'[0-9a-f]{64}',fingerprint):
+                  raise SystemExit('canonical job fingerprint invalid')
+              public_job_id='job-'+fingerprint
+              if public_job_id in safe_jobs:
+                  raise SystemExit('duplicate public job fingerprint rejected')
+              # R3: combine selected R2 digest-only identifiers with the R16/R4
+              # typed allowlist. No caller-controlled string may become a public field.
+              if state.get('state') not in {'completed','cached'}:
+                  raise SystemExit('canonical public job state rejected')
+              result_sha=state.get('result_sha256')
+              if not isinstance(result_sha,str) or not re.fullmatch(r'[0-9a-f]{64}',result_sha):
+                  raise SystemExit('canonical public job result digest rejected')
+              cache_hit=state.get('cache_hit')
+              if cache_hit is not None and type(cache_hit) is not bool:
+                  raise SystemExit('canonical public cache-hit type rejected')
+              safe_jobs[public_job_id]={'state':state['state'],'job_fingerprint':fingerprint,'result_sha256':result_sha}
+              if cache_hit is not None:
+                  safe_jobs[public_job_id]['cache_hit']=cache_hit
+          safe_session={'schema':'mmibkr.canonical_session_receipt.v1', 'session_id':'session-'+session_fp,
+            'session_fingerprint':session_fp, 'status':'completed'}
+          safe_session['jobs']=safe_jobs
           outer=(root/'outer-job-sha256.txt').read_text().strip()
           receipt={'schema':'continue_release.public_canonical_session_terminal.v1','job_sha256':outer,
             'public_head':os.environ['GITHUB_SHA'],'workflow_ref':os.environ['GITHUB_WORKFLOW_REF'],
             'surface_run_id':os.environ['GITHUB_RUN_ID'],
-            'session_receipt':node,
+            'session_receipt':safe_session,
             'session_receipt_sha256':hashlib.sha256(json.dumps(node,sort_keys=True,separators=(',',':')).encode()).hexdigest(),
             'strategy_spec_write':False,'runtime_activation':False,'broker_submit':False,'broker_cancel':False,
             'broker_flatten':False,'promotion_mutation':False,'live_trading':False}
@@ -332,4 +374,6 @@ jobs:
           rm -rf "$RUNNER_TEMP/mmibkr-source" "$RUNNER_TEMP/input-root" "$RUNNER_TEMP/receipts" "$RUNNER_TEMP/public-job-receipts"
           rm -f "$RUNNER_TEMP/mnq-corpus-private.b64" "$RUNNER_TEMP/mnq-corpus-recipient.json" \
             "$RUNNER_TEMP/mnq-corpus-envelope.json" "$RUNNER_TEMP/mnq-corpus-ciphertext.bin" \
-            "$RUNNER_TEMP/canonical-session.json"
+            "$RUNNER_TEMP/canonical-session.json" "$RUNNER_TEMP/session-terminal.json" \
+            "$RUNNER_TEMP/session-runner-private-stderr.log" "$RUNNER_TEMP/terminal-receipt.json" \
+            "$RUNNER_TEMP/outer-job-sha256.txt"

@@ -53,4 +53,7 @@ jobs:
             tests.test_mmibkr_canonical_session_runner_v1 \
             tests.test_mmibkr_canonical_session_push_fire_workflow_v1 \
             tests.test_mmibkr_publishable_job_receipts_v1 \
+            tests.test_release_workflow_private_stderr_noninterference_20261010 \
+            tests.test_release_workflow_public_terminal_digest_ids_20261010 \
+            tests.test_mmibkr_publishable_job_receipts_safe_projection_r7 \
             tests.test_mnq_exact_corpus_producer_v1
