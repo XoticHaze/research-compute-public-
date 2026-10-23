@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
 jobs:
   evaluate:
+    # Legacy confidential P01 EXIT remains held pending authenticated two-sided return.
+    # Exact-source job-level fail-close reused from merged #1953.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
