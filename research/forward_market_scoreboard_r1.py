@@ -388,7 +388,7 @@ def _separate_forward_science_stages(state: dict[str, Any]) -> dict[str, Any]:
     resolved = int(state.get("resolved_cohorts", 0) or 0)
     floor = state.get("minimum_resolved_for_promotion")
     return {
-        "resolved_h20_cohort_count": resolved,
+        "resolved_cohort_count": resolved,
         "forward_sanity_stage": (
             "RESOLVED_COHORT_OBSERVED_ISSUER_ENVELOPE_PENDING"
             if resolved > 0 else "NO_RESOLVED_COHORT"
@@ -754,7 +754,7 @@ def self_test() -> None:
         assert native_by_id["HOMEBUILDERS"]["evidence_grade"] == "PROSPECTIVE_OPEN"
         assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["evidence_grade"] == "PROSPECTIVE_AWAITING_ENTRY_SESSION"
         assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["validation_grade"] == "PROSPECTIVE_SIGNAL_READY"
-        assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["forward_science_stages"]["resolved_h20_cohort_count"] == 0
+        assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["forward_science_stages"]["resolved_cohort_count"] == 0
         one = _separate_forward_science_stages({"resolved_cohorts": 1, "minimum_resolved_for_promotion": 20})
         assert one["forward_sanity_stage"] == "RESOLVED_COHORT_OBSERVED_ISSUER_ENVELOPE_PENDING"
         assert one["full_promotion_sample_floor_reached"] is False
