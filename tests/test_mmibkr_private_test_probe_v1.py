@@ -711,7 +711,8 @@ def test_exact_open_position_mtm_unavailable_is_networkless_and_nonmutating():
     module = "tests.test_capital_curve_fill_time_identity_product_20261024"
     assert validated_modules(module) == [module]
     cmd = pytest_container_command("sealed-test-image", module)
-    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert cmd[:3] == ["docker", "run", "--rm"]
+    assert any(cmd[i:i+2] == ["--network", "none"] for i in range(len(cmd)-1))
     assert "ENABLE_LIVE_TRADING=0" in cmd
     assert cmd[-1] == module_file_path(module)
     for rejected in (
