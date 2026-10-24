@@ -425,3 +425,24 @@ def test_selected_pnl_lifecycle_module_is_exact_and_networkless():
     ):
         with pytest.raises(ValueError):
             validated_modules(denied)
+
+
+def test_exact_p0_residue_and_foundry_issuer_modules_are_networkless():
+    """Two newly changed private test modules reuse the sealed offline probe."""
+    exact = [
+        "tests.test_live_broker_position_residue_product_20261024",
+        "tests.test_foundry_model_promotion_admission_v1",
+    ]
+    assert validated_modules(",".join(exact)) == exact
+    for module in exact:
+        command = pytest_container_command("sealed-test-image", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+    for denied in (
+        "tests.test_live_broker_position_residue_product_20261024_extra",
+        "tests.test_foundry_model_promotion_admission_v1_live_submit",
+        "tests.test_live_broker_position_residue_unreviewed",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
