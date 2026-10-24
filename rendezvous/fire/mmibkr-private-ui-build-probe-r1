@@ -1,10 +1,10 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "07a76356bad914eec426cc8a1ff33009fc443f32",
+  "source_ref": "0e50054c55e302b8a07a6e263ae8a75d58cc6118",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
-  "requested_by": "continue-release-20261024-clock-20261024051734668",
-  "purpose": "Selected UI #888 exact 07a after Product #949 broker gross exposure/raw residue; Source Vault 40066612900 SUCCESS; existing encrypted BotConsole Node acceptance plus Vite build; no deploy/broker/live",
-  "request_nonce": "ui-888-07a76356-gross-exposure-vite-20261024-r1",
+  "requested_by": "continue-release-20261024-clock-20261024054709335",
+  "purpose": "Selected UI #888 exact 0e500 after Product #953 account money identity guard; trusted Source Vault 40068237836 SUCCESS; existing encrypted BotConsole acceptance and Vite build, no deployment/broker/live",
+  "request_nonce": "ui-888-0e50054c-account-money-scope-vite-20261024-r1",
   "authority": {
     "research_only": true,
     "broker": false,
