@@ -121,3 +121,33 @@ test('separate unshared DO stores can each grant a candidate: global routing rem
   // This proves why a unique authenticated account->DO ID route is required.
   assert.notEqual(JSON.parse(a.rows.get(account)).holder,JSON.parse(b.rows.get(account)).holder);
 });
+
+test('tampered stored account context is rejected without rewriting candidate',()=>{
+  const store=new FakeSynchronousSqlite();
+  const first=apply(store);
+  assert.equal(first.ok,true);
+  const valid=JSON.parse(store.rows.get(account));
+  store.rows.set(account,JSON.stringify({...valid,accountDigest:other}));
+  const before=store.rows.get(account);
+  const result=apply(store,req(2,{
+    expectedEpoch:1,serverNowMs:2_000,
+  }),verified(2_000));
+  assert.equal(result.ok,false);
+  assert.equal(result.status,'account_scope_mismatch');
+  assert.equal(store.rows.get(account),before);
+});
+test('unavailable SQLite read denies candidate rather than recreating initial epoch',()=>{
+  const store=new FakeSynchronousSqlite();
+  assert.equal(apply(store).ok,true);
+  const original=store.sql.exec;
+  store.sql.exec=(sql,...args)=>{
+    if(sql.startsWith('SELECT state_json FROM'))
+      throw new Error('synthetic-opaque-disk-read-failure');
+    return original(sql,...args);
+  };
+  const failure=apply(store,req(2,{expectedEpoch:1}),verified());
+  assert.equal(failure.ok,false);
+  assert.equal(failure.status,'candidate_sqlite_transaction_failed');
+  assert.equal(store.rows.size,1);
+  assert.equal(JSON.parse(store.rows.get(account)).epoch,1);
+});
