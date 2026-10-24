@@ -181,6 +181,11 @@ jobs:
           assert 'placeOrder(' not in owner
           assert 'rendezvous/fire/mmibkr-live-writable-admission-r1' in s
           assert "if: github.event_name == 'workflow_dispatch'" in owner
+          assert "APPROVED_PRIVATE_SOURCE_SHA: " + chr(36) + "{{ vars.MMIBKR_APPROVED_PRIVATE_SOURCE_SHA }}" in owner
+          assert "LIVE_PROTECTED_PRIVATE_SOURCE_APPROVAL_MISSING=1" in owner
+          assert "LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1" in owner
+          assert owner.index("LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1") < owner.index("EXPLICIT_APPROVED_CANONICAL_LIVE_OWNER=1")
+          assert owner.index("LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1") < owner.index("Materialize canonical exact private source through existing encrypted Fleet vault")
           assert "if: " + chr(36) + "{{ !inputs.admission_only }}" in owner
           assert "if: " + chr(36) + "{{ inputs.admission_only }}" in owner
           assert '"inputs[admission_only]=$admission_only"' in s
@@ -444,10 +449,21 @@ jobs:
           ADMISSION_ONLY: ${{ inputs.admission_only }}
           HANDOFF_MODE: ${{ inputs.warm_handoff_mode }}
           PREDECESSOR_RUN: ${{ inputs.warm_predecessor_run }}
+          APPROVED_PRIVATE_SOURCE_SHA: ${{ vars.MMIBKR_APPROVED_PRIVATE_SOURCE_SHA }}
         run: |
           set -euo pipefail
           case "$HANDOFF_MODE" in legacy|producer|successor|supervised_5h|gateway_pool_5h) ;; *) exit 64 ;; esac
           if [ "$ADMISSION_ONLY" = false ]; then
+            # A signed private source archive is not owner-approved source.
+            # Fail closed before requesting IBKR credentials on writable modes.
+            if [[ ! "$APPROVED_PRIVATE_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "LIVE_PROTECTED_PRIVATE_SOURCE_APPROVAL_MISSING=1"
+              exit 64
+            fi
+            if [ "$APPROVED_PRIVATE_SOURCE_SHA" != "$PRIVATE_SOURCE_SHA" ]; then
+              echo "LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1"
+              exit 64
+            fi
             case "$HANDOFF_MODE" in
               legacy)
                 test -z "$PREDECESSOR_RUN" || exit 64
