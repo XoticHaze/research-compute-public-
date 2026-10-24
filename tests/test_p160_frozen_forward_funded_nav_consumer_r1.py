@@ -1,6 +1,6 @@
 import copy
 import unittest
-from p160_frozen_forward_funded_nav_consumer_r1 import UNIVERSE, score_frozen_p160
+from research.p160_frozen_forward_funded_nav_consumer_r1 import UNIVERSE, score_frozen_p160
 
 
 class P160FrozenConsumerTests(unittest.TestCase):
