@@ -165,3 +165,41 @@ def test_builder_model_digest_and_crw_cross_timeframe_exact_allowlist():
     ):
         with pytest.raises(ValueError, match="not_allowlisted"):
             mod.validate_acceptance_file(denied)
+
+def test_public_failure_never_echoes_private_cli_or_exception_sentinel(monkeypatch, capsys):
+    secret = "NESTED_PRIVATE_UI_SENTINEL_NEVER_PUBLIC_20261024"
+
+    def fail_with_private_exception(**_kwargs):
+        raise RuntimeError("private-path/" + secret)
+
+    monkeypatch.setattr(mod, "run_probe", fail_with_private_exception)
+    monkeypatch.setattr("sys.argv", [
+        "probe", "--source-root", "/private/" + secret,
+        "--source-materialization", "/private/" + secret,
+        "--source-ref", "a" * 40,
+        "--acceptance-file",
+        "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.local-draft-storage.test.mjs",
+    ])
+    assert mod.main() == 1
+    captured = capsys.readouterr()
+    assert secret not in captured.out + captured.err
+    assert captured.err == ""
+    assert json.loads(captured.out.split("=", 1)[1]) == {
+        "schema": mod.SCHEMA, "status": "REJECTED",
+    }
+
+
+def test_public_parser_and_allowlist_never_echo_unknown_private_text(monkeypatch, capsys):
+    secret = "UNKNOWN_PRIVATE_UI_ARGUMENT_SENTINEL_20261024"
+    with pytest.raises(ValueError) as exc:
+        mod.validate_acceptance_file("ui-react/src/" + secret + ".mjs")
+    assert str(exc.value) == "ui_acceptance_file_not_allowlisted"
+    assert secret not in str(exc.value)
+    monkeypatch.setattr("sys.argv", ["probe", "--unknown", secret])
+    assert mod.main() == 1
+    captured = capsys.readouterr()
+    assert secret not in captured.out + captured.err
+    assert captured.err == ""
+    assert json.loads(captured.out.split("=", 1)[1]) == {
+        "schema": mod.SCHEMA, "status": "REJECTED",
+    }
