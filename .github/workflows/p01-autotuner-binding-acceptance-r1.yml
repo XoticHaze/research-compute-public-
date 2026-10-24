@@ -4,12 +4,22 @@ on:
     paths:
       - '.github/workflows/p01-autotuner-binding-acceptance-r1.yml'
       - 'research/p01_autotuner_binding_acceptance_r1.py'
+      - 'scripts/p01_autotuner_html_consumer_v1.py'
+      - 'tests/test_p01_autotuner_html_public_receipt_20261023.py'
+      - 'scripts/mnq_corpus_ephemeral_consumer_v1.py'
+      - 'scripts/mnq_corpus_ephemeral_materialize_v1.py'
+      - 'tests/test_mnq_corpus_ephemeral_materialize_v1.py'
   push:
     branches:
       - main
     paths:
       - '.github/workflows/p01-autotuner-binding-acceptance-r1.yml'
       - 'research/p01_autotuner_binding_acceptance_r1.py'
+      - 'scripts/p01_autotuner_html_consumer_v1.py'
+      - 'tests/test_p01_autotuner_html_public_receipt_20261023.py'
+      - 'scripts/mnq_corpus_ephemeral_consumer_v1.py'
+      - 'scripts/mnq_corpus_ephemeral_materialize_v1.py'
+      - 'tests/test_mnq_corpus_ephemeral_materialize_v1.py'
 permissions:
   contents: read
 jobs:
@@ -23,6 +33,14 @@ jobs:
           python-version: '3.11.16'
       - name: Verify sanitized AutoTuner product binding contract
         run: python research/p01_autotuner_binding_acceptance_r1.py
+      - name: Verify P01 HTML fixed public receipt and nested sentinel fail-close
+        run: |
+          python -m pip install --disable-pip-version-check cryptography
+          python -m unittest -v tests.test_p01_autotuner_html_public_receipt_20261023
+      - name: Verify direct MNQ CLI fixed-field public failure egress with synthetic sentinels
+        run: |
+          python -m pip install --disable-pip-version-check pytest
+          python -m pytest -q tests/test_mnq_corpus_ephemeral_materialize_v1.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: p01-autotuner-binding-acceptance-r1-result
