@@ -459,12 +459,13 @@ def test_selected_model_lab_backend_modules_are_exact_networkless():
 
 
 def test_selected_pnl_lifecycle_module_is_exact_and_networkless():
-    """Only four exact source-only PnL modules can run, always networkless."""
+    """Only five exact source-only PnL modules can run, always networkless."""
     exact = [
         "tests.test_lifecycle_single_flat_roundtrip_product_20261023",
         "tests.test_lifecycle_decimal_flatness_product_20261024",
         "tests.test_lifecycle_matched_fill_count_truth_product_20261024",
         "tests.test_capital_adjusted_price_explicit_failclose_product_20261024",
+        "tests.test_capital_fill_ledger_integrity_product_20261024",
     ]
     assert validated_modules(",".join(exact)) == exact
     for module in exact:
@@ -477,6 +478,8 @@ def test_selected_pnl_lifecycle_module_is_exact_and_networkless():
         "tests.test_lifecycle_single_flat_roundtrip_product_20261023_extra",
         "tests.test_lifecycle_decimal_flatness_product_20261024_live_submit",
         "tests.test_lifecycle_matched_fill_count_truth_product_20261024_broker_mutation",
+        "tests.test_capital_fill_ledger_integrity_product_20261024_live_submit",
+        "tests.test_capital_fill_ledger_integrity_product_20261024_extra",
     ):
         with pytest.raises(ValueError):
             validated_modules(denied)

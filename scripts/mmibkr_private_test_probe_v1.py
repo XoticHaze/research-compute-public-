@@ -154,6 +154,8 @@ SOURCE_ONLY_PNL_MODULES = frozenset({
     "tests.test_lifecycle_decimal_flatness_product_20261024",
     "tests.test_lifecycle_matched_fill_count_truth_product_20261024",
     "tests.test_capital_adjusted_price_explicit_failclose_product_20261024",
+    # Exact selected funded PnL malformed canonical fill/fallback input fail-close.
+    "tests.test_capital_fill_ledger_integrity_product_20261024",
 })
 SAFE_EXACT.update(SOURCE_ONLY_MODEL_LAB_MODULES)
 SAFE_EXACT.update(SOURCE_ONLY_PNL_MODULES)
