@@ -27,6 +27,8 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/lib/pilotPromotionAdmissionExport.acceptance.test.mjs",
     "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
     "ui-react/src/lib/builderLocalDraftRestore.test.mjs",
+    "ui-react/src/lib/builderPersistedReviewTruth.test.mjs",
+    "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.cross-timeframe-capability.test.mjs",
 }
 
 
