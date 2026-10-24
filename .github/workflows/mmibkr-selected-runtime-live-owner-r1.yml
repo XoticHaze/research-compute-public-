@@ -481,7 +481,7 @@ jobs:
               *) echo 'LIVE_MODE_REQUIRES_LEGACY_OR_EXACT_SUCCESSOR=1'; exit 64 ;;
             esac
             # A signed private source archive is not owner-approved source.
-            # Fail closed before requesting IBKR credentials on writable modes.
+            # Fail closed before any broker secrets are accessed on writable modes.
             if [[ ! "${APPROVED_PRIVATE_SOURCE_SHA:-}" =~ ^[0-9a-f]{40}$ ]]; then
               echo "LIVE_PROTECTED_PRIVATE_SOURCE_APPROVAL_MISSING=1"
               exit 64
