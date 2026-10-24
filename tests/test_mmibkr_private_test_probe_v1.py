@@ -736,3 +736,16 @@ def test_exact_open_position_mtm_unavailable_is_networkless_and_nonmutating():
     ):
         with pytest.raises(ValueError):
             validated_modules(rejected)
+
+def test_exact_pnl_malformed_chart_rows_are_networkless_and_nonmutating():
+    # Selected funded PnL #911 chart-source integrity, no broker/account writes.
+    module = "tests.test_capital_malformed_chart_rows_product_20261024"
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-test-image", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+    for rejected in (module + "_live_submit", module + "_extra",
+                     "tests.test_capital_malformed_chart_rows_product_20261024.py"):
+        with pytest.raises(ValueError):
+            validated_modules(rejected)
