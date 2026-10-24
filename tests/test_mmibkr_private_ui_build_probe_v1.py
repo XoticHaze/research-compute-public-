@@ -144,3 +144,56 @@ def test_workflow_exposes_private_ui_rendezvous_fire_and_dispatch():
     assert "push:" in source
     assert "- 'rendezvous/fire/mmibkr-private-ui-build-probe-r1'" in source
     assert "elif event == \"push\":" in source
+
+
+def test_public_cli_unknown_argument_never_echoes_nested_private_text(monkeypatch, capsys):
+    import sys
+    sentinel = "SYNTHETIC_PRIVATE_NESTED_SENTINEL_20261024"
+    monkeypatch.setattr(sys, "argv", [
+        "mmibkr_private_ui_build_probe_v1.py",
+        "--source-root", "/synthetic",
+        "--source-materialization", "/synthetic/source.json",
+        "--source-ref", "a" * 40,
+        "--acceptance-file", "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
+        "--unexpected", sentinel,
+    ])
+    assert mod.main() == 1
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert sentinel not in captured.out + captured.err
+    receipt = json.loads(captured.out.splitlines()[0].split("=", 1)[1])
+    assert receipt == {"schema": mod.SCHEMA, "status": "REJECTED"}
+
+
+def test_public_cli_private_exception_never_echoes_path_or_nested_sentinel(monkeypatch, capsys):
+    import sys
+    sentinel = "SYNTHETIC_PRIVATE_NESTED_SENTINEL_20261024"
+    monkeypatch.setattr(sys, "argv", [
+        "mmibkr_private_ui_build_probe_v1.py",
+        "--source-root", "/synthetic",
+        "--source-materialization", "/synthetic/source.json",
+        "--source-ref", "a" * 40,
+        "--acceptance-file", "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
+    ])
+    def raise_private(**_kwargs):
+        raise RuntimeError(f"private_source_path/{sentinel}/nested/secret")
+    monkeypatch.setattr(mod, "run_probe", raise_private)
+    assert mod.main() == 1
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert sentinel not in captured.out + captured.err
+    assert "private_source_path" not in captured.out + captured.err
+    receipt = json.loads(captured.out.splitlines()[0].split("=", 1)[1])
+    assert receipt == {"schema": mod.SCHEMA, "status": "REJECTED"}
+
+
+def test_workflow_validates_allowlist_before_env_write_or_private_source():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / ".github" / "workflows" / "mmibkr-private-ui-build-probe-r1.yml"
+    ).read_text(encoding="utf-8")
+    guard = "acceptance = validate_acceptance_file(acceptance)"
+    env_write = 'with Path(os.environ["GITHUB_ENV"]).open'
+    assert guard in source
+    assert source.index(guard) < source.index(env_write)
+    assert "private UI build acceptance file rejected" in source
