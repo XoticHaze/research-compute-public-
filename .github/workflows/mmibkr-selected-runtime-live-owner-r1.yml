@@ -188,6 +188,13 @@ jobs:
           assert 'supervised_5h_dispatch_request_[0-9]{8}_[a-z0-9]{6}' in s
           assert 'mode=legacy' in s and 'mode=supervised_5h' in s
           assert 'inputs[warm_predecessor_run]=$predecessor_run' in s
+          # Workflow dispatch string must never be interpolated directly into
+          # shell source before its numeric validation. Pass via step env.
+          restore=owner.split('      - name: Restore existing encrypted live Gateway warm state',1)[1].split('      - name: Start the established IBKR controller',1)[0]
+          expression=chr(36)+'{{ inputs.warm_predecessor_run }}'
+          assert ('predecessor_run="'+expression+'"') not in restore
+          assert ('PREDECESSOR_RUN: '+expression) in restore
+          assert 'predecessor_run="$PREDECESSOR_RUN"' in restore
           fire=s.split('      - name: Dispatch explicitly authorized canonical owner',1)[1].split('\n  contract:',1)[0]
           assert 'LIVE_WRITABLE_PUSH_DISPATCH_REQUIRES_INDEPENDENT_ADMISSION=1' in fire
           assert 'live_owner_approved_dispatch_request_20261019_' not in fire
