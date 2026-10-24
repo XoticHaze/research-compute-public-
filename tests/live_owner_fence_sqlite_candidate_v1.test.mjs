@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyCandidateSqliteTransition } from '../cloudflare/fleet-authority/src/live_owner_fence_sqlite_candidate_v1.mjs';
+import { applyCandidateSqliteTransition } from '../research/mmibkr_live_owner_fence_contract/live_owner_fence_sqlite_candidate_v1.mjs';
 
 const account='a'.repeat(64), other='b'.repeat(64);
 const host='c'.repeat(64), session='d'.repeat(64);

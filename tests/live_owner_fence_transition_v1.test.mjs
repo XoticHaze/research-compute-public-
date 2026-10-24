@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   FENCE_SCHEMA, initialFrozenFence, transitionFrozenFence,
-} from '../cloudflare/fleet-authority/src/live_owner_fence_transition_v1.mjs';
+} from '../research/mmibkr_live_owner_fence_contract/live_owner_fence_transition_v1.mjs';
 
 const account = 'a'.repeat(64);
 const otherAccount = 'b'.repeat(64);
