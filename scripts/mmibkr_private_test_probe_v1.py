@@ -159,6 +159,11 @@ SOURCE_ONLY_MODEL_ISSUER_MODULES = frozenset({
     "tests.test_promotion_review_get_http_current_product_20261024",
 })
 SAFE_EXACT.update(SOURCE_ONLY_MODEL_ISSUER_MODULES)
+# Exact prebuilt Builder scale guard is pure canonical contract evaluation.
+SOURCE_ONLY_BUILDER_MODULES = frozenset({
+    "tests.test_builder_prebuilt_group_logic_guard_product_20261023",
+})
+SAFE_EXACT.update(SOURCE_ONLY_BUILDER_MODULES)
 STATUS_STAGE_MODULES = {
     "tests.test_market_features_provenance_contract",
 }
@@ -231,7 +236,7 @@ def pytest_container_command(image_tag: str, module: str) -> list[str]:
         "docker",
         "run",
         "--rm",
-        *(["--network", "none"] if module in (SOURCE_ONLY_P0_MODULES | SOURCE_ONLY_MODEL_LAB_MODULES | SOURCE_ONLY_PNL_MODULES | SOURCE_ONLY_MODEL_ISSUER_MODULES) else []),
+        *(["--network", "none"] if module in (SOURCE_ONLY_P0_MODULES | SOURCE_ONLY_MODEL_LAB_MODULES | SOURCE_ONLY_PNL_MODULES | SOURCE_ONLY_MODEL_ISSUER_MODULES | SOURCE_ONLY_BUILDER_MODULES) else []),
         "-e",
         "ENABLE_LIVE_TRADING=0",
         "-e",

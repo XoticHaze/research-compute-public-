@@ -573,3 +573,15 @@ def test_exact_account_scope_operator_snapshot_is_networkless():
     for forbidden in ("tests.test_cloud_operator_snapshot_v1_live_submit", "tests.test_cloud_operator_snapshot_v1_broker_mutation"):
         with pytest.raises(ValueError):
             validated_modules(forbidden)
+
+
+def test_exact_prebuilt_builder_scale_guard_networkless_and_fail_closed():
+    module="tests.test_builder_prebuilt_group_logic_guard_product_20261023"
+    assert validated_modules(module)==[module]
+    command=pytest_container_command("sealed-test-image",module)
+    assert command[:5]==["docker","run","--rm","--network","none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1]==module_file_path(module)
+    for denied in (module+"_live_submit",module+"_broker_mutation",module+"_extra"):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
