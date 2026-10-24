@@ -72,8 +72,12 @@ def _finite(value: object) -> float:
 
 
 def _safe_book(book: dict) -> dict:
-    """Fixed nested public paper-book field projection; no private passthrough."""
-    if not isinstance(book, dict) or set(book) != set(_BOOK_KEYS):
+    """Project only three public books from the frozen full native book record."""
+    source_keys = {"schema", "authority", "generated_at", "signal_date",
+                   "execution", "model_state", "ticker_book", "industry_book",
+                   "options_book", "benchmarks", "boundaries"}
+    if (not isinstance(book, dict) or not set(_BOOK_KEYS) <= set(book)
+            or set(book) - source_keys):
         raise ValueError("public adapter book field-set mismatch")
     projected = {}
     for kind, allowed in _BOOK_KEYS.items():
