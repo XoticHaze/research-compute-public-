@@ -108,7 +108,7 @@ export async function probeNvidia(env, doFetch = fetch) {
   }
   try {
     const result = await doFetch(ORIGIN + "/v1/chat/completions", {
-      method: "POST", headers, redirect: "error", signal: AbortSignal.timeout(15000),
+      method: "POST", headers, redirect: "error",
       body: JSON.stringify({
         model: MODEL,
         messages: [{ role: "user", content: "Reply with PING_OK. This is a synthetic connection check." }],
