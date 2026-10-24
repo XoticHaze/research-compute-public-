@@ -1,10 +1,10 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "7a1250e2ccf5014d5674a6740488ba2ada653416",
+  "source_ref": "6ee0c2664273d6b843961def31bfcb37c45ca362",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
-  "requested_by": "continue-release-20261024-clockin-20261024084531690",
-  "purpose": "Selected UI #888 exact Product #973/#974 account scope and fixed metrics separator, P0 source no-loss, canonical Node acceptance and Vite, no broker/live/deploy",
-  "request_nonce": "ui-888-7a1250e2-metric-separator-exact-vite-20261024-r1",
+  "requested_by": "continue-release-20261024-clockin-20261024091127185",
+  "purpose": "Exact isolated P0#883+UI#888 6ee0 integrated Bot Console account-scope acceptance and Vite build, no broker/live/deploy",
+  "request_nonce": "p0-ui-composite-6ee0-vite-20261024-r1",
   "authority": {
     "research_only": true,
     "broker": false,
