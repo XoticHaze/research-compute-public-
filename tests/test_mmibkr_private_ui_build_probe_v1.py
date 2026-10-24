@@ -144,3 +144,127 @@ def test_workflow_exposes_private_ui_rendezvous_fire_and_dispatch():
     assert "push:" in source
     assert "- 'rendezvous/fire/mmibkr-private-ui-build-probe-r1'" in source
     assert "elif event == \"push\":" in source
+
+
+def test_public_cli_unknown_argument_never_echoes_nested_private_text(monkeypatch, capsys):
+    import sys
+    sentinel = "SYNTHETIC_PRIVATE_NESTED_SENTINEL_20261024"
+    monkeypatch.setattr(sys, "argv", [
+        "mmibkr_private_ui_build_probe_v1.py",
+        "--source-root", "/synthetic",
+        "--source-materialization", "/synthetic/source.json",
+        "--source-ref", "a" * 40,
+        "--acceptance-file", "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
+        "--unexpected", sentinel,
+    ])
+    assert mod.main() == 1
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert sentinel not in captured.out + captured.err
+    receipt = json.loads(captured.out.splitlines()[0].split("=", 1)[1])
+    assert receipt == {"schema": mod.SCHEMA, "status": "REJECTED"}
+
+
+def test_public_cli_private_exception_never_echoes_path_or_nested_sentinel(monkeypatch, capsys):
+    import sys
+    sentinel = "SYNTHETIC_PRIVATE_NESTED_SENTINEL_20261024"
+    monkeypatch.setattr(sys, "argv", [
+        "mmibkr_private_ui_build_probe_v1.py",
+        "--source-root", "/synthetic",
+        "--source-materialization", "/synthetic/source.json",
+        "--source-ref", "a" * 40,
+        "--acceptance-file", "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
+    ])
+    def raise_private(**_kwargs):
+        raise RuntimeError(f"private_source_path/{sentinel}/nested/secret")
+    monkeypatch.setattr(mod, "run_probe", raise_private)
+    assert mod.main() == 1
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert sentinel not in captured.out + captured.err
+    assert "private_source_path" not in captured.out + captured.err
+    receipt = json.loads(captured.out.splitlines()[0].split("=", 1)[1])
+    assert receipt == {"schema": mod.SCHEMA, "status": "REJECTED"}
+
+
+def test_workflow_validates_allowlist_before_env_write_or_private_source():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / ".github" / "workflows" / "mmibkr-private-ui-build-probe-r1.yml"
+    ).read_text(encoding="utf-8")
+    guard = "acceptance = validate_acceptance_file(acceptance)"
+    env_write = 'with Path(os.environ["GITHUB_ENV"]).open'
+    assert guard in source
+    assert source.index(guard) < source.index(env_write)
+    assert "private UI build acceptance file rejected" in source
+
+
+def _synthetic_safe_public_receipt():
+    step = {
+        "status": "PASS", "exit_code": 0,
+        "captured_output_sha256": "d" * 64,
+        "captured_output_bytes": 10,
+    }
+    return {
+        "schema": mod.SCHEMA, "status": "PASS",
+        "source_identity": {
+            "repository": "XoticHaze/mm-IBKR",
+            "source_ref": "a" * 40, "source_sha": "a" * 40,
+            "source_archive_sha256": "b" * 64,
+            "source_archive_bytes": 123,
+            "source_manifest_sha256": "c" * 64,
+            "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
+            "vault_attestation_verified": True,
+        },
+        "package_contract": {
+            "build_script": "vite build", "lockfile_version": 3,
+            "lifecycle_hooks_disabled": True,
+        },
+        "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
+        "npm_ci": dict(step), "node_acceptance": dict(step), "vite_build": dict(step),
+        "dist_index_present": True, "dist_file_count": 2,
+        "dist_digest_sha256": "e" * 64,
+        "authority": {
+            "research_only": True, "private_repository_token_used": False,
+            "broker_credentials_used": False, "broker_request_made": False,
+            "broker_action": False, "strategy_spec_write": False,
+            "runtime_activation": False, "promotion_mutation": False,
+            "live_trading_allowed": False,
+        },
+        "sanitization": {
+            "private_plaintext_published": False,
+            "captured_build_output_published": False,
+            "output_retained_as_digest_only": True,
+        },
+    }
+
+
+def test_public_receipt_rejects_nested_private_sentinel_without_echo(monkeypatch, capsys):
+    import copy
+    import sys
+    valid = _synthetic_safe_public_receipt()
+    assert mod._public_receipt(valid) == valid
+    sentinel = "SYNTHETIC_PRIVATE_NESTED_SENTINEL_20261024"
+    for mutation in ("extra_nested", "digest_field"):
+        bad = copy.deepcopy(valid)
+        if mutation == "extra_nested":
+            bad["source_identity"]["untrusted_nested"] = {"secret": sentinel}
+        else:
+            bad["source_identity"]["source_manifest_sha256"] = sentinel
+        with pytest.raises(ValueError):
+            mod._public_receipt(bad)
+        monkeypatch.setattr(sys, "argv", [
+            "mmibkr_private_ui_build_probe_v1.py",
+            "--source-root", "/synthetic",
+            "--source-materialization", "/synthetic/source.json",
+            "--source-ref", "a" * 40,
+            "--acceptance-file", "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
+        ])
+        monkeypatch.setattr(mod, "run_probe", lambda **_kwargs: bad)
+        assert mod.main() == 1
+        captured = capsys.readouterr()
+        assert captured.err == ""
+        assert sentinel not in captured.out + captured.err
+        assert json.loads(captured.out.splitlines()[0].split("=", 1)[1]) == {
+            "schema": mod.SCHEMA, "status": "REJECTED",
+        }
