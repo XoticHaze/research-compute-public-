@@ -1,10 +1,10 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "24736d773f53801445ee7d4ef463048fc0eb9021",
+  "source_ref": "724a64ba455d71e6e756edfc3576d1f555cfaaf6",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
-  "requested_by": "continue-release-20261023-clock-20261023234744647",
-  "purpose": "Exact selected #888 24736d after consuming #930 Model Lab activity and #931 registry-authority gates: existing Node acceptance plus Vite production integration build, no broker/live/deploy",
-  "request_nonce": "ui-888-24736d77-20261023-vite-r1",
+  "requested_by": "continue-release-20261024-clock-20261024004447542",
+  "purpose": "Exact selected #888 724a after consuming #933 legacy strategy registry provenance and #935 read-only account margin panel: existing Node acceptance plus production Vite build; changed margin Python/Node tests already passed exact local blobs, no broker/live/deploy",
+  "request_nonce": "ui-888-724a64ba-20261024-vite-r1",
   "authority": {
     "research_only": true,
     "broker": false,
