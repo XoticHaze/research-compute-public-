@@ -11,6 +11,7 @@ import pandas as pd
 import yfinance as yf
 
 from research.forward_bar_contract_v2 import ForwardBarContract, ibkr_bar_to_record, normalize_frame
+from research.forward_prospective_cohort_ledger_r1 import _completed_market_data_date
 
 U = ("SPY", "QQQ", "TLT", "GLD", "DBC")
 TOP_K = 2
@@ -86,6 +87,16 @@ def _common_close_panel(bars: pd.DataFrame) -> pd.DataFrame:
     if px.empty:
         raise RuntimeError("no common completed daily bars across P46 universe")
     return px
+
+
+def _completed_common_close_panel(bars: pd.DataFrame, observed_at: pd.Timestamp) -> tuple[pd.DataFrame, int, str]:
+    """Reuse the existing 18:30 ET completed-session boundary, not partial Yahoo bars."""
+    raw = _common_close_panel(bars)
+    cutoff = _completed_market_data_date(observed_at.to_pydatetime())
+    completed = raw.loc[raw.index.date <= cutoff]
+    if completed.empty:
+        raise RuntimeError("P46 no completed common-session bars before settlement")
+    return completed, int(len(raw) - len(completed)), cutoff.isoformat()
 
 
 def _feature_cutoff(px: pd.DataFrame, observed_at: pd.Timestamp) -> pd.Timestamp:
@@ -192,7 +203,7 @@ def main() -> None:
     observed_at = _utc_now()
     bars = _yahoo_normalized()
     fixture = _ibkr_shape_fixture()
-    px = _common_close_panel(bars)
+    px, excluded_partial, completed_cutoff = _completed_common_close_panel(bars, observed_at)
     decision = _decision(px, observed_at)
     shakedown = _shakedown_mark(px)
     latest_bar = pd.Timestamp(px.index.max()).tz_localize("UTC")
@@ -228,6 +239,9 @@ def main() -> None:
         },
         "data_health": {
             "latest_common_bar_date": str(latest_bar.date()),
+            "completed_bar_cutoff_date": completed_cutoff,
+            "in_progress_common_session_rows_excluded": excluded_partial,
+            "completed_bar_authority": "existing_forward_prospective_cohort_ledger_18_30_ET",
             "calendar_age_days": int((observed_at.normalize() - latest_bar.normalize()).days),
             "all_universe_members_present": list(px.columns) == list(U),
         },
