@@ -92,7 +92,7 @@ def validate_source_identity(
 def validate_acceptance_file(raw: str) -> str:
     value = str(raw or "").strip().replace("\\", "/")
     if value not in ALLOWED_ACCEPTANCE_FILES:
-        raise ValueError(f"ui_acceptance_file_not_allowlisted:{value}")
+        raise ValueError("ui_acceptance_file_not_allowlisted")
     path = Path(value)
     if path.is_absolute() or ".." in path.parts:
         raise ValueError("ui_acceptance_file_path_rejected")
@@ -263,27 +263,40 @@ def run_probe(
     }
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--source-root", required=True)
-    parser.add_argument("--source-materialization", required=True)
-    parser.add_argument("--source-ref", required=True)
-    parser.add_argument("--acceptance-file", required=True)
-    args = parser.parse_args()
+class _PublicSafeArgumentParser(argparse.ArgumentParser):
+    """Never interpolate caller-supplied CLI text into public workflow stderr."""
 
-    receipt = run_probe(
-        source_root=Path(args.source_root).resolve(),
-        source_materialization=Path(args.source_materialization).resolve(),
-        expected_source_ref=str(args.source_ref),
-        acceptance_file=str(args.acceptance_file),
-    )
-    encoded = json.dumps(receipt, sort_keys=True, separators=(",", ":"))
-    print("MMIBKR_PRIVATE_UI_BUILD_RECEIPT=" + encoded)
-    print(
-        "MMIBKR_PRIVATE_UI_BUILD_RECEIPT_SHA256="
-        + hashlib.sha256(encoded.encode("utf-8")).hexdigest()
-    )
-    return 0 if receipt["status"] == "PASS" else 1
+    def error(self, message: str) -> None:
+        raise ValueError("ui_probe_cli_arguments_rejected")
+
+
+def main() -> int:
+    try:
+        parser = _PublicSafeArgumentParser(add_help=False)
+        parser.add_argument("--source-root", required=True)
+        parser.add_argument("--source-materialization", required=True)
+        parser.add_argument("--source-ref", required=True)
+        parser.add_argument("--acceptance-file", required=True)
+        args = parser.parse_args()
+
+        receipt = run_probe(
+            source_root=Path(args.source_root).resolve(),
+            source_materialization=Path(args.source_materialization).resolve(),
+            expected_source_ref=str(args.source_ref),
+            acceptance_file=str(args.acceptance_file),
+        )
+        encoded = json.dumps(receipt, sort_keys=True, separators=(",", ":"))
+        print("MMIBKR_PRIVATE_UI_BUILD_RECEIPT=" + encoded)
+        print(
+            "MMIBKR_PRIVATE_UI_BUILD_RECEIPT_SHA256="
+            + hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        )
+        return 0 if receipt["status"] == "PASS" else 1
+    except Exception:
+        # Never expose private source paths, argv, exception text or build logs.
+        print("MMIBKR_PRIVATE_UI_BUILD_RECEIPT=" + json.dumps(
+            {"schema": SCHEMA, "status": "REJECTED"}, sort_keys=True))
+        return 1
 
 
 if __name__ == "__main__":
