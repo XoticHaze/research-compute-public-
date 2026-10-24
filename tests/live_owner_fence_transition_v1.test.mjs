@@ -145,3 +145,24 @@ test('input corruption, clock regression, invalid TTL, forged run id deny closed
   }, req('acquire', { expectedEpoch: 1, ownerRunAttempt: ownerB })).status, 'invalid_persisted_state');
   assert.equal(acquire({ serverNowMs: Number.MAX_SAFE_INTEGER, ttlMs: 20 }).status, 'clock_range_overflow');
 });
+
+test('epoch-zero owner and inverted expiry cannot be trusted as persisted leases', () => {
+  const forgedGenesis = {
+    ...initialFrozenFence(), holder: ownerA, expiresAtMs: 2_000,
+  };
+  const forgedRenew = transitionFrozenFence(forgedGenesis, req('renew', {
+    expectedEpoch: 0, serverNowMs: 1_000,
+    verifiedEvidence: { sameBrokerSession: true, ownerStillAuthenticated: true },
+  }));
+  assert.equal(forgedRenew.status, 'invalid_persisted_state');
+  assert.equal(forgedRenew.ok, false);
+
+  const valid = acquire().state;
+  const inverted = { ...valid, lastServerMs: valid.expiresAtMs + 1 };
+  const forgedTakeover = transitionFrozenFence(inverted, req('acquire', {
+    expectedEpoch: 1, serverNowMs: inverted.lastServerMs + 1,
+    ownerRunAttempt: ownerB,
+  }));
+  assert.equal(forgedTakeover.status, 'invalid_persisted_state');
+  assert.equal(forgedTakeover.ok, false);
+});
