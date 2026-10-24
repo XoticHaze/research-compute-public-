@@ -153,6 +153,8 @@ SAFE_EXACT.update(SOURCE_ONLY_PNL_MODULES)
 # Signed Foundry qualification / Pilot quarantine is an exact offline test only.
 SOURCE_ONLY_MODEL_ISSUER_MODULES = frozenset({
     "tests.test_foundry_model_promotion_admission_v1",
+    # Exact signed limited FORWARD_SANITY boundary and non-approvable stage.
+    "tests.test_foundry_model_limited_forward_sanity_product_20261024",
     # Exact GET-only Promotion Review transport and stale-state regression.
     "tests.test_promotion_review_get_http_current_product_20261024",
 })
