@@ -203,7 +203,8 @@ def test_workflow_exposes_private_ui_rendezvous_fire_and_dispatch():
     assert "acceptance_file:" in source
     assert "push:" in source
     assert "- 'rendezvous/fire/mmibkr-private-ui-build-probe-r1'" in source
-    assert "elif event == \"push\":" in source
+    assert 'if event == "push" else None' in source
+    assert "request = resolve_ui_request(" in source
 
 
 def test_public_cli_unknown_argument_never_echoes_nested_private_text(monkeypatch, capsys):
@@ -252,11 +253,15 @@ def test_workflow_validates_allowlist_before_env_write_or_private_source():
         Path(__file__).resolve().parents[1]
         / ".github" / "workflows" / "mmibkr-private-ui-build-probe-r1.yml"
     ).read_text(encoding="utf-8")
-    guard = "acceptance = validate_acceptance_file(acceptance)"
+    guard = "request = resolve_ui_request("
     env_write = 'with Path(os.environ["GITHUB_ENV"]).open'
     assert guard in source
     assert source.index(guard) < source.index(env_write)
-    assert "private UI build acceptance file rejected" in source
+    assert "private UI build request rejected" in source
+    # The helper dynamically exercises both triggers, not a stale inline parser.
+    resolver = Path(mod.__file__).read_text(encoding="utf-8")
+    assert "validate_acceptance_file(acceptance)" in resolver
+    assert "validate_compute_requirements(requirements)" in resolver
 
 
 def _synthetic_safe_public_receipt():
