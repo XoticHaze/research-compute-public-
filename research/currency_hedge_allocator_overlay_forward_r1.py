@@ -28,6 +28,41 @@ FROZEN_ALLOCATOR_COMMIT = "6a800febaf1232fe77cd377ab28cd70e380fb8e0"
 FROZEN_ALLOCATOR_BLOB = "c1af1ffa76aeb8db6538f0813721382e88be0151"
 FROZEN_CURRENCY_OBSERVER_BLOB = "0dd0311365dd5e147fd69ef9d35aa3dc92fd66fc"
 
+# Source-event valuation is separate from the Yahoo price panel. Eligible BZH
+# shares converted to a $33.50 cash right on 2026-10-20 (SEC 8-K). No traded
+# BZH close exists after the 2026-10-19 session. Do not create one.
+BZH_MERGER_EFFECTIVE = pd.Timestamp("2026-10-20")
+BZH_LAST_TRADE = pd.Timestamp("2026-10-19")
+BZH_CASH_RIGHT_USD = 33.50
+BZH_ENTRY_RAW_REFERENCE = 33.23
+BZH_LAST_RAW_REFERENCE = 33.48
+BZH_RAW_BASIS_TOLERANCE_USD = 0.05
+BZH_ISSUER_FILING = (
+    "https://www.sec.gov/Archives/edgar/data/915840/"
+    "000110465926117198/tm2622398d20_8k.htm"
+)
+
+
+def _bzh_receivable_value(panel: pd.DataFrame, entry: pd.Timestamp, latest: pd.Timestamp) -> float:
+    """Mark the nontrading cash right without inventing a BZH market close."""
+    if latest < BZH_MERGER_EFFECTIVE:
+        return float(panel.loc[latest, "BZH"])
+    if entry >= BZH_MERGER_EFFECTIVE or BZH_LAST_TRADE not in panel.index:
+        raise RuntimeError("BZH_CASH_MERGER_ENTRY_OR_LAST_TRADE_MISSING")
+    if panel.loc[panel.index >= BZH_MERGER_EFFECTIVE, "BZH"].notna().any():
+        raise RuntimeError("BZH_CASH_MERGER_POST_EVENT_PRICE_NOT_ADMITTED")
+    # The original Yahoo panel is auto_adjust=True. Independently observed
+    # raw SIP references bound the 2026 entry and last pre-event close.
+    # If a corporate action or vendor revision changes the basis, fail closed
+    # rather than divide raw merger dollars by adjusted-share units.
+    entry_px = float(panel.loc[entry, "BZH"])
+    last_px = float(panel.loc[BZH_LAST_TRADE, "BZH"])
+    if (not pd.notna(entry_px) or not pd.notna(last_px)
+            or abs(entry_px - BZH_ENTRY_RAW_REFERENCE) > BZH_RAW_BASIS_TOLERANCE_USD
+            or abs(last_px - BZH_LAST_RAW_REFERENCE) > BZH_RAW_BASIS_TOLERANCE_USD):
+        raise RuntimeError("BZH_CASH_MERGER_ADJUSTED_RAW_BASIS_UNVERIFIED")
+    return BZH_CASH_RIGHT_USD
+
 FROZEN_ALLOCATOR_WEIGHTS = {
     "AVDV": 0.1,
     "AVUV": 0.1,
@@ -106,7 +141,24 @@ def _download(asof: date) -> tuple[pd.DataFrame, str]:
 
 
 def _common_calendar(panel: pd.DataFrame) -> pd.DatetimeIndex:
-    return panel.dropna(subset=list(MARKET_SYMBOLS)).index
+    """Require real closes for every active symbol, except a cash-converted BZH.
+
+    Preserve calendar sessions after the issuer-confirmed terminal event while
+    leaving the BZH raw price column NaN. Missing other closes fail closed.
+    """
+    eligible = panel.loc[panel.index.date > REGISTRATION_DATE]
+    if eligible.empty:
+        return panel.dropna(subset=list(MARKET_SYMBOLS)).index
+    active = [symbol for symbol in MARKET_SYMBOLS if symbol != "BZH"]
+    if eligible.loc[:, active].isna().any().any():
+        raise RuntimeError("INCOMPLETE_ACTIVE_SYMBOL_FORWARD_CLOSES")
+    before = eligible.loc[eligible.index < BZH_MERGER_EFFECTIVE]
+    after = eligible.loc[eligible.index >= BZH_MERGER_EFFECTIVE]
+    if before["BZH"].isna().any():
+        raise RuntimeError("BZH_PRE_MERGER_SOURCE_GAP")
+    if after["BZH"].notna().any():
+        raise RuntimeError("BZH_POST_MERGER_PRICE_MUST_REMAIN_MISSING")
+    return eligible.index
 
 
 def _portfolio_return_bps(weights: dict[str, float], panel: pd.DataFrame, entry: pd.Timestamp, latest: pd.Timestamp) -> float:
@@ -114,7 +166,11 @@ def _portfolio_return_bps(weights: dict[str, float], panel: pd.DataFrame, entry:
     for symbol, weight in weights.items():
         if symbol == "CASH" or weight == 0.0:
             continue
-        total += weight * (float(panel.loc[latest, symbol]) / float(panel.loc[entry, symbol]) - 1.0)
+        mark = (
+            _bzh_receivable_value(panel, entry, latest)
+            if symbol == "BZH" else float(panel.loc[latest, symbol])
+        )
+        total += weight * (mark / float(panel.loc[entry, symbol]) - 1.0)
     return total * 10000.0
 
 
@@ -185,6 +241,18 @@ def build(asof: date) -> dict[str, Any]:
             "provider": "Yahoo Finance via yfinance; research-only public data",
             "panel_sha256": digest,
             "symbols": list(MARKET_SYMBOLS),
+            "bzh_issuer_cash_merger": {
+                "effective_date": BZH_MERGER_EFFECTIVE.date().isoformat(),
+                "last_traded_date": BZH_LAST_TRADE.date().isoformat(),
+                "cash_right_per_eligible_share_usd": BZH_CASH_RIGHT_USD,
+                "issuer": BZH_ISSUER_FILING,
+                "provider_payable_date": "2026-10-21",
+                "receivable_not_trading_cash": True,
+                "price_panel_not_filled_or_synthesized": True,
+                "valuation_applies": asof >= BZH_MERGER_EFFECTIVE.date(),
+                "raw_vs_adjusted_basis_requires_reference_check": True,
+                "same_issuer_event_all_four_frozen_arms": True,
+            },
         },
         "decision_use": (
             "Prospective portfolio-level falsifier: determine whether the replicated developed-ex-US currency hedge "
@@ -273,6 +341,25 @@ def build(asof: date) -> dict[str, Any]:
 
 
 def self_test() -> None:
+    # A genuine source gap in the delisted stock is not a synthetic flat close.
+    ix = pd.DatetimeIndex(["2026-09-14", "2026-10-19", "2026-10-20"])
+    tiny = pd.DataFrame(1.0, index=ix, columns=list(MARKET_SYMBOLS))
+    tiny.loc[ix[0], "BZH"] = 33.23
+    tiny.loc[ix[1], "BZH"] = 33.48
+    tiny.loc[ix[2], "BZH"] = float("nan")
+    assert len(_common_calendar(tiny)) == 3
+    expected = 0.0125 * (33.50 / 33.23 - 1.0) * 10000.0
+    actual = _portfolio_return_bps({"BZH": 0.0125}, tiny, ix[0], ix[2])
+    assert abs(actual - expected) < 1e-10
+    assert pd.isna(tiny.loc[ix[2], "BZH"])  # no invented post-merger price
+    broken = tiny.copy()
+    broken.loc[ix[2], "BZH"] = 33.50
+    try:
+        _common_calendar(broken)
+    except RuntimeError as exc:
+        assert "BZH_POST_MERGER_PRICE" in str(exc)
+    else:
+        raise AssertionError("synthetic post-merger BZH price was accepted")
     synthetic = [pd.Timestamp("2026-09-14"), pd.Timestamp("2026-09-15"), pd.Timestamp("2026-09-16")]
     assert len(synthetic) == 3
     assert max(0, len(synthetic) - 1) == 2
