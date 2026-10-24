@@ -49,8 +49,10 @@ class CloudOwnerReusableVaultContractTests(unittest.TestCase):
     def test_watchdog_rejects_checkpoints_from_older_private_source(self):
         text = (ROOT / ".github/workflows/mmibkr-selected-runtime-cloud-watchdog-r1.yml").read_text(encoding="utf-8")
         self.assertIn("canonical_source='" + SOURCE_SHA + "'", text)
-        self.assertIn("receipt.get('private_head')", text)
-        self.assertIn("!= canonical_source", text)
+        self.assertIn("checkpoint_receipt_origin_admitted(run, receipt, canonical_source)", text)
+        helper = (ROOT / "scripts/mmibkr_selected_runtime_cloud_watchdog_cooldown_v1.py").read_text(encoding="utf-8")
+        self.assertIn('receipt.get("private_head") != expected_source', helper)
+        self.assertIn('run.get("conclusion") != "success"', helper)
         self.assertIn("saved_key.endswith('-' + canonical_source)", text)
         self.assertIn("predecessor_key.endswith('-' + canonical_source)", text)
         self.assertIn("MMIBKR_CLOUD_WATCHDOG=no_current_source_checkpoint", text)
