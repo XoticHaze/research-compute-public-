@@ -385,3 +385,43 @@ def test_source_identity_rejects_legacy_or_authority_drift(
     )
     with pytest.raises(RuntimeError, match=error):
         validate_source_identity(source, materialization, SOURCE)
+
+
+def test_selected_model_lab_backend_modules_are_exact_networkless():
+    """Only the five source-only #888 backend regressions are newly admitted."""
+    exact = [
+        "tests.test_model_lab_cancel_process_identity_product",
+        "tests.test_model_lab_cancel_terminal_race_product",
+        "tests.test_model_lab_orchestrator_identity_authority_product",
+        "tests.test_model_lab_startup_status_race_product",
+        "tests.test_model_lab_worker_early_cancel_product",
+    ]
+    assert validated_modules(" ".join(exact)) == exact
+    for module in exact:
+        command = pytest_container_command("sealed-test-image", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+    for denied in (
+        "tests.test_model_lab_runtime_submit",
+        "tests.test_model_lab_cancel_live_order",
+        "tests.test_model_lab_unreviewed_worker",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
+
+
+def test_selected_pnl_lifecycle_module_is_exact_and_networkless():
+    """The independent after-cost PnL child shares the sealed, brokerless probe."""
+    module = "tests.test_lifecycle_single_flat_roundtrip_product_20261023"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-test-image", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for denied in (
+        "tests.test_lifecycle_live_order_pnl",
+        "tests.test_lifecycle_single_flat_roundtrip_product_20261023_extra",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
