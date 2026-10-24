@@ -1,10 +1,10 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "40f7d76266a9bff2a6b7007c66065ed6c7831ddd",
+  "source_ref": "07a76356bad914eec426cc8a1ff33009fc443f32",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
-  "requested_by": "continue-release-20261024-clock-20261024044954616",
-  "purpose": "Exact selected UI #888 after consuming Product #947 multi-symbol backtest chart scoping; trusted encrypted Source Vault run 40064088157 SUCCESS; existing network-isolated BotConsole Node/Vite build, no deploy/broker/live",
-  "request_nonce": "ui-888-40f7d762-20261024-chart-vite-r1",
+  "requested_by": "continue-release-20261024-clock-20261024051734668",
+  "purpose": "Selected UI #888 exact 07a after Product #949 broker gross exposure/raw residue; Source Vault 40066612900 SUCCESS; existing encrypted BotConsole Node acceptance plus Vite build; no deploy/broker/live",
+  "request_nonce": "ui-888-07a76356-gross-exposure-vite-20261024-r1",
   "authority": {
     "research_only": true,
     "broker": false,
