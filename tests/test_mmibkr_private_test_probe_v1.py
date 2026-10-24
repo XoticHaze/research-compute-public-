@@ -87,6 +87,17 @@ def test_exact_live_owner_journal_writer_and_broker_provenance_are_source_only()
         validated_modules("tests.test_selected_runtime_live_broker_submit_v1")
 
 
+def test_signed_owner_candidate_is_allowlisted_only_as_networkless_disabled_source():
+    module = "tests.test_selected_runtime_live_owner_candidate_certificate_v1"
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-test-image", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+    with pytest.raises(ValueError):
+        validated_modules("tests.test_selected_runtime_live_owner_broker_order_v1")
+
+
 def test_allowlist_accepts_exact_pr798_read_only_position_projection_modules():
     assert validated_modules(
         "tests.test_selected_runtime_strategy_spec_integrity_v1 "

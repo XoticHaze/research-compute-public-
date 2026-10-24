@@ -42,6 +42,7 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_selected_runtime_live_execution_ledger_v1",
     "tests.test_selected_runtime_live_broker_provenance_v1",
     "tests.test_selected_runtime_live_p0_integrated_checkpoint_v1",
+    "tests.test_selected_runtime_live_owner_candidate_certificate_v1",
     # Exact new flat-seed broker residue regression, synthetic and brokerless.
     "tests.test_live_broker_position_residue_product_20261024",
 })
