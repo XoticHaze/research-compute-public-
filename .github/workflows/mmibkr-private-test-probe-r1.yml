@@ -107,6 +107,19 @@ jobs:
               raise SystemExit("private test probe requires exact 40-char source SHA")
           if not modules:
               raise SystemExit("private test probe requires modules")
+          # Reuse the existing exact source allowlists BEFORE writing GITHUB_ENV
+          # or materializing private source. Reject multiline injection on both
+          # workflow_dispatch and repository_push_fire variants.
+          from scripts.mmibkr_private_test_probe_v1 import validated_modules
+          from scripts.mmibkr_private_ui_build_probe_v1 import validate_acceptance_file
+          try:
+              modules = ",".join(validated_modules(modules))
+              if ui_acceptance:
+                  ui_acceptance = validate_acceptance_file(ui_acceptance)
+          except (ValueError, TypeError):
+              raise SystemExit("private probe requested module rejected")
+          if parity_key and (len(parity_key) > 8192 or not re.fullmatch(r"[A-Za-z0-9+/]+={0,2}", parity_key)):
+              raise SystemExit("private probe parity key encoding rejected")
           with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as fh:
               fh.write("MMIBKR_PRIVATE_TEST_SOURCE_REF=" + source_ref + "\n")
               fh.write("MMIBKR_PRIVATE_TEST_MODULES=" + modules + "\n")

@@ -12,6 +12,16 @@ import tempfile
 from typing import Any
 
 
+class _PublicSafeArgumentParser(argparse.ArgumentParser):
+    """Reject public CLI errors without echoing private caller input."""
+
+    def __init__(self) -> None:
+        super().__init__(add_help=False)
+
+    def error(self, _message: str) -> None:
+        raise ValueError("invalid_public_test_probe_arguments")
+
+
 SCHEMA = "mmibkr.private_test_probe_receipt.v1"
 PYTEST_VERSION = "8.4.2"
 MODULE_RE = re.compile(r"^tests\.test_[A-Za-z0-9_]+$")
@@ -32,6 +42,15 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_selected_runtime_live_execution_ledger_v1",
     "tests.test_selected_runtime_live_broker_provenance_v1",
     "tests.test_selected_runtime_live_p0_integrated_checkpoint_v1",
+    "tests.test_selected_runtime_live_owner_candidate_certificate_v1",
+    # Exact selected-account position snapshot safety regression, networkless.
+    "tests.test_cloud_operator_snapshot_v1",
+    # Read-only account open-order completeness projection, never a broker consumer.
+    "tests.test_cloud_operator_open_orders_truth_product_20261024",
+    # Exact new flat-seed broker residue regression, synthetic and brokerless.
+    "tests.test_live_broker_position_residue_product_20261024",
+    # Exact operator snapshot contract identity, brokerless synthetic tests.
+    "tests.test_cloud_operator_exact_contract_position_product_20261024",
 })
 
 SAFE_EXACT = {
@@ -105,7 +124,32 @@ SAFE_EXACT = {
     "tests.test_selected_runtime_cloud_bar_clock_v1",
     "tests.test_selected_runtime_cloud_runner_dry_plan_v1",
 }
+
+# Exact selected Model Lab cancellation/identity regressions from MM-IBKR
+# UI composite #888. Tests are brokerless; run with no network to prevent
+# accidental external worker/model traffic. No generic module-name wildcard.
+SOURCE_ONLY_MODEL_LAB_MODULES = frozenset({
+    "tests.test_model_lab_cancel_process_identity_product",
+    "tests.test_model_lab_cancel_terminal_race_product",
+    "tests.test_model_lab_orchestrator_identity_authority_product",
+    "tests.test_model_lab_startup_status_race_product",
+    "tests.test_model_lab_worker_early_cancel_product",
+})
 SAFE_EXACT.update(SOURCE_ONLY_P0_MODULES)
+# Exact synthetic lifecycle after-cost PnL: no broker or network access.
+SOURCE_ONLY_PNL_MODULES = frozenset({
+    "tests.test_lifecycle_single_flat_roundtrip_product_20261023",
+    # Exact new Product source-only decimal residue and matched-fill-count guards.
+    "tests.test_lifecycle_decimal_flatness_product_20261024",
+    "tests.test_lifecycle_matched_fill_count_truth_product_20261024",
+})
+SAFE_EXACT.update(SOURCE_ONLY_MODEL_LAB_MODULES)
+SAFE_EXACT.update(SOURCE_ONLY_PNL_MODULES)
+# Signed Foundry qualification / Pilot quarantine is an exact offline test only.
+SOURCE_ONLY_MODEL_ISSUER_MODULES = frozenset({
+    "tests.test_foundry_model_promotion_admission_v1",
+})
+SAFE_EXACT.update(SOURCE_ONLY_MODEL_ISSUER_MODULES)
 STATUS_STAGE_MODULES = {
     "tests.test_market_features_provenance_contract",
 }
@@ -150,16 +194,16 @@ def validated_modules(raw: str) -> list[str]:
     out: list[str] = []
     for module in values:
         if not MODULE_RE.fullmatch(module):
-            raise ValueError(f"test_module_rejected:{module}")
+            raise ValueError("test_module_rejected")
         if module in SAFE_EXACT:
             if module not in out:
                 out.append(module)
             continue
         lowered = module.lower()
         if any(token in lowered for token in DENY_TOKENS):
-            raise ValueError(f"test_module_authority_rejected:{module}")
+            raise ValueError("test_module_authority_rejected")
         if not module.startswith(SAFE_PREFIXES):
-            raise ValueError(f"test_module_not_allowlisted:{module}")
+            raise ValueError("test_module_not_allowlisted")
         if module not in out:
             out.append(module)
     return out
@@ -168,7 +212,7 @@ def validated_modules(raw: str) -> list[str]:
 def module_file_path(module: str) -> str:
     """Map one already-validated test module to its repository-relative file."""
     if not MODULE_RE.fullmatch(str(module or "")):
-        raise ValueError(f"test_module_rejected:{module}")
+        raise ValueError("test_module_rejected")
     return module.replace(".", "/") + ".py"
 
 
@@ -178,7 +222,7 @@ def pytest_container_command(image_tag: str, module: str) -> list[str]:
         "docker",
         "run",
         "--rm",
-        *(["--network", "none"] if module in SOURCE_ONLY_P0_MODULES else []),
+        *(["--network", "none"] if module in (SOURCE_ONLY_P0_MODULES | SOURCE_ONLY_MODEL_LAB_MODULES | SOURCE_ONLY_PNL_MODULES | SOURCE_ONLY_MODEL_ISSUER_MODULES) else []),
         "-e",
         "ENABLE_LIVE_TRADING=0",
         "-e",
@@ -423,18 +467,22 @@ def run_probe(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--source-root", required=True)
-    parser.add_argument("--source-materialization", required=True)
-    parser.add_argument("--source-ref", required=True)
-    parser.add_argument("--test-modules", required=True)
-    parser.add_argument("--image-tag", default="")
-    args = parser.parse_args()
-
-    modules = validated_modules(args.test_modules)
-    image_tag = args.image_tag or f"mmibkr-private-test-probe:{os.environ.get('GITHUB_RUN_ID', 'local')}"
-    receipt: dict[str, Any]
+    # Never echo private CLI args, source paths or nested exception messages.
+    # Cleanup is restricted to the one exact workflow-owned temporary root.
+    args = None
+    image_tag = ""
     try:
+        parser = _PublicSafeArgumentParser()
+        parser.add_argument("--source-root", required=True)
+        parser.add_argument("--source-materialization", required=True)
+        parser.add_argument("--source-ref", required=True)
+        parser.add_argument("--test-modules", required=True)
+        parser.add_argument("--image-tag", default="")
+        args = parser.parse_args()
+        modules = validated_modules(args.test_modules)
+        image_tag = args.image_tag or f"mmibkr-private-test-probe:{os.environ.get('GITHUB_RUN_ID', 'local')}"
+        if not re.fullmatch(r"mmibkr-private-test-probe:[A-Za-z0-9._-]{1,100}", image_tag):
+            raise ValueError("private_test_probe_image_tag_rejected")
         receipt = run_probe(
             source_root=Path(args.source_root).resolve(),
             source_materialization=Path(args.source_materialization).resolve(),
@@ -442,16 +490,26 @@ def main() -> int:
             modules=modules,
             image_tag=image_tag,
         )
+        encoded = json.dumps(receipt, sort_keys=True, separators=(",", ":"))
+    except Exception:
+        receipt = {"schema": SCHEMA, "status": "REJECTED"}
+        encoded = json.dumps(receipt, sort_keys=True, separators=(",", ":"))
     finally:
-        subprocess.run(
-            ["docker", "image", "rm", image_tag],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-        shutil.rmtree(Path(args.source_root).resolve().parent, ignore_errors=True)
+        if image_tag and re.fullmatch(r"mmibkr-private-test-probe:[A-Za-z0-9._-]{1,100}", image_tag):
+            try:
+                subprocess.run(
+                    ["docker", "image", "rm", image_tag],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+                )
+            except OSError:
+                pass  # No private CLI exception text on cleanup failure.
+        runner_temp = os.environ.get("RUNNER_TEMP", "")
+        if args is not None and runner_temp:
+            expected = (Path(runner_temp).resolve() / "mmibkr-private-test-probe-source").resolve()
+            actual = Path(args.source_root).resolve()
+            if actual == expected or expected in actual.parents:
+                shutil.rmtree(expected, ignore_errors=True)
 
-    encoded = json.dumps(receipt, sort_keys=True, separators=(",", ":"))
     print("MMIBKR_PRIVATE_TEST_PROBE_RECEIPT=" + encoded)
     print("MMIBKR_PRIVATE_TEST_PROBE_RECEIPT_SHA256=" + hashlib.sha256(encoded.encode()).hexdigest())
     return 0 if receipt["status"] == "PASS" else 1
