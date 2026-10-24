@@ -130,7 +130,7 @@ test('tampered stored account context is rejected without rewriting candidate',(
   store.rows.set(account,JSON.stringify({...valid,accountDigest:other}));
   const before=store.rows.get(account);
   const result=apply(store,req(2,{
-    expectedEpoch:1,serverNowMs:2_000,
+    expectedEpoch:1,
   }),verified(2_000));
   assert.equal(result.ok,false);
   assert.equal(result.status,'account_scope_mismatch');
