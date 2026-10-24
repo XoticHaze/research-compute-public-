@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - 'research/forward_p249_p266_shadow_r1.py'
+      - 'research/p249_forward_prefix_integrity_r1.py'
       - 'research/p279_p249_p266_forward_shadow_observer_r1.py'
       - 'tests/test_p279_forward_gap_continuity.py'
       - 'research/current/forward_p249_p266_shadow_r1.json'
@@ -30,6 +31,8 @@ jobs:
       - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
       - name: Check exact held-close gap continuity (two focused cases)
         run: python -m unittest discover -s tests -p 'test_p279_forward_gap_continuity.py' -v
+      - name: Check selected append-only prefix helper (focused synthetic)
+        run: python research/p249_forward_prefix_integrity_r1.py --selftest
       - id: observer
         run: |
           python research/forward_p249_p266_shadow_r1.py
