@@ -25,6 +25,8 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/canonical-market-chart-provenance.acceptance.test.mjs",
     "ui-react/src/lib/pilotStrategySpecHandoff.acceptance.test.mjs",
     "ui-react/src/lib/pilotPromotionAdmissionExport.acceptance.test.mjs",
+    # Selected MM-IBKR UI #937 source-only contradictory account-scope safety regression.
+    "ui-react/src/lib/accountMarginSafety.test.mjs",
     "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
 }
 
