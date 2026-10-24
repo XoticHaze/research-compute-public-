@@ -50,7 +50,7 @@ def _bp(x: float | int | None) -> float | None:
 
 
 def _funded_excess_metrics(core_cumulative: Any, combo_cumulative: Any) -> tuple[float | None, float | None]:
-    """Funded relative wealth and absolute return difference, never compound daily return spreads."""
+    """Relative wealth of existing constant-target shadow NAVs, not a monthly-drift funded execution."""
     try:
         core, combo = float(core_cumulative), float(combo_cumulative)
     except (TypeError, ValueError):
@@ -194,7 +194,8 @@ def _p249(x: dict[str, Any] | None) -> dict[str, Any]:
             "p266_relative_wealth_excess_bps": economic(_bp(funded_relative_wealth)),
             "p266_cumulative_return_difference_bps": economic(_bp(funded_return_difference)),
             "p266_legacy_compounded_daily_spread_bps": economic(_bp(fwd.get("satellite_increment_cumulative"))),
-            "p266_increment_metric_semantics": economic("FUNDED_COMBO_NAV_OVER_CORE_NAV_MINUS_ONE"),
+            "p266_increment_metric_semantics": economic("CONSTANT_TARGET_SHADOW_COMBO_NAV_OVER_CORE_NAV_MINUS_ONE"),
+            "p266_execution_limit": economic("IMPLICIT_DAILY_TARGET_RESET_WITH_UNPRICED_INTRAMONTH_TURNOVER"),
             "p266_increment_observed_sessions": economic(increment_stats["observed_sessions"]),
             "p266_increment_positive_sessions": economic(increment_stats["positive_sessions"]),
             "p266_increment_session_hit_rate": economic(increment_stats["hit_rate"]),
@@ -758,6 +759,8 @@ def self_test() -> None:
         assert funded["scorecard"]["p266_increment_cumulative_bps"] == 2187.5
         assert funded["scorecard"]["p266_cumulative_return_difference_bps"] == 2100.0
         assert funded["scorecard"]["p266_legacy_compounded_daily_spread_bps"] == 2200.0
+        assert funded["scorecard"]["p266_increment_metric_semantics"] == "CONSTANT_TARGET_SHADOW_COMBO_NAV_OVER_CORE_NAV_MINUS_ONE"
+        assert funded["scorecard"]["p266_execution_limit"] == "IMPLICIT_DAILY_TARGET_RESET_WITH_UNPRICED_INTRAMONTH_TURNOVER"
         stats = _challenger_session_stats({
             "challenger_observations": [
                 {"date": "2026-09-10", "net_return": 0.02, "core_return": 0.01},
