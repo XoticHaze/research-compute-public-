@@ -1,10 +1,10 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "d80413fee3284d442946ac7c1bb2a299033c7797",
+  "source_ref": "26a464240a1a6f01bf8dbdd09357f36cd77db169",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
-  "requested_by": "continue-release-20261024-clockin-20261024071306432",
-  "purpose": "Exact selected UI #888 after consumed Product #961 broker residue/unknown ownership display, Source Vault #40073987856 SUCCESS, networkless Node/Vite build, no deploy/broker/live",
-  "request_nonce": "ui-888-d804-product961-exact-vite-20261024-r1",
+  "requested_by": "continue-release-20261024-clockin-20261024074217694",
+  "purpose": "Exact selected UI #888 after Product #966/#962/#964, existing encrypted Source Vault, Node/Vite private build, no served deploy/broker/live",
+  "request_nonce": "ui-888-26a46424-exact-vite-20261024-r1",
   "authority": {
     "research_only": true,
     "broker": false,
