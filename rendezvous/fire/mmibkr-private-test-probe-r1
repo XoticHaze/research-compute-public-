@@ -1,19 +1,18 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "75640fd07068753cd5cf196b20dc1d5d4a990bd7",
+  "source_ref": "04848626b1627d9db48d3eb001be2191796c4be9",
   "test_modules": [
-    "tests.test_model_lab_cancel_process_identity_product",
-    "tests.test_model_lab_cancel_terminal_race_product",
-    "tests.test_model_lab_orchestrator_identity_authority_product",
-    "tests.test_model_lab_startup_status_race_product",
-    "tests.test_model_lab_worker_early_cancel_product"
+    "tests.test_selected_runtime_live_order_intent_journal_v1"
   ],
   "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
   "s3_composition_economics": false,
   "s4_layered_mtf_economics": false,
-  "requested_by": "continue-release-20261024-clockin-20261024094112319",
-  "purpose": "Protected-merged public #1969 exact five Model Lab cancel/identity backend modules on selected UI #888; networkless Docker, no broker/live",
+  "compute_requirements": {
+    "trust_mode": "public_encrypted"
+  },
+  "requested_by": "continue-release-20261024-clockin-20261024162001495",
+  "purpose": "Exact Product #1007 P0 paper/alias account PREPARED fail-close networkless selected journal test, existing encrypted Source Vault; no broker/live/deploy",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -21,8 +20,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "model-lab-five-888-75640-1969-20261024-r1",
+  "request_nonce": "release-p0-journal-1007-04848626-20261024-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "75640fd07068753cd5cf196b20dc1d5d4a990bd7",
+  "current_private_reference": "04848626b1627d9db48d3eb001be2191796c4be9",
   "parity_public_key_b64": ""
 }
