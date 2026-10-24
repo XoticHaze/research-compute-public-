@@ -178,8 +178,8 @@ def _p249(x: dict[str, Any] | None) -> dict[str, Any]:
         },
         "timing": {
             "decision_cadence": "frozen monthly portfolio decision",
-            "entry_rule": "rebalance the research book at the declared portfolio decision boundary, not every daily score run",
-            "holding_rule": "keep frozen weights through the decision period; daily closes update forward PnL and excess only",
+            "entry_rule": "frozen monthly target selection only; observer rows are not trade or funded rebalance evidence",
+            "holding_rule": "monthly target identity is frozen, but the current constant-target shadow reapplies target weights daily without intramonth turnover costs; not a drift-aware funded monthly hold",
         },
         "paper_action": state.get("p249_plus_p266", {}),
         "paper_action_authority": "frozen_monthly_context" if admitted else "prior_frozen_context_only_not_new_economic_current",
@@ -761,6 +761,8 @@ def self_test() -> None:
         assert funded["scorecard"]["p266_legacy_compounded_daily_spread_bps"] == 2200.0
         assert funded["scorecard"]["p266_increment_metric_semantics"] == "CONSTANT_TARGET_SHADOW_COMBO_NAV_OVER_CORE_NAV_MINUS_ONE"
         assert funded["scorecard"]["p266_execution_limit"] == "IMPLICIT_DAILY_TARGET_RESET_WITH_UNPRICED_INTRAMONTH_TURNOVER"
+        assert "reapplies target weights daily" in funded["timing"]["holding_rule"]
+        assert "not trade or funded rebalance evidence" in funded["timing"]["entry_rule"]
         stats = _challenger_session_stats({
             "challenger_observations": [
                 {"date": "2026-09-10", "net_return": 0.02, "core_return": 0.01},
