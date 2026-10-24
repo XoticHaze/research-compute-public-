@@ -1,6 +1,6 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "13409ea82ce4c848b20359c2560424c63bc36e17",
+  "source_ref": "7c7c9772116f0b5dfd1057e4d097698aa9aa193d",
   "test_modules": [
     "tests.test_selected_runtime_live_execution_ledger_v1"
   ],
@@ -9,7 +9,7 @@
   "s3_composition_economics": false,
   "s4_layered_mtf_economics": false,
   "requested_by": "continue-release-20261024-clock-20261024011301300",
-  "purpose": "Exact P0 child #936 changed live fill writer source-only regression after trusted Source Vault #40049279935; one network-isolated module, no broker/live",
+  "purpose": "Exact revised P0 child #936 malformed-account guard changed-source acceptance after Source Vault #40049758996; one networkless module",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -17,8 +17,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "p0-936-execid-cross-contract-writer-20261024-r1",
+  "request_nonce": "p0-936-7c7-malformed-account-20261024-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "13409ea82ce4c848b20359c2560424c63bc36e17",
+  "current_private_reference": "7c7c9772116f0b5dfd1057e4d097698aa9aa193d",
   "parity_public_key_b64": ""
 }
