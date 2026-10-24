@@ -660,3 +660,18 @@ def test_selected_account_margin_guard_and_hook_are_exact_networkless():
                    "tests.test_selected_runtime_margin_whatif_hook_14th31lg_extra"):
         with pytest.raises(ValueError):
             validated_modules(denied)
+
+
+def test_exact_one_shot_generator_funded_pnl_module_is_networkless():
+    module = "tests.test_capital_generator_ledger_integrity_product_20261024"
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-test-image", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+    for rejected in (
+        module + "_live_submit",
+        "tests.test_capital_generator_ledger_integrity_product_20261024_extra",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(rejected)
