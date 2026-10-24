@@ -85,6 +85,12 @@ jobs:
           test -f /tmp/forward-p249-p266-shadow/forward_p249_p266_shadow_r1.json
           git fetch origin main
           git checkout -B forward-current-publish origin/main
+          # The existing versioned CURRENT on fetched main is the prior first-seen
+          # economic record. Reject historical revisions before any replacement.
+          test -f research/current/forward_p249_p266_shadow_r1.json
+          python research/p249_forward_prefix_integrity_r1.py \
+            --prior research/current/forward_p249_p266_shadow_r1.json \
+            --current /tmp/forward-p249-p266-shadow/forward_p249_p266_shadow_r1.json
           mkdir -p research/current
           cp /tmp/forward-p249-p266-shadow/forward_p249_p266_shadow_r1.json research/current/forward_p249_p266_shadow_r1.json
           git config user.name 'github-actions[bot]'
