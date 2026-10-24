@@ -166,6 +166,8 @@ SOURCE_ONLY_PNL_MODULES = frozenset({
     "tests.test_capital_generator_ledger_integrity_product_20261024",
     # Open-position without a chart mark must fail closed, with network disabled.
     "tests.test_capital_curve_fill_time_identity_product_20261024",
+    # Exact funded PnL malformed chart-source row fail-close; offline only.
+    "tests.test_capital_malformed_chart_rows_product_20261024",
 })
 SAFE_EXACT.update(SOURCE_ONLY_MODEL_LAB_MODULES)
 SAFE_EXACT.update(SOURCE_ONLY_PNL_MODULES)
