@@ -300,6 +300,28 @@ def _prices_for(cohort: dict[str, Any], asof: date, loader: Callable[[str, date,
     return out
 
 
+def _late_first_registration(cohort: dict[str, Any], entry_ts: pd.Timestamp) -> dict[str, Any] | None:
+    # Check the original timestamp on every advance, including existing cohorts:
+    # a late cohort can be first stored before the entry bar appears in the tape.
+    registered = pd.Timestamp(cohort["first_registered_at"])
+    if registered.tzinfo is None:
+        raise RuntimeError("forward first_registered_at must be timezone-aware")
+    entry_open = pd.Timestamp(
+        f"{entry_ts.date().isoformat()} 09:30:00", tz="America/New_York"
+    ).tz_convert("UTC")
+    if registered.tz_convert("UTC") < entry_open:
+        return None
+    return {
+        **cohort,
+        "status": "LATE_REGISTRATION_REJECTED",
+        "resolution": {
+            "reason": "first ledger registration was not before next-session regular market open",
+            "entry_date": entry_ts.date().isoformat(),
+            "entry_open_utc": entry_open.isoformat(),
+        },
+    }
+
+
 def _resolve_homebuilders(cohort: dict[str, Any], prices: dict[str, pd.Series], is_new: bool) -> dict[str, Any]:
     symbols = list(cohort["symbols"])
     calendar = _common_calendar(prices, symbols + ["ITB", "QQQ"])
@@ -307,6 +329,9 @@ def _resolve_homebuilders(cohort: dict[str, Any], prices: dict[str, pd.Series], 
     if entry is None:
         return {**cohort, "status": "AWAITING_ENTRY_SESSION", "resolution": None}
     entry_i, entry_ts = entry
+    late = _late_first_registration(cohort, entry_ts)
+    if late is not None:
+        return late
     horizons = cohort["horizon_sessions_by_symbol"]
     matured = {s: entry_i + int(horizons[s]) < len(calendar) for s in symbols}
     if is_new and any(matured.values()):
@@ -580,6 +605,9 @@ def _resolve_semiconductor(cohort: dict[str, Any], prices: dict[str, pd.Series],
     if entry is None:
         return {**cohort, "status": "AWAITING_ENTRY_SESSION", "resolution": None}
     entry_i, entry_ts = entry
+    late = _late_first_registration(cohort, entry_ts)
+    if late is not None:
+        return late
     horizon = int(cohort["holding_horizon_sessions"])
     exit_i = entry_i + horizon
     if is_new and exit_i < len(calendar):
@@ -888,6 +916,9 @@ def self_test() -> None:
     }
     open_row = _advance_cohort(cohort, True, date(2026, 1, 8), loader)
     assert open_row["status"] == "OPEN"
+    late_home = {**cohort, "first_registered_at": "2026-01-06T00:00:00+00:00"}
+    assert _advance_cohort(late_home, True, date(2026, 1, 8), loader)["status"] == "LATE_REGISTRATION_REJECTED"
+    assert _advance_cohort(late_home, False, date(2026, 1, 8), loader)["status"] == "LATE_REGISTRATION_REJECTED"
     assert open_row["resolution"]["observations"][0]["current_mark"]["nonterminal"] is True
     assert open_row["resolution"]["current_mark_metrics"]["nonterminal"] is True
     assert open_row["source_health"]["all_symbols_share_latest_date"] is True
@@ -922,6 +953,17 @@ def self_test() -> None:
         "ticker_book_weights_within_cohort": {"AAA": 0.5, "BBB": 0.3, "CCC": 0.2},
         "predicted_fixed20_net_value_bps": {"AAA": 100.0, "BBB": 200.0, "CCC": 300.0},
     }
+    semi_prices = {s: semi_loader(s, date(2026, 8, 20), date(2026, 9, 20)) for s in ["AAA", "BBB", "CCC", "SMH", "QQQ"]}
+    semi_cohort = {**prestart, "first_registered_at": "2026-09-15T00:00:00+00:00",
+                   "execution_delay_sessions": 1, "holding_horizon_sessions": 20,
+                   "stock_round_trip_cost_bps": 25.0, "industry_round_trip_cost_bps": 10.0,
+                   "status": "REGISTERED", "resolution": None}
+    late_pre_maturity = _resolve_semiconductor(semi_cohort, semi_prices, True)
+    assert late_pre_maturity["status"] == "LATE_REGISTRATION_REJECTED"
+    assert late_pre_maturity["resolution"]["entry_date"] == "2026-09-14"
+    assert _resolve_semiconductor(semi_cohort, semi_prices, False)["status"] == "LATE_REGISTRATION_REJECTED"
+    ontime = {**semi_cohort, "first_registered_at": "2026-09-13T04:55:23+00:00"}
+    assert _resolve_semiconductor(ontime, semi_prices, True)["status"] == "OPEN"
     pre_prices = {s: semi_loader(s, date(2026, 8, 20), date(2026, 9, 20)) for s in ["AAA", "BBB", "CCC"]}
     assert _attach_semiconductor_expression_variants(prestart, pre_prices).get("expression_variants") is None
 
