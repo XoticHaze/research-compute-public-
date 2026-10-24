@@ -218,6 +218,8 @@ jobs:
           assert 'LIVE_RUNTIME_CHECKPOINT_GATEWAY_STILL_RUNNING=1' in checkpoint
           assert 'docker stop --time 90 mmibkr-live-gateway >/dev/null 2>&1 || true' not in checkpoint
           assert 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1' in owner
+          assert 'LIVE_WRT_ACCOUNT_API_READBACK_ONLY=1' in owner
+          assert 'LIVE_WRT_ACCOUNT_READ_ONLY_RECONCILED=1' not in owner
           assert 'EXPLICIT_APPROVED_CANONICAL_LIVE_OWNER=1' in owner
           assert 'LIVE_MODE_REQUIRES_LEGACY_OR_EXACT_SUCCESSOR=1' in owner
           assert 'EPHEMERAL_LIVE_BROKER_MUTATION_DISABLED=1' not in owner
@@ -1146,7 +1148,7 @@ jobs:
         run: |
           set -euo pipefail
           echo 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1'
-          echo 'LIVE_WRT_ACCOUNT_READ_ONLY_RECONCILED=1'
+          echo 'LIVE_WRT_ACCOUNT_API_READBACK_ONLY=1'
           echo 'LIVE_WRT_NO_LIVE_ORDER_DISPATCHED=1'
 
       - name: Observe authenticated Gateway without canonical bot for eight minutes (read only)
