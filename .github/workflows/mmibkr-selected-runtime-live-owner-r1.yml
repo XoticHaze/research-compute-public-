@@ -710,6 +710,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           MMIBKR_LIVE_GATEWAY_WARM_KEY_B64: ${{ secrets.MMIBKR_LIVE_GATEWAY_WARM_KEY_B64 }}
+          PREDECESSOR_RUN: ${{ inputs.warm_predecessor_run }}
         run: |
           set -euo pipefail
           umask 077
@@ -724,7 +725,7 @@ jobs:
           PY
           name="mmibkr-live-gateway-state-v1"
           if [ "${{ inputs.warm_handoff_mode }}" = successor ]; then
-            predecessor_run="${{ inputs.warm_predecessor_run }}"
+            predecessor_run="$PREDECESSOR_RUN"
             aid="$(gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$predecessor_run/artifacts?per_page=100" --jq '[.artifacts[] | select(.name == "mmibkr-live-gateway-state-v1" and .expired == false)] | .[0].id // empty')"
             [ -n "$aid" ] || { echo "EXACT_WARM_PRODUCER_ARTIFACT_MISSING=1"; exit 1; }
             echo "MMIBKR_EXACT_WARM_PRODUCER_REQUIRED=$predecessor_run"
