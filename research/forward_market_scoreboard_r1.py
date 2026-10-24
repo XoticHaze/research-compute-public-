@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -46,6 +47,17 @@ def _load_native_adapters(root: Path) -> dict[str, dict[str, Any]]:
 
 def _bp(x: float | int | None) -> float | None:
     return None if x is None else round(float(x) * 10000.0, 2)
+
+
+def _funded_excess_metrics(core_cumulative: Any, combo_cumulative: Any) -> tuple[float | None, float | None]:
+    """Relative wealth of existing constant-target shadow NAVs, not a monthly-drift funded execution."""
+    try:
+        core, combo = float(core_cumulative), float(combo_cumulative)
+    except (TypeError, ValueError):
+        return None, None
+    if not (math.isfinite(core) and math.isfinite(combo)) or core <= -1.0 or combo <= -1.0:
+        return None, None
+    return (1.0 + combo) / (1.0 + core) - 1.0, combo - core
 
 
 def _positive_session_stats(values: list[float]) -> dict[str, Any]:
@@ -151,6 +163,9 @@ def _p249(x: dict[str, Any] | None) -> dict[str, Any]:
         for row in (fwd.get("observations") or [])
         if row.get("satellite_increment_net") is not None
     ])
+    funded_relative_wealth, funded_return_difference = _funded_excess_metrics(
+        core.get("cumulative_return"), combo.get("cumulative_return")
+    )
     def economic(value: Any) -> Any:
         return value if admitted else None
 
@@ -163,8 +178,8 @@ def _p249(x: dict[str, Any] | None) -> dict[str, Any]:
         },
         "timing": {
             "decision_cadence": "frozen monthly portfolio decision",
-            "entry_rule": "rebalance the research book at the declared portfolio decision boundary, not every daily score run",
-            "holding_rule": "keep frozen weights through the decision period; daily closes update forward PnL and excess only",
+            "entry_rule": "frozen monthly target selection only; observer rows are not trade or funded rebalance evidence",
+            "holding_rule": "monthly target identity is frozen, but the current constant-target shadow reapplies target weights daily without intramonth turnover costs; not a drift-aware funded monthly hold",
         },
         "paper_action": state.get("p249_plus_p266", {}),
         "paper_action_authority": "frozen_monthly_context" if admitted else "prior_frozen_context_only_not_new_economic_current",
@@ -175,7 +190,12 @@ def _p249(x: dict[str, Any] | None) -> dict[str, Any]:
         "scorecard": {
             "p249_core_net_cumulative_bps": economic(_bp(core.get("cumulative_return"))),
             "p249_plus_p266_net_cumulative_bps": economic(_bp(combo.get("cumulative_return"))),
-            "p266_increment_cumulative_bps": economic(_bp(fwd.get("satellite_increment_cumulative"))),
+            "p266_increment_cumulative_bps": economic(_bp(funded_relative_wealth)),
+            "p266_relative_wealth_excess_bps": economic(_bp(funded_relative_wealth)),
+            "p266_cumulative_return_difference_bps": economic(_bp(funded_return_difference)),
+            "p266_legacy_compounded_daily_spread_bps": economic(_bp(fwd.get("satellite_increment_cumulative"))),
+            "p266_increment_metric_semantics": economic("CONSTANT_TARGET_SHADOW_COMBO_NAV_OVER_CORE_NAV_MINUS_ONE"),
+            "p266_execution_limit": economic("IMPLICIT_DAILY_TARGET_RESET_WITH_UNPRICED_INTRAMONTH_TURNOVER"),
             "p266_increment_observed_sessions": economic(increment_stats["observed_sessions"]),
             "p266_increment_positive_sessions": economic(increment_stats["positive_sessions"]),
             "p266_increment_session_hit_rate": economic(increment_stats["hit_rate"]),
@@ -713,6 +733,36 @@ def self_test() -> None:
         assert out["lanes"][1]["economic_current_admitted"] is False
         assert out["lanes"][1]["validation_grade"] == "ECONOMIC_SOURCE_NOT_ADMITTED"
         assert all(v is None for v in out["lanes"][1]["scorecard"].values())
+        assert _funded_excess_metrics(-0.04, 0.17) == (0.21875, 0.20999999999999996) or (
+            abs(_funded_excess_metrics(-0.04, 0.17)[0] - 0.21875) < 1e-12
+            and abs(_funded_excess_metrics(-0.04, 0.17)[1] - 0.21) < 1e-12
+        )
+        assert _funded_excess_metrics(-1.0, 0.17) == (None, None)
+        synthetic = {
+            "schema": "research.forward_p249_p266_shadow_r1",
+            "parent": "P249/P266/P278",
+            "workload_id": "FORWARD_P249_P266_SHADOW_R1",
+            "status": "FORWARD_OBSERVING",
+            "source_health": {"unresolved_forward_gap": None, "latest_scored_common_session": "2026-09-11"},
+            "forward": {
+                "economic_continuity_verified": True, "latest_close": "2026-09-11",
+                "observations": [{"date": "2026-09-10", "satellite_increment_net": 0.1}, {"date": "2026-09-11", "satellite_increment_net": 0.1}],
+                "p249_core_net": {"days": 2, "cumulative_return": -0.04},
+                "p249_plus_p266_net": {"days": 2, "cumulative_return": 0.17},
+                "satellite_increment_cumulative": 0.22,
+            },
+            "current_state": {"p249_core": {"SOXX": 1.0}, "p266": {"XBI": 1.0}, "p249_plus_p266": {"XBI": 1.0}},
+        }
+        funded = _p249(synthetic)
+        assert funded["economic_current_admitted"] is True
+        assert funded["scorecard"]["p266_relative_wealth_excess_bps"] == 2187.5
+        assert funded["scorecard"]["p266_increment_cumulative_bps"] == 2187.5
+        assert funded["scorecard"]["p266_cumulative_return_difference_bps"] == 2100.0
+        assert funded["scorecard"]["p266_legacy_compounded_daily_spread_bps"] == 2200.0
+        assert funded["scorecard"]["p266_increment_metric_semantics"] == "CONSTANT_TARGET_SHADOW_COMBO_NAV_OVER_CORE_NAV_MINUS_ONE"
+        assert funded["scorecard"]["p266_execution_limit"] == "IMPLICIT_DAILY_TARGET_RESET_WITH_UNPRICED_INTRAMONTH_TURNOVER"
+        assert "reapplies target weights daily" in funded["timing"]["holding_rule"]
+        assert "not trade or funded rebalance evidence" in funded["timing"]["entry_rule"]
         stats = _challenger_session_stats({
             "challenger_observations": [
                 {"date": "2026-09-10", "net_return": 0.02, "core_return": 0.01},
