@@ -1,15 +1,15 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "2850e07cb99dcb3e4b839955e2742cfe659b5df6",
+  "source_ref": "660b3be5e563026f78f90e3f8106c1d7d6e0de4e",
   "test_modules": [
-    "tests.test_selected_runtime_live_p0_integrated_checkpoint_v1"
+    "tests.test_selected_runtime_live_owner_candidate_certificate_v1"
   ],
   "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
   "s3_composition_economics": false,
   "s4_layered_mtf_economics": false,
-  "requested_by": "continue-release-clock-in-20261024064552364",
-  "purpose": "Exact selected P0 #883 2850 post Product #950 and tiny 8-decimal ownership fail-close, Source Vault #40072032203 SUCCESS, existing networkless integrated checkpoint only, no Gateway/account/broker/live",
+  "requested_by": "continue-release-own-clock-in-20261024064721851",
+  "purpose": "Exact private P0 child #960 Ed25519 candidate certificate in authenticated encrypted Source Vault, networkless brokerless test only. No Gateway, orders, live activation.",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -17,8 +17,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "p0-883-2850e07c-exact-integrated-20261024-r1",
+  "request_nonce": "p0-960-660b3be5-signed-candidate-exact-20261024-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "2850e07cb99dcb3e4b839955e2742cfe659b5df6",
+  "current_private_reference": "660b3be5e563026f78f90e3f8106c1d7d6e0de4e",
   "parity_public_key_b64": ""
 }
