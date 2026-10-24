@@ -675,3 +675,17 @@ def test_exact_one_shot_generator_funded_pnl_module_is_networkless():
     ):
         with pytest.raises(ValueError):
             validated_modules(rejected)
+
+def test_exact_cross_filter_execid_conflict_falsifier_is_networkless_and_nonmutating():
+    module = "tests.test_execid_cross_filter_conflict_product"
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-test-image", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+    for rejected in (
+        module + "_live_submit",
+        module + "_extra",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(rejected)
