@@ -61,7 +61,7 @@
   "forward": {
     "economic_continuity_verified": true,
     "first_close": "2026-09-10",
-    "latest_close": "2026-10-22",
+    "latest_close": "2026-10-23",
     "observations": [
       {
         "cost_detail": {
@@ -384,63 +384,73 @@
         "p249_plus_p266_gross": -0.029630166857393392,
         "p249_plus_p266_net": -0.029630166857393392,
         "satellite_increment_net": 0.0010155972242788386
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-10-23",
+        "holding_month": "2026-10",
+        "p249_core_gross": 0.0022710761945286353,
+        "p249_core_net": 0.0022710761945286353,
+        "p249_plus_p266_gross": 0.002889958696342167,
+        "p249_plus_p266_net": 0.002889958696342167,
+        "satellite_increment_net": 0.0006188825018135316
       }
     ],
     "p249_core_net": {
-      "annualized_vol": 0.20199321942020168,
-      "cumulative_return": -0.053460045717856675,
-      "days": 31,
+      "annualized_vol": 0.19901952961342678,
+      "cumulative_return": -0.051310381360516355,
+      "days": 32,
       "max_drawdown": -0.08636743840744499,
-      "sharpe_rf0": -2.110835543229802
+      "sharpe_rf0": -1.9855616214354337
     },
     "p249_plus_p266_net": {
-      "annualized_vol": 0.2003426546917409,
-      "cumulative_return": -0.04967329080140259,
-      "days": 31,
+      "annualized_vol": 0.19748089962185866,
+      "cumulative_return": -0.04692688586378779,
+      "days": 32,
       "max_drawdown": -0.07882097257433085,
-      "sharpe_rf0": -1.968199694226403
+      "sharpe_rf0": -1.819080246080459
     },
-    "satellite_increment_cumulative": 0.003909269573016072
+    "satellite_increment_cumulative": 0.004530571453363219
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-10-23T08:34:05.225455+00:00",
+  "observed_at": "2026-10-24T01:32:23.333147+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_health": {
     "all_symbols_share_latest_date": true,
     "common_session_lags_source_max": false,
-    "completed_session_request_date": "2026-10-22",
+    "completed_session_request_date": "2026-10-23",
     "in_progress_session_excluded": true,
     "lagging_symbols_vs_source_max": [],
     "latest_by_symbol": {
-      "AVDV": "2026-10-22",
-      "AVUV": "2026-10-22",
-      "DBC": "2026-10-22",
-      "GLD": "2026-10-22",
-      "IGV": "2026-10-22",
-      "IHI": "2026-10-22",
-      "ITA": "2026-10-22",
-      "IYT": "2026-10-22",
-      "KRE": "2026-10-22",
-      "QQQ": "2026-10-22",
-      "SOXX": "2026-10-22",
-      "SPY": "2026-10-22",
-      "TLT": "2026-10-22",
-      "XAR": "2026-10-22",
-      "XBI": "2026-10-22",
-      "XHB": "2026-10-22",
-      "XME": "2026-10-22",
-      "XOP": "2026-10-22",
-      "XPH": "2026-10-22",
-      "XRT": "2026-10-22",
-      "XSD": "2026-10-22",
-      "XSW": "2026-10-22",
-      "XTN": "2026-10-22"
+      "AVDV": "2026-10-23",
+      "AVUV": "2026-10-23",
+      "DBC": "2026-10-23",
+      "GLD": "2026-10-23",
+      "IGV": "2026-10-23",
+      "IHI": "2026-10-23",
+      "ITA": "2026-10-23",
+      "IYT": "2026-10-23",
+      "KRE": "2026-10-23",
+      "QQQ": "2026-10-23",
+      "SOXX": "2026-10-23",
+      "SPY": "2026-10-23",
+      "TLT": "2026-10-23",
+      "XAR": "2026-10-23",
+      "XBI": "2026-10-23",
+      "XHB": "2026-10-23",
+      "XME": "2026-10-23",
+      "XOP": "2026-10-23",
+      "XPH": "2026-10-23",
+      "XRT": "2026-10-23",
+      "XSD": "2026-10-23",
+      "XSW": "2026-10-23",
+      "XTN": "2026-10-23"
     },
-    "latest_scored_common_session": "2026-10-22",
+    "latest_scored_common_session": "2026-10-23",
     "provider": "yfinance_adjusted_close",
-    "source_max_date": "2026-10-22",
+    "source_max_date": "2026-10-23",
     "unresolved_forward_gap": null
   },
   "source_pins": {
