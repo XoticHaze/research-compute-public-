@@ -316,7 +316,7 @@ jobs:
           pool_script="\n".join(line[10:] if line.startswith("          ") else line for line in pool_run.splitlines())
           subprocess.run(["bash","-n"],input=pool_script,text=True,check=True)
           print('READONLY_GATEWAY_POOL_MAINTENANCE_SHELL_PARSE=PASS')
-          assert 'docker logs --since 10m mmibkr-live-gateway' in owner
+          assert 'maintenance_outage_utc="$(date -u -d "@$maintenance_failure_since" +%Y-%m-%dT%H:%M:%SZ)"' in owner
           assert 'TZ=America/New_York date +%H%M' in owner
           assert 'docker stop --time 90 mmibkr-live-gateway' in owner
           assert 'MMIBKR_CANONICAL_BOT_STATUS=' in owner
