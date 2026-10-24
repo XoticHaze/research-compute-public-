@@ -1,10 +1,10 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "07a76356bad914eec426cc8a1ff33009fc443f32",
+  "source_ref": "d6948fbd843f2cad0a7cf8539c08106364dfdf31",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
-  "requested_by": "continue-release-20261024-clock-20261024051734668",
-  "purpose": "Selected UI #888 exact 07a after Product #949 broker gross exposure/raw residue; Source Vault 40066612900 SUCCESS; existing encrypted BotConsole Node acceptance plus Vite build; no deploy/broker/live",
-  "request_nonce": "ui-888-07a76356-gross-exposure-vite-20261024-r1",
+  "requested_by": "continue-release-clock-in-20261024064552364",
+  "purpose": "Selected #888 exact integrated Product #958/#959 source: reuse approved encrypted Source Vault #40071843391, run existing networkless BotConsole acceptance plus Vite build; no deploy/broker/live",
+  "request_nonce": "ui-888-d694-product958-959-exact-vite-20261024-r1",
   "authority": {
     "research_only": true,
     "broker": false,
