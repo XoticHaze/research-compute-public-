@@ -186,6 +186,20 @@ jobs:
           assert "LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1" in owner
           assert owner.index("LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1") < owner.index("EXPLICIT_APPROVED_CANONICAL_LIVE_OWNER=1")
           assert owner.index("LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1") < owner.index("Materialize canonical exact private source through existing encrypted Fleet vault")
+          # Execute the exact writable preflight guard with synthetic hashes.
+          # Never request IBKR credentials, Gateway, or a private source archive.
+          import os, subprocess
+          source_guard=owner.split('if [ "$ADMISSION_ONLY" = false ]; then',1)[1].split('case "$HANDOFF_MODE" in',1)[0]
+          for approved,code,marker in (
+              ("",64,"LIVE_PROTECTED_PRIVATE_SOURCE_APPROVAL_MISSING=1"),
+              ("1"*40,64,"LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1"),
+              ("0"*40,0,None),
+          ):
+              env={"PATH":os.environ["PATH"],"PRIVATE_SOURCE_SHA":"0"*40,"APPROVED_PRIVATE_SOURCE_SHA":approved}
+              probe=subprocess.run(["bash","-c","set -euo pipefail\n"+source_guard],env=env,capture_output=True,text=True)
+              assert probe.returncode==code,(probe.returncode,code)
+              assert marker is None or marker in probe.stdout
+          print("LIVE_OWNER_PROTECTED_SOURCE_PIN_NEGATIVE_CASES=PASS")
           assert "if: " + chr(36) + "{{ !inputs.admission_only }}" in owner
           assert "if: " + chr(36) + "{{ inputs.admission_only }}" in owner
           assert '"inputs[admission_only]=$admission_only"' in s
