@@ -23,9 +23,14 @@ def _owner_prestart_script() -> str:
 
 
 class LegacyWritablePrestartGateTest(unittest.TestCase):
-    def _invoke(self, *, admission_only: str, mode: str, predecessor: str = "") -> subprocess.CompletedProcess[str]:
+    def _invoke(self, *, admission_only: str, mode: str, predecessor: str = "",
+                approved_source: str = "0" * 40) -> subprocess.CompletedProcess[str]:
+        # Synthetic source identities preserve legacy denial coverage without
+        # granting a real private-source approval or broker credentials.
         env = dict(os.environ, ADMISSION_ONLY=admission_only,
-                   HANDOFF_MODE=mode, PREDECESSOR_RUN=predecessor)
+                   HANDOFF_MODE=mode, PREDECESSOR_RUN=predecessor,
+                   PRIVATE_SOURCE_SHA="0" * 40,
+                   APPROVED_PRIVATE_SOURCE_SHA=approved_source)
         return subprocess.run(["bash", "-c", _owner_prestart_script()],
                               env=env, text=True, capture_output=True,
                               check=False, timeout=5)
@@ -53,6 +58,18 @@ class LegacyWritablePrestartGateTest(unittest.TestCase):
         source = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("Reconcile restored live successor with canonical broker-ledger read-only gate", source)
         self.assertIn("LIVE_RUNTIME_SUCCESSOR_CANONICAL_RECONCILER_SOURCE_NOT_ADMITTED=1", source)
+
+    def test_successor_writable_requires_exact_owner_approved_source(self) -> None:
+        for approved, marker in (
+            ("", "LIVE_PROTECTED_PRIVATE_SOURCE_APPROVAL_MISSING=1"),
+            ("1" * 40, "LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1"),
+        ):
+            with self.subTest(marker=marker):
+                result = self._invoke(admission_only="false", mode="successor",
+                                      predecessor="39499524894", approved_source=approved)
+                self.assertEqual(result.returncode, 64, result.stderr)
+                self.assertIn(marker, result.stdout)
+                self.assertNotIn("EXPLICIT_APPROVED_CANONICAL_LIVE_OWNER=1", result.stdout)
 
     def test_other_writable_modes_remain_denied(self) -> None:
         for mode in ("producer", "supervised_5h", "gateway_pool_5h"):
