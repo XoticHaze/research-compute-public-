@@ -29,6 +29,9 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/lib/accountMarginSafety.test.mjs",
     # Selected MM-IBKR UI #949 exact read-only broker cache/cancel guard regression.
     "ui-react/src/components/operatorOrderSnapshot.cancel-guard.test.mjs",
+    # Exact selected #888 Pilot bounded matrix and Bot Console conId operator truth.
+    "ui-react/src/lib/pilotMatrixPlan.test.mjs",
+    "ui-react/src/lib/botConsoleExactAccountHoldings.test.mjs",
     "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
 }
 

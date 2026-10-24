@@ -82,6 +82,16 @@ def test_acceptance_file_is_exact_allowlist():
         mod.validate_acceptance_file("ui-react/src/components/operatorOrderSnapshot.cancel-guard.test.mjs")
         == "ui-react/src/components/operatorOrderSnapshot.cancel-guard.test.mjs"
     )
+    for exact in ("ui-react/src/lib/pilotMatrixPlan.test.mjs", "ui-react/src/lib/botConsoleExactAccountHoldings.test.mjs"):
+        assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        "ui-react/src/lib/pilotMatrixPlan.live-submit.test.mjs",
+        "ui-react/src/lib/pilotMatrixPlan.test.js",
+        "ui-react/src/lib/botConsoleExactAccountHoldings.live-submit.test.mjs",
+        "ui-react/src/lib/botConsoleExactAccountHoldings.test.js",
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
     # No sibling wildcard, mutation, or arbitrary private script execution.
     for denied in (
         "ui-react/src/components/operatorOrderSnapshot.cancel-guard.live-submit.test.mjs",
