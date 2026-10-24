@@ -69,6 +69,7 @@ jobs:
           from urllib.error import HTTPError
           from scripts.mmibkr_selected_runtime_cloud_watchdog_cooldown_v1 import (
               evaluate_b1_failure_cooldown,
+              checkpoint_receipt_origin_admitted,
           )
           from urllib.request import Request, urlopen
 
@@ -119,7 +120,8 @@ jobs:
           checkpoint_prefix='mmibkr-selected-runtime-cloud-checkpoint-v1-'
           canonical_source='935c756a63227dafb9fcbba024ef5c7ef865b3d5'
 
-          def receipt_for(run_id):
+          def receipt_for(run):
+              run_id=str(run.get('id') or '')
               path=f'rendezvous/receipts/{run_id}-mmibkr-selected-runtime-cloud.json'
               req=Request(
                   f'https://api.github.com/repos/{repo}/contents/{path}?ref=rendezvous-exchange',
@@ -136,9 +138,7 @@ jobs:
                   return None
               raw=base64.b64decode(str(node.get('content') or '').encode())
               receipt=json.loads(raw.decode())
-              if receipt.get('schema') != 'mmibkr.selected_runtime_cloud_session_receipt.v2':
-                  return None
-              if str(receipt.get('private_head') or '').strip().lower() != canonical_source:
+              if not checkpoint_receipt_origin_admitted(run, receipt, canonical_source):
                   return None
               return receipt
 
@@ -150,7 +150,7 @@ jobs:
               run_id=str(run.get('id') or '')
               if not run_id.isdigit():
                   continue
-              receipt=receipt_for(run_id)
+              receipt=receipt_for(run)
               if not isinstance(receipt, dict):
                   continue
 
