@@ -4,6 +4,7 @@ import pytest
 
 from mmibkr_private_test_probe_v1 import (
     module_file_path,
+    validate_native_fire_boolean,
     pytest_container_command,
     validated_modules,
     validate_source_identity,
@@ -762,3 +763,26 @@ def test_exact_stock_intraday_coverage_is_brokerless_and_networkless():
                      "tests.test_stock_range_intraday_coverage_product_20261024.py"):
         with pytest.raises(ValueError):
             validated_modules(rejected)
+
+@pytest.mark.parametrize("field", (
+    "crw_consumer_reprobe", "s3_composition_economics", "s4_layered_mtf_economics",
+))
+def test_push_fire_optional_flags_require_native_json_booleans(field):
+    assert validate_native_fire_boolean({}, field) is False
+    assert validate_native_fire_boolean({field: True}, field) is True
+    assert validate_native_fire_boolean({field: False}, field) is False
+    for invalid in ("false", "true", 0, 1, None, [], {}):
+        with pytest.raises(ValueError, match="private_probe_fire_boolean_type_invalid"):
+            validate_native_fire_boolean({field: invalid}, field)
+    with pytest.raises(ValueError, match="private_probe_fire_boolean_field_unsupported"):
+        validate_native_fire_boolean({field: False}, "arbitrary_flag")
+
+
+def test_push_fire_workflow_uses_native_boolean_gate_before_env_publication():
+    workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows"
+                / "mmibkr-private-test-probe-r1.yml").read_text(encoding="utf-8")
+    for field in ("crw_consumer_reprobe", "s3_composition_economics", "s4_layered_mtf_economics"):
+        assert f'validate_native_fire_boolean(node, "{field}")' in workflow
+        assert f'bool(node.get("{field}"))' not in workflow
+    assert workflow.index('validate_native_fire_boolean(node, "crw_consumer_reprobe")') < workflow.index(
+        'with Path(os.environ["GITHUB_ENV"]).open')

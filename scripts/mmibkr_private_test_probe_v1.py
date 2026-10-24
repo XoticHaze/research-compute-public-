@@ -25,6 +25,21 @@ class _PublicSafeArgumentParser(argparse.ArgumentParser):
 SCHEMA = "mmibkr.private_test_probe_receipt.v1"
 PYTEST_VERSION = "8.4.2"
 MODULE_RE = re.compile(r"^tests\.test_[A-Za-z0-9_]+$")
+FIRE_BOOLEAN_FIELDS = frozenset({
+    "crw_consumer_reprobe", "s3_composition_economics", "s4_layered_mtf_economics",
+})
+
+
+def validate_native_fire_boolean(node: dict[str, Any], field: str) -> bool:
+    """Fail closed optional push-fire flags before private-source admission."""
+    if field not in FIRE_BOOLEAN_FIELDS:
+        raise ValueError("private_probe_fire_boolean_field_unsupported")
+    value = node.get(field, False)
+    if type(value) is not bool:
+        raise ValueError("private_probe_fire_boolean_type_invalid")
+    return value
+
+
 SAFE_PREFIXES = (
     "tests.test_autotuner_",
 )

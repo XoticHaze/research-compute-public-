@@ -107,9 +107,10 @@ jobs:
               modules = ",".join(str(value).strip() for value in raw_modules if str(value).strip())
               parity_key = str(node.get("parity_public_key_b64") or "").strip()
               ui_acceptance = str(node.get("ui_acceptance_file") or "").strip()
-              crw_consumer_reprobe = bool(node.get("crw_consumer_reprobe"))
-              s3_composition_economics = bool(node.get("s3_composition_economics"))
-              s4_layered_mtf_economics = bool(node.get("s4_layered_mtf_economics"))
+              from scripts.mmibkr_private_test_probe_v1 import validate_native_fire_boolean
+              crw_consumer_reprobe = validate_native_fire_boolean(node, "crw_consumer_reprobe")
+              s3_composition_economics = validate_native_fire_boolean(node, "s3_composition_economics")
+              s4_layered_mtf_economics = validate_native_fire_boolean(node, "s4_layered_mtf_economics")
           else:
               raise SystemExit("unsupported private test probe event")
           if not re.fullmatch(r"[0-9a-f]{40}", source_ref):
