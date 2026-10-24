@@ -1,10 +1,13 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "23b9d9df47585c12bd5ddb8cd449848f98e55a6c",
-  "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
-  "requested_by": "continue-release-20261024-clockin-20261024114141165",
-  "purpose": "Exact changed-head P0 #883 paper receipt/quarantine + selected UI #888 source in #975; encrypted native BotConsole Node/Vite acceptance only; no broker/live/deploy",
-  "request_nonce": "release-p0-ui-composite-23b9-20261024-r1",
+  "source_ref": "326115c5344904ca462073a0b3b1448b1413c350",
+  "acceptance_file": "ui-react/src/lib/pilotStrategySpecHandoff.acceptance.test.mjs",
+  "compute_requirements": {
+    "trust_mode": "public_encrypted"
+  },
+  "requested_by": "continue-release-20261024-clockin-20261024162001495",
+  "purpose": "Changed selected #975 Arena zero-trade forward-evidence Product #1008 exact encrypted Node/Vite acceptance; no broker/live/deploy",
+  "request_nonce": "release-p0-ui-composite-326115c5-20261024-r1",
   "authority": {
     "research_only": true,
     "broker": false,
