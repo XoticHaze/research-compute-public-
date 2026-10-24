@@ -34,6 +34,62 @@ def _iso(value: datetime | None) -> str | None:
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+
+CLOUD_RECEIPT_SCHEMA = "mmibkr.selected_runtime_cloud_session_receipt.v2"
+CLOUD_SOURCE_TRANSPORT = "fleet_authority_exact_sha_encrypted_snapshot_vault"
+_PAPER_FALSE_FIELDS = (
+    "live_execution_allowed", "credentials_included", "account_state_included",
+    "positions_included", "orders_included",
+)
+
+
+def checkpoint_receipt_origin_admitted(
+    run: Mapping[str, Any], receipt: Mapping[str, Any], expected_source: str
+) -> bool:
+    """Fail closed before watchdog reuse of a prior owner checkpoint.
+
+    A rendezvous JSON object and saved-cache marker are not sufficient:
+    require a completed successful exact run, matching GitHub run/source
+    identities, terminal accepted paper session, and safe receipt authority.
+    This is a source/receipt guard, NOT cryptographic owner attestation or
+    broker/session continuity proof.
+    """
+    if not isinstance(run, Mapping) or not isinstance(receipt, Mapping):
+        return False
+    if not isinstance(expected_source, str) or len(expected_source) != 40 or any(
+        ch not in "0123456789abcdef" for ch in expected_source
+    ):
+        return False
+    if (
+        run.get("status") != "completed"
+        or run.get("conclusion") != "success"
+        or run.get("head_branch") != "main"
+        or run.get("event") not in ("workflow_dispatch", "push")
+    ):
+        return False
+    run_id = str(run.get("id") or "")
+    if not run_id.isdigit() or str(receipt.get("run_id") or "") != run_id:
+        return False
+    public_sha = run.get("head_sha")
+    if (
+        not isinstance(public_sha, str)
+        or len(public_sha) != 40
+        or any(ch not in "0123456789abcdef" for ch in public_sha.lower())
+        or receipt.get("public_head") != public_sha
+        or receipt.get("private_head") != expected_source
+        or receipt.get("schema") != CLOUD_RECEIPT_SCHEMA
+        or receipt.get("source_transport") != CLOUD_SOURCE_TRANSPORT
+    ):
+        return False
+    if (
+        receipt.get("ok") is not True
+        or receipt.get("session_accepted") is not True
+        or receipt.get("checkpoint_handoff_ready") is not True
+    ):
+        return False
+    return all(receipt.get(key) is False for key in _PAPER_FALSE_FIELDS)
+
+
 def evaluate_b1_failure_cooldown(
     runs: Iterable[Mapping[str, Any]],
     *,
