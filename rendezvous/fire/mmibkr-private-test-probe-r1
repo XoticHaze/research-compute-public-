@@ -1,15 +1,16 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "660b3be5e563026f78f90e3f8106c1d7d6e0de4e",
+  "source_ref": "464712aea9115309c0e38d4dbbfe8ed01f2b8df1",
   "test_modules": [
-    "tests.test_selected_runtime_live_owner_candidate_certificate_v1"
+    "tests.test_selected_runtime_live_execution_ledger_v1",
+    "tests.test_selected_runtime_live_p0_integrated_checkpoint_v1"
   ],
   "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
   "s3_composition_economics": false,
   "s4_layered_mtf_economics": false,
-  "requested_by": "continue-release-own-clock-in-20261024064721851",
-  "purpose": "Exact private P0 child #960 Ed25519 candidate certificate in authenticated encrypted Source Vault, networkless brokerless test only. No Gateway, orders, live activation.",
+  "requested_by": "continue-release-20261024-clockin-20261024071306432",
+  "purpose": "P0 #963 exact changed-source 8-decimal canonical live writer and integrated checkpoint tests; Source Vault #40073807033 SUCCESS; Docker network none, no broker/live",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -17,8 +18,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "p0-960-660b3be5-signed-candidate-exact-20261024-r1",
+  "request_nonce": "p0-963-464712ae-exact-writer-integrated-20261024-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "660b3be5e563026f78f90e3f8106c1d7d6e0de4e",
+  "current_private_reference": "464712aea9115309c0e38d4dbbfe8ed01f2b8df1",
   "parity_public_key_b64": ""
 }
