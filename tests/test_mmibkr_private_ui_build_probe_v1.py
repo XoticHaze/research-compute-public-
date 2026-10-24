@@ -148,6 +148,7 @@ def test_builder_model_digest_and_crw_cross_timeframe_exact_allowlist():
         "ui-react/src/lib/builderPersistedReviewTruth.test.mjs",
         "ui-react/src/lib/tradingProductReadiness.digest-identity.test.mjs",
         "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.cross-timeframe-capability.test.mjs",
+        "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.local-draft-storage.test.mjs",
     )
     for path in exact:
         assert mod.validate_acceptance_file(path) == path
@@ -158,6 +159,8 @@ def test_builder_model_digest_and_crw_cross_timeframe_exact_allowlist():
         "ui-react/src/lib/tradingProductReadiness.digest-identity.test.mjs.bak",
         "ui-react/src/lib/other/tradingProductReadiness.digest-identity.test.mjs",
         "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.cross-timeframe-capability.test.mjs.extra",
+        "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.local-draft-storage.test.mjs.bak",
+        "ui-react/src/components/other/CRWStrategyBuilderBacktestWorkbenchBase.local-draft-storage.test.mjs",
         "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.jsx",
     ):
         with pytest.raises(ValueError, match="not_allowlisted"):
