@@ -95,7 +95,7 @@ def _safe_book(book: dict) -> dict:
                     raise ValueError("public adapter book authority flag mismatch")
                 clean[key] = value
             elif key in ("status", "weighting", "instrument", "mapping", "reason"):
-                if not isinstance(value, str) or len(value) > 180 or "\\n" in value:
+                if not isinstance(value, str) or len(value) > 180 or any(ord(c) < 32 for c in value):
                     raise ValueError("public adapter book text field mismatch")
                 clean[key] = value
             else:
