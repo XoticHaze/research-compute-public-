@@ -689,3 +689,19 @@ def test_exact_cross_filter_execid_conflict_falsifier_is_networkless_and_nonmuta
     ):
         with pytest.raises(ValueError):
             validated_modules(rejected)
+
+def test_exact_missing_broker_execid_is_networkless_and_fail_closed():
+    # Selected P0 Product #1022: no broker socket or mutation from source-only test.
+    module = "tests.test_missing_execid_identity_product_20261024"
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-test-image", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+    for rejected in (
+        module + "_live_submit",
+        module + "_extra",
+        "tests.test_missing_execid_identity_product_20261024.py",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(rejected)
