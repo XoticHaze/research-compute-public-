@@ -441,14 +441,25 @@ def self_test() -> None:
             "trade_authorized": False, "eligible_underlyings": ["AMAT"],
         },
     }
+    full_native_book = {
+        **valid_book,
+        "schema": "foundry.research.semiconductor_three_book_forward_snapshot.v1",
+        "authority": "research_only", "generated_at": "2026-09-10T23:00:00Z",
+        "signal_date": "2026-09-10",
+        "execution": {"delay_sessions": 1, "hold_sessions": 20},
+        "model_state": {"positive_count": 1},
+        "benchmarks": ["SMH", "QQQ"],
+        "boundaries": {"broker_orders": False},
+    }
     admitted_book = adapt_semiconductor({
         "generation_bar_date": "2026-09-10",
         "observations": [{"symbol": "AMAT", "predicted_fixed20_net_value_bps": 10.0}],
         "boundaries": {"runtime_mutation": False, "broker_authority": False,
                        "sizing_authority": False, "promotion_authority": False,
                        "live_trading_authority": False},
-    }, book=valid_book)
+    }, book=full_native_book)
     assert admitted_book["paper_action"]["ticker_book"] == valid_book["ticker_book"]
+    assert "model_state" not in admitted_book["paper_action"]
     assert admitted_book["boundaries"]["native"]["broker_authority"] is False
     mixed_largecap = adapt_largecap({
         "bar_date": "2026-09-10",
