@@ -7,6 +7,7 @@ from mmibkr_private_test_probe_v1 import (
     pytest_container_command,
     validated_modules,
     validate_source_identity,
+    validate_compute_requirements,
 )
 
 
@@ -556,6 +557,23 @@ def test_public_cli_private_module_exception_is_fixed_field(monkeypatch, capsys)
     assert json.loads(out.out.splitlines()[0].split("=", 1)[1]) == {
         "schema": SCHEMA, "status": "REJECTED",
     }
+
+
+def test_private_test_trust_mode_required_before_source_for_both_triggers():
+    assert validate_compute_requirements({"trust_mode": "public_encrypted"}) == "public_encrypted"
+    for denied in (None, "", [], {}, {"trust_mode": None}, {"trust_mode": "local"},
+                   {"trust_mode": "public_encrypted", "executor": "untrusted"}):
+        with pytest.raises(ValueError):
+            validate_compute_requirements(denied)
+    workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows"
+                / "mmibkr-private-test-probe-r1.yml").read_text(encoding="utf-8")
+    assert "DISPATCH_TRUST_MODE: ${{ inputs.trust_mode }}" in workflow
+    assert 'requirements = node.get("compute_requirements")' in workflow
+    assert "trust_mode = validate_compute_requirements(requirements)" in workflow
+    assert workflow.index("trust_mode = validate_compute_requirements(requirements)") < workflow.index(
+        'with Path(os.environ["GITHUB_ENV"]).open')
+    assert workflow.index("trust_mode = validate_compute_requirements(requirements)") < workflow.index(
+        "- name: Materialize exact private MM source from encrypted Source Vault")
 
 
 def test_public_probe_workflow_validates_all_env_inputs_before_write():

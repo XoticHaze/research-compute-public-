@@ -209,6 +209,15 @@ def _load_json(path: Path) -> dict[str, Any]:
     return node
 
 
+def validate_compute_requirements(raw: Any) -> str:
+    """Fail closed on absent, extra or non-approved external compute trust."""
+    if not isinstance(raw, dict) or set(raw) != {"trust_mode"}:
+        raise ValueError("private_test_compute_requirements_invalid")
+    if raw["trust_mode"] != "public_encrypted":
+        raise ValueError("private_test_compute_trust_mode_rejected")
+    return "public_encrypted"
+
+
 def validated_modules(raw: str) -> list[str]:
     values = [
         value.strip()
