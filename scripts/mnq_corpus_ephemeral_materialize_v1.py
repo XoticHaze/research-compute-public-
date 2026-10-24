@@ -85,10 +85,28 @@ def materialize_payload(payload_bytes:bytes, output_root:Path)->dict:
 
 
 def main()->int:
-    p=argparse.ArgumentParser();p.add_argument("--envelope",type=Path,required=True);p.add_argument("--ciphertext",type=Path,required=True);p.add_argument("--private-key",type=Path,required=True);p.add_argument("--run-id",required=True);p.add_argument("--response-root",required=True);p.add_argument("--output-root",type=Path,required=True);a=p.parse_args()
-    envelope=json.loads(a.envelope.read_text());ciphertext=a.ciphertext.read_bytes()
-    payload=decrypt_assembled_ciphertext(envelope=envelope,ciphertext=ciphertext,private_key_path=a.private_key,expected_schema=corpus.SCHEMA,expected_run_id=a.run_id,expected_harness=corpus.HARNESS,response_root=a.response_root)
-    out=materialize_payload(payload,a.output_root)
+    p=corpus._PublicSafeArgumentParser(add_help=False)
+    p.add_argument("--envelope",type=Path,required=True)
+    p.add_argument("--ciphertext",type=Path,required=True)
+    p.add_argument("--private-key",type=Path,required=True)
+    p.add_argument("--run-id",required=True)
+    p.add_argument("--response-root",required=True)
+    p.add_argument("--output-root",type=Path,required=True)
+    try:
+        a=p.parse_args()
+        envelope=json.loads(a.envelope.read_text())
+        ciphertext=a.ciphertext.read_bytes()
+        payload=decrypt_assembled_ciphertext(
+            envelope=envelope,ciphertext=ciphertext,private_key_path=a.private_key,
+            expected_schema=corpus.SCHEMA,expected_run_id=a.run_id,
+            expected_harness=corpus.HARNESS,response_root=a.response_root)
+        out=materialize_payload(payload,a.output_root)
+    except Exception:
+        # No private file path, decrypted member, parser argv or traceback on public egress.
+        print("MNQ_CORPUS_INPUT_ROOT_MATERIALIZED="+json.dumps(
+            {"schema":"mnq-corpus-input-root-materialization-v1","status":"REJECTED"},sort_keys=True))
+        return 1
     print("MNQ_CORPUS_INPUT_ROOT_MATERIALIZED="+json.dumps(out,sort_keys=True))
     return 0
+
 if __name__=="__main__": raise SystemExit(main())
