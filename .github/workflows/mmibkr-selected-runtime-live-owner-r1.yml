@@ -236,7 +236,7 @@ jobs:
           assert 'SUPERVISED_FIVE_HOUR_SHADOW_COMPLETE=1' in owner
           assert 'SUPERVISED_GATEWAY_ONLY_EIGHT_MINUTES_PASS=1' in owner
           assert 'SUPERVISED_GATEWAY_ONLY_API_UNSTABLE=1' in owner
-          assert 'SUPERVISED_GATEWAY_ONLY_BROKER_RECONCILED=1' in owner
+          assert 'SUPERVISED_GATEWAY_ONLY_BROKER_READBACK_ONLY=1' in owner
           assert 'SUPERVISED_GATEWAY_HEALTH=' in owner
           assert 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3' in owner
           assert 'AUTO_RESTART_ADOPT=yes' in owner
@@ -245,7 +245,7 @@ jobs:
           assert 'maintenance_grace_seconds=720' in owner
           assert 'SUPERVISED_MAINTENANCE_RECOVERY_GRACE_STARTED=1' in owner
           assert 'SUPERVISED_MAINTENANCE_RECOVERY_EXPIRED=1' in owner
-          assert 'SUPERVISED_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS=1' in owner
+          assert 'SUPERVISED_MAINTENANCE_ACCOUNT_POSITIONS_ORDERS_READBACK_ONLY=1' in owner
           assert 'SUPERVISED_MAINTENANCE_RECOVERY_INCOMPLETE_AT_SESSION_END=1' in owner
           # The independent read-only pool may outlast the controller's 480s
           # maintenance delay only on an exact in-window post-outage alert.
@@ -329,7 +329,7 @@ jobs:
           print('SUPERVISED_MAINTENANCE_SHELL_PARSE=PASS')
           assert 'PRODUCTION_CANONICAL_LIVE_BOT_STARTED=1' in owner
           assert 'PRODUCTION_LIVE_OWNER_SESSION_COMPLETE=1' in owner
-          assert 'LIVE_RUNTIME_BROKER_READ_RECONCILED=1' in owner
+          assert 'LIVE_RUNTIME_BROKER_READBACK_ONLY=1' in owner
           assert owner.count('logging.disable(logging.CRITICAL)') >= 2
           assert 'util.run(ib.connectAsync(' in owner
           assert 'ib.RequestTimeout=25' in owner
@@ -1199,7 +1199,7 @@ jobs:
               assert expected in ib.managedAccounts()
               ib.reqPositions()
               ib.reqAllOpenOrders()
-              print("SUPERVISED_GATEWAY_ONLY_BROKER_RECONCILED=1")
+              print("SUPERVISED_GATEWAY_ONLY_BROKER_READBACK_ONLY=1")
           finally:
               if ib.isConnected(): ib.disconnect()
           PY
@@ -1208,7 +1208,7 @@ jobs:
             exit 1
           fi
           rm -f "$RUNNER_TEMP/mmibkr-live-supervised-read-private.log"
-          echo 'SUPERVISED_GATEWAY_ONLY_BROKER_RECONCILED=1'
+          echo 'SUPERVISED_GATEWAY_ONLY_BROKER_READBACK_ONLY=1'
           echo 'SUPERVISED_GATEWAY_ONLY_EIGHT_MINUTES_PASS=1'
 
       - name: Run supervised five-hour live-account canonical bot shadow (no orders)
@@ -1302,15 +1302,15 @@ jobs:
               assert expected in ib.managedAccounts(), "authenticated_account_not_matching"
               ib.reqPositions()
               ib.reqAllOpenOrders()
-              print("SUPERVISED_LIVE_ACCOUNT_RECONCILED=1")
+              print("SUPERVISED_LIVE_ACCOUNT_BROKER_READBACK_ONLY=1")
           finally:
               if ib.isConnected(): ib.disconnect()
           PY
               then
                 rm -f "$RUNNER_TEMP/mmibkr-live-supervised-loop-read-private.log"
-                echo 'SUPERVISED_LIVE_ACCOUNT_RECONCILED=1'
+                echo 'SUPERVISED_LIVE_ACCOUNT_BROKER_READBACK_ONLY=1'
                 if [ "$maintenance_recovery_active" -eq 1 ]; then
-                  echo 'SUPERVISED_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS=1'
+                  echo 'SUPERVISED_MAINTENANCE_ACCOUNT_POSITIONS_ORDERS_READBACK_ONLY=1'
                   maintenance_recovery_active=0
                 fi
                 maintenance_failure_since=0
@@ -1546,13 +1546,13 @@ jobs:
               ib.reqPositions()
               ib.reqAllOpenOrders()
               ib.reqExecutions()
-              print("LIVE_RUNTIME_BROKER_READ_RECONCILED=1")
+              print("LIVE_RUNTIME_BROKER_READBACK_ONLY=1")
           finally:
               if ib.isConnected(): ib.disconnect()
           PY
               then
                 rm -f "$RUNNER_TEMP/mmibkr-live-runtime-read-private.log"
-                echo 'LIVE_RUNTIME_BROKER_READ_RECONCILED=1'
+                echo 'LIVE_RUNTIME_BROKER_READBACK_ONLY=1'
                 last_verified="$(date +%s)"
                 if [ "$gateway_healthy" != 1 ]; then
                   echo 'LIVE_RUNTIME_CONTROLLER_HEALTH_DISAGREES_WITH_BROKER_READ=1'
