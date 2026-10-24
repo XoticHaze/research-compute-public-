@@ -397,6 +397,125 @@ def test_source_identity_rejects_legacy_or_authority_drift(
     with pytest.raises(RuntimeError, match=error):
         validate_source_identity(source, materialization, SOURCE)
 
+
+def test_selected_model_lab_backend_modules_are_exact_networkless():
+    """Only the five source-only #888 backend regressions are newly admitted."""
+    exact = [
+        "tests.test_model_lab_cancel_process_identity_product",
+        "tests.test_model_lab_cancel_terminal_race_product",
+        "tests.test_model_lab_orchestrator_identity_authority_product",
+        "tests.test_model_lab_startup_status_race_product",
+        "tests.test_model_lab_worker_early_cancel_product",
+    ]
+    assert validated_modules(" ".join(exact)) == exact
+    for module in exact:
+        command = pytest_container_command("sealed-test-image", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+    for denied in (
+        "tests.test_model_lab_runtime_submit",
+        "tests.test_model_lab_cancel_live_order",
+        "tests.test_model_lab_unreviewed_worker",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
+
+
+def test_selected_pnl_lifecycle_module_is_exact_and_networkless():
+    """The independent after-cost PnL child shares the sealed, brokerless probe."""
+    module = "tests.test_lifecycle_single_flat_roundtrip_product_20261023"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-test-image", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for denied in (
+        "tests.test_lifecycle_live_order_pnl",
+        "tests.test_lifecycle_single_flat_roundtrip_product_20261023_extra",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
+
+
+def test_exact_p0_residue_and_foundry_issuer_modules_are_networkless():
+    """Two newly changed private test modules reuse the sealed offline probe."""
+    exact = [
+        "tests.test_live_broker_position_residue_product_20261024",
+        "tests.test_cloud_operator_exact_contract_position_product_20261024",
+        "tests.test_foundry_model_promotion_admission_v1",
+    ]
+    assert validated_modules(",".join(exact)) == exact
+    for module in exact:
+        command = pytest_container_command("sealed-test-image", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+    for denied in (
+        "tests.test_live_broker_position_residue_product_20261024_extra",
+        "tests.test_foundry_model_promotion_admission_v1_live_submit",
+        "tests.test_live_broker_position_residue_unreviewed",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
+
+
+def test_public_cli_unknown_private_sentinel_is_not_echoed(monkeypatch, capsys):
+    import sys
+    from mmibkr_private_test_probe_v1 import main, SCHEMA
+    sentinel = "SYNTHETIC_PRIVATE_NESTED_SENTINEL_20261024"
+    monkeypatch.setattr(sys, "argv", [
+        "mmibkr_private_test_probe_v1.py",
+        "--source-root", "/synthetic",
+        "--source-materialization", "/synthetic/source.json",
+        "--source-ref", "a" * 40,
+        "--test-modules", "tests.test_lifecycle_single_flat_roundtrip_product_20261023",
+        "--unexpected", sentinel,
+    ])
+    assert main() == 1
+    out = capsys.readouterr()
+    assert out.err == ""
+    assert sentinel not in out.out + out.err
+    import json
+    assert json.loads(out.out.splitlines()[0].split("=", 1)[1]) == {
+        "schema": SCHEMA, "status": "REJECTED",
+    }
+
+
+def test_public_cli_private_module_exception_is_fixed_field(monkeypatch, capsys):
+    import sys
+    from mmibkr_private_test_probe_v1 import main, SCHEMA
+    sentinel = "SYNTHETIC_PRIVATE_NESTED_SENTINEL_20261024"
+    monkeypatch.setattr(sys, "argv", [
+        "mmibkr_private_test_probe_v1.py",
+        "--source-root", "/synthetic",
+        "--source-materialization", "/synthetic/source.json",
+        "--source-ref", "a" * 40,
+        "--test-modules", "tests.test_lifecycle_single_flat_roundtrip_product_20261023",
+    ])
+    import mmibkr_private_test_probe_v1 as probe
+    monkeypatch.setattr(probe, "run_probe", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("private/" + sentinel)))
+    assert main() == 1
+    out = capsys.readouterr()
+    assert out.err == ""
+    assert sentinel not in out.out + out.err
+    import json
+    assert json.loads(out.out.splitlines()[0].split("=", 1)[1]) == {
+        "schema": SCHEMA, "status": "REJECTED",
+    }
+
+
+def test_public_probe_workflow_validates_all_env_inputs_before_write():
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github" / "workflows" / "mmibkr-private-test-probe-r1.yml"
+    ).read_text(encoding="utf-8")
+    assert "modules = \",\".join(validated_modules(modules))" in workflow
+    assert "ui_acceptance = validate_acceptance_file(ui_acceptance)" in workflow
+    assert "private probe parity key encoding rejected" in workflow
+    assert workflow.index('modules = ",".join(validated_modules(modules))') < workflow.index('with Path(os.environ["GITHUB_ENV"]).open')
+
+
 def test_exact_readonly_open_order_observation_is_networkless_and_nonauthoritative():
     module = "tests.test_cloud_operator_open_orders_truth_product_20261024"
     assert validated_modules(module) == [module]
