@@ -140,9 +140,10 @@ class TestForwardGapContinuity(unittest.TestCase):
                "p249_core_gross": 0.0, "p249_plus_p266_gross": 0.0}
         with self.assertRaisesRegex(ValueError, "NONCHRONOLOGICAL"):
             observer._implicit_target_reset_turnover_audit([row, row], daily, states)
-        invalid = dict(row, date="2026-09-11", p249_core_gross=-1.0)
+        invalid = dict(row, p249_core_gross=-1.0)
+        following = dict(row, date="2026-09-11")
         with self.assertRaisesRegex(ValueError, "INVALID_WEALTH"):
-            observer._implicit_target_reset_turnover_audit([row, invalid], daily, states)
+            observer._implicit_target_reset_turnover_audit([invalid, following], daily, states)
 
 
 if __name__ == "__main__":
