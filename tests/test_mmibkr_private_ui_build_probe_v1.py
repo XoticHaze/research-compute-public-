@@ -78,8 +78,15 @@ def test_acceptance_file_is_exact_allowlist():
         mod.validate_acceptance_file("ui-react/src/lib/accountMarginSafety.test.mjs")
         == "ui-react/src/lib/accountMarginSafety.test.mjs"
     )
+    assert (
+        mod.validate_acceptance_file("ui-react/src/components/operatorOrderSnapshot.cancel-guard.test.mjs")
+        == "ui-react/src/components/operatorOrderSnapshot.cancel-guard.test.mjs"
+    )
     # No sibling wildcard, mutation, or arbitrary private script execution.
     for denied in (
+        "ui-react/src/components/operatorOrderSnapshot.cancel-guard.live-submit.test.mjs",
+        "ui-react/src/components/operatorOrderSnapshot.cancel-guard.test.js",
+        "ui-react/src/components/../pages/operatorOrderSnapshot.cancel-guard.test.mjs",
         "ui-react/src/lib/accountMarginSafety.live-submit.test.mjs",
         "ui-react/src/lib/accountMarginSafety.test.js",
         "ui-react/src/lib/../pages/accountMarginSafety.test.mjs",
