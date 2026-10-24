@@ -82,7 +82,12 @@ def test_acceptance_file_is_exact_allowlist():
         mod.validate_acceptance_file("ui-react/src/components/operatorOrderSnapshot.cancel-guard.test.mjs")
         == "ui-react/src/components/operatorOrderSnapshot.cancel-guard.test.mjs"
     )
-    for exact in ("ui-react/src/lib/pilotMatrixPlan.test.mjs", "ui-react/src/lib/botConsoleExactAccountHoldings.test.mjs", "ui-react/src/lib/botConsolePositionTruth.test.mjs"):
+    for exact in (
+        "ui-react/src/lib/pilotMatrixPlan.test.mjs",
+        "ui-react/src/lib/botConsoleExactAccountHoldings.test.mjs",
+        "ui-react/src/lib/botConsolePositionTruth.test.mjs",
+        "ui-react/src/lib/builderLocalDraftRestore.test.mjs",
+    ):
         assert mod.validate_acceptance_file(exact) == exact
     for denied in (
         "ui-react/src/lib/pilotMatrixPlan.live-submit.test.mjs",
@@ -91,6 +96,9 @@ def test_acceptance_file_is_exact_allowlist():
         "ui-react/src/lib/botConsoleExactAccountHoldings.test.js",
         "ui-react/src/lib/botConsolePositionTruth.live-submit.test.mjs",
         "ui-react/src/lib/botConsolePositionTruth.test.js",
+        "ui-react/src/lib/builderLocalDraftRestore.live-submit.test.mjs",
+        "ui-react/src/lib/builderLocalDraftRestore.test.js",
+        "ui-react/src/lib/../pages/builderLocalDraftRestore.test.mjs",
     ):
         with pytest.raises(ValueError):
             mod.validate_acceptance_file(denied)
