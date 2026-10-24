@@ -137,4 +137,11 @@ test('input corruption, clock regression, invalid TTL, forged run id deny closed
     expectedEpoch: 1, serverNowMs: 999,
   })).status, 'untrusted_or_regressing_clock');
   assert.equal(transitionFrozenFence({ ...first, epoch: -1 }, req('renew')).status, 'invalid_persisted_state');
+  assert.equal(transitionFrozenFence({
+    ...first, expiresAtMs: null,
+  }, req('acquire', { expectedEpoch: 1, ownerRunAttempt: ownerB })).status, 'invalid_persisted_state');
+  assert.equal(transitionFrozenFence({
+    ...first, accountDigest: null, holder: null, expiresAtMs: null,
+  }, req('acquire', { expectedEpoch: 1, ownerRunAttempt: ownerB })).status, 'invalid_persisted_state');
+  assert.equal(acquire({ serverNowMs: Number.MAX_SAFE_INTEGER, ttlMs: 20 }).status, 'clock_range_overflow');
 });

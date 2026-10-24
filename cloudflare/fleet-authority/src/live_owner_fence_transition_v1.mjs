@@ -36,7 +36,10 @@ export function transitionFrozenFence(state, request) {
       !safeClock(state.epoch) || !safeClock(state.lastServerMs) ||
       (state.accountDigest !== null && !goodAccount(state.accountDigest)) ||
       (state.holder !== null && !goodOwner(state.holder)) ||
-      (state.expiresAtMs !== null && !safeClock(state.expiresAtMs))) {
+      (state.expiresAtMs !== null && !safeClock(state.expiresAtMs)) ||
+      ((state.holder === null) !== (state.expiresAtMs === null)) ||
+      (state.epoch === 0 && state.accountDigest !== null) ||
+      (state.epoch > 0 && state.accountDigest === null)) {
     return denied(state, 'invalid_persisted_state');
   }
   const now = request?.serverNowMs;
@@ -52,6 +55,8 @@ export function transitionFrozenFence(state, request) {
 
   if (request.operation === 'acquire') {
     if (!goodTtl(request.ttlMs)) return denied(state, 'ttl_invalid');
+    if (now > Number.MAX_SAFE_INTEGER - request.ttlMs)
+      return denied(state, 'clock_range_overflow');
     if (state.holder && now < state.expiresAtMs)
       return denied(state, 'incumbent_not_expired');
     // Expiry does not imply takeover safety. An expired still-connected
@@ -68,6 +73,8 @@ export function transitionFrozenFence(state, request) {
   }
   if (request.operation === 'renew') {
     if (!goodTtl(request.ttlMs)) return denied(state, 'ttl_invalid');
+    if (now > Number.MAX_SAFE_INTEGER - request.ttlMs)
+      return denied(state, 'clock_range_overflow');
     if (state.holder !== who || !state.expiresAtMs || now >= state.expiresAtMs)
       return denied(state, 'not_current_unexpired_holder');
     if (request.verifiedEvidence?.sameBrokerSession === true &&
