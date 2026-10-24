@@ -105,7 +105,19 @@ SAFE_EXACT = {
     "tests.test_selected_runtime_cloud_bar_clock_v1",
     "tests.test_selected_runtime_cloud_runner_dry_plan_v1",
 }
+
+# Exact selected Model Lab cancellation/identity regressions from MM-IBKR
+# UI composite #888. Tests are brokerless; run with no network to prevent
+# accidental external worker/model traffic. No generic module-name wildcard.
+SOURCE_ONLY_MODEL_LAB_MODULES = frozenset({
+    "tests.test_model_lab_cancel_process_identity_product",
+    "tests.test_model_lab_cancel_terminal_race_product",
+    "tests.test_model_lab_orchestrator_identity_authority_product",
+    "tests.test_model_lab_startup_status_race_product",
+    "tests.test_model_lab_worker_early_cancel_product",
+})
 SAFE_EXACT.update(SOURCE_ONLY_P0_MODULES)
+SAFE_EXACT.update(SOURCE_ONLY_MODEL_LAB_MODULES)
 STATUS_STAGE_MODULES = {
     "tests.test_market_features_provenance_contract",
 }
@@ -178,7 +190,7 @@ def pytest_container_command(image_tag: str, module: str) -> list[str]:
         "docker",
         "run",
         "--rm",
-        *(["--network", "none"] if module in SOURCE_ONLY_P0_MODULES else []),
+        *(["--network", "none"] if module in (SOURCE_ONLY_P0_MODULES | SOURCE_ONLY_MODEL_LAB_MODULES) else []),
         "-e",
         "ENABLE_LIVE_TRADING=0",
         "-e",
