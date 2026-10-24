@@ -20,7 +20,9 @@ class P160FrozenConsumerTests(unittest.TestCase):
                                   'session_open_utc':f'{day}T13:30:00Z',
                                   'session_close_utc':f'{day}T20:00:00Z','completed':True})
         self.kwargs={'frozen_signal':self.signal,'completed_bars':self.rows,'observed_at_utc':'2026-10-03T01:00:00Z',
-                     'price_basis':'raw_sip','source_provider':'synthetic_test'}
+                     'price_basis':'raw_sip','source_provider':'synthetic_test',
+                     'expected_common_session_dates':['2026-10-01','2026-10-02'],
+                     'expected_entry_day':'2026-10-01'}
 
     def test_cost_funding_and_matched(self):
         x=score_frozen_p160(**self.kwargs)
@@ -52,6 +54,16 @@ class P160FrozenConsumerTests(unittest.TestCase):
         k=copy.deepcopy(self.kwargs)
         k['completed_bars'][0]['completed']=False
         with self.assertRaisesRegex(ValueError,'incomplete'):
+            score_frozen_p160(**k)
+
+    def test_missing_calendar_session_and_wrong_entry_fail_closed(self):
+        k=copy.deepcopy(self.kwargs)
+        k['expected_common_session_dates']=['2026-10-01','2026-10-02','2026-10-05']
+        with self.assertRaisesRegex(ValueError,'missing or extra expected'):
+            score_frozen_p160(**k)
+        k=copy.deepcopy(self.kwargs)
+        k['expected_entry_day']='2026-10-02'
+        with self.assertRaisesRegex(ValueError,'entry day differs'):
             score_frozen_p160(**k)
 
     def test_frozen_identity_and_full_universe(self):
