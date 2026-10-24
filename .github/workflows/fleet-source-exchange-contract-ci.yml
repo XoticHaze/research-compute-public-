@@ -10,6 +10,8 @@ on:
       - wrangler.jsonc
       - cloudflare/fleet-authority/src/source_exchange.js
       - cloudflare/fleet-authority/src/index.js
+      - cloudflare/fleet-authority/src/live_owner_fence_transition_v1.mjs
+      - tests/live_owner_fence_transition_v1.test.mjs
       - cloudflare/fleet-authority/wrangler.jsonc
       - cloudflare/fleet-authority/package.json
       - cloudflare/fleet-authority/package-lock.json
@@ -34,6 +36,8 @@ on:
       - wrangler.jsonc
       - cloudflare/fleet-authority/src/source_exchange.js
       - cloudflare/fleet-authority/src/index.js
+      - cloudflare/fleet-authority/src/live_owner_fence_transition_v1.mjs
+      - tests/live_owner_fence_transition_v1.test.mjs
       - cloudflare/fleet-authority/wrangler.jsonc
       - cloudflare/fleet-authority/package.json
       - cloudflare/fleet-authority/package-lock.json
@@ -67,6 +71,8 @@ jobs:
           set -euo pipefail
           node --check cloudflare/fleet-authority/src/source_exchange.js
           node --check cloudflare/fleet-authority/src/index.js
+          node --check cloudflare/fleet-authority/src/live_owner_fence_transition_v1.mjs
+          node --test tests/live_owner_fence_transition_v1.test.mjs
 
       - name: Require production and local Durable Object declarations to agree
         run: |
