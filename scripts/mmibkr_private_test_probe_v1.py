@@ -33,6 +33,10 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_selected_runtime_live_broker_provenance_v1",
     "tests.test_selected_runtime_live_p0_integrated_checkpoint_v1",
     "tests.test_selected_runtime_live_owner_candidate_certificate_v1",
+    # Exact selected-account position snapshot safety regression, networkless.
+    "tests.test_cloud_operator_snapshot_v1",
+    # Read-only account open-order completeness projection, never a broker consumer.
+    "tests.test_cloud_operator_open_orders_truth_product_20261024",
 })
 
 SAFE_EXACT = {

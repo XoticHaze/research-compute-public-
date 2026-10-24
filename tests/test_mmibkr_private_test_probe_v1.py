@@ -396,3 +396,29 @@ def test_source_identity_rejects_legacy_or_authority_drift(
     )
     with pytest.raises(RuntimeError, match=error):
         validate_source_identity(source, materialization, SOURCE)
+
+def test_exact_readonly_open_order_observation_is_networkless_and_nonauthoritative():
+    module = "tests.test_cloud_operator_open_orders_truth_product_20261024"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-test-image", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for forbidden in (
+        "tests.test_cloud_operator_open_orders_truth_product_20261024_live_submit",
+        "tests.test_cloud_operator_open_orders_live_submit",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(forbidden)
+
+
+def test_exact_account_scope_operator_snapshot_is_networkless():
+    module = "tests.test_cloud_operator_snapshot_v1"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-test-image", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for forbidden in ("tests.test_cloud_operator_snapshot_v1_live_submit", "tests.test_cloud_operator_snapshot_v1_broker_mutation"):
+        with pytest.raises(ValueError):
+            validated_modules(forbidden)
