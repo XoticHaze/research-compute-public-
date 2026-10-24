@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -113,6 +114,33 @@ def validate_compute_requirements(raw: Any) -> str:
     if raw["trust_mode"] != "public_encrypted":
         raise ValueError("private_ui_compute_trust_mode_rejected")
     return "public_encrypted"
+
+
+def resolve_ui_request(
+    *, event_name: str, dispatch_source_ref: str = "",
+    dispatch_acceptance_file: str = "", dispatch_trust_mode: str = "",
+    fire: Any = None,
+) -> dict[str, str]:
+    """One fail-closed resolver for both existing specialized UI CI triggers."""
+    if event_name == "workflow_dispatch":
+        source_ref = str(dispatch_source_ref or "").strip().lower()
+        acceptance = dispatch_acceptance_file
+        requirements = {"trust_mode": dispatch_trust_mode}
+    elif event_name == "push":
+        if not isinstance(fire, dict) or fire.get("schema") != "mmibkr.private_ui_build_probe_fire.v1":
+            raise ValueError("private_ui_fire_schema_rejected")
+        source_ref = str(fire.get("source_ref") or "").strip().lower()
+        acceptance = fire.get("acceptance_file")
+        requirements = fire.get("compute_requirements")
+    else:
+        raise ValueError("private_ui_event_rejected")
+    if not re.fullmatch(r"[0-9a-f]{40}", source_ref):
+        raise ValueError("private_ui_source_sha_rejected")
+    return {
+        "source_ref": source_ref,
+        "acceptance_file": validate_acceptance_file(acceptance),
+        "trust_mode": validate_compute_requirements(requirements),
+    }
 
 
 def validate_acceptance_file(raw: str) -> str:

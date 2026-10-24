@@ -121,9 +121,42 @@ def test_ui_compute_trust_mode_required_at_both_existing_triggers():
     workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows"
                 / "mmibkr-private-ui-build-probe-r1.yml").read_text(encoding="utf-8")
     assert "DISPATCH_TRUST_MODE:" in workflow
-    assert 'compute_requirements = node.get("compute_requirements")' in workflow
-    assert "validate_compute_requirements(compute_requirements)" in workflow
+    assert "resolve_ui_request(" in workflow
+    assert 'dispatch_trust_mode=os.environ.get("DISPATCH_TRUST_MODE", "")' in workflow
     assert "MMIBKR_PRIVATE_UI_TRUST_MODE=" in workflow
+
+
+def test_ui_request_resolver_executes_both_triggers_and_rejects_untrusted_modes():
+    sha = "a" * 40
+    acceptance = "ui-react/src/lib/pilotStrategySpecHandoff.acceptance.test.mjs"
+    expected = {"source_ref": sha, "acceptance_file": acceptance,
+                "trust_mode": "public_encrypted"}
+    assert mod.resolve_ui_request(
+        event_name="workflow_dispatch", dispatch_source_ref=sha,
+        dispatch_acceptance_file=acceptance, dispatch_trust_mode="public_encrypted",
+    ) == expected
+    fire = {"schema": "mmibkr.private_ui_build_probe_fire.v1",
+            "source_ref": sha, "acceptance_file": acceptance,
+            "compute_requirements": {"trust_mode": "public_encrypted"}}
+    assert mod.resolve_ui_request(event_name="push", fire=fire) == expected
+    for mode in ("", "agent_local", "public", "public_encrypted\\nOTHER=1"):
+        with pytest.raises(ValueError):
+            mod.resolve_ui_request(
+                event_name="workflow_dispatch", dispatch_source_ref=sha,
+                dispatch_acceptance_file=acceptance, dispatch_trust_mode=mode,
+            )
+        with pytest.raises(ValueError):
+            mod.resolve_ui_request(event_name="push", fire={
+                **fire, "compute_requirements": {"trust_mode": mode},
+            })
+    for bad in (None, {}, {**fire, "schema": "other"},
+                {**fire, "compute_requirements": None},
+                {**fire, "source_ref": "not-a-sha"},
+                {**fire, "acceptance_file": "../secret"}):
+        with pytest.raises(ValueError):
+            mod.resolve_ui_request(event_name="push", fire=bad)
+    with pytest.raises(ValueError):
+        mod.resolve_ui_request(event_name="unknown")
 
 
 def test_source_identity_requires_exact_attested_sha(tmp_path):
