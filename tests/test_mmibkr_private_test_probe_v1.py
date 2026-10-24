@@ -423,16 +423,23 @@ def test_selected_model_lab_backend_modules_are_exact_networkless():
 
 
 def test_selected_pnl_lifecycle_module_is_exact_and_networkless():
-    """The independent after-cost PnL child shares the sealed, brokerless probe."""
-    module = "tests.test_lifecycle_single_flat_roundtrip_product_20261023"
-    assert validated_modules(module) == [module]
-    command = pytest_container_command("sealed-test-image", module)
-    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
-    assert "ENABLE_LIVE_TRADING=0" in command
-    assert command[-1] == module_file_path(module)
+    """Only three exact source-only PnL modules can run, always networkless."""
+    exact = [
+        "tests.test_lifecycle_single_flat_roundtrip_product_20261023",
+        "tests.test_lifecycle_decimal_flatness_product_20261024",
+        "tests.test_lifecycle_matched_fill_count_truth_product_20261024",
+    ]
+    assert validated_modules(",".join(exact)) == exact
+    for module in exact:
+        command = pytest_container_command("sealed-test-image", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
     for denied in (
         "tests.test_lifecycle_live_order_pnl",
         "tests.test_lifecycle_single_flat_roundtrip_product_20261023_extra",
+        "tests.test_lifecycle_decimal_flatness_product_20261024_live_submit",
+        "tests.test_lifecycle_matched_fill_count_truth_product_20261024_broker_mutation",
     ):
         with pytest.raises(ValueError):
             validated_modules(denied)
