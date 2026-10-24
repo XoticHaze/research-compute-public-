@@ -316,7 +316,6 @@ jobs:
           pool_script="\n".join(line[10:] if line.startswith("          ") else line for line in pool_run.splitlines())
           subprocess.run(["bash","-n"],input=pool_script,text=True,check=True)
           print('READONLY_GATEWAY_POOL_MAINTENANCE_SHELL_PARSE=PASS')
-          assert 'maintenance_outage_utc="$(date -u -d "@$maintenance_failure_since" +%Y-%m-%dT%H:%M:%SZ)"' in owner
           assert 'TZ=America/New_York date +%H%M' in owner
           assert 'docker stop --time 90 mmibkr-live-gateway' in owner
           assert 'MMIBKR_CANONICAL_BOT_STATUS=' in owner
@@ -340,6 +339,11 @@ jobs:
           script="\n".join(line[10:] if line.startswith("          ") else line for line in run.splitlines())
           subprocess.run(["bash","-n"],input=script,text=True,check=True)
           print('SUPERVISED_MAINTENANCE_SHELL_PARSE=PASS')
+          # Inspect the extracted supervised shell, not the workflow text that
+          # also contains these assertion literals (self-match is not proof).
+          assert 'maintenance_outage_utc="$(date -u -d "@$maintenance_failure_since" +%Y-%m-%dT%H:%M:%SZ)"' in script
+          assert 'docker logs --since 10m mmibkr-live-gateway' not in script
+          assert 'docker logs --since "$maintenance_outage_utc" mmibkr-live-gateway' in script
           assert 'PRODUCTION_CANONICAL_LIVE_BOT_STARTED=1' in owner
           assert 'PRODUCTION_LIVE_OWNER_SESSION_COMPLETE=1' in owner
           assert 'LIVE_RUNTIME_BROKER_READBACK_ONLY=1' in owner
@@ -353,10 +357,6 @@ jobs:
           assert 'UPSTREAM_RELAUNCH=yes' in owner
           assert 'MMIBKR_LIVE_ATTENDED_UPSTREAM_RELAUNCH_ENABLED=1' in owner
           assert 'broker_recovery_budget_seconds=1800' in owner
-          # A maintenance alert predating the first failed broker read must not
-          # grant supervised recovery grace to a later unrelated API outage.
-          assert 'docker logs --since 10m mmibkr-live-gateway' not in owner
-          assert 'docker logs --since "$maintenance_outage_utc" mmibkr-live-gateway' in owner
           assert 'LIVE_RUNTIME_BROKER_RECOVERY_BUDGET_SECONDS=' in owner
           assert 'broker_outage_since ))" -ge 720' not in owner
           assert '"$gateway_healthy" != 1 ] || [ "$bot_paused" -eq 1' in owner
