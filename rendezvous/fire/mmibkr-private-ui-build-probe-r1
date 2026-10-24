@@ -1,10 +1,10 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "f842a62080adb34207f4ea9e80863ac3c926be84",
+  "source_ref": "23b9d9df47585c12bd5ddb8cd449848f98e55a6c",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
-  "requested_by": "continue-release-20261024-clockin-20261024101509908",
-  "purpose": "Exact no-loss P0 #883 plus selected UI #888 #977/#979/#980 fail-close union in #975, encrypted native BotConsole Node/Vite acceptance; no broker/live/deploy",
-  "request_nonce": "release-p0-ui-composite-f842-20261024-r1",
+  "requested_by": "continue-release-20261024-clockin-20261024114141165",
+  "purpose": "Exact changed-head P0 #883 paper receipt/quarantine + selected UI #888 source in #975; encrypted native BotConsole Node/Vite acceptance only; no broker/live/deploy",
+  "request_nonce": "release-p0-ui-composite-23b9-20261024-r1",
   "authority": {
     "research_only": true,
     "broker": false,
