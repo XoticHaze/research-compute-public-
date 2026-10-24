@@ -446,3 +446,59 @@ def test_exact_p0_residue_and_foundry_issuer_modules_are_networkless():
     ):
         with pytest.raises(ValueError):
             validated_modules(denied)
+
+
+def test_public_cli_unknown_private_sentinel_is_not_echoed(monkeypatch, capsys):
+    import sys
+    from mmibkr_private_test_probe_v1 import main, SCHEMA
+    sentinel = "SYNTHETIC_PRIVATE_NESTED_SENTINEL_20261024"
+    monkeypatch.setattr(sys, "argv", [
+        "mmibkr_private_test_probe_v1.py",
+        "--source-root", "/synthetic",
+        "--source-materialization", "/synthetic/source.json",
+        "--source-ref", "a" * 40,
+        "--test-modules", "tests.test_lifecycle_single_flat_roundtrip_product_20261023",
+        "--unexpected", sentinel,
+    ])
+    assert main() == 1
+    out = capsys.readouterr()
+    assert out.err == ""
+    assert sentinel not in out.out + out.err
+    import json
+    assert json.loads(out.out.splitlines()[0].split("=", 1)[1]) == {
+        "schema": SCHEMA, "status": "REJECTED",
+    }
+
+
+def test_public_cli_private_module_exception_is_fixed_field(monkeypatch, capsys):
+    import sys
+    from mmibkr_private_test_probe_v1 import main, SCHEMA
+    sentinel = "SYNTHETIC_PRIVATE_NESTED_SENTINEL_20261024"
+    monkeypatch.setattr(sys, "argv", [
+        "mmibkr_private_test_probe_v1.py",
+        "--source-root", "/synthetic",
+        "--source-materialization", "/synthetic/source.json",
+        "--source-ref", "a" * 40,
+        "--test-modules", "tests.test_lifecycle_single_flat_roundtrip_product_20261023",
+    ])
+    import mmibkr_private_test_probe_v1 as probe
+    monkeypatch.setattr(probe, "run_probe", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("private/" + sentinel)))
+    assert main() == 1
+    out = capsys.readouterr()
+    assert out.err == ""
+    assert sentinel not in out.out + out.err
+    import json
+    assert json.loads(out.out.splitlines()[0].split("=", 1)[1]) == {
+        "schema": SCHEMA, "status": "REJECTED",
+    }
+
+
+def test_public_probe_workflow_validates_all_env_inputs_before_write():
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github" / "workflows" / "mmibkr-private-test-probe-r1.yml"
+    ).read_text(encoding="utf-8")
+    assert "modules = \",\".join(validated_modules(modules))" in workflow
+    assert "ui_acceptance = validate_acceptance_file(ui_acceptance)" in workflow
+    assert "private probe parity key encoding rejected" in workflow
+    assert workflow.index('modules = ",".join(validated_modules(modules))') < workflow.index('with Path(os.environ["GITHUB_ENV"]).open')
