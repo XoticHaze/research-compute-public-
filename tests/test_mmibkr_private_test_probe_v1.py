@@ -442,6 +442,7 @@ def test_exact_p0_residue_and_foundry_issuer_modules_are_networkless():
     """Two newly changed private test modules reuse the sealed offline probe."""
     exact = [
         "tests.test_live_broker_position_residue_product_20261024",
+        "tests.test_cloud_operator_exact_contract_position_product_20261024",
         "tests.test_foundry_model_promotion_admission_v1",
     ]
     assert validated_modules(",".join(exact)) == exact

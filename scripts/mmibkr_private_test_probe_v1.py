@@ -45,6 +45,8 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_selected_runtime_live_owner_candidate_certificate_v1",
     # Exact new flat-seed broker residue regression, synthetic and brokerless.
     "tests.test_live_broker_position_residue_product_20261024",
+    # Exact operator snapshot contract identity, brokerless synthetic tests.
+    "tests.test_cloud_operator_exact_contract_position_product_20261024",
 })
 
 SAFE_EXACT = {
