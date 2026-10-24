@@ -74,6 +74,22 @@ def test_acceptance_file_is_exact_allowlist():
         )
         == "ui-react/src/pages/BotConsolePage.acceptance.test.mjs"
     )
+    # Reuse the existing encrypted UI build route for the exact legacy
+    # Builder draft parser regression, not a new public source/runner path.
+    assert (
+        mod.validate_acceptance_file(
+            "ui-react/src/lib/builderLocalDraftRestore.test.mjs"
+        )
+        == "ui-react/src/lib/builderLocalDraftRestore.test.mjs"
+    )
+    for denied in (
+        "ui-react/src/lib/builderLocalDraftRestore.mjs",
+        "ui-react/src/lib/builderLocalDraftRestore.test.mjs.bak",
+        "ui-react/src/lib/../lib/other.test.mjs",
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
+
     with pytest.raises(ValueError, match="not_allowlisted"):
         mod.validate_acceptance_file("ui-react/src/other.test.mjs")
     with pytest.raises(ValueError):
