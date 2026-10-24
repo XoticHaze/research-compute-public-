@@ -338,6 +338,7 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
         "minimum_resolved_for_promotion": summary.get("minimum_resolved_for_promotion"),
         "promotion_authority": False,
     }
+    out["forward_science_stages"] = _separate_forward_science_stages(out)
     for key in (
         "resolved_observations",
         "positive_hit_rate",
@@ -379,6 +380,27 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
         if current.get("source_health") is not None:
             out["source_health"] = current.get("source_health")
     return out
+
+
+
+def _separate_forward_science_stages(state: dict[str, Any]) -> dict[str, Any]:
+    """Expose observation and stronger sample breadth without canary gate invention."""
+    resolved = int(state.get("resolved_cohorts", 0) or 0)
+    floor = state.get("minimum_resolved_for_promotion")
+    return {
+        "resolved_h20_cohort_count": resolved,
+        "forward_sanity_stage": (
+            "RESOLVED_COHORT_OBSERVED_ISSUER_ENVELOPE_PENDING"
+            if resolved > 0 else "NO_RESOLVED_COHORT"
+        ),
+        "live_canary_eligibility_stage": "INDEPENDENT_OWNER_ADJUDICATION_REQUIRED",
+        "live_probation_stage": "INDEPENDENT_OWNER_ADJUDICATION_REQUIRED",
+        "full_promotion_sample_floor": floor,
+        "full_promotion_sample_floor_reached": (
+            floor is not None and resolved >= int(floor)
+        ),
+        "promotion_authority": False,
+    }
 
 
 def _prospective_evidence_grade(state: dict[str, Any]) -> str:
@@ -438,6 +460,7 @@ def _native_lane(x: dict[str, Any], prospective: dict[str, Any] | None = None) -
         "validation_grade": grade,
         "prospective_evidence": prospective or {"ledger_status": "NOT_SUPPLIED", "program_id": program_id},
         "evidence_grade": _prospective_evidence_grade(prospective or {}),
+        "forward_science_stages": _separate_forward_science_stages(prospective or {}),
         "decision_use": x.get("decision_use"),
         "boundaries": x.get("boundaries", {}),
     }
