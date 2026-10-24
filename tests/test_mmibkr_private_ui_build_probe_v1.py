@@ -111,6 +111,21 @@ def test_acceptance_file_is_exact_allowlist():
         mod.validate_acceptance_file("../private.mjs")
 
 
+def test_ui_compute_trust_mode_required_at_both_existing_triggers():
+    assert mod.validate_compute_requirements({"trust_mode": "public_encrypted"}) == "public_encrypted"
+    for rejected in (None, "", {}, [], {"trust_mode": None},
+                     {"trust_mode": "agent_local"}, {"trust_mode": "public"},
+                     {"trust_mode": "public_encrypted", "executor": "caller-authored"}):
+        with pytest.raises(ValueError):
+            mod.validate_compute_requirements(rejected)
+    workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows"
+                / "mmibkr-private-ui-build-probe-r1.yml").read_text(encoding="utf-8")
+    assert "DISPATCH_TRUST_MODE:" in workflow
+    assert 'compute_requirements = node.get("compute_requirements")' in workflow
+    assert "validate_compute_requirements(compute_requirements)" in workflow
+    assert "MMIBKR_PRIVATE_UI_TRUST_MODE=" in workflow
+
+
 def test_source_identity_requires_exact_attested_sha(tmp_path):
     root = _ui_tree(tmp_path)
     sha = "a" * 40

@@ -103,6 +103,18 @@ def validate_source_identity(
     return node
 
 
+def validate_compute_requirements(raw: Any) -> str:
+    """Require policy-derived public-encrypted compute at both existing triggers.
+
+    This is an ingress requirement, NOT signed PLACED issuance or broker authority.
+    """
+    if not isinstance(raw, dict) or set(raw) != {"trust_mode"}:
+        raise ValueError("private_ui_compute_requirements_invalid")
+    if raw["trust_mode"] != "public_encrypted":
+        raise ValueError("private_ui_compute_trust_mode_rejected")
+    return "public_encrypted"
+
+
 def validate_acceptance_file(raw: str) -> str:
     value = str(raw or "").strip().replace("\\", "/")
     if value not in ALLOWED_ACCEPTANCE_FILES:
