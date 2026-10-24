@@ -1,6 +1,6 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "464712aea9115309c0e38d4dbbfe8ed01f2b8df1",
+  "source_ref": "e34766a9108cf6bf9db4422eb70d4ea279dcb52d",
   "test_modules": [
     "tests.test_selected_runtime_live_execution_ledger_v1",
     "tests.test_selected_runtime_live_p0_integrated_checkpoint_v1"
@@ -9,8 +9,8 @@
   "crw_consumer_reprobe": false,
   "s3_composition_economics": false,
   "s4_layered_mtf_economics": false,
-  "requested_by": "continue-release-20261024-clockin-20261024071306432",
-  "purpose": "P0 #963 exact changed-source 8-decimal canonical live writer and integrated checkpoint tests; Source Vault #40073807033 SUCCESS; Docker network none, no broker/live",
+  "requested_by": "continue-release-20261024-clockin-20261024074217694",
+  "purpose": "Exact selected P0 #883 typed broker account-position identity + canonical ledger/checkpoint brokerless Docker acceptance after encrypted Source Vault, no order/live",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -18,8 +18,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "p0-963-464712ae-exact-writer-integrated-20261024-r1",
+  "request_nonce": "p0-883-e34766a9-exact-integrated-brokerless-20261024-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "464712aea9115309c0e38d4dbbfe8ed01f2b8df1",
+  "current_private_reference": "e34766a9108cf6bf9db4422eb70d4ea279dcb52d",
   "parity_public_key_b64": ""
 }
