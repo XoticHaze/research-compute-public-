@@ -9,10 +9,101 @@ this module consumes only sanitized native result payloads returned by that path
 
 import argparse
 import json
+import math
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 SCHEMA = "foundry.forward_program_adapter.v1"
+FROZEN_SYMBOLS = {
+    "SEMICONDUCTOR_SHARED_RIDGE": frozenset((
+        "AMAT", "APH", "KLAC", "LRCX", "TXN", "NXPI", "ADI",
+        "NVDA", "AMD", "MU", "AVGO", "MRVL", "MCHP",
+    )),
+    "HOMEBUILDERS": frozenset(("CCS", "MHO", "HOV", "BZH")),
+    "GENERALIZED_LARGECAP_RIDGE": frozenset(("CAT", "JPM", "UNH", "XOM", "COST", "MSFT")),
+}
+_NATIVE_BOUNDARY_KEYS = frozenset((
+    "runtime_mutation", "broker_authority", "sizing_authority",
+    "promotion_authority", "live_trading_authority", "allocation_authority",
+    "broker_action", "live_trading_change",
+))
+_BOOK_KEYS = {
+    "ticker_book": frozenset((
+        "status", "cohort_target_weights_nav", "cohort_cash_fraction_nav",
+        "cohort_gross_exposure", "weighting", "prediction_magnitude_used_for_sizing",
+        "realized_vol20_annualized",
+    )),
+    "industry_book": frozenset((
+        "status", "instrument", "mapping", "positive_breadth",
+        "cohort_target_weight_nav", "cohort_cash_fraction_nav",
+    )),
+    "options_book": frozenset(("status", "reason", "trade_authorized", "eligible_underlyings")),
+}
+
+
+def _safe_date(value: object) -> str:
+    text = str(value)[:10]
+    try:
+        if len(text) != 10 or date.fromisoformat(text).isoformat() != text:
+            raise ValueError
+    except ValueError:
+        raise ValueError("public adapter invalid signal date") from None
+    return text
+
+
+def _safe_rows(program: str, rows: list) -> list[dict]:
+    allowed = FROZEN_SYMBOLS[program]
+    if not rows or any(not isinstance(row, dict) or str(row.get("symbol")) not in allowed for row in rows):
+        raise ValueError("public adapter symbol outside frozen universe")
+    if len({str(row["symbol"]) for row in rows}) != len(rows):
+        raise ValueError("public adapter duplicate symbol")
+    return rows
+
+
+def _finite(value: object) -> float:
+    if type(value) not in (int, float) or not math.isfinite(float(value)):
+        raise ValueError("public adapter nonfinite numeric field")
+    return float(value)
+
+
+def _safe_book(book: dict) -> dict:
+    """Fixed nested public paper-book field projection; no private passthrough."""
+    if not isinstance(book, dict) or set(book) != set(_BOOK_KEYS):
+        raise ValueError("public adapter book field-set mismatch")
+    projected = {}
+    for kind, allowed in _BOOK_KEYS.items():
+        node = book[kind]
+        if not isinstance(node, dict) or set(node) - allowed:
+            raise ValueError("public adapter nested book field-set mismatch")
+        clean = {}
+        for key, value in node.items():
+            if key in ("cohort_target_weights_nav", "realized_vol20_annualized"):
+                if not isinstance(value, dict) or set(value) - FROZEN_SYMBOLS["SEMICONDUCTOR_SHARED_RIDGE"]:
+                    raise ValueError("public adapter book symbol map mismatch")
+                clean[key] = {symbol: _finite(amount) for symbol, amount in value.items()}
+            elif key == "eligible_underlyings":
+                if not isinstance(value, list) or any(str(v) not in FROZEN_SYMBOLS["SEMICONDUCTOR_SHARED_RIDGE"] for v in value):
+                    raise ValueError("public adapter book underlyings mismatch")
+                clean[key] = list(value)
+            elif key in ("prediction_magnitude_used_for_sizing", "trade_authorized"):
+                if type(value) is not bool:
+                    raise ValueError("public adapter book authority flag mismatch")
+                clean[key] = value
+            elif key in ("status", "weighting", "instrument", "mapping", "reason"):
+                if not isinstance(value, str) or len(value) > 180 or "\\n" in value:
+                    raise ValueError("public adapter book text field mismatch")
+                clean[key] = value
+            else:
+                clean[key] = _finite(value)
+        projected[kind] = clean
+    return projected
+
+
+def _safe_duration_scores(value: object) -> dict:
+    if not isinstance(value, dict) or set(value) - {"5", "60"}:
+        raise ValueError("public adapter duration score keys mismatch")
+    return {key: _finite(amount) for key, amount in value.items()}
 
 
 def _read(path: str | Path | None) -> dict[str, Any] | None:
@@ -22,7 +113,7 @@ def _read(path: str | Path | None) -> dict[str, Any] | None:
 
 
 def _date_from_timestamp(value: object) -> str | None:
-    return None if value is None else str(value)[:10]
+    return None if value is None else _safe_date(value)
 
 
 def _prediction_map(rows: list[dict[str, Any]], *keys: str) -> dict[str, float]:
@@ -46,6 +137,11 @@ def _positive(row: dict[str, Any]) -> bool:
 
 
 def _boundaries(native: dict[str, Any]) -> dict[str, Any]:
+    raw = native.get("boundaries") or {}
+    if not isinstance(raw, dict) or set(raw) - _NATIVE_BOUNDARY_KEYS:
+        raise ValueError("public adapter native boundary field-set mismatch")
+    if any(type(value) is not bool for value in raw.values()):
+        raise ValueError("public adapter native boundary type mismatch")
     return {
         "research_only": True,
         "allocation_authority": False,
@@ -53,29 +149,28 @@ def _boundaries(native: dict[str, Any]) -> dict[str, Any]:
         "runtime_mutation": False,
         "promotion_authority": False,
         "live_trading_change": False,
-        "native": native.get("boundaries") or {},
+        "native": {key: raw[key] for key in sorted(raw)},
     }
 
 
 def adapt_semiconductor(prediction: dict[str, Any], book: dict[str, Any] | None = None) -> dict[str, Any]:
-    rows = list(prediction.get("observations") or prediction.get("snapshot") or [])
-    if not rows:
-        raise ValueError("semiconductor prediction has no observations")
-    signal_date = str(
+    rows = _safe_rows("SEMICONDUCTOR_SHARED_RIDGE", list(prediction.get("observations") or prediction.get("snapshot") or []))
+    signal_date = _safe_date(
         prediction.get("generation_bar_date")
         or prediction.get("bar_date")
         or rows[0].get("bar_date")
-    )[:10]
+    )
     values = _prediction_map(rows, "predicted_fixed20_net_value_bps", "predicted_fixed20_net25_bps")
     positives = [str(r["symbol"]) for r in rows if _positive(r)]
     breadth = len(positives) / len(rows)
     eligible = signal_date >= "2026-09-10"
     if book:
+        safe_book = _safe_book(book)
         paper_action: dict[str, Any] = {
             "status": "PAPER_COHORT_READY" if eligible else "PRESTART_NO_BOOK",
-            "ticker_book": book.get("ticker_book"),
-            "industry_book": book.get("industry_book"),
-            "options_book": book.get("options_book"),
+            "ticker_book": safe_book["ticker_book"],
+            "industry_book": safe_book["industry_book"],
+            "options_book": safe_book["options_book"],
         }
     else:
         paper_action = {
@@ -124,9 +219,7 @@ def adapt_semiconductor(prediction: dict[str, Any], book: dict[str, Any] | None 
 def adapt_homebuilders(native: dict[str, Any]) -> dict[str, Any]:
     if native.get("schema") != "foundry.research.homebuilders_adaptive_duration_forward.v1":
         raise ValueError("unexpected Homebuilders adaptive-duration schema")
-    rows = list(native.get("observations") or [])
-    if not rows:
-        raise ValueError("homebuilders observation has no rows")
+    rows = _safe_rows("HOMEBUILDERS", list(native.get("observations") or []))
     signal_date = _date_from_timestamp((native.get("duration_snapshot") or {}).get("timestamp"))
     admitted = [
         str(r["symbol"])
@@ -140,7 +233,7 @@ def adapt_homebuilders(native: dict[str, Any]) -> dict[str, Any]:
     }
     predictions = _prediction_map(rows, "predicted_fixed20_net25_bps", "predicted_fixed20_net_value_bps")
     duration_scores = {
-        str(r["symbol"]): r.get("predicted_after25_bps_per_session", {})
+        str(r["symbol"]): _safe_duration_scores(r.get("predicted_after25_bps_per_session", {}))
         for r in rows
     }
     historical = native.get("historical_evidence") or {}
@@ -184,10 +277,8 @@ def adapt_homebuilders(native: dict[str, Any]) -> dict[str, Any]:
 
 
 def adapt_largecap(native: dict[str, Any]) -> dict[str, Any]:
-    rows = list(native.get("snapshot") or native.get("observations") or [])
-    if not rows:
-        raise ValueError("generalized large-cap snapshot has no rows")
-    signal_date = str(native.get("bar_date") or native.get("generation_bar_date") or rows[0].get("bar_date"))[:10]
+    rows = _safe_rows("GENERALIZED_LARGECAP_RIDGE", list(native.get("snapshot") or native.get("observations") or []))
+    signal_date = _safe_date(native.get("bar_date") or native.get("generation_bar_date") or rows[0].get("bar_date"))
     external = [r for r in rows if str(r.get("role", "")).startswith("external")] or rows
     values = _prediction_map(external, "predicted_fixed20_net_value_bps", "predicted_fixed20_net25_bps")
     positives = [str(r["symbol"]) for r in external if _positive(r)]
@@ -269,6 +360,35 @@ def self_test() -> None:
     })
     assert large["signal"]["positive_symbols"] == ["CAT"]
     assert large["paper_action"]["status"] == "CORROBORATION_ONLY_NO_FROZEN_BOOK"
+    # Synthetic nested sentinel rejection: never pass native boundaries or
+    # three-book extras into a public sanitized adapter.
+    for mutated in (
+        {"generation_bar_date": "2026-09-10", "observations": [
+            {"symbol": "AMAT", "predicted_fixed20_net_value_bps": 10.0}],
+         "boundaries": {"PRIVATE_SENTINEL": {"secret": "never_public"}}},
+        {"generation_bar_date": "2026-09-10", "observations": [
+            {"symbol": "PRIVATE_SENTINEL", "predicted_fixed20_net_value_bps": 10.0}]},
+    ):
+        try:
+            adapt_semiconductor(mutated)
+        except ValueError as exc:
+            assert "SENTINEL" not in str(exc)
+        else:
+            raise AssertionError("private native field reached public adapter")
+    try:
+        adapt_semiconductor({
+            "generation_bar_date": "2026-09-10",
+            "observations": [{"symbol": "AMAT", "predicted_fixed20_net_value_bps": 10.0}],
+        }, book={
+            "ticker_book": {"status": "PAPER_COHORT_READY", "PRIVATE_SENTINEL": {"secret": "never_public"}},
+            "industry_book": {"status": "PAPER_COHORT_READY"},
+            "options_book": {"status": "FAIL_CLOSED"},
+        })
+    except ValueError as exc:
+        assert "SENTINEL" not in str(exc)
+    else:
+        raise AssertionError("private nested book field reached public adapter")
+    print("FORWARD_NATIVE_PUBLIC_ADAPTER_NESTED_SENTINEL_SELF_TEST=PASS")
     print("FORWARD_NATIVE_PROGRAM_ADAPTER_SELF_TEST=PASS")
 
 
