@@ -46,6 +46,7 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     # New exact paper post-execution quarantine regression, no broker access.
     "tests.test_selected_runtime_cloud_cycle_v1",
     "tests.test_selected_runtime_terminal_ledger_corruption_product_20261024",
+    "tests.test_selected_runtime_strategy_inventory_unverified_receipt_product_20261024",
     # Exact selected-account position snapshot safety regression, networkless.
     "tests.test_cloud_operator_snapshot_v1",
     # Read-only account open-order completeness projection, never a broker consumer.
