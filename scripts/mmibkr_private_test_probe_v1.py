@@ -82,6 +82,8 @@ SAFE_EXACT = {
     "tests.test_model_lab_validation_authority_cc44",
     "tests.test_data_manager_indicator_context_contract_14th31jq",
     "tests.test_data_manager_registry_authority_14th31lm",
+    # Exact native stock intraday/derived source-coverage fail-close; brokerless.
+    "tests.test_stock_range_intraday_coverage_product_20261024",
     "tests.test_historical_source_stitch",
     "tests.test_external_history_admitted_ingest_contract",
     "tests.test_materialize_admitted_stock_source_canonical",
