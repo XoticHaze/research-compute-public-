@@ -185,7 +185,7 @@ jobs:
           assert "LIVE_PROTECTED_PRIVATE_SOURCE_APPROVAL_MISSING=1" in owner
           assert "LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1" in owner
           assert owner.index("LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1") < owner.index("EXPLICIT_APPROVED_CANONICAL_LIVE_OWNER=1")
-          assert owner.index("LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1") < owner.index("Materialize canonical exact private source through existing encrypted Fleet vault")
+          assert owner.index("LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1") < owner.index("Materialize canonical exact private " + "source through existing encrypted Fleet vault")
           # Execute the exact writable preflight guard with synthetic hashes.
           # Never request IBKR credentials, Gateway, or a private source archive.
           import os, subprocess
