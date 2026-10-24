@@ -1,13 +1,13 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "39e20084f05ad788bb01c463debd480b1f573536",
-  "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
+  "source_ref": "326115c5344904ca462073a0b3b1448b1413c350",
+  "acceptance_file": "ui-react/src/lib/pilotStrategySpecHandoff.acceptance.test.mjs",
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
   "requested_by": "continue-release-20261024-clockin-20261024162001495",
-  "purpose": "Exact selected P0/UI composite #975 39e20084 after Product #1006 two-path broker-fill display guard; admitted encrypted Source Vault, native Node acceptance plus Vite, no broker/live/deploy",
-  "request_nonce": "release-p0-ui-composite-39e20084-20261024-r1",
+  "purpose": "Changed selected #975 Arena zero-trade forward-evidence Product #1008 exact encrypted Node/Vite acceptance; no broker/live/deploy",
+  "request_nonce": "release-p0-ui-composite-326115c5-20261024-r1",
   "authority": {
     "research_only": true,
     "broker": false,
