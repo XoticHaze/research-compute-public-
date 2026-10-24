@@ -754,6 +754,14 @@ def self_test() -> None:
         assert native_by_id["HOMEBUILDERS"]["evidence_grade"] == "PROSPECTIVE_OPEN"
         assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["evidence_grade"] == "PROSPECTIVE_AWAITING_ENTRY_SESSION"
         assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["validation_grade"] == "PROSPECTIVE_SIGNAL_READY"
+        assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["forward_science_stages"]["resolved_h20_cohort_count"] == 0
+        one = _separate_forward_science_stages({"resolved_cohorts": 1, "minimum_resolved_for_promotion": 20})
+        assert one["forward_sanity_stage"] == "RESOLVED_COHORT_OBSERVED_ISSUER_ENVELOPE_PENDING"
+        assert one["full_promotion_sample_floor_reached"] is False
+        assert one["live_canary_eligibility_stage"] == "INDEPENDENT_OWNER_ADJUDICATION_REQUIRED"
+        twenty = _separate_forward_science_stages({"resolved_cohorts": 20, "minimum_resolved_for_promotion": 20})
+        assert twenty["full_promotion_sample_floor_reached"] is True
+        assert twenty["promotion_authority"] is False
         assert out["coverage"]["prospective_ledger"]["present"] is True
         assert out["freshness"]["freshness_gap_visible"] is True
         assert out["freshness"]["p249_p266_source_health"]["lagging_symbols_vs_source_max"] == ["XBI"]
