@@ -2,6 +2,13 @@ name: IBKR Current Gateway Image Probe
 
 on:
   push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ibkr-current-gateway-image-probe.yml'
+  pull_request:
+    branches:
+      - main
     paths:
       - '.github/workflows/ibkr-current-gateway-image-probe.yml'
   workflow_dispatch:
@@ -11,6 +18,7 @@ permissions:
 
 jobs:
   probe:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
@@ -34,4 +42,41 @@ jobs:
             printf "TWS_MAJOR_VRSN=%s\n" "${TWS_MAJOR_VRSN:-}"
             printf "IBC_PATH="; command -v ibcstart.sh || true
             find /home/ibgateway/Jts/ibgateway -maxdepth 1 -mindepth 1 -type d -printf "GATEWAY_DIR=%f\n" 2>/dev/null || true
+          '
+
+  controller_arm64_manifest:
+    # One read-only registry proof on the PR; never launch a Gateway or broker.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check exact pinned controller OCI ARM64 index
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='ghcr.io/code-hustler-ft3d/ibg-controller@sha256:2e4f4911991386e941f6e95d58ee38a8242474dd3be239f21ad82557d24b4368'
+          docker buildx version
+          docker buildx imagetools inspect --raw "$image" | python3 -c '
+          import json,sys
+          node=json.load(sys.stdin)
+          manifests=node.get("manifests")
+          if not isinstance(manifests,list):
+              print("PINNED_CONTROLLER_ARCHITECTURE=UNPROVEN_SINGLE_MANIFEST")
+              sys.exit(3)
+          platforms=sorted({
+              (str(m.get("platform",{}).get("os",""))+"/"+str(m.get("platform",{}).get("architecture","")))
+              for m in manifests if isinstance(m,dict) and isinstance(m.get("platform"),dict)
+          })
+          arm64="linux/arm64" in platforms
+          amd64="linux/amd64" in platforms
+          print("PINNED_CONTROLLER_OCI_INDEX=OBSERVED")
+          print("PINNED_CONTROLLER_LINUX_AMD64="+str(amd64).lower())
+          print("PINNED_CONTROLLER_LINUX_ARM64="+str(arm64).lower())
+          print("PINNED_CONTROLLER_PLATFORM_COUNT="+str(len(platforms)))
+          if not arm64:
+              print("PI_ARM64_IMAGE_ADMISSION=BLOCKED_EXACT_PIN_NO_ARM64_MANIFEST")
+              sys.exit(2)
+          print("PI_ARM64_IMAGE_ADMISSION=MANIFEST_PRESENT_RUNTIME_UNVERIFIED")
           '
