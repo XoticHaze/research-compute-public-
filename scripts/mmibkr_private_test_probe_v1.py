@@ -47,6 +47,8 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_ibkr_persistent_host_preflight_v1",
     # New exact paper post-execution quarantine regression, no broker access.
     "tests.test_selected_runtime_cloud_cycle_v1",
+    # Exact canonical read-only B1 initial-backfill contract integrity, brokerless.
+    "tests.test_selected_runtime_initial_backfill_ingest_v1",
     "tests.test_selected_runtime_terminal_ledger_corruption_product_20261024",
     "tests.test_selected_runtime_strategy_inventory_unverified_receipt_product_20261024",
     # Exact selected-account position snapshot safety regression, networkless.
