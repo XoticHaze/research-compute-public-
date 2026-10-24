@@ -486,10 +486,13 @@ def main() -> int:
         encoded = json.dumps(receipt, sort_keys=True, separators=(",", ":"))
     finally:
         if image_tag and re.fullmatch(r"mmibkr-private-test-probe:[A-Za-z0-9._-]{1,100}", image_tag):
-            subprocess.run(
-                ["docker", "image", "rm", image_tag],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
-            )
+            try:
+                subprocess.run(
+                    ["docker", "image", "rm", image_tag],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+                )
+            except OSError:
+                pass  # No private CLI exception text on cleanup failure.
         runner_temp = os.environ.get("RUNNER_TEMP", "")
         if args is not None and runner_temp:
             expected = (Path(runner_temp).resolve() / "mmibkr-private-test-probe-source").resolve()
