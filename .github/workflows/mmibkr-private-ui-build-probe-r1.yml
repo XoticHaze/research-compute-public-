@@ -79,6 +79,14 @@ jobs:
               raise SystemExit("private UI build requires exact source SHA")
           if not acceptance:
               raise SystemExit("private UI build requires acceptance file")
+          # Validate against the existing probe's single fixed allowlist BEFORE
+          # writing to GITHUB_ENV or decrypting private source. This rejects
+          # embedded newlines, arbitrary files and forged env-file assignments.
+          from scripts.mmibkr_private_ui_build_probe_v1 import validate_acceptance_file
+          try:
+              acceptance = validate_acceptance_file(acceptance)
+          except (ValueError, TypeError):
+              raise SystemExit("private UI build acceptance file rejected")
           with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as fh:
               fh.write("MMIBKR_PRIVATE_UI_SOURCE_REF=" + source_ref + "\n")
               fh.write("MMIBKR_PRIVATE_UI_ACCEPTANCE=" + acceptance + "\n")

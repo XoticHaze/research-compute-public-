@@ -25,8 +25,27 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/canonical-market-chart-provenance.acceptance.test.mjs",
     "ui-react/src/lib/pilotStrategySpecHandoff.acceptance.test.mjs",
     "ui-react/src/lib/pilotPromotionAdmissionExport.acceptance.test.mjs",
+    # Selected MM-IBKR UI #937 source-only contradictory account-scope safety regression.
+    "ui-react/src/lib/accountMarginSafety.test.mjs",
+    # Selected MM-IBKR UI #949 exact read-only broker cache/cancel guard regression.
+    "ui-react/src/components/operatorOrderSnapshot.cancel-guard.test.mjs",
+    # Exact selected #888 Pilot bounded matrix and Bot Console conId operator truth.
+    "ui-react/src/lib/pilotMatrixPlan.test.mjs",
+    "ui-react/src/lib/botConsoleExactAccountHoldings.test.mjs",
+    # Selected UI #888 exact account-position/fill/order scope presentation regression.
+    "ui-react/src/lib/botConsolePositionTruth.test.mjs",
     "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
 }
+
+
+class _PublicSafeArgumentParser(argparse.ArgumentParser):
+    """Reject malformed public CLI without echoing caller-provided private text."""
+
+    def __init__(self) -> None:
+        super().__init__(add_help=False)
+
+    def error(self, _message: str) -> None:
+        raise ValueError("invalid_public_ui_probe_arguments")
 
 
 def _sha256(path: Path) -> str:
@@ -87,7 +106,7 @@ def validate_source_identity(
 def validate_acceptance_file(raw: str) -> str:
     value = str(raw or "").strip().replace("\\", "/")
     if value not in ALLOWED_ACCEPTANCE_FILES:
-        raise ValueError(f"ui_acceptance_file_not_allowlisted:{value}")
+        raise ValueError("ui_acceptance_file_not_allowlisted")
     path = Path(value)
     if path.is_absolute() or ".." in path.parts:
         raise ValueError("ui_acceptance_file_path_rejected")
@@ -258,21 +277,119 @@ def run_probe(
     }
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--source-root", required=True)
-    parser.add_argument("--source-materialization", required=True)
-    parser.add_argument("--source-ref", required=True)
-    parser.add_argument("--acceptance-file", required=True)
-    args = parser.parse_args()
+_PUBLIC_RECEIPT_FIELDS = frozenset({
+    "schema", "status", "source_identity", "package_contract",
+    "acceptance_file", "npm_ci", "node_acceptance", "vite_build",
+    "dist_index_present", "dist_file_count", "dist_digest_sha256",
+    "authority", "sanitization",
+})
+_PUBLIC_NESTED_FIELDS = {
+    "source_identity": frozenset({
+        "repository", "source_ref", "source_sha", "source_archive_sha256",
+        "source_archive_bytes", "source_manifest_sha256",
+        "source_transport", "vault_attestation_verified",
+    }),
+    "package_contract": frozenset({
+        "build_script", "lockfile_version", "lifecycle_hooks_disabled",
+    }),
+    "npm_ci": frozenset({
+        "status", "exit_code", "captured_output_sha256", "captured_output_bytes",
+    }),
+    "node_acceptance": frozenset({
+        "status", "exit_code", "captured_output_sha256", "captured_output_bytes",
+    }),
+    "vite_build": frozenset({
+        "status", "exit_code", "captured_output_sha256", "captured_output_bytes",
+    }),
+    "authority": frozenset({
+        "research_only", "private_repository_token_used",
+        "broker_credentials_used", "broker_request_made", "broker_action",
+        "strategy_spec_write", "runtime_activation", "promotion_mutation",
+        "live_trading_allowed",
+    }),
+    "sanitization": frozenset({
+        "private_plaintext_published", "captured_build_output_published",
+        "output_retained_as_digest_only",
+    }),
+}
 
-    receipt = run_probe(
-        source_root=Path(args.source_root).resolve(),
-        source_materialization=Path(args.source_materialization).resolve(),
-        expected_source_ref=str(args.source_ref),
-        acceptance_file=str(args.acceptance_file),
-    )
-    encoded = json.dumps(receipt, sort_keys=True, separators=(",", ":"))
+
+def _public_receipt(value: dict[str, Any]) -> dict[str, Any]:
+    """Fail closed on unexpected nested fields or non-digest private values."""
+    if not isinstance(value, dict) or set(value) != _PUBLIC_RECEIPT_FIELDS:
+        raise ValueError("public_receipt_field_set_rejected")
+    for key, fields in _PUBLIC_NESTED_FIELDS.items():
+        if not isinstance(value[key], dict) or set(value[key]) != fields:
+            raise ValueError("public_receipt_nested_field_set_rejected")
+    if value["schema"] != SCHEMA or value["status"] not in {"PASS", "FAIL"}:
+        raise ValueError("public_receipt_status_rejected")
+    if value["acceptance_file"] not in ALLOWED_ACCEPTANCE_FILES:
+        raise ValueError("public_receipt_acceptance_rejected")
+    identity = value["source_identity"]
+    if identity["repository"] != "XoticHaze/mm-IBKR":
+        raise ValueError("public_receipt_repository_rejected")
+    for field in ("source_ref", "source_sha", "source_archive_sha256"):
+        digest = identity[field]
+        if not isinstance(digest, str) or len(digest) not in (40, 64) or any(ch not in "0123456789abcdef" for ch in digest):
+            raise ValueError("public_receipt_digest_rejected")
+    optional = identity["source_manifest_sha256"]
+    if optional is not None and (not isinstance(optional, str) or len(optional) != 64 or any(ch not in "0123456789abcdef" for ch in optional)):
+        raise ValueError("public_receipt_manifest_digest_rejected")
+    if (type(identity["source_archive_bytes"]) is not int or identity["source_archive_bytes"] < 0
+            or identity["source_transport"] != "fleet_authority_exact_sha_encrypted_snapshot_vault"
+            or identity["vault_attestation_verified"] is not True):
+        raise ValueError("public_receipt_source_identity_rejected")
+    pkg = value["package_contract"]
+    if pkg != {"build_script": "vite build", "lockfile_version": 3, "lifecycle_hooks_disabled": True}:
+        raise ValueError("public_receipt_package_rejected")
+    for step in ("npm_ci", "node_acceptance", "vite_build"):
+        item = value[step]
+        digest = item["captured_output_sha256"]
+        if (item["status"] not in {"PASS", "FAIL", "SKIPPED"}
+                or (item["exit_code"] is not None and type(item["exit_code"]) is not int)
+                or type(item["captured_output_bytes"]) is not int or item["captured_output_bytes"] < 0
+                or (digest is not None and (not isinstance(digest, str) or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest)))):
+            raise ValueError("public_receipt_step_rejected")
+    dist = value["dist_digest_sha256"]
+    if (type(value["dist_index_present"]) is not bool
+            or type(value["dist_file_count"]) is not int or value["dist_file_count"] < 0
+            or (dist is not None and (not isinstance(dist, str) or len(dist) != 64 or any(ch not in "0123456789abcdef" for ch in dist)))):
+        raise ValueError("public_receipt_dist_rejected")
+    if value["authority"] != {
+        "research_only": True, "private_repository_token_used": False,
+        "broker_credentials_used": False, "broker_request_made": False,
+        "broker_action": False, "strategy_spec_write": False,
+        "runtime_activation": False, "promotion_mutation": False,
+        "live_trading_allowed": False,
+    } or value["sanitization"] != {
+        "private_plaintext_published": False,
+        "captured_build_output_published": False,
+        "output_retained_as_digest_only": True,
+    }:
+        raise ValueError("public_receipt_authority_rejected")
+    return value
+
+
+def main() -> int:
+    # No private source paths, arguments, exception messages or nested fields
+    # may reach public workflow stdout/stderr, including parse failures.
+    try:
+        parser = _PublicSafeArgumentParser()
+        parser.add_argument("--source-root", required=True)
+        parser.add_argument("--source-materialization", required=True)
+        parser.add_argument("--source-ref", required=True)
+        parser.add_argument("--acceptance-file", required=True)
+        args = parser.parse_args()
+        receipt = _public_receipt(run_probe(
+            source_root=Path(args.source_root).resolve(),
+            source_materialization=Path(args.source_materialization).resolve(),
+            expected_source_ref=str(args.source_ref),
+            acceptance_file=str(args.acceptance_file),
+        ))
+        encoded = json.dumps(receipt, sort_keys=True, separators=(",", ":"))
+    except Exception:
+        receipt = {"schema": SCHEMA, "status": "REJECTED"}
+        encoded = json.dumps(receipt, sort_keys=True, separators=(",", ":"))
     print("MMIBKR_PRIVATE_UI_BUILD_RECEIPT=" + encoded)
     print(
         "MMIBKR_PRIVATE_UI_BUILD_RECEIPT_SHA256="
