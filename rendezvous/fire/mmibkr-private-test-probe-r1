@@ -1,16 +1,16 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "6ee0c2664273d6b843961def31bfcb37c45ca362",
+  "source_ref": "1cd6ab74e54ab97afad59d81611cd75027fefe91",
   "test_modules": [
-    "tests.test_selected_runtime_live_execution_ledger_v1",
-    "tests.test_selected_runtime_live_p0_integrated_checkpoint_v1"
+    "tests.test_cloud_operator_open_orders_truth_product_20261024",
+    "tests.test_cloud_operator_snapshot_v1"
   ],
   "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
   "s3_composition_economics": false,
   "s4_layered_mtf_economics": false,
-  "requested_by": "continue-release-20261024-clockin-20261024091127185",
-  "purpose": "Exact isolated P0#883+UI#888 source composite 6ee0 integrated ledger/checkpoint acceptance, networkless Docker no broker/live",
+  "requested_by": "continue-release-20261024-clockin-20261024094112319",
+  "purpose": "Newly protected-merged public P0 #1980 exact read-only account open-order and scope regression admission on selected #883; networkless Docker, no broker/live",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -18,8 +18,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "p0-ui-composite-6ee0-integrated-checkpoint-20261024-r1",
+  "request_nonce": "p0-open-orders-1980-1cd6-20261024-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "6ee0c2664273d6b843961def31bfcb37c45ca362",
+  "current_private_reference": "1cd6ab74e54ab97afad59d81611cd75027fefe91",
   "parity_public_key_b64": ""
 }
