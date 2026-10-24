@@ -20,6 +20,18 @@ VIEW_MODEL='ui-react/src/components/autotuner-operator-status-view-model.js'
 MAX_FILES=8
 MAX_PLAINTEXT_BYTES=4*1024*1024
 MAX_MEMBER_BYTES=2*1024*1024
+MAX_TAR_MEMBERS=32
+MAX_TOTAL_MEMBER_BYTES=MAX_PLAINTEXT_BYTES
+
+
+class _PublicSafeArgumentParser(argparse.ArgumentParser):
+    """Never echo caller-provided private CLI argument text into public stderr."""
+
+    def __init__(self):
+        super().__init__(add_help=False)
+
+    def error(self, _message):
+        raise ValueError('invalid_public_cli_arguments')
 
 
 def b64d(v:str)->bytes: return base64.b64decode(v.encode('ascii'),validate=True)
@@ -42,6 +54,39 @@ def reject_authority(v,p='root'):
     elif isinstance(v,list):
         for i,c in enumerate(v): reject_authority(c,f'{p}[{i}]')
 
+def safe_tar_members(members)->bool:
+    """Bound tar headers, aggregate expansion and normalized paths before extraction."""
+    seen=set()
+    total_bytes=0
+    for count,member in enumerate(members,1):
+        if count>MAX_TAR_MEMBERS or not (member.isfile() or member.isdir()) or not safe_name(member.name):
+            return False
+        if member.isfile():
+            if member.size<0 or member.size>MAX_MEMBER_BYTES:
+                return False
+            total_bytes+=member.size
+            if total_bytes>MAX_TOTAL_MEMBER_BYTES:
+                return False
+        canonical=str(Path(member.name))
+        if canonical in seen or canonical=='.':
+            return False
+        seen.add(canonical)
+    return True
+
+
+
+def validated_tar_members(archive):
+    """Stop on the first unsafe header, before parsing the rest of a gzip tar."""
+    members=[]; file_count=0
+    for member in archive:
+        members.append(member)
+        if not safe_tar_members(members): raise RuntimeError('unsafe payload members')
+        if member.isfile():
+            file_count+=1
+            if file_count>MAX_FILES: raise RuntimeError('payload file count exceeds limit')
+    return members
+
+
 def load_obj(path:Path)->dict:
     v=json.loads(path.read_text(encoding='utf-8-sig'))
     if not isinstance(v,dict): raise RuntimeError(f'JSON root must be object: {path}')
@@ -62,10 +107,9 @@ def consume(envelope_path:Path,private_key_path:Path,run_id:str)->dict:
     plain_sha=hashlib.sha256(plain).hexdigest()
     if len(plain)>MAX_PLAINTEXT_BYTES or plain_sha!=env['plaintext_sha256']: raise RuntimeError('payload size/digest mismatch')
     with tarfile.open(fileobj=io.BytesIO(plain),mode='r:gz') as ar:
-        members=ar.getmembers(); files=[m for m in members if m.isfile()]
-        if len(files)>MAX_FILES: raise RuntimeError('payload file count exceeds limit')
-        for m in members:
-            if m.issym() or m.islnk() or not safe_name(m.name) or (m.isfile() and m.size>MAX_MEMBER_BYTES): raise RuntimeError(f'unsafe payload member: {m.name}')
+        # getmembers() would exhaustively parse untrusted gzip headers first.
+        members=validated_tar_members(ar)
+        files=[m for m in members if m.isfile()]
         names={m.name for m in files}
         if 'manifest.json' not in names: raise RuntimeError('manifest missing')
         manifest=json.loads(ar.extractfile('manifest.json').read().decode())
@@ -75,7 +119,7 @@ def consume(envelope_path:Path,private_key_path:Path,run_id:str)->dict:
         required_files={ENTRYPOINT,VIEW_MODEL,SNAPSHOT}
         if not isinstance(declared,dict) or names!=set(declared)|{'manifest.json'} or not required_files.issubset(names): raise RuntimeError('payload file-set mismatch')
         with tempfile.TemporaryDirectory(prefix='p01-autotuner-html-') as td:
-            root=Path(td); ar.extractall(root)
+            root=Path(td); ar.extractall(root,members=members)
             for rel,expected in declared.items():
                 if not safe_name(rel) or hashlib.sha256((root/rel).read_bytes()).hexdigest()!=str(expected).lower(): raise RuntimeError(f'payload digest mismatch: {rel}')
             snapshot=load_obj(root/SNAPSHOT)
@@ -89,7 +133,47 @@ def consume(envelope_path:Path,private_key_path:Path,run_id:str)->dict:
             if b'Fail-closed authority boundary' not in html or b'Automatic promotion: false' not in html: raise RuntimeError('HTML safety presentation missing')
             return {'schema':RECEIPT_SCHEMA,'authority':AUTHORITY,'harness':HARNESS,'mm_head_sha':MM_HEAD_SHA,'status':'PASS','runtime_count':int(snapshot['runtime_count']),'snapshot_sha256':hashlib.sha256((root/SNAPSHOT).read_bytes()).hexdigest(),'html_sha256':hashlib.sha256(html).hexdigest(),'automatic_promotion':False,'strategy_spec_write':False,'runtime_activation':False,'broker_submit':False,'live_unlock':False}
 
+# Public GitHub logs must never interpolate private snapshot keys, tar member
+# names, subprocess errors, or nested consumer data, even on rejection.
+_PUBLIC_KEYS = frozenset({
+    'schema', 'authority', 'harness', 'mm_head_sha', 'status', 'runtime_count',
+    'snapshot_sha256', 'html_sha256', 'automatic_promotion',
+    'strategy_spec_write', 'runtime_activation', 'broker_submit', 'live_unlock',
+})
+_PUBLIC_FALSE = ('automatic_promotion', 'strategy_spec_write',
+                 'runtime_activation', 'broker_submit', 'live_unlock')
+
+
+def public_receipt(value:dict)->dict:
+    """Fixed-field public success projection; no nested/private passthrough."""
+    if not isinstance(value,dict) or set(value)!=_PUBLIC_KEYS:
+        raise RuntimeError('PUBLIC_RECEIPT_FIELD_SET_REJECTED')
+    expected={'schema':RECEIPT_SCHEMA,'authority':AUTHORITY,'harness':HARNESS,
+              'mm_head_sha':MM_HEAD_SHA,'status':'PASS'}
+    if any(value.get(k)!=v for k,v in expected.items()):
+        raise RuntimeError('PUBLIC_RECEIPT_IDENTITY_REJECTED')
+    if any(value.get(k) is not False for k in _PUBLIC_FALSE):
+        raise RuntimeError('PUBLIC_RECEIPT_AUTHORITY_REJECTED')
+    count=value.get('runtime_count')
+    if type(count) is not int or not 1<=count<=100000:
+        raise RuntimeError('PUBLIC_RECEIPT_COUNT_REJECTED')
+    for key in ('snapshot_sha256','html_sha256'):
+        digest=value.get(key)
+        if not isinstance(digest,str) or len(digest)!=64 or any(c not in '0123456789abcdef' for c in digest):
+            raise RuntimeError('PUBLIC_RECEIPT_DIGEST_REJECTED')
+    return {k:value[k] for k in sorted(_PUBLIC_KEYS)}
+
+
 def main()->int:
-    p=argparse.ArgumentParser(); p.add_argument('--envelope',type=Path,required=True); p.add_argument('--private-key',type=Path,required=True); p.add_argument('--run-id',required=True); a=p.parse_args()
-    print('P01_AUTOTUNER_HTML_RECEIPT='+json.dumps(consume(a.envelope,a.private_key,a.run_id),sort_keys=True)); return 0
+    p=_PublicSafeArgumentParser(); p.add_argument('--envelope',type=Path,required=True); p.add_argument('--private-key',type=Path,required=True); p.add_argument('--run-id',required=True)
+    try:
+        a=p.parse_args()
+        public=public_receipt(consume(a.envelope,a.private_key,a.run_id))
+    except Exception:
+        # Constant public failure, not a traceback containing private key names
+        # or user-controlled error messages. No result artifact is published.
+        print('P01_AUTOTUNER_HTML_RECEIPT='+json.dumps({'schema':RECEIPT_SCHEMA,'status':'REJECTED'},sort_keys=True))
+        return 1
+    print('P01_AUTOTUNER_HTML_RECEIPT='+json.dumps(public,sort_keys=True))
+    return 0
 if __name__=='__main__': raise SystemExit(main())
