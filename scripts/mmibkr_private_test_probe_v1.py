@@ -39,6 +39,8 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_ibkr_live_successor_ledger_reconcile_v1",
     # Exact canonical read-only same-contract execId conflict falsifier; no broker I/O.
     "tests.test_execid_cross_filter_conflict_product",
+    # Reject missing/non-native immutable broker execId before any order filter.
+    "tests.test_missing_execid_identity_product_20261024",
     # Exact source-only P0 journal / fill validator / same-owner broker readback.
     "tests.test_selected_runtime_live_order_intent_journal_v1",
     "tests.test_selected_runtime_live_execution_ledger_v1",
