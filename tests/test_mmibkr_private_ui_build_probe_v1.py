@@ -74,6 +74,18 @@ def test_acceptance_file_is_exact_allowlist():
         )
         == "ui-react/src/pages/BotConsolePage.acceptance.test.mjs"
     )
+    assert (
+        mod.validate_acceptance_file("ui-react/src/lib/accountMarginSafety.test.mjs")
+        == "ui-react/src/lib/accountMarginSafety.test.mjs"
+    )
+    # No sibling wildcard, mutation, or arbitrary private script execution.
+    for denied in (
+        "ui-react/src/lib/accountMarginSafety.live-submit.test.mjs",
+        "ui-react/src/lib/accountMarginSafety.test.js",
+        "ui-react/src/lib/../pages/accountMarginSafety.test.mjs",
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
     with pytest.raises(ValueError, match="not_allowlisted"):
         mod.validate_acceptance_file("ui-react/src/other.test.mjs")
     with pytest.raises(ValueError):
