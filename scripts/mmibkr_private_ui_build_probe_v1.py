@@ -33,6 +33,16 @@ ALLOWED_ACCEPTANCE_FILES = {
 }
 
 
+class _PublicSafeArgumentParser(argparse.ArgumentParser):
+    """Reject malformed public CLI without echoing caller-provided private text."""
+
+    def __init__(self) -> None:
+        super().__init__(add_help=False)
+
+    def error(self, _message: str) -> None:
+        raise ValueError("invalid_public_ui_probe_arguments")
+
+
 def _sha256(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as handle:
@@ -91,7 +101,7 @@ def validate_source_identity(
 def validate_acceptance_file(raw: str) -> str:
     value = str(raw or "").strip().replace("\\", "/")
     if value not in ALLOWED_ACCEPTANCE_FILES:
-        raise ValueError(f"ui_acceptance_file_not_allowlisted:{value}")
+        raise ValueError("ui_acceptance_file_not_allowlisted")
     path = Path(value)
     if path.is_absolute() or ".." in path.parts:
         raise ValueError("ui_acceptance_file_path_rejected")
@@ -263,19 +273,24 @@ def run_probe(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--source-root", required=True)
-    parser.add_argument("--source-materialization", required=True)
-    parser.add_argument("--source-ref", required=True)
-    parser.add_argument("--acceptance-file", required=True)
-    args = parser.parse_args()
+    # No private source paths, arguments, exception messages or nested fields
+    # may reach public workflow stdout/stderr, including parse failures.
+    try:
+        parser = _PublicSafeArgumentParser()
+        parser.add_argument("--source-root", required=True)
+        parser.add_argument("--source-materialization", required=True)
+        parser.add_argument("--source-ref", required=True)
+        parser.add_argument("--acceptance-file", required=True)
+        args = parser.parse_args()
+        receipt = run_probe(
+            source_root=Path(args.source_root).resolve(),
+            source_materialization=Path(args.source_materialization).resolve(),
+            expected_source_ref=str(args.source_ref),
+            acceptance_file=str(args.acceptance_file),
+        )
+    except Exception:
+        receipt = {"schema": SCHEMA, "status": "REJECTED"}
 
-    receipt = run_probe(
-        source_root=Path(args.source_root).resolve(),
-        source_materialization=Path(args.source_materialization).resolve(),
-        expected_source_ref=str(args.source_ref),
-        acceptance_file=str(args.acceptance_file),
-    )
     encoded = json.dumps(receipt, sort_keys=True, separators=(",", ":"))
     print("MMIBKR_PRIVATE_UI_BUILD_RECEIPT=" + encoded)
     print(
