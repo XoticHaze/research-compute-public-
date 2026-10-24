@@ -143,9 +143,10 @@ def test_workflow_exposes_private_ui_rendezvous_fire_and_dispatch():
     assert "elif event == \"push\":" in source
 
 
-def test_builder_persisted_review_and_crw_cross_timeframe_exact_allowlist():
+def test_builder_model_digest_and_crw_cross_timeframe_exact_allowlist():
     exact = (
         "ui-react/src/lib/builderPersistedReviewTruth.test.mjs",
+        "ui-react/src/lib/tradingProductReadiness.digest-identity.test.mjs",
         "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.cross-timeframe-capability.test.mjs",
     )
     for path in exact:
@@ -153,6 +154,9 @@ def test_builder_persisted_review_and_crw_cross_timeframe_exact_allowlist():
     for denied in (
         "ui-react/src/lib/builderPersistedReviewTruth.mjs",
         "ui-react/src/lib/builderPersistedReviewTruth.test.mjs.bak",
+        "ui-react/src/lib/tradingProductReadiness.mjs",
+        "ui-react/src/lib/tradingProductReadiness.digest-identity.test.mjs.bak",
+        "ui-react/src/lib/other/tradingProductReadiness.digest-identity.test.mjs",
         "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.cross-timeframe-capability.test.mjs.extra",
         "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.jsx",
     ):
