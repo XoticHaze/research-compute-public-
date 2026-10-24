@@ -91,17 +91,36 @@ def _safe_book(book: dict) -> dict:
                     raise ValueError("public adapter book underlyings mismatch")
                 clean[key] = list(value)
             elif key in ("prediction_magnitude_used_for_sizing", "trade_authorized"):
-                if type(value) is not bool:
+                if type(value) is not bool or value is not False:
                     raise ValueError("public adapter book authority flag mismatch")
                 clean[key] = value
             elif key in ("status", "weighting", "instrument", "mapping", "reason"):
-                if not isinstance(value, str) or len(value) > 180 or any(ord(c) < 32 for c in value):
+                allowed_text = {
+                    ("ticker_book", "status"): {"PAPER_COHORT_READY"},
+                    ("ticker_book", "weighting"): {
+                        "inverse trailing 20-session realized volatility using only prices available on signal date",
+                    },
+                    ("industry_book", "status"): {"PAPER_COHORT_READY"},
+                    ("industry_book", "instrument"): {"SMH"},
+                    ("industry_book", "mapping"): {"daily_cohort_nav_fraction * positive_breadth"},
+                    ("options_book", "status"): {"FAIL_CLOSED"},
+                    ("options_book", "reason"): {
+                        "missing_point_in_time_chain_and_conditional_return_distribution",
+                        "options_snapshot_contract_incomplete",
+                        "inputs_present_but_option_value_consumer_not_yet_promoted",
+                    },
+                }
+                if not isinstance(value, str) or value not in allowed_text.get((kind, key), set()):
                     raise ValueError("public adapter book text field mismatch")
                 clean[key] = value
             else:
                 clean[key] = _finite(value)
         projected[kind] = clean
     return projected
+
+
+def _optional_finite(value: object) -> float | None:
+    return None if value is None else _finite(value)
 
 
 def _safe_duration_scores(value: object) -> dict:
@@ -146,6 +165,8 @@ def _boundaries(native: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("public adapter native boundary field-set mismatch")
     if any(type(value) is not bool for value in raw.values()):
         raise ValueError("public adapter native boundary type mismatch")
+    if any(raw.values()):
+        raise ValueError("public adapter native authority forbidden")
     return {
         "research_only": True,
         "allocation_authority": False,
@@ -268,8 +289,8 @@ def adapt_homebuilders(native: dict[str, Any]) -> dict[str, Any]:
         "benchmarks": ["ITB", "QQQ"],
         "validation": {
             "historical_gate_pass": bool(historical.get("historical_gate_pass", False)),
-            "historical_fixed20_matched_itb_excess_bps": historical.get("homebuilders_fixed20_matched_itb_excess_bps"),
-            "historical_adaptive_matched_itb_excess_bps": historical.get("homebuilders_binary_5_60_matched_itb_excess_bps"),
+            "historical_fixed20_matched_itb_excess_bps": _optional_finite(historical.get("homebuilders_fixed20_matched_itb_excess_bps")),
+            "historical_adaptive_matched_itb_excess_bps": _optional_finite(historical.get("homebuilders_binary_5_60_matched_itb_excess_bps")),
             "state": "PROSPECTIVE_DIAGNOSTIC_NO_PROMOTION",
         },
         "decision_use": (
