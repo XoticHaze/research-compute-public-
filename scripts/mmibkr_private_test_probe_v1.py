@@ -105,7 +105,6 @@ SAFE_EXACT = {
     # Exact research/accounting regressions. These modules are side-effect-free
     # validation consumers; selected_runtime names are admitted only by exact ID.
     "tests.test_backtest_capital_replay_v1",
-    "tests.test_capital_curve_fill_time_identity_product_20261024",
     "tests.test_selected_runtime_account_sizing_14th31lg",
     "tests.test_selected_runtime_account_sizing_submit_hook_14th31lg",
     "tests.test_selected_runtime_margin_guard_14th31lg",
@@ -163,6 +162,8 @@ SOURCE_ONLY_PNL_MODULES = frozenset({
     "tests.test_capital_fill_ledger_integrity_product_20261024",
     # One-shot fill/trade generator malformed-row fail-close, pure funded PnL.
     "tests.test_capital_generator_ledger_integrity_product_20261024",
+    # Open-position without a chart mark must fail closed, with network disabled.
+    "tests.test_capital_curve_fill_time_identity_product_20261024",
 })
 SAFE_EXACT.update(SOURCE_ONLY_MODEL_LAB_MODULES)
 SAFE_EXACT.update(SOURCE_ONLY_PNL_MODULES)
