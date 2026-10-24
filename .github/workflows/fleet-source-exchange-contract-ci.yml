@@ -15,6 +15,7 @@ on:
       - tests/live_owner_fence_transition_v1.test.mjs
       - tests/live_owner_fence_serialization_v1.test.mjs
       - tests/live_owner_fence_sqlite_candidate_v1.test.mjs
+      - tests/live_owner_fence_source_only_scope_v1.test.mjs
       - cloudflare/fleet-authority/wrangler.jsonc
       - cloudflare/fleet-authority/package.json
       - cloudflare/fleet-authority/package-lock.json
@@ -44,6 +45,7 @@ on:
       - tests/live_owner_fence_transition_v1.test.mjs
       - tests/live_owner_fence_serialization_v1.test.mjs
       - tests/live_owner_fence_sqlite_candidate_v1.test.mjs
+      - tests/live_owner_fence_source_only_scope_v1.test.mjs
       - cloudflare/fleet-authority/wrangler.jsonc
       - cloudflare/fleet-authority/package.json
       - cloudflare/fleet-authority/package-lock.json
@@ -82,6 +84,7 @@ jobs:
           node --test tests/live_owner_fence_serialization_v1.test.mjs
           node --check research/mmibkr_live_owner_fence_contract/live_owner_fence_sqlite_candidate_v1.mjs
           node --test tests/live_owner_fence_sqlite_candidate_v1.test.mjs
+          node --test tests/live_owner_fence_source_only_scope_v1.test.mjs
 
       - name: Require production and local Durable Object declarations to agree
         run: |
