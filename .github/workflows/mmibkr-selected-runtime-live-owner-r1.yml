@@ -206,11 +206,20 @@ jobs:
           assert 'WRITABLE_LIVE_GATEWAY_STARTED=1' in gateway
           assert "inputs.admission_only && 'yes' || 'no'" in gateway
           print('LIVE_EXACT_SUCCESSOR_DISPATCH_SHELL_PARSE=PASS')
+          # The first authenticated account read is a distinct shell step.
+          # Parse the actual source block, never execute a Gateway/login.
+          initial=owner.split('      - name: Bind and reconcile the expected existing production account without order mutation',1)[1].split("      - name: Open Gateway's read-only API",1)[0]
+          initial_run=initial.split('        run: |',1)[1]
+          initial_script="\n".join(line[10:] if line.startswith("          ") else line for line in initial_run.splitlines())
+          subprocess.run(["bash","-n"],input=initial_script,text=True,check=True)
+          print('LIVE_INITIAL_ACCOUNT_READ_SHELL_PARSE=PASS')
           checkpoint=owner.split('      - name: Stop live owner and encrypt canonical Gateway and bot data for successor',1)[1].split('      - name: Persist exact encrypted production-live successor state',1)[0]
           assert 'LIVE_RUNTIME_CHECKPOINT_SOURCE_QUIESCENT=1' in checkpoint
           assert 'LIVE_RUNTIME_CHECKPOINT_GATEWAY_STILL_RUNNING=1' in checkpoint
           assert 'docker stop --time 90 mmibkr-live-gateway >/dev/null 2>&1 || true' not in checkpoint
           assert 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1' in owner
+          assert 'LIVE_WRT_ACCOUNT_API_READBACK_ONLY=1' in owner
+          assert 'LIVE_WRT_ACCOUNT_READ_ONLY_RECONCILED=1' not in owner
           assert 'EXPLICIT_APPROVED_CANONICAL_LIVE_OWNER=1' in owner
           assert 'LIVE_MODE_REQUIRES_LEGACY_OR_EXACT_SUCCESSOR=1' in owner
           assert 'EPHEMERAL_LIVE_BROKER_MUTATION_DISABLED=1' not in owner
@@ -229,7 +238,7 @@ jobs:
           assert 'SUPERVISED_FIVE_HOUR_SHADOW_COMPLETE=1' in owner
           assert 'SUPERVISED_GATEWAY_ONLY_EIGHT_MINUTES_PASS=1' in owner
           assert 'SUPERVISED_GATEWAY_ONLY_API_UNSTABLE=1' in owner
-          assert 'SUPERVISED_GATEWAY_ONLY_BROKER_RECONCILED=1' in owner
+          assert 'SUPERVISED_GATEWAY_ONLY_BROKER_READBACK_ONLY=1' in owner
           assert 'SUPERVISED_GATEWAY_HEALTH=' in owner
           assert 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3' in owner
           assert 'AUTO_RESTART_ADOPT=yes' in owner
@@ -238,7 +247,7 @@ jobs:
           assert 'maintenance_grace_seconds=720' in owner
           assert 'SUPERVISED_MAINTENANCE_RECOVERY_GRACE_STARTED=1' in owner
           assert 'SUPERVISED_MAINTENANCE_RECOVERY_EXPIRED=1' in owner
-          assert 'SUPERVISED_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS=1' in owner
+          assert 'SUPERVISED_MAINTENANCE_ACCOUNT_POSITIONS_ORDERS_READBACK_ONLY=1' in owner
           assert 'SUPERVISED_MAINTENANCE_RECOVERY_INCOMPLETE_AT_SESSION_END=1' in owner
           # The independent read-only pool may outlast the controller's 480s
           # maintenance delay only on an exact in-window post-outage alert.
@@ -253,8 +262,45 @@ jobs:
                          'docker logs --since "$outage_utc" mmibkr-live-gateway',
                          'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_GRACE_STARTED=1',
                          'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_EXPIRED=1',
-                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS_EXECUTIONS=1'):
+                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_BROKER_READBACK_ONLY=1'):
               assert marker in pool, marker
+          # A real reset late in a 15m session must not be cut short by
+          # the nominal session end before the 480s controller delay finishes.
+          for marker in ('while :; do', 'pool_maintenance_alert_after_outage()',
+                         '[ "$now" -ge "$end" ]', '[ "$now" -ge "$((end + 720))" ]',
+                         '[ "$now" -ge "$((outage_since + 720))" ]',
+                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_BOUNDED_OBSERVATION=1',
+                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_OBSERVATION_INCOMPLETE=1'):
+              assert marker in pool, marker
+          assert 'timeout-minutes: 300' in pool
+          # Privacy regression: upstream IB timeout/account text is never
+          # emitted from public owner steps, even when Python exits nonzero.
+          for private_marker in (
+              'python - >"$RUNNER_TEMP/mmibkr-live-initial-account-read-private.log" 2>&1',
+              'if python - >"$private_probe_log" 2>&1',
+              'if ! python - >"$RUNNER_TEMP/mmibkr-live-supervised-read-private.log" 2>&1',
+              'if python - >"$RUNNER_TEMP/mmibkr-live-supervised-loop-read-private.log" 2>&1',
+              'if python - >"$RUNNER_TEMP/mmibkr-live-runtime-read-private.log" 2>&1',
+              'rm -f "$private_probe_log"',
+          ):
+              assert private_marker in owner, private_marker
+          assert "grep -xE 'MMIBKR_GATEWAY_POOL_BROKER_FAILURE_STAGE=" in pool
+          assert "grep -xE 'MMIBKR_GATEWAY_POOL_BROKER_FAILURE_CLASS=" in pool
+          assert "grep -xF 'MMIBKR_GATEWAY_POOL_BROKER_PROBE_RETRYABLE=1'" in pool
+          import tempfile
+          with tempfile.TemporaryDirectory() as temp_dir:
+              private_path=Path(temp_dir)/'broker-read-private.log'
+              shell = "\n".join((
+                  "umask 077",
+                  "python -c 'print(\"PRIVATE_IBKR_\"+\"ACCOUNT_SENTINEL\")' >\"$1\" 2>&1",
+                  "grep -xE 'MMIBKR_GATEWAY_POOL_BROKER_FAILURE_STAGE=(api_connect_and_sync|account_identity)' \"$1\" || true",
+                  "rm -f \"$1\"",
+              ))
+              private_test=subprocess.run(['bash','-c',shell,'_',str(private_path)],
+                                          capture_output=True,text=True,check=True)
+              assert ('PRIVATE_IBKR_'+'ACCOUNT_SENTINEL') not in private_test.stdout+private_test.stderr
+              assert not private_path.exists()
+          print('READONLY_GATEWAY_PRIVATE_BROKER_LOG_SENTINEL=PASS')
           pool_run=pool.split('        run: |',1)[1]
           pool_script="\n".join(line[10:] if line.startswith("          ") else line for line in pool_run.splitlines())
           subprocess.run(["bash","-n"],input=pool_script,text=True,check=True)
@@ -285,7 +331,7 @@ jobs:
           print('SUPERVISED_MAINTENANCE_SHELL_PARSE=PASS')
           assert 'PRODUCTION_CANONICAL_LIVE_BOT_STARTED=1' in owner
           assert 'PRODUCTION_LIVE_OWNER_SESSION_COMPLETE=1' in owner
-          assert 'LIVE_RUNTIME_BROKER_READ_RECONCILED=1' in owner
+          assert 'LIVE_RUNTIME_BROKER_READBACK_ONLY=1' in owner
           assert owner.count('logging.disable(logging.CRITICAL)') >= 2
           assert 'util.run(ib.connectAsync(' in owner
           assert 'ib.RequestTimeout=25' in owner
@@ -346,6 +392,10 @@ jobs:
           assert "--account-env-file" in checked and "--universe" in checked and "--data-root" in checked
           assert "LIVE_RUNTIME_SUCCESSOR_CANONICAL_RECONCILER_SOURCE_NOT_ADMITTED=1" in checked
           assert "LIVE_RUNTIME_SUCCESSOR_READ_ONLY_RECONCILIATION_PASSED=1" in checked
+          assert 'private_reconcile_log="$RUNNER_TEMP/mmibkr-live-successor-reconcile-private.log"' in checked
+          assert '>"$private_reconcile_log" 2>&1' in checked
+          assert "trap 'rm -f \"$private_reconcile_log\"' EXIT" in checked
+          assert "LIVE_RUNTIME_SUCCESSOR_READ_ONLY_RECONCILIATION_FAILED=1" in checked
           assert "LIVE_RUNTIME_SUCCESSOR_PRESTART_LEDGER_RECONCILIATION_REQUIRED=1" in owner
           assert "ENABLE_LIVE_TRADING=1" not in checked
           assert "placeOrder" not in checked and "cancelOrder" not in checked
@@ -858,7 +908,7 @@ jobs:
           rm -f "$RUNNER_TEMP/mmibkr-live-initial-account-read-private.log"
           echo 'PRODUCTION_LIVE_EXECUTION_HISTORY_READ=1'
           echo 'PRODUCTION_LIVE_EXPECTED_ACCOUNT_READ=1'
-          echo 'PRODUCTION_LIVE_POSITIONS_AND_ORDERS_READ=1
+          echo 'PRODUCTION_LIVE_POSITIONS_AND_ORDERS_READ=1'
 
       - name: Open Gateway's read-only API to permitted ephemeral tailnet clients
         if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'gateway_pool_5h' && inputs.pool_transport == 'tailscale' }}
@@ -892,7 +942,7 @@ jobs:
           POOL_TRANSPORT: ${{ inputs.pool_transport }}
           GH_TOKEN: ${{ github.token }}
           POOL_SESSION_MINUTES: ${{ inputs.pool_session_minutes }}
-        timeout-minutes: 290
+        timeout-minutes: 300
         run: |
           set -euo pipefail
           umask 077
@@ -941,7 +991,36 @@ jobs:
           echo "MMIBKR_GATEWAY_ONLY_POOL_SESSION_SECONDS=$((POOL_SESSION_MINUTES * 60))"
           pool_resource_sample initial
           docker exec mmibkr-live-gateway du -sm /home/ibgateway/Jts_b1 2>/dev/null | awk '{print "MMIBKR_POOL_JTS_DISK_MIB_INITIAL="$1}' || true
-          while [ "$(date +%s)" -lt "$end" ]; do
+          # A short acceptance can reach a real 480s maintenance reset near
+          # its nominal end. Extend observation only for a fresh in-window
+          # post-outage controller alert, never for an ordinary API outage.
+          pool_maintenance_alert_after_outage() {
+            [ "$outage_since" -gt 0 ] && [ "$maintenance_grace_used" -eq 0 ] || return 1
+            local eastern_time outage_utc
+            eastern_time="$(TZ=America/New_York date +%H%M)"
+            outage_utc="$(date -u -d "@$outage_since" +%Y-%m-%dT%H:%M:%SZ)"
+            { [[ "$eastern_time" > "2329" ]] || [[ "$eastern_time" < "0201" ]]; } &&
+              docker logs --since "$outage_utc" mmibkr-live-gateway 2>&1 |
+                grep -F 'ALERT_IBKR_MAINTENANCE_RECOVERY' >/dev/null
+          }
+          while :; do
+            now="$(date +%s)"
+            if [ "$now" -ge "$end" ]; then
+              if [ "$outage_since" -eq 0 ]; then break; fi
+              if [ "$maintenance_evidence_seen" -eq 0 ] && pool_maintenance_alert_after_outage; then
+                maintenance_grace_used=1
+                maintenance_evidence_seen=1
+                echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_GRACE_STARTED=1'
+              fi
+              # Hard stop: nominal end + 720s AND outage start + 720s.
+              if [ "$maintenance_evidence_seen" -eq 0 ] ||
+                 [ "$now" -ge "$((end + 720))" ] ||
+                 [ "$now" -ge "$((outage_since + 720))" ]; then
+                echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_OBSERVATION_INCOMPLETE=1'
+                break
+              fi
+              echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_BOUNDED_OBSERVATION=1'
+            fi
             if [ "$POOL_TRANSPORT" = tailscale ]; then
               kill -0 "$relay_pid"
             else
@@ -999,9 +1078,10 @@ jobs:
             then
               rm -f "$private_probe_log"
               if [ "$maintenance_evidence_seen" -eq 1 ]; then
-                # This exact successful broker probe included account identity,
-                # positions, open orders and executions from the same owner.
-                echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS_EXECUTIONS=1'
+                # This same-client probe confirmed a managed account and fresh
+                # positions/open-orders/executions API reads. It does NOT bind
+                # orderRef/permId/execId to durable inventory or prove takeover.
+                echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_BROKER_READBACK_ONLY=1'
               fi
               outage_since=0
               maintenance_evidence_seen=0
@@ -1044,16 +1124,10 @@ jobs:
               # usual 600s outage ceiling to 720s only for one authenticated
               # maintenance/reset-window alert arising AFTER this outage began.
               # No broker action, new login, or owner handoff is performed here.
-              if [ "$maintenance_grace_used" -eq 0 ] && [ "$maintenance_evidence_seen" -eq 0 ]; then
-                eastern_time="$(TZ=America/New_York date +%H%M)"
-                outage_utc="$(date -u -d "@$outage_since" +%Y-%m-%dT%H:%M:%SZ)"
-                if { [[ "$eastern_time" > "2329" ]] || [[ "$eastern_time" < "0201" ]]; } &&
-                   docker logs --since "$outage_utc" mmibkr-live-gateway 2>&1 |
-                     grep -F 'ALERT_IBKR_MAINTENANCE_RECOVERY' >/dev/null; then
-                  maintenance_grace_used=1
-                  maintenance_evidence_seen=1
-                  echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_GRACE_STARTED=1'
-                fi
+              if [ "$maintenance_evidence_seen" -eq 0 ] && pool_maintenance_alert_after_outage; then
+                maintenance_grace_used=1
+                maintenance_evidence_seen=1
+                echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_GRACE_STARTED=1'
               fi
               pool_maintenance_budget=600
               if [ "$maintenance_evidence_seen" -eq 1 ]; then
@@ -1078,7 +1152,7 @@ jobs:
         run: |
           set -euo pipefail
           echo 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1'
-          echo 'LIVE_WRT_ACCOUNT_READ_ONLY_RECONCILED=1'
+          echo 'LIVE_WRT_ACCOUNT_API_READBACK_ONLY=1'
           echo 'LIVE_WRT_NO_LIVE_ORDER_DISPATCHED=1'
 
       - name: Observe authenticated Gateway without canonical bot for eight minutes (read only)
@@ -1131,7 +1205,7 @@ jobs:
               assert expected in ib.managedAccounts()
               ib.reqPositions()
               ib.reqAllOpenOrders()
-              print("SUPERVISED_GATEWAY_ONLY_BROKER_RECONCILED=1")
+              print("SUPERVISED_GATEWAY_ONLY_BROKER_READBACK_ONLY=1")
           finally:
               if ib.isConnected(): ib.disconnect()
           PY
@@ -1140,7 +1214,7 @@ jobs:
             exit 1
           fi
           rm -f "$RUNNER_TEMP/mmibkr-live-supervised-read-private.log"
-          echo 'SUPERVISED_GATEWAY_ONLY_BROKER_RECONCILED=1'
+          echo 'SUPERVISED_GATEWAY_ONLY_BROKER_READBACK_ONLY=1'
           echo 'SUPERVISED_GATEWAY_ONLY_EIGHT_MINUTES_PASS=1'
 
       - name: Run supervised five-hour live-account canonical bot shadow (no orders)
@@ -1234,15 +1308,15 @@ jobs:
               assert expected in ib.managedAccounts(), "authenticated_account_not_matching"
               ib.reqPositions()
               ib.reqAllOpenOrders()
-              print("SUPERVISED_LIVE_ACCOUNT_RECONCILED=1")
+              print("SUPERVISED_LIVE_ACCOUNT_BROKER_READBACK_ONLY=1")
           finally:
               if ib.isConnected(): ib.disconnect()
           PY
               then
                 rm -f "$RUNNER_TEMP/mmibkr-live-supervised-loop-read-private.log"
-                echo 'SUPERVISED_LIVE_ACCOUNT_RECONCILED=1'
+                echo 'SUPERVISED_LIVE_ACCOUNT_BROKER_READBACK_ONLY=1'
                 if [ "$maintenance_recovery_active" -eq 1 ]; then
-                  echo 'SUPERVISED_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS=1'
+                  echo 'SUPERVISED_MAINTENANCE_ACCOUNT_POSITIONS_ORDERS_READBACK_ONLY=1'
                   maintenance_recovery_active=0
                 fi
                 maintenance_failure_since=0
@@ -1386,10 +1460,20 @@ jobs:
           }
           data="$RUNNER_TEMP/mmibkr-live-data"
           universe="$data/strategy_runtime/selected_runtime_authority_14th31jv/selected_runtime_universe_14tu.json"
-          PYTHONPATH="$PRIVATE_SOURCE_ROOT" python "$checker" \
-            --data-root "$data" --universe "$universe" \
-            --account-env-file "$RUNNER_TEMP/mmibkr-live-bot.env"
-          echo 'LIVE_RUNTIME_SUCCESSOR_READ_ONLY_RECONCILIATION_PASSED=1'
+          # Upstream IBKR timeout diagnostics may include private account IDs
+          # even when Python logging is disabled. Contain BOTH streams locally.
+          umask 077
+          private_reconcile_log="$RUNNER_TEMP/mmibkr-live-successor-reconcile-private.log"
+          trap 'rm -f "$private_reconcile_log"' EXIT
+          if PYTHONPATH="$PRIVATE_SOURCE_ROOT" python "$checker" \
+              --data-root "$data" --universe "$universe" \
+              --account-env-file "$RUNNER_TEMP/mmibkr-live-bot.env" \
+              >"$private_reconcile_log" 2>&1; then
+            echo 'LIVE_RUNTIME_SUCCESSOR_READ_ONLY_RECONCILIATION_PASSED=1'
+          else
+            echo 'LIVE_RUNTIME_SUCCESSOR_READ_ONLY_RECONCILIATION_FAILED=1'
+            exit 1
+          fi
           # Existing next step still refuses to start an order-capable successor.
 
       - name: Start unchanged canonical bot natural owner with three persisted live policies
@@ -1478,13 +1562,13 @@ jobs:
               ib.reqPositions()
               ib.reqAllOpenOrders()
               ib.reqExecutions()
-              print("LIVE_RUNTIME_BROKER_READ_RECONCILED=1")
+              print("LIVE_RUNTIME_BROKER_READBACK_ONLY=1")
           finally:
               if ib.isConnected(): ib.disconnect()
           PY
               then
                 rm -f "$RUNNER_TEMP/mmibkr-live-runtime-read-private.log"
-                echo 'LIVE_RUNTIME_BROKER_READ_RECONCILED=1'
+                echo 'LIVE_RUNTIME_BROKER_READBACK_ONLY=1'
                 last_verified="$(date +%s)"
                 if [ "$gateway_healthy" != 1 ]; then
                   echo 'LIVE_RUNTIME_CONTROLLER_HEALTH_DISAGREES_WITH_BROKER_READ=1'
