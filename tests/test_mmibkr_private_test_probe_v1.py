@@ -99,14 +99,22 @@ def test_signed_owner_candidate_is_allowlisted_only_as_networkless_disabled_sour
 
 
 def test_exact_paper_postexecute_quarantine_is_networkless_and_nonmutating():
-    module = "tests.test_selected_runtime_cloud_cycle_v1"
-    assert validated_modules(module) == [module]
-    cmd = pytest_container_command("sealed-test-image", module)
-    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
-    assert "ENABLE_LIVE_TRADING=0" in cmd
-    assert cmd[-1] == module_file_path(module)
-    with pytest.raises(ValueError):
-        validated_modules("tests.test_selected_runtime_cloud_cycle_live_submit_v1")
+    exact = (
+        "tests.test_selected_runtime_cloud_cycle_v1",
+        "tests.test_selected_runtime_terminal_ledger_corruption_product_20261024",
+    )
+    assert validated_modules(" ".join(exact)) == list(exact)
+    for module in exact:
+        cmd = pytest_container_command("sealed-test-image", module)
+        assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in cmd
+        assert cmd[-1] == module_file_path(module)
+    for rejected in (
+        "tests.test_selected_runtime_cloud_cycle_live_submit_v1",
+        "tests.test_selected_runtime_terminal_ledger_broker_submit",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(rejected)
 
 
 def test_allowlist_accepts_exact_pr798_read_only_position_projection_modules():
