@@ -117,7 +117,12 @@ SOURCE_ONLY_MODEL_LAB_MODULES = frozenset({
     "tests.test_model_lab_worker_early_cancel_product",
 })
 SAFE_EXACT.update(SOURCE_ONLY_P0_MODULES)
+# Exact synthetic lifecycle after-cost PnL: no broker or network access.
+SOURCE_ONLY_PNL_MODULES = frozenset({
+    "tests.test_lifecycle_single_flat_roundtrip_product_20261023",
+})
 SAFE_EXACT.update(SOURCE_ONLY_MODEL_LAB_MODULES)
+SAFE_EXACT.update(SOURCE_ONLY_PNL_MODULES)
 STATUS_STAGE_MODULES = {
     "tests.test_market_features_provenance_contract",
 }
@@ -190,7 +195,7 @@ def pytest_container_command(image_tag: str, module: str) -> list[str]:
         "docker",
         "run",
         "--rm",
-        *(["--network", "none"] if module in (SOURCE_ONLY_P0_MODULES | SOURCE_ONLY_MODEL_LAB_MODULES) else []),
+        *(["--network", "none"] if module in (SOURCE_ONLY_P0_MODULES | SOURCE_ONLY_MODEL_LAB_MODULES | SOURCE_ONLY_PNL_MODULES) else []),
         "-e",
         "ENABLE_LIVE_TRADING=0",
         "-e",
