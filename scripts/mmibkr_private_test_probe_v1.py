@@ -32,6 +32,8 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_selected_runtime_live_execution_ledger_v1",
     "tests.test_selected_runtime_live_broker_provenance_v1",
     "tests.test_selected_runtime_live_p0_integrated_checkpoint_v1",
+    # Exact new flat-seed broker residue regression, synthetic and brokerless.
+    "tests.test_live_broker_position_residue_product_20261024",
 })
 
 SAFE_EXACT = {
@@ -123,6 +125,11 @@ SOURCE_ONLY_PNL_MODULES = frozenset({
 })
 SAFE_EXACT.update(SOURCE_ONLY_MODEL_LAB_MODULES)
 SAFE_EXACT.update(SOURCE_ONLY_PNL_MODULES)
+# Signed Foundry qualification / Pilot quarantine is an exact offline test only.
+SOURCE_ONLY_MODEL_ISSUER_MODULES = frozenset({
+    "tests.test_foundry_model_promotion_admission_v1",
+})
+SAFE_EXACT.update(SOURCE_ONLY_MODEL_ISSUER_MODULES)
 STATUS_STAGE_MODULES = {
     "tests.test_market_features_provenance_contract",
 }
@@ -195,7 +202,7 @@ def pytest_container_command(image_tag: str, module: str) -> list[str]:
         "docker",
         "run",
         "--rm",
-        *(["--network", "none"] if module in (SOURCE_ONLY_P0_MODULES | SOURCE_ONLY_MODEL_LAB_MODULES | SOURCE_ONLY_PNL_MODULES) else []),
+        *(["--network", "none"] if module in (SOURCE_ONLY_P0_MODULES | SOURCE_ONLY_MODEL_LAB_MODULES | SOURCE_ONLY_PNL_MODULES | SOURCE_ONLY_MODEL_ISSUER_MODULES) else []),
         "-e",
         "ENABLE_LIVE_TRADING=0",
         "-e",
