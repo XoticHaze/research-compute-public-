@@ -166,6 +166,72 @@ def _held_symbols_ready(day: pd.Series, state: dict[str, dict[str, float]]) -> b
     return bool(held) and bool(day.reindex(sorted(held)).notna().all())
 
 
+
+def _implicit_target_reset_turnover_audit(
+    rows: list[dict[str, object]],
+    daily_returns: pd.DataFrame,
+    month_states: dict[str, dict[str, dict[str, float]]],
+) -> dict[str, object]:
+    """Describe the uncharged daily resets implied by constant-target shadow returns.
+
+    This is NOT an executed trade ledger, a funded monthly-hold counterfactual,
+    or an economic re-scoring. It consumes only the exact already-scored daily
+    returns and frozen monthly target weights, and never changes either arm.
+    """
+    arms = ("p249_core", "p249_plus_p266")
+    result = {
+        arm: {
+            "intramonth_one_way_turnover": 0.0,
+            "intramonth_reset_count": 0,
+            "month_boundary_one_way_turnover": 0.0,
+            "month_boundary_count": 0,
+        }
+        for arm in arms
+    }
+    for current, following in zip(rows, rows[1:]):
+        current_day = str(current["date"])
+        next_day = str(following["date"])
+        if current_day >= next_day:
+            raise ValueError("P249_TURNOVER_AUDIT_NONCHRONOLOGICAL")
+        current_month = str(current["holding_month"])
+        next_month = str(following["holding_month"])
+        for arm in arms:
+            weights = month_states[current_month][arm]
+            next_weights = month_states[next_month][arm]
+            if not math.isclose(sum(weights.values()), 1.0, abs_tol=1e-8):
+                raise ValueError("P249_TURNOVER_AUDIT_INVALID_TARGET")
+            if not math.isclose(sum(next_weights.values()), 1.0, abs_tol=1e-8):
+                raise ValueError("P249_TURNOVER_AUDIT_INVALID_NEXT_TARGET")
+            gross = float(current[f"{arm}_gross"])
+            wealth = 1.0 + gross
+            if not math.isfinite(wealth) or wealth <= 0:
+                raise ValueError("P249_TURNOVER_AUDIT_INVALID_WEALTH")
+            pretrade = {}
+            for symbol, weight in weights.items():
+                daily = float(daily_returns.at[pd.Timestamp(current_day), symbol])
+                if not math.isfinite(daily) or daily <= -1.0 or weight < 0:
+                    raise ValueError("P249_TURNOVER_AUDIT_INVALID_HELD_RETURN")
+                pretrade[symbol] = weight * (1.0 + daily) / wealth
+            if not math.isclose(sum(pretrade.values()), 1.0, abs_tol=1e-8):
+                raise ValueError("P249_TURNOVER_AUDIT_PRETRADE_SUM")
+            one_way = 0.5 * sum(
+                abs(next_weights.get(symbol, 0.0) - pretrade.get(symbol, 0.0))
+                for symbol in set(pretrade) | set(next_weights)
+            )
+            kind = "intramonth" if current_month == next_month else "month_boundary"
+            result[arm][f"{kind}_one_way_turnover"] += one_way
+            result[arm][f"{kind}_{'reset_count' if kind == 'intramonth' else 'count'}"] += 1
+    return {
+        "status": "DIAGNOSTIC_ONLY_UNCHARGED_IMPLICIT_RESETS",
+        "scored_sessions": len(rows),
+        "transitions": max(0, len(rows) - 1),
+        "source": "exact_already_scored_daily_returns_and_frozen_month_targets",
+        "not_actual_trades_or_funded_monthly_hold": True,
+        "not_fee_adjusted_or_alpha_credit": True,
+        "arms": result,
+    }
+
+
 def _metrics(returns: pd.Series) -> dict[str, float | int | None]:
     q = returns.dropna().astype(float)
     if q.empty:
@@ -269,6 +335,17 @@ def main() -> None:
         sat_net = obs["p249_plus_p266_net"]
         increment = obs["satellite_increment_net"]
 
+    try:
+        turnover_audit = _implicit_target_reset_turnover_audit(rows, ret, month_states)
+    except (KeyError, ValueError, TypeError, ArithmeticError) as exc:
+        # Audit-only failure cannot silently change frozen economic arms.
+        turnover_audit = {
+            "status": "DIAGNOSTIC_UNAVAILABLE",
+            "reason": str(exc) if str(exc).startswith("P249_TURNOVER_AUDIT_") else "AUDIT_SOURCE_UNAVAILABLE",
+            "not_actual_trades_or_funded_monthly_hold": True,
+            "not_fee_adjusted_or_alpha_credit": True,
+        }
+
     result = {
         "schema": "research.p279_p249_p266_forward_shadow_observer_r1",
         "parent": "P249/P266/P278/P279",
@@ -312,6 +389,7 @@ def main() -> None:
             "p249_core_net": _metrics(core_net),
             "p249_plus_p266_net": _metrics(sat_net),
             "satellite_increment_cumulative": float((1 + increment).prod() - 1) if len(increment) else 0.0,
+            "implicit_target_reset_turnover_audit": turnover_audit,
             "observations": rows,
         },
         "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
