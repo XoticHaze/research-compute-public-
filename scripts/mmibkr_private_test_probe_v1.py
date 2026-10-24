@@ -43,6 +43,9 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_selected_runtime_live_broker_provenance_v1",
     "tests.test_selected_runtime_live_p0_integrated_checkpoint_v1",
     "tests.test_selected_runtime_live_owner_candidate_certificate_v1",
+    # Brokerless selected-account what-if guard/hook tests must not access a network.
+    "tests.test_selected_runtime_margin_guard_14th31lg",
+    "tests.test_selected_runtime_margin_whatif_hook_14th31lg",
     # Exact synthetic Pi Docker endpoint-locality preflight; no daemon/broker access.
     "tests.test_ibkr_persistent_host_preflight_v1",
     # New exact paper post-execution quarantine regression, no broker access.

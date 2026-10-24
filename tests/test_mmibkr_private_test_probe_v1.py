@@ -622,3 +622,20 @@ def test_exact_b1_initial_backfill_ingest_is_networkless_and_nonmutating():
     ):
         with pytest.raises(ValueError):
             validated_modules(rejected)
+
+
+def test_selected_account_margin_guard_and_hook_are_exact_networkless():
+    exact = (
+        "tests.test_selected_runtime_margin_guard_14th31lg",
+        "tests.test_selected_runtime_margin_whatif_hook_14th31lg",
+    )
+    assert validated_modules(" ".join(exact)) == list(exact)
+    for module in exact:
+        cmd = pytest_container_command("sealed-test-image", module)
+        assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in cmd
+        assert cmd[-1] == module_file_path(module)
+    for denied in ("tests.test_selected_runtime_margin_guard_14th31lg_live_submit",
+                   "tests.test_selected_runtime_margin_whatif_hook_14th31lg_extra"):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
