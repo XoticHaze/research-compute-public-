@@ -54,6 +54,10 @@ def _safe_date(value: object) -> str:
 
 def _safe_rows(program: str, rows: list) -> list[dict]:
     allowed = FROZEN_SYMBOLS[program]
+    if program == "GENERALIZED_LARGECAP_RIDGE":
+        # The frozen snapshot also includes seven semiconductor training-family
+        # rows; only its six target-excluded external rows enter public signals.
+        allowed = allowed | FROZEN_SYMBOLS["SEMICONDUCTOR_SHARED_RIDGE"]
     if not rows or any(not isinstance(row, dict) or str(row.get("symbol")) not in allowed for row in rows):
         raise ValueError("public adapter symbol outside frozen universe")
     if len({str(row["symbol"]) for row in rows}) != len(rows):
@@ -280,6 +284,8 @@ def adapt_largecap(native: dict[str, Any]) -> dict[str, Any]:
     rows = _safe_rows("GENERALIZED_LARGECAP_RIDGE", list(native.get("snapshot") or native.get("observations") or []))
     signal_date = _safe_date(native.get("bar_date") or native.get("generation_bar_date") or rows[0].get("bar_date"))
     external = [r for r in rows if str(r.get("role", "")).startswith("external")] or rows
+    if any(str(r["symbol"]) not in FROZEN_SYMBOLS["GENERALIZED_LARGECAP_RIDGE"] for r in external):
+        raise ValueError("public adapter external symbol outside frozen universe")
     values = _prediction_map(external, "predicted_fixed20_net_value_bps", "predicted_fixed20_net25_bps")
     positives = [str(r["symbol"]) for r in external if _positive(r)]
     negatives = [str(r["symbol"]) for r in external if not _positive(r)]
