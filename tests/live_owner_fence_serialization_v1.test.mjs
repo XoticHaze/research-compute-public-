@@ -16,6 +16,8 @@ const evidence = Object.freeze({
 });
 const request = (id, overrides = {}) => ({
   operation: 'acquire', accountDigest: account, ownerRunAttempt: owner(id),
+  hostDigest: id.toString(16).padStart(64,'0'),
+  brokerSessionDigest: (id + 10000).toString(16).padStart(64,'0'),
   serverNowMs: 1_000, expectedEpoch: 0, ttlMs: 30_000,
   verifiedEvidence: evidence, ...overrides,
 });
@@ -117,4 +119,16 @@ test('raw synthetic true booleans are not a trust signature or broker permission
   assert.match(candidate.status,/not_broker_authorized/);
   assert.equal(Object.hasOwn(candidate,'live_submit_authorized'),false);
   assert.equal(Object.hasOwn(candidate.state,'write_capability'),false);
+});
+
+test('replaying the same run identity on a different host cannot renew the candidate', async () => {
+  const s = new SerialTestStore();
+  assert.equal((await s.submit(request(1))).ok, true);
+  const spoof = await s.submit(request(1, {
+    operation: 'renew', expectedEpoch: 1, serverNowMs: 1_100,
+    hostDigest: 'c'.repeat(64),
+    verifiedEvidence: { sameBrokerSession: true, ownerStillAuthenticated: true },
+  }));
+  assert.equal(spoof.status, 'owner_host_or_broker_session_mismatch');
+  assert.equal(s.state.epoch,1);
 });

@@ -6,11 +6,13 @@ export const FENCE_SCHEMA = 'mmibkr-live-owner-fence-transition.v1';
 const ACCOUNT_SHA = /^[a-f0-9]{64}$/;
 const OWNER_ID = /^[0-9]{4,24}:[1-9][0-9]{0,5}$/;
 const MAX_TTL_MS = 30_000;
+const IDENTITY_SHA = /^[a-f0-9]{64}$/;
 
 export function initialFrozenFence() {
   return Object.freeze({
     schema: FENCE_SCHEMA, epoch: 0, accountDigest: null,
-    holder: null, expiresAtMs: null, lastServerMs: 0,
+    holder: null, holderHostDigest: null, brokerSessionDigest: null,
+    expiresAtMs: null, lastServerMs: 0,
   });
 }
 
@@ -21,6 +23,8 @@ const goodTtl = (value) => Number.isSafeInteger(value) && value > 0 && value <= 
 const goodOwner = (value) => typeof value === 'string' && OWNER_ID.test(value);
 const goodAccount = (value) => typeof value === 'string' && ACCOUNT_SHA.test(value);
 
+// Holder-host and broker-session digests bind proof identity; caller-supplied
+// digests alone do NOT authenticate or exclude a stale IBKR broker connection.
 // All proof booleans are placeholders for *independently verified* evidence,
 // NEVER for caller-supplied claims. Fail closed unless a trusted adapter verifies.
 const takeoverProof = (p) => Boolean(
@@ -36,6 +40,10 @@ export function transitionFrozenFence(state, request) {
       !safeClock(state.epoch) || !safeClock(state.lastServerMs) ||
       (state.accountDigest !== null && !goodAccount(state.accountDigest)) ||
       (state.holder !== null && !goodOwner(state.holder)) ||
+      (state.holder === null && (state.holderHostDigest !== null ||
+                                 state.brokerSessionDigest !== null)) ||
+      (state.holder !== null && (!IDENTITY_SHA.test(state.holderHostDigest || '') ||
+                                 !IDENTITY_SHA.test(state.brokerSessionDigest || ''))) ||
       (state.expiresAtMs !== null && !safeClock(state.expiresAtMs)) ||
       ((state.holder === null) !== (state.expiresAtMs === null)) ||
       (state.epoch === 0 && (state.accountDigest !== null ||
@@ -54,6 +62,11 @@ export function transitionFrozenFence(state, request) {
     return denied(state, 'account_scope_mismatch');
   const who = request?.ownerRunAttempt;
   if (!goodOwner(who)) return denied(state, 'owner_identity_invalid');
+  const hostDigest = request.hostDigest;
+  const sessionDigest = request.brokerSessionDigest;
+  if (typeof hostDigest !== 'string' || !IDENTITY_SHA.test(hostDigest) ||
+      typeof sessionDigest !== 'string' || !IDENTITY_SHA.test(sessionDigest))
+    return denied(state, 'owner_host_or_broker_session_identity_invalid');
 
   if (request.operation === 'acquire') {
     if (!goodTtl(request.ttlMs)) return denied(state, 'ttl_invalid');
@@ -70,6 +83,7 @@ export function transitionFrozenFence(state, request) {
     return admitted({
       schema: FENCE_SCHEMA, epoch: state.epoch + 1,
       accountDigest: account, holder: who,
+      holderHostDigest: hostDigest, brokerSessionDigest: sessionDigest,
       expiresAtMs: now + request.ttlMs, lastServerMs: now,
     }, 'candidate_lease_recorded_not_broker_authorized');
   }
@@ -79,6 +93,9 @@ export function transitionFrozenFence(state, request) {
       return denied(state, 'clock_range_overflow');
     if (state.holder !== who || !state.expiresAtMs || now >= state.expiresAtMs)
       return denied(state, 'not_current_unexpired_holder');
+    if (state.holderHostDigest !== hostDigest ||
+        state.brokerSessionDigest !== sessionDigest)
+      return denied(state, 'owner_host_or_broker_session_mismatch');
     if (request.verifiedEvidence?.sameBrokerSession === true &&
         request.verifiedEvidence?.ownerStillAuthenticated === true) {
       return admitted({ ...state, expiresAtMs: now + request.ttlMs, lastServerMs: now },
@@ -88,12 +105,16 @@ export function transitionFrozenFence(state, request) {
   }
   if (request.operation === 'retire') {
     if (state.holder !== who) return denied(state, 'retire_not_holder');
+    if (state.holderHostDigest !== hostDigest ||
+        state.brokerSessionDigest !== sessionDigest)
+      return denied(state, 'owner_host_or_broker_session_mismatch');
     if (request.verifiedEvidence?.allBrokerWriteSessionsExcluded !== true)
       return denied(state, 'retire_session_not_excluded');
     if (state.epoch === Number.MAX_SAFE_INTEGER)
       return denied(state, 'epoch_exhausted');
     return admitted({
       ...state, epoch: state.epoch + 1, holder: null,
+      holderHostDigest: null, brokerSessionDigest: null,
       expiresAtMs: null, lastServerMs: now,
     }, 'candidate_retired_wait_for_fresh_takeover_proof');
   }

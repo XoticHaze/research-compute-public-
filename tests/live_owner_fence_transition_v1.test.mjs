@@ -6,6 +6,8 @@ import {
 
 const account = 'a'.repeat(64);
 const otherAccount = 'b'.repeat(64);
+const host = 'c'.repeat(64);
+const session = 'd'.repeat(64);
 const ownerA = '40000000001:1';
 const ownerB = '40000000002:1';
 const full = {
@@ -18,6 +20,7 @@ const full = {
 const req = (operation, overrides = {}) => ({
   operation, serverNowMs: 1_000, expectedEpoch: 0,
   accountDigest: account, ownerRunAttempt: ownerA,
+  hostDigest: host, brokerSessionDigest: session,
   ttlMs: 10_000, verifiedEvidence: full, ...overrides,
 });
 const acquire = (overrides = {}) =>
@@ -165,4 +168,35 @@ test('epoch-zero owner and inverted expiry cannot be trusted as persisted leases
   }));
   assert.equal(forgedTakeover.status, 'invalid_persisted_state');
   assert.equal(forgedTakeover.ok, false);
+});
+
+test('same run/epoch from different host or gateway session cannot renew or retire', () => {
+  const state = acquire().state;
+  for (const operation of ['renew', 'retire']) {
+    const trusted = { ...full, sameBrokerSession: true, ownerStillAuthenticated: true };
+    for (const change of [
+      { hostDigest: 'e'.repeat(64) },
+      { brokerSessionDigest: 'f'.repeat(64) },
+    ]) {
+      const attempt = transitionFrozenFence(state, req(operation, {
+        expectedEpoch: 1, serverNowMs: 1_001,
+        verifiedEvidence: trusted, ...change,
+      }));
+      assert.equal(attempt.ok, false);
+      assert.equal(attempt.status, 'owner_host_or_broker_session_mismatch');
+      assert.strictEqual(attempt.state, state);
+    }
+  }
+});
+test('host identity and broker session are required for acquisition', () => {
+  for (const bad of [
+    { hostDigest: undefined },
+    { brokerSessionDigest: undefined },
+    { hostDigest: 'not-a-verified-host' },
+    { brokerSessionDigest: 'not-a-verified-session' },
+  ]) {
+    const out = acquire(bad);
+    assert.equal(out.ok, false);
+    assert.equal(out.status, 'owner_host_or_broker_session_identity_invalid');
+  }
 });
