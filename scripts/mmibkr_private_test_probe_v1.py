@@ -157,6 +157,11 @@ SOURCE_ONLY_MODEL_ISSUER_MODULES = frozenset({
     "tests.test_foundry_model_limited_forward_sanity_product_20261024",
     # Exact GET-only Promotion Review transport and stale-state regression.
     "tests.test_promotion_review_get_http_current_product_20261024",
+    # Exact model-native forward identity adapter/preview/Arena/binder regressions; brokerless.
+    "tests.test_foundry_model_order_intent_adapter_v1",
+    "tests.test_foundry_model_arena_executor_conformance_v1",
+    "tests.test_foundry_model_canonical_preview_conformance_v1",
+    "tests.test_foundry_model_runtime_binding_v1",
 })
 SAFE_EXACT.update(SOURCE_ONLY_MODEL_ISSUER_MODULES)
 # Exact prebuilt Builder scale guard is pure canonical contract evaluation.

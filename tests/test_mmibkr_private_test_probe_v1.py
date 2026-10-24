@@ -474,6 +474,10 @@ def test_exact_p0_residue_and_foundry_issuer_modules_are_networkless():
         "tests.test_foundry_model_promotion_admission_v1",
         "tests.test_foundry_model_limited_forward_sanity_product_20261024",
         "tests.test_promotion_review_get_http_current_product_20261024",
+    "tests.test_foundry_model_order_intent_adapter_v1",
+    "tests.test_foundry_model_arena_executor_conformance_v1",
+    "tests.test_foundry_model_canonical_preview_conformance_v1",
+    "tests.test_foundry_model_runtime_binding_v1",
     ]
     assert validated_modules(",".join(exact)) == exact
     for module in exact:
@@ -486,6 +490,8 @@ def test_exact_p0_residue_and_foundry_issuer_modules_are_networkless():
         "tests.test_foundry_model_promotion_admission_v1_live_submit",
         "tests.test_foundry_model_limited_forward_sanity_product_20261024_live_submit",
         "tests.test_promotion_review_get_http_current_product_20261024_live_submit",
+        "tests.test_foundry_model_order_intent_adapter_v1_live_submit",
+        "tests.test_foundry_model_runtime_binding_v1_extra",
         "tests.test_live_broker_position_residue_unreviewed",
     ):
         with pytest.raises(ValueError):
