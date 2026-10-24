@@ -98,6 +98,21 @@ def test_signed_owner_candidate_is_allowlisted_only_as_networkless_disabled_sour
         validated_modules("tests.test_selected_runtime_live_owner_broker_order_v1")
 
 
+def test_exact_pi_docker_endpoint_preflight_is_networkless():
+    module = "tests.test_ibkr_persistent_host_preflight_v1"
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-test-image", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+    for rejected in (
+        "tests.test_ibkr_persistent_host_preflight_v1_live_submit",
+        "tests.test_ibkr_persistent_host_preflight_v1_extra",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(rejected)
+
+
 def test_exact_paper_postexecute_quarantine_is_networkless_and_nonmutating():
     exact = (
         "tests.test_selected_runtime_cloud_cycle_v1",
