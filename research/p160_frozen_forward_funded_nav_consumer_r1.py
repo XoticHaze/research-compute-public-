@@ -45,6 +45,8 @@ def score_frozen_p160(
     price_basis: str,
     source_provider: str,
     source_issuer_authenticated: bool = False,
+    expected_common_session_dates: Sequence[str],
+    expected_entry_day: str,
     entry_mode: str = "open",
 ) -> dict[str, Any]:
     """Score fixed signal against matched controls using supplied completed daily bars.
@@ -112,6 +114,14 @@ def score_frozen_p160(
     if not sessions:
         raise ValueError("no completed forward sessions")
     days = sorted(sessions)
+    # A truncated panel cannot redefine the original entry or elapsed sessions.
+    expected_days = [date.fromisoformat(x) for x in expected_common_session_dates]
+    if not expected_days or expected_days != sorted(set(expected_days)):
+        raise ValueError("invalid independent common-session calendar")
+    if days != expected_days:
+        raise ValueError("missing or extra expected common-session date")
+    if days[0] != date.fromisoformat(expected_entry_day):
+        raise ValueError("entry day differs from frozen expected next session")
     for day in days:
         if set(sessions[day]) != set(UNIVERSE):
             raise ValueError(f"missing common session member {day}")
@@ -153,6 +163,7 @@ def score_frozen_p160(
                    "frozen_blob_sha": FROZEN_SOURCE_BLOB_SHA},
         "forward": {"entry_day": entry_day.isoformat(), "entry_mode": entry_mode,
                     "last_completed_day": days[-1].isoformat(), "completed_sessions": len(days),
+                    "expected_common_session_dates": [d.isoformat() for d in expected_days],
                     "same_close_execution": False, "cost_bps": EXPLORATORY_COST_BPS},
         "economics": summary,
         "relative_bps": {
