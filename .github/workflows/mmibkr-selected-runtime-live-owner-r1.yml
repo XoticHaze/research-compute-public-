@@ -392,6 +392,10 @@ jobs:
           assert "--account-env-file" in checked and "--universe" in checked and "--data-root" in checked
           assert "LIVE_RUNTIME_SUCCESSOR_CANONICAL_RECONCILER_SOURCE_NOT_ADMITTED=1" in checked
           assert "LIVE_RUNTIME_SUCCESSOR_READ_ONLY_RECONCILIATION_PASSED=1" in checked
+          assert 'private_reconcile_log="$RUNNER_TEMP/mmibkr-live-successor-reconcile-private.log"' in checked
+          assert '>"$private_reconcile_log" 2>&1' in checked
+          assert "trap 'rm -f \"$private_reconcile_log\"' EXIT" in checked
+          assert "LIVE_RUNTIME_SUCCESSOR_READ_ONLY_RECONCILIATION_FAILED=1" in checked
           assert "LIVE_RUNTIME_SUCCESSOR_PRESTART_LEDGER_RECONCILIATION_REQUIRED=1" in owner
           assert "ENABLE_LIVE_TRADING=1" not in checked
           assert "placeOrder" not in checked and "cancelOrder" not in checked
@@ -1456,10 +1460,20 @@ jobs:
           }
           data="$RUNNER_TEMP/mmibkr-live-data"
           universe="$data/strategy_runtime/selected_runtime_authority_14th31jv/selected_runtime_universe_14tu.json"
-          PYTHONPATH="$PRIVATE_SOURCE_ROOT" python "$checker" \
-            --data-root "$data" --universe "$universe" \
-            --account-env-file "$RUNNER_TEMP/mmibkr-live-bot.env"
-          echo 'LIVE_RUNTIME_SUCCESSOR_READ_ONLY_RECONCILIATION_PASSED=1'
+          # Upstream IBKR timeout diagnostics may include private account IDs
+          # even when Python logging is disabled. Contain BOTH streams locally.
+          umask 077
+          private_reconcile_log="$RUNNER_TEMP/mmibkr-live-successor-reconcile-private.log"
+          trap 'rm -f "$private_reconcile_log"' EXIT
+          if PYTHONPATH="$PRIVATE_SOURCE_ROOT" python "$checker" \
+              --data-root "$data" --universe "$universe" \
+              --account-env-file "$RUNNER_TEMP/mmibkr-live-bot.env" \
+              >"$private_reconcile_log" 2>&1; then
+            echo 'LIVE_RUNTIME_SUCCESSOR_READ_ONLY_RECONCILIATION_PASSED=1'
+          else
+            echo 'LIVE_RUNTIME_SUCCESSOR_READ_ONLY_RECONCILIATION_FAILED=1'
+            exit 1
+          fi
           # Existing next step still refuses to start an order-capable successor.
 
       - name: Start unchanged canonical bot natural owner with three persisted live policies
