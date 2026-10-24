@@ -606,3 +606,19 @@ def test_exact_prebuilt_builder_scale_guard_networkless_and_fail_closed():
     for denied in (module+"_live_submit",module+"_broker_mutation",module+"_extra"):
         with pytest.raises(ValueError):
             validated_modules(denied)
+
+def test_exact_b1_initial_backfill_ingest_is_networkless_and_nonmutating():
+    # The private B1 module validates read-only handoff rows before cache writes.
+    # It must never acquire a broker connection or enable live execution.
+    module = "tests.test_selected_runtime_initial_backfill_ingest_v1"
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-test-image", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+    for rejected in (
+        "tests.test_selected_runtime_initial_backfill_ingest_v1_live_submit",
+        "tests.test_selected_runtime_initial_backfill_ingest_v1_extra",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(rejected)
