@@ -1,10 +1,10 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "75640fd07068753cd5cf196b20dc1d5d4a990bd7",
+  "source_ref": "b6620c63375c8b14f7add1c35eff04e0b5474a47",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
   "requested_by": "continue-release-20261024-clockin-20261024094112319",
-  "purpose": "Exact Release #978 corrected empty-runtime UNKNOWN plus compiled Bot Console guard; networkless source, no broker/live/deploy",
-  "request_nonce": "release-ui-978-75640-20261024-r1",
+  "purpose": "Exact no-loss P0 #883 + selected UI #888 corrected runtime UNKNOWN composite #975, encrypted Vite acceptance, no broker/live/deploy",
+  "request_nonce": "release-p0-ui-composite-b662-20261024-r1",
   "authority": {
     "research_only": true,
     "broker": false,
