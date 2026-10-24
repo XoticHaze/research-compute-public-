@@ -1,0 +1,233 @@
+{
+  "schema": "research.finra_daily_short_volume_r3_contract.v1",
+  "frozen_at": "2026-09-26T22:36:00-05:00",
+  "development_window": [
+    "2022-01-01",
+    "2025-12-31"
+  ],
+  "protected_holdout": "2026+ UNREAD",
+  "source": {
+    "template": "https://cdn.finra.org/equity/regsho/daily/CNMSshvolYYYYMMDD.txt",
+    "causal_vintage": "original CNMS daily file",
+    "updated_files": "diagnostic only; never silently replace a consumed original",
+    "semantics": "FINRA TRF/ADF off-exchange publicly disseminated activity; not exchange-consolidated shorting and not short interest",
+    "facility_scope": "Consolidated TRF/ADF NMS file; retain facility-level raw rows for diagnostics but primary feature is date+symbol aggregate."
+  },
+  "panel": [
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "AMD",
+    "AMAT",
+    "AVGO",
+    "JPM",
+    "BAC",
+    "GS",
+    "XOM",
+    "CVX",
+    "COP",
+    "CAT",
+    "HON",
+    "GE",
+    "JNJ",
+    "LLY",
+    "UNH",
+    "PG",
+    "KO",
+    "PEP",
+    "HD",
+    "MCD",
+    "NKE",
+    "TSLA",
+    "META",
+    "GOOGL",
+    "NFLX",
+    "NEE",
+    "DUK",
+    "LIN",
+    "FCX",
+    "PLD",
+    "AMT"
+  ],
+  "pit_aliases": {
+    "FB": "META"
+  },
+  "feature": {
+    "ratio": "ShortVolume / TotalVolume",
+    "short_exempt": "diagnostic only; ShortVolume already includes exempt",
+    "zscore_window_sessions": 20,
+    "ddof": 1,
+    "aggregation": "For each date+canonical symbol, sum ShortVolume, ShortExemptVolume and TotalVolume across all rows/facilities in the Consolidated NMS file, then compute ShortVolume_sum / TotalVolume_sum. Never average facility-level ratios.",
+    "alias_order": "Map PIT alias FB->META before date+symbol aggregation."
+  },
+  "portfolio": {
+    "construction": "sector-balanced long bottom quintile / short top quintile",
+    "entry": "D+1 regular-session open",
+    "horizons_sessions": [
+      1,
+      5
+    ],
+    "gross_exposure": 1,
+    "cost": "10bp one-way applied to sum(abs(delta_weight)); no separate hidden roundtrip multiplier",
+    "construction_detail": "On each decision date after 20-session per-symbol warmup, rank all eligible panel symbols by z-score; choose deterministic bottom ceil(20%*N) long and top ceil(20%*N) short using z-score then symbol as tie-break. Within each side, assign equal gross weight to each represented sector, then equal weight to selected symbols within that sector. Scale long and short sides to 0.5 gross each, for 1.0 total gross and approximately zero net. Do not force a sector into a tail when no member naturally qualifies.",
+    "quintile_rounding": "ceil(0.20*N eligible symbols) per tail",
+    "sector_labels_asof": "Frozen research labels above; no post-result relabeling."
+  },
+  "controls": [
+    "same-panel equal-weight",
+    "SPY",
+    "sector context",
+    "sector-balanced zero-signal permutation"
+  ],
+  "permutation": {
+    "seed": 568,
+    "count": 1000
+  },
+  "folds": [
+    [
+      "2022-01-01",
+      "2022-10-31"
+    ],
+    [
+      "2022-11-01",
+      "2023-08-31"
+    ],
+    [
+      "2023-09-01",
+      "2024-06-30"
+    ],
+    [
+      "2024-07-01",
+      "2025-04-30"
+    ],
+    [
+      "2025-05-01",
+      "2025-12-31"
+    ]
+  ],
+  "overlap_5d": "report overlapping and non-overlapping stride-5 sensitivity; primary portfolio accounting must not double-allocate capital",
+  "missing_policy": "attempt every weekday in development window; 404/non-200 recorded in manifest; never impute FINRA rows; warmup requires 20 observed symbol sessions",
+  "ties": "stable symbol sort after ratio/z-score; quintile membership deterministic",
+  "reject_rescue": [
+    "no alternate z window",
+    "no bucket switch",
+    "no horizon switch",
+    "no cost switch",
+    "no proxy switch",
+    "no date-window switch",
+    "no 2026+ read"
+  ],
+  "terminal_minimum": [
+    "absolute and matched after-cost excess",
+    "SPY/sector context",
+    "zero-signal permutation",
+    "chronology folds",
+    "DD/risk/breadth",
+    "symbol/year concentration",
+    "turnover",
+    "coverage/missing/update-vintage manifest"
+  ],
+  "live_trading_change": false,
+  "sectors": {
+    "Information Technology": [
+      "AAPL",
+      "MSFT",
+      "NVDA",
+      "AMD",
+      "AMAT",
+      "AVGO"
+    ],
+    "Financials": [
+      "JPM",
+      "BAC",
+      "GS"
+    ],
+    "Energy": [
+      "XOM",
+      "CVX",
+      "COP"
+    ],
+    "Industrials": [
+      "CAT",
+      "HON",
+      "GE"
+    ],
+    "Health Care": [
+      "JNJ",
+      "LLY",
+      "UNH"
+    ],
+    "Consumer Staples": [
+      "PG",
+      "KO",
+      "PEP"
+    ],
+    "Consumer Discretionary": [
+      "HD",
+      "MCD",
+      "NKE",
+      "TSLA"
+    ],
+    "Communication Services": [
+      "META",
+      "GOOGL",
+      "NFLX"
+    ],
+    "Utilities": [
+      "NEE",
+      "DUK"
+    ],
+    "Materials": [
+      "LIN",
+      "FCX"
+    ],
+    "Real Estate": [
+      "PLD",
+      "AMT"
+    ]
+  },
+  "coverage_gate": {
+    "minimum_symbols_with_usable_history": 24,
+    "minimum_symbol_days": 3000,
+    "minimum_panel_coverage_fraction_per_decision_day": 0.7,
+    "action_if_failed": "INCONCLUSIVE_SOURCE_COVERAGE; no parameter rescue"
+  },
+  "return_data": {
+    "provider": "Yahoo Finance",
+    "client": "yfinance==0.2.65",
+    "adjustment": "auto_adjust=True",
+    "required_symbols": "frozen 34-name panel plus SPY",
+    "provenance": "persist normalized OHLCV extract hash and retrieval timestamp",
+    "missing_policy": "no OHLC forward fill; report missing symbol/session coverage"
+  },
+  "pre_execution_horizon_semantics": {
+    "frozen_before_economic_read": true,
+    "one_session_exit": {
+      "entry": "D+1 regular-session open",
+      "exit": "D+1 regular-session close on the same exchange trading session",
+      "early_close": "use that session's official regular-session close; no synthetic extension",
+      "halt_or_missing_close": "if a symbol lacks a valid regular-session close after a valid entry, mark that symbol-horizon observation missing and do not impute"
+    },
+    "five_session_exit": {
+      "entry": "D+1 regular-session open",
+      "exit": "regular-session close of the fifth subsequent exchange trading session counting D+1 as session 1",
+      "early_close": "use that fifth session's official regular-session close",
+      "halt_or_missing_close": "if the scheduled fifth-session close is unavailable, mark that symbol-horizon observation missing; do not shift the exit date or impute"
+    },
+    "primary_5d_capital_accounting": {
+      "method": "five independent daily cohorts, each allocated 0.20 of strategy capital at entry; at steady state at most five cohorts are concurrently open",
+      "cohort_weights": "scale each decision-date long/short portfolio weights by 0.20 before combining open cohorts",
+      "gross_cap": "combined absolute open weight is capped at 1.0 by construction; never renormalize surviving cohorts upward after missing observations",
+      "turnover": "compute traded notional from changes in the combined live cohort-weight vector at each session open/close boundary",
+      "costs": "apply the frozen 10bp one-way cost to sum(abs(delta_weight)) of the combined capital-normalized portfolio",
+      "sensitivity": "also report non-overlapping stride-5 event-return sensitivity, but it is secondary and cannot replace the rolling-cohort primary"
+    },
+    "dependence_inference": {
+      "primary_decision_gates": "after-cost spread sign, 5 chronology-fold breadth, source coverage and concentration remain primary",
+      "permutation": "1000 sector-balanced zero-signal permutations preserve each date's eligible panel and sector counts",
+      "time_dependence": "for any reported p-value or confidence interval on daily portfolio returns, use a stationary/block bootstrap with block length 20 trading sessions and seed 568; report bootstrap method and effective sample count",
+      "overlap_5d": "for 5-session rolling-cohort returns, use the same 20-session block bootstrap on the combined portfolio return series; do not treat overlapping cohort observations as independent",
+      "no_inference_rescue": "if time-aware inference disagrees with chronology/breadth gates, classify INCONCLUSIVE rather than switching inference method"
+    }
+  }
+}
