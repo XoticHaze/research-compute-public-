@@ -10,6 +10,7 @@ frozen scientific chain.
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -86,36 +87,43 @@ def self_test() -> None:
     assert spec["source_ref"] == SOURCE_REF
     assert "research/run_homebuilders_adaptive_duration_forward_current_20260912.py" in spec["files"]
     assert "research/run_homebuilders_adaptive_duration_forward_20260905.py" in spec["files"]
+    check = subprocess.run(
+        [sys.executable, __file__, "--harness", "PRIVATE_SENTINEL_DO_NOT_LOG"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15,
+    )
+    assert check.returncode == 1 and not check.stderr
+    assert "PRIVATE_SENTINEL" not in check.stdout and '"status": "REJECTED"' in check.stdout
+    print("FORWARD_NATIVE_HOMEBUILDERS_CURRENT_V2_PUBLIC_EGRESS_SELF_TEST=PASS")
     print("FORWARD_NATIVE_HOMEBUILDERS_CURRENT_V2_SELF_TEST=PASS")
 
 
-def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--envelope")
-    p.add_argument("--private-key")
-    p.add_argument("--run-id")
-    p.add_argument("--harness", default=HARNESS)
-    p.add_argument("--adapter-script", default="research/forward_native_program_adapter_r1.py")
-    p.add_argument("--return-envelope")
-    p.add_argument("--self-test", action="store_true")
-    args = p.parse_args()
-    if args.self_test:
-        self_test()
-        return
-    if args.harness != HARNESS:
-        raise RuntimeError(f"unexpected harness {args.harness}")
-    if not all((args.envelope, args.private_key, args.run_id, args.return_envelope)):
-        p.error("live consume requires envelope, private-key, run-id and return-envelope")
-    receipt = base.consume(
-        Path(args.envelope),
-        Path(args.private_key),
-        args.run_id,
-        HARNESS,
-        Path(args.adapter_script).resolve(),
-        Path(args.return_envelope),
-    )
+def main() -> int:
+    try:
+        p = base._PublicSafeArgumentParser()
+        p.add_argument("--envelope")
+        p.add_argument("--private-key")
+        p.add_argument("--run-id")
+        p.add_argument("--harness", default=HARNESS)
+        p.add_argument("--adapter-script", default="research/forward_native_program_adapter_r1.py")
+        p.add_argument("--return-envelope")
+        p.add_argument("--self-test", action="store_true")
+        args = p.parse_args()
+        if args.self_test:
+            self_test()
+            return 0
+        if args.harness != HARNESS or not all((
+                args.envelope, args.private_key, args.run_id, args.return_envelope)):
+            raise ValueError("invalid_public_harness_or_arguments")
+        receipt = base.public_receipt(base.consume(
+            Path(args.envelope), Path(args.private_key), args.run_id, HARNESS,
+            Path(args.adapter_script).resolve(), Path(args.return_envelope),
+        ))
+    except Exception:
+        base.public_rejection()
+        return 1
     print("FORWARD_NATIVE_PUBLIC_RECEIPT=" + json.dumps(receipt, sort_keys=True))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
