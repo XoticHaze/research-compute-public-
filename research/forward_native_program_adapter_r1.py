@@ -394,6 +394,48 @@ def self_test() -> None:
         assert "SENTINEL" not in str(exc)
     else:
         raise AssertionError("private nested book field reached public adapter")
+    valid_book = {
+        "ticker_book": {
+            "status": "PAPER_COHORT_READY",
+            "cohort_target_weights_nav": {"AMAT": 0.02},
+            "realized_vol20_annualized": {"AMAT": 0.31},
+            "cohort_cash_fraction_nav": 0.03,
+            "cohort_gross_exposure": 0.02,
+            "weighting": "inverse trailing 20-session realized volatility using only prices available on signal date",
+            "prediction_magnitude_used_for_sizing": False,
+        },
+        "industry_book": {
+            "status": "PAPER_COHORT_READY", "instrument": "SMH",
+            "mapping": "daily_cohort_nav_fraction * positive_breadth",
+            "positive_breadth": 0.5, "cohort_target_weight_nav": 0.025,
+            "cohort_cash_fraction_nav": 0.025,
+        },
+        "options_book": {
+            "status": "FAIL_CLOSED",
+            "reason": "missing_point_in_time_chain_and_conditional_return_distribution",
+            "trade_authorized": False, "eligible_underlyings": ["AMAT"],
+        },
+    }
+    admitted_book = adapt_semiconductor({
+        "generation_bar_date": "2026-09-10",
+        "observations": [{"symbol": "AMAT", "predicted_fixed20_net_value_bps": 10.0}],
+        "boundaries": {"runtime_mutation": False, "broker_authority": False,
+                       "sizing_authority": False, "promotion_authority": False,
+                       "live_trading_authority": False},
+    }, book=valid_book)
+    assert admitted_book["paper_action"]["ticker_book"] == valid_book["ticker_book"]
+    assert admitted_book["boundaries"]["native"]["broker_authority"] is False
+    mixed_largecap = adapt_largecap({
+        "bar_date": "2026-09-10",
+        "snapshot": [
+            {"symbol": "AMAT", "role": "training_family",
+             "predicted_fixed20_net_value_bps": 100.0, "positive_value_state": True},
+            {"symbol": "CAT", "role": "external_target_excluded",
+             "predicted_fixed20_net_value_bps": 20.0, "positive_value_state": True},
+        ],
+    })
+    assert mixed_largecap["signal"]["positive_symbols"] == ["CAT"]
+    print("FORWARD_NATIVE_PUBLIC_ADAPTER_VALID_FROZEN_SHAPES_SELF_TEST=PASS")
     print("FORWARD_NATIVE_PUBLIC_ADAPTER_NESTED_SENTINEL_SELF_TEST=PASS")
     print("FORWARD_NATIVE_PROGRAM_ADAPTER_SELF_TEST=PASS")
 
