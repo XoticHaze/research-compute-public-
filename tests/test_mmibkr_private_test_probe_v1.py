@@ -749,3 +749,16 @@ def test_exact_pnl_malformed_chart_rows_are_networkless_and_nonmutating():
                      "tests.test_capital_malformed_chart_rows_product_20261024.py"):
         with pytest.raises(ValueError):
             validated_modules(rejected)
+
+def test_exact_stock_intraday_coverage_is_brokerless_and_networkless():
+    # Native stock/derived range integrity uses mocked DataManager source only.
+    module = "tests.test_stock_range_intraday_coverage_product_20261024"
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-test-image", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+    for rejected in (module + "_live_submit", module + "_extra",
+                     "tests.test_stock_range_intraday_coverage_product_20261024.py"):
+        with pytest.raises(ValueError):
+            validated_modules(rejected)
