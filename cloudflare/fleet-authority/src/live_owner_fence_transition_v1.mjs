@@ -38,7 +38,9 @@ export function transitionFrozenFence(state, request) {
       (state.holder !== null && !goodOwner(state.holder)) ||
       (state.expiresAtMs !== null && !safeClock(state.expiresAtMs)) ||
       ((state.holder === null) !== (state.expiresAtMs === null)) ||
-      (state.epoch === 0 && state.accountDigest !== null) ||
+      (state.epoch === 0 && (state.accountDigest !== null ||
+                             state.holder !== null || state.lastServerMs !== 0)) ||
+      (state.holder !== null && state.expiresAtMs <= state.lastServerMs) ||
       (state.epoch > 0 && state.accountDigest === null)) {
     return denied(state, 'invalid_persisted_state');
   }
