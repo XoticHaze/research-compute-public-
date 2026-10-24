@@ -1,10 +1,10 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "13848b98be6f506b22188d249705cc9e7eebe418",
+  "source_ref": "b97da2d6be3d20def6a92f6cf13af9460d7dec76",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
-  "requested_by": "continue-release-20261024-clockin-20261024081547037",
-  "purpose": "Exact selected UI #888 after Product #969 Pilot symbol deduplication, existing encrypted Source Vault, Node/Vite private build, no served deploy/broker/live",
-  "request_nonce": "ui-888-13848b98-exact-vite-20261024-r1",
+  "requested_by": "continue-release-20261024-clockin-20261024084531690",
+  "purpose": "Selected UI #888 exact cross-selected P0 account-scope + Product #973 UI composition, encrypted private Node/Vite build, no served deploy/broker/live",
+  "request_nonce": "ui-888-b97da2d6-p0-scope-composite-20261024-r1",
   "authority": {
     "research_only": true,
     "broker": false,
