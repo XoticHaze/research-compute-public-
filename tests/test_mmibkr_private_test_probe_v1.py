@@ -102,6 +102,7 @@ def test_exact_paper_postexecute_quarantine_is_networkless_and_nonmutating():
     exact = (
         "tests.test_selected_runtime_cloud_cycle_v1",
         "tests.test_selected_runtime_terminal_ledger_corruption_product_20261024",
+        "tests.test_selected_runtime_strategy_inventory_unverified_receipt_product_20261024",
     )
     assert validated_modules(" ".join(exact)) == list(exact)
     for module in exact:
