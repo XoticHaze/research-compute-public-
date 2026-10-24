@@ -32,6 +32,8 @@ ALLOWED_ACCEPTANCE_FILES = {
     # Exact selected #888 Pilot bounded matrix and Bot Console conId operator truth.
     "ui-react/src/lib/pilotMatrixPlan.test.mjs",
     "ui-react/src/lib/botConsoleExactAccountHoldings.test.mjs",
+    # Selected UI #888 exact account-position/fill/order scope presentation regression.
+    "ui-react/src/lib/botConsolePositionTruth.test.mjs",
     "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
 }
 
