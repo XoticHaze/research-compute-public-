@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import gzip
 import hashlib
 import io
 import json
@@ -28,6 +29,7 @@ MAX_PLAINTEXT_BYTES = 4 * 1024 * 1024
 MAX_MEMBER_BYTES = 2 * 1024 * 1024
 MAX_TOTAL_MEMBER_BYTES = 4 * 1024 * 1024
 MAX_TAR_MEMBERS = 32
+MAX_UNCOMPRESSED_TAR_BYTES = 8 * 1024 * 1024
 
 
 class _PublicSafeArgumentParser(argparse.ArgumentParser):
@@ -166,7 +168,13 @@ def _safe_extract(payload: bytes, root: Path, harness: str) -> dict:
         raise RuntimeError("payload compressed size bound")
     spec = HARNESS_SPECS[harness]
     expected = {"payload-manifest.json", *spec["files"]}
-    with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as tf:
+    # gzip/PAX metadata can expand before a tar header is yielded. Bound the
+    # entire decompressed archive before tarfile parses any member.
+    with gzip.GzipFile(fileobj=io.BytesIO(payload)) as gz:
+        archive_bytes = gz.read(MAX_UNCOMPRESSED_TAR_BYTES + 1)
+    if len(archive_bytes) > MAX_UNCOMPRESSED_TAR_BYTES:
+        raise RuntimeError("payload gzip expansion bound")
+    with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:") as tf:
         members = []
         seen = set()
         total_bytes = 0
@@ -393,6 +401,7 @@ def self_test() -> None:
         ([("a", b"x" * MAX_MEMBER_BYTES), ("b", b"x" * MAX_MEMBER_BYTES),
           ("c", b"x" * MAX_MEMBER_BYTES)], "payload aggregate size bound"),
         ([("PRIVATE_SENTINEL_DO_NOT_LOG.txt", b"secret")], "payload file-set mismatch"),
+        ([("large-gzip-metadata", b"x" * (MAX_UNCOMPRESSED_TAR_BYTES + 1))], "payload gzip expansion bound"),
     ]
     for entries, expected_error in bad:
         with tempfile.TemporaryDirectory() as td:
