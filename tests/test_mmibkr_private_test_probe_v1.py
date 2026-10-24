@@ -472,6 +472,7 @@ def test_exact_p0_residue_and_foundry_issuer_modules_are_networkless():
         "tests.test_live_broker_position_residue_product_20261024",
         "tests.test_cloud_operator_exact_contract_position_product_20261024",
         "tests.test_foundry_model_promotion_admission_v1",
+        "tests.test_promotion_review_get_http_current_product_20261024",
     ]
     assert validated_modules(",".join(exact)) == exact
     for module in exact:
@@ -482,6 +483,7 @@ def test_exact_p0_residue_and_foundry_issuer_modules_are_networkless():
     for denied in (
         "tests.test_live_broker_position_residue_product_20261024_extra",
         "tests.test_foundry_model_promotion_admission_v1_live_submit",
+        "tests.test_promotion_review_get_http_current_product_20261024_live_submit",
         "tests.test_live_broker_position_residue_unreviewed",
     ):
         with pytest.raises(ValueError):
