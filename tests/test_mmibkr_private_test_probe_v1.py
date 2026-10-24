@@ -645,6 +645,20 @@ def test_exact_b1_initial_backfill_ingest_is_networkless_and_nonmutating():
             validated_modules(rejected)
 
 
+def test_selected_b1_ohlcv_domain_product_regression_is_exact_and_networkless():
+    # Reuse the canonical selected-source private test route. No broker client.
+    module = "tests.test_selected_runtime_initial_backfill_ohlcv_domain_product_20261024"
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-test-image", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+    for rejected in (module + "_live_submit", module + "_broker_mutation",
+                     module + "_extra", "tests.test_selected_runtime_initial_backfill_ohlcv_domain_product_20261024.py"):
+        with pytest.raises(ValueError):
+            validated_modules(rejected)
+
+
 def test_selected_account_margin_guard_and_hook_are_exact_networkless():
     exact = (
         "tests.test_selected_runtime_margin_guard_14th31lg",
