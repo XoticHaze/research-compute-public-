@@ -30,6 +30,7 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/lib/builderPersistedReviewTruth.test.mjs",
     "ui-react/src/lib/tradingProductReadiness.digest-identity.test.mjs",
     "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.cross-timeframe-capability.test.mjs",
+    "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.local-draft-storage.test.mjs",
 }
 
 
