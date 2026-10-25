@@ -212,6 +212,8 @@ SOURCE_ONLY_PNL_MODULES = frozenset({
     "tests.test_capital_oversized_numeric_failclosed_product_20261025",
     # Exact selected financial #911 strict decimal economic input; offline only.
     "tests.test_capital_strict_decimal_economic_input_product_20261025",
+    # Exact selected #911 native Decimal nonzero underflow cost fail-close.
+    "tests.test_capital_native_decimal_underflow_product_20261025",
     # Selected UI #888 exact UTC fill/chart identity, no broker or network.
     "tests.test_capital_timestamp_binding_product_20261025",
 })
@@ -238,6 +240,8 @@ SOURCE_ONLY_BUILDER_MODULES = frozenset({
     "tests.test_builder_prebuilt_feature_authority_product_20261025",
     # Exact selected source-only regression; Docker network disabled.
     "tests.test_registry_builder_condition_execution_14th31kn",
+    # Exact selected #888 malformed Builder parameter/source_fields fail-close.
+    "tests.test_builder_parameter_shape_product_20261025",
     # Enabled literal RHS must reject blank/NaN/inf without zero substitution.
     "tests.test_builder_literal_rhs_finite_product_20261025",
     # Exact reviewed apply-packet broker/live and identity guard, synthetic writer only.
