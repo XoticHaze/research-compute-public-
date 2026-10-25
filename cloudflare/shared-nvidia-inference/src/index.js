@@ -73,7 +73,11 @@ export async function probeNvidia(env, doFetch = fetch) {
   }
   const start = performance.now();
   const headers = { "Authorization": "Bearer " + key, "Content-Type": "application/json" };
-  // Cloudflare Workers does not implement redirect: "error": it throws before\n  // sending the request. Use manual for BOTH API calls so Authorization is\n  // never forwarded automatically to a different host. Any actual 3xx\n  // remains a non-200 provider response, not followed.\n  // Separate construction/transport failures from response JSON failures.
+  // Cloudflare Workers does not implement redirect: "error": it throws before
+  // sending the request. Use manual for BOTH API calls so Authorization is
+  // never forwarded automatically to a different host. Any actual 3xx
+  // remains a non-200 provider response, not followed.
+  // Separate construction/transport failures from response JSON failures.
   // This removes unsupported AbortSignal.timeout from the critical path:
   // caller has its own bounded request timeout and this fixed probe has
   // no user-selected destination, URL, model, or request body.
