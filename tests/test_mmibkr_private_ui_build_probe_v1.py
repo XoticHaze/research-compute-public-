@@ -510,3 +510,16 @@ def test_exact_selected_reviewed_backtest_fetch_guard_allowlist_only():
     ):
         with pytest.raises(ValueError, match="not_allowlisted"):
             mod.validate_acceptance_file(denied)
+
+
+def test_selected_builder_decimal_threshold_exact_allowlist_and_lookalike_denials():
+    exact = "ui-react/src/lib/builderLiteralValue.decimalAdmission.product.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        "ui-react/src/lib/builderLiteralValue.decimalAdmission.product.test.js",
+        "ui-react/src/lib/builderLiteralValue.decimalAdmission.product.live-submit.test.mjs",
+        "ui-react/src/lib/../pages/builderLiteralValue.decimalAdmission.product.test.mjs",
+        "ui-react/src/lib/builderLiteralValue.decimalAdmission.product.test.mjs.py",
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)

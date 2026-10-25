@@ -44,6 +44,8 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/lib/historicalRangeReadinessLabel.test.mjs",
     "ui-react/src/lib/builderPersistedReviewTruth.test.mjs",
     "ui-react/src/lib/builderLiteralValue.test.mjs",
+    # Exact selected MM #888@d3fe Builder decimal threshold fail-close regression.
+    "ui-react/src/lib/builderLiteralValue.decimalAdmission.product.test.mjs",
     "ui-react/src/lib/contractPnlCurrency.test.mjs",
     "ui-react/src/lib/selectedRuntimeBadgeTruth.test.mjs",
     "ui-react/src/components/strategy-builder-reviewed-fetch-guard.test.mjs",
