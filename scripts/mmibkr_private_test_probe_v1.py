@@ -81,6 +81,8 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_selected_runtime_strategy_inventory_unverified_receipt_product_20261024",
     # Native stock intraday/derived coverage test is brokerless AND networkless.
     "tests.test_stock_range_intraday_coverage_product_20261024",
+    # Explicit invalid as-of must not silently select current wall time.
+    "tests.test_market_data_invalid_explicit_now_product_20261024",
     # Counted pre-start warmup and status readiness remain source-only and brokerless.
     "tests.test_stock_warmup_count_product_20261025",
     "tests.test_stock_warmup_status_projection_product_20261025",
@@ -199,6 +201,8 @@ SOURCE_ONLY_PNL_MODULES = frozenset({
     "tests.test_capital_malformed_chart_rows_product_20261024",
     # Exact selected funded PnL #911 malformed cost schedule (#1032).
     "tests.test_capital_invalid_cost_schedule_product_20261024",
+    # Exact funded PnL oversized numeric fail-close, no live/broker inputs.
+    "tests.test_capital_oversized_numeric_failclosed_product_20261025",
 })
 SAFE_EXACT.update(SOURCE_ONLY_MODEL_LAB_MODULES)
 SAFE_EXACT.update(SOURCE_ONLY_PNL_MODULES)
@@ -221,6 +225,8 @@ SAFE_EXACT.update(SOURCE_ONLY_MODEL_ISSUER_MODULES)
 SOURCE_ONLY_BUILDER_MODULES = frozenset({
     "tests.test_builder_prebuilt_group_logic_guard_product_20261023",
     "tests.test_builder_prebuilt_feature_authority_product_20261025",
+    # Enabled literal RHS must reject blank/NaN/inf without zero substitution.
+    "tests.test_builder_literal_rhs_finite_product_20261025",
 })
 SAFE_EXACT.update(SOURCE_ONLY_BUILDER_MODULES)
 STATUS_STAGE_MODULES = {

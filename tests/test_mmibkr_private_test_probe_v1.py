@@ -878,3 +878,26 @@ def test_exact_builder_pending_and_futures_conid_warmup_modules_networkless():
     ):
         with pytest.raises(ValueError):
             validated_modules(denied)
+
+
+def test_exact_new_market_builder_and_funded_pnl_modules_networkless():
+    # Release-selected #975/#911: pure private-source tests, never a broker client.
+    exact = (
+        "tests.test_market_data_invalid_explicit_now_product_20261024",
+        "tests.test_builder_literal_rhs_finite_product_20261025",
+        "tests.test_capital_oversized_numeric_failclosed_product_20261025",
+    )
+    assert validated_modules(",".join(exact)) == list(exact)
+    for module in exact:
+        command = pytest_container_command("sealed-test-image", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+    for denied in (
+        "tests.test_market_data_invalid_explicit_now_product_20261024_extra",
+        "tests.test_builder_literal_rhs_finite_product_20261025_live_submit",
+        "tests.test_capital_oversized_numeric_failclosed_product_20261025_broker",
+        "tests.test_capital_oversized_numeric_failclosed_product_20261025.py",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
