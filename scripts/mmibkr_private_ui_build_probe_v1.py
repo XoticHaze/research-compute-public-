@@ -39,6 +39,8 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/lib/botConsoleOpenOrdersTruth.test.mjs",
     # Exact legacy Builder local-draft combinator restoration, read-only UI.
     "ui-react/src/lib/builderLocalDraftRestore.test.mjs",
+    # Exact selected MM #888@f9ac post-closure rapid-click Builder ID safety.
+    "ui-react/src/lib/builderConditionId.test.mjs",
     # Exact selected Builder/CRW/model-digest and operator presentation Node tests.
     "ui-react/src/lib/botConsoleSelectedHoldingsEmpty.product.test.mjs",
     "ui-react/src/lib/historicalRangeReadinessLabel.test.mjs",
