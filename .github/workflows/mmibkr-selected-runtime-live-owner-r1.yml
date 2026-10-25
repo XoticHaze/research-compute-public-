@@ -302,8 +302,12 @@ jobs:
           # A real reset late in a 15m session must not be cut short by
           # the nominal session end before the 480s controller delay finishes.
           for marker in ('while :; do', 'pool_maintenance_alert_after_outage()',
-                         '[ "$now" -ge "$end" ]', '[ "$now" -ge "$((end + 720))" ]',
-                         '[ "$now" -ge "$((outage_since + 720))" ]',
+                         'pool_reset_window_outage()',
+                         '[ "$now" -ge "$end" ]', 'observation_budget=600',
+                         'observation_budget=720',
+                         '[ "$now" -ge "$((end + observation_budget))" ]',
+                         '[ "$now" -ge "$((outage_since + observation_budget))" ]',
+                         'MMIBKR_GATEWAY_POOL_RESET_WINDOW_READONLY_OBSERVATION_STARTED=1',
                          'MMIBKR_GATEWAY_POOL_MAINTENANCE_BOUNDED_OBSERVATION=1',
                          'MMIBKR_GATEWAY_POOL_MAINTENANCE_OBSERVATION_INCOMPLETE=1'):
               assert marker in pool, marker
