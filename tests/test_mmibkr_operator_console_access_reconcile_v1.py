@@ -104,7 +104,7 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertIn("/settings", text)
         self.assertIn("MMIBKR_OPERATOR_CONSOLE_CONTROL_PLANE=READY", text)
         self.assertLess(text.index(control_plane_step), text.index(access_step))
-        self.assertIn("for path in ('/', '/api/operator-snapshot', '/healthz'):", text)
+        self.assertIn("for path in ('/', '/bot-console', '/operator/promotion-review', '/api/operator-snapshot', '/healthz'):", text)
         self.assertNotIn("operator-console pre-Access health did not converge", text)
 
     def test_unauthenticated_acceptance_rejects_public_200(self):
