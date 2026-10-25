@@ -307,5 +307,23 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertIn("received_runtime_count: receipt.received_runtime_count", text)
 
 
+    def test_machine_and_browser_snapshot_reads_reject_invalid_stored_state(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        machine = text.split("url.pathname === '/v1/operator-snapshot-read'", 1)[1].split(
+            "let accessIdentity", 1
+        )[0]
+        browser = text.split("url.pathname === '/api/operator-snapshot'", 1)[1].split(
+            "// This Worker only exposes", 1
+        )[0]
+        for route in (machine, browser):
+            with self.subTest(route="machine" if route is machine else "browser"):
+                self.assertIn("validateSnapshot(record.snapshot)", route)
+                self.assertIn("operator_snapshot_state_invalid", route)
+                self.assertIn("502", route)
+                self.assertIn("return json(", route)
+        self.assertNotIn("return json(record.snapshot, 200)", browser)
+        self.assertIn("return json(snapshot, 200)", browser)
+
+
 if __name__ == "__main__":
     unittest.main()
