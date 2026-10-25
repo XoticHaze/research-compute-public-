@@ -10,6 +10,11 @@ import {
 class MemoryStorage {
   constructor() { this.values = new Map() }
   async put(key, value) { this.values.set(key, structuredClone(value)) }
+  async transaction(fn) {
+    const before = new Map(this.values)
+    try { return await fn(this) }
+    catch (error) { this.values = before; throw error }
+  }
   async get(key) {
     if (Array.isArray(key)) return new Map(key.filter((item) => this.values.has(item)).map((item) => [item, structuredClone(this.values.get(item))]))
     return this.values.has(key) ? structuredClone(this.values.get(key)) : undefined
@@ -62,6 +67,24 @@ assert.equal(JSON.stringify(approved).includes('operator@example.com'), false)
 
 const replay = await recordPromotionDecision(storage, approval(), operator)
 assert.equal(replay.idempotent_replay, true)
+const flaky = new MemoryStorage()
+await storePromotionCandidates(flaky, snapshot, { repository: 'XoticHaze/research-compute-public-', workflow_ref: 'publisher', run_id: '4321' })
+const originalPut = flaky.put.bind(flaky)
+let failIndexOnce = true
+flaky.put = async (key, value) => {
+  if (key === 'promotion:decision-index' && failIndexOnce) {
+    failIndexOnce = false
+    throw new Error('injected_index_write_failure')
+  }
+  return originalPut(key, value)
+}
+await assert.rejects(() => recordPromotionDecision(flaky, approval({ request_id: 'approve-index-failure' }), operator), /injected_index_write_failure/)
+assert.equal([...flaky.values.keys()].some((key) => key.startsWith('promotion:decision:')), false)
+const recovered = await recordPromotionDecision(flaky, approval({ request_id: 'approve-index-failure' }), operator)
+assert.equal(recovered.disposition, 'APPROVED_FOR_ARENA')
+assert.equal(recovered.idempotent_replay, undefined)
+assert.equal((await readPromotionState(flaky)).decisions.length, 1)
+
 await assert.rejects(() => recordPromotionDecision(storage, approval({ request_id: 'approve-2' }), operator), /stage_already_approved_pending_consumer/)
 await assert.rejects(() => recordPromotionDecision(storage, approval({ request_id: 'stale-snapshot', candidate_snapshot_generated_at_utc: '2026-09-22T19:00:00Z' }), operator), /candidate_snapshot_superseded/)
 await assert.rejects(() => recordPromotionDecision(storage, approval({ request_id: 'wrong-symbol', symbol: 'AMAT' }), operator), /candidate_symbol_stale/)
