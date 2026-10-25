@@ -84,6 +84,9 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     # Counted pre-start warmup and status readiness remain source-only and brokerless.
     "tests.test_stock_warmup_count_product_20261025",
     "tests.test_stock_warmup_status_projection_product_20261025",
+    # Exact selected Builder simulated next-open ledger and futures conId warmup.
+    "tests.test_crw_builder_backtest_dca_dual_ledger_14th31jt",
+    "tests.test_signal_history_warmup_exact_conid_product_20261024",
     # Exact selected-account position snapshot safety regression, networkless.
     "tests.test_cloud_operator_snapshot_v1",
     # Read-only account open-order completeness projection, never a broker consumer.

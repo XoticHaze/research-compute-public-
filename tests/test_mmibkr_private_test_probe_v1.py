@@ -840,3 +840,24 @@ def test_exact_stock_warmup_readiness_modules_networkless():
     ):
         with pytest.raises(ValueError):
             validated_modules(denied)
+
+
+def test_exact_builder_pending_and_futures_conid_warmup_modules_networkless():
+    # Existing selected #888 and #924 changed-source tests only, no broker.
+    exact = (
+        "tests.test_crw_builder_backtest_dca_dual_ledger_14th31jt",
+        "tests.test_signal_history_warmup_exact_conid_product_20261024",
+    )
+    assert validated_modules(" ".join(exact)) == list(exact)
+    for module in exact:
+        cmd = pytest_container_command("sealed-test-image", module)
+        assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in cmd
+        assert cmd[-1] == module_file_path(module)
+    for denied in (
+        "tests.test_crw_builder_backtest_dca_dual_ledger_14th31jt_broker_submit",
+        "tests.test_signal_history_warmup_exact_conid_product_20261024_live",
+        "tests.test_signal_history_warmup_exact_conid_product_20261024.py",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
