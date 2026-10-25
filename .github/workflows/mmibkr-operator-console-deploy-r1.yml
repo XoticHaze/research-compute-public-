@@ -854,6 +854,10 @@ jobs:
           python - <<'PY'
           import json, os
           from pathlib import Path
+          access_configured = bool(
+              os.environ.get("MMIBKR_ACCESS_AUD")
+              and os.environ.get("MMIBKR_ACCESS_TEAM_DOMAIN")
+          )
           node = {
               "schema": "mmibkr.operator_console.deploy_receipt.r2",
               "worker": "mmibkr-operator-console",
@@ -862,10 +866,15 @@ jobs:
                   if os.environ.get("CLOUDFLARE_DEPLOY_TOKEN_R2")
                   else "legacy_fallback"
               ),
-              "access_reconciliation_credential": "legacy_access_capable_token",
+              "access_reconciliation_credential": (
+                  "legacy_access_capable_token" if access_configured else "not_exercised"
+              ),
               "source_sha": os.environ.get("REQUEST_SOURCE_SHA", ""),
               "control_plane_pass": True,
-              "access_reconciliation_step_completed": True,
+              "access_reconciliation_step_completed": access_configured,
+              "access_reconciliation_state": (
+                  "configured" if access_configured else "locked_unconfigured"
+              ),
               "unauthenticated_fail_closed_pass": True,
               "private_source_destroy_step_pending": True,
               "secret_included": False,

@@ -115,5 +115,51 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertIn("cloudflareaccess.com", text)
 
 
+    def test_deploy_receipt_distinguishes_locked_unconfigured_from_access_configured(self):
+        import json
+        import os
+        import subprocess
+        import sys
+        import tempfile
+        import textwrap
+
+        text = WORKFLOW.read_text(encoding="utf-8")
+        receipt_step = text.split(
+            "      - name: Publish scoped R2 MM deployment receipt", 1
+        )[1].split("      - name: Destroy private deployment source", 1)[0]
+        script = textwrap.dedent(
+            receipt_step.split("          python - <<'PY'\n", 1)[1]
+            .split("\n          PY", 1)[0]
+        )
+        for configured in (False, True):
+            with self.subTest(configured=configured), tempfile.TemporaryDirectory() as td:
+                env = dict(os.environ)
+                env["REQUEST_SOURCE_SHA"] = "a" * 40
+                env["CLOUDFLARE_DEPLOY_TOKEN_R2"] = "synthetic-scoped-token"
+                env.pop("MMIBKR_ACCESS_AUD", None)
+                env.pop("MMIBKR_ACCESS_TEAM_DOMAIN", None)
+                if configured:
+                    env["MMIBKR_ACCESS_AUD"] = "synthetic-audience"
+                    env["MMIBKR_ACCESS_TEAM_DOMAIN"] = "https://example.cloudflareaccess.com"
+                result = subprocess.run(
+                    [sys.executable, "-c", script], cwd=td, env=env,
+                    capture_output=True, text=True, check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                receipt = json.loads(
+                    (Path(td) / "rendezvous/receipts/mmibkr-operator-console-deploy-r2.json")
+                    .read_text(encoding="utf-8")
+                )
+                self.assertIs(receipt["access_reconciliation_step_completed"], configured)
+                self.assertEqual(
+                    receipt["access_reconciliation_state"],
+                    "configured" if configured else "locked_unconfigured",
+                )
+                self.assertEqual(
+                    receipt["access_reconciliation_credential"],
+                    "legacy_access_capable_token" if configured else "not_exercised",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
