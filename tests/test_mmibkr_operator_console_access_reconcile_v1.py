@@ -107,6 +107,17 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertIn("for path in ('/', '/bot-console', '/operator/promotion-review', '/api/operator-snapshot', '/healthz'):", text)
         self.assertNotIn("operator-console pre-Access health did not converge", text)
 
+    def test_public_actions_never_echo_cloudflare_provider_error_bodies(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        # Cloudflare error bodies can contain operator email allowlists and
+        # account or policy identifiers. Public CI logs must not echo them.
+        self.assertNotIn("detail = exc.read", text)
+        self.assertNotIn("json.dumps(node.get('errors')", text)
+        self.assertIn("Cloudflare Worker settings proof failed HTTP {exc.code}", text)
+        self.assertIn("Cloudflare Access request failed HTTP {exc.code}", text)
+        self.assertIn("Cloudflare Worker settings proof rejected", text)
+        self.assertIn("Cloudflare Access request rejected", text)
+
     def test_unauthenticated_acceptance_rejects_public_200(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("class NoRedirect(HTTPRedirectHandler)", text)
