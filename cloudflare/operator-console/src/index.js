@@ -758,7 +758,8 @@ export default {
 
     // This Worker only exposes the explicitly admitted read-only/operator APIs.
     // Never return SPA HTML with HTTP 200 for an unsupported MM backend API.
-    if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
+    if (url.pathname === '/api' || url.pathname.startsWith('/api/')
+        || url.pathname === '/v1' || url.pathname.startsWith('/v1/')) {
       return json({ error: 'operator_api_not_supported' }, 404);
     }
 
