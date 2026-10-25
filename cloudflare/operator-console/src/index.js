@@ -747,6 +747,12 @@ export default {
       return json(record.snapshot, 200);
     }
 
+    // This Worker only exposes the explicitly admitted read-only/operator APIs.
+    // Never return SPA HTML with HTTP 200 for an unsupported MM backend API.
+    if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
+      return json({ error: 'operator_api_not_supported' }, 404);
+    }
+
     if (!env.ASSETS) return json({ error: 'static_assets_not_deployed' }, 503);
     return secureAssetResponse(await env.ASSETS.fetch(request));
   },
