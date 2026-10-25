@@ -1,13 +1,13 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "326115c5344904ca462073a0b3b1448b1413c350",
-  "acceptance_file": "ui-react/src/lib/pilotStrategySpecHandoff.acceptance.test.mjs",
+  "source_ref": "8ecfc2434c1586e17a2703b152313683b1d0a9c4",
+  "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-20261024-clockin-20261024162001495",
-  "purpose": "Changed selected #975 Arena zero-trade forward-evidence Product #1008 exact encrypted Node/Vite acceptance; no broker/live/deploy",
-  "request_nonce": "release-p0-ui-composite-326115c5-20261024-r1",
+  "requested_by": "continue-release-exact-current-ui-acceptance-20261025",
+  "purpose": "Exact #888 8ec selected improved stale-market-data BAD priority and multisource margin guard, already encrypted Source Vault 40184499577; native Node/Vite through original probe only, no trading/deploy.",
+  "request_nonce": "continue-release-ui-8ecfc243-20261025-r1",
   "authority": {
     "research_only": true,
     "broker": false,
