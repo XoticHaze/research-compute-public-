@@ -122,3 +122,27 @@ test("local-only role selector preserves private destination, rejects injection 
  assert.deepEqual(requests,[{url:"https://cc-shared-nvidia-inference.invalid/internal/diagnostics/nvidia-roles",body}]);
  assert.equal((await caller.fetch(call(),env)).status,409);
 });
+
+test("five distinct synthetic batches per existing local caller, sixth and replay denied",async()=>{
+ const caller=createCaller();
+ let calls=0;
+ const env={NVIDIA_SERVICE:{async fetch(req){
+   calls++;
+   const params=JSON.parse(await req.text());
+   return new Response(JSON.stringify({
+     schema:"commandcenter.nvidia_synthetic_roles.v1",batch:params.batch,
+     status:"batch_complete",calls:1,catalog_http:200,catalog_count:85,
+     catalog_model_ids:["openai/gpt-oss-20b"],eligible_count:1,
+     eligible_model_ids:["openai/gpt-oss-20b"],results:[]
+   }),{status:200});
+ }}};
+ const input=n=>{
+   const body=JSON.stringify({batch:n});
+   return new Request("http://127.0.0.1:8787/roles-batch",{method:"POST",
+     headers:{"content-type":"application/json","content-length":String(body.length)},body});
+ };
+ for(let n=0;n<5;n++)assert.equal((await caller.fetch(input(n),env)).status,200);
+ assert.equal((await caller.fetch(input(0),env)).status,409);
+ assert.equal((await caller.fetch(input(5),env)).status,409);
+ assert.equal(calls,5);
+});
