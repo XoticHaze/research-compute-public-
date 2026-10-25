@@ -68,3 +68,20 @@ test("unsupported batch and malformed catalog fail closed",async()=>{
  await assert.rejects(()=>runSyntheticRoleBatch({batch:"0",providerFetch:async()=>{}}),/invalid_batch/);
  assert.deepEqual(sanitizeModelCatalog([{id:"broken"},{id:"nvidia/test"},{id:"nvidia/test"}]),["nvidia/test"]);
 });
+
+test("model-specific 404 is recorded once and does not waste other synthetic tasks",async()=>{
+ const requests=[];
+ const result=await runSyntheticRoleBatch({batch:0,providerFetch:async(url,opts)=>{
+  if(url.endsWith("/models"))return{status:200,async json(){return{data:[
+   {id:"openai/gpt-oss-20b"},{id:"nvidia/nemotron-3.5-lightning-30b-a3b"}
+  ]}}};
+  const name=JSON.parse(opts.body).model;requests.push(name);
+  if(name==="openai/gpt-oss-20b")return{status:404};
+  return{status:200,async json(){return{choices:[{message:{content:"NO"}}]}}};
+ }});
+ assert.equal(result.status,"batch_complete");
+ assert.equal(result.results.length,2);
+ assert.equal(result.results.find(x=>x.model==="openai/gpt-oss-20b").results.length,1);
+ assert.equal(requests.filter(x=>x==="openai/gpt-oss-20b").length,1);
+ assert.equal(result.calls,6);
+});
