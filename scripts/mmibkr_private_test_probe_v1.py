@@ -58,6 +58,8 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_missing_execid_identity_product_20261024",
     # Exact selected P0 #883 brokerless invalid native execution fields (#1030).
     "tests.test_completed_execution_fields_product_20261024",
+    # Selected P0 #883 Product #1033: same execId cannot change persisted economics.
+    "tests.test_strategy_inventory_same_execid_conflict_product_20261024",
     # Exact source-only P0 journal / fill validator / same-owner broker readback.
     "tests.test_selected_runtime_live_order_intent_journal_v1",
     "tests.test_selected_runtime_live_execution_ledger_v1",

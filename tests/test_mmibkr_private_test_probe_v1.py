@@ -803,10 +803,11 @@ def test_exact_futures_multiplier_invalid_funded_pnl_is_networkless():
         with pytest.raises(ValueError):
             validated_modules(rejected)
 
-def test_exact_selected_p0_execution_fields_and_funded_cost_schedule_are_networkless():
+def test_exact_selected_p0_execution_inventory_and_funded_cost_modules_are_networkless():
     # Exact already-selected private source tests, no broker or live mutation.
     for module in (
         "tests.test_completed_execution_fields_product_20261024",
+        "tests.test_strategy_inventory_same_execid_conflict_product_20261024",
         "tests.test_capital_invalid_cost_schedule_product_20261024",
     ):
         assert validated_modules(module) == [module]
