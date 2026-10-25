@@ -40,7 +40,7 @@ export function createCaller() {
         let selector;
         try {selector=await request.json();}catch{return reply(400,{classification:"role_batch_selector_invalid"});}
         if(!selector||Object.keys(selector).length!==1||
-          !Number.isInteger(selector.batch)||selector.batch< -1||selector.batch>99)
+          !Number.isInteger(selector.batch)||selector.batch< -2||selector.batch>99)
           return reply(400,{classification:"role_batch_selector_invalid"});
         roleBatch=selector.batch;
       } else if (request.body !== null && request.headers.get("content-length") !== "0") {
