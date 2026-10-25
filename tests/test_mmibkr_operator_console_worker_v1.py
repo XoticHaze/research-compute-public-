@@ -32,6 +32,13 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
             text,
         )
 
+    def test_healthz_requires_worker_access_before_status(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        access_gate = text.index("let accessIdentity;")
+        health = text.index("url.pathname === '/healthz'")
+        self.assertLess(access_gate, health)
+        self.assertIn("access_denied", text[access_gate:health])
+
     def test_publisher_is_github_oidc_bound_to_cloud_owner_workflows(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("mmibkr-operator-console", text)
