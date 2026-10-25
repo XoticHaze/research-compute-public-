@@ -262,3 +262,17 @@ def test_exact_selected_contract_pnl_multiplier_acceptance_allowlist_only():
     ):
         with pytest.raises(ValueError, match="not_allowlisted"):
             mod.validate_acceptance_file(denied)
+
+def test_exact_selected_runtime_badge_truth_acceptance_allowlist_only():
+    # Read-only badge/trace presentation. Never grants broker mutation.
+    exact = "ui-react/src/lib/selectedRuntimeBadgeTruth.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        "ui-react/src/lib/selectedRuntimeBadgeTruth.mjs",
+        exact + ".bak",
+        exact + ".js",
+        "ui-react/src/components/selectedRuntimeBadgeTruth.test.mjs",
+        "ui-react/src/lib/../lib/selectedRuntimeBadgeTruth.test.mjs",
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
