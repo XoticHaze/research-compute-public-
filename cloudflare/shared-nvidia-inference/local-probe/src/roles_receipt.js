@@ -2,7 +2,7 @@
 // No model-generated response content, credentials, URLs or prompts leave
 // the private Service Binding. Model IDs are NVIDIA-published catalog metadata.
 const MODEL = /^[A-Za-z0-9_.:-]{2,80}\/[A-Za-z0-9_.:-]{2,120}$/;
-const TASK = new Set(["math","logic","json","tool_call"]);
+const TASK = new Set(["math","logic","json","tool_call","vision"]);
 const STATUS = new Set([
  "catalog_only","batch_complete","end_of_catalog","catalog_http_error",
  "catalog_decode_error","transport_error","timeout","aborted",
@@ -14,7 +14,7 @@ const flag = n => n === true;
 const model = s => typeof s==="string"&&MODEL.test(s)?s:null;
 export function sanitizeRolesReceipt(input) {
  if(!input||input.schema!=="commandcenter.nvidia_synthetic_roles.v1"||
-    !Number.isInteger(input.batch)||input.batch< -1||input.batch>99) {
+    !Number.isInteger(input.batch)||input.batch< -2||input.batch>99) {
    return null;
  }
  const ids=Array.isArray(input.catalog_model_ids)?
