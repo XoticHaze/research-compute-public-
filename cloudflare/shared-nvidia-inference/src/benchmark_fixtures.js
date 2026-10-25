@@ -51,3 +51,24 @@ export function scored(task,msg) {
    obj.count===2&&obj.urgent===false;}catch{return false;}}
  return false;
 }
+
+export const VISION_MODELS=[
+ "meta/llama-3.2-11b-vision-instruct",
+ "nvidia/nemotron-3.5-super-vl-120b-a12b",
+];
+export const VISION_IMAGE_DATA_URI="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAIAAAAt/+nTAAAAOElEQVR4nO3PsQkAAAzDsPz/dHpFliLwbFCaTBvvu94DAAAAAAAAAAAAAAAAAAAAAAAAAAAAPAQcOkv4asq/aw0AAAAASUVORK5CYII=";
+export function visionRequest(model){
+ if(!VISION_MODELS.includes(model)) throw Error("vision_model_not_admitted");
+ return {model,temperature:0,max_tokens:160,stream:false,messages:[{role:"user",
+  content:[{type:"text",text:'Examine the image. Reply ONLY valid JSON: {"left":"color","right":"color"}. Use basic color names.'},
+           {type:"image_url",image_url:{url:VISION_IMAGE_DATA_URI}}]}]};
+}
+export function visionScored(message) {
+ if(typeof message?.content!=="string")return false;
+ try{
+  const obj=JSON.parse(message.content.trim());
+  return obj&&typeof obj==="object"&&
+   String(obj.left).toLowerCase()==="red" &&
+   String(obj.right).toLowerCase()==="blue";
+ }catch{return false;}
+}
