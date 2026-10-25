@@ -33,6 +33,8 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/lib/builderPersistedReviewTruth.test.mjs",
     # Exact selected Product #1041 finite-literal Node helper, no broker access.
     "ui-react/src/lib/builderLiteralValue.test.mjs",
+    # Product #1044 exact selected UI contract multiplier PnL safety regression.
+    "ui-react/src/lib/contractPnlCurrency.test.mjs",
     "ui-react/src/lib/tradingProductReadiness.digest-identity.test.mjs",
     "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.cross-timeframe-capability.test.mjs",
     "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.local-draft-storage.test.mjs",

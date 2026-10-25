@@ -248,3 +248,17 @@ def test_exact_builder_literal_finite_helper_node_acceptance_is_allowlisted_only
             mod.validate_acceptance_file(denied)
 
 
+
+def test_exact_selected_contract_pnl_multiplier_acceptance_allowlist_only():
+    # Pure UI presentation safety. No account/broker/order/FX authority.
+    exact = "ui-react/src/lib/contractPnlCurrency.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        "ui-react/src/lib/contractPnlCurrency.mjs",
+        exact + ".bak",
+        exact + ".js",
+        "ui-react/src/components/contractPnlCurrency.test.mjs",
+        "ui-react/src/lib/../lib/contractPnlCurrency.test.mjs",
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
