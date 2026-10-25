@@ -30,6 +30,12 @@ on:
         required: false
         default: ''
         type: string
+      trust_mode:
+        description: Explicit approved encrypted public compute trust mode
+        required: true
+        type: choice
+        options:
+          - public_encrypted
 
 permissions:
   contents: read
@@ -73,6 +79,7 @@ jobs:
           DISPATCH_SOURCE_REF: ${{ inputs.source_ref }}
           DISPATCH_TEST_MODULES: ${{ inputs.test_modules }}
           DISPATCH_UI_ACCEPTANCE_FILE: ${{ inputs.ui_acceptance_file }}
+          DISPATCH_TRUST_MODE: ${{ inputs.trust_mode }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -81,6 +88,7 @@ jobs:
           event = os.environ.get("GITHUB_EVENT_NAME", "")
           if event == "workflow_dispatch":
               source_ref = os.environ.get("DISPATCH_SOURCE_REF", "").strip()
+              requirements = {"trust_mode": os.environ.get("DISPATCH_TRUST_MODE", "").strip()}
               modules = os.environ.get("DISPATCH_TEST_MODULES", "").strip()
               parity_key = ""
               ui_acceptance = os.environ.get("DISPATCH_UI_ACCEPTANCE_FILE", "").strip()
@@ -92,15 +100,17 @@ jobs:
               if node.get("schema") != "mmibkr.private_test_probe_fire.v1":
                   raise SystemExit("private test probe fire schema rejected")
               source_ref = str(node.get("source_ref") or "").strip()
+              requirements = node.get("compute_requirements")
               raw_modules = node.get("test_modules") or []
               if not isinstance(raw_modules, list):
                   raise SystemExit("private test probe modules must be a list")
               modules = ",".join(str(value).strip() for value in raw_modules if str(value).strip())
               parity_key = str(node.get("parity_public_key_b64") or "").strip()
               ui_acceptance = str(node.get("ui_acceptance_file") or "").strip()
-              crw_consumer_reprobe = bool(node.get("crw_consumer_reprobe"))
-              s3_composition_economics = bool(node.get("s3_composition_economics"))
-              s4_layered_mtf_economics = bool(node.get("s4_layered_mtf_economics"))
+              from scripts.mmibkr_private_test_probe_v1 import validate_native_fire_boolean
+              crw_consumer_reprobe = validate_native_fire_boolean(node, "crw_consumer_reprobe")
+              s3_composition_economics = validate_native_fire_boolean(node, "s3_composition_economics")
+              s4_layered_mtf_economics = validate_native_fire_boolean(node, "s4_layered_mtf_economics")
           else:
               raise SystemExit("unsupported private test probe event")
           if not re.fullmatch(r"[0-9a-f]{40}", source_ref):
@@ -110,9 +120,10 @@ jobs:
           # Reuse the existing exact source allowlists BEFORE writing GITHUB_ENV
           # or materializing private source. Reject multiline injection on both
           # workflow_dispatch and repository_push_fire variants.
-          from scripts.mmibkr_private_test_probe_v1 import validated_modules
+          from scripts.mmibkr_private_test_probe_v1 import validated_modules, validate_compute_requirements
           from scripts.mmibkr_private_ui_build_probe_v1 import validate_acceptance_file
           try:
+              trust_mode = validate_compute_requirements(requirements)
               modules = ",".join(validated_modules(modules))
               if ui_acceptance:
                   ui_acceptance = validate_acceptance_file(ui_acceptance)
@@ -122,6 +133,7 @@ jobs:
               raise SystemExit("private probe parity key encoding rejected")
           with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as fh:
               fh.write("MMIBKR_PRIVATE_TEST_SOURCE_REF=" + source_ref + "\n")
+              fh.write("MMIBKR_PRIVATE_TEST_TRUST_MODE=" + trust_mode + "\n")
               fh.write("MMIBKR_PRIVATE_TEST_MODULES=" + modules + "\n")
               if parity_key:
                   fh.write("MMIBKR_PARITY_PUBLIC_KEY_B64=" + parity_key + "\n")

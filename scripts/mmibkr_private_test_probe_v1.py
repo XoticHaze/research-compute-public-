@@ -25,6 +25,21 @@ class _PublicSafeArgumentParser(argparse.ArgumentParser):
 SCHEMA = "mmibkr.private_test_probe_receipt.v1"
 PYTEST_VERSION = "8.4.2"
 MODULE_RE = re.compile(r"^tests\.test_[A-Za-z0-9_]+$")
+FIRE_BOOLEAN_FIELDS = frozenset({
+    "crw_consumer_reprobe", "s3_composition_economics", "s4_layered_mtf_economics",
+})
+
+
+def validate_native_fire_boolean(node: dict[str, Any], field: str) -> bool:
+    """Fail closed optional push-fire flags before private-source admission."""
+    if field not in FIRE_BOOLEAN_FIELDS:
+        raise ValueError("private_probe_fire_boolean_field_unsupported")
+    value = node.get(field, False)
+    if type(value) is not bool:
+        raise ValueError("private_probe_fire_boolean_type_invalid")
+    return value
+
+
 SAFE_PREFIXES = (
     "tests.test_autotuner_",
 )
@@ -37,12 +52,48 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_live_seal_compose_runner_v1",
     # Brokerless exact successor ledger tests; never permit test network I/O.
     "tests.test_ibkr_live_successor_ledger_reconcile_v1",
+    # Exact canonical read-only same-contract execId conflict falsifier; no broker I/O.
+    "tests.test_execid_cross_filter_conflict_product",
+    # Reject missing/non-native immutable broker execId before any order filter.
+    "tests.test_missing_execid_identity_product_20261024",
+    # Exact selected P0 #883 brokerless invalid native execution fields (#1030).
+    "tests.test_completed_execution_fields_product_20261024",
+    # Selected P0 #883 Product #1033: same execId cannot change persisted economics.
+    "tests.test_strategy_inventory_same_execid_conflict_product_20261024",
     # Exact source-only P0 journal / fill validator / same-owner broker readback.
     "tests.test_selected_runtime_live_order_intent_journal_v1",
     "tests.test_selected_runtime_live_execution_ledger_v1",
     "tests.test_selected_runtime_live_broker_provenance_v1",
     "tests.test_selected_runtime_live_p0_integrated_checkpoint_v1",
     "tests.test_selected_runtime_live_owner_candidate_certificate_v1",
+    # Brokerless selected-account what-if guard/hook tests must not access a network.
+    "tests.test_selected_runtime_margin_guard_14th31lg",
+    "tests.test_selected_runtime_margin_whatif_hook_14th31lg",
+    # Exact synthetic Pi Docker endpoint-locality preflight; no daemon/broker access.
+    "tests.test_ibkr_persistent_host_preflight_v1",
+    # New exact paper post-execution quarantine regression, no broker access.
+    "tests.test_selected_runtime_cloud_cycle_v1",
+    # Exact canonical read-only B1 initial-backfill contract integrity, brokerless.
+    "tests.test_selected_runtime_initial_backfill_ingest_v1",
+    # Exact native-int selected execution conId denial before B1 cache or artifact access.
+    "tests.test_selected_runtime_initial_backfill_selected_conid_product_20261025",
+    # Exact selected P0 #1053 sizing and margin money guards; no broker/network.
+    "tests.test_selected_runtime_sizing_strict_numeric_caps_product_20261025",
+    "tests.test_selected_runtime_margin_strict_money_product_20261025",
+    # Selected P0 B1 OHLCV and negative-volume fail-close, exact synthetic test.
+    "tests.test_selected_runtime_initial_backfill_ohlcv_domain_product_20261024",
+    "tests.test_selected_runtime_terminal_ledger_corruption_product_20261024",
+    "tests.test_selected_runtime_strategy_inventory_unverified_receipt_product_20261024",
+    # Native stock intraday/derived coverage test is brokerless AND networkless.
+    "tests.test_stock_range_intraday_coverage_product_20261024",
+    # Explicit invalid as-of must not silently select current wall time.
+    "tests.test_market_data_invalid_explicit_now_product_20261024",
+    # Counted pre-start warmup and status readiness remain source-only and brokerless.
+    "tests.test_stock_warmup_count_product_20261025",
+    "tests.test_stock_warmup_status_projection_product_20261025",
+    # Exact selected Builder simulated next-open ledger and futures conId warmup.
+    "tests.test_crw_builder_backtest_dca_dual_ledger_14th31jt",
+    "tests.test_signal_history_warmup_exact_conid_product_20261024",
     # Exact selected-account position snapshot safety regression, networkless.
     "tests.test_cloud_operator_snapshot_v1",
     # Read-only account open-order completeness projection, never a broker consumer.
@@ -142,14 +193,70 @@ SOURCE_ONLY_PNL_MODULES = frozenset({
     # Exact new Product source-only decimal residue and matched-fill-count guards.
     "tests.test_lifecycle_decimal_flatness_product_20261024",
     "tests.test_lifecycle_matched_fill_count_truth_product_20261024",
+    # Exact selected source-only regression; Docker network disabled.
+    "tests.test_lifecycle_strict_broker_numeric_product_20261025",
+    "tests.test_capital_adjusted_price_explicit_failclose_product_20261024",
+    # Exact pure futures multiplier fail-close; selected funded PnL #911 source-only.
+    "tests.test_capital_explicit_futures_multiplier_failclose_product_20261024",
+    # Exact selected funded PnL malformed canonical fill/fallback input fail-close.
+    "tests.test_capital_fill_ledger_integrity_product_20261024",
+    # One-shot fill/trade generator malformed-row fail-close, pure funded PnL.
+    "tests.test_capital_generator_ledger_integrity_product_20261024",
+    # Open-position without a chart mark must fail closed, with network disabled.
+    "tests.test_capital_curve_fill_time_identity_product_20261024",
+    # Exact funded PnL malformed chart-source row fail-close; offline only.
+    "tests.test_capital_malformed_chart_rows_product_20261024",
+    # Exact selected funded PnL #911 malformed cost schedule (#1032).
+    "tests.test_capital_invalid_cost_schedule_product_20261024",
+    # Exact funded PnL oversized numeric fail-close, no live/broker inputs.
+    "tests.test_capital_oversized_numeric_failclosed_product_20261025",
+    # Exact selected financial #911 strict decimal economic input; offline only.
+    "tests.test_capital_strict_decimal_economic_input_product_20261025",
+    # Exact selected #911 native Decimal nonzero underflow cost fail-close.
+    "tests.test_capital_native_decimal_underflow_product_20261025",
+    # Selected UI #888 exact UTC fill/chart identity, no broker or network.
+    "tests.test_capital_timestamp_binding_product_20261025",
 })
 SAFE_EXACT.update(SOURCE_ONLY_MODEL_LAB_MODULES)
 SAFE_EXACT.update(SOURCE_ONLY_PNL_MODULES)
 # Signed Foundry qualification / Pilot quarantine is an exact offline test only.
 SOURCE_ONLY_MODEL_ISSUER_MODULES = frozenset({
     "tests.test_foundry_model_promotion_admission_v1",
+    # Exact signed limited FORWARD_SANITY boundary and non-approvable stage.
+    "tests.test_foundry_model_limited_forward_sanity_product_20261024",
+    # Exact GET-only Promotion Review transport and stale-state regression.
+    "tests.test_promotion_review_get_http_current_product_20261024",
+    # Exact model-native forward identity adapter/preview/Arena/binder regressions; brokerless.
+    "tests.test_foundry_model_order_intent_adapter_v1",
+    "tests.test_foundry_model_arena_executor_conformance_v1",
+    "tests.test_foundry_model_canonical_preview_conformance_v1",
+    "tests.test_foundry_model_runtime_binding_v1",
 })
 SAFE_EXACT.update(SOURCE_ONLY_MODEL_ISSUER_MODULES)
+# Exact prebuilt Builder scale and feature-identity guards are pure canonical evaluation.
+# Only these two brokerless modules run, always with Docker network disabled.
+SOURCE_ONLY_BUILDER_MODULES = frozenset({
+    "tests.test_builder_prebuilt_group_logic_guard_product_20261023",
+    "tests.test_builder_prebuilt_feature_authority_product_20261025",
+    # Exact selected source-only regression; Docker network disabled.
+    "tests.test_registry_builder_condition_execution_14th31kn",
+    # Exact selected #888 malformed Builder parameter/source_fields fail-close.
+    "tests.test_builder_parameter_shape_product_20261025",
+    # Enabled literal RHS must reject blank/NaN/inf without zero substitution.
+    "tests.test_builder_literal_rhs_finite_product_20261025",
+    # Exact reviewed apply-packet broker/live and identity guard, synthetic writer only.
+    "tests.test_reviewed_apply_packet_safety_product_20261025",
+    # Exact #1076 server-side reviewed Builder HTTP write gate, synthetic/no broker.
+    "tests.test_builder_review_http_route_binding_product_20261025",
+})
+SAFE_EXACT.update(SOURCE_ONLY_BUILDER_MODULES)
+# Exact selected #888 admitted futures row-identity synthetic test, no external data.
+SOURCE_ONLY_MARKET_DATA_MODULES = frozenset({
+    "tests.test_admitted_futures_source_strict_identity_product_20261025",
+    # Exact selected source-only regression; Docker network disabled.
+    "tests.test_futures_signal_only_execution_authority_product_20261025",
+})
+SAFE_EXACT.update(SOURCE_ONLY_MARKET_DATA_MODULES)
 STATUS_STAGE_MODULES = {
     "tests.test_market_features_provenance_contract",
 }
@@ -181,6 +288,15 @@ def _load_json(path: Path) -> dict[str, Any]:
     if not isinstance(node, dict):
         raise RuntimeError("source_materialization_not_object")
     return node
+
+
+def validate_compute_requirements(raw: Any) -> str:
+    """Fail closed on absent, extra or non-approved external compute trust."""
+    if not isinstance(raw, dict) or set(raw) != {"trust_mode"}:
+        raise ValueError("private_test_compute_requirements_invalid")
+    if raw["trust_mode"] != "public_encrypted":
+        raise ValueError("private_test_compute_trust_mode_rejected")
+    return "public_encrypted"
 
 
 def validated_modules(raw: str) -> list[str]:
@@ -222,7 +338,7 @@ def pytest_container_command(image_tag: str, module: str) -> list[str]:
         "docker",
         "run",
         "--rm",
-        *(["--network", "none"] if module in (SOURCE_ONLY_P0_MODULES | SOURCE_ONLY_MODEL_LAB_MODULES | SOURCE_ONLY_PNL_MODULES | SOURCE_ONLY_MODEL_ISSUER_MODULES) else []),
+        *(["--network", "none"] if module in (SOURCE_ONLY_P0_MODULES | SOURCE_ONLY_MODEL_LAB_MODULES | SOURCE_ONLY_PNL_MODULES | SOURCE_ONLY_MODEL_ISSUER_MODULES | SOURCE_ONLY_BUILDER_MODULES | SOURCE_ONLY_MARKET_DATA_MODULES) else []),
         "-e",
         "ENABLE_LIVE_TRADING=0",
         "-e",
