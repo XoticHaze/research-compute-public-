@@ -60,7 +60,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PRIVATE_SOURCE_SHA: 91b54e63f35b4643da430ca5160fa4a90885eade
+  PRIVATE_SOURCE_SHA: 516a0f3503cdcf60522c3c2790d1e29f3512b8aa
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
   LIVE_SEAL_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-live-bot/seal
   IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:2e4f4911991386e941f6e95d58ee38a8242474dd3be239f21ad82557d24b4368
