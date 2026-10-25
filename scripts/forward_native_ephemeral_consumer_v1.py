@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import gzip
 import hashlib
 import io
 import json
@@ -23,6 +24,18 @@ RETURN_SCHEMA = "forward-native-return-x25519-v1"
 PAYLOAD_SCHEMA = "foundry.forward_native_source_payload.v1"
 INFO = b"research-foundry-forward-native-ephemeral-v1"
 RETURN_INFO = b"research-foundry-forward-native-return-v1"
+MAX_ENVELOPE_BYTES = 8 * 1024 * 1024
+MAX_PLAINTEXT_BYTES = 4 * 1024 * 1024
+MAX_MEMBER_BYTES = 2 * 1024 * 1024
+MAX_TOTAL_MEMBER_BYTES = 4 * 1024 * 1024
+MAX_TAR_MEMBERS = 32
+MAX_UNCOMPRESSED_TAR_BYTES = 8 * 1024 * 1024
+
+
+class _PublicSafeArgumentParser(argparse.ArgumentParser):
+    """No private CLI values or filenames in public Actions stderr."""
+    def error(self, _message):
+        raise ValueError("invalid_public_cli_arguments")
 
 HARNESS_SPECS: dict[str, dict[str, Any]] = {
     "semiconductor_shared_ridge_three_book_v1": {
@@ -57,6 +70,42 @@ HARNESS_SPECS: dict[str, dict[str, Any]] = {
         },
     },
 }
+
+
+_PUBLIC_KEYS = frozenset({
+    "schema", "authority", "harness", "program_id", "source_ref",
+    "native_sha256", "adapter_sha256", "book_sha256",
+    "private_source_persisted", "private_stdout_exposed", "private_stderr_exposed",
+})
+_PUBLIC_FALSE = ("private_source_persisted", "private_stdout_exposed", "private_stderr_exposed")
+
+
+def public_receipt(value: dict) -> dict:
+    """Fixed public success projection; never forward nested native result fields."""
+    if not isinstance(value, dict) or set(value) != _PUBLIC_KEYS:
+        raise RuntimeError("PUBLIC_RECEIPT_FIELD_SET_REJECTED")
+    spec = HARNESS_SPECS.get(value.get("harness"))
+    if (not spec or value.get("schema") != "forward-native-public-compute-receipt-v1"
+            or value.get("authority") != "research_only"
+            or value.get("program_id") != spec["program_id"]
+            or value.get("source_ref") != spec["source_ref"]):
+        raise RuntimeError("PUBLIC_RECEIPT_IDENTITY_REJECTED")
+    if any(value.get(k) is not False for k in _PUBLIC_FALSE):
+        raise RuntimeError("PUBLIC_RECEIPT_AUTHORITY_REJECTED")
+    for key in ("native_sha256", "adapter_sha256", "book_sha256"):
+        digest = value.get(key)
+        if digest is None and key == "book_sha256":
+            continue
+        if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+            raise RuntimeError("PUBLIC_RECEIPT_DIGEST_REJECTED")
+    return {key: value[key] for key in sorted(_PUBLIC_KEYS)}
+
+
+def public_rejection() -> None:
+    """Constant public failure, independent of encrypted input and caller strings."""
+    print("FORWARD_NATIVE_PUBLIC_RECEIPT=" + json.dumps({
+        "schema": "forward-native-public-compute-receipt-v1", "status": "REJECTED",
+    }, sort_keys=True))
 
 
 def _sha(data: bytes) -> str:
@@ -108,44 +157,70 @@ def _decrypt_input(envelope: dict, private_raw: bytes, run_id: str, harness: str
     aad = _aad(SCHEMA, run_id, harness, expected_id)
     shared = private.exchange(x25519.X25519PublicKey.from_public_bytes(sender_raw))
     plaintext = ChaCha20Poly1305(_derive(shared, aad, INFO)).decrypt(nonce, _b64d(envelope["ciphertext_b64"]), aad)
-    if _sha(plaintext) != envelope["plaintext_sha256"]:
-        raise RuntimeError("input plaintext digest mismatch")
+    if len(plaintext) > MAX_PLAINTEXT_BYTES or _sha(plaintext) != envelope["plaintext_sha256"]:
+        raise RuntimeError("input plaintext size/digest mismatch")
     return plaintext
 
 
 def _safe_extract(payload: bytes, root: Path, harness: str) -> dict:
+    """Bound untrusted tar headers and expansion before writing any source bytes."""
+    if len(payload) > MAX_PLAINTEXT_BYTES:
+        raise RuntimeError("payload compressed size bound")
     spec = HARNESS_SPECS[harness]
-    with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as tf:
-        members = tf.getmembers()
-        names = {m.name for m in members if m.isfile()}
-        expected = {"payload-manifest.json", *spec["files"]}
-        if names != expected:
-            raise RuntimeError(f"payload file-set mismatch: {sorted(names ^ expected)}")
-        for member in members:
+    expected = {"payload-manifest.json", *spec["files"]}
+    # gzip/PAX metadata can expand before a tar header is yielded. Bound the
+    # entire decompressed archive before tarfile parses any member.
+    with gzip.GzipFile(fileobj=io.BytesIO(payload)) as gz:
+        archive_bytes = gz.read(MAX_UNCOMPRESSED_TAR_BYTES + 1)
+    if len(archive_bytes) > MAX_UNCOMPRESSED_TAR_BYTES:
+        raise RuntimeError("payload gzip expansion bound")
+    with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:") as tf:
+        members = []
+        seen = set()
+        total_bytes = 0
+        # Do not call getmembers(): it parses every header before a bound is checked.
+        for count, member in enumerate(tf, 1):
+            if count > MAX_TAR_MEMBERS:
+                raise RuntimeError("payload header count bound")
             if not member.isfile():
-                continue
+                raise RuntimeError("payload unsafe member type")
             rel = Path(member.name)
-            if rel.is_absolute() or ".." in rel.parts:
-                raise RuntimeError("unsafe payload path")
+            if rel.is_absolute() or ".." in rel.parts or str(rel) in ("", "."):
+                raise RuntimeError("payload unsafe member path")
+            canonical = rel.as_posix()
+            if canonical in seen:
+                raise RuntimeError("payload duplicate member")
+            seen.add(canonical)
+            if member.size < 0 or member.size > MAX_MEMBER_BYTES:
+                raise RuntimeError("payload individual size bound")
+            total_bytes += member.size
+            if total_bytes > MAX_TOTAL_MEMBER_BYTES:
+                raise RuntimeError("payload aggregate size bound")
+            members.append((member, rel))
+        if {m.name for m, _ in members} != expected:
+            raise RuntimeError("payload file-set mismatch")
+        for member, rel in members:
             target = root / rel
             target.parent.mkdir(parents=True, exist_ok=True)
             src = tf.extractfile(member)
             if src is None:
-                raise RuntimeError(f"unable to read {member.name}")
-            target.write_bytes(src.read())
+                raise RuntimeError("payload unreadable member")
+            data = src.read(MAX_MEMBER_BYTES + 1)
+            if len(data) != member.size:
+                raise RuntimeError("payload member size mismatch")
+            target.write_bytes(data)
     manifest = json.loads((root / "payload-manifest.json").read_text(encoding="utf-8"))
     if manifest.get("schema") != PAYLOAD_SCHEMA or manifest.get("harness") != harness:
         raise RuntimeError("payload manifest identity mismatch")
     if manifest.get("program_id") != spec["program_id"] or manifest.get("source_ref") != spec["source_ref"]:
         raise RuntimeError("payload frozen source identity mismatch")
     hashes_expected = manifest.get("files") or {}
-    if set(hashes_expected) != set(spec["files"]):
+    if not isinstance(hashes_expected, dict) or set(hashes_expected) != set(spec["files"]):
         raise RuntimeError("payload manifest file-set mismatch")
     for rel, expected_hash in hashes_expected.items():
         if _sha((root / rel).read_bytes()) != expected_hash:
-            raise RuntimeError(f"payload digest mismatch: {rel}")
+            raise RuntimeError("payload digest mismatch")
     return manifest
-
 
 def _run(cmd: list[str], root: Path, timeout: int = 1200) -> None:
     env = dict(os.environ)
@@ -259,6 +334,8 @@ def consume(
     private_raw = _b64d(private_key_path.read_text(encoding="ascii").strip())
     if len(private_raw) != 32:
         raise RuntimeError("input recipient private key invalid")
+    if envelope_path.stat().st_size > MAX_ENVELOPE_BYTES:
+        raise RuntimeError("input envelope size bound")
     envelope = json.loads(envelope_path.read_text(encoding="utf-8"))
     plaintext = _decrypt_input(envelope, private_raw, run_id, harness)
     with tempfile.TemporaryDirectory(prefix="forward-native-") as td:
@@ -295,36 +372,102 @@ def self_test() -> None:
     assert HARNESS_SPECS["homebuilders_adaptive_duration_v1"]["source_ref"] == "b2f933b57efbbf4297620492aa415d0fcd2f613c"
     assert "research/run_homebuilders_adaptive_duration_forward_20260905.py" in HARNESS_SPECS["homebuilders_adaptive_duration_v1"]["files"]
     assert HARNESS_SPECS["generalized_largecap_ridge_v1"]["program_id"] == "GENERALIZED_LARGECAP_RIDGE"
+    # Synthetic-only, no private model bytes. Verify exact existing tar producer shape.
+    spec = HARNESS_SPECS["semiconductor_shared_ridge_three_book_v1"]
+    fake = {name: b"synthetic-source" for name in spec["files"]}
+    manifest = {
+        "schema": PAYLOAD_SCHEMA,
+        "harness": "semiconductor_shared_ridge_three_book_v1",
+        "program_id": spec["program_id"],
+        "source_ref": spec["source_ref"],
+        "files": {name: _sha(data) for name, data in fake.items()},
+    }
+    def pack(entries):
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+            for name, data in entries:
+                info = tarfile.TarInfo(name)
+                info.size = len(data)
+                info.mtime = 0
+                tf.addfile(info, io.BytesIO(data))
+        return buf.getvalue()
+    valid = [("payload-manifest.json", json.dumps(manifest).encode())] + list(fake.items())
+    with tempfile.TemporaryDirectory() as td:
+        parsed = _safe_extract(pack(valid), Path(td), "semiconductor_shared_ridge_three_book_v1")
+        assert parsed["source_ref"] == spec["source_ref"]
+    bad = [
+        (valid + [("payload-manifest.json", b"duplicate")], "payload duplicate member"),
+        ([(f"private-sentinel-{i}.txt", b"") for i in range(33)], "payload header count bound"),
+        ([("a", b"x" * MAX_MEMBER_BYTES), ("b", b"x" * MAX_MEMBER_BYTES),
+          ("c", b"x" * MAX_MEMBER_BYTES)], "payload aggregate size bound"),
+        ([("PRIVATE_SENTINEL_DO_NOT_LOG.txt", b"secret")], "payload file-set mismatch"),
+        ([("large-gzip-metadata", b"x" * (MAX_UNCOMPRESSED_TAR_BYTES + 1))], "payload gzip expansion bound"),
+    ]
+    for entries, expected_error in bad:
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                _safe_extract(pack(entries), Path(td), "semiconductor_shared_ridge_three_book_v1")
+            except RuntimeError as exc:
+                assert str(exc) == expected_error and "SENTINEL" not in str(exc)
+            else:
+                raise AssertionError("unsafe tar accepted")
+    fake_receipt = {
+        "schema": "forward-native-public-compute-receipt-v1",
+        "authority": "research_only",
+        "harness": "semiconductor_shared_ridge_three_book_v1",
+        "program_id": spec["program_id"], "source_ref": spec["source_ref"],
+        "native_sha256": "a" * 64, "adapter_sha256": "b" * 64,
+        "book_sha256": None, "private_source_persisted": False,
+        "private_stdout_exposed": False, "private_stderr_exposed": False,
+    }
+    assert public_receipt(fake_receipt)["harness"] == "semiconductor_shared_ridge_three_book_v1"
+    for mutant in ({**fake_receipt, "nested": {"PRIVATE_SENTINEL": "secret"}},
+                   {**fake_receipt, "private_stderr_exposed": True}):
+        try:
+            public_receipt(mutant)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("unsafe public receipt accepted")
+    check = subprocess.run(
+        [sys.executable, __file__, "--harness", "PRIVATE_SENTINEL_DO_NOT_LOG"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15,
+    )
+    assert check.returncode == 1 and not check.stderr
+    assert "PRIVATE_SENTINEL" not in check.stdout and '"status": "REJECTED"' in check.stdout
+    print("FORWARD_NATIVE_PUBLIC_EGRESS_TAR_BOUNDS_SELF_TEST=PASS")
     print("FORWARD_NATIVE_EPHEMERAL_CONSUMER_SELF_TEST=PASS")
 
 
-def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--envelope")
-    p.add_argument("--private-key")
-    p.add_argument("--run-id")
-    p.add_argument("--harness")
-    p.add_argument("--adapter-script", default="research/forward_native_program_adapter_r1.py")
-    p.add_argument("--return-envelope")
-    p.add_argument("--sanitized-adapter-output")
-    p.add_argument("--self-test", action="store_true")
-    args = p.parse_args()
-    if args.self_test:
-        self_test()
-        return
-    if not all((args.envelope, args.private_key, args.run_id, args.harness, args.return_envelope)):
-        p.error("live consume requires envelope, private-key, run-id, harness and return-envelope")
-    receipt = consume(
-        Path(args.envelope),
-        Path(args.private_key),
-        args.run_id,
-        args.harness,
-        Path(args.adapter_script).resolve(),
-        Path(args.return_envelope),
-        Path(args.sanitized_adapter_output) if args.sanitized_adapter_output else None,
-    )
+def main() -> int:
+    try:
+        p = _PublicSafeArgumentParser()
+        p.add_argument("--envelope")
+        p.add_argument("--private-key")
+        p.add_argument("--run-id")
+        p.add_argument("--harness")
+        p.add_argument("--adapter-script", default="research/forward_native_program_adapter_r1.py")
+        p.add_argument("--return-envelope")
+        p.add_argument("--sanitized-adapter-output")
+        p.add_argument("--self-test", action="store_true")
+        args = p.parse_args()
+        if args.self_test:
+            self_test()
+            return 0
+        if not all((args.envelope, args.private_key, args.run_id, args.harness, args.return_envelope)):
+            raise ValueError("missing_required_public_arguments")
+        receipt = public_receipt(consume(
+            Path(args.envelope), Path(args.private_key), args.run_id, args.harness,
+            Path(args.adapter_script).resolve(), Path(args.return_envelope),
+            Path(args.sanitized_adapter_output) if args.sanitized_adapter_output else None,
+        ))
+    except Exception:
+        # Never print private tar names, nested model data, paths or tracebacks.
+        public_rejection()
+        return 1
     print("FORWARD_NATIVE_PUBLIC_RECEIPT=" + json.dumps(receipt, sort_keys=True))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
