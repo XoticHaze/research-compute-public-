@@ -819,3 +819,24 @@ def test_exact_selected_p0_execution_inventory_and_funded_cost_modules_are_netwo
             with pytest.raises(ValueError):
                 validated_modules(rejected)
 
+
+
+def test_exact_stock_warmup_readiness_modules_networkless():
+    # Selected #888/#975 source-only warmup count and status projection tests.
+    exact = (
+        "tests.test_stock_warmup_count_product_20261025",
+        "tests.test_stock_warmup_status_projection_product_20261025",
+    )
+    assert validated_modules(" ".join(exact)) == list(exact)
+    for module in exact:
+        cmd = pytest_container_command("sealed-test-image", module)
+        assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in cmd
+        assert cmd[-1] == module_file_path(module)
+    for denied in (
+        "tests.test_stock_warmup_count_product_20261025_live_submit",
+        "tests.test_stock_warmup_status_projection_product_20261025_extra",
+        "tests.test_stock_warmup_count_product_20261025.py",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(denied)

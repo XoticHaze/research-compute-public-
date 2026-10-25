@@ -81,6 +81,9 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_selected_runtime_strategy_inventory_unverified_receipt_product_20261024",
     # Native stock intraday/derived coverage test is brokerless AND networkless.
     "tests.test_stock_range_intraday_coverage_product_20261024",
+    # Counted pre-start warmup and status readiness remain source-only and brokerless.
+    "tests.test_stock_warmup_count_product_20261025",
+    "tests.test_stock_warmup_status_projection_product_20261025",
     # Exact selected-account position snapshot safety regression, networkless.
     "tests.test_cloud_operator_snapshot_v1",
     # Read-only account open-order completeness projection, never a broker consumer.
