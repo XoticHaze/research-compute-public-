@@ -193,6 +193,8 @@ SOURCE_ONLY_PNL_MODULES = frozenset({
     # Exact new Product source-only decimal residue and matched-fill-count guards.
     "tests.test_lifecycle_decimal_flatness_product_20261024",
     "tests.test_lifecycle_matched_fill_count_truth_product_20261024",
+    # Exact selected source-only regression; Docker network disabled.
+    "tests.test_lifecycle_strict_broker_numeric_product_20261025",
     "tests.test_capital_adjusted_price_explicit_failclose_product_20261024",
     # Exact pure futures multiplier fail-close; selected funded PnL #911 source-only.
     "tests.test_capital_explicit_futures_multiplier_failclose_product_20261024",
@@ -234,6 +236,8 @@ SAFE_EXACT.update(SOURCE_ONLY_MODEL_ISSUER_MODULES)
 SOURCE_ONLY_BUILDER_MODULES = frozenset({
     "tests.test_builder_prebuilt_group_logic_guard_product_20261023",
     "tests.test_builder_prebuilt_feature_authority_product_20261025",
+    # Exact selected source-only regression; Docker network disabled.
+    "tests.test_registry_builder_condition_execution_14th31kn",
     # Enabled literal RHS must reject blank/NaN/inf without zero substitution.
     "tests.test_builder_literal_rhs_finite_product_20261025",
     # Exact reviewed apply-packet broker/live and identity guard, synthetic writer only.
@@ -243,6 +247,8 @@ SAFE_EXACT.update(SOURCE_ONLY_BUILDER_MODULES)
 # Exact selected #888 admitted futures row-identity synthetic test, no external data.
 SOURCE_ONLY_MARKET_DATA_MODULES = frozenset({
     "tests.test_admitted_futures_source_strict_identity_product_20261025",
+    # Exact selected source-only regression; Docker network disabled.
+    "tests.test_futures_signal_only_execution_authority_product_20261025",
 })
 SAFE_EXACT.update(SOURCE_ONLY_MARKET_DATA_MODULES)
 STATUS_STAGE_MODULES = {
