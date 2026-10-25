@@ -228,6 +228,49 @@ jobs:
           set -euo pipefail
           python scripts/cloudflare_r2_scope_preflight.py
 
+      - name: Preflight Access release credentials before Worker deployment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ACCESS_ALLOWED_EMAILS: ${{ secrets.MMIBKR_ACCESS_ALLOWED_EMAILS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$ACCESS_ALLOWED_EMAILS" ]; then
+            echo 'MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_REQUIRED=1'
+            exit 43
+          fi
+          python - <<'PY'
+          import json, os, re
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          emails = [value.strip().lower() for value in os.environ['ACCESS_ALLOWED_EMAILS'].split(',') if value.strip()]
+          if not emails or any(len(value) > 254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', value) for value in emails):
+              raise SystemExit('MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_EMAILS_INVALID=1')
+          account = os.environ['CLOUDFLARE_ACCOUNT_ID'].strip()
+          if not account:
+              raise SystemExit('MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_ACCOUNT_MISSING=1')
+          request = Request(
+              'https://api.cloudflare.com/client/v4/accounts/' + account + '/access/organizations',
+              headers={'Authorization': 'Bearer ' + os.environ['CLOUDFLARE_API_TOKEN'].strip(),
+                       'Accept': 'application/json',
+                       'User-Agent': 'mmibkr-operator-console-access-predeploy-r1'},
+          )
+          try:
+              with urlopen(request, timeout=20) as response:
+                  node = json.load(response)
+          except HTTPError as exc:
+              raise SystemExit('MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_HTTP_' + str(exc.code)) from None
+          except (URLError, TimeoutError, ValueError):
+              raise SystemExit('MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_UNAVAILABLE=1') from None
+          org = node.get('result') if isinstance(node, dict) and node.get('success') is True else None
+          if isinstance(org, list):
+              org = org[0] if org else None
+          if not isinstance(org, dict) or not str(org.get('auth_domain') or '').strip():
+              raise SystemExit('MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_ORG_INVALID=1')
+          print('MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY=READY')
+          PY
       - name: Deploy locked operator-console Worker and private static assets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
