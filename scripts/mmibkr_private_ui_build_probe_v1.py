@@ -37,6 +37,8 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/lib/contractPnlCurrency.test.mjs",
     # Product #1045 exact selected operator lifecycle badge/boolean truth regression.
     "ui-react/src/lib/selectedRuntimeBadgeTruth.test.mjs",
+    # Product #1047 selected reviewed backtest data-missing/stale-success fail-close.
+    "ui-react/src/components/strategy-builder-reviewed-fetch-guard.test.mjs",
     "ui-react/src/lib/tradingProductReadiness.digest-identity.test.mjs",
     "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.cross-timeframe-capability.test.mjs",
     "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.local-draft-storage.test.mjs",

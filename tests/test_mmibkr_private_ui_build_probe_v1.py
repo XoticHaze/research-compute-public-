@@ -276,3 +276,17 @@ def test_exact_selected_runtime_badge_truth_acceptance_allowlist_only():
     ):
         with pytest.raises(ValueError, match="not_allowlisted"):
             mod.validate_acceptance_file(denied)
+
+def test_exact_selected_reviewed_backtest_fetch_guard_allowlist_only():
+    # Read-only acceptance; no Builder apply/config/broker authority.
+    exact = "ui-react/src/components/strategy-builder-reviewed-fetch-guard.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        "ui-react/src/components/strategy-builder-reviewed-fetch-guard.js",
+        exact + ".bak",
+        exact + ".js",
+        "ui-react/src/lib/strategy-builder-reviewed-fetch-guard.test.mjs",
+        "ui-react/src/components/../components/strategy-builder-reviewed-fetch-guard.test.mjs",
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
