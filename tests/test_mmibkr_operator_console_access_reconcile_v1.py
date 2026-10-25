@@ -84,6 +84,34 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertIn("wrangler@4.131.2 secret put ACCESS_AUD", text)
         self.assertIn("wrangler@4.131.2 secret put ACCESS_ALLOWED_EMAILS", text)
 
+    def test_access_preflight_precedes_worker_deploy(self):
+        import os
+        import subprocess
+        import textwrap
+
+        text = WORKFLOW.read_text(encoding="utf-8")
+        start = "      - name: Preflight Access release credentials before Worker deployment"
+        deploy = "      - name: Deploy locked operator-console Worker and private static assets"
+        self.assertIn(start, text)
+        self.assertLess(text.index(start), text.index(deploy))
+        block = text.split(start, 1)[1].split(deploy, 1)[0]
+        self.assertIn("/access/organizations", block)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY=READY", block)
+        self.assertNotIn("exc.read()", block)
+        script = textwrap.dedent(block.split("        run: |\n", 1)[1])
+        for missing in ("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "ACCESS_ALLOWED_EMAILS"):
+            with self.subTest(missing=missing):
+                env = dict(os.environ)
+                env.update({"CLOUDFLARE_API_TOKEN": "synthetic",
+                            "CLOUDFLARE_ACCOUNT_ID": "synthetic",
+                            "ACCESS_ALLOWED_EMAILS": "operator@example.test"})
+                env[missing] = ""
+                result = subprocess.run(["bash", "-c", script], env=env,
+                                        capture_output=True, text=True, check=False)
+                self.assertEqual(result.returncode, 43, result.stderr)
+                self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_REQUIRED=1", result.stdout)
+                self.assertNotIn("operator@example.test", result.stdout + result.stderr)
+
     def test_no_email_allowlist_keeps_worker_locked(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn(
