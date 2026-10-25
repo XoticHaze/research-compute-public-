@@ -20,7 +20,8 @@ function bounded(n, max) { return Number.isInteger(n) && n >= 0 && n <= max ? n 
 function bool(n) { return typeof n === "boolean" ? n : null; }
 
 export function createCaller() {
-  let invoked = false;
+  let smokeInvoked = false;
+  const roleBatchesInvoked = new Set();
   return {
     async fetch(request, env) {
       const url = new URL(request.url);
@@ -45,12 +46,16 @@ export function createCaller() {
       } else if (request.body !== null && request.headers.get("content-length") !== "0") {
         return reply(400, { classification: "request_body_not_allowed" });
       }
-      if (invoked) return reply(409, { classification: "caller_already_invoked" });
+      if ((roleBatch === null && (smokeInvoked || roleBatchesInvoked.size)) ||
+          (roleBatch !== null && (smokeInvoked || roleBatchesInvoked.has(roleBatch) ||
+                                   roleBatchesInvoked.size >= 5)))
+        return reply(409, {classification:"caller_batch_limit_or_replay"});
       if (typeof env?.NVIDIA_SERVICE?.fetch !== "function") {
         return reply(503, { classification: "remote_service_binding_missing" });
       }
       // One request per local dev session, even if upstream errors.
-      invoked = true;
+      if (roleBatch === null) smokeInvoked = true;
+      else roleBatchesInvoked.add(roleBatch);
       try {
         const upstream = await env.NVIDIA_SERVICE.fetch(roleBatch===null
           ? new Request(DESTINATION, { method: "POST" })
