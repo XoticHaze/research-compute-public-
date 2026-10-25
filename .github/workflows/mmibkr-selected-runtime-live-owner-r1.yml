@@ -60,10 +60,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PRIVATE_SOURCE_SHA: 46fcdf26cf84603b305a3ea20bcd3cf28c67bc0b
+  PRIVATE_SOURCE_SHA: 91b54e63f35b4643da430ca5160fa4a90885eade
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
   LIVE_SEAL_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-live-bot/seal
-  IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
+  IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:2e4f4911991386e941f6e95d58ee38a8242474dd3be239f21ad82557d24b4368
   SESSION_SECONDS: "14400"
 
 jobs:
@@ -173,6 +173,11 @@ jobs:
               assert marker in s, marker
           # Check the execution job, not these literal regression assertions.
           owner=s.split('\n  owner:\n',1)[1]
+          pinned_controller='ghcr.io/code-hustler-ft3d/ibg-controller@sha256:2e4f4911991386e941f6e95d58ee38a8242474dd3be239f21ad82557d24b4368'
+          assert '  IBKR_CONTROLLER_IMAGE: '+pinned_controller in s
+          assert "controller_image='"+pinned_controller+"'" in owner
+          assert 'gateway_uid="$(docker run --rm --entrypoint /usr/bin/id "$IBKR_CONTROLLER_IMAGE" -u)"' in owner
+          print('LIVE_OWNER_WARM_CONTROLLER_IMAGE_PIN_CONSISTENT=1')
           assert "contract['localSymbol']=='MNQZ6'" not in owner
           assert "contract['lastTradeDateOrContractMonth']=='20261218'" not in owner
           assert 'is_continuous_futures_symbol(local_symbol' in owner
