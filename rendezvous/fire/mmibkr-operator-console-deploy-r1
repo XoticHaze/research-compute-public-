@@ -1,11 +1,11 @@
 {
   "schema": "mmibkr-operator-console-deploy-fire-v1",
-  "source_sha": "5e56997fe31987fb1ac471ebecb03795b6614887",
+  "source_sha": "20e8f0a8d0a0109543814eea1a862ccd9d63e79f",
   "mode": "locked_private",
   "access_required": true,
   "public_fallback_allowed": false,
   "live_execution_allowed": false,
-  "reason": "prove_scoped_r2_cloudflare_deploy_credential",
-  "requested_by": "assistant-cloudflare-r2-cutover",
-  "request_id": "20260929T0038CDT-r2-scope-proof"
+  "reason": "after_protected_selected_ui_owner_acceptance_deploy_browser_visible_operator_only",
+  "requested_by": "operator-ui-release-staging-20261025",
+  "request_id": "operator-console-20e8f0a8-protected-review-20261025"
 }
