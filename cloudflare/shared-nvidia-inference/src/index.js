@@ -161,7 +161,7 @@ export default {
       let selector;
       try { selector = await request.json(); } catch {return json(400,{error:"invalid_selector"});}
       if (!selector || Object.keys(selector).length !== 1 ||
-          !Number.isInteger(selector.batch) || selector.batch < -1 || selector.batch > 99)
+          !Number.isInteger(selector.batch) || selector.batch < -2 || selector.batch > 99)
         return json(400,{error:"invalid_selector"});
       if (typeof env.NVIDIA_API_KEY?.get !== "function") return json(503,{error:"binding_unavailable"});
       let key;
