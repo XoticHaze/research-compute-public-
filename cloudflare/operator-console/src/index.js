@@ -699,6 +699,15 @@ export default {
       return json({ error: 'access_denied' }, 403);
     }
 
+    // This dedicated Access-locked host is the operator console, not the
+    // full MM backend. React's generic '/' route targets unsupported Markets.
+    if (request.method === 'GET' && url.pathname === '/') {
+      return new Response(null, {
+        status: 302,
+        headers: { location: '/bot-console', 'cache-control': 'private, no-store' },
+      });
+    }
+
     if (request.method === 'GET' && url.pathname === '/healthz') {
       return json({
         ok: true,
