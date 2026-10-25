@@ -88,3 +88,37 @@ test("one bound call only, fixed private destination, unexpected fields dropped"
   assert.equal((await caller.fetch(call(), env)).status, 409);
   assert.equal(called.length, 1);
 });
+
+test("local-only role selector preserves private destination, rejects injection and redacts upstream fields",async()=>{
+ const caller=createCaller();
+ const requests=[];
+ const env={NVIDIA_SERVICE:{async fetch(req){
+   requests.push({url:req.url,body:await req.text()});
+   return new Response(JSON.stringify({
+     schema:"commandcenter.nvidia_synthetic_roles.v1",batch:0,
+     status:"batch_complete",catalog_http:200,catalog_count:85,
+     catalog_model_ids:["openai/gpt-oss-20b"],eligible_count:1,
+     eligible_model_ids:["openai/gpt-oss-20b"],calls:5,elapsed_ms:350,
+     results:[{model:"openai/gpt-oss-20b",results:[
+       {task:"tool_call",http_status:200,latency_ms:120,format_valid:true,passed:true}
+     ]}], SECRET:"LEAK",raw_answer:"LEAK"
+   }),{status:200});
+ }}};
+ const url="http://127.0.0.1:8787/roles-batch";
+ const bad=new Request(url,{method:"POST",headers:{
+   "content-type":"application/json","content-length":"14"
+ },body:'{"batch":"0"}'});
+ assert.equal((await caller.fetch(bad,env)).status,400);
+ const body='{"batch":0}';
+ const good=new Request(url,{method:"POST",headers:{
+   "content-type":"application/json","content-length":String(body.length)
+ },body});
+ const response=await caller.fetch(good,env);
+ assert.equal(response.status,200);
+ const raw=await response.text();
+ assert.equal(raw.includes("LEAK"),false);
+ const receipt=JSON.parse(raw);
+ assert.equal(receipt.results[0].results[0].passed,true);
+ assert.deepEqual(requests,[{url:"https://cc-shared-nvidia-inference.invalid/internal/diagnostics/nvidia-roles",body}]);
+ assert.equal((await caller.fetch(call(),env)).status,409);
+});
