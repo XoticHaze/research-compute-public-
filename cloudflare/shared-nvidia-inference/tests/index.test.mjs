@@ -47,6 +47,8 @@ test("provider catalog 200 but chat 403 is classified privately", async () => {
   assert.equal(receipt.classification, "provider_access_rejected");
   assert.equal(receipt.calls_made, 2);
   assert.equal(calls.length, 2);
+  assert.equal(calls[0].options.redirect, "manual");
+  assert.equal(calls[1].options.redirect, "manual");
   assert.equal(calls[1].url, "https://integrate.api.nvidia.com/v1/chat/completions");
   assert.equal(JSON.parse(calls[1].options.body).model, "openai/gpt-oss-20b");
   assert.equal(JSON.stringify(receipt).includes(SECRET), false);
