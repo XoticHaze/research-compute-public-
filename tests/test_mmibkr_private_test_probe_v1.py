@@ -966,6 +966,25 @@ def test_selected_financial_strict_decimal_economic_input_networkless_only():
             validated_modules(denied)
 
 
+def test_exact_selected_builder_futures_financial_source_modules_networkless_only():
+    # Exact selected #888@f9ac, #924@3ba, #911@83c source-only regressions.
+    # Public allowlist acceptance is NOT selected private execution or PLACED.
+    exact = (
+        "tests.test_registry_builder_condition_execution_14th31kn",
+        "tests.test_futures_signal_only_execution_authority_product_20261025",
+        "tests.test_lifecycle_strict_broker_numeric_product_20261025",
+    )
+    assert validated_modules(",".join(exact)) == list(exact)
+    for module in exact:
+        command = pytest_container_command("sealed-test-image", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for denied in (module + "_live_submit", module + "_extra", module + ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(denied)
+
+
 def test_selected_p0_strict_numeric_caps_and_margin_networkless_only():
     # Selected #1053 risk/account money pure-source tests, no broker writer.
     exact = (
