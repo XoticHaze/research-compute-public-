@@ -172,5 +172,43 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
                 )
 
 
+    def test_exact_owner_release_approval_precedes_private_source_and_cloudflare(self):
+        import os
+        import subprocess
+        import sys
+        import textwrap
+
+        text = WORKFLOW.read_text(encoding="utf-8")
+        start = "      - name: Require owner-approved exact operator-console release source"
+        after = "      - name: Materialize accepted private source from reusable encrypted vault"
+        self.assertIn(start, text)
+        self.assertLess(text.index("      - name: Resolve accepted console source"), text.index(start))
+        self.assertLess(text.index(start), text.index(after))
+        self.assertLess(text.index(start), text.index("      - name: Require Cloudflare deploy credential"))
+        block = text.split(start, 1)[1].split(after, 1)[0]
+        script = textwrap.dedent(
+            block.split("          python - <<'PY'\\n", 1)[1].split("\\n          PY", 1)[0]
+        )
+        for approved, permitted in (
+            (None, False), ("b" * 40, False), ("A" * 40, False), ("a" * 40, True),
+        ):
+            with self.subTest(approved=approved):
+                env = dict(os.environ)
+                env["REQUEST_SOURCE_SHA"] = "a" * 40
+                if approved is None:
+                    env.pop("MMIBKR_OPERATOR_CONSOLE_APPROVED_SOURCE_SHA", None)
+                else:
+                    env["MMIBKR_OPERATOR_CONSOLE_APPROVED_SOURCE_SHA"] = approved
+                result = subprocess.run(
+                    [sys.executable, "-c", script],
+                    env=env, capture_output=True, text=True, check=False,
+                )
+                self.assertIs(result.returncode == 0, permitted)
+                self.assertNotIn("a" * 40, result.stdout + result.stderr)
+                if permitted:
+                    self.assertIn("MMIBKR_OPERATOR_CONSOLE_OWNER_RELEASE_APPROVED=1", result.stdout)
+
+
+
 if __name__ == "__main__":
     unittest.main()
