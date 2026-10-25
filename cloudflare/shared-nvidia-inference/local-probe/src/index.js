@@ -1,6 +1,8 @@
 // Ephemeral operator-only caller. Never deploy. Run via wrangler dev bound to loopback.
 // Only its explicit Cloudflare Service Binding can reach the private inference Worker.
+import {sanitizeRolesReceipt} from "./roles_receipt.js";
 const SOURCE_PATH = "/run-once";
+const ROLES_PATH = "/roles-batch";
 const DESTINATION = "https://cc-shared-nvidia-inference.invalid/internal/diagnostics/nvidia";
 const CLASSIFICATIONS = new Set([
   "unattempted", "secrets_store_binding_missing", "secrets_store_read_unavailable",
@@ -22,13 +24,25 @@ export function createCaller() {
   return {
     async fetch(request, env) {
       const url = new URL(request.url);
-      if (request.method !== "POST" || url.pathname !== SOURCE_PATH || url.search ||
+      if (request.method !== "POST" || ![SOURCE_PATH, ROLES_PATH].includes(url.pathname) || url.search ||
           !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) {
         return reply(404, { classification: "local_route_unavailable" });
       }
       // Wrangler/workerd may represent a zero-byte POST as an empty stream.
       // Admit only a declared zero-length body; reject content-bearing posts.
-      if (request.body !== null && request.headers.get("content-length") !== "0") {
+      let roleBatch = null;
+      if(url.pathname===ROLES_PATH) {
+        const size=Number(request.headers.get("content-length"));
+        if(!Number.isInteger(size)||size<1||size>30||
+           request.headers.get("content-type")!=="application/json")
+          return reply(400,{classification:"role_batch_selector_not_allowed"});
+        let selector;
+        try {selector=await request.json();}catch{return reply(400,{classification:"role_batch_selector_invalid"});}
+        if(!selector||Object.keys(selector).length!==1||
+          !Number.isInteger(selector.batch)||selector.batch< -1||selector.batch>99)
+          return reply(400,{classification:"role_batch_selector_invalid"});
+        roleBatch=selector.batch;
+      } else if (request.body !== null && request.headers.get("content-length") !== "0") {
         return reply(400, { classification: "request_body_not_allowed" });
       }
       if (invoked) return reply(409, { classification: "caller_already_invoked" });
@@ -38,8 +52,20 @@ export function createCaller() {
       // One request per local dev session, even if upstream errors.
       invoked = true;
       try {
-        const upstream = await env.NVIDIA_SERVICE.fetch(new Request(DESTINATION, { method: "POST" }));
+        const upstream = await env.NVIDIA_SERVICE.fetch(roleBatch===null
+          ? new Request(DESTINATION, { method: "POST" })
+          : new Request(DESTINATION.replace("/internal/diagnostics/nvidia",
+              "/internal/diagnostics/nvidia-roles"), {
+              method:"POST",headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({batch:roleBatch})
+          }));
         const value = await upstream.json();
+        if(roleBatch!==null) {
+          const sanitized=sanitizeRolesReceipt(value);
+          if(!sanitized||sanitized.batch!==roleBatch)
+            return reply(502,{classification:"unexpected_synthetic_role_receipt"});
+          return reply(upstream.ok ? 200:502,sanitized);
+        }
         if (value?.schema !== "commandcenter.shared_nvidia_private_diagnostic.v1") {
           return reply(502, { classification: "unexpected_upstream_receipt" });
         }
