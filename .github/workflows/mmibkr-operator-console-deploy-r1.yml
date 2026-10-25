@@ -262,7 +262,8 @@ jobs:
                   node = json.load(response)
           except HTTPError as exc:
               raise SystemExit('MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_HTTP_' + str(exc.code)) from None
-          except (URLError, TimeoutError, ValueError):
+          except Exception:
+              # Never emit network exception URLs/account identifiers to public CI.
               raise SystemExit('MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_UNAVAILABLE=1') from None
           org = node.get('result') if isinstance(node, dict) and node.get('success') is True else None
           if isinstance(org, list):
