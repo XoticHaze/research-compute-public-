@@ -460,14 +460,24 @@ def main() -> None:
             "not_fee_adjusted_or_alpha_credit": True,
         }
 
-    try:
-        monthly_drift_diagnostic = _monthly_hold_drift_diagnostic(rows, ret, month_states)
-    except (KeyError, ValueError, TypeError, ArithmeticError) as exc:
+    if unresolved_gap is not None:
+        # A partial prefix is not an economically current monthly-hold path.
+        # Keep the original source-gap stop and do not publish a diagnostic NAV
+        # as if later sessions had been scored or backfilled.
         monthly_drift_diagnostic = {
-            "status": "DIAGNOSTIC_UNAVAILABLE",
-            "reason": str(exc) if str(exc).startswith("P249_MONTHLY_DRIFT_") else "SOURCE_UNAVAILABLE",
+            "status": "SOURCE_GAP_UNRESOLVED_NO_ECONOMIC_CURRENT",
+            "first_unresolved_session": unresolved_gap["first_unresolved_session"],
             "not_broker_or_alpha_credit": True,
         }
+    else:
+        try:
+            monthly_drift_diagnostic = _monthly_hold_drift_diagnostic(rows, ret, month_states)
+        except (KeyError, ValueError, TypeError, ArithmeticError) as exc:
+            monthly_drift_diagnostic = {
+                "status": "DIAGNOSTIC_UNAVAILABLE",
+                "reason": str(exc) if str(exc).startswith("P249_MONTHLY_DRIFT_") else "SOURCE_UNAVAILABLE",
+                "not_broker_or_alpha_credit": True,
+            }
 
     result = {
         "schema": "research.p279_p249_p266_forward_shadow_observer_r1",
