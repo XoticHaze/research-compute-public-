@@ -227,6 +227,8 @@ SOURCE_ONLY_BUILDER_MODULES = frozenset({
     "tests.test_builder_prebuilt_feature_authority_product_20261025",
     # Enabled literal RHS must reject blank/NaN/inf without zero substitution.
     "tests.test_builder_literal_rhs_finite_product_20261025",
+    # Exact reviewed apply-packet broker/live and identity guard, synthetic writer only.
+    "tests.test_reviewed_apply_packet_safety_product_20261025",
 })
 SAFE_EXACT.update(SOURCE_ONLY_BUILDER_MODULES)
 STATUS_STAGE_MODULES = {

@@ -901,3 +901,19 @@ def test_exact_new_market_builder_and_funded_pnl_modules_networkless():
     ):
         with pytest.raises(ValueError):
             validated_modules(denied)
+
+
+def test_exact_reviewed_builder_apply_packet_guard_networkless_only():
+    # Product #1042 current 20/20 brokerless source accepted; selected #888/#975.
+    exact = "tests.test_reviewed_apply_packet_safety_product_20261025"
+    assert validated_modules(exact) == [exact]
+    command = pytest_container_command("sealed-test-image", exact)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(exact)
+    for denied in (
+        exact + "_live_submit", exact + "_extra", exact + ".py",
+        "tests.test_reviewed_apply_packet_broker_writer_20261025",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
