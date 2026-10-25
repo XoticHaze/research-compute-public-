@@ -1,13 +1,13 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "326115c5344904ca462073a0b3b1448b1413c350",
-  "acceptance_file": "ui-react/src/lib/pilotStrategySpecHandoff.acceptance.test.mjs",
+  "source_ref": "20e8f0a8d0a0109543814eea1a862ccd9d63e79f",
+  "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-20261024-clockin-20261024162001495",
-  "purpose": "Changed selected #975 Arena zero-trade forward-evidence Product #1008 exact encrypted Node/Vite acceptance; no broker/live/deploy",
-  "request_nonce": "release-p0-ui-composite-326115c5-20261024-r1",
+  "requested_by": "operator-selected-ui-release-20261025",
+  "purpose": "Native selected #888 UI BotConsole real Vite build and existing acceptance after integrated #1062 + #1063; exact encrypted Source Vault bootstrap run 40180190518 SUCCESS; source only, not deployment/broker/live",
+  "request_nonce": "operator-ui-888-20e8f0a8-20261025-r1",
   "authority": {
     "research_only": true,
     "broker": false,
