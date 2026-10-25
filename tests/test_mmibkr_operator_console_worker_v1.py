@@ -10,6 +10,14 @@ WRANGLER = ROOT / "cloudflare" / "operator-console" / "wrangler.jsonc"
 
 
 class OperatorConsoleWorkerContractTests(unittest.TestCase):
+    def test_authenticated_console_root_lands_on_supported_bot_console(self):
+        text = (ROOT / "cloudflare/operator-console/src/index.js").read_text(encoding="utf-8")
+        root_gate = "request.method === 'GET' && url.pathname === '/'"
+        self.assertIn(root_gate, text)
+        self.assertIn("location: '/bot-console'", text)
+        self.assertLess(text.index("await verifyAccess(request, env)"), text.index(root_gate))
+        self.assertLess(text.index(root_gate), text.index("env.ASSETS.fetch(request)"))
+
     def test_unknown_api_routes_reject_spa_fallback(self):
         text = (ROOT / "cloudflare/operator-console/src/index.js").read_text(encoding="utf-8")
         gate = "url.pathname === '/api' || url.pathname.startsWith('/api/')"
