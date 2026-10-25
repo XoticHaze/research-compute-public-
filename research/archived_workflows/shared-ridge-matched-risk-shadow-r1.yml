@@ -1,0 +1,41 @@
+name: Shared Ridge Matched Daily Risk Shadow R1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'research/shared_ridge_matched_risk_shadow_r1.py'
+      - 'tests/test_shared_ridge_matched_risk_shadow_r1.py'
+      - '.github/workflows/shared-ridge-matched-risk-shadow-r1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  risk-shadow:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Dependencies
+        run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - name: Frozen-source no-I/O contract acceptance
+        run: python -m unittest discover -s tests -p 'test_shared_ridge_matched_risk_shadow_r1.py' -v
+      - name: Read-only historical daily-path risk replay
+        run: |
+          python -m research.shared_ridge_matched_risk_shadow_r1 \
+            --ledger research/current/forward_prospective_cohort_ledger_r1.json \
+            --scoreboard research/current/forward_market_scoreboard_r1.json \
+            --output research/artifacts/shared_ridge_matched_risk_shadow_r1.json
+      - name: Immutable risk artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shared-ridge-matched-risk-shadow-r1
+          path: research/artifacts/shared_ridge_matched_risk_shadow_r1.json
+          if-no-files-found: warn
+          retention-days: 90
