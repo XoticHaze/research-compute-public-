@@ -217,3 +217,19 @@ def test_exact_selected_bot_console_empty_holdings_acceptance_is_allowlisted_onl
         with pytest.raises(ValueError, match="not_allowlisted"):
             mod.validate_acceptance_file(denied)
 
+
+
+def test_exact_counted_warmup_readiness_acceptance_allowlist_only():
+    # Product #1037 R2 is now carried by selected #888 and #975; admit only
+    # its one exact brokerless Node presentation test through existing probe.
+    exact = "ui-react/src/lib/historicalRangeReadinessLabel.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        "ui-react/src/lib/historicalRangeReadinessLabel.mjs",
+        exact + ".bak",
+        exact.replace(".test.mjs", ".test.mjs.js"),
+        "ui-react/src/lib/../lib/historicalRangeReadinessLabel.test.mjs",
+        "ui-react/src/components/historicalRangeReadinessLabel.test.mjs",
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)

@@ -29,6 +29,7 @@ ALLOWED_ACCEPTANCE_FILES = {
     # Selected operator UI #888/#1031: no false verified-zero holdings.
     "ui-react/src/lib/botConsoleSelectedHoldingsEmpty.product.test.mjs",
     "ui-react/src/lib/builderLocalDraftRestore.test.mjs",
+    "ui-react/src/lib/historicalRangeReadinessLabel.test.mjs",
     "ui-react/src/lib/builderPersistedReviewTruth.test.mjs",
     "ui-react/src/lib/tradingProductReadiness.digest-identity.test.mjs",
     "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.cross-timeframe-capability.test.mjs",
