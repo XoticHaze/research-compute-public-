@@ -73,7 +73,7 @@ export async function probeNvidia(env, doFetch = fetch) {
   }
   const start = performance.now();
   const headers = { "Authorization": "Bearer " + key, "Content-Type": "application/json" };
-  // Separate construction/transport failures from response JSON failures.
+  // Cloudflare Workers does not implement redirect: "error": it throws before\n  // sending the request. Use manual for BOTH API calls so Authorization is\n  // never forwarded automatically to a different host. Any actual 3xx\n  // remains a non-200 provider response, not followed.\n  // Separate construction/transport failures from response JSON failures.
   // This removes unsupported AbortSignal.timeout from the critical path:
   // caller has its own bounded request timeout and this fixed probe has
   // no user-selected destination, URL, model, or request body.
@@ -81,7 +81,7 @@ export async function probeNvidia(env, doFetch = fetch) {
   receipt.catalog_attempt_started = true;
   try {
     catalogResponse = await doFetch(ORIGIN + "/v1/models", {
-      method: "GET", headers, redirect: "error",
+      method: "GET", headers, redirect: "manual",
     });
     receipt.calls_made++;
     receipt.catalog_http_status = boundedStatus(catalogResponse.status);
@@ -108,7 +108,7 @@ export async function probeNvidia(env, doFetch = fetch) {
   }
   try {
     const result = await doFetch(ORIGIN + "/v1/chat/completions", {
-      method: "POST", headers, redirect: "error",
+      method: "POST", headers, redirect: "manual",
       body: JSON.stringify({
         model: MODEL,
         messages: [{ role: "user", content: "Reply with PING_OK. This is a synthetic connection check." }],
