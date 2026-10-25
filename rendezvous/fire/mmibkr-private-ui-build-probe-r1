@@ -1,10 +1,13 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "06e53438be5cbde75143dab1aeb7fe19c0c6a95e",
+  "source_ref": "8ecfc2434c1586e17a2703b152313683b1d0a9c4",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
-  "requested_by": "continue-release-20261024-clock-20261024025215498",
-  "purpose": "Exact selected UI #888 after no-loss #941 scoped Builder Load and #937 account-mode safety; encrypted Source Vault manifest 51c03c09 present, changed-head Node/Vite build without broker/live/deploy",
-  "request_nonce": "ui-888-06e53438-20261024-selected-build-r1",
+  "compute_requirements": {
+    "trust_mode": "public_encrypted"
+  },
+  "requested_by": "continue-release-exact-current-ui-acceptance-20261025",
+  "purpose": "Exact #888 8ec selected improved stale-market-data BAD priority and multisource margin guard, already encrypted Source Vault 40184499577; native Node/Vite through original probe only, no trading/deploy.",
+  "request_nonce": "continue-release-ui-8ecfc243-20261025-r1",
   "authority": {
     "research_only": true,
     "broker": false,
