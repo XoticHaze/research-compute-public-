@@ -239,6 +239,12 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
                     self.assertIn("MMIBKR_OPERATOR_CONSOLE_OWNER_RELEASE_APPROVED=1", result.stdout)
 
 
+    def test_public_ci_omits_access_control_plane_ids(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertNotIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_APP_ID=", text)
+        self.assertNotIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_POLICY_ID=", text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_APP=CONFIGURED", text)
+
 
 if __name__ == "__main__":
     unittest.main()
