@@ -1,6 +1,7 @@
 // Private service-binding only. No workers.dev URL, external route or arbitrary proxy.
 // This Worker does not accept user prompts, model IDs, target URLs or camera content.
 // `NVIDIA_API_KEY` must be a Cloudflare account Secrets Store binding, not a plain var.
+import {runSyntheticRoleBatch} from "./benchmark_runner.js";
 const ORIGIN = "https://integrate.api.nvidia.com";
 const MODEL = "openai/gpt-oss-20b";
 const RUN_PATH = "/internal/diagnostics/nvidia";
@@ -150,6 +151,27 @@ export async function probeNvidia(env, doFetch = fetch) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    // Existing Service Binding route only; public Worker and previews remain
+    // disabled. No caller-authored prompts, tool execution, or target hosts.
+    if (request.method === "POST" && url.pathname === "/internal/diagnostics/nvidia-roles" && !url.search) {
+      if (env.CC_NVIDIA_DIAGNOSTIC_ENABLED !== "1") return json(503, {error:"diagnostic_not_admitted"});
+      const n = Number(request.headers.get("content-length"));
+      if (!Number.isInteger(n) || n < 1 || n > 30 || request.headers.get("content-type") !== "application/json")
+        return json(400, {error:"unsupported_selector"});
+      let selector;
+      try { selector = await request.json(); } catch {return json(400,{error:"invalid_selector"});}
+      if (!selector || Object.keys(selector).length !== 1 ||
+          !Number.isInteger(selector.batch) || selector.batch < -1 || selector.batch > 99)
+        return json(400,{error:"invalid_selector"});
+      if (typeof env.NVIDIA_API_KEY?.get !== "function") return json(503,{error:"binding_unavailable"});
+      let key;
+      try { key = await env.NVIDIA_API_KEY.get(); } catch {return json(503,{error:"secret_unavailable"});}
+      if (typeof key !== "string" || key.length < 8) return json(503,{error:"secret_unavailable"});
+      const authFetch = (endpoint, options) => fetch(endpoint, {...options,
+        headers: {"Authorization":"Bearer " + key, "Content-Type":"application/json"}, redirect:"manual"});
+      const receipt = await runSyntheticRoleBatch({batch:selector.batch,providerFetch:authFetch});
+      return json(receipt.status === "batch_complete" || receipt.status === "catalog_only" ? 200 : 503, receipt);
+    }
     if (request.method !== "POST" || url.pathname !== RUN_PATH || url.search) {
       return json(404, { error: "unavailable" });
     }
