@@ -1000,3 +1000,21 @@ def test_selected_p0_strict_numeric_caps_and_margin_networkless_only():
         for denied in (module + "_extra", module + "_live_submit", module + ".py"):
             with pytest.raises(ValueError):
                 validated_modules(denied)
+
+
+def test_selected_new_builder_shape_and_native_decimal_modules_networkless_only():
+    # Exact selected #888@492a and #911@d453 source-only modules.
+    # This checks public admission contract, not execution of private tests.
+    exact = (
+        "tests.test_builder_parameter_shape_product_20261025",
+        "tests.test_capital_native_decimal_underflow_product_20261025",
+    )
+    assert validated_modules(",".join(exact)) == list(exact)
+    for module in exact:
+        command = pytest_container_command("sealed-test-image", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for denied in (module + "_live_submit", module + "_extra", module + ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(denied)
