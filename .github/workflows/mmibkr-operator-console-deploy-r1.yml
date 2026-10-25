@@ -6,7 +6,7 @@ on:
       source_sha:
         description: Exact accepted private MM-IBKR source SHA containing the Bot Console
         required: true
-        default: 5e56997fe31987fb1ac471ebecb03795b6614887
+        default: f530ee4b4f571422398f70a7b6bef19208107ecc
         type: string
   push:
     branches:
@@ -35,7 +35,7 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  CANONICAL_PRIVATE_SOURCE_SHA: 5e56997fe31987fb1ac471ebecb03795b6614887
+  CANONICAL_PRIVATE_SOURCE_SHA: f530ee4b4f571422398f70a7b6bef19208107ecc
   OPERATOR_CONSOLE_URL: https://mmibkr-operator-console.slenderiq.workers.dev
 
 jobs:
@@ -114,6 +114,25 @@ jobs:
           with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
               fh.write('REQUEST_SOURCE_SHA=' + canonical + '\n')
           print('MMIBKR_OPERATOR_CONSOLE_SOURCE=' + canonical)
+          PY
+
+      - name: Require owner-approved exact operator-console release source
+        env:
+          MMIBKR_OPERATOR_CONSOLE_APPROVED_SOURCE_SHA: ${{ vars.MMIBKR_OPERATOR_CONSOLE_APPROVED_SOURCE_SHA }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import re
+
+          expected = os.environ['REQUEST_SOURCE_SHA'].strip()
+          approved = os.environ.get('MMIBKR_OPERATOR_CONSOLE_APPROVED_SOURCE_SHA', '').strip()
+          if not re.fullmatch(r'[0-9a-f]{40}', approved):
+              raise SystemExit('MMIBKR_OPERATOR_CONSOLE_OWNER_RELEASE_APPROVAL_MISSING_OR_INVALID=1')
+          if approved != expected:
+              raise SystemExit('MMIBKR_OPERATOR_CONSOLE_OWNER_RELEASE_SOURCE_MISMATCH=1')
+          print('MMIBKR_OPERATOR_CONSOLE_OWNER_RELEASE_APPROVED=1')
           PY
 
       - name: Materialize accepted private source from reusable encrypted vault
@@ -209,6 +228,50 @@ jobs:
           set -euo pipefail
           python scripts/cloudflare_r2_scope_preflight.py
 
+      - name: Preflight Access release credentials before Worker deployment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ACCESS_ALLOWED_EMAILS: ${{ secrets.MMIBKR_ACCESS_ALLOWED_EMAILS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$ACCESS_ALLOWED_EMAILS" ]; then
+            echo 'MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_REQUIRED=1'
+            exit 43
+          fi
+          python - <<'PY'
+          import json, os, re
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+
+          emails = [value.strip().lower() for value in os.environ['ACCESS_ALLOWED_EMAILS'].split(',') if value.strip()]
+          if not emails or any(len(value) > 254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', value) for value in emails):
+              raise SystemExit('MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_EMAILS_INVALID=1')
+          account = os.environ['CLOUDFLARE_ACCOUNT_ID'].strip()
+          if not account:
+              raise SystemExit('MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_ACCOUNT_MISSING=1')
+          request = Request(
+              'https://api.cloudflare.com/client/v4/accounts/' + account + '/access/organizations',
+              headers={'Authorization': 'Bearer ' + os.environ['CLOUDFLARE_API_TOKEN'].strip(),
+                       'Accept': 'application/json',
+                       'User-Agent': 'mmibkr-operator-console-access-predeploy-r1'},
+          )
+          try:
+              with urlopen(request, timeout=20) as response:
+                  node = json.load(response)
+          except HTTPError as exc:
+              raise SystemExit('MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_HTTP_' + str(exc.code)) from None
+          except Exception:
+              # Never emit network exception URLs/account identifiers to public CI.
+              raise SystemExit('MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_UNAVAILABLE=1') from None
+          org = node.get('result') if isinstance(node, dict) and node.get('success') is True else None
+          if isinstance(org, list):
+              org = org[0] if org else None
+          if not isinstance(org, dict) or not str(org.get('auth_domain') or '').strip():
+              raise SystemExit('MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_ORG_INVALID=1')
+          print('MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY=READY')
+          PY
       - name: Deploy locked operator-console Worker and private static assets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
@@ -254,15 +317,15 @@ jobs:
               with urlopen(req, timeout=30) as response:
                   node = json.load(response)
           except HTTPError as exc:
-              detail = exc.read(2048).decode('utf-8', 'replace')
+              # Public Actions logs must never echo provider error bodies: they
+              # may contain operator allowlist emails, account or policy data.
               raise SystemExit(
-                  f'Cloudflare Worker settings proof failed HTTP {exc.code}: {detail[:500]}'
-              ) from exc
+                  f'Cloudflare Worker settings proof failed HTTP {exc.code}'
+              ) from None
 
           if node.get('success') is not True:
               raise SystemExit(
-                  'Cloudflare Worker settings proof rejected: '
-                  + json.dumps(node.get('errors') or [], sort_keys=True)
+                  'Cloudflare Worker settings proof rejected'
               )
           result = node.get('result')
           if not isinstance(result, dict):
@@ -335,14 +398,14 @@ jobs:
                   with urlopen(req, timeout=30) as response:
                       node = json.load(response)
               except HTTPError as exc:
-                  detail = exc.read(2048).decode('utf-8', 'replace')
+                  # Provider error bodies and paths may contain private Access
+                  # operator identities. Emit only the safe status class.
                   raise SystemExit(
-                      f'Cloudflare API {method} {path} failed HTTP {exc.code}: {detail[:500]}'
-                  ) from exc
+                      f'Cloudflare Access request failed HTTP {exc.code}'
+                  ) from None
               if node.get('success') is not True:
                   raise SystemExit(
-                      'Cloudflare API rejected request: '
-                      + json.dumps(node.get('errors') or [], sort_keys=True)
+                      'Cloudflare Access request rejected'
                   )
               return node.get('result')
 
@@ -718,7 +781,7 @@ jobs:
                   return None
 
           opener = build_opener(NoRedirect)
-          for path in ('/', '/api/operator-snapshot', '/healthz'):
+          for path in ('/', '/bot-console', '/operator/promotion-review', '/api/operator-snapshot', '/healthz'):
               req = Request(
                   base + path,
                   headers={
@@ -854,6 +917,10 @@ jobs:
           python - <<'PY'
           import json, os
           from pathlib import Path
+          access_configured = bool(
+              os.environ.get("MMIBKR_ACCESS_AUD")
+              and os.environ.get("MMIBKR_ACCESS_TEAM_DOMAIN")
+          )
           node = {
               "schema": "mmibkr.operator_console.deploy_receipt.r2",
               "worker": "mmibkr-operator-console",
@@ -862,10 +929,15 @@ jobs:
                   if os.environ.get("CLOUDFLARE_DEPLOY_TOKEN_R2")
                   else "legacy_fallback"
               ),
-              "access_reconciliation_credential": "legacy_access_capable_token",
+              "access_reconciliation_credential": (
+                  "legacy_access_capable_token" if access_configured else "not_exercised"
+              ),
               "source_sha": os.environ.get("REQUEST_SOURCE_SHA", ""),
               "control_plane_pass": True,
-              "access_reconciliation_step_completed": True,
+              "access_reconciliation_step_completed": access_configured,
+              "access_reconciliation_state": (
+                  "configured" if access_configured else "locked_unconfigured"
+              ),
               "unauthenticated_fail_closed_pass": True,
               "private_source_destroy_step_pending": True,
               "secret_included": False,
