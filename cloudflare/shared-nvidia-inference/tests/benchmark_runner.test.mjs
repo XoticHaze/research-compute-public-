@@ -102,3 +102,29 @@ test("aborted provider request is retained and next model still receives a task"
  assert.equal(result.results[1].results.length,4);
  assert.equal(result.calls,6);
 });
+
+test("fixed vision batch sends generated red-left blue-right PNG, never household footage",async()=>{
+ const models=["meta/llama-3.2-11b-vision-instruct","nvidia/nemotron-3.5-super-vl-120b-a12b"];
+ let calls=0;
+ const receipt=await runSyntheticRoleBatch({batch:-2,providerFetch:async(url,opts)=>{
+  calls++;
+  if(url.endsWith("/models")){
+    return {status:200,async json(){return{data:models.map(id=>({id}))};}};
+  }
+  assert.equal(opts.redirect,"manual");
+  const req=JSON.parse(opts.body);
+  assert(models.includes(req.model));
+  assert.equal(req.messages[0].content[1].type,"image_url");
+  assert(req.messages[0].content[1].image_url.url.startsWith("data:image/png;base64,"));
+  assert.equal(req.messages[0].content[0].type,"text");
+  return {status:200,async json(){return{choices:[{message:{
+    content:'{"left":"red","right":"blue"}'
+  }}]}}};
+ }});
+ assert.equal(receipt.status,"batch_complete");
+ assert.equal(receipt.calls,3);
+ assert.equal(calls,3);
+ assert.equal(receipt.results.length,2);
+ assert(receipt.results.every(x=>x.results.length===1&&x.results[0].task==="vision"&&x.results[0].passed));
+ assert.equal(JSON.stringify(receipt).includes("data:image"),false);
+});
