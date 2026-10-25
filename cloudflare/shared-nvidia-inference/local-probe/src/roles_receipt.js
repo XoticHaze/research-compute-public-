@@ -23,7 +23,7 @@ export function sanitizeRolesReceipt(input) {
    input.eligible_model_ids.slice(0,150).map(model).filter(Boolean):[];
  const results=Array.isArray(input.results)?input.results.slice(0,2).map(item=>({
     model:model(item?.model),
-    tests:Array.isArray(item?.results)?item.results.slice(0,4).map(t=>({
+    results:Array.isArray(item?.results)?item.results.slice(0,4).map(t=>({
       task:TASK.has(t?.task)?t.task:null,
       http_status:int(t?.http_status,599),
       latency_ms:int(t?.latency_ms,120000),
@@ -32,7 +32,7 @@ export function sanitizeRolesReceipt(input) {
       error:ERROR.has(t?.error)?t.error:null,
     })):[]
  })):[];
- if(results.some(x=>!x.model||x.tests.some(y=>!y.task)))return null;
+ if(results.some(x=>!x.model||x.results.some(y=>!y.task)))return null;
  return {
   schema:"commandcenter.nvidia_synthetic_roles.v1",batch:input.batch,
   status:STATUS.has(input.status)?input.status:"invalid_status",
