@@ -1,6 +1,6 @@
 // Fixed, synthetic-only role evaluation. The caller supplies an authenticated
 // request function; this module never handles secrets or accepts user prompts.
-import { TASKS, eligibleChatModel, modelId, request as makeTaskRequest, scored } from "./benchmark_fixtures.js";
+import { TASKS, VISION_MODELS, visionRequest, visionScored, eligibleChatModel, modelId, request as makeTaskRequest, scored } from "./benchmark_fixtures.js";
 
 export const SCHEMA = "commandcenter.nvidia_synthetic_roles.v1";
 export const BATCH_SIZE = 2;
@@ -53,7 +53,7 @@ export function sanitizeModelCatalog(rows) {
 }
 
 export async function runSyntheticRoleBatch({batch, providerFetch, now=clock}) {
-  if (!Number.isInteger(batch) || batch < -1 || batch > 99) throw Error("invalid_batch");
+  if (!Number.isInteger(batch) || batch < -2 || batch > 99) throw Error("invalid_batch");
   if (typeof providerFetch !== "function") throw Error("missing_provider");
   const out = safeReceipt(batch);
   const start = now();
@@ -69,6 +69,42 @@ export async function runSyntheticRoleBatch({batch, providerFetch, now=clock}) {
     out.eligible_model_ids = orderedCandidates(ids);
     out.eligible_count = out.eligible_model_ids.length;
     if (batch === -1) { out.status = "catalog_only"; return out; }
+    if (batch === -2) {
+      // Two fixed, pre-qualified text-callable image models. Actual image
+      // content is a tiny, generated synthetic PNG; never household footage.
+      for (const model of VISION_MODELS.filter(m=>ids.includes(m))) {
+        if(out.calls>=3 || now()-start>MAX_DURATION_MS){
+          out.status="limit_reached";return out;
+        }
+        const begin=now();
+        const row={task:"vision",http_status:null,latency_ms:null,
+                   format_valid:false,passed:false,error:null};
+        try {
+          out.calls++;
+          const rsp=await providerFetch(API+"/v1/chat/completions",{
+            method:"POST",redirect:"manual",body:JSON.stringify(visionRequest(model))});
+          row.http_status=httpStatus(rsp?.status);
+          row.latency_ms=Math.max(0,Math.min(120000,now()-begin));
+          if(row.http_status===200) {
+            const data=await rsp.json();
+            const message=data?.choices?.[0]?.message;
+            row.format_valid=typeof message?.content==="string";
+            row.passed=visionScored(message);
+          }
+        } catch(error) {
+          row.error=errorKind(error);
+          row.latency_ms=Math.max(0,Math.min(120000,now()-begin));
+        }
+        out.results.push({model,results:[row]});
+        if(row.http_status===401||row.http_status===429){
+          out.status=row.http_status===401?"account_auth_rejected":"rate_limited";
+          return out;
+        }
+      }
+      out.status=out.results.length?"batch_complete":"no_vision_models_listed";
+      return out;
+    }
+
     const chosen = out.eligible_model_ids.slice(batch * BATCH_SIZE, (batch+1) * BATCH_SIZE);
     if (!chosen.length) { out.status = "end_of_catalog"; return out; }
     for (const model of chosen) {
