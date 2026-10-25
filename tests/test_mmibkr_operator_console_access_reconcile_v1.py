@@ -187,7 +187,7 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertLess(text.index(start), text.index("      - name: Require Cloudflare deploy credential"))
         block = text.split(start, 1)[1].split(after, 1)[0]
         script = textwrap.dedent(
-            block.split("          python - <<'PY'\\n", 1)[1].split("\\n          PY", 1)[0]
+            block.split("          python - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
         )
         for approved, permitted in (
             (None, False), ("b" * 40, False), ("A" * 40, False), ("a" * 40, True),
