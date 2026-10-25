@@ -77,6 +77,9 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_selected_runtime_initial_backfill_ingest_v1",
     # Exact native-int selected execution conId denial before B1 cache or artifact access.
     "tests.test_selected_runtime_initial_backfill_selected_conid_product_20261025",
+    # Exact selected P0 #1053 sizing and margin money guards; no broker/network.
+    "tests.test_selected_runtime_sizing_strict_numeric_caps_product_20261025",
+    "tests.test_selected_runtime_margin_strict_money_product_20261025",
     # Selected P0 B1 OHLCV and negative-volume fail-close, exact synthetic test.
     "tests.test_selected_runtime_initial_backfill_ohlcv_domain_product_20261024",
     "tests.test_selected_runtime_terminal_ledger_corruption_product_20261024",
@@ -205,6 +208,8 @@ SOURCE_ONLY_PNL_MODULES = frozenset({
     "tests.test_capital_invalid_cost_schedule_product_20261024",
     # Exact funded PnL oversized numeric fail-close, no live/broker inputs.
     "tests.test_capital_oversized_numeric_failclosed_product_20261025",
+    # Exact selected financial #911 strict decimal economic input; offline only.
+    "tests.test_capital_strict_decimal_economic_input_product_20261025",
     # Selected UI #888 exact UTC fill/chart identity, no broker or network.
     "tests.test_capital_timestamp_binding_product_20261025",
 })

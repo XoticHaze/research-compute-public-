@@ -949,3 +949,35 @@ def test_selected_ui_admitted_futures_and_funded_utc_modules_networkless_only():
         for denied in (module + "_extra", module + "_live_submit", module + ".py"):
             with pytest.raises(ValueError):
                 validated_modules(denied)
+
+
+def test_selected_financial_strict_decimal_economic_input_networkless_only():
+    # Exact selected #911/#1052 pure funded parser, not a broker test.
+    module = "tests.test_capital_strict_decimal_economic_input_product_20261025"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-test-image", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for denied in (
+        module + "_extra", module + "_live_submit", module + "_broker", module + ".py",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
+
+
+def test_selected_p0_strict_numeric_caps_and_margin_networkless_only():
+    # Selected #1053 risk/account money pure-source tests, no broker writer.
+    exact = (
+        "tests.test_selected_runtime_sizing_strict_numeric_caps_product_20261025",
+        "tests.test_selected_runtime_margin_strict_money_product_20261025",
+    )
+    assert validated_modules(",".join(exact)) == list(exact)
+    for module in exact:
+        command = pytest_container_command("sealed-test-image", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for denied in (module + "_extra", module + "_live_submit", module + ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(denied)
