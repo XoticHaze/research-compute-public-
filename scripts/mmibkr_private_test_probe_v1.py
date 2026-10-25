@@ -56,6 +56,8 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_execid_cross_filter_conflict_product",
     # Reject missing/non-native immutable broker execId before any order filter.
     "tests.test_missing_execid_identity_product_20261024",
+    # Exact selected P0 #883 brokerless invalid native execution fields (#1030).
+    "tests.test_completed_execution_fields_product_20261024",
     # Exact source-only P0 journal / fill validator / same-owner broker readback.
     "tests.test_selected_runtime_live_order_intent_journal_v1",
     "tests.test_selected_runtime_live_execution_ledger_v1",
@@ -187,6 +189,8 @@ SOURCE_ONLY_PNL_MODULES = frozenset({
     "tests.test_capital_curve_fill_time_identity_product_20261024",
     # Exact funded PnL malformed chart-source row fail-close; offline only.
     "tests.test_capital_malformed_chart_rows_product_20261024",
+    # Exact selected funded PnL #911 malformed cost schedule (#1032).
+    "tests.test_capital_invalid_cost_schedule_product_20261024",
 })
 SAFE_EXACT.update(SOURCE_ONLY_MODEL_LAB_MODULES)
 SAFE_EXACT.update(SOURCE_ONLY_PNL_MODULES)

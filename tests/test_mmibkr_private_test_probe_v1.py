@@ -802,3 +802,19 @@ def test_exact_futures_multiplier_invalid_funded_pnl_is_networkless():
     ):
         with pytest.raises(ValueError):
             validated_modules(rejected)
+
+def test_exact_selected_p0_execution_fields_and_funded_cost_schedule_are_networkless():
+    # Exact already-selected private source tests, no broker or live mutation.
+    for module in (
+        "tests.test_completed_execution_fields_product_20261024",
+        "tests.test_capital_invalid_cost_schedule_product_20261024",
+    ):
+        assert validated_modules(module) == [module]
+        command = pytest_container_command("sealed-test-image", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for rejected in (module + "_live_submit", module + "_extra", module + ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(rejected)
+
