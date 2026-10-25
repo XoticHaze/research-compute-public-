@@ -205,6 +205,8 @@ SOURCE_ONLY_PNL_MODULES = frozenset({
     "tests.test_capital_invalid_cost_schedule_product_20261024",
     # Exact funded PnL oversized numeric fail-close, no live/broker inputs.
     "tests.test_capital_oversized_numeric_failclosed_product_20261025",
+    # Selected UI #888 exact UTC fill/chart identity, no broker or network.
+    "tests.test_capital_timestamp_binding_product_20261025",
 })
 SAFE_EXACT.update(SOURCE_ONLY_MODEL_LAB_MODULES)
 SAFE_EXACT.update(SOURCE_ONLY_PNL_MODULES)
@@ -233,6 +235,11 @@ SOURCE_ONLY_BUILDER_MODULES = frozenset({
     "tests.test_reviewed_apply_packet_safety_product_20261025",
 })
 SAFE_EXACT.update(SOURCE_ONLY_BUILDER_MODULES)
+# Exact selected #888 admitted futures row-identity synthetic test, no external data.
+SOURCE_ONLY_MARKET_DATA_MODULES = frozenset({
+    "tests.test_admitted_futures_source_strict_identity_product_20261025",
+})
+SAFE_EXACT.update(SOURCE_ONLY_MARKET_DATA_MODULES)
 STATUS_STAGE_MODULES = {
     "tests.test_market_features_provenance_contract",
 }
@@ -314,7 +321,7 @@ def pytest_container_command(image_tag: str, module: str) -> list[str]:
         "docker",
         "run",
         "--rm",
-        *(["--network", "none"] if module in (SOURCE_ONLY_P0_MODULES | SOURCE_ONLY_MODEL_LAB_MODULES | SOURCE_ONLY_PNL_MODULES | SOURCE_ONLY_MODEL_ISSUER_MODULES | SOURCE_ONLY_BUILDER_MODULES) else []),
+        *(["--network", "none"] if module in (SOURCE_ONLY_P0_MODULES | SOURCE_ONLY_MODEL_LAB_MODULES | SOURCE_ONLY_PNL_MODULES | SOURCE_ONLY_MODEL_ISSUER_MODULES | SOURCE_ONLY_BUILDER_MODULES | SOURCE_ONLY_MARKET_DATA_MODULES) else []),
         "-e",
         "ENABLE_LIVE_TRADING=0",
         "-e",

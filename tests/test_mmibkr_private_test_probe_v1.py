@@ -932,3 +932,20 @@ def test_exact_reviewed_builder_apply_packet_guard_networkless_only():
     ):
         with pytest.raises(ValueError):
             validated_modules(denied)
+
+
+def test_selected_ui_admitted_futures_and_funded_utc_modules_networkless_only():
+    # Selected MM #888 source-only Product #1049/#1050, never broker/runtime.
+    exact = (
+        "tests.test_admitted_futures_source_strict_identity_product_20261025",
+        "tests.test_capital_timestamp_binding_product_20261025",
+    )
+    assert validated_modules(",".join(exact)) == list(exact)
+    for module in exact:
+        command = pytest_container_command("sealed-test-image", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for denied in (module + "_extra", module + "_live_submit", module + ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(denied)
