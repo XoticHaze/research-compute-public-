@@ -11,6 +11,12 @@ on:
         description: Allowlisted private UI acceptance file
         required: true
         type: string
+      trust_mode:
+        description: Explicit policy-derived public encrypted compute requirement
+        required: true
+        type: choice
+        options:
+          - public_encrypted
   push:
     branches:
       - main
@@ -58,30 +64,32 @@ jobs:
         env:
           DISPATCH_SOURCE_REF: ${{ inputs.source_ref }}
           DISPATCH_ACCEPTANCE_FILE: ${{ inputs.acceptance_file }}
+          DISPATCH_TRUST_MODE: ${{ inputs.trust_mode }}
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, os, re
+          import json, os
           from pathlib import Path
-          event = os.environ.get("GITHUB_EVENT_NAME", "")
-          if event == "workflow_dispatch":
-              source_ref = os.environ.get("DISPATCH_SOURCE_REF", "").strip()
-              acceptance = os.environ.get("DISPATCH_ACCEPTANCE_FILE", "").strip()
-          elif event == "push":
-              node = json.loads(Path("rendezvous/fire/mmibkr-private-ui-build-probe-r1").read_text(encoding="utf-8"))
-              if node.get("schema") != "mmibkr.private_ui_build_probe_fire.v1":
-                  raise SystemExit("private UI build fire schema rejected")
-              source_ref = str(node.get("source_ref") or "").strip()
-              acceptance = str(node.get("acceptance_file") or "").strip()
-          else:
-              raise SystemExit("unsupported private UI build event")
-          if not re.fullmatch(r"[0-9a-f]{40}", source_ref):
-              raise SystemExit("private UI build requires exact source SHA")
-          if not acceptance:
-              raise SystemExit("private UI build requires acceptance file")
+          from scripts.mmibkr_private_ui_build_probe_v1 import resolve_ui_request
+          try:
+              event = os.environ.get("GITHUB_EVENT_NAME", "")
+              fire = (
+                  json.loads(Path("rendezvous/fire/mmibkr-private-ui-build-probe-r1").read_text(encoding="utf-8"))
+                  if event == "push" else None
+              )
+              request = resolve_ui_request(
+                  event_name=event,
+                  dispatch_source_ref=os.environ.get("DISPATCH_SOURCE_REF", ""),
+                  dispatch_acceptance_file=os.environ.get("DISPATCH_ACCEPTANCE_FILE", ""),
+                  dispatch_trust_mode=os.environ.get("DISPATCH_TRUST_MODE", ""),
+                  fire=fire,
+              )
+          except (ValueError, TypeError, OSError):
+              raise SystemExit("private UI build request rejected")
           with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as fh:
-              fh.write("MMIBKR_PRIVATE_UI_SOURCE_REF=" + source_ref + "\n")
-              fh.write("MMIBKR_PRIVATE_UI_ACCEPTANCE=" + acceptance + "\n")
+              fh.write("MMIBKR_PRIVATE_UI_SOURCE_REF=" + request["source_ref"] + "\n")
+              fh.write("MMIBKR_PRIVATE_UI_ACCEPTANCE=" + request["acceptance_file"] + "\n")
+              fh.write("MMIBKR_PRIVATE_UI_TRUST_MODE=" + request["trust_mode"] + "\n")
           print("MMIBKR_PRIVATE_UI_BUILD_REQUEST=PASS")
           PY
 
