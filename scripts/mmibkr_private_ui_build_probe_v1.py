@@ -41,6 +41,8 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/lib/builderLocalDraftRestore.test.mjs",
     # Exact selected MM #888@f9ac post-closure rapid-click Builder ID safety.
     "ui-react/src/lib/builderConditionId.test.mjs",
+    # Exact selected #888@20e8 operator mode, stale-bar and system evidence truth.
+    "ui-react/src/pages/botConsoleModeTruth.test.mjs",
     # Exact selected Builder/CRW/model-digest and operator presentation Node tests.
     "ui-react/src/lib/botConsoleSelectedHoldingsEmpty.product.test.mjs",
     "ui-react/src/lib/historicalRangeReadinessLabel.test.mjs",

@@ -89,6 +89,7 @@ def test_acceptance_file_is_exact_allowlist():
         "ui-react/src/lib/botConsoleOpenOrdersTruth.test.mjs",
         "ui-react/src/lib/builderLocalDraftRestore.test.mjs",
         "ui-react/src/lib/builderConditionId.test.mjs",
+        "ui-react/src/pages/botConsoleModeTruth.test.mjs",
     ):
         assert mod.validate_acceptance_file(exact) == exact
     for denied in (
@@ -103,6 +104,9 @@ def test_acceptance_file_is_exact_allowlist():
         "ui-react/src/lib/../pages/botConsoleOpenOrdersTruth.test.mjs",
         "ui-react/src/lib/builderLocalDraftRestore.live-submit.test.mjs",
         "ui-react/src/lib/builderConditionId.live-submit.test.mjs",
+        "ui-react/src/pages/botConsoleModeTruth.live-submit.test.mjs",
+        "ui-react/src/pages/botConsoleModeTruth.test.js",
+        "ui-react/src/pages/../lib/botConsoleModeTruth.test.mjs",
         "ui-react/src/lib/builderConditionId.test.js",
         "ui-react/src/lib/../pages/builderConditionId.test.mjs",
         "ui-react/src/lib/builderLocalDraftRestore.test.js",
