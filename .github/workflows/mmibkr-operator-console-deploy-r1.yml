@@ -718,7 +718,7 @@ jobs:
                   return None
 
           opener = build_opener(NoRedirect)
-          for path in ('/', '/api/operator-snapshot', '/healthz'):
+          for path in ('/', '/bot-console', '/operator/promotion-review', '/api/operator-snapshot', '/healthz'):
               req = Request(
                   base + path,
                   headers={
