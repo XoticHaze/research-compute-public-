@@ -98,6 +98,8 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertIn("/access/organizations", block)
         self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY=READY", block)
         self.assertNotIn("exc.read()", block)
+        self.assertIn("except Exception:", block)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_UNAVAILABLE=1", block)
         script = textwrap.dedent(block.split("        run: |\n", 1)[1])
         for missing in ("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "ACCESS_ALLOWED_EMAILS"):
             with self.subTest(missing=missing):
