@@ -146,5 +146,67 @@ class TestForwardGapContinuity(unittest.TestCase):
             observer._implicit_target_reset_turnover_audit([invalid, following], daily, states)
 
 
+    def test_monthly_drift_differs_from_daily_target_reset_without_new_source(self):
+        dates = pd.to_datetime(["2026-09-10", "2026-09-11"])
+        daily = pd.DataFrame({"A": [0.10, 0.10], "B": [-0.10, -0.10]}, index=dates)
+        weights = {"A": 0.5, "B": 0.5}
+        states = {"2026-09": {"p249_core": weights, "p249_plus_p266": weights}}
+        rows = [
+            {"date": "2026-09-10", "holding_month": "2026-09",
+             "p249_core_gross": 0.0, "p249_core_net": 0.0,
+             "p249_plus_p266_gross": 0.0, "p249_plus_p266_net": 0.0,
+             "cost_detail": {"p249_core_cost_bp": 0.0}},
+            {"date": "2026-09-11", "holding_month": "2026-09",
+             "p249_core_gross": 0.0, "p249_core_net": 0.0,
+             "p249_plus_p266_gross": 0.0, "p249_plus_p266_net": 0.0,
+             "cost_detail": None},
+        ]
+        result = observer._monthly_hold_drift_diagnostic(rows, daily, states)
+        self.assertEqual(result["status"], "SAME_SOURCE_MONTHLY_HOLD_DRIFT_DIAGNOSTIC")
+        self.assertAlmostEqual(result["arms"]["p249_core"]["terminal_nav"], 1.01)
+        self.assertAlmostEqual(result["original_constant_target_relative_wealth_bp"], 0.0)
+        self.assertEqual(result["arms"]["p249_core"]["monthly_rebalances_including_initial"], 1)
+
+    def test_monthly_drift_rebalances_once_and_preserves_frozen_fee(self):
+        dates = pd.to_datetime(["2026-09-30", "2026-10-01"])
+        daily = pd.DataFrame({"A": [0.0, 0.0], "B": [0.0, 0.0]}, index=dates)
+        states = {
+            "2026-09": {"p249_core": {"A": 0.5, "B": 0.5},
+                        "p249_plus_p266": {"A": 0.5, "B": 0.5}},
+            "2026-10": {"p249_core": {"A": 0.75, "B": 0.25},
+                        "p249_plus_p266": {"A": 0.75, "B": 0.25}},
+        }
+        rows = [
+            {"date": "2026-09-30", "holding_month": "2026-09",
+             "p249_core_gross": 0.0, "p249_core_net": -0.001,
+             "p249_plus_p266_gross": 0.0, "p249_plus_p266_net": -0.001,
+             "cost_detail": {"p249_core_cost_bp": 10.0}},
+            {"date": "2026-10-01", "holding_month": "2026-10",
+             "p249_core_gross": 0.0, "p249_core_net": -0.002,
+             "p249_plus_p266_gross": 0.0, "p249_plus_p266_net": -0.002,
+             "cost_detail": {"p249_core_cost_bp": 20.0}},
+        ]
+        result = observer._monthly_hold_drift_diagnostic(rows, daily, states)
+        arm = result["arms"]["p249_core"]
+        self.assertAlmostEqual(arm["terminal_nav"], 0.999 * 0.998)
+        self.assertEqual(arm["monthly_rebalances_including_initial"], 2)
+        self.assertAlmostEqual(arm["realized_month_boundary_one_way_turnover_including_initial"], 1.25)
+
+    def test_monthly_drift_rejects_missing_or_inconsistent_source(self):
+        daily = pd.DataFrame({"A": [0.0]}, index=pd.to_datetime(["2026-09-10"]))
+        weights = {"A": 1.0}
+        states = {"2026-09": {"p249_core": weights, "p249_plus_p266": weights}}
+        row = {"date": "2026-09-10", "holding_month": "2026-09",
+               "p249_core_gross": 0.0, "p249_core_net": 0.0,
+               "p249_plus_p266_gross": 0.0, "p249_plus_p266_net": 0.0,
+               "cost_detail": None}
+        with self.assertRaisesRegex(ValueError, "MISSING_MONTH_COST"):
+            observer._monthly_hold_drift_diagnostic([row], daily, states)
+        bad = dict(row, cost_detail={}, p249_core_gross=0.1)
+        with self.assertRaisesRegex(ValueError, "FIRST_DAY_SOURCE_MISMATCH"):
+            observer._monthly_hold_drift_diagnostic([bad], daily, states)
+
+
+
 if __name__ == "__main__":
     unittest.main()
