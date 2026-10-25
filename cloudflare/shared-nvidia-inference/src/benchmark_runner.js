@@ -99,6 +99,10 @@ export async function runSyntheticRoleBatch({batch, providerFetch, now=clock}) {
           row.latency_ms = Math.max(0, Math.min(120000,now()-begin));
         }
         results.push(row);
+        // Unavailable, inaccessible and retired models have already failed
+        // provider admission. Do not waste three more synthetic requests.
+        // Preserve the first HTTP observation and continue with other models.
+        if ([403,404,410].includes(row.http_status)) break;
         if (row.http_status === 401 || row.http_status === 429) {
           out.results.push({model, results});
           out.status = row.http_status === 401 ? "account_auth_rejected" : "rate_limited";
