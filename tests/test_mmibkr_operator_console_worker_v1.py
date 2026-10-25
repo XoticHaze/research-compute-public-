@@ -19,6 +19,19 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertIn("access_denied", text)
         self.assertIn("verifyAccess(request, env)", text)
 
+    def test_access_email_allowlist_must_be_nonempty_and_match(self):
+        # A valid Access audience alone is insufficient when the per-operator
+        # allowlist secret is missing, empty, or the JWT omits an email.
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn(
+            "if (!allowedEmails.length || !email || !allowedEmails.includes(email)) {",
+            text,
+        )
+        self.assertNotIn(
+            "if (allowedEmails.length && !allowedEmails.includes(email)) {",
+            text,
+        )
+
     def test_publisher_is_github_oidc_bound_to_cloud_owner_workflows(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("mmibkr-operator-console", text)
