@@ -1018,3 +1018,16 @@ def test_selected_new_builder_shape_and_native_decimal_modules_networkless_only(
         for denied in (module + "_live_submit", module + "_extra", module + ".py"):
             with pytest.raises(ValueError):
                 validated_modules(denied)
+
+
+def test_exact_builder_reviewed_http_apply_routes_are_networkless_and_fail_closed():
+    module = "tests.test_builder_review_http_route_binding_product_20261025"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-test-image", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for denied in (module + "_live_submit", module + "_broker_mutation", module + "_extra",
+                   module + ".py", "../" + module):
+        with pytest.raises(ValueError):
+            validated_modules(denied)

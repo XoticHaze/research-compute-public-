@@ -246,6 +246,8 @@ SOURCE_ONLY_BUILDER_MODULES = frozenset({
     "tests.test_builder_literal_rhs_finite_product_20261025",
     # Exact reviewed apply-packet broker/live and identity guard, synthetic writer only.
     "tests.test_reviewed_apply_packet_safety_product_20261025",
+    # Exact #1076 server-side reviewed Builder HTTP write gate, synthetic/no broker.
+    "tests.test_builder_review_http_route_binding_product_20261025",
 })
 SAFE_EXACT.update(SOURCE_ONLY_BUILDER_MODULES)
 # Exact selected #888 admitted futures row-identity synthetic test, no external data.
