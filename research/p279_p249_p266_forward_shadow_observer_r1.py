@@ -232,6 +232,120 @@ def _implicit_target_reset_turnover_audit(
     }
 
 
+
+def _monthly_hold_drift_diagnostic(
+    rows: list[dict[str, object]],
+    daily_returns: pd.DataFrame,
+    month_states: dict[str, dict[str, dict[str, float]]],
+) -> dict[str, object]:
+    """Same-source monthly buy/hold drift diagnostic; never a broker fill ledger.
+
+    Retains the original monthly target and first-session legacy cost convention,
+    but does not reset component weights inside the holding month. No new price
+    fetch, weight selection, or change to the original constant-target series.
+    """
+    arms = ("p249_core", "p249_plus_p266")
+    if not rows:
+        return {"status": "NO_SCORED_SESSIONS", "arms": {}, "not_broker_or_alpha_credit": True}
+    result: dict[str, dict[str, object]] = {}
+    for arm in arms:
+        positions: dict[str, float] = {}
+        last_date = ""
+        last_month = ""
+        nav_path: list[dict[str, object]] = []
+        realized_month_turnover = 0.0
+        rebalance_count = 0
+        total_legacy_fee_on_nav = 0.0
+        for row in rows:
+            day = str(row["date"])
+            month = str(row["holding_month"])
+            if (last_date and day <= last_date) or not day.startswith(month):
+                raise ValueError("P249_MONTHLY_DRIFT_NONCHRONOLOGICAL")
+            target = month_states[month][arm]
+            if (not target or any(not math.isfinite(float(w)) or float(w) < 0 for w in target.values())
+                    or not math.isclose(sum(float(w) for w in target.values()), 1.0, abs_tol=1e-8)):
+                raise ValueError("P249_MONTHLY_DRIFT_INVALID_TARGET")
+            pre_nav = sum(positions.values()) if positions else 1.0
+            if not math.isfinite(pre_nav) or pre_nav <= 0:
+                raise ValueError("P249_MONTHLY_DRIFT_UNFUNDED_NAV")
+            first_of_month = month != last_month
+            if first_of_month:
+                if row.get("cost_detail") is None:
+                    raise ValueError("P249_MONTHLY_DRIFT_MISSING_MONTH_COST")
+                if positions:
+                    before = {s: v / pre_nav for s, v in positions.items()}
+                    realized_month_turnover += 0.5 * sum(
+                        abs(float(target.get(s, 0.0)) - before.get(s, 0.0))
+                        for s in set(before) | set(target)
+                    )
+                else:
+                    realized_month_turnover += 1.0
+                positions = {s: pre_nav * float(w) for s, w in target.items()}
+                rebalance_count += 1
+                fee_rate = float(row[f"{arm}_gross"]) - float(row[f"{arm}_net"])
+                if not math.isfinite(fee_rate) or fee_rate < -1e-12 or fee_rate >= 1:
+                    raise ValueError("P249_MONTHLY_DRIFT_INVALID_LEGACY_FEE")
+                fee_rate = max(0.0, fee_rate)
+            else:
+                if row.get("cost_detail") is not None:
+                    raise ValueError("P249_MONTHLY_DRIFT_UNEXPECTED_INTRAMONTH_COST")
+                fee_rate = 0.0
+            for symbol in positions:
+                daily = float(daily_returns.at[pd.Timestamp(day), symbol])
+                if not math.isfinite(daily) or daily <= -1.0:
+                    raise ValueError("P249_MONTHLY_DRIFT_INVALID_HELD_RETURN")
+                positions[symbol] *= 1.0 + daily
+            before_fee = sum(positions.values())
+            fee_nav = pre_nav * fee_rate
+            after_fee = before_fee - fee_nav
+            if not math.isfinite(after_fee) or after_fee <= 0 or before_fee <= 0:
+                raise ValueError("P249_MONTHLY_DRIFT_UNFUNDED_AFTER_FEE")
+            if first_of_month:
+                observed_gross = before_fee / pre_nav - 1.0
+                if not math.isclose(observed_gross, float(row[f"{arm}_gross"]), rel_tol=1e-9, abs_tol=1e-10):
+                    raise ValueError("P249_MONTHLY_DRIFT_FIRST_DAY_SOURCE_MISMATCH")
+            fee_scale = after_fee / before_fee
+            positions = {s: v * fee_scale for s, v in positions.items()}
+            total_legacy_fee_on_nav += fee_nav
+            nav_path.append({"date": day, "holding_month": month, "nav": after_fee,
+                             "monthly_rebalance": first_of_month})
+            last_date, last_month = day, month
+        navs = [float(x["nav"]) for x in nav_path]
+        peak = 1.0
+        drawdown = 0.0
+        for nav in navs:
+            peak = max(peak, nav)
+            drawdown = min(drawdown, nav / peak - 1.0)
+        result[arm] = {
+            "terminal_nav": navs[-1],
+            "cumulative_return": navs[-1] - 1.0,
+            "max_drawdown": drawdown,
+            "monthly_rebalances_including_initial": rebalance_count,
+            "realized_month_boundary_one_way_turnover_including_initial": realized_month_turnover,
+            "legacy_monthly_fee_nav_total": total_legacy_fee_on_nav,
+            "daily_nav": nav_path,
+        }
+    core = float(result["p249_core"]["terminal_nav"])
+    combo = float(result["p249_plus_p266"]["terminal_nav"])
+    original_core = math.prod(1.0 + float(row["p249_core_net"]) for row in rows)
+    original_combo = math.prod(1.0 + float(row["p249_plus_p266_net"]) for row in rows)
+    if min(core, combo, original_core, original_combo) <= 0:
+        raise ValueError("P249_MONTHLY_DRIFT_INVALID_COMPARISON_NAV")
+    return {
+        "status": "SAME_SOURCE_MONTHLY_HOLD_DRIFT_DIAGNOSTIC",
+        "scored_sessions": len(rows),
+        "source": "exact_existing_yfinance_adjusted_close_scored_returns_and_frozen_month_targets",
+        "legacy_month_costs_preserved_not_actual_drift_turnover_pricing": True,
+        "not_broker_or_alpha_credit": True,
+        "no_new_original_issuer_or_execution_provenance": True,
+        "arms": result,
+        "matched_relative_wealth_bp": 10000.0 * (combo / core - 1.0),
+        "original_constant_target_relative_wealth_bp": 10000.0 * (original_combo / original_core - 1.0),
+        "monthly_drift_minus_constant_target_relative_bp":
+            10000.0 * (combo / core - original_combo / original_core),
+    }
+
+
 def _metrics(returns: pd.Series) -> dict[str, float | int | None]:
     q = returns.dropna().astype(float)
     if q.empty:
@@ -346,6 +460,15 @@ def main() -> None:
             "not_fee_adjusted_or_alpha_credit": True,
         }
 
+    try:
+        monthly_drift_diagnostic = _monthly_hold_drift_diagnostic(rows, ret, month_states)
+    except (KeyError, ValueError, TypeError, ArithmeticError) as exc:
+        monthly_drift_diagnostic = {
+            "status": "DIAGNOSTIC_UNAVAILABLE",
+            "reason": str(exc) if str(exc).startswith("P249_MONTHLY_DRIFT_") else "SOURCE_UNAVAILABLE",
+            "not_broker_or_alpha_credit": True,
+        }
+
     result = {
         "schema": "research.p279_p249_p266_forward_shadow_observer_r1",
         "parent": "P249/P266/P278/P279",
@@ -390,6 +513,7 @@ def main() -> None:
             "p249_plus_p266_net": _metrics(sat_net),
             "satellite_increment_cumulative": float((1 + increment).prod() - 1) if len(increment) else 0.0,
             "implicit_target_reset_turnover_audit": turnover_audit,
+            "monthly_hold_drift_diagnostic": monthly_drift_diagnostic,
             "observations": rows,
         },
         "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
