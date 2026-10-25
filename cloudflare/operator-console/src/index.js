@@ -300,7 +300,7 @@ async function verifyAccess(request, env) {
     .split(',')
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
-  if (allowedEmails.length && !allowedEmails.includes(email)) {
+  if (!allowedEmails.length || !email || !allowedEmails.includes(email)) {
     throw new Error('access_email_rejected');
   }
 
@@ -534,17 +534,6 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    if (request.method === 'GET' && url.pathname === '/healthz') {
-      return json({
-        ok: true,
-        service: 'mmibkr-operator-console',
-        access_configured: Boolean(env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD),
-        operator_state_configured: Boolean(env.OPERATOR_STATE),
-        static_assets_configured: Boolean(env.ASSETS),
-        live_execution_allowed: false,
-      });
-    }
-
     if (request.method === 'POST' && url.pathname === '/v1/operator-snapshot') {
       const length = Number(request.headers.get('content-length') || 0);
       if (Number.isFinite(length) && length > MAX_SNAPSHOT_BYTES) {
@@ -710,6 +699,17 @@ export default {
       return json({ error: 'access_denied' }, 403);
     }
 
+    if (request.method === 'GET' && url.pathname === '/healthz') {
+      return json({
+        ok: true,
+        service: 'mmibkr-operator-console',
+        access_configured: Boolean(env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD),
+        operator_state_configured: Boolean(env.OPERATOR_STATE),
+        static_assets_configured: Boolean(env.ASSETS),
+        live_execution_allowed: false,
+      });
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/promotion-review') {
       const stored = await stateStub(env).fetch(
         new Request('https://operator-state.internal/promotion/latest'),
@@ -745,6 +745,12 @@ export default {
       if (!stored.ok) return stored;
       const record = await stored.json();
       return json(record.snapshot, 200);
+    }
+
+    // This Worker only exposes the explicitly admitted read-only/operator APIs.
+    // Never return SPA HTML with HTTP 200 for an unsupported MM backend API.
+    if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
+      return json({ error: 'operator_api_not_supported' }, 404);
     }
 
     if (!env.ASSETS) return json({ error: 'static_assets_not_deployed' }, 503);
