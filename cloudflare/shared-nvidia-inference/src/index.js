@@ -167,8 +167,20 @@ export default {
       let key;
       try { key = await env.NVIDIA_API_KEY.get(); } catch {return json(503,{error:"secret_unavailable"});}
       if (typeof key !== "string" || key.length < 8) return json(503,{error:"secret_unavailable"});
-      const authFetch = (endpoint, options) => fetch(endpoint, {...options,
-        headers: {"Authorization":"Bearer " + key, "Content-Type":"application/json"}, redirect:"manual"});
+      // Cloudflare supports AbortController, not AbortSignal.timeout().
+      // Limit each fixed synthetic request so one inaccessible/slow model
+      // cannot monopolize a whole bounded batch. Never follow redirects.
+      const authFetch = async (endpoint, options) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 18000);
+        try {
+          return await fetch(endpoint, {...options,
+            headers: {"Authorization":"Bearer " + key, "Content-Type":"application/json"},
+            redirect:"manual", signal:controller.signal});
+        } finally {
+          clearTimeout(timer);
+        }
+      };
       const receipt = await runSyntheticRoleBatch({batch:selector.batch,providerFetch:authFetch});
       return json(receipt.status === "batch_complete" || receipt.status === "catalog_only" ? 200 : 503, receipt);
     }
