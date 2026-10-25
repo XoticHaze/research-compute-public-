@@ -242,7 +242,7 @@ jobs:
           fi
           python - <<'PY'
           import json, os, re
-          from urllib.error import HTTPError, URLError
+          from urllib.error import HTTPError
           from urllib.request import Request, urlopen
 
           emails = [value.strip().lower() for value in os.environ['ACCESS_ALLOWED_EMAILS'].split(',') if value.strip()]
