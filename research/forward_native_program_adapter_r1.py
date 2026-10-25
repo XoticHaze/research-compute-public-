@@ -71,6 +71,23 @@ def _finite(value: object) -> float:
     return float(value)
 
 
+def _literal_bool(row: dict[str, Any], key: str, default: bool = False) -> bool:
+    """Do not turn malformed native string/numeric flags into public admission."""
+    if key not in row:
+        return default
+    value = row[key]
+    if type(value) is not bool:
+        raise ValueError("public adapter nonboolean admission flag")
+    return value
+
+
+def _frozen_horizon(value: object) -> int:
+    """Only the two predeclared integer Homebuilder horizons are admissible."""
+    if type(value) is not int or value not in (5, 60):
+        raise ValueError("public adapter invalid frozen duration horizon")
+    return value
+
+
 def _safe_book(book: dict) -> dict:
     """Project only three public books from the frozen full native book record."""
     source_keys = {"schema", "authority", "generated_at", "signal_date",
@@ -148,7 +165,7 @@ def _prediction_map(rows: list[dict[str, Any]], *keys: str) -> dict[str, float]:
     for row in rows:
         for key in keys:
             if row.get(key) is not None:
-                out[str(row["symbol"])] = float(row[key])
+                out[str(row["symbol"])] = _finite(row[key])
                 break
     return out
 
@@ -156,10 +173,10 @@ def _prediction_map(rows: list[dict[str, Any]], *keys: str) -> dict[str, float]:
 def _positive(row: dict[str, Any]) -> bool:
     for key in ("positive_value_opportunity", "positive_value_state", "learned_positive"):
         if key in row:
-            return bool(row[key])
+            return _literal_bool(row, key)
     for key in ("predicted_fixed20_net_value_bps", "predicted_fixed20_net25_bps"):
         if row.get(key) is not None:
-            return float(row[key]) > 0.0
+            return _finite(row[key]) > 0.0
     return False
 
 
@@ -253,13 +270,15 @@ def adapt_homebuilders(native: dict[str, Any]) -> dict[str, Any]:
     admitted = [
         str(r["symbol"])
         for r in rows
-        if bool(r.get("duration_applicable_to_parent_admitted_opportunity"))
+        if _literal_bool(r, "duration_applicable_to_parent_admitted_opportunity")
     ]
     horizons = {
-        str(r["symbol"]): int(r["frozen_duration_horizon_sessions"])
+        str(r["symbol"]): _frozen_horizon(r["frozen_duration_horizon_sessions"])
         for r in rows
         if r.get("frozen_duration_horizon_sessions") is not None
     }
+    if any(symbol not in horizons for symbol in admitted):
+        raise ValueError("public adapter admitted duration horizon missing")
     predictions = _prediction_map(rows, "predicted_fixed20_net25_bps", "predicted_fixed20_net_value_bps")
     duration_scores = {
         str(r["symbol"]): _safe_duration_scores(r.get("predicted_after25_bps_per_session", {}))
@@ -292,7 +311,7 @@ def adapt_homebuilders(native: dict[str, Any]) -> dict[str, Any]:
         },
         "benchmarks": ["ITB", "QQQ"],
         "validation": {
-            "historical_gate_pass": bool(historical.get("historical_gate_pass", False)),
+            "historical_gate_pass": _literal_bool(historical, "historical_gate_pass"),
             "historical_fixed20_matched_itb_excess_bps": _optional_finite(historical.get("homebuilders_fixed20_matched_itb_excess_bps")),
             "historical_adaptive_matched_itb_excess_bps": _optional_finite(historical.get("homebuilders_binary_5_60_matched_itb_excess_bps")),
             "state": "PROSPECTIVE_DIAGNOSTIC_NO_PROMOTION",
@@ -471,6 +490,78 @@ def self_test() -> None:
         ],
     })
     assert mixed_largecap["signal"]["positive_symbols"] == ["CAT"]
+    # Native semantic integrity: strings, numbers, nonfinite values and
+    # fractional horizons must not become public positive/admitted signals.
+    base_semi = {"generation_bar_date": "2026-09-10", "observations": [
+        {"symbol": "AMAT", "predicted_fixed20_net_value_bps": 10.0}
+    ]}
+    for field in ("positive_value_opportunity", "positive_value_state", "learned_positive"):
+        for malformed in ("False", "false", "0", 1, 0, None):
+            bad = {**base_semi, "observations": [{**base_semi["observations"][0], field: malformed}]}
+            try:
+                adapt_semiconductor(bad)
+            except ValueError as exc:
+                assert "nonboolean admission flag" in str(exc)
+            else:
+                raise AssertionError("malformed positive flag was accepted")
+    for malformed in (float("nan"), float("inf"), float("-inf"), True, "10"):
+        bad = {**base_semi, "observations": [
+            {"symbol": "AMAT", "predicted_fixed20_net_value_bps": malformed}
+        ]}
+        try:
+            adapt_semiconductor(bad)
+        except ValueError as exc:
+            assert "nonfinite numeric field" in str(exc)
+        else:
+            raise AssertionError("nonfinite or nonnumeric prediction was accepted")
+    def hb_input(row, historical=None):
+        return {
+            "schema": "foundry.research.homebuilders_adaptive_duration_forward.v1",
+            "duration_snapshot": {"timestamp": "2026-09-10T00:00:00Z"},
+            "historical_evidence": historical or {"historical_gate_pass": False},
+            "observations": [row],
+        }
+    hb_row = {
+        "symbol": "CCS", "predicted_fixed20_net25_bps": 10.0,
+        "duration_applicable_to_parent_admitted_opportunity": True,
+        "frozen_duration_horizon_sessions": 5,
+        "predicted_after25_bps_per_session": {"5": 1.0, "60": 2.0},
+    }
+    for malformed in ("false", "False", "0", 1, None):
+        try:
+            adapt_homebuilders(hb_input({**hb_row,
+                "duration_applicable_to_parent_admitted_opportunity": malformed}))
+        except ValueError as exc:
+            assert "nonboolean admission flag" in str(exc)
+        else:
+            raise AssertionError("malformed Homebuilder admission flag was accepted")
+    for malformed in (5.9, "5", True, 6, float("nan")):
+        try:
+            adapt_homebuilders(hb_input({**hb_row,
+                "frozen_duration_horizon_sessions": malformed}))
+        except ValueError as exc:
+            assert "invalid frozen duration horizon" in str(exc)
+        else:
+            raise AssertionError("coerced Homebuilder duration was accepted")
+    try:
+        adapt_homebuilders(hb_input({**hb_row,
+            "frozen_duration_horizon_sessions": None}))
+    except ValueError as exc:
+        assert "admitted duration horizon missing" in str(exc)
+    else:
+        raise AssertionError("admitted Homebuilder without horizon was accepted")
+    try:
+        adapt_homebuilders(hb_input(hb_row, {"historical_gate_pass": "false"}))
+    except ValueError as exc:
+        assert "nonboolean admission flag" in str(exc)
+    else:
+        raise AssertionError("malformed historical admission flag was accepted")
+    valid_sixty = adapt_homebuilders(hb_input({**hb_row,
+        "frozen_duration_horizon_sessions": 60,
+        "duration_applicable_to_parent_admitted_opportunity": False}))
+    assert valid_sixty["signal"]["admitted_symbols"] == []
+    assert valid_sixty["signal"]["duration_horizon_sessions_by_symbol"] == {"CCS": 60}
+    print("FORWARD_NATIVE_PUBLIC_ADAPTER_LITERAL_SEMANTIC_GUARDS_SELF_TEST=PASS")
     print("FORWARD_NATIVE_PUBLIC_ADAPTER_VALID_FROZEN_SHAPES_SELF_TEST=PASS")
     print("FORWARD_NATIVE_PUBLIC_ADAPTER_NESTED_SENTINEL_SELF_TEST=PASS")
     print("FORWARD_NATIVE_PROGRAM_ADAPTER_SELF_TEST=PASS")
