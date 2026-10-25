@@ -65,7 +65,7 @@ assert.equal(replay.idempotent_replay, true)
 await assert.rejects(() => recordPromotionDecision(storage, approval({ request_id: 'approve-2' }), operator), /stage_already_approved_pending_consumer/)
 await assert.rejects(() => recordPromotionDecision(storage, approval({ request_id: 'stale-snapshot', candidate_snapshot_generated_at_utc: '2026-09-22T19:00:00Z' }), operator), /candidate_snapshot_superseded/)
 await assert.rejects(() => recordPromotionDecision(storage, approval({ request_id: 'wrong-symbol', symbol: 'AMAT' }), operator), /candidate_symbol_stale/)
-await assert.rejects(() => recordPromotionDecision(storage, { action: 'DENY', candidate_id: candidate.candidate_id, candidate_digest: candidate.candidate_digest, evidence_digest: candidate.evidence_digest, current_stage: 'RESEARCH', request_id: 'deny-1' }, operator), /operator_note_required/)
+await assert.rejects(() => recordPromotionDecision(storage, { action: 'DENY', candidate_id: candidate.candidate_id, candidate_digest: candidate.candidate_digest, evidence_digest: candidate.evidence_digest, symbol: 'MNQ', timeframe: '12Min', current_stage: 'RESEARCH', request_id: 'deny-1' }, operator), /operator_note_required/)
 
 const liveSnapshot = structuredClone(snapshot)
 liveSnapshot.generated_at_utc = new Date().toISOString()
