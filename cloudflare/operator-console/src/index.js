@@ -534,17 +534,6 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    if (request.method === 'GET' && url.pathname === '/healthz') {
-      return json({
-        ok: true,
-        service: 'mmibkr-operator-console',
-        access_configured: Boolean(env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD),
-        operator_state_configured: Boolean(env.OPERATOR_STATE),
-        static_assets_configured: Boolean(env.ASSETS),
-        live_execution_allowed: false,
-      });
-    }
-
     if (request.method === 'POST' && url.pathname === '/v1/operator-snapshot') {
       const length = Number(request.headers.get('content-length') || 0);
       if (Number.isFinite(length) && length > MAX_SNAPSHOT_BYTES) {
@@ -708,6 +697,17 @@ export default {
       accessIdentity = await verifyAccess(request, env);
     } catch {
       return json({ error: 'access_denied' }, 403);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/healthz') {
+      return json({
+        ok: true,
+        service: 'mmibkr-operator-console',
+        access_configured: Boolean(env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD),
+        operator_state_configured: Boolean(env.OPERATOR_STATE),
+        static_assets_configured: Boolean(env.ASSETS),
+        live_execution_allowed: false,
+      });
     }
 
     if (request.method === 'GET' && url.pathname === '/api/promotion-review') {
