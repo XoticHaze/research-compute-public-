@@ -86,6 +86,7 @@ def test_acceptance_file_is_exact_allowlist():
         "ui-react/src/lib/pilotMatrixPlan.test.mjs",
         "ui-react/src/lib/botConsoleExactAccountHoldings.test.mjs",
         "ui-react/src/lib/botConsolePositionTruth.test.mjs",
+        "ui-react/src/lib/botConsoleOpenOrdersTruth.test.mjs",
         "ui-react/src/lib/builderLocalDraftRestore.test.mjs",
     ):
         assert mod.validate_acceptance_file(exact) == exact
@@ -96,6 +97,9 @@ def test_acceptance_file_is_exact_allowlist():
         "ui-react/src/lib/botConsoleExactAccountHoldings.test.js",
         "ui-react/src/lib/botConsolePositionTruth.live-submit.test.mjs",
         "ui-react/src/lib/botConsolePositionTruth.test.js",
+        "ui-react/src/lib/botConsoleOpenOrdersTruth.live-submit.test.mjs",
+        "ui-react/src/lib/botConsoleOpenOrdersTruth.test.js",
+        "ui-react/src/lib/../pages/botConsoleOpenOrdersTruth.test.mjs",
         "ui-react/src/lib/builderLocalDraftRestore.live-submit.test.mjs",
         "ui-react/src/lib/builderLocalDraftRestore.test.js",
         "ui-react/src/lib/../pages/builderLocalDraftRestore.test.mjs",

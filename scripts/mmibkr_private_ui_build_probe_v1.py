@@ -35,6 +35,8 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/lib/botConsoleExactAccountHoldings.test.mjs",
     # Selected UI #888 exact account-position/fill/order scope presentation regression.
     "ui-react/src/lib/botConsolePositionTruth.test.mjs",
+    # Exact selected P0/UI #975 account-scoped open-order projection (pure Node).
+    "ui-react/src/lib/botConsoleOpenOrdersTruth.test.mjs",
     # Exact legacy Builder local-draft combinator restoration, read-only UI.
     "ui-react/src/lib/builderLocalDraftRestore.test.mjs",
     "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
