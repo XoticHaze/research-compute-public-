@@ -735,8 +735,6 @@ jobs:
               fh.write('MMIBKR_ACCESS_TEAM_DOMAIN=' + auth_domain + '\n')
               fh.write('MMIBKR_ACCESS_AUD=' + audience + '\n')
           print('MMIBKR_OPERATOR_CONSOLE_ACCESS_APP=CONFIGURED')
-          print('MMIBKR_OPERATOR_CONSOLE_ACCESS_APP_ID=' + app_id)
-          print('MMIBKR_OPERATOR_CONSOLE_ACCESS_POLICY_ID=' + policy_id)
           print('MMIBKR_OPERATOR_CONSOLE_ACCESS_EMAIL_COUNT=' + str(len(emails)))
           print('MMIBKR_OPERATOR_CONSOLE_PUBLISHER_INGRESS=OIDC_WORKER_GATED')
           print('MMIBKR_OPERATOR_CONSOLE_PUBLISHER_PATH=/v1/operator-snapshot')
