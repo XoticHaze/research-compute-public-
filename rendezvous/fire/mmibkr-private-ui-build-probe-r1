@@ -1,13 +1,13 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "20e8f0a8d0a0109543814eea1a862ccd9d63e79f",
+  "source_ref": "492a76b157d0abbf4548e8fd902f5fc843505348",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "operator-selected-ui-release-20261025",
-  "purpose": "Native selected #888 UI BotConsole real Vite build and existing acceptance after integrated #1062 + #1063; exact encrypted Source Vault bootstrap run 40180190518 SUCCESS; source only, not deployment/broker/live",
-  "request_nonce": "operator-ui-888-20e8f0a8-20261025-r1",
+  "requested_by": "continue-release-existing-private-ui-acceptance-20261025",
+  "purpose": "Native exact frozen 492a candidate Node/Vite/Bot Console acceptance via existing encrypted Source Vault 40182363241, before protected security review and Access-locked deployment. No live/broker/order/StrategySpec authority.",
+  "request_nonce": "continue-release-ui-492a-existing-r1",
   "authority": {
     "research_only": true,
     "broker": false,
