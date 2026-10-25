@@ -786,3 +786,19 @@ def test_push_fire_workflow_uses_native_boolean_gate_before_env_publication():
         assert f'bool(node.get("{field}"))' not in workflow
     assert workflow.index('validate_native_fire_boolean(node, "crw_consumer_reprobe")') < workflow.index(
         'with Path(os.environ["GITHUB_ENV"]).open')
+
+def test_exact_futures_multiplier_invalid_funded_pnl_is_networkless():
+    # Exact selected PnL #911: malformed explicit MNQ multiplier never becomes economics.
+    module = "tests.test_capital_explicit_futures_multiplier_failclose_product_20261024"
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-test-image", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+    for rejected in (
+        module + "_live_submit",
+        module + "_extra",
+        "tests.test_capital_explicit_futures_multiplier_failclose_product_20261024.py",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(rejected)
