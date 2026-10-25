@@ -93,6 +93,9 @@ def _lane_currency_overlay(x: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("currency-hedge allocator overlay funding/leverage boundary changed")
     if b.get("allocator_mutation") is not False:
         raise RuntimeError("currency-hedge allocator overlay gained allocator mutation authority")
+    requested = x.get("market_data_asof")
+    latest = x.get("latest_common_market_date")
+    common_precedes = bool(requested and latest and str(latest)[:10] < str(requested)[:10])
     return {
         "program_id": x["program_id"],
         "kind": "portfolio_level_currency_hedge_allocator_challenger",
@@ -111,6 +114,14 @@ def _lane_currency_overlay(x: dict[str, Any]) -> dict[str, Any]:
             "clock_semantics": "cross-program comparisons use elapsed_close_to_close_sessions; forward_sessions is retained as legacy inclusive-entry count",
             "entry_rule": contract.get("entry_rule"),
             "holding_rule": contract.get("holding_rule"),
+            "requested_market_data_asof": requested,
+            "latest_common_market_date": latest,
+        },
+        "source_health": {
+            "requested_market_data_asof": requested,
+            "latest_common_market_date": latest,
+            "common_calendar_precedes_requested_asof": common_precedes,
+            "interpretation": "Date discrepancy requires session/event review; it is not itself proof of absent data or losing alpha.",
         },
         "paper_action": {"status": "OBSERVE_ONLY", "portfolio_authority": False},
         "action_text": (
@@ -144,6 +155,9 @@ def enrich(
     ids = {row["program_id"] for row in additions}
     lanes = [row for row in lanes if row.get("program_id") not in ids] + additions
     scoreboard["lanes"] = lanes
+    scoreboard.setdefault("freshness", {})["currency_overlay_common_calendar_precedes_requested_asof"] = (
+        additions[-1]["source_health"]["common_calendar_precedes_requested_asof"]
+    )
 
     coverage = scoreboard.setdefault("coverage", {})
     coverage["challenger_observers"] = {
@@ -190,6 +204,8 @@ def enrich(
             "state": {
                 "forward_state": currency_overlay.get("state"),
                 "entry_date": currency_overlay.get("entry_date"),
+                "requested_market_data_asof": currency_overlay.get("market_data_asof"),
+                "latest_common_market_date": currency_overlay.get("latest_common_market_date"),
                 "scorecard": currency_overlay.get("scorecard"),
             },
             "authority": "prospective_validation_only",
@@ -223,6 +239,8 @@ def enrich(
         "scorecard": currency_overlay.get("scorecard"),
         "funding_source": (currency_overlay.get("contract") or {}).get("funding_source"),
         "overlay_weight": (currency_overlay.get("contract") or {}).get("overlay_weight"),
+        "requested_market_data_asof": currency_overlay.get("market_data_asof"),
+        "latest_common_market_date": currency_overlay.get("latest_common_market_date"),
         "role": "portfolio_level_matched_control_challenger",
     }
     realized = chain.setdefault("realized_excess", {})
@@ -321,6 +339,12 @@ def self_test() -> None:
     assert out["interpretation"]["currency_overlay_is_observation_not_allocator_mutation"] is True
     assert by_id["DEVELOPED_EXUS_CURRENCY_HEDGE"]["timing"]["elapsed_close_to_close_sessions"] == 0
     assert by_id["CURRENCY_HEDGE_ALLOCATOR_OVERLAY"]["timing"]["elapsed_close_to_close_sessions"] == 0
+    lagged = dict(overlay, market_data_asof="2026-10-21", latest_common_market_date="2026-10-19")
+    lane = _lane_currency_overlay(lagged)
+    assert lane["source_health"]["common_calendar_precedes_requested_asof"] is True
+    assert lane["timing"]["latest_common_market_date"] == "2026-10-19"
+    assert lane["scorecard"] is None and lane["boundaries"]["allocator_mutation"] is False
+    assert enrich({"lanes": [], "coverage": {}, "actionable_context": [], "decision_chain": {}, "interpretation": {}}, p160, currency, lagged)["freshness"]["currency_overlay_common_calendar_precedes_requested_asof"] is True
     # An observer may be prospectively eligible without an independently
     # authenticated original adjusted-source/calendar issuer or funded NAV.
     p160_eligible = dict(p160, state="PROSPECTIVE_ELIGIBLE", scientific_forward_credit=True)
