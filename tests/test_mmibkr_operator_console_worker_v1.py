@@ -10,6 +10,14 @@ WRANGLER = ROOT / "cloudflare" / "operator-console" / "wrangler.jsonc"
 
 
 class OperatorConsoleWorkerContractTests(unittest.TestCase):
+    def test_unknown_api_routes_reject_spa_fallback(self):
+        text = (ROOT / "cloudflare/operator-console/src/index.js").read_text(encoding="utf-8")
+        gate = "url.pathname === '/api' || url.pathname.startsWith('/api/')"
+        self.assertIn(gate, text)
+        self.assertIn("return json({ error: 'operator_api_not_supported' }, 404)", text)
+        self.assertLess(text.index(gate), text.index("env.ASSETS.fetch(request)"))
+        self.assertLess(text.index("await verifyAccess(request, env)"), text.index(gate))
+
     def test_browser_surface_requires_cloudflare_access_jwt(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("cf-access-jwt-assertion", text)
@@ -18,6 +26,26 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertIn("/cdn-cgi/access/certs", text)
         self.assertIn("access_denied", text)
         self.assertIn("verifyAccess(request, env)", text)
+
+    def test_access_email_allowlist_must_be_nonempty_and_match(self):
+        # A valid Access audience alone is insufficient when the per-operator
+        # allowlist secret is missing, empty, or the JWT omits an email.
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn(
+            "if (!allowedEmails.length || !email || !allowedEmails.includes(email)) {",
+            text,
+        )
+        self.assertNotIn(
+            "if (allowedEmails.length && !allowedEmails.includes(email)) {",
+            text,
+        )
+
+    def test_healthz_requires_worker_access_before_status(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        access_gate = text.index("let accessIdentity;")
+        health = text.index("url.pathname === '/healthz'")
+        self.assertLess(access_gate, health)
+        self.assertIn("access_denied", text[access_gate:health])
 
     def test_publisher_is_github_oidc_bound_to_cloud_owner_workflows(self):
         text = SOURCE.read_text(encoding="utf-8")
