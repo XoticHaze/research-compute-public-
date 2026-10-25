@@ -233,3 +233,18 @@ def test_exact_counted_warmup_readiness_acceptance_allowlist_only():
     ):
         with pytest.raises(ValueError, match="not_allowlisted"):
             mod.validate_acceptance_file(denied)
+
+def test_exact_builder_literal_finite_helper_node_acceptance_is_allowlisted_only():
+    # Selected #888/#975 consumed Product #1041's pure Node literal parser.
+    exact = "ui-react/src/lib/builderLiteralValue.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        "ui-react/src/lib/builderLiteralValue.mjs",
+        exact + ".bak",
+        exact + ".js",
+        "ui-react/src/components/builderLiteralValue.test.mjs",
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
+
+
