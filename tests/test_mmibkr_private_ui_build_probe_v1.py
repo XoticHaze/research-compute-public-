@@ -203,3 +203,17 @@ def test_public_parser_and_allowlist_never_echo_unknown_private_text(monkeypatch
     assert json.loads(captured.out.split("=", 1)[1]) == {
         "schema": mod.SCHEMA, "status": "REJECTED",
     }
+
+def test_exact_selected_bot_console_empty_holdings_acceptance_is_allowlisted_only():
+    # Private Node acceptance remains exact-file and Source Vault-bound.
+    exact = "ui-react/src/lib/botConsoleSelectedHoldingsEmpty.product.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak",
+        exact.replace(".test.mjs", ".mjs"),
+        exact.replace(".test.mjs", ".test.mjs.js"),
+        "ui-react/src/lib/../lib/botConsoleSelectedHoldingsEmpty.product.test.mjs",
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
+

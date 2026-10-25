@@ -26,6 +26,8 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/lib/pilotStrategySpecHandoff.acceptance.test.mjs",
     "ui-react/src/lib/pilotPromotionAdmissionExport.acceptance.test.mjs",
     "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
+    # Selected operator UI #888/#1031: no false verified-zero holdings.
+    "ui-react/src/lib/botConsoleSelectedHoldingsEmpty.product.test.mjs",
     "ui-react/src/lib/builderLocalDraftRestore.test.mjs",
     "ui-react/src/lib/builderPersistedReviewTruth.test.mjs",
     "ui-react/src/lib/tradingProductReadiness.digest-identity.test.mjs",
