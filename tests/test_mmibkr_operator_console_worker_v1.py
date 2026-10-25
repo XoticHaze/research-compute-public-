@@ -26,6 +26,15 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertLess(text.index(gate), text.index("env.ASSETS.fetch(request)"))
         self.assertLess(text.index("await verifyAccess(request, env)"), text.index(gate))
 
+    def test_unknown_machine_v1_paths_reject_spa_fallback(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("url.pathname === '/v1' || url.pathname.startsWith('/v1/')", text)
+        self.assertLess(text.index("await verifyAccess(request, env)"),
+                        text.index("url.pathname === '/v1' || url.pathname.startsWith('/v1/')"))
+        self.assertLess(text.index("url.pathname === '/v1' || url.pathname.startsWith('/v1/')"),
+                        text.index("env.ASSETS.fetch(request)"))
+        self.assertIn("return json({ error: 'operator_api_not_supported' }, 404)", text)
+
     def test_browser_surface_requires_cloudflare_access_jwt(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("cf-access-jwt-assertion", text)
