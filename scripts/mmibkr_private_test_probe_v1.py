@@ -216,9 +216,11 @@ SOURCE_ONLY_MODEL_ISSUER_MODULES = frozenset({
     "tests.test_foundry_model_runtime_binding_v1",
 })
 SAFE_EXACT.update(SOURCE_ONLY_MODEL_ISSUER_MODULES)
-# Exact prebuilt Builder scale guard is pure canonical contract evaluation.
+# Exact prebuilt Builder scale and feature-identity guards are pure canonical evaluation.
+# Only these two brokerless modules run, always with Docker network disabled.
 SOURCE_ONLY_BUILDER_MODULES = frozenset({
     "tests.test_builder_prebuilt_group_logic_guard_product_20261023",
+    "tests.test_builder_prebuilt_feature_authority_product_20261025",
 })
 SAFE_EXACT.update(SOURCE_ONLY_BUILDER_MODULES)
 STATUS_STAGE_MODULES = {

@@ -629,6 +629,23 @@ def test_exact_prebuilt_builder_scale_guard_networkless_and_fail_closed():
         with pytest.raises(ValueError):
             validated_modules(denied)
 
+def test_exact_unhashed_builder_feature_authority_is_networkless_and_fail_closed():
+    # Only the already-reviewed Product #1039 synthetic feature-identity test.
+    module = "tests.test_builder_prebuilt_feature_authority_product_20261025"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-test-image", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for denied in (
+        module + "_live_submit", module + "_broker_mutation", module + "_extra",
+        module + ".py", "tests.test_builder_prebuilt_feature_authority_unreviewed",
+        "../tests.test_builder_prebuilt_feature_authority_product_20261025",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
+
+
 def test_exact_b1_initial_backfill_ingest_is_networkless_and_nonmutating():
     # The private B1 module validates read-only handoff rows before cache writes.
     # It must never acquire a broker connection or enable live execution.
