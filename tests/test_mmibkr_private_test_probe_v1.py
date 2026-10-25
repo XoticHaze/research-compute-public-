@@ -115,6 +115,21 @@ def test_exact_pi_docker_endpoint_preflight_is_networkless():
             validated_modules(rejected)
 
 
+def test_exact_selected_backfill_native_conid_guard_is_networkless():
+    module = "tests.test_selected_runtime_initial_backfill_selected_conid_product_20261025"
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-test-image", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+    for denied in (
+        "tests.test_selected_runtime_initial_backfill_selected_conid_product_20261025_live_submit",
+        "tests.test_selected_runtime_initial_backfill_selected_conid_product_20261025_extra",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
+
+
 def test_exact_paper_postexecute_quarantine_is_networkless_and_nonmutating():
     exact = (
         "tests.test_selected_runtime_cloud_cycle_v1",
