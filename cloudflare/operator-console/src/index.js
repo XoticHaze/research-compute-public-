@@ -300,7 +300,7 @@ async function verifyAccess(request, env) {
     .split(',')
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
-  if (allowedEmails.length && !allowedEmails.includes(email)) {
+  if (!allowedEmails.length || !email || !allowedEmails.includes(email)) {
     throw new Error('access_email_rejected');
   }
 
