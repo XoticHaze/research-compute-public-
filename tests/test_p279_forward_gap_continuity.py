@@ -52,6 +52,8 @@ class TestForwardGapContinuity(unittest.TestCase):
         self.assertEqual(result["source_health"]["unresolved_forward_gap"]["missing_held_symbols"], ["B"])
         self.assertEqual([r["date"] for r in result["forward"]["observations"]], ["2026-09-10"])
         self.assertEqual(result["forward"]["latest_close"], "2026-09-10")
+        self.assertEqual(result["forward"]["monthly_hold_drift_diagnostic"]["status"], "SOURCE_GAP_UNRESOLVED_NO_ECONOMIC_CURRENT")
+        self.assertEqual(result["forward"]["monthly_hold_drift_diagnostic"]["first_unresolved_session"], "2026-09-11")
 
     def test_economic_current_publisher_rejects_gap_and_incomplete_receipts(self):
         from copy import deepcopy
