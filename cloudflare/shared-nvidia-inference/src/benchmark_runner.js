@@ -75,6 +75,7 @@ export async function runSyntheticRoleBatch({batch, providerFetch, now=clock}) {
       const results = [];
       for (const task of TASKS) {
         if (out.calls >= MAX_REQUESTS_PER_BATCH || now()-start > MAX_DURATION_MS) {
+          out.results.push({model,results});
           out.status = "limit_reached"; return out;
         }
         const begin = now();
@@ -102,7 +103,7 @@ export async function runSyntheticRoleBatch({batch, providerFetch, now=clock}) {
         // Unavailable, inaccessible and retired models have already failed
         // provider admission. Do not waste three more synthetic requests.
         // Preserve the first HTTP observation and continue with other models.
-        if ([403,404,410].includes(row.http_status)) break;
+        if ([403,404,410].includes(row.http_status) || row.error) break;
         if (row.http_status === 401 || row.http_status === 429) {
           out.results.push({model, results});
           out.status = row.http_status === 401 ? "account_auth_rejected" : "rate_limited";
