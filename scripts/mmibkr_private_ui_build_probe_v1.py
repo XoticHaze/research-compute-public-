@@ -39,6 +39,17 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/lib/botConsoleOpenOrdersTruth.test.mjs",
     # Exact legacy Builder local-draft combinator restoration, read-only UI.
     "ui-react/src/lib/builderLocalDraftRestore.test.mjs",
+    # Exact selected Builder/CRW/model-digest and operator presentation Node tests.
+    "ui-react/src/lib/botConsoleSelectedHoldingsEmpty.product.test.mjs",
+    "ui-react/src/lib/historicalRangeReadinessLabel.test.mjs",
+    "ui-react/src/lib/builderPersistedReviewTruth.test.mjs",
+    "ui-react/src/lib/builderLiteralValue.test.mjs",
+    "ui-react/src/lib/contractPnlCurrency.test.mjs",
+    "ui-react/src/lib/selectedRuntimeBadgeTruth.test.mjs",
+    "ui-react/src/components/strategy-builder-reviewed-fetch-guard.test.mjs",
+    "ui-react/src/lib/tradingProductReadiness.digest-identity.test.mjs",
+    "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.cross-timeframe-capability.test.mjs",
+    "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.local-draft-storage.test.mjs",
     "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
 }
 

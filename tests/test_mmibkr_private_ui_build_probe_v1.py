@@ -345,3 +345,168 @@ def test_public_receipt_rejects_nested_private_sentinel_without_echo(monkeypatch
         assert json.loads(captured.out.splitlines()[0].split("=", 1)[1]) == {
             "schema": mod.SCHEMA, "status": "REJECTED",
         }
+
+
+def test_builder_model_digest_and_crw_cross_timeframe_exact_allowlist():
+    exact = (
+        "ui-react/src/lib/builderPersistedReviewTruth.test.mjs",
+        "ui-react/src/lib/tradingProductReadiness.digest-identity.test.mjs",
+        "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.cross-timeframe-capability.test.mjs",
+        "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.local-draft-storage.test.mjs",
+    )
+    for path in exact:
+        assert mod.validate_acceptance_file(path) == path
+    for denied in (
+        "ui-react/src/lib/builderPersistedReviewTruth.mjs",
+        "ui-react/src/lib/builderPersistedReviewTruth.test.mjs.bak",
+        "ui-react/src/lib/tradingProductReadiness.mjs",
+        "ui-react/src/lib/tradingProductReadiness.digest-identity.test.mjs.bak",
+        "ui-react/src/lib/other/tradingProductReadiness.digest-identity.test.mjs",
+        "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.cross-timeframe-capability.test.mjs.extra",
+        "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.local-draft-storage.test.mjs.bak",
+        "ui-react/src/components/other/CRWStrategyBuilderBacktestWorkbenchBase.local-draft-storage.test.mjs",
+        "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.jsx",
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
+
+
+
+def test_public_failure_never_echoes_private_cli_or_exception_sentinel(monkeypatch, capsys):
+    secret = "NESTED_PRIVATE_UI_SENTINEL_NEVER_PUBLIC_20261024"
+
+    def fail_with_private_exception(**_kwargs):
+        raise RuntimeError("private-path/" + secret)
+
+    monkeypatch.setattr(mod, "run_probe", fail_with_private_exception)
+    monkeypatch.setattr("sys.argv", [
+        "probe", "--source-root", "/private/" + secret,
+        "--source-materialization", "/private/" + secret,
+        "--source-ref", "a" * 40,
+        "--acceptance-file",
+        "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.local-draft-storage.test.mjs",
+    ])
+    assert mod.main() == 1
+    captured = capsys.readouterr()
+    assert secret not in captured.out + captured.err
+    assert captured.err == ""
+    assert json.loads(captured.out.splitlines()[0].split("=", 1)[1]) == {
+        "schema": mod.SCHEMA, "status": "REJECTED",
+    }
+
+
+
+
+def test_public_parser_and_allowlist_never_echo_unknown_private_text(monkeypatch, capsys):
+    secret = "UNKNOWN_PRIVATE_UI_ARGUMENT_SENTINEL_20261024"
+    with pytest.raises(ValueError) as exc:
+        mod.validate_acceptance_file("ui-react/src/" + secret + ".mjs")
+    assert str(exc.value) == "ui_acceptance_file_not_allowlisted"
+    assert secret not in str(exc.value)
+    monkeypatch.setattr("sys.argv", ["probe", "--unknown", secret])
+    assert mod.main() == 1
+    captured = capsys.readouterr()
+    assert secret not in captured.out + captured.err
+    assert captured.err == ""
+    assert json.loads(captured.out.splitlines()[0].split("=", 1)[1]) == {
+        "schema": mod.SCHEMA, "status": "REJECTED",
+    }
+
+
+
+def test_exact_selected_bot_console_empty_holdings_acceptance_is_allowlisted_only():
+    # Private Node acceptance remains exact-file and Source Vault-bound.
+    exact = "ui-react/src/lib/botConsoleSelectedHoldingsEmpty.product.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak",
+        exact.replace(".test.mjs", ".mjs"),
+        exact.replace(".test.mjs", ".test.mjs.js"),
+        "ui-react/src/lib/../lib/botConsoleSelectedHoldingsEmpty.product.test.mjs",
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
+
+
+
+
+
+def test_exact_counted_warmup_readiness_acceptance_allowlist_only():
+    # Product #1037 R2 is now carried by selected #888 and #975; admit only
+    # its one exact brokerless Node presentation test through existing probe.
+    exact = "ui-react/src/lib/historicalRangeReadinessLabel.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        "ui-react/src/lib/historicalRangeReadinessLabel.mjs",
+        exact + ".bak",
+        exact.replace(".test.mjs", ".test.mjs.js"),
+        "ui-react/src/lib/../lib/historicalRangeReadinessLabel.test.mjs",
+        "ui-react/src/components/historicalRangeReadinessLabel.test.mjs",
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
+
+
+
+def test_exact_builder_literal_finite_helper_node_acceptance_is_allowlisted_only():
+    # Selected #888/#975 consumed Product #1041's pure Node literal parser.
+    exact = "ui-react/src/lib/builderLiteralValue.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        "ui-react/src/lib/builderLiteralValue.mjs",
+        exact + ".bak",
+        exact + ".js",
+        "ui-react/src/components/builderLiteralValue.test.mjs",
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
+
+
+
+
+
+def test_exact_selected_contract_pnl_multiplier_acceptance_allowlist_only():
+    # Pure UI presentation safety. No account/broker/order/FX authority.
+    exact = "ui-react/src/lib/contractPnlCurrency.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        "ui-react/src/lib/contractPnlCurrency.mjs",
+        exact + ".bak",
+        exact + ".js",
+        "ui-react/src/components/contractPnlCurrency.test.mjs",
+        "ui-react/src/lib/../lib/contractPnlCurrency.test.mjs",
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
+
+
+
+def test_exact_selected_runtime_badge_truth_acceptance_allowlist_only():
+    # Read-only badge/trace presentation. Never grants broker mutation.
+    exact = "ui-react/src/lib/selectedRuntimeBadgeTruth.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        "ui-react/src/lib/selectedRuntimeBadgeTruth.mjs",
+        exact + ".bak",
+        exact + ".js",
+        "ui-react/src/components/selectedRuntimeBadgeTruth.test.mjs",
+        "ui-react/src/lib/../lib/selectedRuntimeBadgeTruth.test.mjs",
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
+
+
+
+def test_exact_selected_reviewed_backtest_fetch_guard_allowlist_only():
+    # Read-only acceptance; no Builder apply/config/broker authority.
+    exact = "ui-react/src/components/strategy-builder-reviewed-fetch-guard.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        "ui-react/src/components/strategy-builder-reviewed-fetch-guard.js",
+        exact + ".bak",
+        exact + ".js",
+        "ui-react/src/lib/strategy-builder-reviewed-fetch-guard.test.mjs",
+        "ui-react/src/components/../components/strategy-builder-reviewed-fetch-guard.test.mjs",
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
