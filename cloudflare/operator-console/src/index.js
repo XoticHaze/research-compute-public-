@@ -753,7 +753,13 @@ export default {
       );
       if (!stored.ok) return stored;
       const record = await stored.json();
-      return json(record.snapshot, 200);
+      let snapshot;
+      try {
+        snapshot = validateSnapshot(record.snapshot);
+      } catch {
+        return json({ error: 'operator_snapshot_state_invalid' }, 502);
+      }
+      return json(snapshot, 200);
     }
 
     // This Worker only exposes the explicitly admitted read-only/operator APIs.
