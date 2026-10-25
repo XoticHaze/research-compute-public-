@@ -8,6 +8,27 @@ export const MAX_REQUESTS_PER_BATCH = 1 + BATCH_SIZE * TASKS.length;
 const API = "https://integrate.api.nvidia.com";
 const MAX_MODELS = 150;
 const MAX_DURATION_MS = 120000;
+// Fixed first-wave assistant challengers; after these, evaluate every other
+// catalog-listed chat candidate in stable order. Never hardcode a winner.
+const PRIORITY = [
+  "openai/gpt-oss-20b",
+  "nvidia/nemotron-3.5-lightning-30b-a3b",
+  "nvidia/nemotron-3.5-bolt-e4b",
+  "nvidia/nemotron-3-super-120b-a12b",
+  "nvidia/nemotron-3-ultra-550b-a55b",
+  "nvidia/llama-3.1-nemotron-ultra-253b-v1",
+  "nvidia/nemotron-nano-3-30b-a3b",
+  "mistralai/mistral-large-2-instruct",
+  "meta/llama-3.3-70b-instruct"
+];
+function orderedCandidates(ids) {
+ const chat=ids.filter(eligibleChatModel);
+ return [
+   ...PRIORITY.filter(id=>chat.includes(id)),
+   ...chat.filter(id=>!PRIORITY.includes(id))
+ ];
+}
+
 
 function httpStatus(n) { return Number.isInteger(n) && n >= 100 && n <= 599 ? n : null; }
 function clock() { return Date.now(); }
@@ -45,7 +66,7 @@ export async function runSyntheticRoleBatch({batch, providerFetch, now=clock}) {
     const ids = sanitizeModelCatalog(parsed?.data);
     out.catalog_count = ids.length;
     out.catalog_model_ids = ids;
-    out.eligible_model_ids = ids.filter(eligibleChatModel);
+    out.eligible_model_ids = orderedCandidates(ids);
     out.eligible_count = out.eligible_model_ids.length;
     if (batch === -1) { out.status = "catalog_only"; return out; }
     const chosen = out.eligible_model_ids.slice(batch * BATCH_SIZE, (batch+1) * BATCH_SIZE);
