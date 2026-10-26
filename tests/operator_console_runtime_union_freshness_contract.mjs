@@ -90,6 +90,29 @@ for (const [label, invalidRows] of [
   assert.throws(() => mergeRuntimeProjection(null, invalid),
     /snapshot_runtime_identity_invalid_or_duplicate/, label + ' must fail on first publication too');
 }
+// Older Durable Object records can predate today's strict incoming validator.
+// A duplicate or malformed persisted row must not survive as a carried card.
+for (const [label, priorRows] of [
+  ['duplicate prior runtime ID', [previousRow, { ...previousRow, last_action: 'SELL' }]],
+  ['whitespace prior runtime ID', [{ ...previousRow, runtime_id: ' AMAT-15Min' }]],
+  ['numeric prior runtime ID', [{ ...previousRow, runtime_id: 15 }]],
+]) {
+  const recovered = mergeRuntimeProjection(
+    { snapshot: snapshot('a'.repeat(40), priorRows) }, incoming,
+  );
+  assert.deepEqual(recovered.snapshot.runtimes, [incomingRow],
+    label + ' must never carry stale/ambiguous persisted rows');
+  assert.equal(recovered.runtimeMergeApplied, false, label);
+  assert.equal(recovered.previousRuntimeCount, priorRows.length, label);
+}
+const unsafePrior = snapshot('a'.repeat(40), [previousRow]);
+unsafePrior.privacy.execution_authority_included = true;
+const privacyRecovered = mergeRuntimeProjection({ snapshot: unsafePrior }, incoming);
+assert.deepEqual(privacyRecovered.snapshot.runtimes, [incomingRow],
+  'legacy privacy-invalid state must not be inherited');
+assert.equal(privacyRecovered.runtimeMergeApplied, false);
+console.log('MMIBKR_OPERATOR_CONSOLE_LEGACY_CARRY_FAILCLOSED=PASS');
+
 console.log('MMIBKR_OPERATOR_CONSOLE_RUNTIME_IDENTITY_FAILCLOSED=PASS');
 console.log('MMIBKR_OPERATOR_CONSOLE_CARRIED_RUNTIME_FRESHNESS=PASS');
 
