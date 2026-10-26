@@ -314,6 +314,18 @@ function snapshotSourceSha(node) {
   return String(node?.runtime?.source_sha || '').trim().toLowerCase();
 }
 
+// GitHub publisher jobs can finish out of order. A later HTTP receipt is
+// not proof that its underlying boundary snapshot is the latest observation.
+function snapshotGeneratedAtMs(node) {
+  const value = node?.generated_at_utc;
+  if (typeof value !== 'string'
+      || !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$/.test(value)) {
+    return null;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
   const previous = previousRecord?.snapshot;
   if (!previous || typeof previous !== 'object' || Array.isArray(previous)) {
@@ -469,7 +481,15 @@ export class OperatorState {
     if (request.method === 'POST' && url.pathname === '/store') {
       const body = await request.json();
       const incomingSnapshot = validateSnapshot(body.snapshot);
+      const incomingGeneratedAt = snapshotGeneratedAtMs(incomingSnapshot);
+      if (incomingGeneratedAt === null || incomingGeneratedAt > Date.now() + 60_000) {
+        return json({ error: 'snapshot_generated_at_invalid' }, 400);
+      }
       const previousRecord = await this.ctx.storage.get('latest');
+      const previousGeneratedAt = snapshotGeneratedAtMs(previousRecord?.snapshot);
+      if (previousGeneratedAt !== null && incomingGeneratedAt < previousGeneratedAt) {
+        return json({ error: 'snapshot_out_of_order' }, 409);
+      }
       const merged = mergeRuntimeProjection(previousRecord, incomingSnapshot);
       const snapshot = merged.snapshot;
       const transport = body.transport && typeof body.transport === 'object'
@@ -605,6 +625,7 @@ export default {
           },
         }),
       }));
+      if (stored.status === 409) return json({ error: 'snapshot_out_of_order' }, 409);
       if (!stored.ok) return json({ error: 'snapshot_store_failed' }, 502);
       const receipt = await stored.json();
       if (receipt.durable_readback_verified !== true) {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mergeRuntimeProjection } from '../cloudflare/operator-console/src/index.js';
+import { mergeRuntimeProjection, OperatorState } from '../cloudflare/operator-console/src/index.js';
 
 function snapshot(source, runtimes) {
   return {
@@ -78,3 +78,36 @@ const repeated = mergeRuntimeProjection({ snapshot: result.snapshot }, snapshot(
 assert.ok(repeated.snapshot.runtimes.every((row) => row.data_health.current === false),
   'repeated carry cannot restore previous eligibility');
 console.log('MMIBKR_OPERATOR_CONSOLE_CARRIED_RUNTIME_FRESHNESS=PASS');
+
+const backing = new Map();
+const storage = {
+  async get(key) { return backing.get(key); },
+  async put(key, value) { backing.set(key, value); },
+};
+const state = new OperatorState({ storage }, {});
+async function storeBoundary(snapshotValue) {
+  return state.fetch(new Request('https://operator-state.internal/store', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ snapshot: snapshotValue, transport: {} }),
+  }));
+}
+const currentAt = new Date(Date.now() - 120_000).toISOString();
+const olderAt = new Date(Date.now() - 240_000).toISOString();
+const newerAt = new Date(Date.now() - 30_000).toISOString();
+const firstBoundary = { ...snapshot('a'.repeat(40), [incomingRow]), generated_at_utc: currentAt };
+assert.equal((await storeBoundary(firstBoundary)).status, 201);
+const olderBoundary = { ...snapshot('a'.repeat(40), [previousRow]), generated_at_utc: olderAt };
+const rejectedOlder = await storeBoundary(olderBoundary);
+assert.equal(rejectedOlder.status, 409, 'older same-source run cannot overwrite fresh state');
+assert.equal((await rejectedOlder.json()).error, 'snapshot_out_of_order');
+assert.equal((await storage.get('latest')).snapshot.generated_at_utc, currentAt);
+const rejectedOtherSource = await storeBoundary({ ...olderBoundary, runtime: { source_sha: 'b'.repeat(40) } });
+assert.equal(rejectedOtherSource.status, 409, 'source changes cannot backdate the displayed observation');
+assert.equal((await storage.get('latest')).snapshot.runtime.source_sha, 'a'.repeat(40));
+assert.equal((await storeBoundary({ ...firstBoundary, generated_at_utc: 'not-utc' })).status, 400);
+assert.equal((await storeBoundary({ ...firstBoundary, generated_at_utc: new Date(Date.now() + 300_000).toISOString() })).status, 400);
+assert.equal((await storeBoundary({ ...firstBoundary, generated_at_utc: newerAt })).status, 201);
+assert.equal((await storage.get('latest')).snapshot.generated_at_utc, newerAt);
+console.log('MMIBKR_OPERATOR_CONSOLE_MONOTONIC_SNAPSHOT_FRESHNESS=PASS');
+
