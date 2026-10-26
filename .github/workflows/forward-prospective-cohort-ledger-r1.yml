@@ -38,6 +38,10 @@ jobs:
         run: python -m pip install --disable-pip-version-check pandas==2.2.3 yfinance==0.2.65
       - name: Self-test prospective chronology
         run: python research/forward_prospective_cohort_ledger_r1.py --self-test
+      - name: Verify changed-source Shared Ridge matched-net comparator contract
+        run: |
+          python -m pip install --disable-pip-version-check pytest==8.4.2
+          python -m pytest -q tests/test_shared_ridge_forward_comparator_cost_basis.py
       - name: Resolve only matured prospective cohorts
         run: |
           python research/forward_prospective_cohort_ledger_r1.py \
