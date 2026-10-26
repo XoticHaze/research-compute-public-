@@ -402,6 +402,35 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
             round(sum(v[1] for v in matched) / len(matched), 4) if complete else None
         )
         out["legacy_mean_ticker_book_excess_vs_smh_basis"] = "BOOK_NET_VS_SMH_GROSS"
+    if program_id == "HOMEBUILDERS":
+        # The frozen Homebuilders contract charges stock round trips but
+        # specifies no ITB/QQQ benchmark fee. Preserve the legacy mixed-cost
+        # numbers, never fabricate a matched-net benchmark comparison.
+        resolved = [c for c in rows if c.get("status") == "RESOLVED"]
+        expected = int(summary.get("resolved_cohorts", len(resolved)) or 0)
+        projections = ledger.get("homebuilders_cost_basis_projections") or {}
+        valid = 0
+        for cohort in resolved:
+            projection = projections.get(str(cohort.get("cohort_id"))) or {}
+            legacy = projection.get("legacy_stock_net_minus_itb_gross_mean_bps")
+            if (
+                projection.get("status") == "DERIVED_MIXED_COST_ONLY_BENCHMARK_FEES_UNFROZEN"
+                and projection.get("original_resolution_mutated") is False
+                and projection.get("alpha_or_promotion_authority") is False
+                and projection.get("matched_stock_net_minus_itb_net_mean_bps") is None
+                and isinstance(legacy, (int, float)) and not isinstance(legacy, bool)
+                and math.isfinite(legacy)
+            ):
+                valid += 1
+        complete = bool(resolved) and valid == len(resolved) == expected
+        out["homebuilders_cost_basis_projection_status"] = (
+            "ALL_RESOLVED_COHORTS_MIXED_COST_LABELLED" if complete
+            else "NO_RESOLVED_COHORT" if not resolved and expected == 0
+            else "MIXED_COST_PROJECTION_INCOMPLETE"
+        )
+        out["legacy_mean_excess_vs_itb_basis"] = "STOCK_NET_MINUS_ITB_GROSS_NOT_MATCHED_AFTER_COST"
+        out["mean_matched_after_cost_excess_vs_itb_bps"] = None
+        out["mean_matched_after_cost_excess_vs_qqq_bps"] = None
     if current:
         out.update(
             {
@@ -586,6 +615,9 @@ def _decision_chain(lanes: list[dict[str, Any]]) -> dict[str, Any]:
             "semiconductor_mean_ticker_book_excess_vs_equal_weight_13_net_bps": (semi.get("prospective_evidence") or {}).get("mean_ticker_book_excess_vs_equal_weight_13_net_bps"),
             "semiconductor_matched_cost_projection_status": (semi.get("prospective_evidence") or {}).get("matched_cost_projection_status"),
             "homebuilders_mean_excess_vs_itb_bps": (hb.get("prospective_evidence") or {}).get("mean_excess_vs_itb_bps"),
+            "homebuilders_legacy_itb_cost_basis": (hb.get("prospective_evidence") or {}).get("legacy_mean_excess_vs_itb_basis"),
+            "homebuilders_matched_after_cost_status": (hb.get("prospective_evidence") or {}).get("homebuilders_cost_basis_projection_status"),
+            "homebuilders_matched_after_cost_excess_vs_itb_bps": (hb.get("prospective_evidence") or {}).get("mean_matched_after_cost_excess_vs_itb_bps"),
         },
         "resulting_market_decision_rule": (
             "Use P249/P266 as the frozen base research portfolio; treat P46 as regime context; add only native prospectively "
@@ -916,6 +948,29 @@ def self_test() -> None:
         invalid = _prospective_state(ledger, "SEMICONDUCTOR_SHARED_RIDGE")
         assert invalid["matched_cost_projection_status"] == "MATCHED_COST_PROJECTION_INCOMPLETE"
         assert invalid["mean_ticker_book_excess_vs_smh_net_bps"] is None
+
+    # Homebuilders legacy stock-net vs ITB-gross is not matched-after-cost alpha.
+    homebuilders_cost_ledger = {
+        "schema": LEDGER_SCHEMA,
+        "cohorts": [{"cohort_id": "HB_COST", "program_id": "HOMEBUILDERS",
+                     "status": "RESOLVED", "signal_date": "2026-09-10",
+                     "first_registered_at": "2026-09-11T00:00:00+00:00",
+                     "resolution": {"observations": []}}],
+        "summary": {"HOMEBUILDERS": {"resolved_cohorts": 1,
+                                    "mean_excess_vs_itb_bps": 88.9639}},
+        "homebuilders_cost_basis_projections": {
+            "HB_COST": {"status": "DERIVED_MIXED_COST_ONLY_BENCHMARK_FEES_UNFROZEN",
+                        "legacy_stock_net_minus_itb_gross_mean_bps": 88.9639,
+                        "matched_stock_net_minus_itb_net_mean_bps": None,
+                        "original_resolution_mutated": False,
+                        "alpha_or_promotion_authority": False}},
+    }
+    homebuilders_state = _prospective_state(homebuilders_cost_ledger, "HOMEBUILDERS")
+    assert homebuilders_state["homebuilders_cost_basis_projection_status"] == "ALL_RESOLVED_COHORTS_MIXED_COST_LABELLED"
+    assert homebuilders_state["mean_excess_vs_itb_bps"] == 88.9639
+    assert homebuilders_state["mean_matched_after_cost_excess_vs_itb_bps"] is None
+    assert homebuilders_state["legacy_mean_excess_vs_itb_basis"] == "STOCK_NET_MINUS_ITB_GROSS_NOT_MATCHED_AFTER_COST"
+
     print("FORWARD_MARKET_SCOREBOARD_SELF_TEST=PASS")
 
 
