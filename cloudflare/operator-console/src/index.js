@@ -310,6 +310,20 @@ async function verifyAccess(request, env) {
   };
 }
 
+// Browser promotion decisions mutate durable review state. Cloudflare Access
+// authenticates the operator but is not, by itself, a cross-site request
+// forgery boundary. Only same-origin JSON requests may reach the decision
+// writer. Machine OIDC publisher/reader routes remain separate.
+export function operatorDecisionRequestIsSameOrigin(request) {
+  const url = new URL(request.url);
+  const origin = request.headers.get('origin');
+  const fetchSite = request.headers.get('sec-fetch-site');
+  const contentType = String(request.headers.get('content-type') || '').trim();
+  return origin === url.origin
+    && (!fetchSite || fetchSite === 'same-origin')
+    && /^application\/json(?:\s*;\s*charset\s*=\s*utf-8)?$/i.test(contentType);
+}
+
 function snapshotSourceSha(node) {
   return String(node?.runtime?.source_sha || '').trim().toLowerCase();
 }
@@ -787,6 +801,9 @@ export default {
     }
 
     if (request.method === 'POST' && url.pathname === '/api/promotion-review/decision') {
+      if (!operatorDecisionRequestIsSameOrigin(request)) {
+        return json({ error: 'operator_mutation_origin_rejected' }, 403);
+      }
       let decision;
       try {
         const raw = await request.text();
