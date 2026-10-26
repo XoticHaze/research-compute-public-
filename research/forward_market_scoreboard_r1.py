@@ -438,6 +438,8 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
         out["legacy_mean_excess_vs_itb_basis"] = "STOCK_NET_MINUS_ITB_GROSS_NOT_MATCHED_AFTER_COST"
         out["mean_matched_after_cost_excess_vs_itb_bps"] = None
         out["mean_matched_after_cost_excess_vs_qqq_bps"] = None
+        out["homebuilders_observation_unit"] = "PER_SYMBOL_FROZEN_HORIZON_MEAN_NOT_FUNDED_PORTFOLIO"
+        out["homebuilders_funded_portfolio_nav_return_bps"] = None
     if current:
         out.update(
             {
@@ -625,6 +627,8 @@ def _decision_chain(lanes: list[dict[str, Any]]) -> dict[str, Any]:
             "homebuilders_legacy_itb_cost_basis": (hb.get("prospective_evidence") or {}).get("legacy_mean_excess_vs_itb_basis"),
             "homebuilders_matched_after_cost_status": (hb.get("prospective_evidence") or {}).get("homebuilders_cost_basis_projection_status"),
             "homebuilders_matched_after_cost_excess_vs_itb_bps": (hb.get("prospective_evidence") or {}).get("mean_matched_after_cost_excess_vs_itb_bps"),
+            "homebuilders_observation_unit": (hb.get("prospective_evidence") or {}).get("homebuilders_observation_unit"),
+            "homebuilders_funded_portfolio_nav_return_bps": (hb.get("prospective_evidence") or {}).get("homebuilders_funded_portfolio_nav_return_bps"),
         },
         "resulting_market_decision_rule": (
             "Use P249/P266 as the frozen base research portfolio; treat P46 as regime context; add only native prospectively "
@@ -976,6 +980,7 @@ def self_test() -> None:
     assert homebuilders_state["homebuilders_cost_basis_projection_status"] == "ALL_RESOLVED_COHORTS_MIXED_COST_LABELLED"
     assert homebuilders_state["mean_excess_vs_itb_bps"] == 88.9639
     assert homebuilders_state["mean_matched_after_cost_excess_vs_itb_bps"] is None
+    assert homebuilders_state["homebuilders_funded_portfolio_nav_return_bps"] is None
     assert homebuilders_state["legacy_mean_excess_vs_itb_basis"] == "STOCK_NET_MINUS_ITB_GROSS_NOT_MATCHED_AFTER_COST"
     partial_homebuilders = dict(homebuilders_cost_ledger)
     partial_homebuilders["cohorts"] = [{
