@@ -167,8 +167,11 @@ def _expected_forward_sessions(start: pd.Timestamp, completed_date: date) -> pd.
     silently compress the prospective funded path. Missing calendar support
     fails the observer rather than falling back to provider-derived dates.
     """
+    from importlib.metadata import version
     import pandas_market_calendars as mcal
 
+    if version("pandas_market_calendars") != "5.5.0" or version("exchange_calendars") != "4.13.2":
+        raise RuntimeError("P249_EXCHANGE_CALENDAR_DEPENDENCY_MISMATCH")
     schedule = mcal.get_calendar("NYSE").schedule(
         start_date=start.date().isoformat(), end_date=completed_date.isoformat()
     )
@@ -514,7 +517,7 @@ def main() -> None:
         "source_health": {
             "provider": "yfinance_adjusted_close",
             "completed_session_request_date": completed_data_date.isoformat(),
-            "exchange_calendar": "NYSE:pandas_market_calendars==5.5.0",
+            "exchange_calendar": "NYSE:pandas_market_calendars==5.5.0:exchange_calendars==4.13.2",
             "expected_completed_exchange_sessions": int(len(forward_ix)),
             "observed_completed_exchange_sessions": int(len(observed_forward_ix)),
             "all_expected_exchange_sessions_present": bool(not len(forward_ix.difference(observed_forward_ix))),
