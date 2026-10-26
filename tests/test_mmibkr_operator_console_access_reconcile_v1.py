@@ -94,7 +94,7 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         deploy = "      - name: Deploy locked operator-console Worker and private static assets"
         self.assertIn(start, text)
         self.assertLess(text.index(start), text.index(deploy))
-        block = text.split(start, 1)[1].split(deploy, 1)[0]
+        block = text.split(start, 1)[1].split("      - name: Reconcile exact-email Cloudflare Access application", 1)[0]
         self.assertIn("/access/organizations", block)
         self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY=READY", block)
         self.assertNotIn("exc.read()", block)
@@ -125,17 +125,29 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
             text,
         )
 
-    def test_worker_control_plane_is_proved_before_access_gate(self):
+    def test_access_is_reconciled_before_worker_deploy_and_control_plane_proof(self):
         text = WORKFLOW.read_text(encoding="utf-8")
-        control_plane_step = "Prove deployed Worker through Cloudflare control plane"
+        preflight = "Preflight Access release credentials before Worker deployment"
         access_step = "Reconcile exact-email Cloudflare Access application"
-        self.assertIn(control_plane_step, text)
+        deploy_step = "Deploy locked operator-console Worker and private static assets"
+        control_plane_step = "Prove deployed Worker through Cloudflare control plane"
+        bind_step = "Bind Worker defense-in-depth Access verifier"
+        self.assertLess(text.index(preflight), text.index(access_step))
+        self.assertLess(text.index(access_step), text.index(deploy_step))
+        self.assertLess(text.index(deploy_step), text.index(control_plane_step))
+        self.assertLess(text.index(control_plane_step), text.index(bind_step))
         self.assertIn("/workers/scripts/", text)
         self.assertIn("/settings", text)
         self.assertIn("MMIBKR_OPERATOR_CONSOLE_CONTROL_PLANE=READY", text)
-        self.assertLess(text.index(control_plane_step), text.index(access_step))
         self.assertIn("for path in ('/', '/bot-console', '/operator/promotion-review', '/api/operator-snapshot', '/healthz'):", text)
         self.assertNotIn("operator-console pre-Access health did not converge", text)
+
+    def test_missing_access_binding_is_terminal_not_a_successful_deploy(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        access = text.split("      - name: Reconcile exact-email Cloudflare Access application", 1)[1].split("      - name: Deploy locked operator-console Worker", 1)[0]
+        bind = text.split("      - name: Bind Worker defense-in-depth Access verifier", 1)[1].split("      - name: Prove unauthenticated surface fails closed", 1)[0]
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_BINDING=LOCKED_EMAIL_ALLOWLIST_MISSING'\n            exit 43", access)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_BINDING=LOCKED_UNCONFIGURED'\n            exit 44", bind)
 
     def test_public_actions_never_echo_cloudflare_provider_error_bodies(self):
         text = WORKFLOW.read_text(encoding="utf-8")
