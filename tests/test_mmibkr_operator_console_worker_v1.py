@@ -120,7 +120,9 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
 
     def test_publish_201_requires_durable_object_readback(self):
         text = SOURCE.read_text(encoding="utf-8")
-        self.assertIn("await this.ctx.storage.put('latest', record)", text)
+        self.assertIn("this.ctx.storage.transaction(async (txn) =>", text)
+        self.assertIn("await txn.get('latest')", text)
+        self.assertIn("await txn.put('latest', record)", text)
         self.assertIn("await this.ctx.storage.get('latest')", text)
         self.assertIn("operator_snapshot_readback_failed", text)
         self.assertIn("snapshot_readback_unverified", text)
@@ -252,7 +254,9 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         )
         self.assertEqual(config["exports"]["OperatorState"]["storage"], "sqlite")
         text = SOURCE.read_text(encoding="utf-8")
-        self.assertIn("this.ctx.storage.put('latest'", text)
+        self.assertIn("this.ctx.storage.transaction(async (txn) =>", text)
+        self.assertIn("await txn.get('latest')", text)
+        self.assertIn("await txn.put('latest', record)", text)
         self.assertIn("this.ctx.storage.get('latest')", text)
 
     def test_worker_does_not_embed_broker_or_private_source_credentials(self):
