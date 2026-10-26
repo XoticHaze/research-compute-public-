@@ -5,6 +5,7 @@ No IBKR client, credentials, Gateway process, or live order route is exercised.
 from __future__ import annotations
 
 import subprocess
+from datetime import datetime
 import unittest
 from pathlib import Path
 from textwrap import dedent
@@ -44,11 +45,25 @@ class GatewayResetWindowObservationTests(unittest.TestCase):
         self.assertTrue(self._eligible(1792734300))
         self.assertFalse(self._eligible(1792734360))
 
-    def test_saturday_and_ordinary_outage_not_extended(self):
-        self.assertFalse(self._eligible(1792817870))  # Saturday 00:57 ET
+    def test_saturday_maintenance_window_and_ordinary_outage(self):
+        # Official IBKR Saturday maintenance 00:00-02:00 ET is a separate
+        # bounded read-only observation window from Sunday-Friday reset.
+        cases = (
+            ("2026-10-24T00:00:00-04:00", True),
+            ("2026-10-24T00:57:50-04:00", True),
+            ("2026-10-24T01:59:00-04:00", True),
+            ("2026-10-24T02:00:00-04:00", False),
+            ("2026-10-23T23:59:00-04:00", False),
+        )
+        for eastern, expected in cases:
+            with self.subTest(eastern=eastern):
+                self.assertEqual(
+                    self._eligible(int(datetime.fromisoformat(eastern).timestamp())),
+                    expected,
+                )
         self.assertFalse(self._eligible(1792745870))  # Friday 04:57 ET
         self.assertFalse(self._eligible(0))  # No observed outage
-        self.assertFalse(self._eligible(1792731470, used=1))  # No repeat grace
+        self.assertFalse(self._eligible(1792817870, used=1))  # No repeat grace
 
     def test_only_readonly_observation_extended_and_bounded(self):
         source = self.source
@@ -59,6 +74,7 @@ class GatewayResetWindowObservationTests(unittest.TestCase):
         self.assertIn('docker exec mmibkr-live-gateway /bin/sh -lc \'test "$READ_ONLY_API" = yes\'', pool)
         self.assertIn("MMIBKR_GATEWAY_POOL_RESET_WINDOW_READONLY_OBSERVATION_STARTED=1", pool)
         self.assertIn("observation_budget=600", pool)
+        self.assertIn('[ "$outage_eastern_weekday" -eq 6 ]', pool)
         self.assertIn("observation_budget=720", pool)
         self.assertIn('[ "$now" -ge "$((end + observation_budget))" ]', pool)
         self.assertIn('[ "$now" -ge "$((outage_since + observation_budget))" ]', pool)

@@ -72,26 +72,60 @@ def _positive_session_stats(values: list[float]) -> dict[str, Any]:
 
 
 def _challenger_session_stats(fwd: dict[str, Any]) -> dict[str, Any]:
-    challenger = {
-        str(row.get("date")): row
-        for row in (fwd.get("challenger_observations") or [])
-        if row.get("date")
+    """Only report forward hit rates when the entire matched date book exists."""
+    empty = _positive_session_stats([])
+    invalid = {
+        "complete": False,
+        "vs_incumbent": empty,
+        "vs_matched_cash_control": empty,
     }
+    metrics = fwd.get("challenger_if_flattened_now") or {}
+    days = metrics.get("days")
+    challenger_rows = fwd.get("challenger_observations")
+    matched_rows = fwd.get("matched_control_observations")
+    if (
+        isinstance(days, bool) or not isinstance(days, int) or days < 0
+        or not isinstance(challenger_rows, list)
+        or not isinstance(matched_rows, list)
+        or len(challenger_rows) != days or len(matched_rows) != days
+    ):
+        return invalid
+
+    def indexed(rows: list[dict[str, Any]], required: tuple[str, ...]) -> dict[str, dict[str, Any]] | None:
+        by_day: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                return None
+            day = row.get("date")
+            if not isinstance(day, str) or not day or day in by_day:
+                return None
+            if any(
+                isinstance(row.get(key), bool)
+                or not isinstance(row.get(key), (int, float))
+                or not math.isfinite(row[key])
+                for key in required
+            ):
+                return None
+            by_day[day] = row
+        return by_day
+
+    challenger = indexed(challenger_rows, ("net_return", "core_return"))
+    matched = indexed(matched_rows, ("net_return",))
+    if challenger is None or matched is None or challenger.keys() != matched.keys():
+        return invalid
     incumbent_excess = [
-        float(row.get("net_return", 0.0)) - float(row.get("core_return", 0.0))
-        for row in challenger.values()
+        row["net_return"] - row["core_return"] for row in challenger.values()
     ]
-    matched = {
-        str(row.get("date")): row
-        for row in (fwd.get("matched_control_observations") or [])
-        if row.get("date")
-    }
     matched_excess = [
-        float(row.get("net_return", 0.0)) - float(matched[day].get("net_return", 0.0))
+        row["net_return"] - matched[day]["net_return"]
         for day, row in challenger.items()
-        if day in matched
     ]
+    # Individually finite returns can still overflow on subtraction.
+    # Never publish a complete matched book with nonfinite derived excess.
+    if not all(math.isfinite(value) for value in incumbent_excess + matched_excess):
+        return invalid
     return {
+        "complete": True,
         "vs_incumbent": _positive_session_stats(incumbent_excess),
         "vs_matched_cash_control": _positive_session_stats(matched_excess),
     }
@@ -221,6 +255,7 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
     days = int(metrics.get("days", 0) or 0)
     pos = x.get("current_positions", {}).get("challenger", {})
     session_stats = _challenger_session_stats(fwd)
+    matched_complete = session_stats["complete"]
     return {
         "program_id": program_id,
         "kind": "portfolio_diversification_challenger",
@@ -235,8 +270,9 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
         "forward_days": days,
         "scorecard": {
             "challenger_cumulative_bps": _bp(metrics.get("cumulative_return")),
-            "excess_vs_incumbent_bps": _bp(fwd.get("challenger_minus_incumbent_cumulative")),
-            "excess_vs_matched_cash_control_bps": _bp(fwd.get("challenger_minus_matched_cumulative")),
+            "excess_vs_incumbent_bps": _bp(fwd.get("challenger_minus_incumbent_cumulative")) if matched_complete else None,
+            "excess_vs_matched_cash_control_bps": _bp(fwd.get("challenger_minus_matched_cumulative")) if matched_complete else None,
+            "matched_observation_integrity": "COMPLETE" if matched_complete else "INCOMPLETE_FAIL_CLOSED",
             "vs_incumbent_observed_sessions": session_stats["vs_incumbent"]["observed_sessions"],
             "vs_incumbent_positive_sessions": session_stats["vs_incumbent"]["positive_sessions"],
             "vs_incumbent_session_hit_rate": session_stats["vs_incumbent"]["hit_rate"],
@@ -246,7 +282,7 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
             "max_drawdown": metrics.get("max_drawdown"),
             "annualized_vol": metrics.get("annualized_vol"),
         },
-        "validation_grade": _grade(days),
+        "validation_grade": _grade(days) if matched_complete else "FORWARD_MATCHED_OBSERVATIONS_INCOMPLETE",
         "decision_use": (
             f"Tests whether allocating half the incumbent portfolio to {alt} improves capital efficiency and diversification. "
             "A market decision requires positive excess versus both the unchanged incumbent and matched BIL control with enough forward observations."
@@ -964,6 +1000,7 @@ def self_test() -> None:
         assert "reapplies target weights daily" in funded["timing"]["holding_rule"]
         assert "not trade or funded rebalance evidence" in funded["timing"]["entry_rule"]
         stats = _challenger_session_stats({
+            "challenger_if_flattened_now": {"days": 2},
             "challenger_observations": [
                 {"date": "2026-09-10", "net_return": 0.02, "core_return": 0.01},
                 {"date": "2026-09-11", "net_return": -0.01, "core_return": 0.0},
@@ -975,6 +1012,47 @@ def self_test() -> None:
         })
         assert stats["vs_incumbent"] == {"observed_sessions": 2, "positive_sessions": 1, "hit_rate": 0.5}
         assert stats["vs_matched_cash_control"] == {"observed_sessions": 2, "positive_sessions": 2, "hit_rate": 1.0}
+        assert stats["complete"] is True
+        incomplete = {
+            "challenger_if_flattened_now": {"days": 2},
+            "challenger_observations": [
+                {"date": "2026-09-10", "net_return": 0.02, "core_return": 0.01},
+                {"date": "2026-09-11", "net_return": -0.01, "core_return": 0.0},
+            ],
+            "matched_control_observations": [
+                {"date": "2026-09-10", "net_return": 0.015},
+            ],
+            "challenger_minus_matched_cumulative": 0.99,
+            "challenger_minus_incumbent_cumulative": 0.88,
+        }
+        assert _challenger_session_stats(incomplete)["complete"] is False
+        guarded = _challenger({"forward": incomplete}, "P558", "KMLM")
+        assert guarded["validation_grade"] == "FORWARD_MATCHED_OBSERVATIONS_INCOMPLETE"
+        assert guarded["scorecard"]["matched_observation_integrity"] == "INCOMPLETE_FAIL_CLOSED"
+        assert guarded["scorecard"]["excess_vs_matched_cash_control_bps"] is None
+        assert guarded["scorecard"]["excess_vs_incumbent_bps"] is None
+        duplicate = dict(incomplete)
+        duplicate["matched_control_observations"] = [
+            {"date": "2026-09-10", "net_return": 0.015},
+            {"date": "2026-09-10", "net_return": -0.02},
+        ]
+        assert _challenger_session_stats(duplicate)["complete"] is False
+        missing_numeric = dict(incomplete)
+        missing_numeric["matched_control_observations"] = [
+            {"date": "2026-09-10", "net_return": 0.015},
+            {"date": "2026-09-11"},
+        ]
+        assert _challenger_session_stats(missing_numeric)["complete"] is False
+        derived_overflow = dict(incomplete)
+        derived_overflow["challenger_observations"] = [
+            {"date": "2026-09-10", "net_return": 1e308, "core_return": -1e308},
+            {"date": "2026-09-11", "net_return": 0.0, "core_return": 0.0},
+        ]
+        derived_overflow["matched_control_observations"] = [
+            {"date": "2026-09-10", "net_return": -1e308},
+            {"date": "2026-09-11", "net_return": 0.0},
+        ]
+        assert _challenger_session_stats(derived_overflow)["complete"] is False
         assert out["coverage"]["native_result_gaps"] == []
         assert out["decision_chain"]["sectors"]["homebuilders"]["horizons"] == {"CCS": 5}
         native_by_id = {x["program_id"]: x for x in out["lanes"]}
