@@ -344,6 +344,26 @@ jobs:
           pool_script="\n".join(line[10:] if line.startswith("          ") else line for line in pool_run.splitlines())
           subprocess.run(["bash","-n"],input=pool_script,text=True,check=True)
           print('READONLY_GATEWAY_POOL_MAINTENANCE_SHELL_PARSE=PASS')
+          # Execute only the extracted pure reset-window shell function with
+          # fixed historical ET epochs. No Gateway, credentials, orders or bot.
+          from datetime import datetime
+          reset_fn = ('pool_reset_window_outage() {' +
+                      pool_script.split('pool_reset_window_outage() {',1)[1].split('\\n}',1)[0] + '\\n}')
+          reset_cases = (
+              ('2026-10-24T00:00:00-04:00', True),   # Saturday opens
+              ('2026-10-24T01:59:00-04:00', True),   # Saturday last minute
+              ('2026-10-24T02:00:00-04:00', False),  # Saturday boundary
+              ('2026-10-25T00:14:00-04:00', False),  # Sunday early
+              ('2026-10-25T00:15:00-04:00', True),   # Sunday opens
+              ('2026-10-25T01:45:00-04:00', True),   # Sunday last minute
+              ('2026-10-25T01:46:00-04:00', False),  # Sunday boundary
+          )
+          for et, expected in reset_cases:
+              epoch=int(datetime.fromisoformat(et).timestamp())
+              shell=reset_fn + f'\\noutage_since={epoch}\\nreset_window_grace_used=0\\npool_reset_window_outage\\n'
+              observed=subprocess.run(['bash','-c',shell],capture_output=True,text=True)
+              assert (observed.returncode == 0) is expected, (et, observed.returncode, observed.stderr)
+          print('READONLY_GATEWAY_WEEKEND_RESET_BOUNDARIES=PASS')
           assert 'TZ=America/New_York date +%H%M' in owner
           assert 'docker stop --time 90 mmibkr-live-gateway' in owner
           assert 'MMIBKR_CANONICAL_BOT_STATUS=' in owner
@@ -1071,10 +1091,14 @@ jobs:
             local outage_eastern_hhmm outage_eastern_weekday
             outage_eastern_hhmm="$(TZ=America/New_York date -d "@$outage_since" +%H%M)" || return 1
             outage_eastern_weekday="$(TZ=America/New_York date -d "@$outage_since" +%u)" || return 1
-            # Sunday-Friday 00:15-01:45 Eastern, DST handled by zoneinfo.
-            [ "$outage_eastern_weekday" != 6 ] &&
+            # Official IBKR North America reset: Sunday-Friday 00:15-01:45 ET;
+            # Saturday maintenance 00:00-02:00 ET. Both use Eastern DST.
+            if [ "$outage_eastern_weekday" -eq 6 ]; then
+              [[ "$outage_eastern_hhmm" < "0200" ]]
+            else
               [[ "$outage_eastern_hhmm" > "0014" ]] &&
-              [[ "$outage_eastern_hhmm" < "0146" ]]
+                [[ "$outage_eastern_hhmm" < "0146" ]]
+            fi
           }
           while :; do
             now="$(date +%s)"
