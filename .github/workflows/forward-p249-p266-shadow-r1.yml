@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
-      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65 pandas_market_calendars==5.5.0
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65 pandas_market_calendars==5.5.0 exchange_calendars==4.13.2
       - name: Check exact held-close and full-session gap continuity (focused)
         run: python -m unittest discover -s tests -p 'test_p279_forward_gap_continuity.py' -v
       - name: Check selected append-only prefix helper (focused synthetic)
