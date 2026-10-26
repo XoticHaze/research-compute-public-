@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mergeRuntimeProjection, OperatorState } from '../cloudflare/operator-console/src/index.js';
+import { mergeRuntimeProjection, OperatorState, operatorDecisionRequestIsSameOrigin } from '../cloudflare/operator-console/src/index.js';
 
 function snapshot(source, runtimes) {
   return {
@@ -129,3 +129,34 @@ assert.equal((await storage.get('latest')).snapshot.generated_at_utc, concurrent
   'concurrent out-of-order publisher completion cannot roll back durable state');
 console.log('MMIBKR_OPERATOR_CONSOLE_MONOTONIC_SNAPSHOT_FRESHNESS=PASS');
 
+
+const decisionUrl = 'https://mmibkr-operator-console.slenderiq.workers.dev/api/promotion-review/decision';
+function decisionRequest(headers = {}, url = decisionUrl) {
+  return new Request(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: '{}',
+  });
+}
+const decisionOrigin = new URL(decisionUrl).origin;
+assert.equal(operatorDecisionRequestIsSameOrigin(decisionRequest({
+  origin: decisionOrigin, 'sec-fetch-site': 'same-origin',
+})), true, 'authenticated same-origin browser JSON is eligible for the existing Access gate');
+assert.equal(operatorDecisionRequestIsSameOrigin(decisionRequest({
+  origin: decisionOrigin, 'sec-fetch-site': 'same-origin',
+  'content-type': 'application/json; charset=UTF-8',
+})), true, 'normal JSON charset is accepted');
+for (const [label, headers] of [
+  ['missing origin', {}],
+  ['cross-site origin', { origin: 'https://attacker.example', 'sec-fetch-site': 'cross-site' }],
+  ['same-site subdomain', { origin: 'https://other.slenderiq.workers.dev', 'sec-fetch-site': 'same-site' }],
+  ['forged same-origin with cross-site metadata', { origin: decisionOrigin, 'sec-fetch-site': 'cross-site' }],
+  ['HTML form content', { origin: decisionOrigin, 'sec-fetch-site': 'same-origin', 'content-type': 'text/plain' }],
+  ['form encoded content', { origin: decisionOrigin, 'sec-fetch-site': 'same-origin', 'content-type': 'application/x-www-form-urlencoded' }],
+]) {
+  assert.equal(operatorDecisionRequestIsSameOrigin(decisionRequest(headers)), false, label);
+}
+assert.equal(operatorDecisionRequestIsSameOrigin(decisionRequest({
+  origin: decisionOrigin, 'sec-fetch-site': 'same-origin',
+}, 'https://another.example/api/promotion-review/decision')), false, 'host confusion is rejected');
+console.log('MMIBKR_OPERATOR_CONSOLE_DECISION_SAME_ORIGIN=PASS');
