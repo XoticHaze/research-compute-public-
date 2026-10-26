@@ -287,6 +287,26 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
     pos = x.get("current_positions", {}).get("challenger", {})
     session_stats = _challenger_session_stats(fwd)
     matched_complete = session_stats["complete"]
+    basis = fwd.get("comparison_cost_basis") or {}
+    both_net = (
+        matched_complete
+        and basis.get("challenger_minus_incumbent_cumulative")
+            == "CHALLENGER_NET_IF_FLATTENED_NOW_MINUS_UNCHANGED_INCUMBENT_NET"
+        and basis.get("challenger_minus_matched_cumulative")
+            == "BOTH_NET_IF_FLATTENED_NOW"
+        and basis.get("legacy_pre_exit_spreads_not_used") is True
+    )
+    challenger_nav = metrics.get("cumulative_return")
+    incumbent_nav = (fwd.get("incumbent") or {}).get("cumulative_return")
+    matched_nav = (fwd.get("matched_control_if_flattened_now") or {}).get("cumulative_return")
+    incumbent_relative, _ = (
+        _funded_excess_metrics(incumbent_nav, challenger_nav)
+        if both_net else (None, None)
+    )
+    matched_relative, _ = (
+        _funded_excess_metrics(matched_nav, challenger_nav)
+        if both_net else (None, None)
+    )
     return {
         "program_id": program_id,
         "kind": "portfolio_diversification_challenger",
@@ -301,6 +321,14 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
         "forward_days": days,
         "scorecard": {
             "challenger_cumulative_bps": _bp(metrics.get("cumulative_return")),
+            # Preserve legacy common-capital differences. Wealth ratios are
+            # separate metrics, never substituted for the published fields.
+            "matched_cost_basis": "BOTH_NET_IF_FLATTENED_NOW" if both_net else "UNADMITTED_OR_INCOMPLETE",
+            "challenger_absolute_net_if_flattened_now_bps": _bp(challenger_nav) if both_net else None,
+            "incumbent_absolute_net_if_flattened_now_bps": _bp(incumbent_nav) if both_net else None,
+            "matched_control_absolute_net_if_flattened_now_bps": _bp(matched_nav) if both_net else None,
+            "challenger_vs_incumbent_relative_wealth_bps": _bp(incumbent_relative),
+            "challenger_vs_matched_control_relative_wealth_bps": _bp(matched_relative),
             "excess_vs_incumbent_bps": _bp(fwd.get("challenger_minus_incumbent_cumulative")) if matched_complete else None,
             "excess_vs_matched_cash_control_bps": _bp(fwd.get("challenger_minus_matched_cumulative")) if matched_complete else None,
             "matched_observation_integrity": "COMPLETE" if matched_complete else "INCOMPLETE_FAIL_CLOSED",
@@ -1306,6 +1334,43 @@ def self_test() -> None:
         missing_reference = build(root)["freshness"]
         assert missing_reference["forward_source_reference_state"] == "NO_INDEPENDENT_COMPLETED_SESSION"
         assert missing_reference["freshness_gap_visible"] is True
+
+    # The new P558/JAAA wealth ratios require explicit both-net source basis,
+    # matched observation completeness and valid funded terminal NAVs.
+    challenger = {
+        "current_positions": {"challenger": {"KMLM": 0.5}},
+        "forward": {
+            "challenger_if_flattened_now": {"days": 1, "cumulative_return": -0.02054759529211936},
+            "incumbent": {"cumulative_return": -0.0298141670103782},
+            "matched_control_if_flattened_now": {"cumulative_return": -0.017146162108331087},
+            "challenger_minus_incumbent_cumulative": 0.009266571718258843,
+            "challenger_minus_matched_cumulative": -0.0034014331837882716,
+            "challenger_observations": [{"date": "2026-10-23", "net_return": 0.01, "core_return": 0.02}],
+            "matched_control_observations": [{"date": "2026-10-23", "net_return": 0.012}],
+            "comparison_cost_basis": {
+                "challenger_minus_incumbent_cumulative":
+                    "CHALLENGER_NET_IF_FLATTENED_NOW_MINUS_UNCHANGED_INCUMBENT_NET",
+                "challenger_minus_matched_cumulative": "BOTH_NET_IF_FLATTENED_NOW",
+                "legacy_pre_exit_spreads_not_used": True,
+            },
+        },
+    }
+    matched = _challenger(challenger, "P558", "KMLM")["scorecard"]
+    assert matched["matched_cost_basis"] == "BOTH_NET_IF_FLATTENED_NOW"
+    assert matched["challenger_absolute_net_if_flattened_now_bps"] == -205.48
+    assert matched["incumbent_absolute_net_if_flattened_now_bps"] == -298.14
+    assert matched["matched_control_absolute_net_if_flattened_now_bps"] == -171.46
+    assert matched["challenger_vs_incumbent_relative_wealth_bps"] == 95.51
+    assert matched["challenger_vs_matched_control_relative_wealth_bps"] == -34.61
+    challenger["forward"]["comparison_cost_basis"]["legacy_pre_exit_spreads_not_used"] = False
+    held = _challenger(challenger, "P558", "KMLM")["scorecard"]
+    assert held["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
+    assert held["challenger_vs_incumbent_relative_wealth_bps"] is None
+    challenger["forward"]["comparison_cost_basis"]["legacy_pre_exit_spreads_not_used"] = True
+    challenger["forward"]["matched_control_observations"] = []
+    held = _challenger(challenger, "P558", "KMLM")["scorecard"]
+    assert held["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
+    assert held["challenger_vs_matched_control_relative_wealth_bps"] is None
 
     # Generic producer artifacts can be duplicated by nested artifact download.
     # Byte-identical transport copies are harmless, but conflicting copies
