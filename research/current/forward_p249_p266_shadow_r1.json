@@ -61,7 +61,446 @@
   "forward": {
     "economic_continuity_verified": true,
     "first_close": "2026-09-10",
+    "implicit_target_reset_turnover_audit": {
+      "arms": {
+        "p249_core": {
+          "intramonth_one_way_turnover": 0.160084957321815,
+          "intramonth_reset_count": 30,
+          "month_boundary_count": 1,
+          "month_boundary_one_way_turnover": 0.0018674474041006466
+        },
+        "p249_plus_p266": {
+          "intramonth_one_way_turnover": 0.1767641414073938,
+          "intramonth_reset_count": 30,
+          "month_boundary_count": 1,
+          "month_boundary_one_way_turnover": 0.08447999792544161
+        }
+      },
+      "not_actual_trades_or_funded_monthly_hold": true,
+      "not_fee_adjusted_or_alpha_credit": true,
+      "scored_sessions": 32,
+      "source": "exact_already_scored_daily_returns_and_frozen_month_targets",
+      "status": "DIAGNOSTIC_ONLY_UNCHARGED_IMPLICIT_RESETS",
+      "transitions": 31
+    },
     "latest_close": "2026-10-23",
+    "monthly_hold_drift_diagnostic": {
+      "arms": {
+        "p249_core": {
+          "cumulative_return": -0.049352626655635,
+          "daily_nav": [
+            {
+              "date": "2026-09-10",
+              "holding_month": "2026-09",
+              "monthly_rebalance": true,
+              "nav": 0.9831942104598542
+            },
+            {
+              "date": "2026-09-11",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 0.9918772816083223
+            },
+            {
+              "date": "2026-09-14",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 0.9706530710597274
+            },
+            {
+              "date": "2026-09-15",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 0.9706044069586844
+            },
+            {
+              "date": "2026-09-16",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 0.9697788340960598
+            },
+            {
+              "date": "2026-09-17",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 0.9866240084364223
+            },
+            {
+              "date": "2026-09-18",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 0.9942946338725743
+            },
+            {
+              "date": "2026-09-21",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 1.0169997919435225
+            },
+            {
+              "date": "2026-09-22",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 1.0297437782719079
+            },
+            {
+              "date": "2026-09-23",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 1.018710414990562
+            },
+            {
+              "date": "2026-09-24",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 1.0189436222748303
+            },
+            {
+              "date": "2026-09-25",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 1.023353914680182
+            },
+            {
+              "date": "2026-09-28",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 1.010665410841164
+            },
+            {
+              "date": "2026-09-29",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 1.012620429933028
+            },
+            {
+              "date": "2026-09-30",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 1.0141847474718555
+            },
+            {
+              "date": "2026-10-01",
+              "holding_month": "2026-10",
+              "monthly_rebalance": true,
+              "nav": 1.0205634239994401
+            },
+            {
+              "date": "2026-10-02",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 1.0325990639807403
+            },
+            {
+              "date": "2026-10-05",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 1.0357023956228197
+            },
+            {
+              "date": "2026-10-06",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 1.0355090713838888
+            },
+            {
+              "date": "2026-10-07",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 1.02559650841357
+            },
+            {
+              "date": "2026-10-08",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 1.012371770671256
+            },
+            {
+              "date": "2026-10-09",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 1.0139965472587682
+            },
+            {
+              "date": "2026-10-12",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 1.0023657319646815
+            },
+            {
+              "date": "2026-10-13",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 1.0018260275565622
+            },
+            {
+              "date": "2026-10-14",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.9769122019246749
+            },
+            {
+              "date": "2026-10-15",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.9774585417197568
+            },
+            {
+              "date": "2026-10-16",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.9572486441384858
+            },
+            {
+              "date": "2026-10-19",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.9648305700525438
+            },
+            {
+              "date": "2026-10-20",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.967710425745822
+            },
+            {
+              "date": "2026-10-21",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.9767189805255534
+            },
+            {
+              "date": "2026-10-22",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.9485400467306431
+            },
+            {
+              "date": "2026-10-23",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.950647373344365
+            }
+          ],
+          "legacy_monthly_fee_nav_total": 0.0036666666666666653,
+          "max_drawdown": -0.08415771679253636,
+          "monthly_rebalances_including_initial": 2,
+          "realized_month_boundary_one_way_turnover_including_initial": 1.0225239905610803,
+          "terminal_nav": 0.950647373344365
+        },
+        "p249_plus_p266": {
+          "cumulative_return": -0.04463404663234438,
+          "daily_nav": [
+            {
+              "date": "2026-09-10",
+              "holding_month": "2026-09",
+              "monthly_rebalance": true,
+              "nav": 0.9823614010104881
+            },
+            {
+              "date": "2026-09-11",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 0.990478441793945
+            },
+            {
+              "date": "2026-09-14",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 0.9705791855559317
+            },
+            {
+              "date": "2026-09-15",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 0.9683375994894441
+            },
+            {
+              "date": "2026-09-16",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 0.9676811984024138
+            },
+            {
+              "date": "2026-09-17",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 0.9868397708246467
+            },
+            {
+              "date": "2026-09-18",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 0.9920616936477621
+            },
+            {
+              "date": "2026-09-21",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 1.0136454542753592
+            },
+            {
+              "date": "2026-09-22",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 1.0282618555619807
+            },
+            {
+              "date": "2026-09-23",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 1.012287118716406
+            },
+            {
+              "date": "2026-09-24",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 1.0129843043301987
+            },
+            {
+              "date": "2026-09-25",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 1.0177401579721383
+            },
+            {
+              "date": "2026-09-28",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 1.0078188868153921
+            },
+            {
+              "date": "2026-09-29",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 1.0088206664299448
+            },
+            {
+              "date": "2026-09-30",
+              "holding_month": "2026-09",
+              "monthly_rebalance": false,
+              "nav": 1.0090770416967236
+            },
+            {
+              "date": "2026-10-01",
+              "holding_month": "2026-10",
+              "monthly_rebalance": true,
+              "nav": 1.0150678412789902
+            },
+            {
+              "date": "2026-10-02",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 1.0273484044659553
+            },
+            {
+              "date": "2026-10-05",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 1.0313351175823768
+            },
+            {
+              "date": "2026-10-06",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 1.0298012948995645
+            },
+            {
+              "date": "2026-10-07",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 1.0203536759569594
+            },
+            {
+              "date": "2026-10-08",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 1.009242929236866
+            },
+            {
+              "date": "2026-10-09",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 1.0118799960504417
+            },
+            {
+              "date": "2026-10-12",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 1.0002620022153046
+            },
+            {
+              "date": "2026-10-13",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 1.0000961171740974
+            },
+            {
+              "date": "2026-10-14",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.9762706836231212
+            },
+            {
+              "date": "2026-10-15",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.9768635357189364
+            },
+            {
+              "date": "2026-10-16",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.9582073839646738
+            },
+            {
+              "date": "2026-10-19",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.9666279683371068
+            },
+            {
+              "date": "2026-10-20",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.9721952116679894
+            },
+            {
+              "date": "2026-10-21",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.9797310486012024
+            },
+            {
+              "date": "2026-10-22",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.9523956137429365
+            },
+            {
+              "date": "2026-10-23",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.9553659533676556
+            }
+          ],
+          "legacy_monthly_fee_nav_total": 0.004420448767373635,
+          "max_drawdown": -0.0765410800947881,
+          "monthly_rebalances_including_initial": 2,
+          "realized_month_boundary_one_way_turnover_including_initial": 1.1005965690167108,
+          "terminal_nav": 0.9553659533676556
+        }
+      },
+      "legacy_month_costs_preserved_not_actual_drift_turnover_pricing": true,
+      "matched_relative_wealth_bp": 49.63543954989991,
+      "monthly_drift_minus_constant_target_relative_bp": 3.429647786152845,
+      "no_new_original_issuer_or_execution_provenance": true,
+      "not_broker_or_alpha_credit": true,
+      "original_constant_target_relative_wealth_bp": 46.20579176374706,
+      "scored_sessions": 32,
+      "source": "exact_existing_yfinance_adjusted_close_scored_returns_and_frozen_month_targets",
+      "status": "SAME_SOURCE_MONTHLY_HOLD_DRIFT_DIAGNOSTIC"
+    },
     "observations": [
       {
         "cost_detail": {
@@ -414,13 +853,13 @@
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-10-25T14:56:42.525662+00:00",
+  "observed_at": "2026-10-26T04:57:11.223959+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_health": {
     "all_symbols_share_latest_date": true,
     "common_session_lags_source_max": false,
-    "completed_session_request_date": "2026-10-24",
+    "completed_session_request_date": "2026-10-25",
     "in_progress_session_excluded": true,
     "lagging_symbols_vs_source_max": [],
     "latest_by_symbol": {
