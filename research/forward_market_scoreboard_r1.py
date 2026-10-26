@@ -307,10 +307,44 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
             and math.isfinite(numeric * 10000.0)
         )
 
+    def replayed_nav(rows: list[dict[str, Any]], key: str, exit_fee: float) -> float | None:
+        # The producer publishes daily net returns BEFORE its final 25bp
+        # flattening fee. Recompute all three books rather than trusting a
+        # declared cost basis plus unrelated finite terminal NAVs.
+        if not rows:
+            return None
+        wealth = 1.0
+        for index, row in enumerate(rows):
+            try:
+                daily = float(row[key]) - (exit_fee if index == len(rows) - 1 else 0.0)
+                wealth *= 1.0 + daily
+            except (KeyError, TypeError, ValueError, OverflowError):
+                return None
+            if not math.isfinite(wealth) or wealth <= 0.0:
+                return None
+        return wealth - 1.0
+
+    nav_reconciled = False
+    if matched_complete and days > 0 and all(
+        admitted_nav(nav) for nav in (challenger_nav, incumbent_nav, matched_nav)
+    ):
+        challenger_rows = fwd["challenger_observations"]
+        matched_rows = fwd["matched_control_observations"]
+        expected = (
+            replayed_nav(challenger_rows, "net_return", 0.0025),
+            replayed_nav(challenger_rows, "core_return", 0.0),
+            replayed_nav(matched_rows, "net_return", 0.0025),
+        )
+        nav_reconciled = all(
+            value is not None and math.isfinite(value)
+            and math.isclose(value, published, rel_tol=1e-10, abs_tol=1e-10)
+            for value, published in zip(expected, (challenger_nav, incumbent_nav, matched_nav))
+        )
+
     both_net = (
         matched_complete
         and days > 0
-        and all(admitted_nav(nav) for nav in (challenger_nav, incumbent_nav, matched_nav))
+        and nav_reconciled
         and basis.get("challenger_minus_incumbent_cumulative")
             == "CHALLENGER_NET_IF_FLATTENED_NOW_MINUS_UNCHANGED_INCUMBENT_NET"
         and basis.get("challenger_minus_matched_cumulative")
@@ -352,6 +386,7 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
             # Preserve legacy common-capital differences. Wealth ratios are
             # separate metrics, never substituted for the published fields.
             "matched_cost_basis": "BOTH_NET_IF_FLATTENED_NOW" if both_net else "UNADMITTED_OR_INCOMPLETE",
+            "funded_nav_reconciliation": "PASS_THREE_BOOKS" if nav_reconciled else "FAIL_CLOSED",
             "challenger_absolute_net_if_flattened_now_bps": _bp(challenger_nav) if both_net else None,
             "incumbent_absolute_net_if_flattened_now_bps": _bp(incumbent_nav) if both_net else None,
             "matched_control_absolute_net_if_flattened_now_bps": _bp(matched_nav) if both_net else None,
@@ -1373,8 +1408,8 @@ def self_test() -> None:
             "matched_control_if_flattened_now": {"cumulative_return": -0.017146162108331087},
             "challenger_minus_incumbent_cumulative": 0.009266571718258843,
             "challenger_minus_matched_cumulative": -0.0034014331837882716,
-            "challenger_observations": [{"date": "2026-10-23", "net_return": 0.01, "core_return": 0.02}],
-            "matched_control_observations": [{"date": "2026-10-23", "net_return": 0.012}],
+            "challenger_observations": [{"date": "2026-10-23", "net_return": -0.01804759529211936, "core_return": -0.0298141670103782}],
+            "matched_control_observations": [{"date": "2026-10-23", "net_return": -0.014646162108331087}],
             "comparison_cost_basis": {
                 "challenger_minus_incumbent_cumulative":
                     "CHALLENGER_NET_IF_FLATTENED_NOW_MINUS_UNCHANGED_INCUMBENT_NET",
@@ -1390,6 +1425,15 @@ def self_test() -> None:
     assert matched["matched_control_absolute_net_if_flattened_now_bps"] == -171.46
     assert matched["challenger_vs_incumbent_relative_wealth_bps"] == 95.51
     assert matched["challenger_vs_matched_control_relative_wealth_bps"] == -34.61
+    # Complete, finite rows with a mismatched funded terminal NAV are not
+    # independent both-net evidence; a self-declared basis cannot rescue them.
+    original_incumbent = challenger["forward"]["incumbent"]["cumulative_return"]
+    challenger["forward"]["incumbent"]["cumulative_return"] += 0.001
+    tampered = _challenger(challenger, "P558", "KMLM")["scorecard"]
+    assert tampered["funded_nav_reconciliation"] == "FAIL_CLOSED"
+    assert tampered["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
+    challenger["forward"]["incumbent"]["cumulative_return"] = original_incumbent
+
     challenger["forward"]["comparison_cost_basis"]["legacy_pre_exit_spreads_not_used"] = False
     held = _challenger(challenger, "P558", "KMLM")["scorecard"]
     assert held["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
@@ -1410,10 +1454,10 @@ def self_test() -> None:
     # even when source metadata and matched rows look complete.
     challenger["forward"]["challenger_if_flattened_now"]["days"] = 1
     challenger["forward"]["challenger_observations"] = [
-        {"date": "2026-10-23", "net_return": 0.01, "core_return": 0.02}
+        {"date": "2026-10-23", "net_return": -0.01804759529211936, "core_return": -0.0298141670103782}
     ]
     challenger["forward"]["matched_control_observations"] = [
-        {"date": "2026-10-23", "net_return": 0.012}
+        {"date": "2026-10-23", "net_return": -0.014646162108331087}
     ]
     for key, invalid_nav in (
         ("incumbent", None),
