@@ -314,7 +314,7 @@ function snapshotSourceSha(node) {
   return String(node?.runtime?.source_sha || '').trim().toLowerCase();
 }
 
-function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
+export function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
   const previous = previousRecord?.snapshot;
   if (!previous || typeof previous !== 'object' || Array.isArray(previous)) {
     return {
@@ -341,9 +341,40 @@ function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
     ? incomingSnapshot.runtimes
     : [];
   const merged = new Map();
+  const incomingIds = new Set(incomingRuntimes.map((row) => String(row?.runtime_id || '').trim()));
   for (const row of previousRuntimes) {
     const runtimeId = String(row?.runtime_id || '').trim();
-    if (runtimeId) merged.set(runtimeId, row);
+    if (!runtimeId || incomingIds.has(runtimeId)) continue;
+    // A prior source-matched runtime is retained for navigation only. It is
+    // NOT a new bar, position, quote, actionable signal or live owner proof.
+    // The top-level generated_at_utc belongs to the incoming snapshot.
+    merged.set(runtimeId, {
+      ...row,
+      state: 'unobserved',
+      position: null,
+      broker_symbol_position: null,
+      broker_symbol_position_observed: false,
+      position_ownership: {
+        ...(row?.position_ownership && typeof row.position_ownership === 'object' ? row.position_ownership : {}),
+        attributed: false,
+        attribution_unverified_this_boundary: true,
+        carried_from_previous_snapshot: true,
+      },
+      last_action: 'NOT_OBSERVED',
+      candidate_ready: false,
+      broker_action: false,
+      primary_metric: null,
+      conditions: [],
+      position_context: null,
+      market_context: { features: [], quote: null },
+      data_health: {
+        ...(row?.data_health && typeof row.data_health === 'object' ? row.data_health : {}),
+        current: false,
+        observed_this_boundary: false,
+        not_due_this_boundary: true,
+        carried_from_previous_snapshot: true,
+      },
+    });
   }
   for (const row of incomingRuntimes) {
     const runtimeId = String(row?.runtime_id || '').trim();

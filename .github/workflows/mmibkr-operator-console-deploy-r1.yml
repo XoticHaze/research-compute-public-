@@ -49,10 +49,15 @@ jobs:
         with:
           python-version: '3.11.16'
 
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+
       - name: Validate Worker and deploy contracts
         run: |
           set -euo pipefail
           node --check cloudflare/operator-console/src/index.js
+          node tests/operator_console_runtime_union_freshness_contract.mjs
           node --check cloudflare/operator-console/src/promotion_review_state.js
           node tests/promotion_review_state_contract.mjs
           python -m unittest -v \
