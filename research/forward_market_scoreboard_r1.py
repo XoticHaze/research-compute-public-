@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
@@ -32,17 +33,32 @@ def _load(root: Path, name: str) -> dict[str, Any] | None:
 
 
 def _load_native_adapters(root: Path) -> dict[str, dict[str, Any]]:
+    """Never select a native program by filesystem enumeration order.
+
+    Identical byte-for-byte transport copies are harmless. Conflicting
+    first-seen program identities must fail before scoreboard construction.
+    """
     out: dict[str, dict[str, Any]] = {}
+    seen_sha256: dict[str, str] = {}
     for path in root.rglob("*.json"):
         try:
-            payload = json.loads(path.read_text())
+            raw = path.read_bytes()
+            payload = json.loads(raw)
         except (json.JSONDecodeError, UnicodeDecodeError):
             continue
-        if payload.get("schema") != ADAPTER_SCHEMA:
+        if not isinstance(payload, dict) or payload.get("schema") != ADAPTER_SCHEMA:
             continue
         program_id = str(payload.get("program_id") or "")
-        if program_id in EXPECTED_PRIVATE_ADAPTERS:
-            out[program_id] = payload
+        if program_id not in EXPECTED_PRIVATE_ADAPTERS:
+            continue
+        digest = hashlib.sha256(raw).hexdigest()
+        if program_id in seen_sha256:
+            if seen_sha256[program_id] != digest:
+                # Do not echo source paths, raw payloads or private identifiers.
+                raise ValueError(f"DUPLICATE_NATIVE_ADAPTER_PROGRAM_ID:{program_id}")
+            continue
+        seen_sha256[program_id] = digest
+        out[program_id] = payload
     return out
 
 
@@ -1249,6 +1265,32 @@ def self_test() -> None:
         assert missing_reference["forward_source_reference_state"] == "NO_INDEPENDENT_COMPLETED_SESSION"
         assert missing_reference["freshness_gap_visible"] is True
 
+        # Consume the independently accepted #2006 duplicate-native-adapter
+        # identity guard in the selected #2012 composite without changing its
+        # matched-book, source freshness, or economic projection semantics.
+        duplicate_dir = root / "shadow-native"
+        duplicate_dir.mkdir()
+        original_adapter = root / "forward_program_adapter_0.json"
+        duplicate_adapter = duplicate_dir / "duplicate.json"
+        duplicate_adapter.write_bytes(original_adapter.read_bytes())
+        assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
+        duplicate_adapter.write_text(json.dumps(dict(semi, signal_date="2026-10-23")))
+        for original_payload, duplicate_payload in (
+            (semi, dict(semi, signal_date="2026-10-23")),
+            (dict(semi, signal_date="2026-10-23"), semi),
+        ):
+            original_adapter.write_text(json.dumps(original_payload))
+            duplicate_adapter.write_text(json.dumps(duplicate_payload))
+            for loader in (_load_native_adapters, build):
+                try:
+                    loader(root)
+                except ValueError as exc:
+                    assert str(exc) == "DUPLICATE_NATIVE_ADAPTER_PROGRAM_ID:SEMICONDUCTOR_SHARED_RIDGE"
+                else:
+                    raise AssertionError("conflicting native program identity was silently accepted")
+        duplicate_adapter.unlink()
+        original_adapter.write_text(json.dumps(semi))
+        assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
     print("FORWARD_MARKET_SCOREBOARD_SELF_TEST=PASS")
 
 
