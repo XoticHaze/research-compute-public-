@@ -108,7 +108,43 @@ jobs:
           )
           with urlopen(b1_req, timeout=30) as response:
               b1_body=json.loads(response.read().decode())
-          cooldown=evaluate_b1_failure_cooldown(b1_body.get('workflow_runs') or [])
+          # A failed run summary cannot identify a broker dependency failure.
+          # Independently read GitHub's actual job/step evidence for at most
+          # three newest failed B1 runs. Missing/zero-step evidence stays
+          # unclassified; it must never trigger a broker-dependency cooldown.
+          b1_runs=b1_body.get('workflow_runs') or []
+          job_evidence={}
+          failed_b1=sorted(
+              (run for run in b1_runs
+               if run.get('event') == 'workflow_dispatch'
+               and run.get('head_branch') == 'ibkr-b1-authority-v1'
+               and run.get('status') == 'completed'
+               and run.get('conclusion') == 'failure'),
+              key=lambda run: str(run.get('created_at') or ''),
+              reverse=True,
+          )
+          for failed_run in failed_b1[:3]:
+              run_id=str(failed_run.get('id') or '')
+              if not run_id.isdigit():
+                  continue
+              jobs_req=Request(
+                  f'https://api.github.com/repos/{repo}/actions/runs/{run_id}/jobs?per_page=100',
+                  headers=headers,
+              )
+              try:
+                  with urlopen(jobs_req, timeout=30) as response:
+                      jobs_node=json.loads(response.read().decode())
+                  job_evidence[run_id]=jobs_node.get('jobs') if isinstance(jobs_node, dict) else []
+              except (HTTPError, OSError, ValueError):
+                  job_evidence[run_id]=[]
+                  print('MMIBKR_CLOUD_WATCHDOG_B1_JOB_EVIDENCE_UNAVAILABLE=1')
+          cooldown=evaluate_b1_failure_cooldown(
+              b1_runs, job_evidence_by_run_id=job_evidence,
+          )
+          if cooldown.get('reason') == 'b1_failure_unclassified':
+              print('MMIBKR_CLOUD_WATCHDOG=B1_FAILURE_UNCLASSIFIED')
+              print('MMIBKR_CLOUD_WATCHDOG_B1_UNCLASSIFIED_RUN_ID='
+                    +str(cooldown.get('unclassified_failure_run_id') or ''))
           if cooldown.get('suppress') is True:
               print('MMIBKR_CLOUD_WATCHDOG=broker_dependency_cooldown')
               print('MMIBKR_CLOUD_WATCHDOG_COOLDOWN_REASON='+str(cooldown.get('reason') or ''))
