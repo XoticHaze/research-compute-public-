@@ -60,8 +60,8 @@
       "max_drawdown": -0.039714966345062885,
       "sharpe_rf0": -1.4153923160979844
     },
-    "challenger_minus_incumbent_cumulative": 0.015111066425714803,
-    "challenger_minus_matched_cumulative": -1.6363876153113743e-05,
+    "challenger_minus_incumbent_cumulative": 0.012651266515553483,
+    "challenger_minus_matched_cumulative": -1.673838649363102e-05,
     "challenger_observations": [
       {
         "alt_return": 0.0007907532676403317,
@@ -436,6 +436,11 @@
         "post_close_core_weight": 0.4849624142368807
       }
     ],
+    "comparison_cost_basis": {
+      "challenger_minus_incumbent_cumulative": "CHALLENGER_NET_IF_FLATTENED_NOW_MINUS_UNCHANGED_INCUMBENT_NET",
+      "challenger_minus_matched_cumulative": "BOTH_NET_IF_FLATTENED_NOW",
+      "legacy_pre_exit_spreads_not_used": true
+    },
     "first_close": "2026-09-11",
     "incumbent": {
       "annualized_vol": 0.1949855911919894,
@@ -827,7 +832,7 @@
       }
     ]
   },
-  "observed_at": "2026-10-26T06:51:21.942956+00:00",
+  "observed_at": "2026-10-26T18:00:53.353351+00:00",
   "operator_note": "Research shadow only. Always display diversification deltas together with capital opportunity cost versus the unchanged incumbent. No allocation, runtime, broker, or live-trading authority.",
   "parent": "SENIOR_CLO_CARRY_ALPHA / P249+P266",
   "schema": "research.forward_senior_clo_current_core_shadow_r1",
