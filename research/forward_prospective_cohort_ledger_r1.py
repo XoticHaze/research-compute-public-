@@ -591,6 +591,13 @@ def _expression_variant_metrics(
             "ticker_book_net_return_bps": round(net, 4),
             "excess_vs_smh_bps": round(net - smh_bps, 4),
             "excess_vs_smh_net_bps": round(net - (smh_bps - industry_cost_bps), 4),
+            "comparison_cost_basis": {
+                "excess_vs_smh_bps": "MIXED_TICKER_NET_MINUS_SMH_GROSS_LEGACY",
+                "excess_vs_smh_net_bps": "MATCHED_TICKER_NET_MINUS_SMH_NET",
+                "excess_vs_qqq_bps": "MIXED_TICKER_NET_MINUS_QQQ_GROSS_NO_QQQ_FEE",
+                "excess_vs_equal_weight_universe_bps": "MIXED_TICKER_NET_MINUS_EQUAL_WEIGHT_GROSS",
+                "excess_vs_equal_weight_universe_net_bps": "MATCHED_TICKER_NET_MINUS_EQUAL_WEIGHT_NET",
+            },
             "excess_vs_qqq_bps": round(net - qqq_bps, 4),
             "excess_vs_equal_weight_universe_bps": round(
                 net - equal_weight_universe_bps, 4
@@ -667,8 +674,25 @@ def _resolve_semiconductor(cohort: dict[str, Any], prices: dict[str, pd.Series],
             "ticker_positive_hit_rate": round(sum(bool(row["sign_hit_current"]) for row in marks.values()) / len(marks), 6),
             "ticker_book_net_if_flattened_now_bps": round(ticker_net, 4),
             "ticker_book_matched_excess_vs_smh_bps": round(ticker_net - smh, 4),
+            "ticker_book_matched_excess_vs_smh_net_if_flattened_now_bps": round(
+                ticker_net - (smh - float(cohort["industry_round_trip_cost_bps"])), 4
+            ),
             "ticker_book_opportunity_excess_vs_qqq_bps": round(ticker_net - qqq, 4),
             "ticker_book_excess_vs_equal_weight_universe_bps": round(ticker_net - ew, 4),
+            "ticker_book_excess_vs_equal_weight_universe_net_if_flattened_now_bps": round(
+                ticker_net - (ew - stock_cost), 4
+            ),
+            "comparison_cost_basis": {
+                "ticker_book_matched_excess_vs_smh_bps": "MIXED_TICKER_NET_MINUS_SMH_GROSS_LEGACY",
+                "ticker_book_matched_excess_vs_smh_net_if_flattened_now_bps": "MATCHED_BOTH_NET_IF_FLATTENED_NOW",
+                "ticker_book_opportunity_excess_vs_qqq_bps": "MIXED_TICKER_NET_MINUS_QQQ_GROSS_NO_QQQ_FEE",
+                "ticker_book_excess_vs_equal_weight_universe_bps": "MIXED_TICKER_NET_MINUS_EQUAL_WEIGHT_GROSS",
+                "ticker_book_excess_vs_equal_weight_universe_net_if_flattened_now_bps": "MATCHED_BOTH_NET_IF_FLATTENED_NOW",
+            },
+            "smh_net_if_flattened_now_bps": round(
+                smh - float(cohort["industry_round_trip_cost_bps"]), 4
+            ),
+            "equal_weight_universe_net_if_flattened_now_bps": round(ew - stock_cost, 4),
             "smh_return_bps": round(smh, 4),
             "qqq_return_bps": round(qqq, 4),
             "equal_weight_universe_return_bps": round(ew, 4),
@@ -752,6 +776,13 @@ def _resolve_semiconductor(cohort: dict[str, Any], prices: dict[str, pd.Series],
             },
             "ticker_book_excess_vs_smh_bps": round(ticker_net - smh, 4),
             "ticker_book_excess_vs_smh_net_bps": round(ticker_net - industry_net, 4),
+            "comparison_cost_basis": {
+                "ticker_book_excess_vs_smh_bps": "MIXED_TICKER_NET_MINUS_SMH_GROSS_LEGACY",
+                "ticker_book_excess_vs_smh_net_bps": "MATCHED_TICKER_NET_MINUS_SMH_NET",
+                "ticker_book_excess_vs_qqq_bps": "MIXED_TICKER_NET_MINUS_QQQ_GROSS_NO_QQQ_FEE",
+                "ticker_book_excess_vs_equal_weight_13_bps": "MIXED_TICKER_NET_MINUS_EQUAL_WEIGHT_GROSS",
+                "ticker_book_excess_vs_equal_weight_13_net_bps": "MATCHED_TICKER_NET_MINUS_EQUAL_WEIGHT_NET",
+            },
             "ticker_book_excess_vs_qqq_bps": round(ticker_net - qqq, 4),
             "ticker_book_excess_vs_equal_weight_13_bps": round(ticker_net - ew13, 4),
             "ticker_book_excess_vs_equal_weight_13_net_bps": round(ticker_net - ew13_net, 4),
