@@ -1,8 +1,9 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "04848626b1627d9db48d3eb001be2191796c4be9",
+  "source_ref": "589f80597bb8662324eeb824d094055276e6c247",
   "test_modules": [
-    "tests.test_selected_runtime_live_order_intent_journal_v1"
+    "tests.test_selected_runtime_initial_backfill_ingest_v1",
+    "tests.test_autotuner_parameter_consumption"
   ],
   "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
@@ -11,8 +12,8 @@
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-20261024-clockin-20261024162001495",
-  "purpose": "Exact Product #1007 P0 paper/alias account PREPARED fail-close networkless selected journal test, existing encrypted Source Vault; no broker/live/deploy",
+  "requested_by": "manual-worker-exact-589f-networkless-20261026220756737",
+  "purpose": "Native network-isolated tests for #975 589f latest backfill stock preflight cache-write ordering and AutoTuner parameter consumption, admitted encrypted Source Vault 40411198616, no broker/live/deploy",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -20,8 +21,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "release-p0-journal-1007-04848626-20261024-r1",
+  "request_nonce": "manual-worker-589f-backfill-autotuner-20261026-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "04848626b1627d9db48d3eb001be2191796c4be9",
+  "current_private_reference": "589f80597bb8662324eeb824d094055276e6c247",
   "parity_public_key_b64": ""
 }
