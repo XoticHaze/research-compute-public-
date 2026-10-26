@@ -191,12 +191,48 @@ def validate_package_contract(ui_root: Path) -> dict[str, Any]:
     }
 
 
+_SAFE_VITE_FAILURE_CLASSES = frozenset({
+    "IMPORT_RESOLUTION", "EXPORT_BINDING", "SOURCE_SYNTAX",
+    "RESOURCE_EXHAUSTION", "BUNDLER_ERROR_OTHER", "UNCLASSIFIED",
+})
+
+
+def _safe_vite_failure_class(log_path: Path) -> str:
+    """Fixed enum only; never return private paths, source, stderr or snippets."""
+    try:
+        value = log_path.read_bytes()[:65536].decode("utf-8", errors="replace").lower()
+    except OSError:
+        return "UNCLASSIFIED"
+    if any(token in value for token in (
+        "could not resolve", "failed to resolve import", "cannot find module",
+        "module not found", "could not load",
+    )):
+        return "IMPORT_RESOLUTION"
+    if any(token in value for token in (
+        "not exported by", "does not provide an export named",
+        "is not exported", "missing export",
+    )):
+        return "EXPORT_BINDING"
+    if any(token in value for token in (
+        "unexpected token", "syntax error", "parse error", "transform failed",
+    )):
+        return "SOURCE_SYNTAX"
+    if any(token in value for token in (
+        "heap out of memory", "allocation failed", "out of memory",
+    )):
+        return "RESOURCE_EXHAUSTION"
+    if "error during build" in value or "build failed" in value:
+        return "BUNDLER_ERROR_OTHER"
+    return "UNCLASSIFIED"
+
+
 def _run_captured(
     command: list[str],
     *,
     cwd: Path,
     log_path: Path,
     timeout: int,
+    diagnose_vite: bool = False,
 ) -> dict[str, Any]:
     with log_path.open("wb") as handle:
         proc = subprocess.run(
@@ -210,13 +246,20 @@ def _run_captured(
         )
     digest = _sha256(log_path)
     size = log_path.stat().st_size
+    failure_class = (
+        _safe_vite_failure_class(log_path)
+        if diagnose_vite and proc.returncode != 0 else None
+    )
     log_path.unlink(missing_ok=True)
-    return {
+    result = {
         "status": "PASS" if proc.returncode == 0 else "FAIL",
         "exit_code": int(proc.returncode),
         "captured_output_sha256": digest,
         "captured_output_bytes": int(size),
     }
+    if diagnose_vite:
+        result["_safe_vite_failure_class"] = failure_class
+    return result
 
 
 def _dist_digest(dist: Path) -> tuple[str, int]:
@@ -266,6 +309,7 @@ def run_probe(
             "captured_output_bytes": 0,
         }
         build = dict(acceptance)
+        vite_failure_class = None
         if install["status"] == "PASS":
             acceptance = _run_captured(
                 ["node", str(acceptance_path)],
@@ -282,7 +326,9 @@ def run_probe(
                 cwd=ui,
                 log_path=temp / "vite-build.log",
                 timeout=900,
+                diagnose_vite=True,
             )
+            vite_failure_class = build.pop("_safe_vite_failure_class", None)
 
     dist = ui / "dist"
     dist_ok = build["status"] == "PASS" and (dist / "index.html").is_file()
@@ -316,6 +362,7 @@ def run_probe(
         "npm_ci": install,
         "node_acceptance": acceptance,
         "vite_build": build,
+        "vite_failure_class": vite_failure_class,
         "dist_index_present": bool(dist_ok),
         "dist_file_count": int(dist_file_count),
         "dist_digest_sha256": dist_digest,
@@ -342,6 +389,7 @@ _PUBLIC_RECEIPT_FIELDS = frozenset({
     "schema", "status", "source_identity", "package_contract",
     "acceptance_file", "npm_ci", "node_acceptance", "vite_build",
     "dist_index_present", "dist_file_count", "dist_digest_sha256",
+    "vite_failure_class",
     "authority", "sanitization",
 })
 _PUBLIC_NESTED_FIELDS = {
@@ -411,6 +459,12 @@ def _public_receipt(value: dict[str, Any]) -> dict[str, Any]:
                 or type(item["captured_output_bytes"]) is not int or item["captured_output_bytes"] < 0
                 or (digest is not None and (not isinstance(digest, str) or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest)))):
             raise ValueError("public_receipt_step_rejected")
+    failure_class = value["vite_failure_class"]
+    if value["vite_build"]["status"] == "FAIL":
+        if failure_class not in _SAFE_VITE_FAILURE_CLASSES:
+            raise ValueError("public_receipt_vite_failure_class_rejected")
+    elif failure_class is not None:
+        raise ValueError("public_receipt_vite_failure_class_rejected")
     dist = value["dist_digest_sha256"]
     if (type(value["dist_index_present"]) is not bool
             or type(value["dist_file_count"]) is not int or value["dist_file_count"] < 0
