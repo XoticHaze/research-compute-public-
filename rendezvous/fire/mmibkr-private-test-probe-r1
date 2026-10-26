@@ -1,6 +1,6 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "589f80597bb8662324eeb824d094055276e6c247",
+  "source_ref": "f77d0ab03d67fb83e985f771e1a71f4ceb551bb1",
   "test_modules": [
     "tests.test_selected_runtime_initial_backfill_ingest_v1",
     "tests.test_autotuner_parameter_consumption"
@@ -12,8 +12,8 @@
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "manual-worker-exact-589f-networkless-20261026220756737",
-  "purpose": "Native network-isolated tests for #975 589f latest backfill stock preflight cache-write ordering and AutoTuner parameter consumption, admitted encrypted Source Vault 40411198616, no broker/live/deploy",
+  "requested_by": "manual-worker-f77d-corrected-test-native-20261026220756737",
+  "purpose": "Exact f77d two test fixture fixes after red selected B1 OHLC and AutoTuner keyword helper cases; rerun same two networkless modules via existing encrypted test probe only, no broker/live",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -21,8 +21,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "manual-worker-589f-backfill-autotuner-20261026-r1",
+  "request_nonce": "manual-worker-native-f77d-backfill-autotuner-r2",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "589f80597bb8662324eeb824d094055276e6c247",
+  "current_private_reference": "f77d0ab03d67fb83e985f771e1a71f4ceb551bb1",
   "parity_public_key_b64": ""
 }
