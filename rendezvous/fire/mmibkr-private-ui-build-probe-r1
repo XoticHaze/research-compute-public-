@@ -1,13 +1,13 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "d8b02b00a14b7c23ec04b6379d6b64ba6bb376e8",
+  "source_ref": "eb160f90404ffd4e7a8aa97f07b19dad376af7eb",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-stable-pinned-operator-ui-20261026",
-  "purpose": "Native exact public-deploy-pinned d8b operator BotConsole Node/Vite release acceptance; existing encrypted vault 40287209998, read-only static build, no Cloudflare/broker/live mutation",
-  "request_nonce": "ui-deploy-pinned-d8b-native-vite-20261026-r1",
+  "requested_by": "continue-release-20261026102514374",
+  "purpose": "Native exact eb160 UI #888 Bot Console acceptance and Vite after corrected age-based Unverified guard, immutable accepted Source Vault 40307402327. No Cloudflare deploy/broker/live, only existing encrypted compute.",
+  "request_nonce": "ui-frozen-eb160-native-20261026-r1",
   "authority": {
     "research_only": true,
     "broker": false,
