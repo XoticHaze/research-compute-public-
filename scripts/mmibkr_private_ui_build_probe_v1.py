@@ -270,7 +270,7 @@ def _run_captured(
     digest = _sha256(log_path)
     size = log_path.stat().st_size
     failure_class = None
-    if diagnose_vite and proc.returncode != 0:
+    if proc.returncode != 0 and (diagnose_vite or log_path.name == "vite-build.log"):
         try:
             raw = log_path.read_text(encoding="utf-8", errors="replace")
             safe_failure = _safe_vite_failure_class(raw)

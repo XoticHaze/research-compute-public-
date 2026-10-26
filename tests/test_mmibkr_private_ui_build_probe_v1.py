@@ -597,3 +597,21 @@ def test_public_vite_receipt_fixed_enum_requires_failed_build():
     success["vite_build"]["status"] = "PASS"
     with pytest.raises(ValueError, match="public_receipt_vite_failure_class_rejected"):
         mod._public_receipt(success)
+
+
+
+def test_safe_vite_marker_and_fixed_receipt_class_in_diagnose_mode(tmp_path, capsys):
+    import sys
+    raw = "Could not resolve synthetic-private-module\\n"
+    log = tmp_path / "vite-build.log"
+    code = "import sys;sys.stdout.write(" + repr(raw) + ");sys.exit(1)"
+    result = mod._run_captured(
+        [sys.executable, "-c", code],
+        cwd=tmp_path, log_path=log, timeout=15, diagnose_vite=True,
+    )
+    output = capsys.readouterr()
+    assert result["status"] == "FAIL"
+    assert result["_safe_vite_failure_class"] == "IMPORT_RESOLUTION"
+    assert "MMIBKR_PRIVATE_UI_VITE_SAFE_FAILURE=" in output.out
+    assert "synthetic-private-module" not in output.out + output.err
+    assert not log.exists()
