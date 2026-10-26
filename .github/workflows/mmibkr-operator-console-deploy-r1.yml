@@ -272,67 +272,6 @@ jobs:
               raise SystemExit('MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_ORG_INVALID=1')
           print('MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY=READY')
           PY
-      - name: Deploy locked operator-console Worker and private static assets
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx --yes wrangler@4.131.2 deploy \
-            --config cloudflare/operator-console/wrangler.jsonc
-          echo 'MMIBKR_OPERATOR_CONSOLE_WORKER_DEPLOYED=1'
-
-      - name: Prove deployed Worker through Cloudflare control plane
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json, os
-          from urllib.error import HTTPError
-          from urllib.request import Request, urlopen
-
-          account = os.environ['CLOUDFLARE_ACCOUNT_ID'].strip()
-          token = os.environ['CLOUDFLARE_API_TOKEN'].strip()
-          script = 'mmibkr-operator-console'
-          url = (
-              'https://api.cloudflare.com/client/v4/accounts/'
-              + account
-              + '/workers/scripts/'
-              + script
-              + '/settings'
-          )
-          req = Request(
-              url,
-              headers={
-                  'Authorization': 'Bearer ' + token,
-                  'Accept': 'application/json',
-                  'User-Agent': 'mmibkr-operator-console-control-plane-proof-r1',
-              },
-          )
-          try:
-              with urlopen(req, timeout=30) as response:
-                  node = json.load(response)
-          except HTTPError as exc:
-              # Public Actions logs must never echo provider error bodies: they
-              # may contain operator allowlist emails, account or policy data.
-              raise SystemExit(
-                  f'Cloudflare Worker settings proof failed HTTP {exc.code}'
-              ) from None
-
-          if node.get('success') is not True:
-              raise SystemExit(
-                  'Cloudflare Worker settings proof rejected'
-              )
-          result = node.get('result')
-          if not isinstance(result, dict):
-              raise SystemExit('Cloudflare Worker settings result missing')
-          print('MMIBKR_OPERATOR_CONSOLE_CONTROL_PLANE=READY')
-          PY
-
       - name: Reconcile exact-email Cloudflare Access application
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -343,7 +282,7 @@ jobs:
           set -euo pipefail
           if [ -z "$ACCESS_ALLOWED_EMAILS" ]; then
             echo 'MMIBKR_OPERATOR_CONSOLE_ACCESS_BINDING=LOCKED_EMAIL_ALLOWLIST_MISSING'
-            exit 0
+            exit 43
           fi
           python - <<'PY'
           import json, os, re
@@ -746,6 +685,67 @@ jobs:
           print('MMIBKR_OPERATOR_CONSOLE_PROMOTION_READER_PATH=/v1/promotion-review-read')
           PY
 
+      - name: Deploy locked operator-console Worker and private static assets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.131.2 deploy \
+            --config cloudflare/operator-console/wrangler.jsonc
+          echo 'MMIBKR_OPERATOR_CONSOLE_WORKER_DEPLOYED=1'
+
+      - name: Prove deployed Worker through Cloudflare control plane
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+
+          account = os.environ['CLOUDFLARE_ACCOUNT_ID'].strip()
+          token = os.environ['CLOUDFLARE_API_TOKEN'].strip()
+          script = 'mmibkr-operator-console'
+          url = (
+              'https://api.cloudflare.com/client/v4/accounts/'
+              + account
+              + '/workers/scripts/'
+              + script
+              + '/settings'
+          )
+          req = Request(
+              url,
+              headers={
+                  'Authorization': 'Bearer ' + token,
+                  'Accept': 'application/json',
+                  'User-Agent': 'mmibkr-operator-console-control-plane-proof-r1',
+              },
+          )
+          try:
+              with urlopen(req, timeout=30) as response:
+                  node = json.load(response)
+          except HTTPError as exc:
+              # Public Actions logs must never echo provider error bodies: they
+              # may contain operator allowlist emails, account or policy data.
+              raise SystemExit(
+                  f'Cloudflare Worker settings proof failed HTTP {exc.code}'
+              ) from None
+
+          if node.get('success') is not True:
+              raise SystemExit(
+                  'Cloudflare Worker settings proof rejected'
+              )
+          result = node.get('result')
+          if not isinstance(result, dict):
+              raise SystemExit('Cloudflare Worker settings result missing')
+          print('MMIBKR_OPERATOR_CONSOLE_CONTROL_PLANE=READY')
+          PY
+
       - name: Bind Worker defense-in-depth Access verifier
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
@@ -756,7 +756,7 @@ jobs:
           set -euo pipefail
           if [ -z "${MMIBKR_ACCESS_AUD:-}" ] || [ -z "${MMIBKR_ACCESS_TEAM_DOMAIN:-}" ]; then
             echo 'MMIBKR_OPERATOR_CONSOLE_ACCESS_BINDING=LOCKED_UNCONFIGURED'
-            exit 0
+            exit 44
           fi
           printf '%s' "$MMIBKR_ACCESS_TEAM_DOMAIN" | npx --yes wrangler@4.131.2 secret put ACCESS_TEAM_DOMAIN --config cloudflare/operator-console/wrangler.jsonc >/dev/null
           printf '%s' "$MMIBKR_ACCESS_AUD" | npx --yes wrangler@4.131.2 secret put ACCESS_AUD --config cloudflare/operator-console/wrangler.jsonc >/dev/null
