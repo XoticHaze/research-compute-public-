@@ -139,6 +139,7 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertIn("/workers/scripts/", text)
         self.assertIn("/settings", text)
         self.assertIn("MMIBKR_OPERATOR_CONSOLE_CONTROL_PLANE=READY", text)
+        self.assertIn("browser_paths = ('/', '/bot-console', '/operator/forward-execution', '/operator/promotion-review')", text)
         self.assertIn("for path in (*browser_paths, '/api/operator-snapshot', '/healthz'):", text)
         self.assertNotIn("operator-console pre-Access health did not converge", text)
 
