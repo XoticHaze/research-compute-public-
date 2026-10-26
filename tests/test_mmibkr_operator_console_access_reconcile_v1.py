@@ -168,6 +168,45 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertIn("cloudflareaccess.com", text)
 
 
+    def test_anonymous_browser_requires_real_https_access_redirect(self):
+        import ast
+        import textwrap
+        from urllib.parse import urlsplit
+
+        text = WORKFLOW.read_text(encoding="utf-8")
+        block = text.split(
+            "      - name: Prove unauthenticated surface fails closed", 1
+        )[1].split("      - name: Publish scoped R2 MM deployment receipt", 1)[0]
+        script = textwrap.dedent(
+            block.split("          python - <<'PY'\\n", 1)[1]
+            .split("\\n          PY", 1)[0]
+        )
+        tree = ast.parse(script)
+        predicate = next(
+            node for node in tree.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "is_access_redirect"
+        )
+        namespace = {"urlsplit": urlsplit}
+        exec(
+            compile(ast.Module(body=[predicate], type_ignores=[]), "<access-redirect>", "exec"),
+            namespace,
+        )
+        accepts = namespace["is_access_redirect"]
+        self.assertTrue(accepts("https://team.cloudflareaccess.com/cdn-cgi/access/login"))
+        for invalid in (
+            "https://evil.example/redirect?next=cloudflareaccess.com",
+            "https://cloudflareaccess.com.evil.example/login",
+            "https://team.cloudflareaccess.com.evil.example/login",
+            "http://team.cloudflareaccess.com/cdn-cgi/access/login",
+            "https://evil.example/redirect?token=private",
+        ):
+            with self.subTest(invalid=invalid):
+                self.assertFalse(accepts(invalid))
+        self.assertIn("if path in browser_paths and status not in {302, 303, 307}:", script)
+        self.assertNotIn("and 'cloudflareaccess.com' not in location", script)
+        self.assertNotIn(":{location}", script)
+
     def test_deploy_receipt_distinguishes_locked_unconfigured_from_access_configured(self):
         import json
         import os
