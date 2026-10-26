@@ -1139,6 +1139,33 @@ def self_test() -> None:
         assert invalid["matched_cost_projection_status"] == "MATCHED_COST_PROJECTION_INCOMPLETE"
         assert invalid["mean_ticker_book_excess_vs_smh_net_bps"] is None
 
+        # Consume the independently accepted #2006 duplicate-native-adapter
+        # identity guard in the selected #2012 composite without changing its
+        # matched-book, source freshness, or economic projection semantics.
+        duplicate_dir = root / "shadow-native"
+        duplicate_dir.mkdir()
+        original_adapter = root / "forward_program_adapter_0.json"
+        duplicate_adapter = duplicate_dir / "duplicate.json"
+        duplicate_adapter.write_bytes(original_adapter.read_bytes())
+        assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
+        duplicate_adapter.write_text(json.dumps(dict(semi, signal_date="2026-10-23")))
+        for original_payload, duplicate_payload in (
+            (semi, dict(semi, signal_date="2026-10-23")),
+            (dict(semi, signal_date="2026-10-23"), semi),
+        ):
+            original_adapter.write_text(json.dumps(original_payload))
+            duplicate_adapter.write_text(json.dumps(duplicate_payload))
+            for loader in (_load_native_adapters, build):
+                try:
+                    loader(root)
+                except ValueError as exc:
+                    assert str(exc) == "DUPLICATE_NATIVE_ADAPTER_PROGRAM_ID:SEMICONDUCTOR_SHARED_RIDGE"
+                else:
+                    raise AssertionError("conflicting native program identity was silently accepted")
+        duplicate_adapter.unlink()
+        original_adapter.write_text(json.dumps(semi))
+        assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
+
     # Homebuilders legacy stock-net vs ITB-gross is not matched-after-cost alpha.
     homebuilders_cost_ledger = {
         "schema": LEDGER_SCHEMA,
@@ -1265,32 +1292,6 @@ def self_test() -> None:
         assert missing_reference["forward_source_reference_state"] == "NO_INDEPENDENT_COMPLETED_SESSION"
         assert missing_reference["freshness_gap_visible"] is True
 
-        # Consume the independently accepted #2006 duplicate-native-adapter
-        # identity guard in the selected #2012 composite without changing its
-        # matched-book, source freshness, or economic projection semantics.
-        duplicate_dir = root / "shadow-native"
-        duplicate_dir.mkdir()
-        original_adapter = root / "forward_program_adapter_0.json"
-        duplicate_adapter = duplicate_dir / "duplicate.json"
-        duplicate_adapter.write_bytes(original_adapter.read_bytes())
-        assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
-        duplicate_adapter.write_text(json.dumps(dict(semi, signal_date="2026-10-23")))
-        for original_payload, duplicate_payload in (
-            (semi, dict(semi, signal_date="2026-10-23")),
-            (dict(semi, signal_date="2026-10-23"), semi),
-        ):
-            original_adapter.write_text(json.dumps(original_payload))
-            duplicate_adapter.write_text(json.dumps(duplicate_payload))
-            for loader in (_load_native_adapters, build):
-                try:
-                    loader(root)
-                except ValueError as exc:
-                    assert str(exc) == "DUPLICATE_NATIVE_ADAPTER_PROGRAM_ID:SEMICONDUCTOR_SHARED_RIDGE"
-                else:
-                    raise AssertionError("conflicting native program identity was silently accepted")
-        duplicate_adapter.unlink()
-        original_adapter.write_text(json.dumps(semi))
-        assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
     print("FORWARD_MARKET_SCOREBOARD_SELF_TEST=PASS")
 
 
