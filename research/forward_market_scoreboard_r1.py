@@ -119,6 +119,10 @@ def _challenger_session_stats(fwd: dict[str, Any]) -> dict[str, Any]:
         row["net_return"] - matched[day]["net_return"]
         for day, row in challenger.items()
     ]
+    # Individually finite returns can still overflow on subtraction.
+    # Never publish a complete matched book with nonfinite derived excess.
+    if not all(math.isfinite(value) for value in incumbent_excess + matched_excess):
+        return invalid
     return {
         "complete": True,
         "vs_incumbent": _positive_session_stats(incumbent_excess),
@@ -911,6 +915,16 @@ def self_test() -> None:
             {"date": "2026-09-11"},
         ]
         assert _challenger_session_stats(missing_numeric)["complete"] is False
+        derived_overflow = dict(incomplete)
+        derived_overflow["challenger_observations"] = [
+            {"date": "2026-09-10", "net_return": 1e308, "core_return": -1e308},
+            {"date": "2026-09-11", "net_return": 0.0, "core_return": 0.0},
+        ]
+        derived_overflow["matched_control_observations"] = [
+            {"date": "2026-09-10", "net_return": -1e308},
+            {"date": "2026-09-11", "net_return": 0.0},
+        ]
+        assert _challenger_session_stats(derived_overflow)["complete"] is False
         assert out["coverage"]["native_result_gaps"] == []
         assert out["decision_chain"]["sectors"]["homebuilders"]["horizons"] == {"CCS": 5}
         native_by_id = {x["program_id"]: x for x in out["lanes"]}
