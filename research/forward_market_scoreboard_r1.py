@@ -1481,11 +1481,16 @@ def self_test() -> None:
     # ratio when the control wealth is extremely close to zero.
     challenger["forward"]["challenger_if_flattened_now"]["cumulative_return"] = 1e303
     challenger["forward"]["incumbent"]["cumulative_return"] = -1.0 + 1e-16
+    challenger["forward"]["challenger_observations"][0]["net_return"] = 1e303
+    challenger["forward"]["challenger_observations"][0]["core_return"] = -1.0 + 1e-16
     overflow = _challenger(challenger, "P558", "KMLM")["scorecard"]
+    assert overflow["funded_nav_reconciliation"] == "PASS_THREE_BOOKS"
     assert overflow["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
     assert overflow["challenger_vs_incumbent_relative_wealth_bps"] is None
     challenger["forward"]["challenger_if_flattened_now"]["cumulative_return"] = -0.02054759529211936
     challenger["forward"]["incumbent"]["cumulative_return"] = -0.0298141670103782
+    challenger["forward"]["challenger_observations"][0]["net_return"] = -0.01804759529211936
+    challenger["forward"]["challenger_observations"][0]["core_return"] = -0.0298141670103782
 
     original_challenger_nav = challenger["forward"]["challenger_if_flattened_now"]["cumulative_return"]
     challenger["forward"]["challenger_if_flattened_now"]["cumulative_return"] = float("nan")
