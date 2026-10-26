@@ -1,13 +1,13 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "af3a83415057006011a529f58883f1d0da0b5127",
+  "source_ref": "74e9d77d2b54b98e90316d0546db6429041aea60",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-20261026102514374-vite-failure-diagnostic",
-  "purpose": "Repeat same exact af3a encrypted source ONCE with newly privacy-safe hashed Vite failure classifier after actual Vite error 40308811884 (Node acceptance PASS, Vite FAIL), no new private source/public plaintext/broker/live/deploy.",
-  "request_nonce": "ui-af3a-vite-diagnostic-20261026-r2",
+  "requested_by": "continue-release-20261026102514374-vite-closure",
+  "purpose": "Exact fully encrypted admitted #888 74e9 one-char PilotRunDetailPage JSX close fix; native BotConsole acceptance and true Vite production build on existing public compute, no Cloudflare deploy/broker/live.",
+  "request_nonce": "ui-74e9-vite-final-20261026-r1",
   "authority": {
     "research_only": true,
     "broker": false,
