@@ -932,31 +932,31 @@ def self_test() -> None:
         invalid = _prospective_state(ledger, "SEMICONDUCTOR_SHARED_RIDGE")
         assert invalid["matched_cost_projection_status"] == "MATCHED_COST_PROJECTION_INCOMPLETE"
         assert invalid["mean_ticker_book_excess_vs_smh_net_bps"] is None
-    # A second transport copy with identical bytes is allowed, but no
-    # conflicting program identity may win by arbitrary file ordering.
-    duplicate_dir = root / "shadow-native"
-    duplicate_dir.mkdir()
-    original = root / "forward_program_adapter_0.json"
-    duplicate = duplicate_dir / "duplicate.json"
-    duplicate.write_bytes(original.read_bytes())
-    assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
-    duplicate.write_text(json.dumps(dict(semi, signal_date="2026-10-23")))
-    for original_payload, duplicate_payload in (
-        (semi, dict(semi, signal_date="2026-10-23")),
-        (dict(semi, signal_date="2026-10-23"), semi),
-    ):
-        original.write_text(json.dumps(original_payload))
-        duplicate.write_text(json.dumps(duplicate_payload))
-        for loader in (_load_native_adapters, build):
-            try:
-                loader(root)
-            except ValueError as exc:
-                assert str(exc) == "DUPLICATE_NATIVE_ADAPTER_PROGRAM_ID:SEMICONDUCTOR_SHARED_RIDGE"
-            else:
-                raise AssertionError("conflicting native program identity was silently accepted")
-    duplicate.unlink()
-    original.write_text(json.dumps(semi))
-    assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
+        # A second transport copy with identical bytes is allowed, but no
+        # conflicting program identity may win by arbitrary file ordering.
+        duplicate_dir = root / "shadow-native"
+        duplicate_dir.mkdir()
+        original = root / "forward_program_adapter_0.json"
+        duplicate = duplicate_dir / "duplicate.json"
+        duplicate.write_bytes(original.read_bytes())
+        assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
+        duplicate.write_text(json.dumps(dict(semi, signal_date="2026-10-23")))
+        for original_payload, duplicate_payload in (
+            (semi, dict(semi, signal_date="2026-10-23")),
+            (dict(semi, signal_date="2026-10-23"), semi),
+        ):
+            original.write_text(json.dumps(original_payload))
+            duplicate.write_text(json.dumps(duplicate_payload))
+            for loader in (_load_native_adapters, build):
+                try:
+                    loader(root)
+                except ValueError as exc:
+                    assert str(exc) == "DUPLICATE_NATIVE_ADAPTER_PROGRAM_ID:SEMICONDUCTOR_SHARED_RIDGE"
+                else:
+                    raise AssertionError("conflicting native program identity was silently accepted")
+        duplicate.unlink()
+        original.write_text(json.dumps(semi))
+        assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
     print("FORWARD_MARKET_SCOREBOARD_SELF_TEST=PASS")
 
 
