@@ -77,6 +77,20 @@ assert.equal(empty.snapshot.runtimes[0].data_health.current, false,
 const repeated = mergeRuntimeProjection({ snapshot: result.snapshot }, snapshot('a'.repeat(40), []));
 assert.ok(repeated.snapshot.runtimes.every((row) => row.data_health.current === false),
   'repeated carry cannot restore previous eligibility');
+for (const [label, invalidRows] of [
+  ['duplicate runtime ID', [incomingRow, { ...incomingRow, last_action: 'BUY' }]],
+  ['empty runtime ID', [{ ...incomingRow, runtime_id: '' }]],
+  ['whitespace runtime ID', [{ ...incomingRow, runtime_id: ' MNQ-12Min' }]],
+  ['numeric runtime ID', [{ ...incomingRow, runtime_id: 12 }]],
+  ['array runtime row', [[]]],
+]) {
+  const invalid = snapshot('a'.repeat(40), invalidRows);
+  assert.throws(() => mergeRuntimeProjection(previous, invalid),
+    /snapshot_runtime_identity_invalid_or_duplicate/, label + ' must not silently collapse with prior state');
+  assert.throws(() => mergeRuntimeProjection(null, invalid),
+    /snapshot_runtime_identity_invalid_or_duplicate/, label + ' must fail on first publication too');
+}
+console.log('MMIBKR_OPERATOR_CONSOLE_RUNTIME_IDENTITY_FAILCLOSED=PASS');
 console.log('MMIBKR_OPERATOR_CONSOLE_CARRIED_RUNTIME_FRESHNESS=PASS');
 
 const backing = new Map();
