@@ -1071,10 +1071,14 @@ jobs:
             local outage_eastern_hhmm outage_eastern_weekday
             outage_eastern_hhmm="$(TZ=America/New_York date -d "@$outage_since" +%H%M)" || return 1
             outage_eastern_weekday="$(TZ=America/New_York date -d "@$outage_since" +%u)" || return 1
-            # Sunday-Friday 00:15-01:45 Eastern, DST handled by zoneinfo.
-            [ "$outage_eastern_weekday" != 6 ] &&
+            # Official IBKR North America reset: Sunday-Friday 00:15-01:45 ET;
+            # Saturday maintenance 00:00-02:00 ET. Both use Eastern DST.
+            if [ "$outage_eastern_weekday" -eq 6 ]; then
+              [[ "$outage_eastern_hhmm" < "0200" ]]
+            else
               [[ "$outage_eastern_hhmm" > "0014" ]] &&
-              [[ "$outage_eastern_hhmm" < "0146" ]]
+                [[ "$outage_eastern_hhmm" < "0146" ]]
+            fi
           }
           while :; do
             now="$(date +%s)"
