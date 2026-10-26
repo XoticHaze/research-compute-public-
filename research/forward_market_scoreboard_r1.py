@@ -406,11 +406,17 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
         # The frozen Homebuilders contract charges stock round trips but
         # specifies no ITB/QQQ benchmark fee. Preserve the legacy mixed-cost
         # numbers, never fabricate a matched-net benchmark comparison.
-        resolved = [c for c in rows if c.get("status") == "RESOLVED"]
-        expected = int(summary.get("resolved_cohorts", len(resolved)) or 0)
+        full = [c for c in rows if c.get("status") == "RESOLVED"]
+        partial = [
+            c for c in rows if c.get("status") == "PARTIALLY_RESOLVED"
+            and any(isinstance(row, dict) and row.get("status") == "RESOLVED"
+                    for row in ((c.get("resolution") or {}).get("observations") or []))
+        ]
+        reportable = full + partial
+        expected_full = int(summary.get("resolved_cohorts", len(full)) or 0)
         projections = ledger.get("homebuilders_cost_basis_projections") or {}
         valid = 0
-        for cohort in resolved:
+        for cohort in reportable:
             projection = projections.get(str(cohort.get("cohort_id"))) or {}
             legacy = projection.get("legacy_stock_net_minus_itb_gross_mean_bps")
             if (
@@ -422,10 +428,11 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
                 and math.isfinite(legacy)
             ):
                 valid += 1
-        complete = bool(resolved) and valid == len(resolved) == expected
+        complete = bool(reportable) and valid == len(reportable) and len(full) == expected_full
         out["homebuilders_cost_basis_projection_status"] = (
-            "ALL_RESOLVED_COHORTS_MIXED_COST_LABELLED" if complete
-            else "NO_RESOLVED_COHORT" if not resolved and expected == 0
+            "ALL_REPORTABLE_PARTIAL_COHORTS_MIXED_COST_LABELLED" if complete and partial
+            else "ALL_RESOLVED_COHORTS_MIXED_COST_LABELLED" if complete
+            else "NO_RESOLVED_OBSERVATIONS" if not reportable and expected_full == 0
             else "MIXED_COST_PROJECTION_INCOMPLETE"
         )
         out["legacy_mean_excess_vs_itb_basis"] = "STOCK_NET_MINUS_ITB_GROSS_NOT_MATCHED_AFTER_COST"
@@ -970,6 +977,17 @@ def self_test() -> None:
     assert homebuilders_state["mean_excess_vs_itb_bps"] == 88.9639
     assert homebuilders_state["mean_matched_after_cost_excess_vs_itb_bps"] is None
     assert homebuilders_state["legacy_mean_excess_vs_itb_basis"] == "STOCK_NET_MINUS_ITB_GROSS_NOT_MATCHED_AFTER_COST"
+    partial_homebuilders = dict(homebuilders_cost_ledger)
+    partial_homebuilders["cohorts"] = [{
+        **homebuilders_cost_ledger["cohorts"][0],
+        "status": "PARTIALLY_RESOLVED",
+        "resolution": {"observations": [
+            {"status": "RESOLVED", "net_return_bps": 10},
+            {"status": "OPEN"}]},
+    }]
+    partial_homebuilders["summary"] = {"HOMEBUILDERS": {"resolved_cohorts": 0}}
+    partial_state = _prospective_state(partial_homebuilders, "HOMEBUILDERS")
+    assert partial_state["homebuilders_cost_basis_projection_status"] == "ALL_REPORTABLE_PARTIAL_COHORTS_MIXED_COST_LABELLED"
 
     print("FORWARD_MARKET_SCOREBOARD_SELF_TEST=PASS")
 
