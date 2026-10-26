@@ -889,6 +889,55 @@ def _matched_after_cost_projections(cohorts: list[dict[str, Any]]) -> dict[str, 
     return out
 
 
+
+def _homebuilders_cost_basis_projections(cohorts: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Label immutable Homebuilders returns without inventing an ITB/QQQ fee."""
+    out: dict[str, dict[str, Any]] = {}
+    for cohort in cohorts:
+        if cohort.get("program_id") != "HOMEBUILDERS" or cohort.get("status") not in {"RESOLVED", "PARTIALLY_RESOLVED"}:
+            continue
+        identity = str(cohort.get("cohort_id") or "")
+        if not identity:
+            continue
+        resolution = cohort.get("resolution")
+        rows = resolution.get("observations") if isinstance(resolution, dict) else None
+        if not isinstance(rows, list):
+            out[identity] = {"status": "MISSING_FROZEN_OBSERVATIONS_NO_PROJECTION"}
+            continue
+        resolved = [row for row in rows if isinstance(row, dict) and row.get("status") == "RESOLVED"]
+        if not resolved:
+            continue
+        stock_cost = cohort.get("stock_round_trip_cost_bps")
+        numeric = [stock_cost] + [row.get(key) for row in resolved for key in (
+            "net_return_bps", "itb_return_bps", "qqq_return_bps")]
+        if any(isinstance(value, bool) or not isinstance(value, (int, float))
+               or not math.isfinite(value) for value in numeric):
+            out[identity] = {"status": "INVALID_FROZEN_RETURN_OR_COST_NO_PROJECTION"}
+            continue
+        n = len(resolved)
+        stock_net = sum(float(row["net_return_bps"]) for row in resolved) / n
+        itb_gross = sum(float(row["itb_return_bps"]) for row in resolved) / n
+        qqq_gross = sum(float(row["qqq_return_bps"]) for row in resolved) / n
+        out[identity] = {
+            "status": "DERIVED_MIXED_COST_ONLY_BENCHMARK_FEES_UNFROZEN",
+            "resolved_observations": n,
+            "stock_net_mean_bps": round(stock_net, 4),
+            "itb_gross_mean_bps": round(itb_gross, 4),
+            "qqq_gross_mean_bps": round(qqq_gross, 4),
+            "legacy_stock_net_minus_itb_gross_mean_bps": round(stock_net - itb_gross, 4),
+            "legacy_stock_net_minus_qqq_gross_mean_bps": round(stock_net - qqq_gross, 4),
+            "matched_stock_net_minus_itb_net_mean_bps": None,
+            "matched_stock_net_minus_qqq_net_mean_bps": None,
+            "stock_round_trip_cost_bps": float(stock_cost),
+            "itb_round_trip_cost_bps": None,
+            "qqq_round_trip_cost_bps": None,
+            "comparison_cost_basis": "STOCK_NET_MINUS_BENCHMARK_GROSS_LEGACY_NOT_MATCHED_AFTER_COST",
+            "original_resolution_mutated": False,
+            "alpha_or_promotion_authority": False,
+        }
+    return out
+
+
 def _observed_market_data_asof(cohorts: list[dict[str, Any]], requested: date) -> str:
     """Return the latest date supported by every active cohort's common tape.
 
@@ -960,6 +1009,7 @@ def build(
         },
         "cohorts": cohorts,
         "matched_after_cost_projections": _matched_after_cost_projections(cohorts),
+        "homebuilders_cost_basis_projections": _homebuilders_cost_basis_projections(cohorts),
         "summary": _summary(cohorts),
         "boundaries": {
             "research_only": True,
@@ -1101,6 +1151,26 @@ def self_test() -> None:
     assert projected["ticker_minus_smh_net_bps"] == -8.3719
     assert projected["original_resolution_mutated"] is False
     assert json.dumps(terminal, sort_keys=True) == original_terminal
+
+    # Read-only cost-basis labels never rewrite a frozen Homebuilders result.
+    homebuilders_frozen = {
+        "cohort_id": "HB_SYNTHETIC", "program_id": "HOMEBUILDERS",
+        "status": "RESOLVED", "stock_round_trip_cost_bps": 25,
+        "resolution": {"observations": [
+            {"status": "RESOLVED", "net_return_bps": 100, "itb_return_bps": 50, "qqq_return_bps": 60},
+            {"status": "RESOLVED", "net_return_bps": 0, "itb_return_bps": 20, "qqq_return_bps": 40},
+        ]},
+    }
+    original_homebuilders = json.dumps(homebuilders_frozen, sort_keys=True)
+    hb_projection = _homebuilders_cost_basis_projections([homebuilders_frozen])["HB_SYNTHETIC"]
+    assert hb_projection["stock_net_mean_bps"] == 50
+    assert hb_projection["legacy_stock_net_minus_itb_gross_mean_bps"] == 15
+    assert hb_projection["matched_stock_net_minus_itb_net_mean_bps"] is None
+    assert hb_projection["original_resolution_mutated"] is False
+    assert json.dumps(homebuilders_frozen, sort_keys=True) == original_homebuilders
+    homebuilders_frozen["stock_round_trip_cost_bps"] = True
+    assert _homebuilders_cost_basis_projections([homebuilders_frozen])["HB_SYNTHETIC"]["status"] == "INVALID_FROZEN_RETURN_OR_COST_NO_PROJECTION"
+
     print("FORWARD_PROSPECTIVE_COHORT_LEDGER_SELF_TEST=PASS")
 
 
