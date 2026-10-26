@@ -49,6 +49,42 @@ def _ui_tree(tmp_path: Path) -> Path:
     return source_root
 
 
+
+def test_vite_safe_failure_diagnostic_is_bounded_and_never_prints_private_source(tmp_path, capsys):
+    import hashlib
+    import sys
+    private_sentinel = "SYNTHETIC_PRIVATE_VITE_SOURCE_DO_NOT_PUBLISH_20261026"
+    path = "src/pages/SyntheticPrivate.jsx"
+    raw = (
+        "Transform failed with 1 error:\\n"
+        f"/runner/private/ui-react/{path}:42:7: ERROR: {private_sentinel}\\n"
+    )
+    expected = {
+        "class": "TRANSFORM_ERROR",
+        "source_path_sha256_16": hashlib.sha256(path.encode()).hexdigest()[:16],
+        "source_line": 42,
+    }
+    assert mod._safe_vite_failure_class(raw) == expected
+    safe = json.dumps(expected)
+    assert private_sentinel not in safe and path not in safe and "/runner/" not in safe
+    assert mod._safe_vite_failure_class("Could not resolve secret-import") == {"class": "UNRESOLVED_IMPORT"}
+
+    log = tmp_path / "vite-build.log"
+    code = "import sys;sys.stdout.write(" + repr(raw) + ");sys.exit(1)"
+    result = mod._run_captured(
+        [sys.executable, "-c", code],
+        cwd=tmp_path, log_path=log, timeout=15,
+    )
+    output = capsys.readouterr()
+    assert result["status"] == "FAIL"
+    assert result["exit_code"] == 1
+    assert "MMIBKR_PRIVATE_UI_VITE_SAFE_FAILURE=" in output.out
+    assert private_sentinel not in output.out + output.err
+    assert path not in output.out and "/runner/private" not in output.out
+    assert not log.exists()
+
+
+
 def test_acceptance_file_is_exact_allowlist():
     assert (
         mod.validate_acceptance_file(
