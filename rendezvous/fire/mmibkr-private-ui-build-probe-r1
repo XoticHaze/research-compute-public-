@@ -1,13 +1,13 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "0b87eb5362de109b0468852c560088272e6ff947",
-  "acceptance_file": "ui-react/src/lib/accountMarginSafety.test.mjs",
+  "source_ref": "9793e238c5f864c8d0883a5e92dee7420c167480",
+  "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-20261026-current-margin-coverage-four-path",
-  "purpose": "Exact newer #975/#888 663/663 UI parity, four changed margin/Builder coverage paths; existing authenticated encrypted Source Vault 0b87 manifest admitted. Native changed-source accountMarginSafety Node acceptance and Vite build only; no Cloudflare deploy, broker, live, P01, promotion or StrategySpec mutation.",
-  "request_nonce": "ui-0b87-account-margin-vite-20261026-r1",
+  "requested_by": "continue-release-manual-20261026220536844",
+  "purpose": "One exact encrypted source admission already established for selected public release pin 9793; run native BotConsole Node acceptance and Vite build; no Cloudflare deployment, broker or live authority.",
+  "request_nonce": "continue-release-native-current-9793-20261026-r1",
   "authority": {
     "research_only": true,
     "broker": false,
