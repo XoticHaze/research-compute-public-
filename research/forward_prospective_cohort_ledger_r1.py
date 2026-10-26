@@ -923,6 +923,8 @@ def _homebuilders_cost_basis_projections(cohorts: list[dict[str, Any]]) -> dict[
         legacy_qqq = sum(float(row["excess_vs_qqq_bps"]) for row in resolved) / n
         out[identity] = {
             "status": "DERIVED_MIXED_COST_ONLY_BENCHMARK_FEES_UNFROZEN",
+            "observation_unit": "PER_SYMBOL_FROZEN_HORIZON_MEAN_NOT_FUNDED_PORTFOLIO",
+            "funded_portfolio_nav_return_bps": None,
             "resolved_observations": n,
             "stock_net_mean_bps": round(stock_net, 4),
             "itb_gross_mean_bps": round(itb_gross, 4),
@@ -1169,6 +1171,8 @@ def self_test() -> None:
     assert hb_projection["stock_net_mean_bps"] == 50
     assert hb_projection["legacy_stock_net_minus_itb_gross_mean_bps"] == 15
     assert hb_projection["matched_stock_net_minus_itb_net_mean_bps"] is None
+    assert hb_projection["funded_portfolio_nav_return_bps"] is None
+    assert hb_projection["observation_unit"] == "PER_SYMBOL_FROZEN_HORIZON_MEAN_NOT_FUNDED_PORTFOLIO"
     assert hb_projection["original_resolution_mutated"] is False
     assert json.dumps(homebuilders_frozen, sort_keys=True) == original_homebuilders
     homebuilders_frozen["stock_round_trip_cost_bps"] = True
