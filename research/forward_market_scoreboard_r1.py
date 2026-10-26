@@ -26,10 +26,25 @@ EXPECTED_PRIVATE_ADAPTERS = (
 
 
 def _load(root: Path, name: str) -> dict[str, Any] | None:
-    matches = list(root.rglob(name))
+    """Reject conflicting transport copies of a canonical scoreboard input.
+
+    A recursive artifact root can contain multiple copies of the same producer
+    basename. Never select one by directory enumeration order. Byte-identical
+    copies are safe; a conflicting copy fails closed without exposing paths or
+    input contents in public logs.
+    """
+    matches = sorted(root.rglob(name))
     if not matches:
         return None
-    return json.loads(matches[0].read_text())
+    raw = matches[0].read_bytes()
+    digest = hashlib.sha256(raw).digest()
+    for path in matches[1:]:
+        if hashlib.sha256(path.read_bytes()).digest() != digest:
+            raise ValueError(f"CONFLICTING_SCOREBOARD_INPUT:{name}")
+    payload = json.loads(raw)
+    if not isinstance(payload, dict):
+        raise ValueError(f"INVALID_SCOREBOARD_INPUT:{name}")
+    return payload
 
 
 def _load_native_adapters(root: Path) -> dict[str, dict[str, Any]]:
@@ -1291,6 +1306,50 @@ def self_test() -> None:
         missing_reference = build(root)["freshness"]
         assert missing_reference["forward_source_reference_state"] == "NO_INDEPENDENT_COMPLETED_SESSION"
         assert missing_reference["freshness_gap_visible"] is True
+
+    # Generic producer artifacts can be duplicated by nested artifact download.
+    # Byte-identical transport copies are harmless, but conflicting copies
+    # must not silently select a different frozen input by filesystem order.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        for name in (
+            "forward_prospective_cohort_ledger_r1.json",
+            "forward_p249_p266_shadow_r1.json",
+        ):
+            first = root / name
+            duplicate_dir = root / "nested-transport-copy"
+            duplicate_dir.mkdir(exist_ok=True)
+            second = duplicate_dir / name
+            first.write_text(json.dumps({"source_health": {"source_max_date": "2026-10-23"}}))
+            second.write_bytes(first.read_bytes())
+            assert _load(root, name) == {"source_health": {"source_max_date": "2026-10-23"}}
+            second.write_text(json.dumps({"source_health": {"source_max_date": "2026-10-12"}}))
+            for first_value, second_value in (
+                ("2026-10-23", "2026-10-12"),
+                ("2026-10-12", "2026-10-23"),
+            ):
+                first.write_text(json.dumps({"source_health": {"source_max_date": first_value}}))
+                second.write_text(json.dumps({"source_health": {"source_max_date": second_value}}))
+                for loader in (
+                    lambda: _load(root, name),
+                    lambda: build(root),
+                ):
+                    try:
+                        loader()
+                    except ValueError as exc:
+                        assert str(exc) == f"CONFLICTING_SCOREBOARD_INPUT:{name}"
+                    else:
+                        raise AssertionError("conflicting canonical input was silently accepted")
+            first.unlink()
+            second.unlink()
+        invalid = root / "forward_p249_p266_shadow_r1.json"
+        invalid.write_text("[]")
+        try:
+            _load(root, invalid.name)
+        except ValueError as exc:
+            assert str(exc) == f"INVALID_SCOREBOARD_INPUT:{invalid.name}"
+        else:
+            raise AssertionError("non-object canonical input was silently accepted")
 
     print("FORWARD_MARKET_SCOREBOARD_SELF_TEST=PASS")
 
