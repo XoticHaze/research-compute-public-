@@ -288,18 +288,29 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
     session_stats = _challenger_session_stats(fwd)
     matched_complete = session_stats["complete"]
     basis = fwd.get("comparison_cost_basis") or {}
+    challenger_nav = metrics.get("cumulative_return")
+    incumbent_nav = (fwd.get("incumbent") or {}).get("cumulative_return")
+    matched_nav = (fwd.get("matched_control_if_flattened_now") or {}).get("cumulative_return")
+
+    def admitted_nav(value: Any) -> bool:
+        # A cost-basis declaration cannot authenticate missing, string, bool,
+        # nonfinite or bankrupt funded NAVs. Guard bps multiplication too.
+        return (
+            isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value) and value > -1.0
+            and math.isfinite(value * 10000.0)
+        )
+
     both_net = (
         matched_complete
         and days > 0
+        and all(admitted_nav(nav) for nav in (challenger_nav, incumbent_nav, matched_nav))
         and basis.get("challenger_minus_incumbent_cumulative")
             == "CHALLENGER_NET_IF_FLATTENED_NOW_MINUS_UNCHANGED_INCUMBENT_NET"
         and basis.get("challenger_minus_matched_cumulative")
             == "BOTH_NET_IF_FLATTENED_NOW"
         and basis.get("legacy_pre_exit_spreads_not_used") is True
     )
-    challenger_nav = metrics.get("cumulative_return")
-    incumbent_nav = (fwd.get("incumbent") or {}).get("cumulative_return")
-    matched_nav = (fwd.get("matched_control_if_flattened_now") or {}).get("cumulative_return")
     incumbent_relative, _ = (
         _funded_excess_metrics(incumbent_nav, challenger_nav)
         if both_net else (None, None)
@@ -308,6 +319,16 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
         _funded_excess_metrics(matched_nav, challenger_nav)
         if both_net else (None, None)
     )
+    # A near-zero control wealth can overflow a finite NAV ratio. Such a
+    # ratio is not a valid both-net scorecard, even if all inputs were finite.
+    both_net = (
+        both_net and incumbent_relative is not None and matched_relative is not None
+        and math.isfinite(incumbent_relative) and math.isfinite(matched_relative)
+        and math.isfinite(incumbent_relative * 10000.0)
+        and math.isfinite(matched_relative * 10000.0)
+    )
+    if not both_net:
+        incumbent_relative = matched_relative = None
     return {
         "program_id": program_id,
         "kind": "portfolio_diversification_challenger",
@@ -321,7 +342,7 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
         "action_text": f"Shadow {_weights_text(pos, 12)}.",
         "forward_days": days,
         "scorecard": {
-            "challenger_cumulative_bps": _bp(metrics.get("cumulative_return")),
+            "challenger_cumulative_bps": _bp(challenger_nav) if admitted_nav(challenger_nav) else None,
             # Preserve legacy common-capital differences. Wealth ratios are
             # separate metrics, never substituted for the published fields.
             "matched_cost_basis": "BOTH_NET_IF_FLATTENED_NOW" if both_net else "UNADMITTED_OR_INCOMPLETE",
@@ -1378,6 +1399,39 @@ def self_test() -> None:
     zero_day = _challenger(challenger, "P558", "KMLM")["scorecard"]
     assert zero_day["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
     assert zero_day["challenger_vs_incumbent_relative_wealth_bps"] is None
+
+    # Explicit both-net labels must not survive invalid terminal NAV inputs,
+    # even when source metadata and matched rows look complete.
+    challenger["forward"]["challenger_if_flattened_now"]["days"] = 1
+    challenger["forward"]["challenger_observations"] = [
+        {"date": "2026-10-23", "net_return": 0.01, "core_return": 0.02}
+    ]
+    challenger["forward"]["matched_control_observations"] = [
+        {"date": "2026-10-23", "net_return": 0.012}
+    ]
+    for key, invalid_nav in (
+        ("incumbent", None),
+        ("incumbent", float("nan")),
+        ("incumbent", float("inf")),
+        ("incumbent", -1.0),
+        ("incumbent", "0.02"),
+        ("incumbent", True),
+        ("matched_control_if_flattened_now", -1.0 + 1e-16),
+    ):
+        original_nav = challenger["forward"][key]["cumulative_return"]
+        challenger["forward"][key]["cumulative_return"] = invalid_nav
+        rejected = _challenger(challenger, "P558", "KMLM")["scorecard"]
+        assert rejected["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
+        assert rejected["challenger_vs_incumbent_relative_wealth_bps"] is None
+        assert rejected["challenger_vs_matched_control_relative_wealth_bps"] is None
+        assert rejected["incumbent_absolute_net_if_flattened_now_bps"] is None
+        challenger["forward"][key]["cumulative_return"] = original_nav
+    original_challenger_nav = challenger["forward"]["challenger_if_flattened_now"]["cumulative_return"]
+    challenger["forward"]["challenger_if_flattened_now"]["cumulative_return"] = float("nan")
+    rejected = _challenger(challenger, "P558", "KMLM")["scorecard"]
+    assert rejected["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
+    assert rejected["challenger_cumulative_bps"] is None
+    challenger["forward"]["challenger_if_flattened_now"]["cumulative_return"] = original_challenger_nav
 
     # Generic producer artifacts can be duplicated by nested artifact download.
     # Byte-identical transport copies are harmless, but conflicting copies
