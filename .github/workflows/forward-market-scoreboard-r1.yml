@@ -77,6 +77,7 @@ jobs:
       - run: python research/forward_deterministic_allocator_r1.py --self-test
       - run: python research/forward_scoreboard_lineage_r1.py --self-test
       - run: python -m pip install --disable-pip-version-check pandas==2.3.2
+      - run: python research/forward_prospective_cohort_ledger_r1.py --self-test
       - run: python -m unittest discover -s tests -p 'test_p160_frozen_oct2026_forward_nav_consumer_r1.py' -v
       - run: python research/forward_largecap_transport_observer_r1.py --self-test
       - run: python research/forward_bundle_publish_guard_r1.py --self-test
@@ -434,7 +435,15 @@ jobs:
               assert p['forward_days']==f['p249_plus_p266_net']['days']
               assert p['scorecard']['p249_core_net_cumulative_bps']==bp(f['p249_core_net']['cumulative_return'])
               assert p['scorecard']['p249_plus_p266_net_cumulative_bps']==bp(f['p249_plus_p266_net']['cumulative_return'])
-              assert p['scorecard']['p266_increment_cumulative_bps']==bp(f['satellite_increment_cumulative'])
+              # The canonical P266 increment is funded relative wealth, not
+              # the legacy compounded daily return spread retained separately.
+              core_nav=1.0+float(f['p249_core_net']['cumulative_return'])
+              combo_nav=1.0+float(f['p249_plus_p266_net']['cumulative_return'])
+              assert core_nav > 0 and combo_nav > 0
+              assert p['scorecard']['p266_increment_cumulative_bps']==bp(combo_nav/core_nav-1.0)
+              assert p['scorecard']['p266_relative_wealth_excess_bps']==p['scorecard']['p266_increment_cumulative_bps']
+              assert p['scorecard']['p266_legacy_compounded_daily_spread_bps']==bp(f['satellite_increment_cumulative'])
+              assert p['scorecard']['p266_increment_metric_semantics']=='CONSTANT_TARGET_SHADOW_COMBO_NAV_OVER_CORE_NAV_MINUS_ONE'
           else:
               assert p['economic_current_admitted'] is False
               assert p['validation_grade'] in ('SOURCE_GAP_UNRESOLVED','ECONOMIC_SOURCE_NOT_ADMITTED')
