@@ -781,17 +781,27 @@ jobs:
 
           opener = build_opener(NoRedirect)
 
-          def is_access_redirect(location):
-              # The previous substring check accepted attacker hosts/queries.
-              # Only a real HTTPS Cloudflare Access login host is admission.
+          def is_access_redirect(location, expected_team_domain):
+              # Require this account's independently reconciled Access tenant.
+              # Another valid Cloudflare Access tenant is not our login proof.
               try:
                   parsed = urlsplit(location)
+                  expected = urlsplit(expected_team_domain)
                   host = (parsed.hostname or '').lower()
+                  tenant = (expected.hostname or '').lower()
+                  ports_ok = parsed.port in (None, 443) and expected.port in (None, 443)
               except ValueError:
                   return False
-              return parsed.scheme == 'https' and (
-                  host == 'cloudflareaccess.com'
-                  or host.endswith('.cloudflareaccess.com')
+              return (
+                  parsed.scheme == 'https'
+                  and expected.scheme == 'https'
+                  and ports_ok
+                  and not parsed.username and not parsed.password
+                  and not expected.username and not expected.password
+                  and expected.path in ('', '/')
+                  and not expected.query and not expected.fragment
+                  and tenant.endswith('.cloudflareaccess.com')
+                  and host == tenant
               )
 
           browser_paths = ('/', '/bot-console', '/operator/promotion-review')
@@ -826,7 +836,7 @@ jobs:
                   raise SystemExit(
                       f'unauthenticated operator-console path unexpected status: {path}:{status}'
                   )
-              if status in {302, 303, 307} and not is_access_redirect(location):
+              if status in {302, 303, 307} and not is_access_redirect(location, os.environ.get('MMIBKR_ACCESS_TEAM_DOMAIN', '')):
                   # Never echo Location: provider redirects can contain
                   # private operator/account/session query parameters.
                   raise SystemExit(
