@@ -841,8 +841,28 @@ def _decision_chain(lanes: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _load_prospective_ledger(root: Path) -> dict[str, Any] | None:
+    """Use the freshly resolved ledger, never the prior-current history copy.
+
+    The report job intentionally stages both a historical main snapshot under
+    prior-current/ and a newly resolved producer under prospective-current/.
+    They are different authorities, not conflicting copies of one current
+    artifact. Conflicting duplicates *within* the selected current producer
+    directory still fail closed through _load.
+    """
+    name = "forward_prospective_cohort_ledger_r1.json"
+    current = root / "prospective-current"
+    if current.is_dir():
+        if not (current / name).is_file():
+            raise ValueError("CURRENT_PROSPECTIVE_LEDGER_NOT_MATERIALIZED")
+        return _load(current, name)
+    if (root / "prior-current" / name).is_file():
+        raise ValueError("CURRENT_PROSPECTIVE_LEDGER_NOT_MATERIALIZED")
+    return _load(root, name)
+
+
 def build(root: Path) -> dict[str, Any]:
-    ledger = _load(root, "forward_prospective_cohort_ledger_r1.json")
+    ledger = _load_prospective_ledger(root)
     p438_predecessor = _p438_semiconductor_predecessor(
         _load(root, "p438_semiconductor_forward_mtd_r1.json")
     )
@@ -1551,6 +1571,39 @@ def self_test() -> None:
             assert str(exc) == f"INVALID_SCOREBOARD_INPUT:{invalid.name}"
         else:
             raise AssertionError("non-object canonical input was silently accepted")
+
+    # The actual report job stages prior-current historical bytes alongside
+    # newly resolved prospective-current bytes. They are intentionally
+    # different; select the fresh producer without weakening same-source
+    # duplicate-content fail-close.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        historical = root / "prior-current"
+        current = root / "prospective-current"
+        historical.mkdir()
+        current.mkdir()
+        name = "forward_prospective_cohort_ledger_r1.json"
+        (historical / name).write_text(json.dumps({"source": "prior"}))
+        fresh = current / name
+        fresh.write_text(json.dumps({"source": "fresh"}))
+        assert _load_prospective_ledger(root) == {"source": "fresh"}
+        duplicate = current / "nested-copy"
+        duplicate.mkdir()
+        (duplicate / name).write_text(json.dumps({"source": "different-current"}))
+        try:
+            _load_prospective_ledger(root)
+        except ValueError as exc:
+            assert str(exc) == f"CONFLICTING_SCOREBOARD_INPUT:{name}"
+        else:
+            raise AssertionError("conflicting current-producer copy was admitted")
+        (duplicate / name).unlink()
+        fresh.unlink()
+        try:
+            _load_prospective_ledger(root)
+        except ValueError as exc:
+            assert str(exc) == "CURRENT_PROSPECTIVE_LEDGER_NOT_MATERIALIZED"
+        else:
+            raise AssertionError("prior-current history substituted for missing fresh ledger")
 
     print("FORWARD_MARKET_SCOREBOARD_SELF_TEST=PASS")
 
