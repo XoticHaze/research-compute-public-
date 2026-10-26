@@ -1,13 +1,13 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "74e9d77d2b54b98e90316d0546db6429041aea60",
+  "source_ref": "c0eafed52b725a146abc3f336c4a562e472ddd31",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-20261026102514374-vite-closure",
-  "purpose": "Exact fully encrypted admitted #888 74e9 one-char PilotRunDetailPage JSX close fix; native BotConsole acceptance and true Vite production build on existing public compute, no Cloudflare deploy/broker/live.",
-  "request_nonce": "ui-74e9-vite-final-20261026-r1",
+  "requested_by": "continue-release-20261026-current-663-ui-parity",
+  "purpose": "Current #888 c92f and #975 c0ea 663/663 UI Git blob parity; c0ea exact encrypted Source Vault admitted. Execute existing trusted public-encrypted private UI Node acceptance and native Vite build; no Cloudflare deploy, broker, order, live, P01, promotion or StrategySpec mutation.",
+  "request_nonce": "ui-c0e-selected-663-parity-20261026-r1",
   "authority": {
     "research_only": true,
     "broker": false,
