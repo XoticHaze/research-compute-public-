@@ -290,6 +290,7 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
     basis = fwd.get("comparison_cost_basis") or {}
     both_net = (
         matched_complete
+        and days > 0
         and basis.get("challenger_minus_incumbent_cumulative")
             == "CHALLENGER_NET_IF_FLATTENED_NOW_MINUS_UNCHANGED_INCUMBENT_NET"
         and basis.get("challenger_minus_matched_cumulative")
@@ -1371,6 +1372,12 @@ def self_test() -> None:
     held = _challenger(challenger, "P558", "KMLM")["scorecard"]
     assert held["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
     assert held["challenger_vs_matched_control_relative_wealth_bps"] is None
+    challenger["forward"]["matched_control_observations"] = []
+    challenger["forward"]["challenger_observations"] = []
+    challenger["forward"]["challenger_if_flattened_now"]["days"] = 0
+    zero_day = _challenger(challenger, "P558", "KMLM")["scorecard"]
+    assert zero_day["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
+    assert zero_day["challenger_vs_incumbent_relative_wealth_bps"] is None
 
     # Generic producer artifacts can be duplicated by nested artifact download.
     # Byte-identical transport copies are harmless, but conflicting copies
