@@ -13,6 +13,7 @@ cutoff-aware so the late-registration guard is exercised without future leakage.
 import argparse
 import hashlib
 import json
+import math
 from datetime import date, datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -810,6 +811,53 @@ def _summary(cohorts: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
+def _matched_after_cost_projections(cohorts: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Read-only matched-cost view of immutable resolved Ridge outcomes.
+
+    A previously RESOLVED cohort is never rerun or rewritten merely because
+    new reporting fields were introduced. This projection uses only frozen
+    published returns and the cohort's original cost contract.
+    """
+    out: dict[str, dict[str, Any]] = {}
+    for cohort in cohorts:
+        if cohort.get("program_id") != "SEMICONDUCTOR_SHARED_RIDGE" or cohort.get("status") != "RESOLVED":
+            continue
+        identity = str(cohort["cohort_id"])
+        result = cohort.get("resolution") or {}
+        benchmarks = result.get("benchmarks") or {}
+        keys = (
+            (result, "ticker_book_net_return_bps"),
+            (benchmarks, "equal_weight_13_return_bps"),
+            (benchmarks, "smh_buy_and_hold_return_bps"),
+            (cohort, "stock_round_trip_cost_bps"),
+            (cohort, "industry_round_trip_cost_bps"),
+        )
+        if any(not isinstance(source.get(key), (int, float)) or isinstance(source.get(key), bool)
+               for source, key in keys):
+            out[identity] = {"status": "MISSING_FROZEN_COST_OR_GROSS_RETURN_NO_PROJECTION"}
+            continue
+        net, ew_gross, smh_gross, stock_cost, industry_cost = (
+            float(source[key]) for source, key in keys
+        )
+        if not all(math.isfinite(v) for v in (net, ew_gross, smh_gross, stock_cost, industry_cost)):
+            out[identity] = {"status": "NONFINITE_FROZEN_INPUT_NO_PROJECTION"}
+            continue
+        ew_net, smh_net = ew_gross - stock_cost, smh_gross - industry_cost
+        out[identity] = {
+            "status": "DERIVED_FROM_FROZEN_RESOLVED_COHORT_NO_OUTCOME_BACKFILL",
+            "ticker_book_net_return_bps": round(net, 4),
+            "equal_weight_13_net_return_bps": round(ew_net, 4),
+            "smh_net_return_bps": round(smh_net, 4),
+            "ticker_minus_equal_weight_13_net_bps": round(net - ew_net, 4),
+            "ticker_minus_smh_net_bps": round(net - smh_net, 4),
+            "stock_round_trip_cost_bps": stock_cost,
+            "smh_round_trip_cost_bps": industry_cost,
+            "original_resolution_mutated": False,
+            "alpha_or_promotion_authority": False,
+        }
+    return out
+
+
 def _observed_market_data_asof(cohorts: list[dict[str, Any]], requested: date) -> str:
     """Return the latest date supported by every active cohort's common tape.
 
@@ -880,6 +928,7 @@ def build(
             "freshness_gap_note": "A requested/observed gap may be a non-session day; consumers must compare against the expected completed exchange session before classifying stale data.",
         },
         "cohorts": cohorts,
+        "matched_after_cost_projections": _matched_after_cost_projections(cohorts),
         "summary": _summary(cohorts),
         "boundaries": {
             "research_only": True,
@@ -1005,6 +1054,22 @@ def self_test() -> None:
     assert matched["excess_vs_smh_net_bps"] == -15.0
     assert matched["excess_vs_equal_weight_universe_bps"] == -25.0  # legacy
     assert matched["excess_vs_equal_weight_universe_net_bps"] == 0.0
+    # Existing terminal cohorts remain immutable; new reporting is projected
+    # separately from their frozen original gross/net and cost contract.
+    terminal = {
+        "cohort_id": "FROZEN_H20", "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+        "status": "RESOLVED", "stock_round_trip_cost_bps": 25.0,
+        "industry_round_trip_cost_bps": 10.0,
+        "resolution": {"ticker_book_net_return_bps": 895.5707,
+                       "benchmarks": {"equal_weight_13_return_bps": 1045.7918,
+                                      "smh_buy_and_hold_return_bps": 913.9426}},
+    }
+    original_terminal = json.dumps(terminal, sort_keys=True)
+    projected = _matched_after_cost_projections([terminal])["FROZEN_H20"]
+    assert projected["ticker_minus_equal_weight_13_net_bps"] == -125.2211
+    assert projected["ticker_minus_smh_net_bps"] == -8.3719
+    assert projected["original_resolution_mutated"] is False
+    assert json.dumps(terminal, sort_keys=True) == original_terminal
     print("FORWARD_PROSPECTIVE_COHORT_LEDGER_SELF_TEST=PASS")
 
 
