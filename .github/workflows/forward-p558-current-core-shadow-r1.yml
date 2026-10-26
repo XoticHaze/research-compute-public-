@@ -24,7 +24,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
-      - run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 yfinance==0.2.65
+      - run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 yfinance==0.2.65 pandas_market_calendars==5.5.0 exchange_calendars==4.13.2
+      - name: Check matched after-cost NAV comparisons (focused synthetic)
+        run: python -m unittest discover -s tests -p 'test_forward_diversifier_exit_cost_consistency_r1.py' -v
       - id: observer
         run: |
           python research/forward_p558_current_core_shadow_r1.py

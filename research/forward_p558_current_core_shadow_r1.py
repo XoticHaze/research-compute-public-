@@ -121,6 +121,14 @@ def main() -> None:
     simple = close[["KMLM", "BIL"]].astype(float).pct_change(fill_method=None)
     challenger, challenger_rows = _simulate(core_daily, simple["KMLM"])
     matched, matched_rows = _simulate(core_daily, simple["BIL"])
+    # The matched cash and incumbent comparisons must cover exactly the
+    # same completed sessions as the challenger. Do not compare mismatched
+    # NAV horizons if one source silently omits a daily bar.
+    if len(challenger) and (
+        not challenger.index.equals(matched.index)
+        or not challenger.index.equals(core_daily.index)
+    ):
+        raise RuntimeError("FORWARD_MATCHED_SESSION_SET_MISMATCH")
 
     core_current = core_payload.get("current_state", {}).get("p249_plus_p266", {})
     status = "FORWARD_OBSERVING" if len(challenger) else "BASELINE_FROZEN_NO_FORWARD_CLOSES"
@@ -160,8 +168,16 @@ def main() -> None:
             "incumbent": core_metrics,
             "challenger_if_flattened_now": challenger_metrics,
             "matched_control_if_flattened_now": matched_metrics,
-            "challenger_minus_matched_cumulative": float((1 + challenger).prod() - (1 + matched).prod()) if len(challenger) else 0.0,
-            "challenger_minus_incumbent_cumulative": float((1 + challenger).prod() - (1 + core_daily).prod()) if len(challenger) else 0.0,
+            # Compare the exact NAVs already published above, including the
+            # frozen mark-to-market exit fee on challenger and matched cash.
+            # The incumbent is unchanged and is not charged a challenger exit.
+            "challenger_minus_matched_cumulative": float(challenger_metrics["cumulative_return"] - matched_metrics["cumulative_return"]) if len(challenger) else 0.0,
+            "challenger_minus_incumbent_cumulative": float(challenger_metrics["cumulative_return"] - core_metrics["cumulative_return"]) if len(challenger) else 0.0,
+            "comparison_cost_basis": {
+                "challenger_minus_matched_cumulative": "BOTH_NET_IF_FLATTENED_NOW",
+                "challenger_minus_incumbent_cumulative": "CHALLENGER_NET_IF_FLATTENED_NOW_MINUS_UNCHANGED_INCUMBENT_NET",
+                "legacy_pre_exit_spreads_not_used": True,
+            },
             "challenger_observations": challenger_rows,
             "matched_control_observations": matched_rows,
         },
