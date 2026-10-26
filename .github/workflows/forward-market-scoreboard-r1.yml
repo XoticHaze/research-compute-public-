@@ -24,6 +24,9 @@ on:
       - 'research/forward_bundle_publish_guard_r1.py'
       - 'research/forward_scoreboard_history_r1.py'
       - 'research/p438_semiconductor_forward_mtd_r1.py'
+      - 'research/forward_p249_p266_shadow_r1.py'
+      - 'research/p279_p249_p266_forward_shadow_observer_r1.py'
+      - 'tests/test_p279_forward_gap_continuity.py'
       - 'research/current/native_adapters/*.json'
       - 'research/current/p160_forward_observation_r1.json'
       - 'research/current/currency_hedge_mechanism_forward_r1.json'
@@ -50,6 +53,8 @@ on:
       - 'research/current/currency_hedge_allocator_overlay_forward_r1.json'
       - '.github/workflows/forward-market-scoreboard-r1.yml'
       - 'research/forward_p249_p266_shadow_r1.py'
+      - 'research/p279_p249_p266_forward_shadow_observer_r1.py'
+      - 'tests/test_p279_forward_gap_continuity.py'
       - 'research/forward_p558_current_core_shadow_r1.py'
       - 'research/forward_senior_clo_current_core_shadow_r1.py'
       - 'research/p46_forward_observer_r2.py'
@@ -122,7 +127,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
-      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65 pandas_market_calendars==5.5.0 exchange_calendars==4.13.2
       - run: python research/forward_p249_p266_shadow_r1.py
       - uses: actions/upload-artifact@v4
         with:
