@@ -15,12 +15,14 @@ from research import p279_p249_p266_forward_shadow_observer_r1 as observer
 
 
 class TestForwardGapContinuity(unittest.TestCase):
-    def _run(self, prices: dict[str, list[float | None]]) -> dict:
+    def _run(self, prices: dict[str, list[float | None]], drop_full_session: str | None = None) -> dict:
         dates = pd.to_datetime([
             "2026-09-09", "2026-09-10", "2026-09-11",
             "2026-09-14", "2026-09-15",
         ])
         close = pd.DataFrame(prices, index=dates, dtype=float)
+        if drop_full_session is not None:
+            close = close.drop(pd.Timestamp(drop_full_session))
         frozen = {
             "p64": {}, "p36": {}, "p266": {},
             "p249_core": {"A": 0.5, "B": 0.5},
@@ -34,6 +36,7 @@ class TestForwardGapContinuity(unittest.TestCase):
                 with (
                     patch.object(observer, "ALL", ["A", "B"]),
                     patch.object(observer, "DECISION_AT", pd.Timestamp("2026-09-10T07:25:00Z")),
+                    patch.object(observer, "_completed_market_data_date", return_value=pd.Timestamp("2026-09-15").date()),
                     patch.object(observer.yf, "download", return_value=close),
                     patch.object(observer, "_portfolio_weights", return_value=frozen),
                     redirect_stdout(out),
@@ -54,6 +57,19 @@ class TestForwardGapContinuity(unittest.TestCase):
         self.assertEqual(result["forward"]["latest_close"], "2026-09-10")
         self.assertEqual(result["forward"]["monthly_hold_drift_diagnostic"]["status"], "SOURCE_GAP_UNRESOLVED_NO_ECONOMIC_CURRENT")
         self.assertEqual(result["forward"]["monthly_hold_drift_diagnostic"]["first_unresolved_session"], "2026-09-11")
+
+    def test_all_symbol_exchange_session_omission_freezes_prospective_path(self):
+        result = self._run(
+            {"A": [100, 101, 102, 103, 104], "B": [100, 101, 102, 103, 104]},
+            drop_full_session="2026-09-11",
+        )
+        self.assertEqual(result["status"], "SOURCE_GAP_UNRESOLVED")
+        self.assertFalse(result["forward"]["economic_continuity_verified"])
+        gap = result["source_health"]["unresolved_forward_gap"]
+        self.assertEqual(gap["reason"], "MISSING_EXCHANGE_SESSION_ALL_SYMBOLS")
+        self.assertEqual(gap["first_unresolved_session"], "2026-09-11")
+        self.assertEqual([row["date"] for row in result["forward"]["observations"]], ["2026-09-10"])
+        self.assertFalse(result["source_health"]["all_expected_exchange_sessions_present"])
 
     def test_economic_current_publisher_rejects_gap_and_incomplete_receipts(self):
         from copy import deepcopy
