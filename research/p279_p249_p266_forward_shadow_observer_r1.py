@@ -160,6 +160,21 @@ def _observed_close_returns(close: pd.DataFrame) -> pd.DataFrame:
     return close.pct_change(fill_method=None)
 
 
+def _expected_forward_sessions(start: pd.Timestamp, completed_date: date) -> pd.DatetimeIndex:
+    """Use an independent NYSE schedule, not provider rows, as the session clock.
+
+    A Yahoo outage that omits every symbol on one exchange session must not
+    silently compress the prospective funded path. Missing calendar support
+    fails the observer rather than falling back to provider-derived dates.
+    """
+    import pandas_market_calendars as mcal
+
+    schedule = mcal.get_calendar("NYSE").schedule(
+        start_date=start.date().isoformat(), end_date=completed_date.isoformat()
+    )
+    return pd.DatetimeIndex(schedule.index).normalize()
+
+
 def _held_symbols_ready(day: pd.Series, state: dict[str, dict[str, float]]) -> bool:
     """Only score a date when both frozen arms have actual paired daily closes."""
     held = set(state["p249_core"]) | set(state["p249_plus_p266"])
@@ -385,7 +400,11 @@ def main() -> None:
 
     decision_date = DECISION_AT.tz_convert(None).normalize()
     ret = _observed_close_returns(close)
-    forward_ix = ret.index[ret.index >= decision_date]
+    forward_ix = _expected_forward_sessions(decision_date, completed_data_date)
+    observed_forward_ix = ret.index[(ret.index >= decision_date) & (ret.index <= pd.Timestamp(completed_data_date))]
+    unexpected_forward_ix = observed_forward_ix.difference(forward_ix)
+    if len(unexpected_forward_ix):
+        raise RuntimeError("P249_NONEXCHANGE_FORWARD_SESSION:" + unexpected_forward_ix[0].date().isoformat())
     rows = []
     month_states: dict[str, dict[str, dict[str, float]]] = {}
     prev_state = None
@@ -393,6 +412,13 @@ def main() -> None:
     unresolved_gap: dict[str, object] | None = None
 
     for dt in forward_ix:
+        if dt not in ret.index:
+            unresolved_gap = {
+                "first_unresolved_session": dt.date().isoformat(),
+                "reason": "MISSING_EXCHANGE_SESSION_ALL_SYMBOLS",
+                "missing_held_symbols": [],
+            }
+            break
         period = dt.to_period("M")
         key = str(period)
         if key not in month_states:
@@ -488,6 +514,10 @@ def main() -> None:
         "source_health": {
             "provider": "yfinance_adjusted_close",
             "completed_session_request_date": completed_data_date.isoformat(),
+            "exchange_calendar": "NYSE:pandas_market_calendars==5.5.0",
+            "expected_completed_exchange_sessions": int(len(forward_ix)),
+            "observed_completed_exchange_sessions": int(len(observed_forward_ix)),
+            "all_expected_exchange_sessions_present": bool(not len(forward_ix.difference(observed_forward_ix))),
             "in_progress_session_excluded": True,
             "source_max_date": source_max_date,
             "latest_by_symbol": latest_by_symbol,
