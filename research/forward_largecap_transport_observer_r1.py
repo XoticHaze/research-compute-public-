@@ -204,6 +204,19 @@ def build(
         }
 
     entry_i, entry_ts = entry
+    # A recovered historical record proves the record existed, not that it
+    # existed before the selected next-session entry. With only daily close
+    # timestamps, require registration on a strictly earlier NY market date;
+    # same-day registration is unverified, not automatically prospective.
+    first_registration_et = datetime.fromisoformat(
+        first_registered_at.replace("Z", "+00:00")
+    ).astimezone(ZoneInfo("America/New_York"))
+    first_seen_before_entry = first_registration_et.date() < entry_ts.date()
+    # Neither a caller-provided prior JSON nor a recovered Git commit is an
+    # independently authenticated Foundry issuer. This consumer can establish
+    # clock consistency, never grant scientific prospective cohort credit.
+    pre_entry_clock_consistent = registration_evidence_present and first_seen_before_entry
+    prospective_forward_credit_eligible = False
     sessions_completed = max(0, len(calendar) - 1 - entry_i)
     terminal = entry_i + horizon < len(calendar)
     if terminal and not registration_evidence_present:
@@ -215,6 +228,8 @@ def build(
             "signal_date": signal_date,
             "first_registered_at": first_registered_at,
             "registration_anchor_source": registration_anchor_source,
+            "first_seen_before_entry": first_seen_before_entry,
+            "prospective_forward_credit_eligible": False,
             "state": "LATE_REGISTRATION_REJECTED",
             "source_health": source_health,
             "entry_date": entry_ts.date().isoformat(),
@@ -282,6 +297,10 @@ def build(
         "signal_date": signal_date,
         "first_registered_at": first_registered_at,
         "registration_anchor_source": registration_anchor_source,
+        "first_seen_before_entry": first_seen_before_entry,
+        "pre_entry_clock_consistent": pre_entry_clock_consistent,
+        "independent_original_issuer_authenticated": False,
+        "prospective_forward_credit_eligible": prospective_forward_credit_eligible,
         "state": "RESOLVED" if terminal else "PROSPECTIVE_OPEN",
         "source_health": {
             **source_health,
@@ -334,10 +353,24 @@ def enrich_scoreboard(
         "largecap_observation_generated_at": observation.get("generated_at"),
         "largecap_market_data_asof": observation.get("market_data_asof"),
     })
-    lane["evidence_grade"] = "FORWARD_OBSERVATION_RESOLVED" if observation.get("state") == "RESOLVED" else "FORWARD_OBSERVATION_OPEN"
+    # A historical recovery after entry can resolve a descriptive H20 tape,
+    # but it cannot establish an originally first-seen prospective cohort.
+    # The public observation cannot self-authenticate original Foundry issuer.
+    # A forged prior JSON or an asserted boolean is not promotion/forward credit.
+    qualified = False
+    clock_consistent = observation.get("first_seen_before_entry") is True
+    lane["evidence_grade"] = (
+        "PRE_ENTRY_CLOCK_CONSISTENT_SOURCE_ONLY" if observation.get("state") == "RESOLVED" and clock_consistent
+        else "RETROSPECTIVE_REGISTRATION_ONLY" if observation.get("state") == "RESOLVED"
+        else "FORWARD_OBSERVATION_OPEN_SOURCE_ONLY"
+    )
     scorecard = dict(lane.get("scorecard") or {})
     scorecard.update({
         "forward_state": observation.get("state"),
+        "first_seen_before_entry": observation.get("first_seen_before_entry"),
+        "pre_entry_clock_consistent": observation.get("pre_entry_clock_consistent"),
+        "independent_original_issuer_authenticated": False,
+        "prospective_forward_credit_eligible": qualified,
         "forward_sessions_completed": observation.get("sessions_completed"),
         "directional_sign_hit_rate_current": (observation.get("summary") or {}).get("directional_sign_hit_rate"),
         "mean_directional_excess_vs_spy_bps_current": (observation.get("summary") or {}).get("mean_directional_excess_vs_spy_bps"),
@@ -349,6 +382,7 @@ def enrich_scoreboard(
     scoreboard.setdefault("coverage", {})["largecap_transport_observer"] = {
         "present": True,
         "state": observation.get("state"),
+        "prospective_forward_credit_eligible": qualified,
         "generated_at": observation.get("generated_at"),
         "market_data_asof": observation.get("market_data_asof"),
         "sessions_completed": observation.get("sessions_completed"),
@@ -406,6 +440,11 @@ def self_test() -> None:
     out = build(adapter, date(2026, 1, 9), "2026-01-09T00:00:00+00:00", loader)
     assert out["state"] == "PROSPECTIVE_OPEN"
     assert out["first_registered_at"] == "2026-01-09T00:00:00+00:00"
+    assert out["first_seen_before_entry"] is False
+    assert out["prospective_forward_credit_eligible"] is False
+    timely = build(adapter, date(2026, 1, 9), "2026-01-02T22:00:00+00:00", loader)
+    assert timely["first_seen_before_entry"] is True
+    assert timely["prospective_forward_credit_eligible"] is False  # no prior durable anchor yet
     recovered_adapter = dict(adapter)
     recovered_adapter["signal_date"] = "2026-09-11"
     recovered = build(recovered_adapter, date(2026, 1, 9), "2026-09-18T06:00:00+00:00", loader)
@@ -431,6 +470,34 @@ def self_test() -> None:
     assert late["state"] == "LATE_REGISTRATION_REJECTED"
     resolved = build(adapter, long_dates[-1].date(), "2026-02-10T00:00:00+00:00", long_loader, prior=out)
     assert resolved["state"] == "RESOLVED"
+    assert resolved["first_seen_before_entry"] is False
+    assert resolved["prospective_forward_credit_eligible"] is False
+    timely_resolved = build(adapter, long_dates[-1].date(), "2026-02-10T00:00:00+00:00", long_loader, prior=timely)
+    assert timely_resolved["state"] == "RESOLVED"
+    assert timely_resolved["first_seen_before_entry"] is True
+    assert timely_resolved["pre_entry_clock_consistent"] is True
+    assert timely_resolved["prospective_forward_credit_eligible"] is False
+    late_score = enrich_scoreboard(
+        {"schema": SCOREBOARD_SCHEMA, "lanes": [{"program_id": PROGRAM_ID}], "coverage": {}, "decision_chain": {}},
+        resolved, "late-registration-test",
+    )
+    assert late_score["lanes"][0]["evidence_grade"] == "RETROSPECTIVE_REGISTRATION_ONLY"
+    assert late_score["lanes"][0]["scorecard"]["prospective_forward_credit_eligible"] is False
+    timely_score = enrich_scoreboard(
+        {"schema": SCOREBOARD_SCHEMA, "lanes": [{"program_id": PROGRAM_ID}], "coverage": {}, "decision_chain": {}},
+        timely_resolved, "timely-registration-test",
+    )
+    assert timely_score["lanes"][0]["evidence_grade"] == "PRE_ENTRY_CLOCK_CONSISTENT_SOURCE_ONLY"
+    assert timely_score["lanes"][0]["scorecard"]["prospective_forward_credit_eligible"] is False
+    # A caller-authored prior claiming issuer admission cannot upgrade grade.
+    forged = dict(timely_resolved, prospective_forward_credit_eligible=True,
+                  independent_original_issuer_authenticated=True)
+    forged_score = enrich_scoreboard(
+        {"schema": SCOREBOARD_SCHEMA, "lanes": [{"program_id": PROGRAM_ID}], "coverage": {}, "decision_chain": {}},
+        forged, "forged-source-only-issuer",
+    )
+    assert forged_score["lanes"][0]["evidence_grade"] == "PRE_ENTRY_CLOCK_CONSISTENT_SOURCE_ONLY"
+    assert forged_score["lanes"][0]["scorecard"]["prospective_forward_credit_eligible"] is False
 
     score = {"schema": SCOREBOARD_SCHEMA, "lanes": [{"program_id": PROGRAM_ID}], "coverage": {}, "decision_chain": {}}
     score = enrich_scoreboard(score, out, "test-largecap-sha")
