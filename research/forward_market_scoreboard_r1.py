@@ -754,15 +754,42 @@ def build(root: Path) -> dict[str, Any]:
         if value
     ]
     common_asof = min(market_data_dates) if market_data_dates else None
+    # A ledger can be internally cross-symbol synchronized while every
+    # program's latest historical source date lags an independently observed
+    # completed market session. Do not present that as a fresh forward source.
+    completed_reference = str(p249_health.get("latest_scored_common_session") or "")[:10]
+    forward_source_lag = {}
+    for program, health in (ledger_freshness.get("source_health_by_program") or {}).items():
+        if not isinstance(health, dict):
+            forward_source_lag[program] = {"state": "INVALID_SOURCE_HEALTH"}
+            continue
+        source_max = str(health.get("source_max_date") or "")[:10]
+        if not completed_reference:
+            continue
+        try:
+            source_day = datetime.strptime(source_max, "%Y-%m-%d").date()
+            reference_day = datetime.strptime(completed_reference, "%Y-%m-%d").date()
+        except ValueError:
+            forward_source_lag[program] = {"state": "INVALID_SOURCE_DATE", "source_max_date": source_max}
+            continue
+        if source_day < reference_day:
+            forward_source_lag[program] = {
+                "state": "SOURCE_HISTORY_BEHIND_OBSERVED_COMPLETED_SESSION",
+                "source_max_date": source_max,
+                "observed_completed_reference_session": completed_reference,
+            }
     freshness = {
         "common_market_data_asof": common_asof,
         "p249_p266_source_health": p249_health,
         "prospective_ledger": ledger_freshness,
+        "forward_source_lag_vs_observed_completed_session": forward_source_lag,
+        "forward_source_reference_state": ("OBSERVED_COMPLETED_SESSION" if completed_reference else "NO_INDEPENDENT_COMPLETED_SESSION"),
         "freshness_gap_visible": bool(
             p249_health.get("common_session_lags_source_max")
             or ledger_freshness.get("freshness_gap_visible")
             or p249_health.get("lagging_symbols_vs_source_max")
             or ledger_freshness.get("lagging_symbols_by_program")
+            or forward_source_lag
         ),
         "rule": "A successful workflow is not sufficient freshness proof. Consumers must compare the common market-data date with the expected completed exchange session and inspect per-symbol source health.",
     }
@@ -1069,6 +1096,45 @@ def self_test() -> None:
     partial_homebuilders["summary"] = {"HOMEBUILDERS": {"resolved_cohorts": 0}}
     partial_state = _prospective_state(partial_homebuilders, "HOMEBUILDERS")
     assert partial_state["homebuilders_cost_basis_projection_status"] == "ALL_REPORTABLE_PARTIAL_COHORTS_MIXED_COST_LABELLED"
+
+    # Cross-program freshness must not go green merely because all symbols
+    # stopped on the same old day while another observed source has a newer
+    # completed exchange session.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / "forward_p249_p266_shadow_r1.json").write_text(json.dumps({
+            "source_health": {
+                "latest_scored_common_session": "2026-10-23",
+                "common_session_lags_source_max": False,
+                "lagging_symbols_vs_source_max": [],
+            },
+        }))
+        ledger_path = root / "forward_prospective_cohort_ledger_r1.json"
+        stale_ledger = {
+            "schema": LEDGER_SCHEMA,
+            "market_data_asof": "2026-10-25",
+            "freshness": {
+                "freshness_gap_visible": False,
+                "lagging_symbols_by_program": {},
+                "source_health_by_program": {
+                    "SEMICONDUCTOR_SHARED_RIDGE": {
+                        "source_max_date": "2026-10-12",
+                        "all_symbols_share_latest_date": True,
+                    },
+                },
+            },
+            "cohorts": [],
+            "summary": {},
+        }
+        ledger_path.write_text(json.dumps(stale_ledger))
+        stale_result = build(root)
+        assert stale_result["freshness"]["freshness_gap_visible"] is True
+        assert stale_result["freshness"]["forward_source_lag_vs_observed_completed_session"]["SEMICONDUCTOR_SHARED_RIDGE"]["source_max_date"] == "2026-10-12"
+        stale_ledger["freshness"]["source_health_by_program"]["SEMICONDUCTOR_SHARED_RIDGE"]["source_max_date"] = "2026-10-23"
+        ledger_path.write_text(json.dumps(stale_ledger))
+        current_result = build(root)
+        assert current_result["freshness"]["forward_source_lag_vs_observed_completed_session"] == {}
+        assert current_result["freshness"]["freshness_gap_visible"] is False
 
     print("FORWARD_MARKET_SCOREBOARD_SELF_TEST=PASS")
 
