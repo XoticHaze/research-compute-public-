@@ -116,6 +116,16 @@ const rejectedOtherSource = await storeBoundary({ ...olderBoundary, runtime: { s
 assert.equal(rejectedOtherSource.status, 409, 'source changes cannot backdate the displayed observation');
 assert.equal((await storage.get('latest')).snapshot.runtime.source_sha, 'a'.repeat(40));
 assert.equal((await storeBoundary({ ...firstBoundary, generated_at_utc: 'not-utc' })).status, 400);
+for (const impossible of [
+  '2026-02-30T10:00:00Z',
+  '2026-02-29T10:00:00Z',
+  '2026-01-01T24:00:00Z',
+]) {
+  assert.equal((await storeBoundary({ ...firstBoundary, generated_at_utc: impossible })).status, 400,
+    `normalized impossible UTC clock must fail closed: ${impossible}`);
+}
+assert.equal((await storage.get('latest')).snapshot.generated_at_utc, currentAt,
+  'invalid calendar clocks cannot alter durable operator state');
 assert.equal((await storeBoundary({ ...firstBoundary, generated_at_utc: new Date(Date.now() + 300_000).toISOString() })).status, 400);
 assert.equal((await storeBoundary({ ...firstBoundary, generated_at_utc: newerAt })).status, 201);
 assert.equal((await storage.get('latest')).snapshot.generated_at_utc, newerAt);

@@ -337,7 +337,12 @@ function snapshotGeneratedAtMs(node) {
     return null;
   }
   const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : null;
+  if (!Number.isFinite(parsed)) return null;
+  // Date.parse normalizes impossible Gregorian dates and 24:00 into a
+  // different instant. An invalid producer clock must not advance or roll
+  // back the durable operator snapshot ordering authority.
+  return new Date(parsed).toISOString().slice(0, 19) === value.slice(0, 19)
+    ? parsed : null;
 }
 
 export function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
