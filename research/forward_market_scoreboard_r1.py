@@ -1416,7 +1416,7 @@ def self_test() -> None:
         ("incumbent", -1.0),
         ("incumbent", "0.02"),
         ("incumbent", True),
-        ("matched_control_if_flattened_now", -1.0 + 1e-16),
+        ("matched_control_if_flattened_now", 1e307),
     ):
         original_nav = challenger["forward"][key]["cumulative_return"]
         challenger["forward"][key]["cumulative_return"] = invalid_nav
@@ -1426,6 +1426,16 @@ def self_test() -> None:
         assert rejected["challenger_vs_matched_control_relative_wealth_bps"] is None
         assert rejected["incumbent_absolute_net_if_flattened_now_bps"] is None
         challenger["forward"][key]["cumulative_return"] = original_nav
+    # Individually finite NAVs can still overflow their relative-wealth
+    # ratio when the control wealth is extremely close to zero.
+    challenger["forward"]["challenger_if_flattened_now"]["cumulative_return"] = 1e303
+    challenger["forward"]["incumbent"]["cumulative_return"] = -1.0 + 1e-16
+    overflow = _challenger(challenger, "P558", "KMLM")["scorecard"]
+    assert overflow["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
+    assert overflow["challenger_vs_incumbent_relative_wealth_bps"] is None
+    challenger["forward"]["challenger_if_flattened_now"]["cumulative_return"] = -0.02054759529211936
+    challenger["forward"]["incumbent"]["cumulative_return"] = -0.0298141670103782
+
     original_challenger_nav = challenger["forward"]["challenger_if_flattened_now"]["cumulative_return"]
     challenger["forward"]["challenger_if_flattened_now"]["cumulative_return"] = float("nan")
     rejected = _challenger(challenger, "P558", "KMLM")["scorecard"]
