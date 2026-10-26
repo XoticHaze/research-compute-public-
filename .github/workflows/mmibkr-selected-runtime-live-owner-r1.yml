@@ -60,7 +60,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PRIVATE_SOURCE_SHA: 91b54e63f35b4643da430ca5160fa4a90885eade
+  PRIVATE_SOURCE_SHA: b434df5a17f9264ddbce073cd5226d4ddc5c04e0
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
   LIVE_SEAL_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-live-bot/seal
   IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:2e4f4911991386e941f6e95d58ee38a8242474dd3be239f21ad82557d24b4368
@@ -302,8 +302,12 @@ jobs:
           # A real reset late in a 15m session must not be cut short by
           # the nominal session end before the 480s controller delay finishes.
           for marker in ('while :; do', 'pool_maintenance_alert_after_outage()',
-                         '[ "$now" -ge "$end" ]', '[ "$now" -ge "$((end + 720))" ]',
-                         '[ "$now" -ge "$((outage_since + 720))" ]',
+                         'pool_reset_window_outage()',
+                         '[ "$now" -ge "$end" ]', 'observation_budget=600',
+                         'observation_budget=720',
+                         '[ "$now" -ge "$((end + observation_budget))" ]',
+                         '[ "$now" -ge "$((outage_since + observation_budget))" ]',
+                         'MMIBKR_GATEWAY_POOL_RESET_WINDOW_READONLY_OBSERVATION_STARTED=1',
                          'MMIBKR_GATEWAY_POOL_MAINTENANCE_BOUNDED_OBSERVATION=1',
                          'MMIBKR_GATEWAY_POOL_MAINTENANCE_OBSERVATION_INCOMPLETE=1'):
               assert marker in pool, marker
@@ -451,6 +455,9 @@ jobs:
 
       - name: Verify direct legacy writable prestart denial (brokerless)
         run: python -m unittest -v tests.test_mmibkr_live_legacy_prestart_gate_v1
+
+      - name: Verify reset-window bounded read-only observation (brokerless)
+        run: python -m unittest -v tests.test_mmibkr_live_gateway_reset_window_observation_v1
 
   owner:
     if: github.event_name == 'workflow_dispatch'
@@ -1012,6 +1019,7 @@ jobs:
           outage_since=0
           maintenance_grace_used=0
           maintenance_evidence_seen=0
+          reset_window_grace_used=0
           ready=0
           owner_probe_sample=0
           private_probe_log="$RUNNER_TEMP/mmibkr-gateway-read-probe-private.log"
@@ -1043,9 +1051,12 @@ jobs:
           echo "MMIBKR_GATEWAY_ONLY_POOL_SESSION_SECONDS=$((POOL_SESSION_MINUTES * 60))"
           pool_resource_sample initial
           docker exec mmibkr-live-gateway du -sm /home/ibgateway/Jts_b1 2>/dev/null | awk '{print "MMIBKR_POOL_JTS_DISK_MIB_INITIAL="$1}' || true
-          # A short acceptance can reach a real 480s maintenance reset near
-          # its nominal end. Extend observation only for a fresh in-window
-          # post-outage controller alert, never for an ordinary API outage.
+          # A short read-only acceptance can overlap IBKR's North America
+          # reset. An observed account API outage beginning within the exact
+          # reset window may use at most the existing 600s recovery budget even
+          # if a still-alive JVM has not emitted a controller maintenance alert.
+          # The 720s extended budget still requires the native controller alert.
+          # This only extends observation, never starts a bot or retries orders.
           pool_maintenance_alert_after_outage() {
             [ "$outage_since" -gt 0 ] && [ "$maintenance_grace_used" -eq 0 ] || return 1
             local eastern_time outage_utc
@@ -1054,6 +1065,16 @@ jobs:
             { [[ "$eastern_time" > "2329" ]] || [[ "$eastern_time" < "0201" ]]; } &&
               docker logs --since "$outage_utc" mmibkr-live-gateway 2>&1 |
                 grep -F 'ALERT_IBKR_MAINTENANCE_RECOVERY' >/dev/null
+          }
+          pool_reset_window_outage() {
+            [ "$outage_since" -gt 0 ] && [ "$reset_window_grace_used" -eq 0 ] || return 1
+            local outage_eastern_hhmm outage_eastern_weekday
+            outage_eastern_hhmm="$(TZ=America/New_York date -d "@$outage_since" +%H%M)" || return 1
+            outage_eastern_weekday="$(TZ=America/New_York date -d "@$outage_since" +%u)" || return 1
+            # Sunday-Friday 00:15-01:45 Eastern, DST handled by zoneinfo.
+            [ "$outage_eastern_weekday" != 6 ] &&
+              [[ "$outage_eastern_hhmm" > "0014" ]] &&
+              [[ "$outage_eastern_hhmm" < "0146" ]]
           }
           while :; do
             now="$(date +%s)"
@@ -1064,10 +1085,17 @@ jobs:
                 maintenance_evidence_seen=1
                 echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_GRACE_STARTED=1'
               fi
-              # Hard stop: nominal end + 720s AND outage start + 720s.
-              if [ "$maintenance_evidence_seen" -eq 0 ] ||
-                 [ "$now" -ge "$((end + 720))" ] ||
-                 [ "$now" -ge "$((outage_since + 720))" ]; then
+              if [ "$maintenance_evidence_seen" -eq 0 ] && pool_reset_window_outage; then
+                reset_window_grace_used=1
+                echo 'MMIBKR_GATEWAY_POOL_RESET_WINDOW_READONLY_OBSERVATION_STARTED=1'
+              fi
+              # Never extend an ordinary non-reset API outage. Without a native
+              # controller alert the pre-existing 600s budget remains binding.
+              observation_budget=600
+              if [ "$maintenance_evidence_seen" -eq 1 ]; then observation_budget=720; fi
+              if { [ "$maintenance_evidence_seen" -eq 0 ] && [ "$reset_window_grace_used" -eq 0 ]; } ||
+                 [ "$now" -ge "$((end + observation_budget))" ] ||
+                 [ "$now" -ge "$((outage_since + observation_budget))" ]; then
                 echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_OBSERVATION_INCOMPLETE=1'
                 break
               fi
