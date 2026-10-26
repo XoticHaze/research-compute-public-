@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -757,20 +758,34 @@ def build(root: Path) -> dict[str, Any]:
     # A ledger can be internally cross-symbol synchronized while every
     # program's latest historical source date lags an independently observed
     # completed market session. Do not present that as a fresh forward source.
-    completed_reference = str(p249_health.get("latest_scored_common_session") or "")[:10]
+    def strict_session_day(value: Any):
+        # Never silently truncate malformed timestamps into valid-looking dates.
+        if not isinstance(value, str) or re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value) is None:
+            return None
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+    completed_reference = p249_health.get("latest_scored_common_session")
+    reference_day = strict_session_day(completed_reference)
+    reference_state = (
+        "OBSERVED_COMPLETED_SESSION" if reference_day is not None
+        else "INVALID_INDEPENDENT_COMPLETED_SESSION"
+        if completed_reference not in (None, "") else "NO_INDEPENDENT_COMPLETED_SESSION"
+    )
     forward_source_lag = {}
     for program, health in (ledger_freshness.get("source_health_by_program") or {}).items():
         if not isinstance(health, dict):
             forward_source_lag[program] = {"state": "INVALID_SOURCE_HEALTH"}
             continue
-        source_max = str(health.get("source_max_date") or "")[:10]
-        if not completed_reference:
+        source_max = health.get("source_max_date")
+        source_day = strict_session_day(source_max)
+        if source_day is None:
+            # Do not reflect malformed, potentially sensitive raw values.
+            forward_source_lag[program] = {"state": "INVALID_SOURCE_DATE"}
             continue
-        try:
-            source_day = datetime.strptime(source_max, "%Y-%m-%d").date()
-            reference_day = datetime.strptime(completed_reference, "%Y-%m-%d").date()
-        except ValueError:
-            forward_source_lag[program] = {"state": "INVALID_SOURCE_DATE", "source_max_date": source_max}
+        if reference_day is None:
             continue
         if source_day < reference_day:
             forward_source_lag[program] = {
@@ -783,13 +798,14 @@ def build(root: Path) -> dict[str, Any]:
         "p249_p266_source_health": p249_health,
         "prospective_ledger": ledger_freshness,
         "forward_source_lag_vs_observed_completed_session": forward_source_lag,
-        "forward_source_reference_state": ("OBSERVED_COMPLETED_SESSION" if completed_reference else "NO_INDEPENDENT_COMPLETED_SESSION"),
+        "forward_source_reference_state": reference_state,
         "freshness_gap_visible": bool(
             p249_health.get("common_session_lags_source_max")
             or ledger_freshness.get("freshness_gap_visible")
             or p249_health.get("lagging_symbols_vs_source_max")
             or ledger_freshness.get("lagging_symbols_by_program")
             or forward_source_lag
+            or reference_day is None
         ),
         "rule": "A successful workflow is not sufficient freshness proof. Consumers must compare the common market-data date with the expected completed exchange session and inspect per-symbol source health.",
     }
@@ -1135,6 +1151,25 @@ def self_test() -> None:
         current_result = build(root)
         assert current_result["freshness"]["forward_source_lag_vs_observed_completed_session"] == {}
         assert current_result["freshness"]["freshness_gap_visible"] is False
+        stale_ledger["freshness"]["source_health_by_program"]["SEMICONDUCTOR_SHARED_RIDGE"]["source_max_date"] = "2026-10-23garbage"
+        ledger_path.write_text(json.dumps(stale_ledger))
+        malformed_source = build(root)["freshness"]
+        assert malformed_source["forward_source_lag_vs_observed_completed_session"]["SEMICONDUCTOR_SHARED_RIDGE"]["state"] == "INVALID_SOURCE_DATE"
+        assert malformed_source["freshness_gap_visible"] is True
+        stale_ledger["freshness"]["source_health_by_program"]["SEMICONDUCTOR_SHARED_RIDGE"]["source_max_date"] = "2026-10-23"
+        ledger_path.write_text(json.dumps(stale_ledger))
+        p249_path = root / "forward_p249_p266_shadow_r1.json"
+        p249 = json.loads(p249_path.read_text())
+        p249["source_health"]["latest_scored_common_session"] = "2026-10-23T99:99:99Z"
+        p249_path.write_text(json.dumps(p249))
+        malformed_reference = build(root)["freshness"]
+        assert malformed_reference["forward_source_reference_state"] == "INVALID_INDEPENDENT_COMPLETED_SESSION"
+        assert malformed_reference["freshness_gap_visible"] is True
+        p249["source_health"].pop("latest_scored_common_session")
+        p249_path.write_text(json.dumps(p249))
+        missing_reference = build(root)["freshness"]
+        assert missing_reference["forward_source_reference_state"] == "NO_INDEPENDENT_COMPLETED_SESSION"
+        assert missing_reference["freshness_gap_visible"] is True
 
     print("FORWARD_MARKET_SCOREBOARD_SELF_TEST=PASS")
 
