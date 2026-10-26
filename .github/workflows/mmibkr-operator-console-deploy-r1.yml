@@ -770,6 +770,7 @@ jobs:
           python - <<'PY'
           import os
           from urllib.error import HTTPError
+          from urllib.parse import urlsplit
           from urllib.request import HTTPRedirectHandler, Request, build_opener
 
           base = os.environ['OPERATOR_CONSOLE_URL'].rstrip('/')
@@ -779,7 +780,22 @@ jobs:
                   return None
 
           opener = build_opener(NoRedirect)
-          for path in ('/', '/bot-console', '/operator/promotion-review', '/api/operator-snapshot', '/healthz'):
+
+          def is_access_redirect(location):
+              # The previous substring check accepted attacker hosts/queries.
+              # Only a real HTTPS Cloudflare Access login host is admission.
+              try:
+                  parsed = urlsplit(location)
+                  host = (parsed.hostname or '').lower()
+              except ValueError:
+                  return False
+              return parsed.scheme == 'https' and (
+                  host == 'cloudflareaccess.com'
+                  or host.endswith('.cloudflareaccess.com')
+              )
+
+          browser_paths = ('/', '/bot-console', '/operator/promotion-review')
+          for path in (*browser_paths, '/api/operator-snapshot', '/healthz'):
               req = Request(
                   base + path,
                   headers={
@@ -800,16 +816,21 @@ jobs:
                   raise SystemExit(
                       f'unauthenticated operator-console path became public: {path}:{status}'
                   )
+              # Browser routes must reach the real Access login, not merely
+              # return a Worker-side 403 while the Access app is unbound.
+              if path in browser_paths and status not in {302, 303, 307}:
+                  raise SystemExit(
+                      f'Cloudflare Access browser login redirect missing: {path}:{status}'
+                  )
               if status not in {302, 303, 307, 403}:
                   raise SystemExit(
                       f'unauthenticated operator-console path unexpected status: {path}:{status}'
                   )
-              if (
-                  status in {302, 303, 307}
-                  and 'cloudflareaccess.com' not in location
-              ):
+              if status in {302, 303, 307} and not is_access_redirect(location):
+                  # Never echo Location: provider redirects can contain
+                  # private operator/account/session query parameters.
                   raise SystemExit(
-                      f'unauthenticated redirect is not Cloudflare Access: {path}:{location}'
+                      f'Cloudflare Access redirect host rejected: {path}:{status}'
                   )
 
           configured = bool(
