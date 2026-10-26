@@ -346,6 +346,9 @@ function snapshotGeneratedAtMs(node) {
 }
 
 export function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
+  // A duplicate or malformed incoming runtime ID must never be silently
+  // collapsed by Map last-wins semantics before the UI sees the snapshot.
+  validateSnapshot(incomingSnapshot);
   const previous = previousRecord?.snapshot;
   if (!previous || typeof previous !== 'object' || Array.isArray(previous)) {
     return {
@@ -461,6 +464,16 @@ function validateSnapshot(node) {
   if (!runtimes || !positions) throw new Error('snapshot_collection_contract_rejected');
   if (runtimes.length > 100 || positions.length > 500) {
     throw new Error('snapshot_collection_size_rejected');
+  }
+  const seenRuntimeIds = new Set();
+  for (const row of runtimes) {
+    const id = row?.runtime_id;
+    if (!row || typeof row !== 'object' || Array.isArray(row)
+        || typeof id !== 'string' || !id || id !== id.trim()
+        || seenRuntimeIds.has(id)) {
+      throw new Error('snapshot_runtime_identity_invalid_or_duplicate');
+    }
+    seenRuntimeIds.add(id);
   }
   return node;
 }
