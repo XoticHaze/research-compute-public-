@@ -193,16 +193,31 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
             namespace,
         )
         accepts = namespace["is_access_redirect"]
-        self.assertTrue(accepts("https://team.cloudflareaccess.com/cdn-cgi/access/login"))
+        tenant = "https://team.cloudflareaccess.com"
+        valid = "https://team.cloudflareaccess.com/cdn-cgi/access/login"
+        self.assertTrue(accepts(valid, tenant))
         for invalid in (
             "https://evil.example/redirect?next=cloudflareaccess.com",
             "https://cloudflareaccess.com.evil.example/login",
             "https://team.cloudflareaccess.com.evil.example/login",
             "http://team.cloudflareaccess.com/cdn-cgi/access/login",
             "https://evil.example/redirect?token=private",
+            "https://other.cloudflareaccess.com/cdn-cgi/access/login",
+            "https://team.cloudflareaccess.com:444/cdn-cgi/access/login",
+            "https://user@team.cloudflareaccess.com/cdn-cgi/access/login",
         ):
             with self.subTest(invalid=invalid):
-                self.assertFalse(accepts(invalid))
+                self.assertFalse(accepts(invalid, tenant))
+        for invalid_tenant in (
+            "",
+            "https://other.cloudflareaccess.com",
+            "https://team.cloudflareaccess.com.evil.example",
+            "http://team.cloudflareaccess.com",
+            "https://user@team.cloudflareaccess.com",
+        ):
+            with self.subTest(invalid_tenant=invalid_tenant):
+                self.assertFalse(accepts(valid, invalid_tenant))
+        self.assertIn("os.environ.get('MMIBKR_ACCESS_TEAM_DOMAIN', '')", script)
         self.assertIn("if path in browser_paths and status not in {302, 303, 307}:", script)
         self.assertNotIn("and 'cloudflareaccess.com' not in location", script)
         self.assertNotIn(":{location}", script)
