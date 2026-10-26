@@ -58,6 +58,13 @@ class TestForwardGapContinuity(unittest.TestCase):
         self.assertEqual(result["forward"]["monthly_hold_drift_diagnostic"]["status"], "SOURCE_GAP_UNRESOLVED_NO_ECONOMIC_CURRENT")
         self.assertEqual(result["forward"]["monthly_hold_drift_diagnostic"]["first_unresolved_session"], "2026-09-11")
 
+    def test_unpinned_exchange_calendar_dependency_fails_closed(self):
+        with patch("importlib.metadata.version", return_value="0.0"):
+            with self.assertRaisesRegex(RuntimeError, "P249_EXCHANGE_CALENDAR_DEPENDENCY_MISMATCH"):
+                observer._expected_forward_sessions(
+                    pd.Timestamp("2026-09-10"), pd.Timestamp("2026-09-15").date()
+                )
+
     def test_all_symbol_exchange_session_omission_freezes_prospective_path(self):
         result = self._run(
             {"A": [100, 101, 102, 103, 104], "B": [100, 101, 102, 103, 104]},
