@@ -419,8 +419,50 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
         for cohort in reportable:
             projection = projections.get(str(cohort.get("cohort_id"))) or {}
             legacy = projection.get("legacy_stock_net_minus_itb_gross_mean_bps")
+            # A finite caller-supplied projection is not proof that it was
+            # derived from THIS immutable cohort. Rebind the status label to
+            # the original resolved rows; do not alter the original returns.
+            resolution = cohort.get("resolution")
+            observations = resolution.get("observations") if isinstance(resolution, dict) else None
+            observations = observations if isinstance(observations, list) else []
+            resolved_obs = [r for r in observations if isinstance(r, dict)
+                            and r.get("status") == "RESOLVED"]
+            fields = {
+                "stock_net_mean_bps": "net_return_bps",
+                "itb_gross_mean_bps": "itb_return_bps",
+                "qqq_gross_mean_bps": "qqq_return_bps",
+                "legacy_stock_net_minus_itb_gross_mean_bps": "excess_vs_itb_bps",
+                "legacy_stock_net_minus_qqq_gross_mean_bps": "excess_vs_qqq_bps",
+            }
+            source_numeric = all(
+                isinstance(r.get(field), (int, float))
+                and not isinstance(r.get(field), bool)
+                and math.isfinite(r[field])
+                for r in resolved_obs for field in fields.values()
+            )
+            source_bound = (
+                bool(resolved_obs)
+                and source_numeric
+                and projection.get("resolved_observations") == len(resolved_obs)
+                and isinstance(cohort.get("stock_round_trip_cost_bps"), (int, float))
+                and not isinstance(cohort.get("stock_round_trip_cost_bps"), bool)
+                and math.isfinite(cohort["stock_round_trip_cost_bps"])
+                and projection.get("stock_round_trip_cost_bps") == float(cohort["stock_round_trip_cost_bps"])
+                and all(
+                    projection.get(projected) == round(
+                        sum(float(r[source]) for r in resolved_obs) / len(resolved_obs), 4
+                    )
+                    for projected, source in fields.items()
+                )
+                and (
+                    (cohort.get("status") == "RESOLVED" and len(resolved_obs) == len(observations))
+                    or (cohort.get("status") == "PARTIALLY_RESOLVED"
+                        and len(resolved_obs) < len(observations))
+                )
+            )
             if (
-                projection.get("status") == "DERIVED_MIXED_COST_ONLY_BENCHMARK_FEES_UNFROZEN"
+                source_bound
+                and projection.get("status") == "DERIVED_MIXED_COST_ONLY_BENCHMARK_FEES_UNFROZEN"
                 and projection.get("original_resolution_mutated") is False
                 and projection.get("alpha_or_promotion_authority") is False
                 and projection.get("matched_stock_net_minus_itb_net_mean_bps") is None
@@ -966,12 +1008,23 @@ def self_test() -> None:
         "cohorts": [{"cohort_id": "HB_COST", "program_id": "HOMEBUILDERS",
                      "status": "RESOLVED", "signal_date": "2026-09-10",
                      "first_registered_at": "2026-09-11T00:00:00+00:00",
-                     "resolution": {"observations": []}}],
+                     "stock_round_trip_cost_bps": 25.0,
+                     "resolution": {"observations": [{
+                         "status": "RESOLVED", "net_return_bps": 100.0,
+                         "itb_return_bps": 11.0361, "qqq_return_bps": 599.9839,
+                         "excess_vs_itb_bps": 88.9639,
+                         "excess_vs_qqq_bps": -499.9839}]}}],
         "summary": {"HOMEBUILDERS": {"resolved_cohorts": 1,
                                     "mean_excess_vs_itb_bps": 88.9639}},
         "homebuilders_cost_basis_projections": {
             "HB_COST": {"status": "DERIVED_MIXED_COST_ONLY_BENCHMARK_FEES_UNFROZEN",
+                        "resolved_observations": 1,
+                        "stock_round_trip_cost_bps": 25.0,
+                        "stock_net_mean_bps": 100.0,
+                        "itb_gross_mean_bps": 11.0361,
+                        "qqq_gross_mean_bps": 599.9839,
                         "legacy_stock_net_minus_itb_gross_mean_bps": 88.9639,
+                        "legacy_stock_net_minus_qqq_gross_mean_bps": -499.9839,
                         "matched_stock_net_minus_itb_net_mean_bps": None,
                         "original_resolution_mutated": False,
                         "alpha_or_promotion_authority": False}},
@@ -982,12 +1035,35 @@ def self_test() -> None:
     assert homebuilders_state["mean_matched_after_cost_excess_vs_itb_bps"] is None
     assert homebuilders_state["homebuilders_funded_portfolio_nav_return_bps"] is None
     assert homebuilders_state["legacy_mean_excess_vs_itb_basis"] == "STOCK_NET_MINUS_ITB_GROSS_NOT_MATCHED_AFTER_COST"
+    # False-green falsifiers: a status-only resolved cohort with zero rows,
+    # a stale cost projection and a changed original row must all fail closed.
+    empty_homebuilders = dict(homebuilders_cost_ledger)
+    empty_homebuilders["cohorts"] = [{
+        **homebuilders_cost_ledger["cohorts"][0], "resolution": {"observations": []}
+    }]
+    assert _prospective_state(empty_homebuilders, "HOMEBUILDERS")[
+        "homebuilders_cost_basis_projection_status"] == "MIXED_COST_PROJECTION_INCOMPLETE"
+    stale_homebuilders = dict(homebuilders_cost_ledger)
+    stale_homebuilders["homebuilders_cost_basis_projections"] = {
+        "HB_COST": {**homebuilders_cost_ledger["homebuilders_cost_basis_projections"]["HB_COST"],
+                    "stock_round_trip_cost_bps": 50.0}}
+    assert _prospective_state(stale_homebuilders, "HOMEBUILDERS")[
+        "homebuilders_cost_basis_projection_status"] == "MIXED_COST_PROJECTION_INCOMPLETE"
+    changed_homebuilders = dict(homebuilders_cost_ledger)
+    changed_homebuilders["cohorts"] = [{
+        **homebuilders_cost_ledger["cohorts"][0],
+        "resolution": {"observations": [{
+            **homebuilders_cost_ledger["cohorts"][0]["resolution"]["observations"][0],
+            "excess_vs_itb_bps": 77.0}]}
+    }]
+    assert _prospective_state(changed_homebuilders, "HOMEBUILDERS")[
+        "homebuilders_cost_basis_projection_status"] == "MIXED_COST_PROJECTION_INCOMPLETE"
     partial_homebuilders = dict(homebuilders_cost_ledger)
     partial_homebuilders["cohorts"] = [{
         **homebuilders_cost_ledger["cohorts"][0],
         "status": "PARTIALLY_RESOLVED",
         "resolution": {"observations": [
-            {"status": "RESOLVED", "net_return_bps": 10},
+            dict(homebuilders_cost_ledger["cohorts"][0]["resolution"]["observations"][0]),
             {"status": "OPEN"}]},
     }]
     partial_homebuilders["summary"] = {"HOMEBUILDERS": {"resolved_cohorts": 0}}
