@@ -319,7 +319,7 @@ function snapshotSourceSha(node) {
 function snapshotGeneratedAtMs(node) {
   const value = node?.generated_at_utc;
   if (typeof value !== 'string'
-      || !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$/.test(value)) {
+      || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value)) {
     return null;
   }
   const parsed = Date.parse(value);
