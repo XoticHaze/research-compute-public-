@@ -909,7 +909,8 @@ def _homebuilders_cost_basis_projections(cohorts: list[dict[str, Any]]) -> dict[
             continue
         stock_cost = cohort.get("stock_round_trip_cost_bps")
         numeric = [stock_cost] + [row.get(key) for row in resolved for key in (
-            "net_return_bps", "itb_return_bps", "qqq_return_bps")]
+            "net_return_bps", "itb_return_bps", "qqq_return_bps",
+            "excess_vs_itb_bps", "excess_vs_qqq_bps")]
         if any(isinstance(value, bool) or not isinstance(value, (int, float))
                or not math.isfinite(value) for value in numeric):
             out[identity] = {"status": "INVALID_FROZEN_RETURN_OR_COST_NO_PROJECTION"}
@@ -918,14 +919,16 @@ def _homebuilders_cost_basis_projections(cohorts: list[dict[str, Any]]) -> dict[
         stock_net = sum(float(row["net_return_bps"]) for row in resolved) / n
         itb_gross = sum(float(row["itb_return_bps"]) for row in resolved) / n
         qqq_gross = sum(float(row["qqq_return_bps"]) for row in resolved) / n
+        legacy_itb = sum(float(row["excess_vs_itb_bps"]) for row in resolved) / n
+        legacy_qqq = sum(float(row["excess_vs_qqq_bps"]) for row in resolved) / n
         out[identity] = {
             "status": "DERIVED_MIXED_COST_ONLY_BENCHMARK_FEES_UNFROZEN",
             "resolved_observations": n,
             "stock_net_mean_bps": round(stock_net, 4),
             "itb_gross_mean_bps": round(itb_gross, 4),
             "qqq_gross_mean_bps": round(qqq_gross, 4),
-            "legacy_stock_net_minus_itb_gross_mean_bps": round(stock_net - itb_gross, 4),
-            "legacy_stock_net_minus_qqq_gross_mean_bps": round(stock_net - qqq_gross, 4),
+            "legacy_stock_net_minus_itb_gross_mean_bps": round(legacy_itb, 4),
+            "legacy_stock_net_minus_qqq_gross_mean_bps": round(legacy_qqq, 4),
             "matched_stock_net_minus_itb_net_mean_bps": None,
             "matched_stock_net_minus_qqq_net_mean_bps": None,
             "stock_round_trip_cost_bps": float(stock_cost),
@@ -1157,8 +1160,8 @@ def self_test() -> None:
         "cohort_id": "HB_SYNTHETIC", "program_id": "HOMEBUILDERS",
         "status": "RESOLVED", "stock_round_trip_cost_bps": 25,
         "resolution": {"observations": [
-            {"status": "RESOLVED", "net_return_bps": 100, "itb_return_bps": 50, "qqq_return_bps": 60},
-            {"status": "RESOLVED", "net_return_bps": 0, "itb_return_bps": 20, "qqq_return_bps": 40},
+            {"status": "RESOLVED", "net_return_bps": 100, "itb_return_bps": 50, "qqq_return_bps": 60, "excess_vs_itb_bps": 50, "excess_vs_qqq_bps": 40},
+            {"status": "RESOLVED", "net_return_bps": 0, "itb_return_bps": 20, "qqq_return_bps": 40, "excess_vs_itb_bps": -20, "excess_vs_qqq_bps": -40},
         ]},
     }
     original_homebuilders = json.dumps(homebuilders_frozen, sort_keys=True)
