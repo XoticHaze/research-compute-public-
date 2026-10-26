@@ -205,6 +205,19 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertIn("selected_runtime_write: false", contract)
         self.assertIn("live_execution_allowed: false", contract)
 
+    def test_access_gated_promotion_decision_requires_same_origin_json_before_mutation(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        start = text.index("url.pathname === '/api/promotion-review/decision'")
+        end = text.index("url.pathname === '/api/operator-snapshot'", start)
+        route = text[start:end]
+        self.assertIn("operatorDecisionRequestIsSameOrigin(request)", route)
+        self.assertIn("operator_mutation_origin_rejected", route)
+        self.assertLess(route.index("operatorDecisionRequestIsSameOrigin(request)"),
+                        route.index("await request.text()"))
+        self.assertLess(route.index("operatorDecisionRequestIsSameOrigin(request)"),
+                        route.index("operator-state.internal/promotion/decision"))
+        self.assertLess(text.index("await verifyAccess(request, env)"), start)
+
     def test_promotion_candidate_publisher_is_separate_from_snapshot_publisher(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("const ALLOWED_PROMOTION_PUBLISHERS", text)
