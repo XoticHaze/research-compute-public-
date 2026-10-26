@@ -485,29 +485,37 @@ export class OperatorState {
       if (incomingGeneratedAt === null || incomingGeneratedAt > Date.now() + 60_000) {
         return json({ error: 'snapshot_generated_at_invalid' }, 400);
       }
-      const previousRecord = await this.ctx.storage.get('latest');
-      const previousGeneratedAt = snapshotGeneratedAtMs(previousRecord?.snapshot);
-      if (previousGeneratedAt !== null && incomingGeneratedAt < previousGeneratedAt) {
-        return json({ error: 'snapshot_out_of_order' }, 409);
-      }
-      const merged = mergeRuntimeProjection(previousRecord, incomingSnapshot);
-      const snapshot = merged.snapshot;
-      const transport = body.transport && typeof body.transport === 'object'
-        ? body.transport
-        : {};
-      const record = {
-        schema: 'mmibkr.operator_console_state.v1',
-        stored_at_utc: new Date().toISOString(),
-        snapshot,
-        transport: {
-          publisher: transport.publisher || {},
-          published_at_utc: transport.published_at_utc || null,
-          received_runtime_count: incomingSnapshot.runtimes.length,
-          stored_runtime_count: snapshot.runtimes.length,
-          runtime_merge_applied: merged.runtimeMergeApplied,
-        },
-      };
-      await this.ctx.storage.put('latest', record);
+      // Compare-and-store must share a Durable Object storage transaction.
+      // Independent read/put awaits can otherwise interleave concurrent
+      // publishers and allow an older completion to overwrite a newer bar.
+      const accepted = await this.ctx.storage.transaction(async (txn) => {
+        const previousRecord = await txn.get('latest');
+        const previousGeneratedAt = snapshotGeneratedAtMs(previousRecord?.snapshot);
+        if (previousGeneratedAt !== null && incomingGeneratedAt < previousGeneratedAt) {
+          return { outOfOrder: true };
+        }
+        const merged = mergeRuntimeProjection(previousRecord, incomingSnapshot);
+        const snapshot = merged.snapshot;
+        const transport = body.transport && typeof body.transport === 'object'
+          ? body.transport
+          : {};
+        const record = {
+          schema: 'mmibkr.operator_console_state.v1',
+          stored_at_utc: new Date().toISOString(),
+          snapshot,
+          transport: {
+            publisher: transport.publisher || {},
+            published_at_utc: transport.published_at_utc || null,
+            received_runtime_count: incomingSnapshot.runtimes.length,
+            stored_runtime_count: snapshot.runtimes.length,
+            runtime_merge_applied: merged.runtimeMergeApplied,
+          },
+        };
+        await txn.put('latest', record);
+        return { record, merged, snapshot };
+      });
+      if (accepted.outOfOrder) return json({ error: 'snapshot_out_of_order' }, 409);
+      const { record, merged, snapshot } = accepted;
       const readback = await this.ctx.storage.get('latest');
       const readbackVerified = Boolean(
         readback

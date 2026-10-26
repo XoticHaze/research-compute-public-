@@ -80,9 +80,19 @@ assert.ok(repeated.snapshot.runtimes.every((row) => row.data_health.current === 
 console.log('MMIBKR_OPERATOR_CONSOLE_CARRIED_RUNTIME_FRESHNESS=PASS');
 
 const backing = new Map();
+let storageTransactionCount = 0;
+let transactionTail = Promise.resolve();
 const storage = {
   async get(key) { return backing.get(key); },
   async put(key, value) { backing.set(key, value); },
+  async transaction(fn) {
+    storageTransactionCount += 1;
+    const predecessor = transactionTail;
+    let release;
+    transactionTail = new Promise((resolve) => { release = resolve; });
+    await predecessor;
+    try { return await fn(this); } finally { release(); }
+  },
 };
 const state = new OperatorState({ storage }, {});
 async function storeBoundary(snapshotValue) {
@@ -109,5 +119,13 @@ assert.equal((await storeBoundary({ ...firstBoundary, generated_at_utc: 'not-utc
 assert.equal((await storeBoundary({ ...firstBoundary, generated_at_utc: new Date(Date.now() + 300_000).toISOString() })).status, 400);
 assert.equal((await storeBoundary({ ...firstBoundary, generated_at_utc: newerAt })).status, 201);
 assert.equal((await storage.get('latest')).snapshot.generated_at_utc, newerAt);
+assert.ok(storageTransactionCount >= 3, 'publisher ordering must be enforced inside DO storage transaction');
+const concurrentOld = { ...firstBoundary, generated_at_utc: new Date(Date.now() - 180_000).toISOString() };
+const concurrentNew = { ...firstBoundary, generated_at_utc: new Date(Date.now() - 10_000).toISOString() };
+const outcomes = await Promise.all([storeBoundary(concurrentNew), storeBoundary(concurrentOld)]);
+assert.ok(outcomes.some((response) => response.status === 201));
+assert.ok(outcomes.some((response) => response.status === 409));
+assert.equal((await storage.get('latest')).snapshot.generated_at_utc, concurrentNew.generated_at_utc,
+  'concurrent out-of-order publisher completion cannot roll back durable state');
 console.log('MMIBKR_OPERATOR_CONSOLE_MONOTONIC_SNAPSHOT_FRESHNESS=PASS');
 
