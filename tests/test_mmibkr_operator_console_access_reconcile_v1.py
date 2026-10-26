@@ -311,6 +311,15 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertNotIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_POLICY_ID=", text)
         self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_APP=CONFIGURED", text)
 
+    def test_source_only_main_merge_cannot_auto_fire_cloudflare_deploy(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("  workflow_dispatch:", text)
+        push = text.split("\n  push:\n", 1)[1].split("\n  pull_request:\n", 1)[0]
+        self.assertIn("'rendezvous/fire/mmibkr-operator-console-deploy-r1'", push)
+        self.assertNotIn("'.github/workflows/mmibkr-operator-console-deploy-r1.yml'", push)
+        self.assertNotIn("'cloudflare/operator-console/**'", push)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_OWNER_RELEASE_APPROVAL_MISSING_OR_INVALID=1", text)
+
 
 if __name__ == "__main__":
     unittest.main()

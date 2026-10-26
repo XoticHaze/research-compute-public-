@@ -8,13 +8,13 @@ on:
         required: true
         default: d8b02b00a14b7c23ec04b6379d6b64ba6bb376e8
         type: string
+  # Mainline source changes are review/CI only. Only an explicit release fire
+  # marker or owner workflow_dispatch can request an Access-locked deploy.
   push:
     branches:
       - main
     paths:
       - 'rendezvous/fire/mmibkr-operator-console-deploy-r1'
-      - '.github/workflows/mmibkr-operator-console-deploy-r1.yml'
-      - 'cloudflare/operator-console/**'
   pull_request:
     branches:
       - main
