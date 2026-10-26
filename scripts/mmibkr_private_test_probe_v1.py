@@ -252,6 +252,9 @@ SOURCE_ONLY_BUILDER_MODULES = frozenset({
 SAFE_EXACT.update(SOURCE_ONLY_BUILDER_MODULES)
 # Exact selected #888 admitted futures row-identity synthetic test, no external data.
 SOURCE_ONLY_MARKET_DATA_MODULES = frozenset({
+    # Exact #1132 synthetic, signed read-only OHLCV admission tests only.
+    # This is NOT the B1 producer or a live/paper broker-session test.
+    "tests.test_ibkr_remote_readonly_market_data_consumer_v1",
     "tests.test_admitted_futures_source_strict_identity_product_20261025",
     # Exact selected source-only regression; Docker network disabled.
     "tests.test_futures_signal_only_execution_authority_product_20261025",
