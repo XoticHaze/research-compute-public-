@@ -368,6 +368,40 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
     ):
         if key in summary:
             out[key] = summary.get(key)
+    if program_id == "SEMICONDUCTOR_SHARED_RIDGE":
+        # Project only the exact already-resolved frozen cohort identities.
+        # Keep legacy mixed-cost fields unchanged for existing consumers.
+        resolved = [c for c in rows if c.get("status") == "RESOLVED"]
+        expected = int(summary.get("resolved_cohorts", len(resolved)) or 0)
+        projections = ledger.get("matched_after_cost_projections") or {}
+        matched = []
+        for cohort in resolved:
+            projection = projections.get(str(cohort.get("cohort_id"))) or {}
+            fields = (
+                projection.get("ticker_minus_smh_net_bps"),
+                projection.get("ticker_minus_equal_weight_13_net_bps"),
+            )
+            if (
+                projection.get("status") != "DERIVED_FROM_FROZEN_RESOLVED_COHORT_NO_OUTCOME_BACKFILL"
+                or projection.get("original_resolution_mutated") is not False
+                or projection.get("alpha_or_promotion_authority") is not False
+                or any(not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v) for v in fields)
+            ):
+                break
+            matched.append(tuple(float(v) for v in fields))
+        complete = bool(resolved) and len(matched) == len(resolved) == expected
+        out["matched_cost_projection_status"] = (
+            "ALL_RESOLVED_COHORTS_DERIVED" if complete
+            else "NO_RESOLVED_COHORT" if not resolved and expected == 0
+            else "MATCHED_COST_PROJECTION_INCOMPLETE"
+        )
+        out["mean_ticker_book_excess_vs_smh_net_bps"] = (
+            round(sum(v[0] for v in matched) / len(matched), 4) if complete else None
+        )
+        out["mean_ticker_book_excess_vs_equal_weight_13_net_bps"] = (
+            round(sum(v[1] for v in matched) / len(matched), 4) if complete else None
+        )
+        out["legacy_mean_ticker_book_excess_vs_smh_basis"] = "BOOK_NET_VS_SMH_GROSS"
     if current:
         out.update(
             {
@@ -395,6 +429,18 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
             compact["summary"] = resolution.get("summary")
         if resolution.get("current_mark_metrics") is not None:
             compact["current_mark_metrics"] = resolution.get("current_mark_metrics")
+        if (
+            program_id == "SEMICONDUCTOR_SHARED_RIDGE"
+            and current.get("status") == "RESOLVED"
+            and out.get("matched_cost_projection_status") == "ALL_RESOLVED_COHORTS_DERIVED"
+        ):
+            projection = (ledger.get("matched_after_cost_projections") or {}).get(str(current.get("cohort_id")))
+            compact["matched_after_cost"] = {
+                "ticker_minus_smh_net_bps": projection["ticker_minus_smh_net_bps"],
+                "ticker_minus_equal_weight_13_net_bps": projection["ticker_minus_equal_weight_13_net_bps"],
+                "original_resolution_mutated": False,
+                "alpha_or_promotion_authority": False,
+            }
         if compact:
             out["current_resolution"] = compact
         if current.get("source_health") is not None:
@@ -535,6 +581,10 @@ def _decision_chain(lanes: list[dict[str, Any]]) -> dict[str, Any]:
             "JAAA_vs_incumbent_bps": (clo.get("scorecard") or {}).get("excess_vs_incumbent_bps"),
             "JAAA_vs_cash_control_bps": (clo.get("scorecard") or {}).get("excess_vs_matched_cash_control_bps"),
             "semiconductor_mean_ticker_book_excess_vs_smh_bps": (semi.get("prospective_evidence") or {}).get("mean_ticker_book_excess_vs_smh_bps"),
+            "semiconductor_legacy_smh_comparison_basis": (semi.get("prospective_evidence") or {}).get("legacy_mean_ticker_book_excess_vs_smh_basis"),
+            "semiconductor_mean_ticker_book_excess_vs_smh_net_bps": (semi.get("prospective_evidence") or {}).get("mean_ticker_book_excess_vs_smh_net_bps"),
+            "semiconductor_mean_ticker_book_excess_vs_equal_weight_13_net_bps": (semi.get("prospective_evidence") or {}).get("mean_ticker_book_excess_vs_equal_weight_13_net_bps"),
+            "semiconductor_matched_cost_projection_status": (semi.get("prospective_evidence") or {}).get("matched_cost_projection_status"),
             "homebuilders_mean_excess_vs_itb_bps": (hb.get("prospective_evidence") or {}).get("mean_excess_vs_itb_bps"),
         },
         "resulting_market_decision_rule": (
@@ -822,6 +872,50 @@ def self_test() -> None:
         assert continuity["current_cohort"]["signal_date"] == "2026-09-10"
         assert continuity["overlapping_sessions_are_not_additive"] is True
         assert out["coverage"]["predecessor_forward_identities"]["P438_SEMICONDUCTOR_FORWARD_MTD_R1"] is True
+        frozen = {
+            "cohort_id": "SEMICONDUCTOR_SHARED_RIDGE:2026-09-11:fixed20",
+            "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+            "signal_date": "2026-09-11",
+            "first_registered_at": "2026-09-12T00:00:00+00:00",
+            "status": "RESOLVED",
+            "resolution": {"ticker_book_net_return_bps": 895.5707,
+                           "ticker_book_excess_vs_smh_bps": -18.3719},
+        }
+        projected = {
+            "status": "DERIVED_FROM_FROZEN_RESOLVED_COHORT_NO_OUTCOME_BACKFILL",
+            "ticker_minus_smh_net_bps": -8.3719,
+            "ticker_minus_equal_weight_13_net_bps": -125.2211,
+            "original_resolution_mutated": False,
+            "alpha_or_promotion_authority": False,
+        }
+        ledger = {
+            "schema": LEDGER_SCHEMA,
+            "cohorts": [frozen],
+            "summary": {"SEMICONDUCTOR_SHARED_RIDGE": {
+                "registered_cohorts": 1, "resolved_cohorts": 1, "open_cohorts": 0,
+                "mean_ticker_book_excess_vs_smh_bps": -18.3719,
+            }},
+            "matched_after_cost_projections": {frozen["cohort_id"]: projected},
+        }
+        original_frozen = json.dumps(frozen, sort_keys=True)
+        state = _prospective_state(ledger, "SEMICONDUCTOR_SHARED_RIDGE")
+        assert state["mean_ticker_book_excess_vs_smh_bps"] == -18.3719
+        assert state["mean_ticker_book_excess_vs_smh_net_bps"] == -8.3719
+        assert state["mean_ticker_book_excess_vs_equal_weight_13_net_bps"] == -125.2211
+        assert state["current_resolution"]["matched_after_cost"]["ticker_minus_smh_net_bps"] == -8.3719
+        chain = _decision_chain([{"program_id": "SEMICONDUCTOR_SHARED_RIDGE", "prospective_evidence": state}])
+        assert chain["realized_excess"]["semiconductor_mean_ticker_book_excess_vs_smh_bps"] == -18.3719
+        assert chain["realized_excess"]["semiconductor_mean_ticker_book_excess_vs_smh_net_bps"] == -8.3719
+        assert chain["realized_excess"]["semiconductor_mean_ticker_book_excess_vs_equal_weight_13_net_bps"] == -125.2211
+        assert json.dumps(frozen, sort_keys=True) == original_frozen
+        del ledger["matched_after_cost_projections"]
+        absent = _prospective_state(ledger, "SEMICONDUCTOR_SHARED_RIDGE")
+        assert absent["matched_cost_projection_status"] == "MATCHED_COST_PROJECTION_INCOMPLETE"
+        assert absent["mean_ticker_book_excess_vs_smh_net_bps"] is None
+        ledger["matched_after_cost_projections"] = {frozen["cohort_id"]: dict(projected, ticker_minus_smh_net_bps=True)}
+        invalid = _prospective_state(ledger, "SEMICONDUCTOR_SHARED_RIDGE")
+        assert invalid["matched_cost_projection_status"] == "MATCHED_COST_PROJECTION_INCOMPLETE"
+        assert invalid["mean_ticker_book_excess_vs_smh_net_bps"] is None
     print("FORWARD_MARKET_SCOREBOARD_SELF_TEST=PASS")
 
 
