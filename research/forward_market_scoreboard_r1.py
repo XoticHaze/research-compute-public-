@@ -294,11 +294,17 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
 
     def admitted_nav(value: Any) -> bool:
         # A cost-basis declaration cannot authenticate missing, string, bool,
-        # nonfinite or bankrupt funded NAVs. Guard bps multiplication too.
+        # nonfinite or bankrupt funded NAVs. Catch oversized JSON integers
+        # before float conversion; guard bps multiplication too.
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return False
+        try:
+            numeric = float(value)
+        except (OverflowError, ValueError):
+            return False
         return (
-            isinstance(value, (int, float)) and not isinstance(value, bool)
-            and math.isfinite(value) and value > -1.0
-            and math.isfinite(value * 10000.0)
+            math.isfinite(numeric) and numeric > -1.0
+            and math.isfinite(numeric * 10000.0)
         )
 
     both_net = (
@@ -1416,6 +1422,7 @@ def self_test() -> None:
         ("incumbent", -1.0),
         ("incumbent", "0.02"),
         ("incumbent", True),
+        ("incumbent", 10**400),
         ("matched_control_if_flattened_now", 1e307),
     ):
         original_nav = challenger["forward"][key]["cumulative_return"]
