@@ -178,8 +178,8 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
             "      - name: Prove unauthenticated surface fails closed", 1
         )[1].split("      - name: Publish scoped R2 MM deployment receipt", 1)[0]
         script = textwrap.dedent(
-            block.split("          python - <<'PY'\\n", 1)[1]
-            .split("\\n          PY", 1)[0]
+            block.split("          python - <<'PY'\n", 1)[1]
+            .split("\n          PY", 1)[0]
         )
         tree = ast.parse(script)
         predicate = next(
