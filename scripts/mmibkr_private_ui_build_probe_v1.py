@@ -197,12 +197,35 @@ _SAFE_VITE_FAILURE_CLASSES = frozenset({
 })
 
 
-def _safe_vite_failure_class(log_path: Path) -> str:
+def _safe_vite_failure_class(raw: str) -> dict[str, Any]:
+    """Emit only an allowlisted diagnostic class and hashed repo-relative file path.
+
+    Never print Vite log lines, imports, source excerpts, absolute paths, or
+    arbitrary exception text on public encrypted compute.
+    """
+    kind = (
+        "UNRESOLVED_IMPORT" if re.search(r"failed to resolve import|could not resolve", raw, re.I)
+        else "TRANSFORM_ERROR" if re.search(r"transform failed|unexpected token|syntax error|\[vite:esbuild\]", raw, re.I)
+        else "EXPORT_ERROR" if re.search(r"does not provide an export|not exported", raw, re.I)
+        else "BUILD_FAILURE_OTHER"
+    )
+    result: dict[str, Any] = {"class": kind}
+    source_match = re.search(
+        r"(?:^|[\s(/])(?P<path>src/(?:[a-zA-Z0-9_.-]+/)*[a-zA-Z0-9_.-]+\.(?:jsx|js|mjs|tsx|ts|css)):(?P<line>[1-9]\d{0,5})(?::(?P<column>\d{1,4}))?",
+        raw.replace("\\", "/"),
+        re.M,
+    )
+    if source_match:
+        result["source_path_sha256_16"] = hashlib.sha256(
+            source_match.group("path").encode("utf-8")
+        ).hexdigest()[:16]
+        result["source_line"] = int(source_match.group("line"))
+    return result
+
+
+def _safe_vite_receipt_class(raw: str) -> str:
     """Fixed enum only; never return private paths, source, stderr or snippets."""
-    try:
-        value = log_path.read_bytes()[:65536].decode("utf-8", errors="replace").lower()
-    except OSError:
-        return "UNCLASSIFIED"
+    value = raw[:65536].lower()
     if any(token in value for token in (
         "could not resolve", "failed to resolve import", "cannot find module",
         "module not found", "could not load",
@@ -246,10 +269,18 @@ def _run_captured(
         )
     digest = _sha256(log_path)
     size = log_path.stat().st_size
-    failure_class = (
-        _safe_vite_failure_class(log_path)
-        if diagnose_vite and proc.returncode != 0 else None
-    )
+    failure_class = None
+    if diagnose_vite and proc.returncode != 0:
+        try:
+            raw = log_path.read_text(encoding="utf-8", errors="replace")
+            safe_failure = _safe_vite_failure_class(raw)
+            failure_class = _safe_vite_receipt_class(raw)
+        except (OSError, UnicodeError, ValueError):
+            safe_failure = {"class": "BUILD_FAILURE_OTHER"}
+            failure_class = "UNCLASSIFIED"
+        print("MMIBKR_PRIVATE_UI_VITE_SAFE_FAILURE=" + json.dumps(
+            safe_failure, sort_keys=True, separators=(",", ":")
+        ))
     log_path.unlink(missing_ok=True)
     result = {
         "status": "PASS" if proc.returncode == 0 else "FAIL",
