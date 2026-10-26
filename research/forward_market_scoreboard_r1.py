@@ -325,8 +325,10 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
         return wealth - 1.0
 
     nav_reconciled = False
-    if matched_complete and days > 0 and all(
-        admitted_nav(nav) for nav in (challenger_nav, incumbent_nav, matched_nav)
+    if (
+        matched_complete and days > 0
+        and x.get("contract", {}).get("entry_and_mark_to_market_exit_cost_bps_each") == 25
+        and all(admitted_nav(nav) for nav in (challenger_nav, incumbent_nav, matched_nav))
     ):
         challenger_rows = fwd["challenger_observations"]
         matched_rows = fwd["matched_control_observations"]
@@ -1401,6 +1403,7 @@ def self_test() -> None:
     # The new P558/JAAA wealth ratios require explicit both-net source basis,
     # matched observation completeness and valid funded terminal NAVs.
     challenger = {
+        "contract": {"entry_and_mark_to_market_exit_cost_bps_each": 25},
         "current_positions": {"challenger": {"KMLM": 0.5}},
         "forward": {
             "challenger_if_flattened_now": {"days": 1, "cumulative_return": -0.02054759529211936},
@@ -1425,6 +1428,12 @@ def self_test() -> None:
     assert matched["matched_control_absolute_net_if_flattened_now_bps"] == -171.46
     assert matched["challenger_vs_incumbent_relative_wealth_bps"] == 95.51
     assert matched["challenger_vs_matched_control_relative_wealth_bps"] == -34.61
+    challenger["contract"]["entry_and_mark_to_market_exit_cost_bps_each"] = 30
+    changed_fee = _challenger(challenger, "P558", "KMLM")["scorecard"]
+    assert changed_fee["funded_nav_reconciliation"] == "FAIL_CLOSED"
+    assert changed_fee["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
+    challenger["contract"]["entry_and_mark_to_market_exit_cost_bps_each"] = 25
+
     # Complete, finite rows with a mismatched funded terminal NAV are not
     # independent both-net evidence; a self-declared basis cannot rescue them.
     original_incumbent = challenger["forward"]["incumbent"]["cumulative_return"]
