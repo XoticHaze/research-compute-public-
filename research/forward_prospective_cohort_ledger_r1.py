@@ -573,6 +573,7 @@ def _expression_variant_metrics(
     variants = cohort.get("expression_variants") or {}
     if not variants:
         return None
+    industry_cost_bps = float(cohort["industry_round_trip_cost_bps"])
     out: dict[str, Any] = {}
     for name, spec in variants.items():
         weights = {
@@ -588,9 +589,13 @@ def _expression_variant_metrics(
             "ticker_book_gross_return_bps": round(gross, 4),
             "ticker_book_net_return_bps": round(net, 4),
             "excess_vs_smh_bps": round(net - smh_bps, 4),
+            "excess_vs_smh_net_bps": round(net - (smh_bps - industry_cost_bps), 4),
             "excess_vs_qqq_bps": round(net - qqq_bps, 4),
             "excess_vs_equal_weight_universe_bps": round(
                 net - equal_weight_universe_bps, 4
+            ),
+            "excess_vs_equal_weight_universe_net_bps": round(
+                net - (equal_weight_universe_bps - stock_cost_bps), 4
             ),
             "scientific_forward_credit": bool(spec.get("scientific_forward_credit")),
         }
@@ -705,6 +710,7 @@ def _resolve_semiconductor(cohort: dict[str, Any], prices: dict[str, pd.Series],
     smh = _ret_bps(prices["SMH"], entry_ts, exit_ts)
     qqq = _ret_bps(prices["QQQ"], entry_ts, exit_ts)
     ew13 = sum(realized[s]["gross_return_bps"] for s in symbols) / len(symbols)
+    ew13_net = ew13 - stock_cost
     industry_net = smh - float(cohort["industry_round_trip_cost_bps"])
     abs_errors = [abs(float(v["prediction_error_bps"])) for v in realized.values() if v["prediction_error_bps"] is not None]
     usable = [
@@ -740,10 +746,14 @@ def _resolve_semiconductor(cohort: dict[str, Any], prices: dict[str, pd.Series],
                 "smh_buy_and_hold_return_bps": round(smh, 4),
                 "qqq_buy_and_hold_return_bps": round(qqq, 4),
                 "equal_weight_13_return_bps": round(ew13, 4),
+                "equal_weight_13_net_return_bps": round(ew13_net, 4),
+                "smh_buy_and_hold_net_return_bps": round(industry_net, 4),
             },
             "ticker_book_excess_vs_smh_bps": round(ticker_net - smh, 4),
+            "ticker_book_excess_vs_smh_net_bps": round(ticker_net - industry_net, 4),
             "ticker_book_excess_vs_qqq_bps": round(ticker_net - qqq, 4),
             "ticker_book_excess_vs_equal_weight_13_bps": round(ticker_net - ew13, 4),
+            "ticker_book_excess_vs_equal_weight_13_net_bps": round(ticker_net - ew13_net, 4),
             "ticker_book_excess_vs_cash_bps": round(ticker_net, 4),
             "ticker_positive_hit_rate": round(sum(1 for v in realized.values() if v["sign_hit"]) / len(realized), 6),
             "prediction_mae_bps": None if not abs_errors else round(sum(abs_errors) / len(abs_errors), 4),
@@ -980,6 +990,21 @@ def self_test() -> None:
     assert abs(sum(frozen["expression_variants"]["equal_weight"]["weights_within_cohort"].values()) - 1.0) < 1e-12
     assert frozen["expression_variants"]["linear_prediction_rank"]["weights_within_cohort"]["CCC"] > frozen["expression_variants"]["linear_prediction_rank"]["weights_within_cohort"]["AAA"]
     assert frozen["expression_variant_freeze"]["retrospective_credit"] is False
+    # Same frozen 25 bp stock cost and 10 bp SMH cost must be applied to
+    # BOTH sides of matched economic comparisons. Legacy mixed-basis fields
+    # remain unchanged for consumers that already depend on them.
+    matched = _expression_variant_metrics(
+        {"industry_round_trip_cost_bps": 10.0,
+         "expression_variants": {"equal_weight": {
+             "weights_within_cohort": {"AAA": 0.5, "BBB": 0.5},
+             "scientific_forward_credit": False}}},
+        {"AAA": 100.0, "BBB": 0.0}, 50.0, 40.0, 50.0, 25.0,
+    )["equal_weight"]
+    assert matched["ticker_book_net_return_bps"] == 25.0
+    assert matched["excess_vs_smh_bps"] == -25.0  # legacy net vs gross
+    assert matched["excess_vs_smh_net_bps"] == -15.0
+    assert matched["excess_vs_equal_weight_universe_bps"] == -25.0  # legacy
+    assert matched["excess_vs_equal_weight_universe_net_bps"] == 0.0
     print("FORWARD_PROSPECTIVE_COHORT_LEDGER_SELF_TEST=PASS")
 
 
