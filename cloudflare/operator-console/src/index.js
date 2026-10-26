@@ -358,6 +358,20 @@ export function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
     };
   }
 
+  // Persisted state may predate the current runtime-ID/privacy validator.
+  // Never carry legacy malformed rows through Map last-wins deduplication;
+  // keep the independently validated incoming boundary without inheritance.
+  try {
+    validateSnapshot(previous);
+  } catch {
+    return {
+      snapshot: incomingSnapshot,
+      runtimeMergeApplied: false,
+      previousRuntimeCount: Array.isArray(previous.runtimes)
+        ? previous.runtimes.length : 0,
+    };
+  }
+
   const previousSource = snapshotSourceSha(previous);
   const incomingSource = snapshotSourceSha(incomingSnapshot);
   if (!previousSource || !incomingSource || previousSource !== incomingSource) {
