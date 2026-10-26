@@ -116,6 +116,9 @@ def evaluate(monthly):
             "required_month_count": int(len(expected)),
             "missing_months": [str(x) for x in missing_months],
             "missing_symbols": missing_symbols,
+            "issuer_cper_commenced_operations": "2011-11-15",
+            "issuer_cper_source": "https://www.uscfinvestments.com/cper",
+            "sec_cper_source": "https://www.sec.gov/Archives/edgar/data/1479247/000114420414014586/R29.htm",
         },
         "scientific_promotion_credit": False,
     }
@@ -123,6 +126,22 @@ def evaluate(monthly):
         result["decision"] = "SOURCE_COVERAGE_INCOMPLETE_NOT_NEGATIVE_ALPHA"
         return result
     prices = monthly.loc[expected, list(SYMBOLS)].astype(float)
+    missing_values = {
+        symbol: [str(p) for p in prices.index[prices[symbol].isna()]]
+        for symbol in SYMBOLS
+        if prices[symbol].isna().any()
+    }
+    result["source"]["missing_price_months_by_symbol"] = missing_values
+    if missing_values:
+        # CPER's documented 2011-11-15 inception makes Sep/Oct native
+        # observations impossible. Never synthesize them or choose a
+        # post-outcome warmup policy for the frozen 2012+ window.
+        if (set(missing_values) == {"CPER"}
+                and set(missing_values["CPER"]) == {"2011-09", "2011-10"}):
+            result["decision"] = "PRE_INCEPTION_WARMUP_CONTRACT_UNRESOLVED_NOT_ALPHA"
+        else:
+            result["decision"] = "SOURCE_VALUES_INVALID_NOT_NEGATIVE_ALPHA"
+        return result
     if not np.isfinite(prices.to_numpy()).all() or (prices <= 0).any().any():
         result["decision"] = "SOURCE_VALUES_INVALID_NOT_NEGATIVE_ALPHA"
         return result
@@ -177,6 +196,11 @@ def self_test():
     incomplete = evaluate(prices.drop(pd.Period("2014-06", freq="M")))
     assert incomplete["decision"] == "SOURCE_COVERAGE_INCOMPLETE_NOT_NEGATIVE_ALPHA"
     assert "2014-06" in incomplete["source"]["missing_months"]
+    inception_limited = prices.copy()
+    inception_limited.loc["2011-09":"2011-10", "CPER"] = np.nan
+    inception_result = evaluate(inception_limited)
+    assert inception_result["decision"] == "PRE_INCEPTION_WARMUP_CONTRACT_UNRESOLVED_NOT_ALPHA"
+    assert inception_result["source"]["missing_price_months_by_symbol"]["CPER"] == ["2011-09", "2011-10"]
     test = pd.DataFrame({
         "signal": [True, False, False],
         "EEM": [0.10, 0.00, 0.00],
