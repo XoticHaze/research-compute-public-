@@ -6,7 +6,7 @@ on:
       source_sha:
         description: Exact accepted private MM-IBKR source SHA containing the Bot Console
         required: true
-        default: f530ee4b4f571422398f70a7b6bef19208107ecc
+        default: 588273d4610067ec68852524196e21cb6e147039
         type: string
   push:
     branches:
@@ -35,7 +35,7 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  CANONICAL_PRIVATE_SOURCE_SHA: f530ee4b4f571422398f70a7b6bef19208107ecc
+  CANONICAL_PRIVATE_SOURCE_SHA: 588273d4610067ec68852524196e21cb6e147039
   OPERATOR_CONSOLE_URL: https://mmibkr-operator-console.slenderiq.workers.dev
 
 jobs:
