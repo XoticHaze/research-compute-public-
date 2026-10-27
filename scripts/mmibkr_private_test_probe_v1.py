@@ -108,6 +108,9 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_selected_runtime_live_preflight_risk_roll_product_20261027",
     # Product #1297 exact conId and MNQ expiry guard, brokerless only.
     "tests.test_live_canary_exact_contract_identity_product_20261027",
+    # Exact Product #1298 active ID fail-close and #1299 prospective partial bars.
+    "tests.test_active_runtime_identity_failclosed_product_20261027",
+    "tests.test_selected_runtime_forward_partial_capture_product_20261027",
 })
 
 SAFE_EXACT = {
