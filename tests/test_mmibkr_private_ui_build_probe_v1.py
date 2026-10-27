@@ -668,3 +668,17 @@ def test_selected_limited_model_promotion_review_exact_node_acceptance_only():
     ):
         with pytest.raises(ValueError):
             mod.validate_acceptance_file(denied)
+
+
+def test_product_1309_paper_history_exact_node_acceptance_only():
+    exact = "ui-react/src/lib/paperBoundaryHistory.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak",
+        exact + ".js",
+        exact.replace(".test.mjs", ".mjs"),
+        "ui-react/src/pages/paperBoundaryHistory.test.mjs",
+        "ui-react/src/lib/../lib/paperBoundaryHistory.test.mjs",
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
