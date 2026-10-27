@@ -164,6 +164,22 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
             ):
                 raise RuntimeError("FORWARD_HOMEBUILDERS_HORIZON_INVALID")
             horizons[symbol] = int(value)
+        # A positive integer can still violate the frozen adaptive-duration
+        # envelope; an arbitrary long horizon must not silently join science.
+        timing = adapter.get("timing") or {}
+        allowed_source = timing.get("candidate_holding_horizons_sessions")
+        if (
+            not isinstance(allowed_source, list)
+            or not allowed_source
+            or any(
+                isinstance(h, bool) or not isinstance(h, int) or h < 1
+                for h in allowed_source
+            )
+        ):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_ALLOWED_HORIZON_ENVELOPE_INVALID")
+        allowed_horizons = set(allowed_source)
+        if any(horizon not in allowed_horizons for horizon in horizons.values()):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_HORIZON_OUTSIDE_FROZEN_ENVELOPE")
         # Partial forecast maps silently shrink forward calibration sample size,
         # even while the same funded symbols contribute realized observations.
         prediction_source = signal.get("predicted_fixed20_net25_bps")
@@ -1207,6 +1223,7 @@ def self_test() -> None:
         "program_id": "HOMEBUILDERS",
         "signal_date": "2026-09-11",
         "signal": home_signal,
+        "timing": {"candidate_holding_horizons_sessions": [5, 10]},
     }
     admitted_home = _new_cohort(home_adapter, "test", "2026-09-11T00:00:00Z")
     assert admitted_home is not None
@@ -1241,6 +1258,20 @@ def self_test() -> None:
         try:
             _new_cohort({**home_adapter, "signal": bad_signal}, "test", "2026-09-11T00:00:00Z")
             raise AssertionError("ambiguous Homebuilders frozen cohort admitted")
+        except RuntimeError as exc:
+            assert code in str(exc)
+    for bad_timing, code in [
+        ({"candidate_holding_horizons_sessions": [5]},
+         "FORWARD_HOMEBUILDERS_HORIZON_OUTSIDE_FROZEN_ENVELOPE"),
+        ({"candidate_holding_horizons_sessions": [5, 10, 0]},
+         "FORWARD_HOMEBUILDERS_ALLOWED_HORIZON_ENVELOPE_INVALID"),
+        ({"candidate_holding_horizons_sessions": [5, True]},
+         "FORWARD_HOMEBUILDERS_ALLOWED_HORIZON_ENVELOPE_INVALID"),
+        ({}, "FORWARD_HOMEBUILDERS_ALLOWED_HORIZON_ENVELOPE_INVALID"),
+    ]:
+        try:
+            _new_cohort({**home_adapter, "timing": bad_timing}, "test", "2026-09-11T00:00:00Z")
+            raise AssertionError("Homebuilders duration outside frozen envelope admitted")
         except RuntimeError as exc:
             assert code in str(exc)
     # Frozen positive-symbol membership and ticker-book weights must match.
