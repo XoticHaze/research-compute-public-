@@ -102,6 +102,10 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_live_broker_position_residue_product_20261024",
     # Exact operator snapshot contract identity, brokerless synthetic tests.
     "tests.test_cloud_operator_exact_contract_position_product_20261024",
+    # Exact selected #975 Product #1294/#1296 operator privacy and #1295 risk/roll
+    # pure brokerless regressions. These names are not generic test wildcards.
+    "tests.test_operator_lifecycle_snapshot_privacy_product_20261027",
+    "tests.test_selected_runtime_live_preflight_risk_roll_product_20261027",
 })
 
 SAFE_EXACT = {
