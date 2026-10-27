@@ -43,6 +43,27 @@ def test_allowlist_rejects_authority_or_unknown_modules(module):
         validated_modules(module)
 
 
+@pytest.mark.parametrize(
+    "module",
+    [
+        "tests.test_ibkr_account_context",
+        "tests.test_ibkr_production_live_account_context_v1",
+        "tests.test_ibkr_remote_account_hygiene_slot_v1",
+        "tests.test_selected_runtime_submit_authority",
+        "tests.test_paper_flatten_canonical_route_authority_667",
+        "tests.test_selected_runtime_account_sizing_submit_hook_14th31lg",
+    ],
+)
+def test_exact_sensitive_named_modules_are_network_isolated(module):
+    # Exact allowlist admission cannot override network isolation for a
+    # broker/account/submit/flatten test. These are source-only regressions.
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-test-image", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+
+
 def test_exact_live_seal_source_only_p0_modules_run_without_network_or_live_authority():
     exact = [
         "tests.test_legacy_submit_fail_closed_r10",
