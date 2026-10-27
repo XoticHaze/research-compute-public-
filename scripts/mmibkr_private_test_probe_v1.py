@@ -270,6 +270,8 @@ SOURCE_ONLY_SELECTED_PRODUCT_MODULES = frozenset({
     "tests.test_cloud_operator_snapshot_inventory_readonly_product_20261027",
     "tests.test_crw_backtest_rth_asset_contract_product_20261027",
     "tests.test_survivor_paper_trade_evidence_materializer_v1",
+    "tests.test_futures_range_tail_coverage_product_20261027",
+    "tests.test_market_feed_range_orchestration_14th31ix",
 })
 SAFE_EXACT.update(SOURCE_ONLY_SELECTED_PRODUCT_MODULES)
 STATUS_STAGE_MODULES = {
