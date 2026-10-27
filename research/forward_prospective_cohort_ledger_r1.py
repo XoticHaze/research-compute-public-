@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 import tempfile
 from datetime import date, datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
@@ -75,9 +76,34 @@ def _read_json(path: Path | None) -> dict[str, Any] | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _reject_adapter_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise RuntimeError("FORWARD_ADAPTER_DUPLICATE_JSON_KEY")
+        result[key] = value
+    return result
+
+
+def _reject_adapter_nonfinite_constant(value: str) -> None:
+    raise RuntimeError("FORWARD_ADAPTER_NONFINITE_JSON_CONSTANT")
+
+
+def _canonical_signal_date(raw: Any) -> str:
+    if not isinstance(raw, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", raw):
+        raise RuntimeError("FORWARD_ADAPTER_SIGNAL_DATE_INVALID: exact YYYY-MM-DD required")
+    try:
+        return date.fromisoformat(raw).isoformat()
+    except ValueError as exc:
+        raise RuntimeError("FORWARD_ADAPTER_SIGNAL_DATE_INVALID: impossible calendar date") from exc
+
+
 def _adapter(path: Path) -> tuple[dict[str, Any], str]:
     raw = path.read_bytes()
-    x = json.loads(raw)
+    x = json.loads(raw, object_pairs_hook=_reject_adapter_duplicate_keys,
+                   parse_constant=_reject_adapter_nonfinite_constant)
+    if not isinstance(x, dict):
+        raise RuntimeError("FORWARD_ADAPTER_ROOT_NOT_OBJECT")
     if x.get("schema") != ADAPTER_SCHEMA:
         raise RuntimeError(f"unexpected adapter schema path={path}")
     program = str(x.get("program_id") or "")
@@ -96,9 +122,8 @@ def _cohort_id(program: str, signal_date: str, adapter_sha256: str) -> str:
 
 def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str) -> dict[str, Any] | None:
     program = str(adapter["program_id"])
-    signal_date = str(adapter.get("signal_date") or "")[:10]
-    if not signal_date:
-        raise RuntimeError(f"missing signal_date program={program}")
+    # Never borrow a valid frozen cohort identity from a malformed suffix.
+    signal_date = _canonical_signal_date(adapter.get("signal_date"))
     contract = CONTRACTS[program]
     signal = adapter.get("signal") or {}
 
@@ -1043,6 +1068,32 @@ def build(
 
 
 def self_test() -> None:
+    # Nested JSON duplicates and nonfinite constants cannot be trusted adapter
+    # identities even if a last-wins parser would retain a valid-looking key.
+    with tempfile.TemporaryDirectory() as source_dir:
+        adapter_path = Path(source_dir) / "adapter.json"
+        for raw, code in [
+            ('{"schema":"foundry.forward_program_adapter.v1","schema":"bad"}', "FORWARD_ADAPTER_DUPLICATE_JSON_KEY"),
+            ('{"schema":"foundry.forward_program_adapter.v1","program_id":"HOMEBUILDERS","signal":{"score":NaN}}', "FORWARD_ADAPTER_NONFINITE_JSON_CONSTANT"),
+        ]:
+            adapter_path.write_text(raw, encoding="utf-8")
+            try:
+                _adapter(adapter_path)
+                raise AssertionError("ambiguous/nonfinite adapter JSON admitted")
+            except RuntimeError as exc:
+                assert code in str(exc)
+    for bad_date in ("2026-09-11junk", "2026-02-30", "2026-9-11"):
+        bad_adapter = {
+            "program_id": "HOMEBUILDERS", "signal_date": bad_date,
+            "signal": {"admitted_symbols": ["CCS"],
+                       "duration_horizon_sessions_by_symbol": {"CCS": 5}},
+        }
+        try:
+            _new_cohort(bad_adapter, "test", "2026-09-12T00:00:00Z")
+            raise AssertionError("malformed frozen signal date admitted")
+        except RuntimeError as exc:
+            assert "FORWARD_ADAPTER_SIGNAL_DATE_INVALID" in str(exc)
+    assert _canonical_signal_date("2026-09-11") == "2026-09-11"
     # Duplicate prior cohort IDs must never silently replace the original
     # first-seen registration clock, even if the later row is otherwise valid.
     with tempfile.TemporaryDirectory() as duplicate_dir:
