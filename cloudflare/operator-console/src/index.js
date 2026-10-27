@@ -529,8 +529,10 @@ function rejectSensitiveSnapshotFields(value, depth = 0) {
     const normalized = key.normalize('NFKC').replace(/[^a-z0-9]/gi, '').toLowerCase();
     // The root account summary is an admitted numerical projection. A nested
     // account field is not, even when privacy.account_identifiers_included=false.
+    // Only the exact root key `account` receives typed projection validation.
+    // Case/punctuation/Unicode aliases must not bypass that validator.
     if (FORBIDDEN_OPERATOR_SNAPSHOT_KEYS.has(normalized)
-        || (normalized === 'account' && depth !== 0)) {
+        || (normalized === 'account' && (depth !== 0 || key !== 'account'))) {
       throw new Error('snapshot_sensitive_field_rejected');
     }
     rejectSensitiveSnapshotFields(child, depth + 1);
