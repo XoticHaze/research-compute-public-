@@ -332,6 +332,11 @@ SOURCE_ONLY_SELECTED_PRODUCT_MODULES = frozenset({
     "tests.test_selected_runtime_cloud_daemon_v1",
     # Exact selected #1275 futures-roll cutoff fail-close, mocked/read-only only.
     "tests.test_selected_runtime_futures_roll_maintenance_v1",
+    # Release #975: exact changed-source paper P&L, retained inventory and
+    # bounded Foundry source-run parser regressions. All are offline, no broker.
+    "tests.test_cloud_forward_performance_v1",
+    "tests.test_forward_lifecycle_retained_state_product_20261027",
+    "tests.test_foundry_model_run_id_bounded_product_20261027",
 })
 SAFE_EXACT.update(SOURCE_ONLY_SELECTED_PRODUCT_MODULES)
 STATUS_STAGE_MODULES = {
