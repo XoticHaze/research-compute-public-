@@ -738,3 +738,30 @@ def test_selected_product_1322_pilot_handoff_presentation_exact_node_only():
     ):
         with pytest.raises(ValueError):
             mod.validate_acceptance_file(denied)
+
+def test_selected_funded_pilot_terminal_drawdown_exact_node_acceptance_only():
+    # Product #1337 was consumed into selected #975. Read-only funded-NAV guard.
+    exact = "ui-react/src/lib/pilotFundedTerminalDrawdown.product.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak", exact + ".js",
+        exact.replace(".test.mjs", ".mjs"),
+        "ui-react/src/pages/pilotFundedTerminalDrawdown.product.test.mjs",
+        "ui-react/src/lib/../lib/pilotFundedTerminalDrawdown.product.test.mjs",
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
+
+
+def test_selected_model_evidence_presentation_exact_node_acceptance_only():
+    # Selected #975 Product model-review display; not an issuer or promotion grant.
+    exact = "ui-react/src/lib/promotionCandidateEvidencePresentation.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak", exact + ".js",
+        exact.replace(".test.mjs", ".mjs"),
+        "ui-react/src/pages/promotionCandidateEvidencePresentation.test.mjs",
+        "ui-react/src/lib/../lib/promotionCandidateEvidencePresentation.test.mjs",
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
