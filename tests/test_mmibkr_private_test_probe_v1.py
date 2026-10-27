@@ -1126,3 +1126,28 @@ def test_legacy_autotuner_prefix_cannot_get_network():
         assert command[-1] == module_file_path(module)
     with pytest.raises(ValueError):
         validated_modules("tests.test_autotuner_live_submit")
+
+
+def test_selected_975_new_source_only_modules_exact_networkless_and_no_aliases():
+    # Exact Product/Research postimages consumed by selected broad #975.
+    # This only validates public probe admission, not private test execution.
+    modules = (
+        "tests.test_selected_runtime_forward_execution_lifecycle_v1",
+        "tests.test_selected_runtime_forward_lifecycle_ledger_failclosed_product_20261027",
+        "tests.test_cc44_source_cache_first_12m_r1",
+        "tests.test_cc44_source_cache_session_gap_guard_r1",
+        "tests.test_builder_cross_lane_condition_ids_product_20261027",
+        "tests.test_strategy_builder_review_apply",
+        "tests.test_strategy_builder_review_guard",
+        "tests.test_mnq_dca_event_export",
+        "tests.test_mnq_dca_path_outcomes",
+    )
+    assert validated_modules(",".join(modules)) == list(modules)
+    for module in modules:
+        command = pytest_container_command("sealed-selected-source-only", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for rejected in (module + "_extra", module + "_live_submit", module + ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(rejected)
