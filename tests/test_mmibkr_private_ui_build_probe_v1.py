@@ -567,3 +567,18 @@ def test_selected_builder_decimal_threshold_exact_allowlist_and_lookalike_denial
     ):
         with pytest.raises(ValueError):
             mod.validate_acceptance_file(denied)
+
+
+def test_selected_builder_coverage_review_exact_node_acceptance_only():
+    # Selected #975 Product #1254: pure Node coverage/refresh truth test.
+    exact = "ui-react/src/lib/builderBacktestCoverageReview.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        "ui-react/src/lib/builderBacktestCoverageReview.mjs",
+        exact + ".bak",
+        exact + ".js",
+        "ui-react/src/pages/builderBacktestCoverageReview.test.mjs",
+        "ui-react/src/lib/../lib/builderBacktestCoverageReview.test.mjs",
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
