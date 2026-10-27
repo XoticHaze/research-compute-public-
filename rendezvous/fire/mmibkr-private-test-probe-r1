@@ -1,18 +1,19 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "3e684341ca10d9cc878ec0d788508345e950cb96",
+  "source_ref": "8110c69410de32b0ba5a378b420c21163fa02b03",
   "test_modules": [
-    "tests.test_cloud_operator_snapshot_v1"
+    "tests.test_cloud_operator_snapshot_v1",
+    "tests.test_cloud_operator_snapshot_health_adapter_v1"
   ],
-  "ui_acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
+  "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
   "s3_composition_economics": false,
   "s4_layered_mtf_economics": false,
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-selected-bot-runtime-row-20261027",
-  "purpose": "Exact encrypted selected #975@3e684 Bot Console runtime-row identity changed-source Node acceptance and native Vite build; one required networkless brokerless Python module; no broker/live/deploy",
+  "requested_by": "continue-release-selected-8110-privacy-existing-native-20261027",
+  "purpose": "Exact selected #975 8110 private operator snapshot privacy changed-source regression using two already-allowlisted networkless modules, encrypted vault; no broker, live, UI deploy or promotion",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -20,8 +21,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "release-selected-3e684-bot-console-exact-runtime-row-native-r1",
+  "request_nonce": "release-selected-8110-privacy-allowlisted-native-20261027-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "3e684341ca10d9cc878ec0d788508345e950cb96",
+  "current_private_reference": "8110c69410de32b0ba5a378b420c21163fa02b03",
   "parity_public_key_b64": ""
 }

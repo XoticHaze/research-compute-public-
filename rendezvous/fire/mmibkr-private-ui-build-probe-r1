@@ -1,13 +1,13 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "934005c8907c86fc2b0f998afb4ac625803c3279",
+  "source_ref": "1e7127b8670178c4dd107d85b89fbc1612ba47d7",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-exact-selected-ui-20261027",
-  "purpose": "Exact encrypted-vault-admitted selected #975/#888 Product #1280 operator UI Bot Console native acceptance and Vite build, no Cloudflare deploy/broker/live",
-  "request_nonce": "release-selected-934005c-native-ui-20261027-r1",
+  "requested_by": "continue-release-selected-paper-boundary-history-20261027",
+  "purpose": "Native encrypted-vault-admitted selected #975@1e712 Bot Console acceptance and Vite build after Product #1289 paper boundary history; #1292 later Python-only guard leaves UI blobs unchanged; no broker/live/Cloudflare deploy",
+  "request_nonce": "release-selected-1e712-paper-boundary-native-ui-20261027-r1",
   "authority": {
     "research_only": true,
     "broker": false,
