@@ -174,6 +174,17 @@ SAFE_EXACT = {
     # Pure scheduler/dry-plan builders with no broker client or live enable.
     "tests.test_selected_runtime_cloud_bar_clock_v1",
     "tests.test_selected_runtime_cloud_runner_dry_plan_v1",
+    # Exact new selected #975 source-only regression modules, all networkless.
+    # Admission of test names is not a trusted placement or private execution.
+    "tests.test_selected_runtime_forward_execution_lifecycle_v1",
+    "tests.test_selected_runtime_forward_lifecycle_ledger_failclosed_product_20261027",
+    "tests.test_cc44_source_cache_first_12m_r1",
+    "tests.test_cc44_source_cache_session_gap_guard_r1",
+    "tests.test_builder_cross_lane_condition_ids_product_20261027",
+    "tests.test_strategy_builder_review_apply",
+    "tests.test_strategy_builder_review_guard",
+    "tests.test_mnq_dca_event_export",
+    "tests.test_mnq_dca_path_outcomes",
 }
 
 # Exact selected Model Lab cancellation/identity regressions from MM-IBKR
