@@ -29,13 +29,27 @@ def _finite_numeric(df: pd.DataFrame, columns: tuple[str, ...]) -> None:
         raise ValueError(f"non-numeric/null values in required numeric columns {columns}")
 
 
+def _explicit_utc_timestamp(value: Any) -> pd.Timestamp:
+    """Never silently interpret an exchange-local or date-only label as UTC."""
+    try:
+        stamp = pd.Timestamp(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("forward_bar_timestamp_unparseable") from exc
+    if pd.isna(stamp) or stamp.tzinfo is None or stamp.utcoffset() is None:
+        raise ValueError("forward_bar_timestamp_explicit_timezone_required")
+    return stamp.tz_convert("UTC")
+
+
 def normalize_frame(rows: pd.DataFrame | Iterable[dict], *, relative_ohlc_tolerance: float = 1e-7) -> pd.DataFrame:
     df = rows.copy() if isinstance(rows, pd.DataFrame) else pd.DataFrame(list(rows))
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError(f"missing normalized bar columns: {missing}")
     df = df.loc[:, REQUIRED_COLUMNS].copy()
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="raise")
+    df["timestamp"] = pd.to_datetime(
+        [_explicit_utc_timestamp(value) for value in df["timestamp"]],
+        utc=True, errors="raise",
+    )
     _finite_numeric(df, ("open", "high", "low", "close"))
     for c in ("volume", "wap", "bar_count"):
         df[c] = pd.to_numeric(df[c], errors="coerce")
