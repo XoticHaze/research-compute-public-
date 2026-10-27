@@ -1151,3 +1151,16 @@ def test_selected_975_new_source_only_modules_exact_networkless_and_no_aliases()
         for rejected in (module + "_extra", module + "_live_submit", module + ".py"):
             with pytest.raises(ValueError):
                 validated_modules(rejected)
+
+
+def test_selected_builder_prebuilt_timeframe_exact_networkless_only():
+    # Exact #975 Builder cadence guard: public admission only, never broker execution.
+    module = "tests.test_builder_prebuilt_timeframe_identity_product_20261027"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-selected-builder", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for denied in (module + "_extra", module + "_live_submit", module + ".py", "../" + module):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
