@@ -439,6 +439,18 @@ export function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
       disposition: 'not_due_this_boundary',
       candidate_ready: false,
       broker_action: false,
+      // Policy flags and limits can change between boundaries. The prior
+      // paper/DCA settings are not a current authority observation either.
+      execution_policy: {
+        paper_submit_enabled: null,
+        live_submit_enabled: null,
+        dca_enabled: null,
+        max_dca_adds: null,
+        max_contracts: null,
+        max_shares: null,
+        carried_from_previous_snapshot: true,
+        policy_unverified_this_boundary: true,
+      },
       primary_metric: null,
       conditions: [],
       position_context: null,
