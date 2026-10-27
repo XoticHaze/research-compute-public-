@@ -106,6 +106,8 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     # pure brokerless regressions. These names are not generic test wildcards.
     "tests.test_operator_lifecycle_snapshot_privacy_product_20261027",
     "tests.test_selected_runtime_live_preflight_risk_roll_product_20261027",
+    # Product #1297 exact conId and MNQ expiry guard, brokerless only.
+    "tests.test_live_canary_exact_contract_identity_product_20261027",
 })
 
 SAFE_EXACT = {
