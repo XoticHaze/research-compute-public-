@@ -305,6 +305,8 @@ SOURCE_ONLY_SELECTED_PRODUCT_MODULES = frozenset({
     # Selected #975 Product #1306/#1307 brokerless read-only consumer regressions.
     "tests.test_cloud_operator_health_bound_read_return_product_20261027",
     "tests.test_cloud_forward_lifecycle_size_guard_product_20261027",
+    # Product #1308 exact bounded private paper boundary-history consumer.
+    "tests.test_cloud_paper_boundary_history_v1",
     # Exact selected P0/forward source-only regressions; no broker credentials or network.
     "tests.test_selected_runtime_live_incumbent_preflight_v1",
     "tests.test_selected_runtime_forward_completed_trade_admission_v1",
