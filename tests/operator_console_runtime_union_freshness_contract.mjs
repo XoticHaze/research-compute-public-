@@ -336,3 +336,23 @@ assert.equal(operatorDecisionRequestIsSameOrigin(decisionRequest({
   origin: decisionOrigin, 'sec-fetch-site': 'same-origin',
 }, 'https://another.example/api/promotion-review/decision')), false, 'host confusion is rejected');
 console.log('MMIBKR_OPERATOR_CONSOLE_DECISION_SAME_ORIGIN=PASS');
+
+// A signed publisher's declared privacy=false flags cannot launder raw
+// account IDs or credential-shaped fields through a nested projection.
+// The canonical producer never emits these keys, so reject at admission.
+for (const [name, mutate] of [
+  ['raw position account', (s) => { s.positions = [{ contract: { symbol: 'AMAT' }, account: 'DU-PRIVATE' }]; }],
+  ['raw fill account ID', (s) => { s.fills = [{ execution: { accountId: 'DU-PRIVATE' } }]; }],
+  ['nested broker credential', (s) => { s.runtimes[0].position_context = { credentials: { password: 'private' } }; }],
+  ['account summary identifier', (s) => { s.account = { equity: 1, account_code: 'DU-PRIVATE' }; }],
+  ['runtime secret token', (s) => { s.runtimes[0].data_health = { nested: { access_token: 'private' } }; }],
+]) {
+  const contaminated = snapshot('a'.repeat(40), [{ ...incomingRow }]);
+  mutate(contaminated);
+  assert.throws(() => mergeRuntimeProjection(null, contaminated),
+    /snapshot_sensitive_field_rejected/, name);
+}
+const cleanPrivacy = snapshot('a'.repeat(40), [{ ...incomingRow }]);
+cleanPrivacy.account = { equity: 123, positions_count: 0, currencies: { equity: 'USD' } };
+assert.equal(mergeRuntimeProjection(null, cleanPrivacy).snapshot.account.equity, 123);
+console.log('MMIBKR_OPERATOR_CONSOLE_NESTED_PRIVACY_FAILCLOSED=PASS');

@@ -507,6 +507,34 @@ export function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
   };
 }
 
+// Publisher privacy declarations are necessary but cannot authorize storing
+// raw broker account IDs or credentials hidden in nested projection rows.
+// The canonical producer emits only sanitized account summary/position fields.
+const FORBIDDEN_OPERATOR_SNAPSHOT_KEYS = new Set([
+  'accountid', 'accountnumber', 'accountcode', 'acctnumber', 'ibaccount',
+  'username', 'ibusername', 'password', 'ibpassword', 'passwd',
+  'apikey', 'accesstoken', 'refreshtoken', 'token', 'secret',
+  'privatekey', 'credential', 'credentials',
+]);
+function rejectSensitiveSnapshotFields(value, depth = 0) {
+  if (depth > 32) throw new Error('snapshot_nested_depth_rejected');
+  if (!value || typeof value !== 'object') return;
+  if (Array.isArray(value)) {
+    for (const child of value) rejectSensitiveSnapshotFields(child, depth + 1);
+    return;
+  }
+  for (const [key, child] of Object.entries(value)) {
+    const normalized = key.replace(/[-_]/g, '').toLowerCase();
+    // The root account summary is an admitted numerical projection. A nested
+    // account field is not, even when privacy.account_identifiers_included=false.
+    if (FORBIDDEN_OPERATOR_SNAPSHOT_KEYS.has(normalized)
+        || (normalized === 'account' && depth !== 0)) {
+      throw new Error('snapshot_sensitive_field_rejected');
+    }
+    rejectSensitiveSnapshotFields(child, depth + 1);
+  }
+}
+
 function validateSnapshot(node) {
   if (!node || typeof node !== 'object' || Array.isArray(node)) {
     throw new Error('snapshot_object_required');
@@ -545,6 +573,7 @@ function validateSnapshot(node) {
   if (runtimes.length > 100 || positions.length > 500) {
     throw new Error('snapshot_collection_size_rejected');
   }
+  rejectSensitiveSnapshotFields(node);
   const seenRuntimeIds = new Set();
   for (const row of runtimes) {
     const id = row?.runtime_id;
