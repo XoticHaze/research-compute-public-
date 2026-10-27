@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from mmibkr_private_test_probe_v1 import (
+    SAFE_EXACT,
     module_file_path,
     validate_native_fire_boolean,
     pytest_container_command,
@@ -419,6 +420,17 @@ def test_allowlist_accepts_only_exact_forward_historical_tick_evidence_modules()
             validated_modules(rejected)
 
 
+@pytest.mark.parametrize("module", sorted(SAFE_EXACT))
+def test_every_exact_allowlisted_module_is_networkless_even_without_sensitive_name(module):
+    # Exact allowlist admission is not a network permission. Source-only
+    # validation must not reach external data, brokers or arbitrary hosts.
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-test-image", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+
+
 def test_module_file_path_and_pytest_command_are_exact_and_shell_free():
     assert module_file_path("tests.test_model_lab_xgboost") == "tests/test_model_lab_xgboost.py"
     command = pytest_container_command("probe:test", "tests.test_model_lab_xgboost")
@@ -426,6 +438,8 @@ def test_module_file_path_and_pytest_command_are_exact_and_shell_free():
         "docker",
         "run",
         "--rm",
+        "--network",
+        "none",
         "-e",
         "ENABLE_LIVE_TRADING=0",
         "-e",
