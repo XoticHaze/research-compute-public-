@@ -1,9 +1,9 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "13340dbfec3618bdc7e76621745e111d9e8c8520",
+  "source_ref": "8110c69410de32b0ba5a378b420c21163fa02b03",
   "test_modules": [
     "tests.test_cloud_operator_snapshot_v1",
-    "tests.test_promotion_review_store"
+    "tests.test_cloud_operator_snapshot_health_adapter_v1"
   ],
   "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
@@ -12,8 +12,8 @@
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-exact-pilot-fixture-causal-fix-native-20261027",
-  "purpose": "Exact selected #975 13340 test-only 3-field fixture correction; rerun only previously failed promotion review and paired operator snapshot modules after encrypted vault admission; no broker/live/UI duplicate/deploy",
+  "requested_by": "continue-release-selected-8110-privacy-existing-native-20261027",
+  "purpose": "Exact selected #975 8110 private operator snapshot privacy changed-source regression using two already-allowlisted networkless modules, encrypted vault; no broker, live, UI deploy or promotion",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -21,8 +21,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "release-selected-13340-pilot-guard-fixture-native-retry-20261027-r1",
+  "request_nonce": "release-selected-8110-privacy-allowlisted-native-20261027-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "13340dbfec3618bdc7e76621745e111d9e8c8520",
+  "current_private_reference": "8110c69410de32b0ba5a378b420c21163fa02b03",
   "parity_public_key_b64": ""
 }
