@@ -409,6 +409,9 @@ export function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
         carried_from_previous_snapshot: true,
       },
       last_action: 'NOT_OBSERVED',
+      // A carried runtime is navigation-only. Never inherit an earlier
+      // eligible/execute disposition as if this boundary evaluated it.
+      disposition: 'not_due_this_boundary',
       candidate_ready: false,
       broker_action: false,
       primary_metric: null,
