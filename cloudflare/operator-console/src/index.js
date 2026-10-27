@@ -557,6 +557,10 @@ export class OperatorState {
           : {};
         const record = {
           schema: 'mmibkr.operator_console_state.v1',
+          // A timestamp plus collection counts is not a durable record
+          // identity: another publisher can replace the value before the
+          // independent readback. Generate a unique private write identity.
+          write_id: crypto.randomUUID(),
           stored_at_utc: new Date().toISOString(),
           snapshot,
           transport: {
@@ -577,6 +581,8 @@ export class OperatorState {
         readback
         && readback.schema === record.schema
         && readback.stored_at_utc === record.stored_at_utc
+        && typeof record.write_id === 'string'
+        && readback.write_id === record.write_id
         && readback.snapshot?.schema === snapshot.schema
         && Array.isArray(readback.snapshot?.runtimes)
         && readback.snapshot.runtimes.length === snapshot.runtimes.length
