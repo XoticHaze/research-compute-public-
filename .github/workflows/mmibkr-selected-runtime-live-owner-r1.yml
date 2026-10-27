@@ -129,18 +129,11 @@ jobs:
               exit 1
             fi
           fi
-          gh api --method POST \
-            "/repos/${GITHUB_REPOSITORY}/actions/workflows/mmibkr-selected-runtime-live-owner-r1.yml/dispatches" \
-            -f ref=main \
-            -f "inputs[admission_only]=$admission_only" \
-            -f "inputs[warm_handoff_mode]=$mode" \
-            -f "inputs[pool_transport]=cloudflare_access_ssh" \
-            -f "inputs[pool_session_minutes]=$pool_session_minutes" \
-            -f "inputs[warm_predecessor_run]=$predecessor_run"
-          echo "LIVE_OWNER_FIRE_DISPATCHED_ADMISSION_ONLY=$admission_only"
-          echo "LIVE_OWNER_FIRE_DISPATCHED_MODE=$mode"
-          echo "LIVE_OWNER_FIRE_DISPATCHED_POOL_SESSION_MINUTES=$pool_session_minutes"
-          echo "LIVE_OWNER_FIRE_DISPATCHED_PREDECESSOR=$predecessor_run"
+          # A caller-authored Git push marker is not independent operator
+          # authorization for IBKR identity, even when READ_ONLY_API=yes.
+          # Canonical operator workflow_dispatch retains supervised/pool modes.
+          echo 'LIVE_READONLY_PUSH_DISPATCH_REQUIRES_INDEPENDENT_OPERATOR_ISSUER=1'
+          exit 64
 
   contract:
     if: github.event_name == 'pull_request'
@@ -207,11 +200,12 @@ jobs:
           print("LIVE_OWNER_PROTECTED_SOURCE_PIN_NEGATIVE_CASES=PASS")
           assert "if: " + chr(36) + "{{ !inputs.admission_only }}" in owner
           assert "if: " + chr(36) + "{{ inputs.admission_only }}" in owner
-          assert '"inputs[admission_only]=$admission_only"' in s
-          assert "'inputs[warm_handoff_mode]=$mode'" in s or 'inputs[warm_handoff_mode]=$mode' in s
+          push_fire=s.split('  dispatch_admission:',1)[1].split('  contract:',1)[0]
           assert 'supervised_5h_dispatch_request_[0-9]{8}_[a-z0-9]{6}' in s
           assert 'mode=legacy' in s and 'mode=supervised_5h' in s
-          assert 'inputs[warm_predecessor_run]=$predecessor_run' in s
+          assert 'LIVE_READONLY_PUSH_DISPATCH_REQUIRES_INDEPENDENT_OPERATOR_ISSUER=1' in push_fire
+          assert 'gh api --method POST' not in push_fire
+          assert 'workflow_dispatch:' in s and 'gateway_pool_5h' in s
           # Workflow dispatch string must never be interpolated directly into
           # shell source before its numeric validation. Pass via step env.
           restore=owner.split('      - name: Restore existing encrypted live Gateway warm state',1)[1].split('      - name: Start the established IBKR controller',1)[0]
