@@ -76,6 +76,9 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_ccpi_ibkr_malformed_proof_product_20261027",
     "tests.test_ccpi_ibkr_typed_host_preflight_v2",
     "tests.test_persistent_gateway_non_takeover_release_20261027",
+    # Changed #983 no-login continuity lock ownership/nofollow regression.
+    # Exact module, Docker --network none and live trading disabled.
+    "tests.test_ibkr_persistent_reauth_monitor_v1",
     # New exact paper post-execution quarantine regression, no broker access.
     "tests.test_selected_runtime_cloud_cycle_v1",
     # Exact canonical read-only B1 initial-backfill contract integrity, brokerless.
