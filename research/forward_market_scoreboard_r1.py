@@ -1022,6 +1022,7 @@ def build(root: Path) -> dict[str, Any]:
         "forward_source_reference_state": reference_state,
         "freshness_gap_visible": bool(
             p249_health.get("common_session_lags_source_max")
+            or p249_health.get("unresolved_forward_gap") is not None
             or ledger_freshness.get("freshness_gap_visible")
             or p249_health.get("lagging_symbols_vs_source_max")
             or ledger_freshness.get("lagging_symbols_by_program")
@@ -1448,6 +1449,21 @@ def self_test() -> None:
         assert terminal_result["freshness"]["forward_source_lag_vs_observed_completed_session"] == {}
         assert terminal_result["freshness"]["freshness_gap_visible"] is False
         assert terminal_result["freshness"]["terminal_cohort_source_snapshots"]["SEMICONDUCTOR_SHARED_RIDGE"]["state"] == "FROZEN_TERMINAL_COHORT_SOURCE_HISTORY_NOT_ACTIVE_STALENESS"
+        # A synchronized P249 tape can still be missing a completed exchange
+        # session. Frozen terminal cohort snapshots must not mask that gap.
+        p249_gap_path = root / "forward_p249_p266_shadow_r1.json"
+        p249_gap = json.loads(p249_gap_path.read_text())
+        p249_gap["source_health"]["unresolved_forward_gap"] = {
+            "first_unresolved_session": "2026-10-23",
+            "missing_held_symbols": [],
+            "reason": "MISSING_EXCHANGE_SESSION_ALL_SYMBOLS",
+        }
+        p249_gap_path.write_text(json.dumps(p249_gap))
+        independent_gap = build(root)["freshness"]
+        assert independent_gap["freshness_gap_visible"] is True
+        assert independent_gap["terminal_cohort_source_snapshots"]["SEMICONDUCTOR_SHARED_RIDGE"]["state"] == "FROZEN_TERMINAL_COHORT_SOURCE_HISTORY_NOT_ACTIVE_STALENESS"
+        p249_gap["source_health"].pop("unresolved_forward_gap")
+        p249_gap_path.write_text(json.dumps(p249_gap))
         # Missing exit identity must fail closed even with a RESOLVED label.
         stale_ledger["cohorts"][0]["resolution"] = {}
         ledger_path.write_text(json.dumps(stale_ledger))
