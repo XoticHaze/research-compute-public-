@@ -1,18 +1,19 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "3e684341ca10d9cc878ec0d788508345e950cb96",
+  "source_ref": "0a83ccee25407a672dd92463a28a338d7bc9c243",
   "test_modules": [
-    "tests.test_cloud_operator_snapshot_v1"
+    "tests.test_cloud_operator_snapshot_v1",
+    "tests.test_promotion_review_store"
   ],
-  "ui_acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
+  "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
   "s3_composition_economics": false,
   "s4_layered_mtf_economics": false,
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-selected-bot-runtime-row-20261027",
-  "purpose": "Exact encrypted selected #975@3e684 Bot Console runtime-row identity changed-source Node acceptance and native Vite build; one required networkless brokerless Python module; no broker/live/deploy",
+  "requested_by": "continue-release-product1290-1292-selected-native-20261027",
+  "purpose": "Changed selected #975 source-only Python integration after Product #1290 atomic snapshot, #1291 unknown trade count and #1292 Pilot collision guard; run only existing allowlisted operator snapshot and promotion review modules; no UI duplicate/broker/live/deploy",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -20,8 +21,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "release-selected-3e684-bot-console-exact-runtime-row-native-r1",
+  "request_nonce": "release-selected-0a83-product1290-1292-native-python-20261027-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "3e684341ca10d9cc878ec0d788508345e950cb96",
+  "current_private_reference": "0a83ccee25407a672dd92463a28a338d7bc9c243",
   "parity_public_key_b64": ""
 }
