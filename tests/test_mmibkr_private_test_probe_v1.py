@@ -1205,6 +1205,7 @@ def test_selected_p0_privacy_risk_followons_exact_networkless_only():
         "tests.test_active_runtime_identity_failclosed_product_20261027",
         "tests.test_selected_runtime_forward_execution_lifecycle_v1",
         "tests.test_selected_runtime_forward_partial_capture_product_20261027",
+        "tests.test_forward_exact_tick_contract_integrity_product_20261027",
     )
     assert validated_modules(",".join(modules)) == list(modules)
     for module in modules:
