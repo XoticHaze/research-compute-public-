@@ -615,3 +615,18 @@ def test_safe_vite_marker_and_fixed_receipt_class_in_diagnose_mode(tmp_path, cap
     assert "MMIBKR_PRIVATE_UI_VITE_SAFE_FAILURE=" in output.out
     assert "synthetic-private-module" not in output.out + output.err
     assert not log.exists()
+
+
+def test_selected_builder_coverage_review_exact_node_acceptance_only():
+    # Collision-safe adoption from selected #2017; no private UI execution.
+    exact = "ui-react/src/lib/builderBacktestCoverageReview.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        "ui-react/src/lib/builderBacktestCoverageReview.mjs",
+        exact + ".bak",
+        exact + ".js",
+        "ui-react/src/pages/builderBacktestCoverageReview.test.mjs",
+        "ui-react/src/lib/../lib/builderBacktestCoverageReview.test.mjs",
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
