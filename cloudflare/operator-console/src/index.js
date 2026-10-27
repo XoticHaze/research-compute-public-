@@ -418,6 +418,18 @@ export function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
       position_ownership: {
         ...(row?.position_ownership && typeof row.position_ownership === 'object' ? row.position_ownership : {}),
         attributed: false,
+        // Prior ledger provenance belongs to the earlier observation, not
+        // this unobserved boundary. The UI renders provenance_kind even when
+        // attributed=false, so leaving it here falsely reports current
+        // execution-backed inventory on a navigation-only carried card.
+        source: null,
+        provenance_kind: null,
+        processed_execution_count: null,
+        execution_history_present: null,
+        reviewed_migration_seed_present: null,
+        pre_seed_transition_continuity_proven: null,
+        ledger_updated_at_utc: null,
+        runtime_updated_at_utc: null,
         attribution_unverified_this_boundary: true,
         carried_from_previous_snapshot: true,
       },
