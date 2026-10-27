@@ -84,6 +84,36 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertIn("wrangler@4.131.2 secret put ACCESS_AUD", text)
         self.assertIn("wrangler@4.131.2 secret put ACCESS_ALLOWED_EMAILS", text)
 
+    def test_access_preflight_precedes_worker_deploy(self):
+        import os
+        import subprocess
+        import textwrap
+
+        text = WORKFLOW.read_text(encoding="utf-8")
+        start = "      - name: Preflight Access release credentials before Worker deployment"
+        deploy = "      - name: Deploy locked operator-console Worker and private static assets"
+        self.assertIn(start, text)
+        self.assertLess(text.index(start), text.index(deploy))
+        block = text.split(start, 1)[1].split("      - name: Reconcile exact-email Cloudflare Access application", 1)[0]
+        self.assertIn("/access/organizations", block)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY=READY", block)
+        self.assertNotIn("exc.read()", block)
+        self.assertIn("except Exception:", block)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_UNAVAILABLE=1", block)
+        script = textwrap.dedent(block.split("        run: |\n", 1)[1])
+        for missing in ("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "ACCESS_ALLOWED_EMAILS"):
+            with self.subTest(missing=missing):
+                env = dict(os.environ)
+                env.update({"CLOUDFLARE_API_TOKEN": "synthetic",
+                            "CLOUDFLARE_ACCOUNT_ID": "synthetic",
+                            "ACCESS_ALLOWED_EMAILS": "operator@example.test"})
+                env[missing] = ""
+                result = subprocess.run(["bash", "-c", script], env=env,
+                                        capture_output=True, text=True, check=False)
+                self.assertEqual(result.returncode, 43, result.stderr)
+                self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_PREDEPLOY_REQUIRED=1", result.stdout)
+                self.assertNotIn("operator@example.test", result.stdout + result.stderr)
+
     def test_no_email_allowlist_keeps_worker_locked(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn(
@@ -95,17 +125,41 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
             text,
         )
 
-    def test_worker_control_plane_is_proved_before_access_gate(self):
+    def test_access_is_reconciled_before_worker_deploy_and_control_plane_proof(self):
         text = WORKFLOW.read_text(encoding="utf-8")
-        control_plane_step = "Prove deployed Worker through Cloudflare control plane"
+        preflight = "Preflight Access release credentials before Worker deployment"
         access_step = "Reconcile exact-email Cloudflare Access application"
-        self.assertIn(control_plane_step, text)
+        deploy_step = "Deploy locked operator-console Worker and private static assets"
+        control_plane_step = "Prove deployed Worker through Cloudflare control plane"
+        bind_step = "Bind Worker defense-in-depth Access verifier"
+        self.assertLess(text.index(preflight), text.index(access_step))
+        self.assertLess(text.index(access_step), text.index(deploy_step))
+        self.assertLess(text.index(deploy_step), text.index(control_plane_step))
+        self.assertLess(text.index(control_plane_step), text.index(bind_step))
         self.assertIn("/workers/scripts/", text)
         self.assertIn("/settings", text)
         self.assertIn("MMIBKR_OPERATOR_CONSOLE_CONTROL_PLANE=READY", text)
-        self.assertLess(text.index(control_plane_step), text.index(access_step))
-        self.assertIn("for path in ('/', '/api/operator-snapshot', '/healthz'):", text)
+        self.assertIn("browser_paths = ('/', '/bot-console', '/operator/forward-execution', '/operator/promotion-review')", text)
+        self.assertIn("for path in (*browser_paths, '/api/operator-snapshot', '/healthz'):", text)
         self.assertNotIn("operator-console pre-Access health did not converge", text)
+
+    def test_missing_access_binding_is_terminal_not_a_successful_deploy(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        access = text.split("      - name: Reconcile exact-email Cloudflare Access application", 1)[1].split("      - name: Deploy locked operator-console Worker", 1)[0]
+        bind = text.split("      - name: Bind Worker defense-in-depth Access verifier", 1)[1].split("      - name: Prove unauthenticated surface fails closed", 1)[0]
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_BINDING=LOCKED_EMAIL_ALLOWLIST_MISSING'\n            exit 43", access)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_BINDING=LOCKED_UNCONFIGURED'\n            exit 44", bind)
+
+    def test_public_actions_never_echo_cloudflare_provider_error_bodies(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        # Cloudflare error bodies can contain operator email allowlists and
+        # account or policy identifiers. Public CI logs must not echo them.
+        self.assertNotIn("detail = exc.read", text)
+        self.assertNotIn("json.dumps(node.get('errors')", text)
+        self.assertIn("Cloudflare Worker settings proof failed HTTP {exc.code}", text)
+        self.assertIn("Cloudflare Access request failed HTTP {exc.code}", text)
+        self.assertIn("Cloudflare Worker settings proof rejected", text)
+        self.assertIn("Cloudflare Access request rejected", text)
 
     def test_unauthenticated_acceptance_rejects_public_200(self):
         text = WORKFLOW.read_text(encoding="utf-8")
@@ -113,6 +167,159 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertIn("if status == 200:", text)
         self.assertIn("unauthenticated operator-console path became public", text)
         self.assertIn("cloudflareaccess.com", text)
+
+
+    def test_anonymous_browser_requires_real_https_access_redirect(self):
+        import ast
+        import textwrap
+        from urllib.parse import urlsplit
+
+        text = WORKFLOW.read_text(encoding="utf-8")
+        block = text.split(
+            "      - name: Prove unauthenticated surface fails closed", 1
+        )[1].split("      - name: Publish scoped R2 MM deployment receipt", 1)[0]
+        script = textwrap.dedent(
+            block.split("          python - <<'PY'\n", 1)[1]
+            .split("\n          PY", 1)[0]
+        )
+        tree = ast.parse(script)
+        predicate = next(
+            node for node in tree.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "is_access_redirect"
+        )
+        namespace = {"urlsplit": urlsplit}
+        exec(
+            compile(ast.Module(body=[predicate], type_ignores=[]), "<access-redirect>", "exec"),
+            namespace,
+        )
+        accepts = namespace["is_access_redirect"]
+        tenant = "https://team.cloudflareaccess.com"
+        valid = "https://team.cloudflareaccess.com/cdn-cgi/access/login"
+        self.assertTrue(accepts(valid, tenant))
+        for invalid in (
+            "https://evil.example/redirect?next=cloudflareaccess.com",
+            "https://cloudflareaccess.com.evil.example/login",
+            "https://team.cloudflareaccess.com.evil.example/login",
+            "http://team.cloudflareaccess.com/cdn-cgi/access/login",
+            "https://evil.example/redirect?token=private",
+            "https://other.cloudflareaccess.com/cdn-cgi/access/login",
+            "https://team.cloudflareaccess.com:444/cdn-cgi/access/login",
+            "https://user@team.cloudflareaccess.com/cdn-cgi/access/login",
+        ):
+            with self.subTest(invalid=invalid):
+                self.assertFalse(accepts(invalid, tenant))
+        for invalid_tenant in (
+            "",
+            "https://other.cloudflareaccess.com",
+            "https://team.cloudflareaccess.com.evil.example",
+            "http://team.cloudflareaccess.com",
+            "https://user@team.cloudflareaccess.com",
+        ):
+            with self.subTest(invalid_tenant=invalid_tenant):
+                self.assertFalse(accepts(valid, invalid_tenant))
+        self.assertIn("os.environ.get('MMIBKR_ACCESS_TEAM_DOMAIN', '')", script)
+        self.assertIn("if path in browser_paths and status not in {302, 303, 307}:", script)
+        self.assertNotIn("and 'cloudflareaccess.com' not in location", script)
+        self.assertNotIn(":{location}", script)
+
+    def test_deploy_receipt_distinguishes_locked_unconfigured_from_access_configured(self):
+        import json
+        import os
+        import subprocess
+        import sys
+        import tempfile
+        import textwrap
+
+        text = WORKFLOW.read_text(encoding="utf-8")
+        receipt_step = text.split(
+            "      - name: Publish scoped R2 MM deployment receipt", 1
+        )[1].split("      - name: Destroy private deployment source", 1)[0]
+        script = textwrap.dedent(
+            receipt_step.split("          python - <<'PY'\n", 1)[1]
+            .split("\n          PY", 1)[0]
+        )
+        for configured in (False, True):
+            with self.subTest(configured=configured), tempfile.TemporaryDirectory() as td:
+                env = dict(os.environ)
+                env["REQUEST_SOURCE_SHA"] = "a" * 40
+                env["CLOUDFLARE_DEPLOY_TOKEN_R2"] = "synthetic-scoped-token"
+                env.pop("MMIBKR_ACCESS_AUD", None)
+                env.pop("MMIBKR_ACCESS_TEAM_DOMAIN", None)
+                if configured:
+                    env["MMIBKR_ACCESS_AUD"] = "synthetic-audience"
+                    env["MMIBKR_ACCESS_TEAM_DOMAIN"] = "https://example.cloudflareaccess.com"
+                result = subprocess.run(
+                    [sys.executable, "-c", script], cwd=td, env=env,
+                    capture_output=True, text=True, check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                receipt = json.loads(
+                    (Path(td) / "rendezvous/receipts/mmibkr-operator-console-deploy-r2.json")
+                    .read_text(encoding="utf-8")
+                )
+                self.assertIs(receipt["access_reconciliation_step_completed"], configured)
+                self.assertEqual(
+                    receipt["access_reconciliation_state"],
+                    "configured" if configured else "locked_unconfigured",
+                )
+                self.assertEqual(
+                    receipt["access_reconciliation_credential"],
+                    "legacy_access_capable_token" if configured else "not_exercised",
+                )
+
+
+    def test_exact_owner_release_approval_precedes_private_source_and_cloudflare(self):
+        import os
+        import subprocess
+        import sys
+        import textwrap
+
+        text = WORKFLOW.read_text(encoding="utf-8")
+        start = "      - name: Require owner-approved exact operator-console release source"
+        after = "      - name: Materialize accepted private source from reusable encrypted vault"
+        self.assertIn(start, text)
+        self.assertLess(text.index("      - name: Resolve accepted console source"), text.index(start))
+        self.assertLess(text.index(start), text.index(after))
+        self.assertLess(text.index(start), text.index("      - name: Require Cloudflare deploy credential"))
+        block = text.split(start, 1)[1].split(after, 1)[0]
+        script = textwrap.dedent(
+            block.split("          python - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+        )
+        for approved, permitted in (
+            (None, False), ("b" * 40, False), ("A" * 40, False), ("a" * 40, True),
+        ):
+            with self.subTest(approved=approved):
+                env = dict(os.environ)
+                env["REQUEST_SOURCE_SHA"] = "a" * 40
+                if approved is None:
+                    env.pop("MMIBKR_OPERATOR_CONSOLE_APPROVED_SOURCE_SHA", None)
+                else:
+                    env["MMIBKR_OPERATOR_CONSOLE_APPROVED_SOURCE_SHA"] = approved
+                result = subprocess.run(
+                    [sys.executable, "-c", script],
+                    env=env, capture_output=True, text=True, check=False,
+                )
+                self.assertIs(result.returncode == 0, permitted)
+                self.assertNotIn("a" * 40, result.stdout + result.stderr)
+                if permitted:
+                    self.assertIn("MMIBKR_OPERATOR_CONSOLE_OWNER_RELEASE_APPROVED=1", result.stdout)
+
+
+    def test_public_ci_omits_access_control_plane_ids(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertNotIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_APP_ID=", text)
+        self.assertNotIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_POLICY_ID=", text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_APP=CONFIGURED", text)
+
+    def test_source_only_main_merge_cannot_auto_fire_cloudflare_deploy(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("  workflow_dispatch:", text)
+        push = text.split("\n  push:\n", 1)[1].split("\n  pull_request:\n", 1)[0]
+        self.assertIn("'rendezvous/fire/mmibkr-operator-console-deploy-r1'", push)
+        self.assertNotIn("'.github/workflows/mmibkr-operator-console-deploy-r1.yml'", push)
+        self.assertNotIn("'cloudflare/operator-console/**'", push)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_OWNER_RELEASE_APPROVAL_MISSING_OR_INVALID=1", text)
 
 
 if __name__ == "__main__":
