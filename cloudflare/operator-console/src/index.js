@@ -345,6 +345,19 @@ function snapshotGeneratedAtMs(node) {
     ? parsed : null;
 }
 
+// Compare full signed UTC observation precision, not Date.parse's
+// millisecond-truncated value. Python producers can emit microseconds;
+// lexical UTC seconds + zero-padded nanoseconds preserves exact ordering.
+function snapshotGeneratedAtOrderKey(node) {
+  if (snapshotGeneratedAtMs(node) === null) return null;
+  const value = node?.generated_at_utc;
+  const match = typeof value === 'string'
+    ? /^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})(?:\\.(\\d{1,9}))?Z$/.exec(value)
+    : null;
+  if (!match) return null;
+  return `${match[1]}.${(match[2] || '').padEnd(9, '0')}`;
+}
+
 export function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
   // A duplicate or malformed incoming runtime ID must never be silently
   // collapsed by Map last-wins semantics before the UI sees the snapshot.
@@ -538,7 +551,8 @@ export class OperatorState {
       const body = await request.json();
       const incomingSnapshot = validateSnapshot(body.snapshot);
       const incomingGeneratedAt = snapshotGeneratedAtMs(incomingSnapshot);
-      if (incomingGeneratedAt === null || incomingGeneratedAt > Date.now() + 60_000) {
+      const incomingOrderKey = snapshotGeneratedAtOrderKey(incomingSnapshot);
+      if (incomingGeneratedAt === null || incomingOrderKey === null || incomingGeneratedAt > Date.now() + 60_000) {
         return json({ error: 'snapshot_generated_at_invalid' }, 400);
       }
       // Compare-and-store must share a Durable Object storage transaction.
@@ -546,8 +560,8 @@ export class OperatorState {
       // publishers and allow an older completion to overwrite a newer bar.
       const accepted = await this.ctx.storage.transaction(async (txn) => {
         const previousRecord = await txn.get('latest');
-        const previousGeneratedAt = snapshotGeneratedAtMs(previousRecord?.snapshot);
-        if (previousGeneratedAt !== null && incomingGeneratedAt < previousGeneratedAt) {
+        const previousOrderKey = snapshotGeneratedAtOrderKey(previousRecord?.snapshot);
+        if (previousOrderKey !== null && incomingOrderKey < previousOrderKey) {
           return { outOfOrder: true };
         }
         const merged = mergeRuntimeProjection(previousRecord, incomingSnapshot);
