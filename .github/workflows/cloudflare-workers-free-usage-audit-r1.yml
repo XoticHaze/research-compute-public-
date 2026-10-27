@@ -204,3 +204,82 @@ jobs:
 
           print("CF_AUDIT_COMPLETE=1")
           PY
+
+      - name: Read-only operator release authority and Cloudflare Access preflight
+        shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: e927b48fba8c48dfad45d4d538b8805799750d8f
+          APPROVED_SOURCE_SHA: ${{ vars.MMIBKR_OPERATOR_CONSOLE_APPROVED_SOURCE_SHA }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_ACCESS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 }}
+          ACCESS_ALLOWED_EMAILS: ${{ secrets.MMIBKR_ACCESS_ALLOWED_EMAILS }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          expected = os.environ['EXPECTED_SOURCE_SHA']
+          approved = os.environ.get('APPROVED_SOURCE_SHA', '').strip().lower()
+          if approved == expected:
+              print('MMIBKR_RELEASE_APPROVED_SOURCE=MATCH')
+          elif not approved:
+              print('MMIBKR_RELEASE_APPROVED_SOURCE=UNSET')
+          else:
+              print('MMIBKR_RELEASE_APPROVED_SOURCE=MISMATCH')
+          account = os.environ.get('CF_ACCOUNT_ID', '')
+          access_token = os.environ.get('CF_ACCESS_TOKEN', '')
+          deploy_token = os.environ.get('CF_DEPLOY_TOKEN', '')
+          allowed = os.environ.get('ACCESS_ALLOWED_EMAILS', '')
+          addresses = [s.strip() for s in allowed.split(',') if s.strip()]
+          email_ok = bool(addresses) and all(re.fullmatch(r'[^\\s@]+@[^\\s@]+\\.[^\\s@]+', s) for s in addresses)
+          print('MMIBKR_RELEASE_ACCESS_EMAIL_ALLOWLIST=' + ('CONFIGURED' if email_ok else 'MISSING_OR_INVALID'))
+          print('MMIBKR_RELEASE_CLOUDFLARE_ACCESS_TOKEN=' + ('CONFIGURED' if access_token else 'MISSING'))
+          print('MMIBKR_RELEASE_CLOUDFLARE_DEPLOY_TOKEN=' + ('CONFIGURED' if deploy_token else 'MISSING'))
+          if not (re.fullmatch(r'[0-9a-fA-F]{32}', account) and access_token):
+              print('MMIBKR_RELEASE_ACCESS_ACCOUNT_READ=BLOCKED_CREDENTIAL')
+              raise SystemExit(0)
+
+          def cf_read(path):
+              request = Request(
+                  'https://api.cloudflare.com/client/v4/accounts/' + account + path,
+                  headers={
+                      'Authorization': 'Bearer ' + access_token,
+                      'Accept': 'application/json',
+                      'User-Agent': 'mmibkr-free-release-readonly-1',
+                  },
+                  method='GET',
+              )
+              try:
+                  with urlopen(request, timeout=20) as response:
+                      return response.status, json.loads(response.read(131072))
+              except HTTPError as error:
+                  return error.code, {}
+              except (URLError, TimeoutError, ValueError, TypeError):
+                  return 0, {}
+
+          org_status, org = cf_read('/access/organizations')
+          item = org.get('result') if org.get('success') else None
+          if isinstance(item, list):
+              item = item[0] if item else None
+          print('MMIBKR_RELEASE_ACCESS_ORGANIZATION=' + (
+              'READABLE' if org_status == 200 and isinstance(item, dict)
+              and str(item.get('auth_domain') or '') else 'NOT_VERIFIED'
+          ))
+          apps_status, apps_node = cf_read('/access/apps?per_page=100')
+          apps = apps_node.get('result') if apps_node.get('success') else []
+          host = 'mmibkr-operator-console.slenderiq.workers.dev'
+          app_found = isinstance(apps, list) and any(
+              isinstance(row, dict)
+              and (row.get('domain') == host or row.get('name') == 'MM-IBKR Operator Console')
+              for row in apps
+          )
+          print('MMIBKR_RELEASE_ACCESS_APP=' + (
+              'EXISTS' if apps_status == 200 and app_found else
+              'NOT_OBSERVED_OR_SCOPE_DENIED'
+          ))
+          print('MMIBKR_RELEASE_READ_ONLY=1')
+          print('MMIBKR_RELEASE_CLOUDFLARE_MUTATIONS=0')
+          PY
