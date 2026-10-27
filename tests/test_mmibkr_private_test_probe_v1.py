@@ -131,6 +131,31 @@ def test_exact_readonly_market_data_consumer_is_networkless_only():
             validated_modules(denied)
 
 
+@pytest.mark.parametrize(
+    "module",
+    [
+        "tests.test_autotuner_parameter_consumption",
+        "tests.test_capital_timestamp_binding_product_20261026",
+        "tests.test_cloud_operator_snapshot_forward_root_binding_product_20261026",
+        "tests.test_cloud_operator_snapshot_health_adapter_v1",
+        "tests.test_cloud_operator_snapshot_inventory_readonly_product_20261027",
+        "tests.test_crw_backtest_rth_asset_contract_product_20261027",
+        "tests.test_survivor_paper_trade_evidence_materializer_v1",
+    ],
+)
+def test_exact_selected_product_regressions_are_networkless_only(module):
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-test-image", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+    # The legacy autotuner prefix is separately allowed; all other Product
+    # names must be exact, not arbitrary suffixed executable modules.
+    if not module.startswith("tests.test_autotuner_"):
+        with pytest.raises(ValueError):
+            validated_modules(module + "_extra")
+
+
 def test_exact_selected_backfill_native_conid_guard_is_networkless():
     module = "tests.test_selected_runtime_initial_backfill_selected_conid_product_20261025"
     assert validated_modules(module) == [module]
