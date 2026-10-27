@@ -32,6 +32,21 @@ class P03PrivatePytestCapsuleSourceHoldTest(unittest.TestCase):
         self.assertIn("tf.extractall(root)", consumer)
         self.assertIn("subprocess.run(", consumer)
 
+    def test_position_duration_executable_capsule_job_is_inert(self):
+        workflow = (ROOT / ".github/workflows/p03-private-binding-ephemeral-rendezvous.yml").read_text(encoding="utf-8")
+        self.assertIn("  pull_request:", workflow)
+        self.assertIn("  contents: write", workflow)
+        marker = "\\njobs:\\n  consume:\\n"
+        self.assertEqual(workflow.count(marker), 1)
+        before_runner = workflow.split(marker, 1)[1].split("\\n    runs-on:", 1)[0]
+        self.assertIn("    if: ${{ false }}", before_runner)
+        consumer = (ROOT / "scripts/p03_private_binding_contract_consumer_v1.py").read_text(encoding="utf-8")
+        self.assertIn('env["sender_public_b64"]', consumer)
+        self.assertIn('manifest["operator_source_sha256"]', consumer)
+        self.assertIn('manifest["operator_test_sha256"]', consumer)
+        self.assertIn("tf.extractall(root)", consumer)
+        self.assertIn("subprocess.run(", consumer)
+
 
 if __name__ == "__main__":
     unittest.main()
