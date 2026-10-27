@@ -20,6 +20,11 @@ env:
 
 jobs:
   consume:
+    # Fail closed: the envelope sender is not independently authenticated.
+    # The extracted Python source/test hashes and mm_head_sha are declared
+    # by the same capsule; they do not establish trusted executable identity.
+    # Preserve the existing encrypted transport until issuer/source admission.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
