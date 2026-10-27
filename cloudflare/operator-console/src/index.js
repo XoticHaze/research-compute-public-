@@ -535,6 +535,60 @@ function rejectSensitiveSnapshotFields(value, depth = 0) {
   }
 }
 
+// Root account summary is a narrowly typed financial projection. The generic
+// nested-key privacy guard alone cannot reject an account ID disguised as
+// account: "DU..." or account: { equity: "DU..." } at the allowed root key.
+const ACCOUNT_MONEY_FIELDS = new Set([
+  'equity', 'cash', 'buying_power', 'available_funds', 'excess_liquidity',
+  'init_margin_req', 'maint_margin_req', 'equity_with_loan_value',
+  'gross_position_value', 'unrealized_pnl', 'realized_pnl',
+]);
+const ACCOUNT_BOOLEAN_FIELDS = new Set([
+  'positions_capability', 'positions_observed_complete',
+  'open_orders_capability', 'open_orders_observed_complete',
+  'account_scope_verified', 'expected_account_matched',
+]);
+const ACCOUNT_COUNT_FIELDS = new Set(['positions_count', 'open_orders_count']);
+function validateAccountProjection(account) {
+  if (account === undefined || account === null) return;
+  if (typeof account !== 'object' || Array.isArray(account)) {
+    throw new Error('snapshot_account_projection_rejected');
+  }
+  for (const [field, value] of Object.entries(account)) {
+    if (ACCOUNT_MONEY_FIELDS.has(field)) {
+      if (value !== null && (typeof value !== 'number' || !Number.isFinite(value))) {
+        throw new Error('snapshot_account_projection_rejected');
+      }
+    } else if (ACCOUNT_BOOLEAN_FIELDS.has(field)) {
+      if (value !== null && typeof value !== 'boolean') {
+        throw new Error('snapshot_account_projection_rejected');
+      }
+    } else if (ACCOUNT_COUNT_FIELDS.has(field)) {
+      if (value !== null && (!Number.isSafeInteger(value) || value < 0)) {
+        throw new Error('snapshot_account_projection_rejected');
+      }
+    } else if (field === 'observed_at_utc') {
+      if (value !== null && (typeof value !== 'string'
+          || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value))) {
+        throw new Error('snapshot_account_projection_rejected');
+      }
+    } else if (field === 'currencies') {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new Error('snapshot_account_projection_rejected');
+      }
+      for (const [moneyField, currency] of Object.entries(value)) {
+        if (!ACCOUNT_MONEY_FIELDS.has(moneyField)
+            || typeof currency !== 'string'
+            || !/^(?:[A-Z]{3}|BASE)$/.test(currency)) {
+          throw new Error('snapshot_account_projection_rejected');
+        }
+      }
+    } else {
+      throw new Error('snapshot_account_projection_rejected');
+    }
+  }
+}
+
 function validateSnapshot(node) {
   if (!node || typeof node !== 'object' || Array.isArray(node)) {
     throw new Error('snapshot_object_required');
@@ -574,6 +628,7 @@ function validateSnapshot(node) {
     throw new Error('snapshot_collection_size_rejected');
   }
   rejectSensitiveSnapshotFields(node);
+  validateAccountProjection(node.account);
   const seenRuntimeIds = new Set();
   for (const row of runtimes) {
     const id = row?.runtime_id;
