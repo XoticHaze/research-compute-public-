@@ -1,0 +1,289 @@
+name: Cloudflare Workers Free Usage Read-Only R1
+
+# Single explicitly triggered bounded read of existing account analytics.
+# No Worker deployment, mutations, new schedule, or token/account identifiers logged.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cloudflare-workers-free-usage-audit-r1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-account-usage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Read Workers usage (two GraphQL queries only, no secret output)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timedelta, timezone
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          account = os.environ.get("CF_ACCOUNT_ID", "").strip()
+          token = os.environ.get("CF_READ_TOKEN", "").strip()
+          print("CF_AUDIT_MODE=READ_ONLY")
+          print("CF_WORKER_MUTATIONS=0")
+          print("CF_DEPLOYMENTS=0")
+          print("CF_SCHEDULED_RUNS=0")
+          print("CF_SECRET_VALUES_EMITTED=0")
+          if not account or not token:
+              print("CF_USAGE_STATUS=EXISTING_SECRET_UNAVAILABLE")
+              raise SystemExit(0)
+          if len(account) != 32 or any(c not in "0123456789abcdefABCDEF" for c in account):
+              print("CF_USAGE_STATUS=ACCOUNT_ID_INVALID")
+              raise SystemExit(0)
+
+          query = """
+          query WorkerUsage($accountTag: String!, $start: Time!, $end: Time!) {
+            viewer {
+              accounts(filter: {accountTag: $accountTag}) {
+                workersInvocationsAdaptive(
+                  filter: {datetime_geq: $start, datetime_lt: $end},
+                  limit: 100,
+                  orderBy: [sum_requests_DESC]
+                ) {
+                  sum { requests errors }
+                  dimensions { scriptName }
+                }
+              }
+            }
+          }
+          """
+          now = datetime.now(timezone.utc).replace(microsecond=0)
+          today = now.replace(hour=0, minute=0, second=0)
+          yesterday = today - timedelta(days=1)
+          known = {
+              "fleet-authority", "mmibkr-operator-console",
+              "mmibkr-live-cloud-owner", "reference-release-broker-v1",
+              "reference-release-maintainer-v1", "reference-maintenance-authority-v1",
+          }
+          def iso(t):
+              return t.isoformat().replace("+00:00", "Z")
+          for label, start, end in (
+              ("TODAY_UTC", today, now),
+              ("YESTERDAY_UTC", yesterday, today),
+          ):
+              payload = json.dumps({
+                  "query": query,
+                  "variables": {"accountTag": account, "start": iso(start), "end": iso(end)},
+              }).encode("utf-8")
+              req = Request(
+                  "https://api.cloudflare.com/client/v4/graphql",
+                  data=payload,
+                  headers={
+                      "Authorization": "Bearer " + token,
+                      "Content-Type": "application/json",
+                      "Accept": "application/json",
+                      "User-Agent": "mmibkr-free-workers-read-only-usage/1",
+                  },
+                  method="POST",  # GraphQL query operation, never mutation
+              )
+              try:
+                  with urlopen(req, timeout=20) as resp:
+                      status = resp.status
+                      body = resp.read(262144)
+              except HTTPError as exc:
+                  print("CF_" + label + "_HTTP_STATUS=" + str(exc.code))
+                  print("CF_" + label + "_RESULT=TOKEN_SCOPE_OR_API_DENIED")
+                  continue
+              except (URLError, TimeoutError):
+                  print("CF_" + label + "_RESULT=TRANSPORT_UNAVAILABLE")
+                  continue
+              print("CF_" + label + "_HTTP_STATUS=" + str(status))
+              try:
+                  parsed = json.loads(body)
+                  if parsed.get("errors"):
+                      print("CF_" + label + "_RESULT=GRAPHQL_SCOPE_OR_SCHEMA_DENIED")
+                      continue
+                  accounts = (parsed.get("data") or {}).get("viewer", {}).get("accounts") or []
+                  if len(accounts) != 1:
+                      print("CF_" + label + "_RESULT=ACCOUNT_NOT_READABLE")
+                      continue
+                  rows = accounts[0].get("workersInvocationsAdaptive") or []
+                  if not isinstance(rows, list):
+                      print("CF_" + label + "_RESULT=DATASET_UNAVAILABLE")
+                      continue
+                  total = 0
+                  errors = 0
+                  seen = 0
+                  other = 0
+                  for item in rows:
+                      if not isinstance(item, dict):
+                          continue
+                      data = item.get("sum") or {}
+                      n = int(data.get("requests") or 0)
+                      e = int(data.get("errors") or 0)
+                      if n < 0 or e < 0:
+                          raise ValueError("invalid counts")
+                      total += n
+                      errors += e
+                      seen += 1
+                      name = str((item.get("dimensions") or {}).get("scriptName") or "")
+                      if name in known:
+                          print("CF_" + label + "_WORKER_" + name.upper().replace("-", "_") + "_REQUESTS=" + str(n))
+                      else:
+                          other += n
+                  print("CF_" + label + "_RESULT=OBSERVED")
+                  print("CF_" + label + "_GROUP_COUNT=" + str(seen))
+                  print("CF_" + label + "_POSSIBLY_TRUNCATED=" + ("1" if len(rows) >= 100 else "0"))
+                  print("CF_" + label + "_OTHER_WORKERS_REQUESTS=" + str(other))
+                  print("CF_" + label + "_REQUESTS=" + str(total))
+                  print("CF_" + label + "_ERRORS=" + str(errors))
+                  print("CF_" + label + "_SHARE_OF_100K_PERCENT=" + str(round(100 * total / 100000, 2)))
+                  print("CF_" + label + "_OVER_80_PERCENT=" + ("1" if total >= 80000 else "0"))
+              except (ValueError, TypeError, AttributeError):
+                  print("CF_" + label + "_RESULT=SANITIZED_PARSING_FAILED")
+          # One extra read-only GraphQL query for Durable Object demand.
+          # This is a trailing 48h window, not a per-day billing total.
+          do_start = (today - timedelta(days=2)).date().isoformat()
+          do_query = (
+              'query { viewer { accounts(filter: {accountTag: "' + account + '"}) { '
+              'durableObjectsInvocationsAdaptiveGroups('
+              'filter: {date_gt: "' + do_start + '"}, limit: 1000) {sum {requests}} '
+              'durableObjectsStorageGroups('
+              'filter: {date_gt: "' + do_start + '"}, limit: 1000) {max {storedBytes}} '
+              '} } }'
+          )
+          request = Request(
+              "https://api.cloudflare.com/client/v4/graphql",
+              data=json.dumps({"query": do_query}).encode("utf-8"),
+              headers={
+                  "Authorization": "Bearer " + token,
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "User-Agent": "mmibkr-free-do-read-only-usage/1",
+              },
+              method="POST",
+          )
+          try:
+              with urlopen(request, timeout=20) as response:
+                  do_status = response.status
+                  do_body = response.read(262144)
+              print("CF_DO_HTTP_STATUS=" + str(do_status))
+              parsed = json.loads(do_body)
+              if parsed.get("errors"):
+                  print("CF_DO_RESULT=GRAPHQL_SCOPE_OR_SCHEMA_UNAVAILABLE")
+              else:
+                  accounts = (parsed.get("data") or {}).get("viewer", {}).get("accounts") or []
+                  if len(accounts) != 1:
+                      print("CF_DO_RESULT=ACCOUNT_NOT_READABLE")
+                  else:
+                      node = accounts[0]
+                      inv = node.get("durableObjectsInvocationsAdaptiveGroups") or []
+                      sto = node.get("durableObjectsStorageGroups") or []
+                      req = sum(int((row.get("sum") or {}).get("requests") or 0) for row in inv)
+                      sizes = [int((row.get("max") or {}).get("storedBytes") or 0) for row in sto]
+                      if req < 0 or any(size < 0 for size in sizes):
+                          raise ValueError("invalid DO metrics")
+                      print("CF_DO_RESULT=OBSERVED")
+                      print("CF_DO_WINDOW_START_DATE_EXCLUSIVE=" + do_start)
+                      print("CF_DO_WINDOW_REQUESTS=" + str(req))
+                      print("CF_DO_INVOCATION_GROUPS=" + str(len(inv)))
+                      print("CF_DO_STORAGE_REPORTED_MAX_ROW_BYTES=" + str(max(sizes, default=0)))
+                      print("CF_DO_STORAGE_GROUPS=" + str(len(sto)))
+                      print("CF_DO_GROUP_TRUNCATION_UNCERTAIN=" + ("1" if max(len(inv), len(sto)) >= 1000 else "0"))
+          except HTTPError as exc:
+              print("CF_DO_HTTP_STATUS=" + str(exc.code))
+              print("CF_DO_RESULT=TOKEN_SCOPE_OR_API_DENIED")
+          except (URLError, TimeoutError):
+              print("CF_DO_RESULT=TRANSPORT_UNAVAILABLE")
+          except (ValueError, TypeError, AttributeError):
+              print("CF_DO_RESULT=SANITIZED_PARSING_FAILED")
+
+          print("CF_AUDIT_COMPLETE=1")
+          PY
+
+      - name: Read-only operator release authority and Cloudflare Access preflight
+        shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: e927b48fba8c48dfad45d4d538b8805799750d8f
+          APPROVED_SOURCE_SHA: ${{ vars.MMIBKR_OPERATOR_CONSOLE_APPROVED_SOURCE_SHA }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_ACCESS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 }}
+          ACCESS_ALLOWED_EMAILS: ${{ secrets.MMIBKR_ACCESS_ALLOWED_EMAILS }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          expected = os.environ['EXPECTED_SOURCE_SHA']
+          approved = os.environ.get('APPROVED_SOURCE_SHA', '').strip().lower()
+          if approved == expected:
+              print('MMIBKR_RELEASE_APPROVED_SOURCE=MATCH')
+          elif not approved:
+              print('MMIBKR_RELEASE_APPROVED_SOURCE=UNSET')
+          else:
+              print('MMIBKR_RELEASE_APPROVED_SOURCE=MISMATCH')
+          account = os.environ.get('CF_ACCOUNT_ID', '')
+          access_token = os.environ.get('CF_ACCESS_TOKEN', '')
+          deploy_token = os.environ.get('CF_DEPLOY_TOKEN', '')
+          allowed = os.environ.get('ACCESS_ALLOWED_EMAILS', '')
+          addresses = [s.strip() for s in allowed.split(',') if s.strip()]
+          email_ok = bool(addresses) and all(
+              s.count('@') == 1 and 0 < len(s) <= 254
+              and '.' in s.rsplit('@', 1)[1] and not any(ch.isspace() for ch in s)
+              for s in addresses
+          )
+          print('MMIBKR_RELEASE_ACCESS_EMAIL_ALLOWLIST=' + ('CONFIGURED' if email_ok else 'MISSING_OR_INVALID'))
+          print('MMIBKR_RELEASE_CLOUDFLARE_ACCESS_TOKEN=' + ('CONFIGURED' if access_token else 'MISSING'))
+          print('MMIBKR_RELEASE_CLOUDFLARE_DEPLOY_TOKEN=' + ('CONFIGURED' if deploy_token else 'MISSING'))
+          if not (re.fullmatch(r'[0-9a-fA-F]{32}', account) and access_token):
+              print('MMIBKR_RELEASE_ACCESS_ACCOUNT_READ=BLOCKED_CREDENTIAL')
+              raise SystemExit(0)
+
+          def cf_read(path):
+              request = Request(
+                  'https://api.cloudflare.com/client/v4/accounts/' + account + path,
+                  headers={
+                      'Authorization': 'Bearer ' + access_token,
+                      'Accept': 'application/json',
+                      'User-Agent': 'mmibkr-free-release-readonly-1',
+                  },
+                  method='GET',
+              )
+              try:
+                  with urlopen(request, timeout=20) as response:
+                      return response.status, json.loads(response.read(131072))
+              except HTTPError as error:
+                  return error.code, {}
+              except (URLError, TimeoutError, ValueError, TypeError):
+                  return 0, {}
+
+          org_status, org = cf_read('/access/organizations')
+          item = org.get('result') if org.get('success') else None
+          if isinstance(item, list):
+              item = item[0] if item else None
+          print('MMIBKR_RELEASE_ACCESS_ORGANIZATION=' + (
+              'READABLE' if org_status == 200 and isinstance(item, dict)
+              and str(item.get('auth_domain') or '') else 'NOT_VERIFIED'
+          ))
+          apps_status, apps_node = cf_read('/access/apps?per_page=100')
+          apps = apps_node.get('result') if apps_node.get('success') else []
+          host = 'mmibkr-operator-console.slenderiq.workers.dev'
+          app_found = isinstance(apps, list) and any(
+              isinstance(row, dict)
+              and (row.get('domain') == host or row.get('name') == 'MM-IBKR Operator Console')
+              for row in apps
+          )
+          print('MMIBKR_RELEASE_ACCESS_APP=' + (
+              'EXISTS' if apps_status == 200 and app_found else
+              'NOT_OBSERVED_OR_SCOPE_DENIED'
+          ))
+          print('MMIBKR_RELEASE_READ_ONLY=1')
+          print('MMIBKR_RELEASE_CLOUDFLARE_MUTATIONS=0')
+          PY

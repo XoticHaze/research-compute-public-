@@ -218,10 +218,14 @@ export async function recordPromotionDecision(storage, body, operator) {
     operator: { identity_sha256: operatorHash, authenticated: true },
     authority: { decision_recorded: true, promotion_consumer_required: canonical.action === 'APPROVE', broker_mutation_authority: false, selected_runtime_write: false, live_execution_allowed: false },
   };
-  await storage.put('promotion:decision:' + decisionId, receipt);
-  const index = await readDecisionIndex(storage);
-  index.push(decisionId);
-  await storage.put('promotion:decision-index', Array.from(new Set(index)).slice(-MAX_DECISIONS));
+  // The receipt and its reader index are one durable approval boundary.
+  // A failed index write must not leave an invisible, falsely replayable receipt.
+  await storage.transaction(async (txn) => {
+    const index = await readDecisionIndex(txn);
+    index.push(decisionId);
+    await txn.put('promotion:decision:' + decisionId, receipt);
+    await txn.put('promotion:decision-index', Array.from(new Set(index)).slice(-MAX_DECISIONS));
+  });
   const readback = await storage.get('promotion:decision:' + decisionId);
   if (!readback || readback.decision_id !== decisionId || readback.candidate_snapshot_generated_at_utc !== snapshotIdentity) throw new Error('promotion_decision_readback_failed');
   return receipt;
