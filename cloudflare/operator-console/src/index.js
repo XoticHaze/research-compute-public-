@@ -524,7 +524,7 @@ function rejectSensitiveSnapshotFields(value, depth = 0) {
     return;
   }
   for (const [key, child] of Object.entries(value)) {
-    const normalized = key.replace(/[-_]/g, '').toLowerCase();
+    const normalized = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
     // The root account summary is an admitted numerical projection. A nested
     // account field is not, even when privacy.account_identifiers_included=false.
     if (FORBIDDEN_OPERATOR_SNAPSHOT_KEYS.has(normalized)
