@@ -1166,6 +1166,17 @@ def test_selected_builder_prebuilt_timeframe_exact_networkless_only():
             validated_modules(denied)
 
 
+def test_exact_builder_preview_semantic_writer_guard_is_networkless_and_allowlisted():
+    module = "tests.test_strategy_builder_review_preview_semantic_20261027"
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-test-image", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+    with pytest.raises(ValueError):
+        validated_modules("tests.test_strategy_builder_review_preview_semantic_untrusted")
+
+
 def test_selected_p0_forward_new_exact_modules_networkless_only():
     # Exact selected source guards; this tests public admission, not private execution.
     modules = (

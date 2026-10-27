@@ -39,6 +39,8 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/lib/botConsolePositionTruth.test.mjs",
     # Selected #975 Product #1254 exact Builder coverage truth acceptance.
     "ui-react/src/lib/builderBacktestCoverageReview.test.mjs",
+    # Exact selected Builder Preview malformed-error semantic parity, source-only Node.
+    "ui-react/src/lib/builderPreviewResponse.test.mjs",
     # Exact selected P0/UI #975 account-scoped open-order projection (pure Node).
     "ui-react/src/lib/botConsoleOpenOrdersTruth.test.mjs",
     # Exact legacy Builder local-draft combinator restoration, read-only UI.

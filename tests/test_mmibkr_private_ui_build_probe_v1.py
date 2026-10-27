@@ -632,6 +632,13 @@ def test_selected_builder_coverage_review_exact_node_acceptance_only():
             mod.validate_acceptance_file(denied)
 
 
+def test_exact_builder_preview_semantic_error_ui_acceptance_allowlist():
+    exact = "ui-react/src/lib/builderPreviewResponse.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    with pytest.raises(ValueError, match="not_allowlisted"):
+        mod.validate_acceptance_file("ui-react/src/lib/builderPreviewResponse.evil.mjs")
+
+
 def test_selected_limited_model_promotion_review_exact_node_acceptance_only():
     # Pure UI request construction, not Foundry approval or broker mutation.
     exact = "ui-react/src/lib/promotionReview.test.mjs"

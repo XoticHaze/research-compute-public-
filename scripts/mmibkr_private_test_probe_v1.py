@@ -183,6 +183,8 @@ SAFE_EXACT = {
     "tests.test_builder_cross_lane_condition_ids_product_20261027",
     "tests.test_strategy_builder_review_apply",
     "tests.test_strategy_builder_review_guard",
+    # Exact canonical Builder Preview semantic write-gate regression, brokerless.
+    "tests.test_strategy_builder_review_preview_semantic_20261027",
     "tests.test_mnq_dca_event_export",
     "tests.test_mnq_dca_path_outcomes",
 }
