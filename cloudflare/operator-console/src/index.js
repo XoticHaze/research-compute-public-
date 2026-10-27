@@ -416,8 +416,10 @@ export function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
       broker_symbol_position: null,
       broker_symbol_position_observed: false,
       position_ownership: {
-        ...(row?.position_ownership && typeof row.position_ownership === 'object' ? row.position_ownership : {}),
+        // Explicit allowlist: no unknown historical ownership/ledger field may
+        // leak into a new boundary's navigation-only projection.
         attributed: false,
+        account_wide_position_is_not_strategy_ownership: true,
         // Prior ledger provenance belongs to the earlier observation, not
         // this unobserved boundary. The UI renders provenance_kind even when
         // attributed=false, so leaving it here falsely reports current
@@ -456,7 +458,10 @@ export function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
       position_context: null,
       market_context: { features: [], quote: null },
       data_health: {
-        ...(row?.data_health && typeof row.data_health === 'object' ? row.data_health : {}),
+        // Explicit carry schema: only timestamps remain historical context.
+        // Unknown previous health keys must not become fresh eligibility.
+        target_bar_close_utc: row?.data_health?.target_bar_close_utc ?? null,
+        latest_timestamp: row?.data_health?.latest_timestamp ?? null,
         current: false,
         observed_this_boundary: false,
         not_due_this_boundary: true,
