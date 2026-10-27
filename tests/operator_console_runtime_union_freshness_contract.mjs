@@ -35,6 +35,7 @@ const previousRow = {
     pre_seed_transition_continuity_proven: true,
     ledger_updated_at_utc: '2026-10-25T14:00:00Z',
     runtime_updated_at_utc: '2026-10-25T14:00:00Z',
+    untrusted_stale_authority: true,
   },
   primary_metric: { current: 1, target: 2 },
   conditions: [{ status: 'pass' }], position_context: { open: true },
@@ -42,7 +43,8 @@ const previousRow = {
   data_health: { current: true, observed_this_boundary: true,
     bar_close_identity_ok: true, no_new_completed_target_bar: true, bar_close_gap_sec: 0,
     warmup: { ready: true }, freshness: { execution_eligible: true },
-    target_bar_close_utc: '2026-10-25T14:00:00Z' },
+    target_bar_close_utc: '2026-10-25T14:00:00Z',
+    untrusted_stale_authority: true },
 };
 const incomingRow = {
   runtime_id: 'MNQ-12Min', symbol: 'MNQ', state: 'watching',
@@ -79,6 +81,9 @@ assert.equal(carried.position, null);
 assert.equal(carried.broker_symbol_position, null);
 assert.equal(carried.broker_symbol_position_observed, false);
 assert.equal(carried.position_ownership.attributed, false);
+assert.equal(carried.position_ownership.account_wide_position_is_not_strategy_ownership, true);
+assert.equal(Object.hasOwn(carried.position_ownership, 'untrusted_stale_authority'), false,
+  'unknown previous ledger authority must not survive carry');
 assert.equal(carried.position_ownership.carried_from_previous_snapshot, true);
 assert.equal(carried.position_ownership.attribution_unverified_this_boundary, true);
 for (const field of [
@@ -97,6 +102,8 @@ assert.deepEqual(carried.conditions, []);
 assert.equal(carried.position_context, null);
 assert.deepEqual(carried.market_context, { features: [], quote: null });
 assert.equal(carried.data_health.current, false);
+assert.equal(Object.hasOwn(carried.data_health, 'untrusted_stale_authority'), false,
+  'unknown previous health eligibility must not survive carry');
 assert.equal(carried.data_health.observed_this_boundary, false);
 assert.equal(carried.data_health.not_due_this_boundary, true);
 assert.equal(carried.data_health.bar_close_identity_ok, false);
@@ -110,6 +117,8 @@ assert.equal(carried.data_health.carried_from_previous_snapshot, true);
 assert.equal(carried.data_health.target_bar_close_utc, '2026-10-25T14:00:00Z');
 assert.equal(previousRow.data_health.current, true, 'never mutate durable prior record');
 assert.equal(previousRow.position_ownership.attributed, true);
+assert.equal(previousRow.position_ownership.untrusted_stale_authority, true);
+assert.equal(previousRow.data_health.untrusted_stale_authority, true);
 assert.equal(mergeRuntimeProjection(previous, snapshot('b'.repeat(40), [incomingRow])).snapshot.runtimes.length, 1,
   'different private source must not inherit previous runtime rows');
 assert.deepEqual(
