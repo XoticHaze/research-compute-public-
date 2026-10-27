@@ -121,6 +121,19 @@ assert.equal(previousRow.position_ownership.untrusted_stale_authority, true);
 assert.equal(previousRow.data_health.untrusted_stale_authority, true);
 assert.equal(mergeRuntimeProjection(previous, snapshot('b'.repeat(40), [incomingRow])).snapshot.runtimes.length, 1,
   'different private source must not inherit previous runtime rows');
+for (const placeholder of ['unknown', 'not-a-git-sha', '0'.repeat(39)]) {
+  const invalidSourceCarry = mergeRuntimeProjection(
+    { snapshot: snapshot(placeholder, [previousRow]) },
+    snapshot(placeholder, [incomingRow]),
+  );
+  assert.deepEqual(invalidSourceCarry.snapshot.runtimes, [incomingRow],
+    'matching placeholder source identity cannot authorize runtime carry');
+  assert.equal(invalidSourceCarry.runtimeMergeApplied, false);
+}
+assert.equal(mergeRuntimeProjection(
+  { snapshot: snapshot('A'.repeat(40), [previousRow]) },
+  snapshot('a'.repeat(40), [incomingRow]),
+).snapshot.runtimes.length, 2, 'valid uppercase SHA normalizes to exact identity');
 assert.deepEqual(
   mergeRuntimeProjection(previous, snapshot('a'.repeat(40), [{ ...previousRow, last_action: 'HOLD' }])).snapshot.runtimes[0].last_action,
   'HOLD', 'incoming same-ID runtime must replace previous row',
