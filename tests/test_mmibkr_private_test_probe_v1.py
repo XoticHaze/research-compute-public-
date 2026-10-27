@@ -161,6 +161,7 @@ def test_exact_readonly_market_data_consumer_is_networkless_only():
         "tests.test_cloud_operator_snapshot_forward_root_binding_product_20261026",
         "tests.test_cloud_operator_snapshot_health_adapter_v1",
         "tests.test_cloud_operator_snapshot_inventory_readonly_product_20261027",
+        "tests.test_cloud_operator_snapshot_single_publish_product_20261027",
         "tests.test_crw_backtest_rth_asset_contract_product_20261027",
         "tests.test_survivor_paper_trade_evidence_materializer_v1",
     "tests.test_futures_range_tail_coverage_product_20261027",
