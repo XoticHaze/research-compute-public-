@@ -535,6 +535,19 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
         raise RuntimeError(f"unexpected prospective ledger schema {ledger.get('schema')}")
     rows = [c for c in (ledger.get("cohorts") or []) if c.get("program_id") == program_id]
     summary = dict((ledger.get("summary") or {}).get(program_id) or {})
+    # A summary is not independent cohort evidence. In particular, a caller-
+    # supplied resolved_cohorts=20 must not mark a one-row frozen H20 sample
+    # as reaching the stronger full-promotion floor.
+    actual_registered = len(rows)
+    actual_resolved = sum(c.get("status") == "RESOLVED" for c in rows)
+    reported_registered = summary.get("registered_cohorts", actual_registered)
+    reported_resolved = summary.get("resolved_cohorts", actual_resolved)
+    if (
+        type(reported_registered) is not int or type(reported_resolved) is not int
+        or reported_registered != actual_registered
+        or reported_resolved != actual_resolved
+    ):
+        raise ValueError(f"PROSPECTIVE_COHORT_SUMMARY_COUNT_MISMATCH:{program_id}")
     current = max(
         rows,
         key=lambda c: (str(c.get("signal_date") or ""), str(c.get("first_registered_at") or "")),
@@ -544,8 +557,8 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
         "ledger_status": "PRESENT",
         "program_id": program_id,
         "market_data_asof": ledger.get("market_data_asof"),
-        "registered_cohorts": int(summary.get("registered_cohorts", len(rows)) or 0),
-        "resolved_cohorts": int(summary.get("resolved_cohorts", 0) or 0),
+        "registered_cohorts": actual_registered,
+        "resolved_cohorts": actual_resolved,
         "open_cohorts": int(summary.get("open_cohorts", 0) or 0),
         "late_registration_rejections": int(summary.get("late_registration_rejections", 0) or 0),
         "minimum_resolved_for_promotion": summary.get("minimum_resolved_for_promotion"),
@@ -1334,6 +1347,31 @@ def self_test() -> None:
         }
         original_frozen = json.dumps(frozen, sort_keys=True)
         state = _prospective_state(ledger, "SEMICONDUCTOR_SHARED_RIDGE")
+        # The frozen one-cohort source cannot be promoted by a fabricated
+        # summary count, even if a separate matched-cost projection exists.
+        for bad in (20, "20", 20.0, True, -1):
+            changed = {**ledger, "summary": {"SEMICONDUCTOR_SHARED_RIDGE": {
+                **ledger["summary"]["SEMICONDUCTOR_SHARED_RIDGE"],
+                "resolved_cohorts": bad,
+                "minimum_resolved_for_promotion": 20,
+            }}}
+            try:
+                _prospective_state(changed, "SEMICONDUCTOR_SHARED_RIDGE")
+            except ValueError as exc:
+                assert str(exc) == "PROSPECTIVE_COHORT_SUMMARY_COUNT_MISMATCH:SEMICONDUCTOR_SHARED_RIDGE"
+            else:
+                raise AssertionError("unverified summary claimed twenty resolved H20 cohorts")
+        wrong_registered = {**ledger, "summary": {"SEMICONDUCTOR_SHARED_RIDGE": {
+            **ledger["summary"]["SEMICONDUCTOR_SHARED_RIDGE"],
+            "registered_cohorts": 2,
+        }}}
+        try:
+            _prospective_state(wrong_registered, "SEMICONDUCTOR_SHARED_RIDGE")
+        except ValueError as exc:
+            assert str(exc) == "PROSPECTIVE_COHORT_SUMMARY_COUNT_MISMATCH:SEMICONDUCTOR_SHARED_RIDGE"
+        else:
+            raise AssertionError("unverified summary claimed extra registered cohorts")
+        assert state["forward_science_stages"]["full_promotion_sample_floor_reached"] is False
         assert state["mean_ticker_book_excess_vs_smh_bps"] == -18.3719
         assert state["mean_ticker_book_excess_vs_smh_net_bps"] == -8.3719
         assert state["mean_ticker_book_excess_vs_equal_weight_13_net_bps"] == -125.2211
