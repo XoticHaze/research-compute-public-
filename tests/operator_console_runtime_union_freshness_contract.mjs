@@ -24,7 +24,14 @@ const previousRow = {
   last_action: 'BUY', disposition: 'eligible_execute', candidate_ready: true, broker_action: true,
   position: { position: 4 }, broker_symbol_position: { position: 4 },
   broker_symbol_position_observed: true,
-  position_ownership: { attributed: true, source: 'previous_only' },
+  position_ownership: {
+    attributed: true, source: 'previous_only',
+    provenance_kind: 'reconciled_execution_history', processed_execution_count: 3,
+    execution_history_present: true, reviewed_migration_seed_present: true,
+    pre_seed_transition_continuity_proven: true,
+    ledger_updated_at_utc: '2026-10-25T14:00:00Z',
+    runtime_updated_at_utc: '2026-10-25T14:00:00Z',
+  },
   primary_metric: { current: 1, target: 2 },
   conditions: [{ status: 'pass' }], position_context: { open: true },
   market_context: { features: [{ name: 'RSI', value: 70 }], quote: { price: 150 } },
@@ -60,6 +67,17 @@ assert.equal(carried.broker_symbol_position_observed, false);
 assert.equal(carried.position_ownership.attributed, false);
 assert.equal(carried.position_ownership.carried_from_previous_snapshot, true);
 assert.equal(carried.position_ownership.attribution_unverified_this_boundary, true);
+for (const field of [
+  'source', 'provenance_kind', 'processed_execution_count',
+  'execution_history_present', 'reviewed_migration_seed_present',
+  'pre_seed_transition_continuity_proven', 'ledger_updated_at_utc',
+  'runtime_updated_at_utc',
+]) {
+  assert.equal(carried.position_ownership[field], null,
+    'carried inventory must not claim prior ledger provenance: ' + field);
+}
+assert.equal(previousRow.position_ownership.provenance_kind, 'reconciled_execution_history',
+  'historical execution-backed evidence remains immutable');
 assert.equal(carried.primary_metric, null);
 assert.deepEqual(carried.conditions, []);
 assert.equal(carried.position_context, null);
@@ -90,6 +108,8 @@ assert.equal(empty.snapshot.runtimes[0].data_health.current, false,
 const repeated = mergeRuntimeProjection({ snapshot: result.snapshot }, snapshot('a'.repeat(40), []));
 assert.ok(repeated.snapshot.runtimes.every((row) => row.data_health.current === false),
   'repeated carry cannot restore previous eligibility');
+assert.equal(repeated.snapshot.runtimes[0].position_ownership.provenance_kind, null,
+  'repeated carry must not resurrect historical inventory provenance');
 for (const [label, invalidRows] of [
   ['duplicate runtime ID', [incomingRow, { ...incomingRow, last_action: 'BUY' }]],
   ['empty runtime ID', [{ ...incomingRow, runtime_id: '' }]],
