@@ -1,0 +1,398 @@
+import assert from 'node:assert/strict';
+import { mergeRuntimeProjection, OperatorState, operatorDecisionRequestIsSameOrigin } from '../cloudflare/operator-console/src/index.js';
+
+function snapshot(source, runtimes) {
+  return {
+    schema: 'mmibkr.cloud_operator_snapshot.v1',
+    mode: 'paper', live_enabled: false,
+    runtime: { source_sha: source }, runtimes, positions: [],
+    privacy: {
+      private_operator_state: true, account_identifiers_included: false,
+      credentials_included: false, tokens_included: false,
+      private_source_included: false, execution_authority_included: false,
+    },
+    authority: {
+      presentation_projection_only: true, strategy_authority: false,
+      execution_policy_authority: false, sizing_authority: false,
+      broker_mutation_authority: false, live_execution_allowed: false,
+    },
+  };
+}
+
+const previousRow = {
+  runtime_id: 'AMAT-15Min', symbol: 'AMAT', state: 'managing',
+  last_action: 'BUY', disposition: 'eligible_execute', candidate_ready: true, broker_action: true,
+  stale_top_level_order_authority: { submit_allowed: true, prior_order_id: 'stale-only' },
+  execution_contract: { symbol: 'AMAT', secType: 'STK', conId: 12345, stale_unknown_authority: true },
+  position: { position: 4 }, broker_symbol_position: { position: 4 },
+  execution_policy: {
+    paper_submit_enabled: true, live_submit_enabled: false, dca_enabled: true,
+    max_dca_adds: 2, max_contracts: 4, max_shares: 10,
+  },
+  broker_symbol_position_observed: true,
+  position_ownership: {
+    attributed: true, source: 'previous_only',
+    provenance_kind: 'reconciled_execution_history', processed_execution_count: 3,
+    execution_history_present: true, reviewed_migration_seed_present: true,
+    pre_seed_transition_continuity_proven: true,
+    ledger_updated_at_utc: '2026-10-25T14:00:00Z',
+    runtime_updated_at_utc: '2026-10-25T14:00:00Z',
+    untrusted_stale_authority: true,
+  },
+  primary_metric: { current: 1, target: 2 },
+  conditions: [{ status: 'pass' }], position_context: { open: true },
+  market_context: { features: [{ name: 'RSI', value: 70 }], quote: { price: 150 } },
+  data_health: { current: true, observed_this_boundary: true,
+    bar_close_identity_ok: true, no_new_completed_target_bar: true, bar_close_gap_sec: 0,
+    warmup: { ready: true }, freshness: { execution_eligible: true },
+    target_bar_close_utc: '2026-10-25T14:00:00Z',
+    untrusted_stale_authority: true },
+};
+const incomingRow = {
+  runtime_id: 'MNQ-12Min', symbol: 'MNQ', state: 'watching',
+  last_action: 'WAIT', candidate_ready: false, broker_action: false,
+  data_health: { current: true, observed_this_boundary: true },
+};
+const previous = { snapshot: snapshot('a'.repeat(40), [previousRow]) };
+const incoming = snapshot('a'.repeat(40), [incomingRow]);
+const result = mergeRuntimeProjection(previous, incoming);
+assert.equal(result.runtimeMergeApplied, true);
+assert.equal(result.previousRuntimeCount, 1);
+assert.equal(result.snapshot.runtimes.length, 2);
+const carried = result.snapshot.runtimes.find((row) => row.runtime_id === previousRow.runtime_id);
+const fresh = result.snapshot.runtimes.find((row) => row.runtime_id === incomingRow.runtime_id);
+assert.deepEqual(fresh, incomingRow, 'fresh incoming runtime must win unchanged');
+assert.equal(carried.state, 'unobserved');
+assert.equal(carried.last_action, 'NOT_OBSERVED');
+assert.equal(carried.disposition, 'not_due_this_boundary',
+  'carried runtime must not retain a previously actionable disposition');
+assert.equal(previousRow.disposition, 'eligible_execute', 'do not mutate previous durable evidence');
+assert.equal(carried.candidate_ready, false);
+assert.equal(carried.broker_action, false);
+assert.equal(Object.hasOwn(carried, 'stale_top_level_order_authority'), false,
+  'unknown historical top-level broker/order authority must not survive carry');
+assert.equal(carried.execution_contract, null,
+  'unobserved runtime must not present a stale contract/conId as current');
+assert.equal(carried.symbol, 'AMAT', 'static navigation identity must remain visible');
+assert.equal(carried.runtime_id, previousRow.runtime_id);
+for (const field of [
+  'paper_submit_enabled', 'live_submit_enabled', 'dca_enabled',
+  'max_dca_adds', 'max_contracts', 'max_shares',
+]) {
+  assert.equal(carried.execution_policy[field], null,
+    'carried runtime policy must be unverified, not current: ' + field);
+}
+assert.equal(carried.execution_policy.policy_unverified_this_boundary, true);
+assert.equal(previousRow.execution_policy.paper_submit_enabled, true,
+  'historical selected policy evidence remains immutable');
+assert.equal(carried.position, null);
+assert.equal(carried.broker_symbol_position, null);
+assert.equal(carried.broker_symbol_position_observed, false);
+assert.equal(carried.position_ownership.attributed, false);
+assert.equal(carried.position_ownership.account_wide_position_is_not_strategy_ownership, true);
+assert.equal(Object.hasOwn(carried.position_ownership, 'untrusted_stale_authority'), false,
+  'unknown previous ledger authority must not survive carry');
+assert.equal(carried.position_ownership.carried_from_previous_snapshot, true);
+assert.equal(carried.position_ownership.attribution_unverified_this_boundary, true);
+for (const field of [
+  'source', 'provenance_kind', 'processed_execution_count',
+  'execution_history_present', 'reviewed_migration_seed_present',
+  'pre_seed_transition_continuity_proven', 'ledger_updated_at_utc',
+  'runtime_updated_at_utc',
+]) {
+  assert.equal(carried.position_ownership[field], null,
+    'carried inventory must not claim prior ledger provenance: ' + field);
+}
+assert.equal(previousRow.position_ownership.provenance_kind, 'reconciled_execution_history',
+  'historical execution-backed evidence remains immutable');
+assert.equal(carried.primary_metric, null);
+assert.deepEqual(carried.conditions, []);
+assert.equal(carried.position_context, null);
+assert.deepEqual(carried.market_context, { features: [], quote: null });
+assert.equal(carried.data_health.current, false);
+assert.equal(Object.hasOwn(carried.data_health, 'untrusted_stale_authority'), false,
+  'unknown previous health eligibility must not survive carry');
+assert.equal(carried.data_health.observed_this_boundary, false);
+assert.equal(carried.data_health.not_due_this_boundary, true);
+assert.equal(carried.data_health.bar_close_identity_ok, false);
+assert.equal(carried.data_health.no_new_completed_target_bar, false,
+  'historical no-new-bar status must not impersonate the new unobserved boundary');
+assert.equal(carried.data_health.bar_close_gap_sec, null);
+assert.deepEqual(carried.data_health.warmup, {});
+assert.deepEqual(carried.data_health.freshness, {});
+assert.equal(previousRow.data_health.no_new_completed_target_bar, true);
+assert.equal(carried.data_health.carried_from_previous_snapshot, true);
+assert.equal(carried.data_health.target_bar_close_utc, '2026-10-25T14:00:00Z');
+assert.equal(previousRow.data_health.current, true, 'never mutate durable prior record');
+assert.equal(previousRow.position_ownership.attributed, true);
+assert.equal(previousRow.position_ownership.untrusted_stale_authority, true);
+assert.equal(previousRow.data_health.untrusted_stale_authority, true);
+assert.equal(mergeRuntimeProjection(previous, snapshot('b'.repeat(40), [incomingRow])).snapshot.runtimes.length, 1,
+  'different private source must not inherit previous runtime rows');
+for (const placeholder of ['unknown', 'not-a-git-sha', '0'.repeat(39)]) {
+  const invalidSourceCarry = mergeRuntimeProjection(
+    { snapshot: snapshot(placeholder, [previousRow]) },
+    snapshot(placeholder, [incomingRow]),
+  );
+  assert.deepEqual(invalidSourceCarry.snapshot.runtimes, [incomingRow],
+    'matching placeholder source identity cannot authorize runtime carry');
+  assert.equal(invalidSourceCarry.runtimeMergeApplied, false);
+}
+assert.equal(mergeRuntimeProjection(
+  { snapshot: snapshot('A'.repeat(40), [previousRow]) },
+  snapshot('a'.repeat(40), [incomingRow]),
+).snapshot.runtimes.length, 2, 'valid uppercase SHA normalizes to exact identity');
+assert.deepEqual(
+  mergeRuntimeProjection(previous, snapshot('a'.repeat(40), [{ ...previousRow, last_action: 'HOLD' }])).snapshot.runtimes[0].last_action,
+  'HOLD', 'incoming same-ID runtime must replace previous row',
+);
+const empty = mergeRuntimeProjection(previous, snapshot('a'.repeat(40), []));
+assert.equal(empty.snapshot.runtimes[0].data_health.current, false,
+  'empty new boundary cannot renew prior positive freshness');
+const repeated = mergeRuntimeProjection({ snapshot: result.snapshot }, snapshot('a'.repeat(40), []));
+assert.ok(repeated.snapshot.runtimes.every((row) => row.data_health.current === false),
+  'repeated carry cannot restore previous eligibility');
+assert.equal(repeated.snapshot.runtimes[0].position_ownership.provenance_kind, null,
+  'repeated carry must not resurrect historical inventory provenance');
+for (const [label, invalidRows] of [
+  ['duplicate runtime ID', [incomingRow, { ...incomingRow, last_action: 'BUY' }]],
+  ['empty runtime ID', [{ ...incomingRow, runtime_id: '' }]],
+  ['whitespace runtime ID', [{ ...incomingRow, runtime_id: ' MNQ-12Min' }]],
+  ['numeric runtime ID', [{ ...incomingRow, runtime_id: 12 }]],
+  ['array runtime row', [[]]],
+]) {
+  const invalid = snapshot('a'.repeat(40), invalidRows);
+  assert.throws(() => mergeRuntimeProjection(previous, invalid),
+    /snapshot_runtime_identity_invalid_or_duplicate/, label + ' must not silently collapse with prior state');
+  assert.throws(() => mergeRuntimeProjection(null, invalid),
+    /snapshot_runtime_identity_invalid_or_duplicate/, label + ' must fail on first publication too');
+}
+// Older Durable Object records can predate today's strict incoming validator.
+// A duplicate or malformed persisted row must not survive as a carried card.
+for (const [label, priorRows] of [
+  ['duplicate prior runtime ID', [previousRow, { ...previousRow, last_action: 'SELL' }]],
+  ['whitespace prior runtime ID', [{ ...previousRow, runtime_id: ' AMAT-15Min' }]],
+  ['numeric prior runtime ID', [{ ...previousRow, runtime_id: 15 }]],
+]) {
+  const recovered = mergeRuntimeProjection(
+    { snapshot: snapshot('a'.repeat(40), priorRows) }, incoming,
+  );
+  assert.deepEqual(recovered.snapshot.runtimes, [incomingRow],
+    label + ' must never carry stale/ambiguous persisted rows');
+  assert.equal(recovered.runtimeMergeApplied, false, label);
+  assert.equal(recovered.previousRuntimeCount, priorRows.length, label);
+}
+const unsafePrior = snapshot('a'.repeat(40), [previousRow]);
+unsafePrior.privacy.execution_authority_included = true;
+const privacyRecovered = mergeRuntimeProjection({ snapshot: unsafePrior }, incoming);
+assert.deepEqual(privacyRecovered.snapshot.runtimes, [incomingRow],
+  'legacy privacy-invalid state must not be inherited');
+assert.equal(privacyRecovered.runtimeMergeApplied, false);
+console.log('MMIBKR_OPERATOR_CONSOLE_LEGACY_CARRY_FAILCLOSED=PASS');
+
+console.log('MMIBKR_OPERATOR_CONSOLE_RUNTIME_IDENTITY_FAILCLOSED=PASS');
+console.log('MMIBKR_OPERATOR_CONSOLE_CARRIED_RUNTIME_FRESHNESS=PASS');
+
+const backing = new Map();
+let storageTransactionCount = 0;
+let transactionTail = Promise.resolve();
+const storage = {
+  async get(key) { return backing.get(key); },
+  async put(key, value) { backing.set(key, value); },
+  async transaction(fn) {
+    storageTransactionCount += 1;
+    const predecessor = transactionTail;
+    let release;
+    transactionTail = new Promise((resolve) => { release = resolve; });
+    await predecessor;
+    try { return await fn(this); } finally { release(); }
+  },
+};
+const state = new OperatorState({ storage }, {});
+async function storeBoundary(snapshotValue) {
+  return state.fetch(new Request('https://operator-state.internal/store', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ snapshot: snapshotValue, transport: {} }),
+  }));
+}
+const currentAt = new Date(Date.now() - 120_000).toISOString();
+const olderAt = new Date(Date.now() - 240_000).toISOString();
+const newerAt = new Date(Date.now() - 30_000).toISOString();
+const firstBoundary = { ...snapshot('a'.repeat(40), [incomingRow]), generated_at_utc: currentAt };
+assert.equal((await storeBoundary(firstBoundary)).status, 201);
+const olderBoundary = { ...snapshot('a'.repeat(40), [previousRow]), generated_at_utc: olderAt };
+const rejectedOlder = await storeBoundary(olderBoundary);
+assert.equal(rejectedOlder.status, 409, 'older same-source run cannot overwrite fresh state');
+assert.equal((await rejectedOlder.json()).error, 'snapshot_out_of_order');
+assert.equal((await storage.get('latest')).snapshot.generated_at_utc, currentAt);
+const rejectedOtherSource = await storeBoundary({ ...olderBoundary, runtime: { source_sha: 'b'.repeat(40) } });
+assert.equal(rejectedOtherSource.status, 409, 'source changes cannot backdate the displayed observation');
+assert.equal((await storage.get('latest')).snapshot.runtime.source_sha, 'a'.repeat(40));
+assert.equal((await storeBoundary({ ...firstBoundary, generated_at_utc: 'not-utc' })).status, 400);
+for (const impossible of [
+  '2026-02-30T10:00:00Z',
+  '2026-02-29T10:00:00Z',
+  '2026-01-01T24:00:00Z',
+]) {
+  assert.equal((await storeBoundary({ ...firstBoundary, generated_at_utc: impossible })).status, 400,
+    `normalized impossible UTC clock must fail closed: ${impossible}`);
+}
+assert.equal((await storage.get('latest')).snapshot.generated_at_utc, currentAt,
+  'invalid calendar clocks cannot alter durable operator state');
+assert.equal((await storeBoundary({ ...firstBoundary, generated_at_utc: new Date(Date.now() + 300_000).toISOString() })).status, 400);
+assert.equal((await storeBoundary({ ...firstBoundary, generated_at_utc: newerAt })).status, 201);
+assert.equal((await storage.get('latest')).snapshot.generated_at_utc, newerAt);
+assert.ok(storageTransactionCount >= 3, 'publisher ordering must be enforced inside DO storage transaction');
+const concurrentOld = { ...firstBoundary, generated_at_utc: new Date(Date.now() - 180_000).toISOString() };
+const concurrentNew = { ...firstBoundary, generated_at_utc: new Date(Date.now() - 10_000).toISOString() };
+const outcomes = await Promise.all([storeBoundary(concurrentNew), storeBoundary(concurrentOld)]);
+assert.ok(outcomes.some((response) => response.status === 201));
+assert.ok(outcomes.some((response) => response.status === 409));
+assert.equal((await storage.get('latest')).snapshot.generated_at_utc, concurrentNew.generated_at_utc,
+  'concurrent out-of-order publisher completion cannot roll back durable state');
+// A concurrent writer can replace a just-committed record before the
+// independent readback. Matching timestamp, schema and collection counts
+// are not proof that the record being acknowledged is still the one written.
+const overwritten = new Map();
+let substituteReadback = false;
+const sameShapeReplacementStorage = {
+  async get(key) {
+    const stored = overwritten.get(key);
+    if (substituteReadback && key === 'latest') {
+      return {
+        ...stored,
+        write_id: 'different-committed-record',
+        snapshot: {
+          ...stored.snapshot,
+          runtimes: stored.snapshot.runtimes.map((row) => ({
+            ...row, last_action: 'FOREIGN_BOUNDARY',
+          })),
+        },
+      };
+    }
+    return stored;
+  },
+  async put(key, value) { overwritten.set(key, value); },
+  async transaction(fn) {
+    const result = await fn(this);
+    substituteReadback = true;
+    return result;
+  },
+};
+const substitutedState = new OperatorState({ storage: sameShapeReplacementStorage }, {});
+const substitutedResponse = await substitutedState.fetch(new Request(
+  'https://operator-state.internal/store',
+  { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ snapshot: firstBoundary, transport: {} }) },
+));
+assert.equal(substitutedResponse.status, 502,
+  'same timestamp/count but different committed record cannot earn durable readback');
+assert.equal((await substitutedResponse.json()).error, 'operator_snapshot_readback_failed');
+console.log('MMIBKR_OPERATOR_CONSOLE_READBACK_IDENTITY_FAILCLOSED=PASS');
+
+// Python UTC snapshot producers may emit six fractional digits. Date.parse
+// truncates them to milliseconds; an older .123455 boundary must not
+// overwrite a newer .123456 boundary just because both parse to .123 ms.
+const microPrefix = new Date(Date.now() - 5_000).toISOString().slice(0, 19);
+const microNew = `${microPrefix}.123456Z`;
+const microOld = `${microPrefix}.123455Z`;
+assert.equal((await storeBoundary({ ...firstBoundary, generated_at_utc: microNew })).status, 201);
+const rejectedMicroOld = await storeBoundary({ ...firstBoundary, generated_at_utc: microOld });
+assert.equal(rejectedMicroOld.status, 409, 'submillisecond ordering cannot roll back latest');
+assert.equal((await storage.get('latest')).snapshot.generated_at_utc, microNew);
+console.log('MMIBKR_OPERATOR_CONSOLE_MICROSECOND_ORDER=PASS');
+
+console.log('MMIBKR_OPERATOR_CONSOLE_MONOTONIC_SNAPSHOT_FRESHNESS=PASS');
+
+
+const decisionUrl = 'https://mmibkr-operator-console.slenderiq.workers.dev/api/promotion-review/decision';
+function decisionRequest(headers = {}, url = decisionUrl) {
+  return new Request(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...headers },
+    body: '{}',
+  });
+}
+const decisionOrigin = new URL(decisionUrl).origin;
+assert.equal(operatorDecisionRequestIsSameOrigin(decisionRequest({
+  origin: decisionOrigin, 'sec-fetch-site': 'same-origin',
+})), true, 'authenticated same-origin browser JSON is eligible for the existing Access gate');
+assert.equal(operatorDecisionRequestIsSameOrigin(decisionRequest({
+  origin: decisionOrigin, 'sec-fetch-site': 'same-origin',
+  'content-type': 'application/json; charset=UTF-8',
+})), true, 'normal JSON charset is accepted');
+for (const [label, headers] of [
+  ['missing origin', {}],
+  ['cross-site origin', { origin: 'https://attacker.example', 'sec-fetch-site': 'cross-site' }],
+  ['same-site subdomain', { origin: 'https://other.slenderiq.workers.dev', 'sec-fetch-site': 'same-site' }],
+  ['forged same-origin with cross-site metadata', { origin: decisionOrigin, 'sec-fetch-site': 'cross-site' }],
+  ['HTML form content', { origin: decisionOrigin, 'sec-fetch-site': 'same-origin', 'content-type': 'text/plain' }],
+  ['form encoded content', { origin: decisionOrigin, 'sec-fetch-site': 'same-origin', 'content-type': 'application/x-www-form-urlencoded' }],
+]) {
+  assert.equal(operatorDecisionRequestIsSameOrigin(decisionRequest(headers)), false, label);
+}
+assert.equal(operatorDecisionRequestIsSameOrigin(decisionRequest({
+  origin: decisionOrigin, 'sec-fetch-site': 'same-origin',
+}, 'https://another.example/api/promotion-review/decision')), false, 'host confusion is rejected');
+console.log('MMIBKR_OPERATOR_CONSOLE_DECISION_SAME_ORIGIN=PASS');
+
+// A signed publisher's declared privacy=false flags cannot launder raw
+// account IDs or credential-shaped fields through a nested projection.
+// The canonical producer never emits these keys, so reject at admission.
+for (const [name, mutate] of [
+  ['raw position account', (s) => { s.positions = [{ contract: { symbol: 'AMAT' }, account: 'DU-PRIVATE' }]; }],
+  ['raw fill account ID', (s) => { s.fills = [{ execution: { accountId: 'DU-PRIVATE' } }]; }],
+  ['nested broker credential', (s) => { s.runtimes[0].position_context = { credentials: { password: 'private' } }; }],
+  ['account summary identifier', (s) => { s.account = { equity: 1, account_code: 'DU-PRIVATE' }; }],
+  ['runtime secret token', (s) => { s.runtimes[0].data_health = { nested: { access_token: 'private' } }; }],
+  ['spaced broker account ID', (s) => { s.positions = [{ 'account id': 'DU-PRIVATE' }]; }],
+  ['dotted broker account ID', (s) => { s.fills = [{ 'account.id': 'DU-PRIVATE' }]; }],
+  ['punctuated credential', (s) => { s.runtimes[0].data_health = { 'pass.word': 'private' }; }],
+  ['fullwidth broker account ID', (s) => { s.fills = [{ 'ａｃｃｏｕｎｔｉｄ': 'DU-PRIVATE' }]; }],
+  ['fullwidth punctuated broker ID', (s) => { s.positions = [{ 'ＡＣＣＯＵＮＴ－ＩＤ': 'DU-PRIVATE' }]; }],
+  ['fullwidth credential', (s) => { s.runtimes[0].data_health = { 'ｐａｓｓｗｏｒｄ': 'private' }; }],
+  ['fullwidth root account alias', (s) => { s['ａｃｃｏｕｎｔ'] = 'DU-PRIVATE'; }],
+  ['punctuated root account alias', (s) => { s['a.c.c.o.u.n.t'] = 'DU-PRIVATE'; }],
+  ['uppercase root account alias', (s) => { s['ACCOUNT'] = 'DU-PRIVATE'; }],
+  ['Cyrillic account homoglyph', (s) => { s['аccount'] = 'DU-PRIVATE'; }],
+  ['zero-width account key', (s) => { s['acc\u200bount'] = 'DU-PRIVATE'; }],
+]) {
+  const contaminated = snapshot('a'.repeat(40), [{ ...incomingRow }]);
+  mutate(contaminated);
+  assert.throws(() => mergeRuntimeProjection(null, contaminated),
+    /snapshot_sensitive_field_rejected/, name);
+}
+const cleanPrivacy = snapshot('a'.repeat(40), [{ ...incomingRow }]);
+cleanPrivacy.account = { equity: 123, positions_count: 0, currencies: { equity: 'USD' } };
+assert.equal(mergeRuntimeProjection(null, cleanPrivacy).snapshot.account.equity, 123);
+console.log('MMIBKR_OPERATOR_CONSOLE_NESTED_PRIVACY_FAILCLOSED=PASS');
+
+// The allowed top-level account key must not become a privacy bypass:
+// account IDs can be laundered as the whole value, a money value, a
+// currency, or an unknown generic field without any forbidden key name.
+for (const [name, account] of [
+  ['raw account string', 'DU-PRIVATE'],
+  ['account list', ['DU-PRIVATE']],
+  ['account money string', { equity: 'DU-PRIVATE' }],
+  ['unknown account field', { equity: 1, note: 'DU-PRIVATE' }],
+  ['currency account identifier', { currencies: { equity: 'DU-PRIVATE' } }],
+  ['nonfinite money', { equity: Infinity }],
+  ['negative count', { positions_count: -1 }],
+]) {
+  const contaminated = snapshot('a'.repeat(40), [{ ...incomingRow }]);
+  contaminated.account = account;
+  assert.throws(() => mergeRuntimeProjection(null, contaminated),
+    /snapshot_account_projection_rejected/, name);
+}
+const fullSafeAccount = snapshot('a'.repeat(40), [{ ...incomingRow }]);
+fullSafeAccount.account = {
+  equity: 123, excess_liquidity: null, positions_count: 0,
+  open_orders_count: 0, positions_capability: true,
+  open_orders_capability: null, account_scope_verified: null,
+  observed_at_utc: '2026-10-27T04:00:00Z',
+  currencies: { equity: 'USD', cash: 'BASE' },
+};
+assert.equal(mergeRuntimeProjection(null, fullSafeAccount).snapshot.account.equity, 123);
+console.log('MMIBKR_OPERATOR_CONSOLE_ACCOUNT_PROJECTION_PRIVACY=PASS');
+

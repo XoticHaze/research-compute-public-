@@ -351,8 +351,8 @@
     "freshness_gap_visible": false,
     "in_progress_session_excluded": true,
     "lagging_symbols_by_program": {},
-    "observed_common_asof": "2026-10-22",
-    "requested_asof": "2026-10-22",
+    "observed_common_asof": "2026-10-26",
+    "requested_asof": "2026-10-26",
     "source_health_by_program": {
       "HOMEBUILDERS": {
         "all_symbols_share_latest_date": true,
@@ -393,9 +393,23 @@
       }
     }
   },
-  "generated_at": "2026-10-23T01:27:43.052116+00:00",
-  "market_data_asof": "2026-10-22",
-  "requested_market_data_asof": "2026-10-22",
+  "generated_at": "2026-10-27T08:06:46.275060+00:00",
+  "market_data_asof": "2026-10-26",
+  "matched_after_cost_projections": {
+    "SEMICONDUCTOR_SHARED_RIDGE:2026-09-11:aed8eb43d888d3c4": {
+      "alpha_or_promotion_authority": false,
+      "equal_weight_13_net_return_bps": 1020.7918,
+      "original_resolution_mutated": false,
+      "smh_net_return_bps": 903.9426,
+      "smh_round_trip_cost_bps": 10.0,
+      "status": "DERIVED_FROM_FROZEN_RESOLVED_COHORT_NO_OUTCOME_BACKFILL",
+      "stock_round_trip_cost_bps": 25.0,
+      "ticker_book_net_return_bps": 895.5707,
+      "ticker_minus_equal_weight_13_net_bps": -125.2211,
+      "ticker_minus_smh_net_bps": -8.3719
+    }
+  },
+  "requested_market_data_asof": "2026-10-26",
   "schema": "research.forward_prospective_cohort_ledger_r1",
   "summary": {
     "HOMEBUILDERS": {

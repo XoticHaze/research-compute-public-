@@ -122,9 +122,17 @@ def main() -> None:
     simple = close[[CANDIDATE, CASH]].astype(float).pct_change(fill_method=None)
     challenger, challenger_rows = _simulate(core_daily, simple[CANDIDATE])
     matched, matched_rows = _simulate(core_daily, simple[CASH])
+    if len(challenger) and (
+        not challenger.index.equals(matched.index)
+        or not challenger.index.equals(core_daily.index)
+    ):
+        raise RuntimeError("FORWARD_MATCHED_SESSION_SET_MISMATCH")
 
     core_current = core_payload.get("current_state", {}).get("p249_plus_p266", {})
     status = "FORWARD_OBSERVING" if len(challenger) else "BASELINE_FROZEN_NO_FORWARD_CLOSES"
+    core_metrics = _metrics(core_daily, include_exit_cost=False)
+    challenger_metrics = _metrics(challenger)
+    matched_metrics = _metrics(matched)
     result = {
         "schema": "research.forward_senior_clo_current_core_shadow_r1",
         "workload_id": WORKLOAD_ID,
@@ -155,11 +163,18 @@ def main() -> None:
         "forward": {
             "first_close": challenger.index.min().date().isoformat() if len(challenger) else None,
             "latest_close": challenger.index.max().date().isoformat() if len(challenger) else None,
-            "incumbent": _metrics(core_daily, include_exit_cost=False),
-            "challenger_if_flattened_now": _metrics(challenger),
-            "matched_control_if_flattened_now": _metrics(matched),
-            "challenger_minus_matched_cumulative": float((1 + challenger).prod() - (1 + matched).prod()) if len(challenger) else 0.0,
-            "challenger_minus_incumbent_cumulative": float((1 + challenger).prod() - (1 + core_daily).prod()) if len(challenger) else 0.0,
+            "incumbent": core_metrics,
+            "challenger_if_flattened_now": challenger_metrics,
+            "matched_control_if_flattened_now": matched_metrics,
+            # Same funded NAV definitions as the three published absolute
+            # books: challenger and matched include mark-to-market exit cost.
+            "challenger_minus_matched_cumulative": float(challenger_metrics["cumulative_return"] - matched_metrics["cumulative_return"]) if len(challenger) else 0.0,
+            "challenger_minus_incumbent_cumulative": float(challenger_metrics["cumulative_return"] - core_metrics["cumulative_return"]) if len(challenger) else 0.0,
+            "comparison_cost_basis": {
+                "challenger_minus_matched_cumulative": "BOTH_NET_IF_FLATTENED_NOW",
+                "challenger_minus_incumbent_cumulative": "CHALLENGER_NET_IF_FLATTENED_NOW_MINUS_UNCHANGED_INCUMBENT_NET",
+                "legacy_pre_exit_spreads_not_used": True,
+            },
             "challenger_observations": challenger_rows,
             "matched_control_observations": matched_rows,
         },

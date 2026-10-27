@@ -60,10 +60,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PRIVATE_SOURCE_SHA: 46fcdf26cf84603b305a3ea20bcd3cf28c67bc0b
+  PRIVATE_SOURCE_SHA: bc485b8deb32492b2be2d55de4f4f38af300cfd1
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
   LIVE_SEAL_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-live-bot/seal
-  IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:5db4074ec952d130937afc3bb926ee97f115d09f7f46676eb16d98c2805572b5
+  IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:2e4f4911991386e941f6e95d58ee38a8242474dd3be239f21ad82557d24b4368
   SESSION_SECONDS: "14400"
 
 jobs:
@@ -97,35 +97,16 @@ jobs:
             echo "LIVE_OWNER_EXACT_NEW_MARKER_COUNT_INVALID=$marker_count"
             exit 64
           fi
-          if printf '%s\n' "$changed" | grep -Eq '^\+live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39492758670$'; then
-            admission_only=false
-            mode=successor
-            predecessor_run=39492758670
-            echo 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39492758670'
-          elif printf '%s\n' "$changed" | grep -Eq '^\+live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39484631800$'; then
-            admission_only=false
-            mode=successor
-            predecessor_run=39484631800
-            echo 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39484631800'
-          elif printf '%s\n' "$changed" | grep -Eq '^\+live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39394982732$'; then
-            admission_only=false
-            mode=successor
-            predecessor_run=39394982732
-            echo 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39394982732'
-          elif printf '%s\n' "$changed" | grep -Eq '^\+live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39359585927$'; then
-            admission_only=false
-            mode=successor
-            predecessor_run=39359585927
-            echo 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39359585927'
-          elif printf '%s\n' "$changed" | grep -Eq '^\+live_successor_approved_dispatch_request_20261019_[a-z0-9]{6}: 39231751596$'; then
-            admission_only=false
-            mode=successor
-            predecessor_run=39231751596
-            echo 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39231751596'
-          elif printf '%s\n' "$changed" | grep -Eq '^\+live_owner_approved_dispatch_request_20261019_[a-z0-9]{6}: true$'; then
-            admission_only=false
-            echo 'EXPLICIT_OPERATOR_LIVE_FIRE_MATCHED=1'
-          elif printf '%s\n' "$changed" | grep -Eq '^\+gateway_pool_5h_readonly_dispatch_request_20261022_[a-z0-9]{6}: (true|15m)$'; then
+          # A fresh random suffix on an old marker is not independent operator
+          # authorization. Never let a public Git push replay a writable owner
+          # or successor, even if the marker's historical predecessor ID matches.
+          # Preserve explicit workflow_dispatch for the canonical operator and
+          # the separately bounded read-only pool/supervised push markers.
+          if printf '%s\n' "$changed" | grep -Eq '^\+(live_successor_approved_dispatch_request|live_owner_approved_dispatch_request)'; then
+            echo 'LIVE_WRITABLE_PUSH_DISPATCH_REQUIRES_INDEPENDENT_ADMISSION=1'
+            exit 64
+          fi
+          if printf '%s\n' "$changed" | grep -Eq '^\+gateway_pool_5h_readonly_dispatch_request_20261022_[a-z0-9]{6}: (true|15m)$'; then
             mode=gateway_pool_5h
             admission_only=true
             if printf '%s\n' "$changed" | grep -Eq '^\+gateway_pool_5h_readonly_dispatch_request_20261022_[a-z0-9]{6}: 15m$'; then
@@ -134,6 +115,11 @@ jobs:
             echo 'EXPLICIT_OPERATOR_READONLY_CF_GATEWAY_POOL_REQUEST_MATCHED=1'
           elif printf '%s\n' "$changed" | grep -Eq '^\+supervised_5h_dispatch_request_[0-9]{8}_[a-z0-9]{6}: true$'; then
             mode=supervised_5h
+          else
+            # An accepted prefix with an unapproved value must never start
+            # even a read-only production Gateway or request an IB Key login.
+            echo 'LIVE_OWNER_UNRECOGNIZED_NEW_MARKER=1'
+            exit 64
           fi
           if [ "$mode" = gateway_pool_5h ]; then
             active_owners="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/mmibkr-selected-runtime-live-owner-r1.yml/runs?per_page=100" \
@@ -187,6 +173,11 @@ jobs:
               assert marker in s, marker
           # Check the execution job, not these literal regression assertions.
           owner=s.split('\n  owner:\n',1)[1]
+          pinned_controller='ghcr.io/code-hustler-ft3d/ibg-controller@sha256:2e4f4911991386e941f6e95d58ee38a8242474dd3be239f21ad82557d24b4368'
+          assert '  IBKR_CONTROLLER_IMAGE: '+pinned_controller in s
+          assert "controller_image='"+pinned_controller+"'" in owner
+          assert 'gateway_uid="$(docker run --rm --entrypoint /usr/bin/id "$IBKR_CONTROLLER_IMAGE" -u)"' in owner
+          print('LIVE_OWNER_WARM_CONTROLLER_IMAGE_PIN_CONSISTENT=1')
           assert "contract['localSymbol']=='MNQZ6'" not in owner
           assert "contract['lastTradeDateOrContractMonth']=='20261218'" not in owner
           assert 'is_continuous_futures_symbol(local_symbol' in owner
@@ -195,30 +186,75 @@ jobs:
           assert 'placeOrder(' not in owner
           assert 'rendezvous/fire/mmibkr-live-writable-admission-r1' in s
           assert "if: github.event_name == 'workflow_dispatch'" in owner
+          assert "APPROVED_PRIVATE_SOURCE_SHA: " + chr(36) + "{{ vars.MMIBKR_APPROVED_PRIVATE_SOURCE_SHA }}" in owner
+          assert "LIVE_PROTECTED_PRIVATE_SOURCE_APPROVAL_MISSING=1" in owner
+          assert "LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1" in owner
+          assert owner.index("LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1") < owner.index("EXPLICIT_APPROVED_CANONICAL_LIVE_OWNER=1")
+          assert owner.index("LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1") < owner.index("Materialize canonical exact private " + "source through existing encrypted Fleet vault")
+          # Execute the exact writable preflight guard with synthetic hashes.
+          # Never request IBKR credentials, Gateway, or a private source archive.
+          import os, subprocess
+          source_guard=owner.split('            esac\n',1)[1].split("            echo 'EXPLICIT_APPROVED_CANONICAL_LIVE_OWNER=1'",1)[0]
+          for approved,code,marker in (
+              ("",64,"LIVE_PROTECTED_PRIVATE_SOURCE_APPROVAL_MISSING=1"),
+              ("1"*40,64,"LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1"),
+              ("0"*40,0,None),
+          ):
+              env={"PATH":os.environ["PATH"],"PRIVATE_SOURCE_SHA":"0"*40,"APPROVED_PRIVATE_SOURCE_SHA":approved}
+              probe=subprocess.run(["bash","-c","set -euo pipefail\n"+source_guard],env=env,capture_output=True,text=True)
+              assert probe.returncode==code,(probe.returncode,code)
+              assert marker is None or marker in probe.stdout
+          print("LIVE_OWNER_PROTECTED_SOURCE_PIN_NEGATIVE_CASES=PASS")
           assert "if: " + chr(36) + "{{ !inputs.admission_only }}" in owner
           assert "if: " + chr(36) + "{{ inputs.admission_only }}" in owner
           assert '"inputs[admission_only]=$admission_only"' in s
           assert "'inputs[warm_handoff_mode]=$mode'" in s or 'inputs[warm_handoff_mode]=$mode' in s
           assert 'supervised_5h_dispatch_request_[0-9]{8}_[a-z0-9]{6}' in s
           assert 'mode=legacy' in s and 'mode=supervised_5h' in s
-          assert 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39231751596' in s
-          assert 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39359585927' in s
-          assert 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39394982732' in s
-          assert 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39484631800' in s
-          assert 'EXACT_FAILED_LIVE_PREDECESSOR_REQUESTED=39492758670' in s
-          assert 'live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39492758670' in s
-          assert 'live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39484631800' in s
-          assert 'live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}: 39394982732' in s
-          assert 'live_successor_approved_dispatch_request_20261020_[a-z0-9]{6}' in s
           assert 'inputs[warm_predecessor_run]=$predecessor_run' in s
-          assert 'mode=successor' in s
+          # Workflow dispatch string must never be interpolated directly into
+          # shell source before its numeric validation. Pass via step env.
+          restore=owner.split('      - name: Restore existing encrypted live Gateway warm state',1)[1].split('      - name: Start the established IBKR controller',1)[0]
+          expression=chr(36)+'{{ inputs.warm_predecessor_run }}'
+          assert ('predecessor_run="'+expression+'"') not in restore
+          assert ('PREDECESSOR_RUN: '+expression) in restore
+          assert 'predecessor_run="$PREDECESSOR_RUN"' in restore
+          # Validate the supplied run ID before it enters any GitHub API path.
+          # The later check is still required for artifact-discovered legacy IDs.
+          successor_api='aid="$(gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$predecessor_run/artifacts'
+          assert restore.index('[[ "$predecessor_run" =~ ^[0-9]+$') < restore.index(successor_api)
           fire=s.split('      - name: Dispatch explicitly authorized canonical owner',1)[1].split('\n  contract:',1)[0]
+          assert 'LIVE_WRITABLE_PUSH_DISPATCH_REQUIRES_INDEPENDENT_ADMISSION=1' in fire
+          assert 'live_owner_approved_dispatch_request_20261019_' not in fire
+          assert 'live_successor_approved_dispatch_request_20261020_' not in fire
           run=fire.split('        run: |',1)[1]
           import subprocess
           script="\n".join(line[10:] if line.startswith("          ") else line for line in run.splitlines())
           subprocess.run(["bash","-n"],input=script,text=True,check=True)
+          # Every admission-only handoff must set broker READ_ONLY_API=yes,
+          # including legacy/producer/successor, not only supervised/pool.
+          gateway=owner.split('      - name: Start the established IBKR controller in writable live mode on host 4001',1)[1].split('      - name: Bind and reconcile the expected existing production account without order mutation',1)[0]
+          assert 'read_only_api=yes' in gateway
+          mode=chr(36)+'{{ inputs.admission_only }}'
+          assert ('if [ "'+mode+'" = false ]; then\\n            read_only_api=no').replace('\\n','\n') in gateway
+          assert 'READONLY_LIVE_GATEWAY_STARTED=1' in gateway
+          assert 'WRITABLE_LIVE_GATEWAY_STARTED=1' in gateway
+          assert "inputs.admission_only && 'yes' || 'no'" in gateway
           print('LIVE_EXACT_SUCCESSOR_DISPATCH_SHELL_PARSE=PASS')
+          # The first authenticated account read is a distinct shell step.
+          # Parse the actual source block, never execute a Gateway/login.
+          initial=owner.split('      - name: Bind and reconcile the expected existing production account without order mutation',1)[1].split("      - name: Open Gateway's read-only API",1)[0]
+          initial_run=initial.split('        run: |',1)[1]
+          initial_script="\n".join(line[10:] if line.startswith("          ") else line for line in initial_run.splitlines())
+          subprocess.run(["bash","-n"],input=initial_script,text=True,check=True)
+          print('LIVE_INITIAL_ACCOUNT_READ_SHELL_PARSE=PASS')
+          checkpoint=owner.split('      - name: Stop live owner and encrypt canonical Gateway and bot data for successor',1)[1].split('      - name: Persist exact encrypted production-live successor state',1)[0]
+          assert 'LIVE_RUNTIME_CHECKPOINT_SOURCE_QUIESCENT=1' in checkpoint
+          assert 'LIVE_RUNTIME_CHECKPOINT_GATEWAY_STILL_RUNNING=1' in checkpoint
+          assert 'docker stop --time 90 mmibkr-live-gateway >/dev/null 2>&1 || true' not in checkpoint
           assert 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1' in owner
+          assert 'LIVE_WRT_ACCOUNT_API_READBACK_ONLY=1' in owner
+          assert 'LIVE_WRT_ACCOUNT_READ_ONLY_RECONCILED=1' not in owner
           assert 'EXPLICIT_APPROVED_CANONICAL_LIVE_OWNER=1' in owner
           assert 'LIVE_MODE_REQUIRES_LEGACY_OR_EXACT_SUCCESSOR=1' in owner
           assert 'EPHEMERAL_LIVE_BROKER_MUTATION_DISABLED=1' not in owner
@@ -237,17 +273,77 @@ jobs:
           assert 'SUPERVISED_FIVE_HOUR_SHADOW_COMPLETE=1' in owner
           assert 'SUPERVISED_GATEWAY_ONLY_EIGHT_MINUTES_PASS=1' in owner
           assert 'SUPERVISED_GATEWAY_ONLY_API_UNSTABLE=1' in owner
-          assert 'SUPERVISED_GATEWAY_ONLY_BROKER_RECONCILED=1' in owner
+          assert 'SUPERVISED_GATEWAY_ONLY_BROKER_READBACK_ONLY=1' in owner
           assert 'SUPERVISED_GATEWAY_HEALTH=' in owner
           assert 'SUPERVISED_BROKER_UNAVAILABLE_CONSECUTIVE_PROBES=3' in owner
           assert 'AUTO_RESTART_ADOPT=yes' in owner
+          assert sum(1 for line in owner.splitlines() if line.strip().startswith('supervised_recovery_args=(-e AUTO_RESTART_TIME=')) == 3
           assert 'CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480' in owner
           assert 'maintenance_grace_seconds=720' in owner
           assert 'SUPERVISED_MAINTENANCE_RECOVERY_GRACE_STARTED=1' in owner
           assert 'SUPERVISED_MAINTENANCE_RECOVERY_EXPIRED=1' in owner
-          assert 'SUPERVISED_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS=1' in owner
+          assert 'SUPERVISED_MAINTENANCE_ACCOUNT_POSITIONS_ORDERS_READBACK_ONLY=1' in owner
           assert 'SUPERVISED_MAINTENANCE_RECOVERY_INCOMPLETE_AT_SESSION_END=1' in owner
-          assert 'docker logs --since 10m mmibkr-live-gateway' in owner
+          # The independent read-only pool may outlast the controller's 480s
+          # maintenance delay only on an exact in-window post-outage alert.
+          # Compose the step delimiters so source-contract readers searching
+          # the workflow cannot accidentally select this assertion block.
+          pool_start='      - name: ' + 'Hold one authenticated read-only Gateway for independent GitHub compute jobs'
+          pool_end='      - name: ' + 'Confirm no-order admission did not authorize live bot startup'
+          pool=owner.split(pool_start,1)[1].split(pool_end,1)[0]
+          for marker in ('maintenance_grace_used=0', 'maintenance_evidence_seen=0',
+                         'pool_maintenance_budget=600', 'pool_maintenance_budget=720',
+                         'ALERT_IBKR_MAINTENANCE_RECOVERY',
+                         'docker logs --since "$outage_utc" mmibkr-live-gateway',
+                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_GRACE_STARTED=1',
+                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_EXPIRED=1',
+                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_BROKER_READBACK_ONLY=1'):
+              assert marker in pool, marker
+          # A real reset late in a 15m session must not be cut short by
+          # the nominal session end before the 480s controller delay finishes.
+          for marker in ('while :; do', 'pool_maintenance_alert_after_outage()',
+                         'pool_reset_window_outage()',
+                         '[ "$now" -ge "$end" ]', 'observation_budget=600',
+                         'observation_budget=720',
+                         '[ "$now" -ge "$((end + observation_budget))" ]',
+                         '[ "$now" -ge "$((outage_since + observation_budget))" ]',
+                         'MMIBKR_GATEWAY_POOL_RESET_WINDOW_READONLY_OBSERVATION_STARTED=1',
+                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_BOUNDED_OBSERVATION=1',
+                         'MMIBKR_GATEWAY_POOL_MAINTENANCE_OBSERVATION_INCOMPLETE=1'):
+              assert marker in pool, marker
+          assert 'timeout-minutes: 300' in pool
+          # Privacy regression: upstream IB timeout/account text is never
+          # emitted from public owner steps, even when Python exits nonzero.
+          for private_marker in (
+              'python - >"$RUNNER_TEMP/mmibkr-live-initial-account-read-private.log" 2>&1',
+              'if python - >"$private_probe_log" 2>&1',
+              'if ! python - >"$RUNNER_TEMP/mmibkr-live-supervised-read-private.log" 2>&1',
+              'if python - >"$RUNNER_TEMP/mmibkr-live-supervised-loop-read-private.log" 2>&1',
+              'if python - >"$RUNNER_TEMP/mmibkr-live-runtime-read-private.log" 2>&1',
+              'rm -f "$private_probe_log"',
+          ):
+              assert private_marker in owner, private_marker
+          assert "grep -xE 'MMIBKR_GATEWAY_POOL_BROKER_FAILURE_STAGE=" in pool
+          assert "grep -xE 'MMIBKR_GATEWAY_POOL_BROKER_FAILURE_CLASS=" in pool
+          assert "grep -xF 'MMIBKR_GATEWAY_POOL_BROKER_PROBE_RETRYABLE=1'" in pool
+          import tempfile
+          with tempfile.TemporaryDirectory() as temp_dir:
+              private_path=Path(temp_dir)/'broker-read-private.log'
+              shell = "\n".join((
+                  "umask 077",
+                  "python -c 'print(\"PRIVATE_IBKR_\"+\"ACCOUNT_SENTINEL\")' >\"$1\" 2>&1",
+                  "grep -xE 'MMIBKR_GATEWAY_POOL_BROKER_FAILURE_STAGE=(api_connect_and_sync|account_identity)' \"$1\" || true",
+                  "rm -f \"$1\"",
+              ))
+              private_test=subprocess.run(['bash','-c',shell,'_',str(private_path)],
+                                          capture_output=True,text=True,check=True)
+              assert ('PRIVATE_IBKR_'+'ACCOUNT_SENTINEL') not in private_test.stdout+private_test.stderr
+              assert not private_path.exists()
+          print('READONLY_GATEWAY_PRIVATE_BROKER_LOG_SENTINEL=PASS')
+          pool_run=pool.split('        run: |',1)[1]
+          pool_script="\n".join(line[10:] if line.startswith("          ") else line for line in pool_run.splitlines())
+          subprocess.run(["bash","-n"],input=pool_script,text=True,check=True)
+          print('READONLY_GATEWAY_POOL_MAINTENANCE_SHELL_PARSE=PASS')
           assert 'TZ=America/New_York date +%H%M' in owner
           assert 'docker stop --time 90 mmibkr-live-gateway' in owner
           assert 'MMIBKR_CANONICAL_BOT_STATUS=' in owner
@@ -271,9 +367,14 @@ jobs:
           script="\n".join(line[10:] if line.startswith("          ") else line for line in run.splitlines())
           subprocess.run(["bash","-n"],input=script,text=True,check=True)
           print('SUPERVISED_MAINTENANCE_SHELL_PARSE=PASS')
+          # Inspect the extracted supervised shell, not the workflow text that
+          # also contains these assertion literals (self-match is not proof).
+          assert 'maintenance_outage_utc="$(date -u -d "@$maintenance_failure_since" +%Y-%m-%dT%H:%M:%SZ)"' in script
+          assert 'docker logs --since 10m mmibkr-live-gateway' not in script
+          assert 'docker logs --since "$maintenance_outage_utc" mmibkr-live-gateway' in script
           assert 'PRODUCTION_CANONICAL_LIVE_BOT_STARTED=1' in owner
           assert 'PRODUCTION_LIVE_OWNER_SESSION_COMPLETE=1' in owner
-          assert 'LIVE_RUNTIME_BROKER_READ_RECONCILED=1' in owner
+          assert 'LIVE_RUNTIME_BROKER_READBACK_ONLY=1' in owner
           assert owner.count('logging.disable(logging.CRITICAL)') >= 2
           assert 'util.run(ib.connectAsync(' in owner
           assert 'ib.RequestTimeout=25' in owner
@@ -287,7 +388,8 @@ jobs:
           assert 'LIVE_RUNTIME_BROKER_RECOVERY_BUDGET_SECONDS=' in owner
           assert 'broker_outage_since ))" -ge 720' not in owner
           assert '"$gateway_healthy" != 1 ] || [ "$bot_paused" -eq 1' in owner
-          assert 'LIVE_RUNTIME_BROKER_VERIFIED_BOT_UNFROZEN=1' in owner
+          assert 'LIVE_RUNTIME_CANONICAL_LEDGER_RECONCILIATION_REQUIRED_BOT_STAYS_FROZEN=1' in owner
+          assert 'docker unpause mmibkr-live-bot' not in owner
           assert 'LIVE_RUNTIME_BROKER_LOST_BOT_FROZEN=1' not in owner
           assert 'LIVE_RUNTIME_BOT_AND_GATEWAY_CHECKPOINT_SEALED=1' in owner
           assert 'LIVE_RUNTIME_PREDECESSOR_GATEWAY_AND_BOT_DATA_RESTORED=1' in owner
@@ -296,6 +398,7 @@ jobs:
           assert 'PRODUCTION_LIVE_EXECUTION_HISTORY_READ=1' in owner
           assert 'mmibkr-live-runtime-checkpoint-v1' in owner
           assert 'LIVE_RUNTIME_SUCCESSOR_AUTH_AND_BROKER_RECONCILIATION_REQUIRED=1' in owner
+          assert 'LIVE_RUNTIME_SUCCESSOR_PRESTART_LEDGER_RECONCILIATION_REQUIRED=1' in owner
           assert "SESSION_SECONDS: \"14400\"" in s
           live=owner.split('      - name: Start unchanged canonical bot natural owner with three persisted live policies',1)[1]
           live=live.split('      - name: Stop live owner and encrypt canonical Gateway and bot data for successor',1)[0]
@@ -322,9 +425,39 @@ jobs:
           assert 'LIVE_RUNTIME_CONTROLLER_ALERT_COUNTS=' in owner
           assert 'LIVE_RUNTIME_FINAL_CONTROLLER_HEALTH=' in owner
           print('LIVE_RUNTIME_RECOVERY_OBSERVABILITY_PARSE=PASS')
+          prestart='      - name: ' + 'Reconcile restored live successor with canonical broker-ledger read-only gate'
+          start='      - name: ' + 'Start unchanged canonical bot natural owner with three persisted live policies'
+          assert owner.count(prestart) == 1
+          assert owner.rfind(prestart) < owner.rfind(start)
+          checked=owner.rsplit(prestart,1)[1].split(start,1)[0]
+          assert ('if: ' + chr(36) + "{{ !inputs.admission_only && inputs.warm_handoff_mode == 'successor' }}") in checked
+          assert "ibkr_live_successor_ledger_reconcile_v1.py" in checked
+          assert "--account-env-file" in checked and "--universe" in checked and "--data-root" in checked
+          assert "LIVE_RUNTIME_SUCCESSOR_CANONICAL_RECONCILER_SOURCE_NOT_ADMITTED=1" in checked
+          assert "LIVE_RUNTIME_SUCCESSOR_READ_ONLY_RECONCILIATION_PASSED=1" in checked
+          assert 'private_reconcile_log="$RUNNER_TEMP/mmibkr-live-successor-reconcile-private.log"' in checked
+          assert '>"$private_reconcile_log" 2>&1' in checked
+          assert "trap 'rm -f \"$private_reconcile_log\"' EXIT" in checked
+          assert "LIVE_RUNTIME_SUCCESSOR_READ_ONLY_RECONCILIATION_FAILED=1" in checked
+          assert "LIVE_RUNTIME_SUCCESSOR_PRESTART_LEDGER_RECONCILIATION_REQUIRED=1" in owner
+          assert "ENABLE_LIVE_TRADING=1" not in checked
+          assert "placeOrder" not in checked and "cancelOrder" not in checked
+          prestart_shell=checked.split('        run: |',1)[1]
+          prestart_shell="\n".join(line[10:] if line.startswith("          ") else line for line in prestart_shell.splitlines())
+          subprocess.run(["bash","-n"],input=prestart_shell,text=True,check=True)
+          print('LIVE_SUCCESSOR_READONLY_PRESTART_STEP_CONTRACT_PASS=1')
           print('CANONICAL_LIVE_OWNER_CONTRACT_PASS=1')
           PY
           python -m unittest -v tests.test_mmibkr_live_runtime_checkpoint_v1
+
+      - name: Verify writable push replay denial and read-only preservation (brokerless)
+        run: python -m unittest discover -s tests -p 'test_mmibkr_live_writable_push_replay_guard_v1.py' -v
+
+      - name: Verify direct legacy writable prestart denial (brokerless)
+        run: python -m unittest -v tests.test_mmibkr_live_legacy_prestart_gate_v1
+
+      - name: Verify reset-window bounded read-only observation (brokerless)
+        run: python -m unittest -v tests.test_mmibkr_live_gateway_reset_window_observation_v1
 
   owner:
     if: github.event_name == 'workflow_dispatch'
@@ -342,17 +475,33 @@ jobs:
           ADMISSION_ONLY: ${{ inputs.admission_only }}
           HANDOFF_MODE: ${{ inputs.warm_handoff_mode }}
           PREDECESSOR_RUN: ${{ inputs.warm_predecessor_run }}
+          APPROVED_PRIVATE_SOURCE_SHA: ${{ vars.MMIBKR_APPROVED_PRIVATE_SOURCE_SHA }}
         run: |
           set -euo pipefail
           case "$HANDOFF_MODE" in legacy|producer|successor|supervised_5h|gateway_pool_5h) ;; *) exit 64 ;; esac
           if [ "$ADMISSION_ONLY" = false ]; then
             case "$HANDOFF_MODE" in
               legacy)
-                test -z "$PREDECESSOR_RUN" || exit 64 ;;
+                test -z "$PREDECESSOR_RUN" || exit 64
+                # Explicit user approval is preserved, but an old writable
+                # legacy dispatch cannot skip same-account live journal/fill
+                # reconciliation or the fenced successor-only prestart gate.
+                echo 'LIVE_LEGACY_WRITABLE_ACCOUNT_LEDGER_NOT_ADMITTED=1'
+                exit 64 ;;
               successor)
                 [[ "$PREDECESSOR_RUN" =~ ^[0-9]+$ ]] || exit 64 ;;
               *) echo 'LIVE_MODE_REQUIRES_LEGACY_OR_EXACT_SUCCESSOR=1'; exit 64 ;;
             esac
+            # A signed private source archive is not owner-approved source.
+            # Fail closed before any broker secrets are accessed on writable modes.
+            if [[ ! "${APPROVED_PRIVATE_SOURCE_SHA:-}" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "LIVE_PROTECTED_PRIVATE_SOURCE_APPROVAL_MISSING=1"
+              exit 64
+            fi
+            if [ "${APPROVED_PRIVATE_SOURCE_SHA:-}" != "$PRIVATE_SOURCE_SHA" ]; then
+              echo "LIVE_PROTECTED_PRIVATE_SOURCE_PIN_MISMATCH=1"
+              exit 64
+            fi
             echo 'EXPLICIT_APPROVED_CANONICAL_LIVE_OWNER=1'
           else
             if [ "$HANDOFF_MODE" = successor ]; then
@@ -611,6 +760,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           MMIBKR_LIVE_GATEWAY_WARM_KEY_B64: ${{ secrets.MMIBKR_LIVE_GATEWAY_WARM_KEY_B64 }}
+          PREDECESSOR_RUN: ${{ inputs.warm_predecessor_run }}
         run: |
           set -euo pipefail
           umask 077
@@ -625,7 +775,8 @@ jobs:
           PY
           name="mmibkr-live-gateway-state-v1"
           if [ "${{ inputs.warm_handoff_mode }}" = successor ]; then
-            predecessor_run="${{ inputs.warm_predecessor_run }}"
+            predecessor_run="$PREDECESSOR_RUN"
+            [[ "$predecessor_run" =~ ^[0-9]+$ && "$predecessor_run" != "$GITHUB_RUN_ID" ]] || { echo 'EXACT_PREDECESSOR_RUN_INVALID=1'; exit 64; }
             aid="$(gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$predecessor_run/artifacts?per_page=100" --jq '[.artifacts[] | select(.name == "mmibkr-live-gateway-state-v1" and .expired == false)] | .[0].id // empty')"
             [ -n "$aid" ] || { echo "EXACT_WARM_PRODUCER_ARTIFACT_MISSING=1"; exit 1; }
             echo "MMIBKR_EXACT_WARM_PRODUCER_REQUIRED=$predecessor_run"
@@ -697,14 +848,18 @@ jobs:
             warm_args=(-e GATEWAY_WARM_STATE=/home/ibgateway/warm-state
                        -v "mmibkr-live-warm-$GITHUB_RUN_ID:/home/ibgateway/warm-state:ro")
           fi
-          read_only_api=no
+          # Admission-only is broker-enforced read-only for EVERY handoff mode.
+          # A label/no-bot guard alone is not an IBKR API mutation boundary.
+          read_only_api=yes
           twofa_exit_interval=120
           relogin_after_twofa_timeout=yes
           supervised_recovery_args=()
           if [ "${{ inputs.admission_only }}" = false ]; then
+            read_only_api=no
             twofa_exit_interval=300
             relogin_after_twofa_timeout=no
-            supervised_recovery_args=(-e AUTO_RESTART_ADOPT=yes
+            supervised_recovery_args=(-e AUTO_RESTART_TIME="11:45 PM"
+                                      -e AUTO_RESTART_ADOPT=yes
                                       -e CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480 \
                                       -e UPSTREAM_RELAUNCH=yes)
             echo 'MMIBKR_LIVE_RECOVERY_CONTROLLER_ENABLED=1'
@@ -719,7 +874,8 @@ jobs:
             relogin_after_twofa_timeout=no
             # Keep the existing Gateway-internal restart/adoption logic active.
             # Native v0.16.2 maintenance re-auth intentionally waits 480s.
-            supervised_recovery_args=(-e AUTO_RESTART_ADOPT=yes
+            supervised_recovery_args=(-e AUTO_RESTART_TIME="11:45 PM"
+                                      -e AUTO_RESTART_ADOPT=yes
                                       -e CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480)
             echo 'MMIBKR_SUPERVISED_MAINTENANCE_BACKOFF_SECONDS=480'
             echo 'MMIBKR_SUPERVISED_AUTO_RESTART_ADOPT=1'
@@ -733,7 +889,8 @@ jobs:
             read_only_api=yes
             twofa_exit_interval=300
             relogin_after_twofa_timeout=no
-            supervised_recovery_args=(-e AUTO_RESTART_ADOPT=yes
+            supervised_recovery_args=(-e AUTO_RESTART_TIME="11:45 PM"
+                                      -e AUTO_RESTART_ADOPT=yes
                                       -e CCP_MAINTENANCE_RECOVERY_DELAY_SECONDS=480)
             echo 'MMIBKR_SPLIT_GATEWAY_POOL_API_READ_ONLY=1'
             echo 'MMIBKR_SPLIT_GATEWAY_POOL_AUTO_RELOGIN=0'
@@ -755,13 +912,17 @@ jobs:
             -p 127.0.0.1:4001:4003 \
             "$controller_image" >/dev/null
           docker exec mmibkr-live-gateway /bin/sh -lc \
-            'test "$READ_ONLY_API" = "${{ inputs.admission_only && (inputs.warm_handoff_mode == 'supervised_5h' || inputs.warm_handoff_mode == 'gateway_pool_5h') && 'yes' || 'no' }}" && test "$TRADING_MODE" = live' 
+            'test "$READ_ONLY_API" = "${{ inputs.admission_only && 'yes' || 'no' }}" && test "$TRADING_MODE" = live' 
           # Exact network proof. The only published socket is loopback TWS
           # 4001:4003. Bot joins the Gateway namespace with no published
           # control/API 8001 port and no public HTTP ingress.
           docker inspect -f '{{json .HostConfig.PortBindings}}' mmibkr-live-gateway |
             python -c "import json,sys; p=json.load(sys.stdin); assert set(p)=={'4003/tcp'},p; r=p['4003/tcp']; assert len(r)==1 and r[0]['HostIp']=='127.0.0.1' and r[0]['HostPort']=='4001',p; print('HEADLESS_LIVE_PRIVATE_NETWORK_ATTESTED=1')"
-          echo 'WRITABLE_LIVE_GATEWAY_STARTED=1'
+          if [ "${{ inputs.admission_only }}" = true ]; then
+            echo 'READONLY_LIVE_GATEWAY_STARTED=1'
+          else
+            echo 'WRITABLE_LIVE_GATEWAY_STARTED=1'
+          fi
           if [ "${{ inputs.admission_only }}" = true ] && [ "${{ inputs.warm_handoff_mode }}" = gateway_pool_5h ]; then
             docker stats --no-stream --format 'MMIBKR_POOL_GATEWAY_START_MEM={{.MemUsage}} CPU={{.CPUPerc}} NET_IO={{.NetIO}} PIDS={{.PIDs}}' mmibkr-live-gateway || echo 'MMIBKR_POOL_GATEWAY_START_STATS_UNAVAILABLE=1'
           fi
@@ -769,9 +930,11 @@ jobs:
       - name: Bind and reconcile the expected existing production account without order mutation
         run: |
           set -euo pipefail
-          python - <<'PY'
+          umask 077
+          python - >"$RUNNER_TEMP/mmibkr-live-initial-account-read-private.log" 2>&1 <<'PY'
           import os,time,logging
           from pathlib import Path
+          from scripts.mmibkr_public_broker_log_guard_v1 import install; install()
           from ib_insync import IB
           # ib_insync may log raw broker account IDs on sync timeout.
           # Only sanitized fixed-field markers may enter public Actions logs.
@@ -801,6 +964,10 @@ jobs:
                   if ib.isConnected(): ib.disconnect()
           if not authenticated: raise SystemExit('live_gateway_authenticated_account_read_failed')
           PY
+          rm -f "$RUNNER_TEMP/mmibkr-live-initial-account-read-private.log"
+          echo 'PRODUCTION_LIVE_EXECUTION_HISTORY_READ=1'
+          echo 'PRODUCTION_LIVE_EXPECTED_ACCOUNT_READ=1'
+          echo 'PRODUCTION_LIVE_POSITIONS_AND_ORDERS_READ=1'
 
       - name: Open Gateway's read-only API to permitted ephemeral tailnet clients
         if: ${{ inputs.admission_only && inputs.warm_handoff_mode == 'gateway_pool_5h' && inputs.pool_transport == 'tailscale' }}
@@ -834,9 +1001,10 @@ jobs:
           POOL_TRANSPORT: ${{ inputs.pool_transport }}
           GH_TOKEN: ${{ github.token }}
           POOL_SESSION_MINUTES: ${{ inputs.pool_session_minutes }}
-        timeout-minutes: 290
+        timeout-minutes: 300
         run: |
           set -euo pipefail
+          umask 077
           # Same authenticated production owner and A/B consumers for short
           # acceptance (15m) or the original long continuity (280m).
           case "$POOL_SESSION_MINUTES" in 15|280) ;; *) echo 'MMIBKR_POOL_DURATION_INVALID=1'; exit 64 ;; esac
@@ -849,8 +1017,12 @@ jobs:
             docker stats --no-stream --format "MMIBKR_POOL_GATEWAY_RESOURCES_PHASE=${phase} ELAPSED_SECONDS=${elapsed} MEM={{.MemUsage}} CPU={{.CPUPerc}} NET_IO={{.NetIO}} PIDS={{.PIDs}}" mmibkr-live-gateway || echo 'MMIBKR_POOL_GATEWAY_STATS_UNAVAILABLE=1'
           }
           outage_since=0
+          maintenance_grace_used=0
+          maintenance_evidence_seen=0
+          reset_window_grace_used=0
           ready=0
           owner_probe_sample=0
+          private_probe_log="$RUNNER_TEMP/mmibkr-gateway-read-probe-private.log"
           if [ "$POOL_TRANSPORT" = tailscale ]; then
             relay_pid="$(cat "$RUNNER_TEMP/mmibkr-gateway-relay.pid")"
             kill -0 "$relay_pid"
@@ -879,7 +1051,60 @@ jobs:
           echo "MMIBKR_GATEWAY_ONLY_POOL_SESSION_SECONDS=$((POOL_SESSION_MINUTES * 60))"
           pool_resource_sample initial
           docker exec mmibkr-live-gateway du -sm /home/ibgateway/Jts_b1 2>/dev/null | awk '{print "MMIBKR_POOL_JTS_DISK_MIB_INITIAL="$1}' || true
-          while [ "$(date +%s)" -lt "$end" ]; do
+          # A short read-only acceptance can overlap IBKR's North America
+          # reset. An observed account API outage beginning within the exact
+          # reset window may use at most the existing 600s recovery budget even
+          # if a still-alive JVM has not emitted a controller maintenance alert.
+          # The 720s extended budget still requires the native controller alert.
+          # This only extends observation, never starts a bot or retries orders.
+          pool_maintenance_alert_after_outage() {
+            [ "$outage_since" -gt 0 ] && [ "$maintenance_grace_used" -eq 0 ] || return 1
+            local eastern_time outage_utc
+            eastern_time="$(TZ=America/New_York date +%H%M)"
+            outage_utc="$(date -u -d "@$outage_since" +%Y-%m-%dT%H:%M:%SZ)"
+            { [[ "$eastern_time" > "2329" ]] || [[ "$eastern_time" < "0201" ]]; } &&
+              docker logs --since "$outage_utc" mmibkr-live-gateway 2>&1 |
+                grep -F 'ALERT_IBKR_MAINTENANCE_RECOVERY' >/dev/null
+          }
+          pool_reset_window_outage() {
+            [ "$outage_since" -gt 0 ] && [ "$reset_window_grace_used" -eq 0 ] || return 1
+            local outage_eastern_hhmm outage_eastern_weekday
+            outage_eastern_hhmm="$(TZ=America/New_York date -d "@$outage_since" +%H%M)" || return 1
+            outage_eastern_weekday="$(TZ=America/New_York date -d "@$outage_since" +%u)" || return 1
+            # Official IBKR North America reset: Sunday-Friday 00:15-01:45 ET;
+            # Saturday maintenance 00:00-02:00 ET. Both use Eastern DST.
+            if [ "$outage_eastern_weekday" -eq 6 ]; then
+              [[ "$outage_eastern_hhmm" < "0200" ]]
+            else
+              [[ "$outage_eastern_hhmm" > "0014" ]] &&
+                [[ "$outage_eastern_hhmm" < "0146" ]]
+            fi
+          }
+          while :; do
+            now="$(date +%s)"
+            if [ "$now" -ge "$end" ]; then
+              if [ "$outage_since" -eq 0 ]; then break; fi
+              if [ "$maintenance_evidence_seen" -eq 0 ] && pool_maintenance_alert_after_outage; then
+                maintenance_grace_used=1
+                maintenance_evidence_seen=1
+                echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_GRACE_STARTED=1'
+              fi
+              if [ "$maintenance_evidence_seen" -eq 0 ] && pool_reset_window_outage; then
+                reset_window_grace_used=1
+                echo 'MMIBKR_GATEWAY_POOL_RESET_WINDOW_READONLY_OBSERVATION_STARTED=1'
+              fi
+              # Never extend an ordinary non-reset API outage. Without a native
+              # controller alert the pre-existing 600s budget remains binding.
+              observation_budget=600
+              if [ "$maintenance_evidence_seen" -eq 1 ]; then observation_budget=720; fi
+              if { [ "$maintenance_evidence_seen" -eq 0 ] && [ "$reset_window_grace_used" -eq 0 ]; } ||
+                 [ "$now" -ge "$((end + observation_budget))" ] ||
+                 [ "$now" -ge "$((outage_since + observation_budget))" ]; then
+                echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_OBSERVATION_INCOMPLETE=1'
+                break
+              fi
+              echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_BOUNDED_OBSERVATION=1'
+            fi
             if [ "$POOL_TRANSPORT" = tailscale ]; then
               kill -0 "$relay_pid"
             else
@@ -893,9 +1118,12 @@ jobs:
             pool_resource_sample interval
             owner_probe_sample=$((owner_probe_sample + 1))
             export MMIBKR_OWNER_PROBE_SAMPLE="$owner_probe_sample"
-            if python - <<'PY'
+            # Capture upstream IBKR stdout AND stderr; logger.disable alone
+            # cannot guarantee account-number-bearing timeout text stays private.
+            if python - >"$private_probe_log" 2>&1 <<'PY'
           import os,logging
           from pathlib import Path
+          from scripts.mmibkr_public_broker_log_guard_v1 import install; install()
           from ib_insync import IB, util
           # Suppress ib_insync's raw-account timeout diagnostics in public logs.
           # Sanitized failure stage/class below remain visible via print().
@@ -932,7 +1160,15 @@ jobs:
               if ib.isConnected(): ib.disconnect()
           PY
             then
+              rm -f "$private_probe_log"
+              if [ "$maintenance_evidence_seen" -eq 1 ]; then
+                # This same-client probe confirmed a managed account and fresh
+                # positions/open-orders/executions API reads. It does NOT bind
+                # orderRef/permId/execId to durable inventory or prove takeover.
+                echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_BROKER_READBACK_ONLY=1'
+              fi
               outage_since=0
+              maintenance_evidence_seen=0
               echo 'MMIBKR_GATEWAY_POOL_BROKER_READ_PASS=1'
               if [ "$ready" -eq 0 ]; then
                 echo 'MMIBKR_GATEWAY_ONLY_POOL_READY=1'
@@ -953,6 +1189,14 @@ jobs:
               sleep 90
             else
               result=$?
+              # Only exact allowlisted stage/class markers may leave the private
+              # runner-local log. Never cat/tail upstream IB timeout messages.
+              if [ -f "$private_probe_log" ]; then
+                grep -xE 'MMIBKR_GATEWAY_POOL_BROKER_FAILURE_STAGE=(api_connect_and_sync|account_identity|positions_read|orders_read|executions_read)' "$private_probe_log" || true
+                grep -xE 'MMIBKR_GATEWAY_POOL_BROKER_FAILURE_CLASS=(TimeoutError|ConnectionError|RuntimeError|OSError|ValueError|AssertionError)' "$private_probe_log" || true
+                grep -xF 'MMIBKR_GATEWAY_POOL_BROKER_PROBE_RETRYABLE=1' "$private_probe_log" || true
+                rm -f "$private_probe_log"
+              fi
               if [ "$result" -eq 70 ]; then
                 echo 'MMIBKR_GATEWAY_POOL_ACCOUNT_MISMATCH_FAIL_CLOSED=1'
                 exit 70
@@ -960,7 +1204,23 @@ jobs:
               if [ "$outage_since" -eq 0 ]; then outage_since="$(date +%s)"; fi
               elapsed="$(( $(date +%s) - outage_since ))"
               echo "MMIBKR_GATEWAY_POOL_API_UNAVAILABLE_SECONDS=$elapsed"
-              if [ "$elapsed" -ge 600 ]; then
+              # Native controller re-auth deliberately waits 480s. Extend the
+              # usual 600s outage ceiling to 720s only for one authenticated
+              # maintenance/reset-window alert arising AFTER this outage began.
+              # No broker action, new login, or owner handoff is performed here.
+              if [ "$maintenance_evidence_seen" -eq 0 ] && pool_maintenance_alert_after_outage; then
+                maintenance_grace_used=1
+                maintenance_evidence_seen=1
+                echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_GRACE_STARTED=1'
+              fi
+              pool_maintenance_budget=600
+              if [ "$maintenance_evidence_seen" -eq 1 ]; then
+                pool_maintenance_budget=720
+              fi
+              if [ "$elapsed" -ge "$pool_maintenance_budget" ]; then
+                if [ "$maintenance_evidence_seen" -eq 1 ]; then
+                  echo 'MMIBKR_GATEWAY_POOL_MAINTENANCE_RECOVERY_EXPIRED=1'
+                fi
                 echo 'MMIBKR_GATEWAY_POOL_BROKER_RECOVERY_BUDGET_EXPIRED=1'
                 exit 75
               fi
@@ -976,7 +1236,7 @@ jobs:
         run: |
           set -euo pipefail
           echo 'LIVE_WRT_ADMISSION_ONLY_NO_BOT_STARTED=1'
-          echo 'LIVE_WRT_ACCOUNT_READ_ONLY_RECONCILED=1'
+          echo 'LIVE_WRT_ACCOUNT_API_READBACK_ONLY=1'
           echo 'LIVE_WRT_NO_LIVE_ORDER_DISPATCHED=1'
 
       - name: Observe authenticated Gateway without canonical bot for eight minutes (read only)
@@ -984,6 +1244,7 @@ jobs:
         timeout-minutes: 12
         run: |
           set -euo pipefail
+          umask 077
           # Distinguish broker/Gateway session instability from bot-triggered
           # disconnects before starting canonical main.py. No submit route,
           # order mutation, restart, login or controller commands here.
@@ -1016,9 +1277,10 @@ jobs:
             echo 'SUPERVISED_GATEWAY_ONLY_API_UNSTABLE=1'
             exit 1
           fi
-          if ! python - <<'PY'
+          if ! python - >"$RUNNER_TEMP/mmibkr-live-supervised-read-private.log" 2>&1 <<'PY'
           import os
           from pathlib import Path
+          from scripts.mmibkr_public_broker_log_guard_v1 import install; install()
           from ib_insync import IB
           expected=(Path(os.environ["RUNNER_TEMP"])/"mmibkr-live-bot.env").read_text().strip().split("=",1)[1]
           ib=IB()
@@ -1027,7 +1289,7 @@ jobs:
               assert expected in ib.managedAccounts()
               ib.reqPositions()
               ib.reqAllOpenOrders()
-              print("SUPERVISED_GATEWAY_ONLY_BROKER_RECONCILED=1")
+              print("SUPERVISED_GATEWAY_ONLY_BROKER_READBACK_ONLY=1")
           finally:
               if ib.isConnected(): ib.disconnect()
           PY
@@ -1035,6 +1297,8 @@ jobs:
             echo 'SUPERVISED_GATEWAY_ONLY_API_HANDSHAKE_FAILED=1'
             exit 1
           fi
+          rm -f "$RUNNER_TEMP/mmibkr-live-supervised-read-private.log"
+          echo 'SUPERVISED_GATEWAY_ONLY_BROKER_READBACK_ONLY=1'
           echo 'SUPERVISED_GATEWAY_ONLY_EIGHT_MINUTES_PASS=1'
 
       - name: Run supervised five-hour live-account canonical bot shadow (no orders)
@@ -1116,9 +1380,10 @@ jobs:
             fi
             gateway_status
             if [ $((minute % 5)) -eq 1 ] || [ "$probe_failures" -gt 0 ]; then
-              if python - <<'PY'
+              if python - >"$RUNNER_TEMP/mmibkr-live-supervised-loop-read-private.log" 2>&1 <<'PY'
           import os
           from pathlib import Path
+          from scripts.mmibkr_public_broker_log_guard_v1 import install; install()
           from ib_insync import IB
           expected=(Path(os.environ["RUNNER_TEMP"])/"mmibkr-live-bot.env").read_text().strip().split("=",1)[1]
           ib=IB()
@@ -1127,18 +1392,21 @@ jobs:
               assert expected in ib.managedAccounts(), "authenticated_account_not_matching"
               ib.reqPositions()
               ib.reqAllOpenOrders()
-              print("SUPERVISED_LIVE_ACCOUNT_RECONCILED=1")
+              print("SUPERVISED_LIVE_ACCOUNT_BROKER_READBACK_ONLY=1")
           finally:
               if ib.isConnected(): ib.disconnect()
           PY
               then
+                rm -f "$RUNNER_TEMP/mmibkr-live-supervised-loop-read-private.log"
+                echo 'SUPERVISED_LIVE_ACCOUNT_BROKER_READBACK_ONLY=1'
                 if [ "$maintenance_recovery_active" -eq 1 ]; then
-                  echo 'SUPERVISED_MAINTENANCE_RECONCILED_ACCOUNT_POSITIONS_ORDERS=1'
+                  echo 'SUPERVISED_MAINTENANCE_ACCOUNT_POSITIONS_ORDERS_READBACK_ONLY=1'
                   maintenance_recovery_active=0
                 fi
                 maintenance_failure_since=0
                 probe_failures=0
               else
+                rm -f "$RUNNER_TEMP/mmibkr-live-supervised-loop-read-private.log"
                 probe_failures=$((probe_failures + 1))
                 [ "$maintenance_failure_since" -gt 0 ] ||
                   maintenance_failure_since="$(date +%s)"
@@ -1154,8 +1422,9 @@ jobs:
                     echo 'SUPERVISED_MAINTENANCE_RECOVERY_OBSERVING=1'
                   elif [ "$maintenance_grace_used" -eq 0 ]; then
                     eastern_time="$(TZ=America/New_York date +%H%M)"
+                    maintenance_outage_utc="$(date -u -d "@$maintenance_failure_since" +%Y-%m-%dT%H:%M:%SZ)"
                     if [[ "$eastern_time" > "2329" || "$eastern_time" < "0201" ]] &&
-                       docker logs --since 10m mmibkr-live-gateway 2>&1 |
+                       docker logs --since "$maintenance_outage_utc" mmibkr-live-gateway 2>&1 |
                          grep -F 'ALERT_IBKR_MAINTENANCE_RECOVERY' >/dev/null; then
                       maintenance_grace_used=1
                       maintenance_recovery_active=1
@@ -1264,10 +1533,47 @@ jobs:
                   if re.search(pat,line): counts[k]=min(999,counts[k]+1)
           print("MMIBKR_SAFE_CONTROLLER_LIFECYCLE="+json.dumps(counts,sort_keys=True,separators=(",",":")))' || true
           fi
+      - name: Reconcile restored live successor with canonical broker-ledger read-only gate
+        if: ${{ !inputs.admission_only && inputs.warm_handoff_mode == 'successor' }}
+        run: |
+          set -euo pipefail
+          # No broker mutation and no submit enable. Execute only restored MM source.
+          checker="$PRIVATE_SOURCE_ROOT/scripts/operator/ibkr_live_successor_ledger_reconcile_v1.py"
+          test -f "$checker" || {
+            echo 'LIVE_RUNTIME_SUCCESSOR_CANONICAL_RECONCILER_SOURCE_NOT_ADMITTED=1'
+            exit 1
+          }
+          data="$RUNNER_TEMP/mmibkr-live-data"
+          universe="$data/strategy_runtime/selected_runtime_authority_14th31jv/selected_runtime_universe_14tu.json"
+          # Upstream IBKR timeout diagnostics may include private account IDs
+          # even when Python logging is disabled. Contain BOTH streams locally.
+          umask 077
+          private_reconcile_log="$RUNNER_TEMP/mmibkr-live-successor-reconcile-private.log"
+          trap 'rm -f "$private_reconcile_log"' EXIT
+          if PYTHONPATH="$PRIVATE_SOURCE_ROOT" python "$checker" \
+              --data-root "$data" --universe "$universe" \
+              --account-env-file "$RUNNER_TEMP/mmibkr-live-bot.env" \
+              >"$private_reconcile_log" 2>&1; then
+            echo 'LIVE_RUNTIME_SUCCESSOR_READ_ONLY_RECONCILIATION_PASSED=1'
+          else
+            echo 'LIVE_RUNTIME_SUCCESSOR_READ_ONLY_RECONCILIATION_FAILED=1'
+            exit 1
+          fi
+          # Existing next step still refuses to start an order-capable successor.
+
       - name: Start unchanged canonical bot natural owner with three persisted live policies
         if: ${{ !inputs.admission_only }}
         run: |
           set -euo pipefail
+          umask 077
+          # An authenticated broker read is not an attribution of restored
+          # orderRef/permId/execId intent, fills, open orders and positions.
+          # Until the owning MM consumer produces that same-owner proof, an
+          # encrypted predecessor checkpoint cannot safely resume live.
+          if [ "${{ inputs.warm_handoff_mode }}" = successor ]; then
+            echo 'LIVE_RUNTIME_SUCCESSOR_PRESTART_LEDGER_RECONCILIATION_REQUIRED=1'
+            exit 1
+          fi
           # No separate execution capsule, strategy selector, broker client or submit route.
           # Gateway exposes only 4001 loopback on the runner. Bot shares its
           # private network namespace; its internal TWS port is 4003.
@@ -1328,9 +1634,10 @@ jobs:
             # A successful broker reconciliation overrides uncertain status.
             if [ "$gateway_healthy" != 1 ] || [ "$bot_paused" -eq 1 ] ||
                [ $((iteration%5)) -eq 1 ]; then
-              if python - <<'PY'
+              if python - >"$RUNNER_TEMP/mmibkr-live-runtime-read-private.log" 2>&1 <<'PY'
           import os
           from pathlib import Path
+          from scripts.mmibkr_public_broker_log_guard_v1 import install; install()
           from ib_insync import IB
           expected=(Path(os.environ["RUNNER_TEMP"])/"mmibkr-live-bot.env").read_text().strip().split("=",1)[1]
           ib=IB()
@@ -1340,22 +1647,28 @@ jobs:
               ib.reqPositions()
               ib.reqAllOpenOrders()
               ib.reqExecutions()
-              print("LIVE_RUNTIME_BROKER_READ_RECONCILED=1")
+              print("LIVE_RUNTIME_BROKER_READBACK_ONLY=1")
           finally:
               if ib.isConnected(): ib.disconnect()
           PY
               then
+                rm -f "$RUNNER_TEMP/mmibkr-live-runtime-read-private.log"
+                echo 'LIVE_RUNTIME_BROKER_READBACK_ONLY=1'
                 last_verified="$(date +%s)"
                 if [ "$gateway_healthy" != 1 ]; then
                   echo 'LIVE_RUNTIME_CONTROLLER_HEALTH_DISAGREES_WITH_BROKER_READ=1'
                 fi
                 if [ "$bot_paused" -eq 1 ]; then
-                  docker unpause mmibkr-live-bot >/dev/null
-                  bot_paused=0
-                  broker_outage_since=0
-                  echo 'LIVE_RUNTIME_BROKER_VERIFIED_BOT_UNFROZEN=1'
+                  # Fresh account/position/order/execution reads establish API
+                  # health, NOT reconciliation to persisted bot orderRef/permId/
+                  # execId intent and inventory. Never resume a paused live bot
+                  # from a connectivity-only receipt after an unknown outage.
+                  # The canonical MM owner must first bind the exact account,
+                  # open orders, positions and fills to its persisted intent.
+                  echo 'LIVE_RUNTIME_CANONICAL_LEDGER_RECONCILIATION_REQUIRED_BOT_STAYS_FROZEN=1'
                 fi
               else
+                rm -f "$RUNNER_TEMP/mmibkr-live-runtime-read-private.log"
                 if [ "$bot_paused" -eq 0 ]; then
                   docker pause mmibkr-live-bot >/dev/null
                   bot_paused=1
@@ -1429,10 +1742,32 @@ jobs:
           umask 077
           docker inspect mmibkr-live-gateway >/dev/null
           test -d "$RUNNER_TEMP/mmibkr-live-data"
+          # Never seal a moving Gateway/bot volume after a masked stop error.
+          # This proves disk quiescence only, not broker logout or cross-runner
+          # authenticated session continuity; successor admission stays fenced.
           if docker inspect mmibkr-live-bot >/dev/null 2>&1; then
-            docker stop --time 90 mmibkr-live-bot >/dev/null 2>&1 || true
+            if [ "$(docker inspect -f '{{.State.Running}}' mmibkr-live-bot)" = true ]; then
+              if ! docker stop --time 90 mmibkr-live-bot >/dev/null 2>&1; then
+                echo 'LIVE_RUNTIME_CHECKPOINT_BOT_STOP_FAILED=1'
+                exit 75
+              fi
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' mmibkr-live-bot)" != false ]; then
+              echo 'LIVE_RUNTIME_CHECKPOINT_BOT_STILL_RUNNING=1'
+              exit 75
+            fi
           fi
-          docker stop --time 90 mmibkr-live-gateway >/dev/null 2>&1 || true
+          if [ "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" = true ]; then
+            if ! docker stop --time 90 mmibkr-live-gateway >/dev/null 2>&1; then
+              echo 'LIVE_RUNTIME_CHECKPOINT_GATEWAY_STOP_FAILED=1'
+              exit 75
+            fi
+          fi
+          if [ "$(docker inspect -f '{{.State.Running}}' mmibkr-live-gateway)" != false ]; then
+            echo 'LIVE_RUNTIME_CHECKPOINT_GATEWAY_STILL_RUNNING=1'
+            exit 75
+          fi
+          echo 'LIVE_RUNTIME_CHECKPOINT_SOURCE_QUIESCENT=1'
           work="$RUNNER_TEMP/mmibkr-live-checkpoint"
           mkdir -p "$work"
           docker run --rm --network none --user 0:0 \
@@ -1486,7 +1821,7 @@ jobs:
           fi
           rm -rf "$RUNNER_TEMP/live-warm-import" "$RUNNER_TEMP/live-warm-export"
           rm -rf "$RUNNER_TEMP/mmibkr-live-source" "$RUNNER_TEMP/mmibkr-live-data"
-          rm -f "$RUNNER_TEMP/mmibkr-live-gateway.env" "$RUNNER_TEMP/mmibkr-live-bot.env" "$RUNNER_TEMP/mmibkr-live-seal-receipt.json"
+          rm -f "$RUNNER_TEMP/mmibkr-live-gateway.env" "$RUNNER_TEMP/mmibkr-live-bot.env" "$RUNNER_TEMP/mmibkr-live-seal-receipt.json" "$RUNNER_TEMP/mmibkr-gateway-read-probe-private.log" "$RUNNER_TEMP/mmibkr-live-initial-account-read-private.log" "$RUNNER_TEMP/mmibkr-live-supervised-read-private.log" "$RUNNER_TEMP/mmibkr-live-supervised-loop-read-private.log" "$RUNNER_TEMP/mmibkr-live-runtime-read-private.log"
           test ! -e "$RUNNER_TEMP/mmibkr-live-gateway.env"
           test ! -e "$RUNNER_TEMP/mmibkr-live-data"
           echo 'LIVE_RUN_ONE_RUN_PRIVATE_MATERIAL_DESTROYED=1'

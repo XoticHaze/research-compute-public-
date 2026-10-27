@@ -13,6 +13,7 @@ cutoff-aware so the late-registration guard is exercised without future leakage.
 import argparse
 import hashlib
 import json
+import math
 from datetime import date, datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -300,6 +301,28 @@ def _prices_for(cohort: dict[str, Any], asof: date, loader: Callable[[str, date,
     return out
 
 
+def _late_first_registration(cohort: dict[str, Any], entry_ts: pd.Timestamp) -> dict[str, Any] | None:
+    # Check the original timestamp on every advance, including existing cohorts:
+    # a late cohort can be first stored before the entry bar appears in the tape.
+    registered = pd.Timestamp(cohort["first_registered_at"])
+    if registered.tzinfo is None:
+        raise RuntimeError("forward first_registered_at must be timezone-aware")
+    entry_open = pd.Timestamp(
+        f"{entry_ts.date().isoformat()} 09:30:00", tz="America/New_York"
+    ).tz_convert("UTC")
+    if registered.tz_convert("UTC") < entry_open:
+        return None
+    return {
+        **cohort,
+        "status": "LATE_REGISTRATION_REJECTED",
+        "resolution": {
+            "reason": "first ledger registration was not before next-session regular market open",
+            "entry_date": entry_ts.date().isoformat(),
+            "entry_open_utc": entry_open.isoformat(),
+        },
+    }
+
+
 def _resolve_homebuilders(cohort: dict[str, Any], prices: dict[str, pd.Series], is_new: bool) -> dict[str, Any]:
     symbols = list(cohort["symbols"])
     calendar = _common_calendar(prices, symbols + ["ITB", "QQQ"])
@@ -307,6 +330,9 @@ def _resolve_homebuilders(cohort: dict[str, Any], prices: dict[str, pd.Series], 
     if entry is None:
         return {**cohort, "status": "AWAITING_ENTRY_SESSION", "resolution": None}
     entry_i, entry_ts = entry
+    late = _late_first_registration(cohort, entry_ts)
+    if late is not None:
+        return late
     horizons = cohort["horizon_sessions_by_symbol"]
     matured = {s: entry_i + int(horizons[s]) < len(calendar) for s in symbols}
     if is_new and any(matured.values()):
@@ -548,6 +574,7 @@ def _expression_variant_metrics(
     variants = cohort.get("expression_variants") or {}
     if not variants:
         return None
+    industry_cost_bps = float(cohort["industry_round_trip_cost_bps"])
     out: dict[str, Any] = {}
     for name, spec in variants.items():
         weights = {
@@ -563,9 +590,13 @@ def _expression_variant_metrics(
             "ticker_book_gross_return_bps": round(gross, 4),
             "ticker_book_net_return_bps": round(net, 4),
             "excess_vs_smh_bps": round(net - smh_bps, 4),
+            "excess_vs_smh_net_bps": round(net - (smh_bps - industry_cost_bps), 4),
             "excess_vs_qqq_bps": round(net - qqq_bps, 4),
             "excess_vs_equal_weight_universe_bps": round(
                 net - equal_weight_universe_bps, 4
+            ),
+            "excess_vs_equal_weight_universe_net_bps": round(
+                net - (equal_weight_universe_bps - stock_cost_bps), 4
             ),
             "scientific_forward_credit": bool(spec.get("scientific_forward_credit")),
         }
@@ -580,6 +611,9 @@ def _resolve_semiconductor(cohort: dict[str, Any], prices: dict[str, pd.Series],
     if entry is None:
         return {**cohort, "status": "AWAITING_ENTRY_SESSION", "resolution": None}
     entry_i, entry_ts = entry
+    late = _late_first_registration(cohort, entry_ts)
+    if late is not None:
+        return late
     horizon = int(cohort["holding_horizon_sessions"])
     exit_i = entry_i + horizon
     if is_new and exit_i < len(calendar):
@@ -677,6 +711,7 @@ def _resolve_semiconductor(cohort: dict[str, Any], prices: dict[str, pd.Series],
     smh = _ret_bps(prices["SMH"], entry_ts, exit_ts)
     qqq = _ret_bps(prices["QQQ"], entry_ts, exit_ts)
     ew13 = sum(realized[s]["gross_return_bps"] for s in symbols) / len(symbols)
+    ew13_net = ew13 - stock_cost
     industry_net = smh - float(cohort["industry_round_trip_cost_bps"])
     abs_errors = [abs(float(v["prediction_error_bps"])) for v in realized.values() if v["prediction_error_bps"] is not None]
     usable = [
@@ -712,10 +747,14 @@ def _resolve_semiconductor(cohort: dict[str, Any], prices: dict[str, pd.Series],
                 "smh_buy_and_hold_return_bps": round(smh, 4),
                 "qqq_buy_and_hold_return_bps": round(qqq, 4),
                 "equal_weight_13_return_bps": round(ew13, 4),
+                "equal_weight_13_net_return_bps": round(ew13_net, 4),
+                "smh_buy_and_hold_net_return_bps": round(industry_net, 4),
             },
             "ticker_book_excess_vs_smh_bps": round(ticker_net - smh, 4),
+            "ticker_book_excess_vs_smh_net_bps": round(ticker_net - industry_net, 4),
             "ticker_book_excess_vs_qqq_bps": round(ticker_net - qqq, 4),
             "ticker_book_excess_vs_equal_weight_13_bps": round(ticker_net - ew13, 4),
+            "ticker_book_excess_vs_equal_weight_13_net_bps": round(ticker_net - ew13_net, 4),
             "ticker_book_excess_vs_cash_bps": round(ticker_net, 4),
             "ticker_positive_hit_rate": round(sum(1 for v in realized.values() if v["sign_hit"]) / len(realized), 6),
             "prediction_mae_bps": None if not abs_errors else round(sum(abs_errors) / len(abs_errors), 4),
@@ -769,6 +808,53 @@ def _summary(cohorts: list[dict[str, Any]]) -> dict[str, Any]:
             else:
                 out[program]["mean_ticker_book_excess_vs_smh_bps"] = None
                 out[program]["mean_ticker_positive_hit_rate"] = None
+    return out
+
+
+def _matched_after_cost_projections(cohorts: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Read-only matched-cost view of immutable resolved Ridge outcomes.
+
+    A previously RESOLVED cohort is never rerun or rewritten merely because
+    new reporting fields were introduced. This projection uses only frozen
+    published returns and the cohort's original cost contract.
+    """
+    out: dict[str, dict[str, Any]] = {}
+    for cohort in cohorts:
+        if cohort.get("program_id") != "SEMICONDUCTOR_SHARED_RIDGE" or cohort.get("status") != "RESOLVED":
+            continue
+        identity = str(cohort["cohort_id"])
+        result = cohort.get("resolution") or {}
+        benchmarks = result.get("benchmarks") or {}
+        keys = (
+            (result, "ticker_book_net_return_bps"),
+            (benchmarks, "equal_weight_13_return_bps"),
+            (benchmarks, "smh_buy_and_hold_return_bps"),
+            (cohort, "stock_round_trip_cost_bps"),
+            (cohort, "industry_round_trip_cost_bps"),
+        )
+        if any(not isinstance(source.get(key), (int, float)) or isinstance(source.get(key), bool)
+               for source, key in keys):
+            out[identity] = {"status": "MISSING_FROZEN_COST_OR_GROSS_RETURN_NO_PROJECTION"}
+            continue
+        net, ew_gross, smh_gross, stock_cost, industry_cost = (
+            float(source[key]) for source, key in keys
+        )
+        if not all(math.isfinite(v) for v in (net, ew_gross, smh_gross, stock_cost, industry_cost)):
+            out[identity] = {"status": "NONFINITE_FROZEN_INPUT_NO_PROJECTION"}
+            continue
+        ew_net, smh_net = ew_gross - stock_cost, smh_gross - industry_cost
+        out[identity] = {
+            "status": "DERIVED_FROM_FROZEN_RESOLVED_COHORT_NO_OUTCOME_BACKFILL",
+            "ticker_book_net_return_bps": round(net, 4),
+            "equal_weight_13_net_return_bps": round(ew_net, 4),
+            "smh_net_return_bps": round(smh_net, 4),
+            "ticker_minus_equal_weight_13_net_bps": round(net - ew_net, 4),
+            "ticker_minus_smh_net_bps": round(net - smh_net, 4),
+            "stock_round_trip_cost_bps": stock_cost,
+            "smh_round_trip_cost_bps": industry_cost,
+            "original_resolution_mutated": False,
+            "alpha_or_promotion_authority": False,
+        }
     return out
 
 
@@ -842,6 +928,7 @@ def build(
             "freshness_gap_note": "A requested/observed gap may be a non-session day; consumers must compare against the expected completed exchange session before classifying stale data.",
         },
         "cohorts": cohorts,
+        "matched_after_cost_projections": _matched_after_cost_projections(cohorts),
         "summary": _summary(cohorts),
         "boundaries": {
             "research_only": True,
@@ -888,6 +975,9 @@ def self_test() -> None:
     }
     open_row = _advance_cohort(cohort, True, date(2026, 1, 8), loader)
     assert open_row["status"] == "OPEN"
+    late_home = {**cohort, "first_registered_at": "2026-01-06T00:00:00+00:00"}
+    assert _advance_cohort(late_home, True, date(2026, 1, 8), loader)["status"] == "LATE_REGISTRATION_REJECTED"
+    assert _advance_cohort(late_home, False, date(2026, 1, 8), loader)["status"] == "LATE_REGISTRATION_REJECTED"
     assert open_row["resolution"]["observations"][0]["current_mark"]["nonterminal"] is True
     assert open_row["resolution"]["current_mark_metrics"]["nonterminal"] is True
     assert open_row["source_health"]["all_symbols_share_latest_date"] is True
@@ -922,6 +1012,17 @@ def self_test() -> None:
         "ticker_book_weights_within_cohort": {"AAA": 0.5, "BBB": 0.3, "CCC": 0.2},
         "predicted_fixed20_net_value_bps": {"AAA": 100.0, "BBB": 200.0, "CCC": 300.0},
     }
+    semi_prices = {s: semi_loader(s, date(2026, 8, 20), date(2026, 9, 20)) for s in ["AAA", "BBB", "CCC", "SMH", "QQQ"]}
+    semi_cohort = {**prestart, "first_registered_at": "2026-09-15T00:00:00+00:00",
+                   "execution_delay_sessions": 1, "holding_horizon_sessions": 20,
+                   "stock_round_trip_cost_bps": 25.0, "industry_round_trip_cost_bps": 10.0,
+                   "status": "REGISTERED", "resolution": None}
+    late_pre_maturity = _resolve_semiconductor(semi_cohort, semi_prices, True)
+    assert late_pre_maturity["status"] == "LATE_REGISTRATION_REJECTED"
+    assert late_pre_maturity["resolution"]["entry_date"] == "2026-09-14"
+    assert _resolve_semiconductor(semi_cohort, semi_prices, False)["status"] == "LATE_REGISTRATION_REJECTED"
+    ontime = {**semi_cohort, "first_registered_at": "2026-09-13T04:55:23+00:00"}
+    assert _resolve_semiconductor(ontime, semi_prices, True)["status"] == "OPEN"
     pre_prices = {s: semi_loader(s, date(2026, 8, 20), date(2026, 9, 20)) for s in ["AAA", "BBB", "CCC"]}
     assert _attach_semiconductor_expression_variants(prestart, pre_prices).get("expression_variants") is None
 
@@ -938,6 +1039,37 @@ def self_test() -> None:
     assert abs(sum(frozen["expression_variants"]["equal_weight"]["weights_within_cohort"].values()) - 1.0) < 1e-12
     assert frozen["expression_variants"]["linear_prediction_rank"]["weights_within_cohort"]["CCC"] > frozen["expression_variants"]["linear_prediction_rank"]["weights_within_cohort"]["AAA"]
     assert frozen["expression_variant_freeze"]["retrospective_credit"] is False
+    # Same frozen 25 bp stock cost and 10 bp SMH cost must be applied to
+    # BOTH sides of matched economic comparisons. Legacy mixed-basis fields
+    # remain unchanged for consumers that already depend on them.
+    matched = _expression_variant_metrics(
+        {"industry_round_trip_cost_bps": 10.0,
+         "expression_variants": {"equal_weight": {
+             "weights_within_cohort": {"AAA": 0.5, "BBB": 0.5},
+             "scientific_forward_credit": False}}},
+        {"AAA": 100.0, "BBB": 0.0}, 50.0, 40.0, 50.0, 25.0,
+    )["equal_weight"]
+    assert matched["ticker_book_net_return_bps"] == 25.0
+    assert matched["excess_vs_smh_bps"] == -25.0  # legacy net vs gross
+    assert matched["excess_vs_smh_net_bps"] == -15.0
+    assert matched["excess_vs_equal_weight_universe_bps"] == -25.0  # legacy
+    assert matched["excess_vs_equal_weight_universe_net_bps"] == 0.0
+    # Existing terminal cohorts remain immutable; new reporting is projected
+    # separately from their frozen original gross/net and cost contract.
+    terminal = {
+        "cohort_id": "FROZEN_H20", "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+        "status": "RESOLVED", "stock_round_trip_cost_bps": 25.0,
+        "industry_round_trip_cost_bps": 10.0,
+        "resolution": {"ticker_book_net_return_bps": 895.5707,
+                       "benchmarks": {"equal_weight_13_return_bps": 1045.7918,
+                                      "smh_buy_and_hold_return_bps": 913.9426}},
+    }
+    original_terminal = json.dumps(terminal, sort_keys=True)
+    projected = _matched_after_cost_projections([terminal])["FROZEN_H20"]
+    assert projected["ticker_minus_equal_weight_13_net_bps"] == -125.2211
+    assert projected["ticker_minus_smh_net_bps"] == -8.3719
+    assert projected["original_resolution_mutated"] is False
+    assert json.dumps(terminal, sort_keys=True) == original_terminal
     print("FORWARD_PROSPECTIVE_COHORT_LEDGER_SELF_TEST=PASS")
 
 

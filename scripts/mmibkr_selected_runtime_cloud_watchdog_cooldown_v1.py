@@ -14,6 +14,7 @@ B1_BRANCH = "ibkr-b1-authority-v1"
 FAILURE_THRESHOLD = 3
 COOLDOWN_SECONDS = 1800
 ACTIVE_STATUSES = {"queued", "in_progress", "waiting", "pending", "requested"}
+BROKER_DEPENDENCY_STEP = "Prove read-only broker session and historical data fetch"
 
 
 def _utc(value: Any) -> datetime | None:
@@ -34,9 +35,92 @@ def _iso(value: datetime | None) -> str | None:
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+
+CLOUD_RECEIPT_SCHEMA = "mmibkr.selected_runtime_cloud_session_receipt.v2"
+CLOUD_SOURCE_TRANSPORT = "fleet_authority_exact_sha_encrypted_snapshot_vault"
+_PAPER_FALSE_FIELDS = (
+    "live_execution_allowed", "credentials_included", "account_state_included",
+    "positions_included", "orders_included",
+)
+
+
+def checkpoint_receipt_origin_admitted(
+    run: Mapping[str, Any], receipt: Mapping[str, Any], expected_source: str
+) -> bool:
+    """Fail closed before watchdog reuse of a prior owner checkpoint.
+
+    A rendezvous JSON object and saved-cache marker are not sufficient:
+    require a completed successful exact run, matching GitHub run/source
+    identities, terminal accepted paper session, and safe receipt authority.
+    This is a source/receipt guard, NOT cryptographic owner attestation or
+    broker/session continuity proof.
+    """
+    if not isinstance(run, Mapping) or not isinstance(receipt, Mapping):
+        return False
+    if not isinstance(expected_source, str) or len(expected_source) != 40 or any(
+        ch not in "0123456789abcdef" for ch in expected_source
+    ):
+        return False
+    if (
+        run.get("status") != "completed"
+        or run.get("conclusion") != "success"
+        or run.get("head_branch") != "main"
+        or run.get("event") not in ("workflow_dispatch", "push")
+    ):
+        return False
+    run_id = str(run.get("id") or "")
+    if not run_id.isdigit() or str(receipt.get("run_id") or "") != run_id:
+        return False
+    public_sha = run.get("head_sha")
+    if (
+        not isinstance(public_sha, str)
+        or len(public_sha) != 40
+        or any(ch not in "0123456789abcdef" for ch in public_sha.lower())
+        or receipt.get("public_head") != public_sha
+        or receipt.get("private_head") != expected_source
+        or receipt.get("schema") != CLOUD_RECEIPT_SCHEMA
+        or receipt.get("source_transport") != CLOUD_SOURCE_TRANSPORT
+    ):
+        return False
+    if (
+        receipt.get("ok") is not True
+        or receipt.get("session_accepted") is not True
+        or receipt.get("checkpoint_handoff_ready") is not True
+    ):
+        return False
+    return all(receipt.get(key) is False for key in _PAPER_FALSE_FIELDS)
+
+
+def _verified_broker_dependency_failure(run: Mapping[str, Any], jobs: Any) -> bool:
+    """Require GitHub job/step evidence of the actual broker dependency failure.
+
+    A completed failed workflow summary, zero-step runner failure, checkout,
+    secret/source failure, or a caller-authored failure label is not broker proof.
+    """
+    if not isinstance(jobs, list):
+        return False
+    expected_run_id = str(run.get("id") or "")
+    if not expected_run_id.isdigit():
+        return False
+    for job in jobs:
+        if not isinstance(job, Mapping):
+            continue
+        if (str(job.get("run_id") or "") != expected_run_id
+                or job.get("conclusion") != "failure"):
+            continue
+        for step in job.get("steps") or []:
+            if (isinstance(step, Mapping)
+                    and step.get("name") == BROKER_DEPENDENCY_STEP
+                    and step.get("status") == "completed"
+                    and step.get("conclusion") == "failure"):
+                return True
+    return False
+
+
 def evaluate_b1_failure_cooldown(
     runs: Iterable[Mapping[str, Any]],
     *,
+    job_evidence_by_run_id: Mapping[str, Any] | None = None,
     now: datetime | None = None,
     threshold: int = FAILURE_THRESHOLD,
     cooldown_seconds: int = COOLDOWN_SECONDS,
@@ -75,10 +159,15 @@ def evaluate_b1_failure_cooldown(
         }
 
     failures: list[dict[str, Any]] = []
+    unclassified_failure: dict[str, Any] | None = None
     for run in candidates:
         if str(run.get("status") or "") in ACTIVE_STATUSES:
             break
         if str(run.get("conclusion") or "") != "failure":
+            break
+        jobs = (job_evidence_by_run_id or {}).get(str(run.get("id") or ""))
+        if not _verified_broker_dependency_failure(run, jobs):
+            unclassified_failure = run
             break
         failures.append(run)
         if len(failures) >= threshold:
@@ -106,9 +195,14 @@ def evaluate_b1_failure_cooldown(
         "reason": (
             "recent_consecutive_b1_failures"
             if suppress
+            else "b1_failure_unclassified" if unclassified_failure
             else "b1_dependency_cooldown_not_required"
         ),
         "consecutive_failure_count": len(failures),
+        "unclassified_failure_run_id": (
+            str(unclassified_failure.get("id") or "") or None
+            if unclassified_failure else None
+        ),
         "latest_run_id": (
             str(latest_failure.get("id") or "") or None
             if latest_failure

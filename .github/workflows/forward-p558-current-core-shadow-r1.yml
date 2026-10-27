@@ -10,7 +10,8 @@ on:
       - 'research/forward_p558_current_core_shadow_r1.py'
       - '.github/workflows/forward-p558-current-core-shadow-r1.yml'
   schedule:
-    - cron: '40 22 * * 1-5'
+    # Mon-Fri 20:25 EST / 21:25 EDT, after the canonical 18:30 America/New_York completed-session cutoff.
+    - cron: '25 1 * * 2-6'
   workflow_dispatch:
 permissions: {contents: read}
 jobs:
@@ -23,7 +24,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
-      - run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 yfinance==0.2.65
+      - run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 yfinance==0.2.65 pandas_market_calendars==5.5.0 exchange_calendars==4.13.2
+      - name: Check matched after-cost NAV comparisons (focused synthetic)
+        run: python -m unittest discover -s tests -p 'test_forward_diversifier_exit_cost_consistency_r1.py' -v
       - id: observer
         run: |
           python research/forward_p558_current_core_shadow_r1.py

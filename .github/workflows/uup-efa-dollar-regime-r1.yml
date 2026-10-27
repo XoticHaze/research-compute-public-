@@ -1,6 +1,9 @@
 name: uup-efa-dollar-regime-r1
 on:
   pull_request:
+    paths:
+      - .github/workflows/uup-efa-dollar-regime-r1.yml
+      - research/uup_efa_dollar_regime_r1.py
   workflow_dispatch:
 jobs:
   evaluate:

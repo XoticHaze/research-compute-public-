@@ -1,5 +1,6 @@
 from __future__ import annotations
-import hashlib,io,zipfile
+import hashlib,io,zipfile,json,subprocess,sys
+import pytest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 def test_materialize_ticket_writes_exact_member(tmp_path,monkeypatch):
@@ -72,3 +73,124 @@ def test_materialize_payload_rejects_gzip_identity_mismatch(tmp_path,monkeypatch
     monkeypatch.setattr(mod,"DATASET_BYTES",len(raw))
     with pytest.raises(RuntimeError,match="MNQ gzip corpus identity mismatch"):
         mod.materialize_payload(gzip.compress(raw,mtime=0),tmp_path)
+
+
+@pytest.mark.parametrize("script,prefix,schema", [
+    ("mnq_corpus_ephemeral_consumer_v1.py", "MNQ_CORPUS_EPHEMERAL_RECEIPT=", "mnq-corpus-ephemeral-receipt-v1"),
+    ("mnq_corpus_ephemeral_materialize_v1.py", "MNQ_CORPUS_INPUT_ROOT_MATERIALIZED=", "mnq-corpus-input-root-materialization-v1"),
+])
+@pytest.mark.parametrize("failure", ["unknown_arg", "missing_private_file"])
+def test_mnq_public_cli_failure_has_fixed_fields(tmp_path, script, prefix, schema, failure):
+    """Nested/private argv or file names must never escape into public stdout/stderr."""
+    sentinel = "PRIVATE_SENTINEL_MNQ_ACCOUNT_PATH_DO_NOT_ECHO"
+    output_root = tmp_path / "materialized"
+    if failure == "unknown_arg":
+        argv = ["--not-allowed", sentinel]
+    else:
+        argv = [
+            "--envelope", str(tmp_path / (sentinel + ".json")),
+            "--ciphertext", str(tmp_path / "missing.enc"),
+            "--private-key", str(tmp_path / "missing.key"),
+            "--run-id", "synthetic-run",
+            "--response-root", "synthetic-root",
+        ]
+        if "materialize" in script:
+            argv += ["--output-root", str(output_root)]
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / script), *argv],
+        cwd=str(ROOT / "scripts"), capture_output=True, text=True, timeout=20,
+    )
+    assert result.returncode == 1
+    assert result.stderr == ""
+    assert sentinel not in result.stdout + result.stderr
+    lines = result.stdout.splitlines()
+    assert len(lines) == 1 and lines[0].startswith(prefix)
+    assert json.loads(lines[0][len(prefix):]) == {"schema": schema, "status": "REJECTED"}
+    assert not output_root.exists()
+
+
+@pytest.mark.parametrize("script,prefix,schema", [
+    ("consumer", "MNQ_CORPUS_EPHEMERAL_RECEIPT=", "mnq-corpus-ephemeral-receipt-v1"),
+    ("materializer", "MNQ_CORPUS_INPUT_ROOT_MATERIALIZED=", "mnq-corpus-input-root-materialization-v1"),
+])
+def test_mnq_public_nested_private_exception_is_constant(tmp_path, monkeypatch, capsys,
+                                                         script, prefix, schema):
+    """Even a nested confidential exception must not appear in public output."""
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
+    import mnq_corpus_ephemeral_consumer_v1 as consumer
+    import mnq_corpus_ephemeral_materialize_v1 as materializer
+    sentinel = "NESTED_PRIVATE_MEMBER_ACCOUNT_SENTINEL_DO_NOT_ECHO"
+    envelope = tmp_path / "envelope.json"
+    ciphertext = tmp_path / "ciphertext.bin"
+    envelope.write_text("{}", encoding="utf-8")
+    ciphertext.write_bytes(b"synthetic")
+
+    def private_failure(*args, **kwargs):
+        raise RuntimeError(sentinel)
+
+    argv = [
+        "--envelope", str(envelope), "--ciphertext", str(ciphertext),
+        "--private-key", str(tmp_path / "unused.key"),
+        "--run-id", "synthetic-run", "--response-root", "synthetic-root",
+    ]
+    if script == "consumer":
+        monkeypatch.setattr(consumer, "decrypt_assembled_ciphertext",
+                            lambda **kwargs: b"synthetic-ticket")
+        monkeypatch.setattr(consumer, "_fetch_artifact", lambda _: b"synthetic-archive")
+        monkeypatch.setattr(consumer, "_validate_zip", private_failure)
+        target = consumer
+    else:
+        monkeypatch.setattr(materializer, "decrypt_assembled_ciphertext",
+                            lambda **kwargs: b"synthetic-corpus")
+        monkeypatch.setattr(materializer, "materialize_payload", private_failure)
+        argv += ["--output-root", str(tmp_path / "output")]
+        target = materializer
+    monkeypatch.setattr(sys, "argv", [script, *argv])
+    assert target.main() == 1
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert sentinel not in captured.out + captured.err
+    lines = captured.out.splitlines()
+    assert len(lines) == 1 and lines[0].startswith(prefix)
+    assert json.loads(lines[0][len(prefix):]) == {"schema": schema, "status": "REJECTED"}
+
+
+@pytest.mark.parametrize("script", ["consumer", "materializer"])
+def test_mnq_public_cli_success_receipt_unchanged(tmp_path, monkeypatch, capsys, script):
+    """The new fail-close wrapper must preserve the existing success output."""
+    monkeypatch.syspath_prepend(str(ROOT / "scripts"))
+    import mnq_corpus_ephemeral_consumer_v1 as consumer
+    import mnq_corpus_ephemeral_materialize_v1 as materializer
+    envelope = tmp_path / "envelope.json"
+    ciphertext = tmp_path / "ciphertext.bin"
+    envelope.write_text("{}", encoding="utf-8")
+    ciphertext.write_bytes(b"synthetic")
+    argv = [
+        "--envelope", str(envelope), "--ciphertext", str(ciphertext),
+        "--private-key", str(tmp_path / "unused.key"),
+        "--run-id", "synthetic-run", "--response-root", "synthetic-root",
+    ]
+    if script == "consumer":
+        expected = {"schema": "mnq-corpus-ephemeral-receipt-v1",
+                    "authority": "research_only", "broker_submit": False}
+        prefix = "MNQ_CORPUS_EPHEMERAL_RECEIPT="
+        monkeypatch.setattr(consumer, "decrypt_assembled_ciphertext",
+                            lambda **kwargs: b"synthetic-ticket")
+        monkeypatch.setattr(consumer, "_fetch_artifact", lambda _: b"synthetic-archive")
+        monkeypatch.setattr(consumer, "_validate_zip", lambda _: expected)
+        target = consumer
+    else:
+        expected = {"schema": "mnq-corpus-input-root-materialization-v1",
+                    "research_only": True, "broker_submit": False}
+        prefix = "MNQ_CORPUS_INPUT_ROOT_MATERIALIZED="
+        monkeypatch.setattr(materializer, "decrypt_assembled_ciphertext",
+                            lambda **kwargs: b"synthetic-corpus")
+        monkeypatch.setattr(materializer, "materialize_payload",
+                            lambda *args, **kwargs: expected)
+        argv += ["--output-root", str(tmp_path / "output")]
+        target = materializer
+    monkeypatch.setattr(sys, "argv", [script, *argv])
+    assert target.main() == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert captured.out.strip() == prefix + json.dumps(expected, sort_keys=True)

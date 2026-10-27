@@ -2,9 +2,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+# Use the already-merged standalone economic CURRENT admission, never a parallel source gate.
+if __package__:
+    from .forward_p249_p266_shadow_r1 import current_publication_admitted
+else:
+    from forward_p249_p266_shadow_r1 import current_publication_admitted
 
 SCHEMA = "research.forward_market_scoreboard_r1"
 ADAPTER_SCHEMA = "foundry.forward_program_adapter.v1"
@@ -40,6 +47,17 @@ def _load_native_adapters(root: Path) -> dict[str, dict[str, Any]]:
 
 def _bp(x: float | int | None) -> float | None:
     return None if x is None else round(float(x) * 10000.0, 2)
+
+
+def _funded_excess_metrics(core_cumulative: Any, combo_cumulative: Any) -> tuple[float | None, float | None]:
+    """Relative wealth of existing constant-target shadow NAVs, not a monthly-drift funded execution."""
+    try:
+        core, combo = float(core_cumulative), float(combo_cumulative)
+    except (TypeError, ValueError):
+        return None, None
+    if not (math.isfinite(core) and math.isfinite(combo)) or core <= -1.0 or combo <= -1.0:
+        return None, None
+    return (1.0 + combo) / (1.0 + core) - 1.0, combo - core
 
 
 def _positive_session_stats(values: list[float]) -> dict[str, Any]:
@@ -132,6 +150,9 @@ def _p46(x: dict[str, Any] | None) -> dict[str, Any]:
 def _p249(x: dict[str, Any] | None) -> dict[str, Any]:
     if not x:
         return {"program_id": "P249_P266", "status": "MISSING", "decision_use": "unavailable"}
+    admitted = current_publication_admitted(x)
+    health = x.get("source_health") if isinstance(x.get("source_health"), dict) else {}
+    blocked_grade = ("SOURCE_GAP_UNRESOLVED" if x.get("status") == "SOURCE_GAP_UNRESOLVED" or health.get("unresolved_forward_gap") is not None else "ECONOMIC_SOURCE_NOT_ADMITTED")
     fwd = x.get("forward", {})
     core = fwd.get("p249_core_net", {})
     combo = fwd.get("p249_plus_p266_net", {})
@@ -142,6 +163,12 @@ def _p249(x: dict[str, Any] | None) -> dict[str, Any]:
         for row in (fwd.get("observations") or [])
         if row.get("satellite_increment_net") is not None
     ])
+    funded_relative_wealth, funded_return_difference = _funded_excess_metrics(
+        core.get("cumulative_return"), combo.get("cumulative_return")
+    )
+    def economic(value: Any) -> Any:
+        return value if admitted else None
+
     return {
         "program_id": "P249_P266",
         "kind": "portfolio_construction_plus_industry_momentum_satellite",
@@ -151,23 +178,31 @@ def _p249(x: dict[str, Any] | None) -> dict[str, Any]:
         },
         "timing": {
             "decision_cadence": "frozen monthly portfolio decision",
-            "entry_rule": "rebalance the research book at the declared portfolio decision boundary, not every daily score run",
-            "holding_rule": "keep frozen weights through the decision period; daily closes update forward PnL and excess only",
+            "entry_rule": "frozen monthly target selection only; observer rows are not trade or funded rebalance evidence",
+            "holding_rule": "monthly target identity is frozen, but the current constant-target shadow reapplies target weights daily without intramonth turnover costs; not a drift-aware funded monthly hold",
         },
         "paper_action": state.get("p249_plus_p266", {}),
-        "action_text": f"Frozen combined portfolio: {_weights_text(state.get('p249_plus_p266', {}), 10)}.",
-        "forward_days": days,
+        "paper_action_authority": "frozen_monthly_context" if admitted else "prior_frozen_context_only_not_new_economic_current",
+        "action_text": (f"Frozen combined portfolio: {_weights_text(state.get('p249_plus_p266', {}), 10)}." if admitted else "Economic CURRENT held: source gap/unadmitted; frozen weights are prior context, not a new rebalance."),
+        "forward_days": days if admitted else None,
+        "economic_current_admitted": admitted,
+        "source_status": x.get("status"),
         "scorecard": {
-            "p249_core_net_cumulative_bps": _bp(core.get("cumulative_return")),
-            "p249_plus_p266_net_cumulative_bps": _bp(combo.get("cumulative_return")),
-            "p266_increment_cumulative_bps": _bp(fwd.get("satellite_increment_cumulative")),
-            "p266_increment_observed_sessions": increment_stats["observed_sessions"],
-            "p266_increment_positive_sessions": increment_stats["positive_sessions"],
-            "p266_increment_session_hit_rate": increment_stats["hit_rate"],
-            "p249_core_annualized_vol": core.get("annualized_vol"),
-            "p249_plus_p266_annualized_vol": combo.get("annualized_vol"),
+            "p249_core_net_cumulative_bps": economic(_bp(core.get("cumulative_return"))),
+            "p249_plus_p266_net_cumulative_bps": economic(_bp(combo.get("cumulative_return"))),
+            "p266_increment_cumulative_bps": economic(_bp(funded_relative_wealth)),
+            "p266_relative_wealth_excess_bps": economic(_bp(funded_relative_wealth)),
+            "p266_cumulative_return_difference_bps": economic(_bp(funded_return_difference)),
+            "p266_legacy_compounded_daily_spread_bps": economic(_bp(fwd.get("satellite_increment_cumulative"))),
+            "p266_increment_metric_semantics": economic("CONSTANT_TARGET_SHADOW_COMBO_NAV_OVER_CORE_NAV_MINUS_ONE"),
+            "p266_execution_limit": economic("IMPLICIT_DAILY_TARGET_RESET_WITH_UNPRICED_INTRAMONTH_TURNOVER"),
+            "p266_increment_observed_sessions": economic(increment_stats["observed_sessions"]),
+            "p266_increment_positive_sessions": economic(increment_stats["positive_sessions"]),
+            "p266_increment_session_hit_rate": economic(increment_stats["hit_rate"]),
+            "p249_core_annualized_vol": economic(core.get("annualized_vol")),
+            "p249_plus_p266_annualized_vol": economic(combo.get("annualized_vol")),
         },
-        "validation_grade": _grade(days),
+        "validation_grade": _grade(days) if admitted else blocked_grade,
         "source_health": x.get("source_health", {}),
         "decision_use": (
             "This is not a price target. Weights are the frozen portfolio expression. "
@@ -323,6 +358,7 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
         "minimum_resolved_for_promotion": summary.get("minimum_resolved_for_promotion"),
         "promotion_authority": False,
     }
+    out["forward_science_stages"] = _separate_forward_science_stages(out)
     for key in (
         "resolved_observations",
         "positive_hit_rate",
@@ -332,6 +368,40 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
     ):
         if key in summary:
             out[key] = summary.get(key)
+    if program_id == "SEMICONDUCTOR_SHARED_RIDGE":
+        # Project only the exact already-resolved frozen cohort identities.
+        # Keep legacy mixed-cost fields unchanged for existing consumers.
+        resolved = [c for c in rows if c.get("status") == "RESOLVED"]
+        expected = int(summary.get("resolved_cohorts", len(resolved)) or 0)
+        projections = ledger.get("matched_after_cost_projections") or {}
+        matched = []
+        for cohort in resolved:
+            projection = projections.get(str(cohort.get("cohort_id"))) or {}
+            fields = (
+                projection.get("ticker_minus_smh_net_bps"),
+                projection.get("ticker_minus_equal_weight_13_net_bps"),
+            )
+            if (
+                projection.get("status") != "DERIVED_FROM_FROZEN_RESOLVED_COHORT_NO_OUTCOME_BACKFILL"
+                or projection.get("original_resolution_mutated") is not False
+                or projection.get("alpha_or_promotion_authority") is not False
+                or any(not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v) for v in fields)
+            ):
+                break
+            matched.append(tuple(float(v) for v in fields))
+        complete = bool(resolved) and len(matched) == len(resolved) == expected
+        out["matched_cost_projection_status"] = (
+            "ALL_RESOLVED_COHORTS_DERIVED" if complete
+            else "NO_RESOLVED_COHORT" if not resolved and expected == 0
+            else "MATCHED_COST_PROJECTION_INCOMPLETE"
+        )
+        out["mean_ticker_book_excess_vs_smh_net_bps"] = (
+            round(sum(v[0] for v in matched) / len(matched), 4) if complete else None
+        )
+        out["mean_ticker_book_excess_vs_equal_weight_13_net_bps"] = (
+            round(sum(v[1] for v in matched) / len(matched), 4) if complete else None
+        )
+        out["legacy_mean_ticker_book_excess_vs_smh_basis"] = "BOOK_NET_VS_SMH_GROSS"
     if current:
         out.update(
             {
@@ -359,11 +429,43 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
             compact["summary"] = resolution.get("summary")
         if resolution.get("current_mark_metrics") is not None:
             compact["current_mark_metrics"] = resolution.get("current_mark_metrics")
+        if (
+            program_id == "SEMICONDUCTOR_SHARED_RIDGE"
+            and current.get("status") == "RESOLVED"
+            and out.get("matched_cost_projection_status") == "ALL_RESOLVED_COHORTS_DERIVED"
+        ):
+            projection = (ledger.get("matched_after_cost_projections") or {}).get(str(current.get("cohort_id")))
+            compact["matched_after_cost"] = {
+                "ticker_minus_smh_net_bps": projection["ticker_minus_smh_net_bps"],
+                "ticker_minus_equal_weight_13_net_bps": projection["ticker_minus_equal_weight_13_net_bps"],
+                "original_resolution_mutated": False,
+                "alpha_or_promotion_authority": False,
+            }
         if compact:
             out["current_resolution"] = compact
         if current.get("source_health") is not None:
             out["source_health"] = current.get("source_health")
     return out
+
+
+def _separate_forward_science_stages(state: dict[str, Any]) -> dict[str, Any]:
+    """Expose observation and stronger sample breadth without canary gate invention."""
+    resolved = int(state.get("resolved_cohorts", 0) or 0)
+    floor = state.get("minimum_resolved_for_promotion")
+    return {
+        "resolved_cohort_count": resolved,
+        "forward_sanity_stage": (
+            "RESOLVED_COHORT_OBSERVED_ISSUER_ENVELOPE_PENDING"
+            if resolved > 0 else "NO_RESOLVED_COHORT"
+        ),
+        "live_canary_eligibility_stage": "INDEPENDENT_OWNER_ADJUDICATION_REQUIRED",
+        "live_probation_stage": "INDEPENDENT_OWNER_ADJUDICATION_REQUIRED",
+        "full_promotion_sample_floor": floor,
+        "full_promotion_sample_floor_reached": (
+            floor is not None and resolved >= int(floor)
+        ),
+        "promotion_authority": False,
+    }
 
 
 def _prospective_evidence_grade(state: dict[str, Any]) -> str:
@@ -423,6 +525,7 @@ def _native_lane(x: dict[str, Any], prospective: dict[str, Any] | None = None) -
         "validation_grade": grade,
         "prospective_evidence": prospective or {"ledger_status": "NOT_SUPPLIED", "program_id": program_id},
         "evidence_grade": _prospective_evidence_grade(prospective or {}),
+        "forward_science_stages": _separate_forward_science_stages(prospective or {}),
         "decision_use": x.get("decision_use"),
         "boundaries": x.get("boundaries", {}),
     }
@@ -478,6 +581,10 @@ def _decision_chain(lanes: list[dict[str, Any]]) -> dict[str, Any]:
             "JAAA_vs_incumbent_bps": (clo.get("scorecard") or {}).get("excess_vs_incumbent_bps"),
             "JAAA_vs_cash_control_bps": (clo.get("scorecard") or {}).get("excess_vs_matched_cash_control_bps"),
             "semiconductor_mean_ticker_book_excess_vs_smh_bps": (semi.get("prospective_evidence") or {}).get("mean_ticker_book_excess_vs_smh_bps"),
+            "semiconductor_legacy_smh_comparison_basis": (semi.get("prospective_evidence") or {}).get("legacy_mean_ticker_book_excess_vs_smh_basis"),
+            "semiconductor_mean_ticker_book_excess_vs_smh_net_bps": (semi.get("prospective_evidence") or {}).get("mean_ticker_book_excess_vs_smh_net_bps"),
+            "semiconductor_mean_ticker_book_excess_vs_equal_weight_13_net_bps": (semi.get("prospective_evidence") or {}).get("mean_ticker_book_excess_vs_equal_weight_13_net_bps"),
+            "semiconductor_matched_cost_projection_status": (semi.get("prospective_evidence") or {}).get("matched_cost_projection_status"),
             "homebuilders_mean_excess_vs_itb_bps": (hb.get("prospective_evidence") or {}).get("mean_excess_vs_itb_bps"),
         },
         "resulting_market_decision_rule": (
@@ -695,8 +802,39 @@ def self_test() -> None:
         out = build(root)
         assert out["schema"] == SCHEMA
         assert out["lanes"][0]["validation_grade"] == "SHAKEDOWN_ONLY"
-        assert out["lanes"][1]["scorecard"]["p266_increment_cumulative_bps"] == -10.0
-        assert out["lanes"][1]["scorecard"]["p266_increment_observed_sessions"] == 0
+        assert out["lanes"][1]["economic_current_admitted"] is False
+        assert out["lanes"][1]["validation_grade"] == "ECONOMIC_SOURCE_NOT_ADMITTED"
+        assert all(v is None for v in out["lanes"][1]["scorecard"].values())
+        assert _funded_excess_metrics(-0.04, 0.17) == (0.21875, 0.20999999999999996) or (
+            abs(_funded_excess_metrics(-0.04, 0.17)[0] - 0.21875) < 1e-12
+            and abs(_funded_excess_metrics(-0.04, 0.17)[1] - 0.21) < 1e-12
+        )
+        assert _funded_excess_metrics(-1.0, 0.17) == (None, None)
+        synthetic = {
+            "schema": "research.forward_p249_p266_shadow_r1",
+            "parent": "P249/P266/P278",
+            "workload_id": "FORWARD_P249_P266_SHADOW_R1",
+            "status": "FORWARD_OBSERVING",
+            "source_health": {"unresolved_forward_gap": None, "latest_scored_common_session": "2026-09-11"},
+            "forward": {
+                "economic_continuity_verified": True, "latest_close": "2026-09-11",
+                "observations": [{"date": "2026-09-10", "satellite_increment_net": 0.1}, {"date": "2026-09-11", "satellite_increment_net": 0.1}],
+                "p249_core_net": {"days": 2, "cumulative_return": -0.04},
+                "p249_plus_p266_net": {"days": 2, "cumulative_return": 0.17},
+                "satellite_increment_cumulative": 0.22,
+            },
+            "current_state": {"p249_core": {"SOXX": 1.0}, "p266": {"XBI": 1.0}, "p249_plus_p266": {"XBI": 1.0}},
+        }
+        funded = _p249(synthetic)
+        assert funded["economic_current_admitted"] is True
+        assert funded["scorecard"]["p266_relative_wealth_excess_bps"] == 2187.5
+        assert funded["scorecard"]["p266_increment_cumulative_bps"] == 2187.5
+        assert funded["scorecard"]["p266_cumulative_return_difference_bps"] == 2100.0
+        assert funded["scorecard"]["p266_legacy_compounded_daily_spread_bps"] == 2200.0
+        assert funded["scorecard"]["p266_increment_metric_semantics"] == "CONSTANT_TARGET_SHADOW_COMBO_NAV_OVER_CORE_NAV_MINUS_ONE"
+        assert funded["scorecard"]["p266_execution_limit"] == "IMPLICIT_DAILY_TARGET_RESET_WITH_UNPRICED_INTRAMONTH_TURNOVER"
+        assert "reapplies target weights daily" in funded["timing"]["holding_rule"]
+        assert "not trade or funded rebalance evidence" in funded["timing"]["entry_rule"]
         stats = _challenger_session_stats({
             "challenger_observations": [
                 {"date": "2026-09-10", "net_return": 0.02, "core_return": 0.01},
@@ -715,6 +853,14 @@ def self_test() -> None:
         assert native_by_id["HOMEBUILDERS"]["evidence_grade"] == "PROSPECTIVE_OPEN"
         assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["evidence_grade"] == "PROSPECTIVE_AWAITING_ENTRY_SESSION"
         assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["validation_grade"] == "PROSPECTIVE_SIGNAL_READY"
+        assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["forward_science_stages"]["resolved_cohort_count"] == 0
+        one = _separate_forward_science_stages({"resolved_cohorts": 1, "minimum_resolved_for_promotion": 20})
+        assert one["forward_sanity_stage"] == "RESOLVED_COHORT_OBSERVED_ISSUER_ENVELOPE_PENDING"
+        assert one["full_promotion_sample_floor_reached"] is False
+        assert one["live_canary_eligibility_stage"] == "INDEPENDENT_OWNER_ADJUDICATION_REQUIRED"
+        twenty = _separate_forward_science_stages({"resolved_cohorts": 20, "minimum_resolved_for_promotion": 20})
+        assert twenty["full_promotion_sample_floor_reached"] is True
+        assert twenty["promotion_authority"] is False
         assert out["coverage"]["prospective_ledger"]["present"] is True
         assert out["freshness"]["freshness_gap_visible"] is True
         assert out["freshness"]["p249_p266_source_health"]["lagging_symbols_vs_source_max"] == ["XBI"]
@@ -726,6 +872,50 @@ def self_test() -> None:
         assert continuity["current_cohort"]["signal_date"] == "2026-09-10"
         assert continuity["overlapping_sessions_are_not_additive"] is True
         assert out["coverage"]["predecessor_forward_identities"]["P438_SEMICONDUCTOR_FORWARD_MTD_R1"] is True
+        frozen = {
+            "cohort_id": "SEMICONDUCTOR_SHARED_RIDGE:2026-09-11:fixed20",
+            "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+            "signal_date": "2026-09-11",
+            "first_registered_at": "2026-09-12T00:00:00+00:00",
+            "status": "RESOLVED",
+            "resolution": {"ticker_book_net_return_bps": 895.5707,
+                           "ticker_book_excess_vs_smh_bps": -18.3719},
+        }
+        projected = {
+            "status": "DERIVED_FROM_FROZEN_RESOLVED_COHORT_NO_OUTCOME_BACKFILL",
+            "ticker_minus_smh_net_bps": -8.3719,
+            "ticker_minus_equal_weight_13_net_bps": -125.2211,
+            "original_resolution_mutated": False,
+            "alpha_or_promotion_authority": False,
+        }
+        ledger = {
+            "schema": LEDGER_SCHEMA,
+            "cohorts": [frozen],
+            "summary": {"SEMICONDUCTOR_SHARED_RIDGE": {
+                "registered_cohorts": 1, "resolved_cohorts": 1, "open_cohorts": 0,
+                "mean_ticker_book_excess_vs_smh_bps": -18.3719,
+            }},
+            "matched_after_cost_projections": {frozen["cohort_id"]: projected},
+        }
+        original_frozen = json.dumps(frozen, sort_keys=True)
+        state = _prospective_state(ledger, "SEMICONDUCTOR_SHARED_RIDGE")
+        assert state["mean_ticker_book_excess_vs_smh_bps"] == -18.3719
+        assert state["mean_ticker_book_excess_vs_smh_net_bps"] == -8.3719
+        assert state["mean_ticker_book_excess_vs_equal_weight_13_net_bps"] == -125.2211
+        assert state["current_resolution"]["matched_after_cost"]["ticker_minus_smh_net_bps"] == -8.3719
+        chain = _decision_chain([{"program_id": "SEMICONDUCTOR_SHARED_RIDGE", "prospective_evidence": state}])
+        assert chain["realized_excess"]["semiconductor_mean_ticker_book_excess_vs_smh_bps"] == -18.3719
+        assert chain["realized_excess"]["semiconductor_mean_ticker_book_excess_vs_smh_net_bps"] == -8.3719
+        assert chain["realized_excess"]["semiconductor_mean_ticker_book_excess_vs_equal_weight_13_net_bps"] == -125.2211
+        assert json.dumps(frozen, sort_keys=True) == original_frozen
+        del ledger["matched_after_cost_projections"]
+        absent = _prospective_state(ledger, "SEMICONDUCTOR_SHARED_RIDGE")
+        assert absent["matched_cost_projection_status"] == "MATCHED_COST_PROJECTION_INCOMPLETE"
+        assert absent["mean_ticker_book_excess_vs_smh_net_bps"] is None
+        ledger["matched_after_cost_projections"] = {frozen["cohort_id"]: dict(projected, ticker_minus_smh_net_bps=True)}
+        invalid = _prospective_state(ledger, "SEMICONDUCTOR_SHARED_RIDGE")
+        assert invalid["matched_cost_projection_status"] == "MATCHED_COST_PROJECTION_INCOMPLETE"
+        assert invalid["mean_ticker_book_excess_vs_smh_net_bps"] is None
     print("FORWARD_MARKET_SCOREBOARD_SELF_TEST=PASS")
 
 

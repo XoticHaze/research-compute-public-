@@ -8,10 +8,14 @@ on:
     branches: [main]
     paths:
       - 'research/forward_p249_p266_shadow_r1.py'
+      - 'research/p249_forward_prefix_integrity_r1.py'
+      - 'research/p279_p249_p266_forward_shadow_observer_r1.py'
+      - 'tests/test_p279_forward_gap_continuity.py'
       - 'research/current/forward_p249_p266_shadow_r1.json'
       - '.github/workflows/forward-p249-p266-shadow-r1.yml'
   schedule:
-    - cron: '30 22 * * 1-5'
+    # Mon-Fri 20:15 EST / 21:15 EDT, after the canonical 18:30 America/New_York completed-session cutoff.
+    - cron: '15 1 * * 2-6'
   workflow_dispatch:
 permissions: {contents: read}
 jobs:
@@ -24,7 +28,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
-      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65
+      - run: python -m pip install --disable-pip-version-check numpy==1.26.4 pandas==2.2.3 yfinance==0.2.65 pandas_market_calendars==5.5.0 exchange_calendars==4.13.2
+      - name: Check exact held-close and full-session gap continuity (focused)
+        run: python -m unittest discover -s tests -p 'test_p279_forward_gap_continuity.py' -v
+      - name: Check selected append-only prefix helper (focused synthetic)
+        run: python research/p249_forward_prefix_integrity_r1.py --selftest
       - id: observer
         run: |
           python research/forward_p249_p266_shadow_r1.py
@@ -56,11 +64,36 @@ jobs:
         with:
           name: forward-p249-p266-shadow__${{ needs.observe.outputs.tag }}
           path: /tmp/forward-p249-p266-shadow
+      - name: Validate continuous economic CURRENT admission
+        id: source_admission
+        run: |
+          python - <<'PY'
+          import json, os
+          from research.forward_p249_p266_shadow_r1 import current_publication_admitted
+          p='/tmp/forward-p249-p266-shadow/forward_p249_p266_shadow_r1.json'
+          try:
+              with open(p, encoding='utf-8') as f:
+                  admitted=current_publication_admitted(json.load(f))
+          except (OSError, ValueError, TypeError):
+              admitted=False
+          print('FORWARD_ECONOMIC_CURRENT_ADMITTED='+str(admitted).lower())
+          if not admitted:
+              print('FORWARD_CURRENT_HELD_SOURCE_GAP_OR_INVALID_RECEIPT=1')
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
+              f.write('admitted='+str(admitted).lower()+'\n')
+          PY
       - name: Publish stable current snapshot
+        if: steps.source_admission.outputs.admitted == 'true'
         run: |
           test -f /tmp/forward-p249-p266-shadow/forward_p249_p266_shadow_r1.json
           git fetch origin main
           git checkout -B forward-current-publish origin/main
+          # The existing versioned CURRENT on fetched main is the prior first-seen
+          # economic record. Reject historical revisions before any replacement.
+          test -f research/current/forward_p249_p266_shadow_r1.json
+          python research/p249_forward_prefix_integrity_r1.py \
+            --prior research/current/forward_p249_p266_shadow_r1.json \
+            --current /tmp/forward-p249-p266-shadow/forward_p249_p266_shadow_r1.json
           mkdir -p research/current
           cp /tmp/forward-p249-p266-shadow/forward_p249_p266_shadow_r1.json research/current/forward_p249_p266_shadow_r1.json
           git config user.name 'github-actions[bot]'

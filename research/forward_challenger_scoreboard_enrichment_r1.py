@@ -33,9 +33,11 @@ def _lane_p160(x: dict[str, Any]) -> dict[str, Any]:
         "paper_action": x.get("paper_action", {}),
         "action_text": (
             f"Shadow frozen P160 only: {(x.get('paper_action') or {}).get('target_weights', {})}. "
-            "No scientific credit before the declared boundary and no allocator authority."
+            "Observer eligibility is not earned forward credit; original issuer and funded NAV remain unadmitted. No allocator authority."
         ),
-        "scientific_forward_credit": bool(x.get("scientific_forward_credit", False)),
+        "scientific_forward_credit": False,
+        "observer_declared_prospective_eligibility": bool(x.get("scientific_forward_credit", False)),
+        "forward_credit_stage": "SOURCE_ONLY_ORIGINAL_ISSUER_UNADMITTED",
         "validation_grade": x.get("state"),
         "scorecard": None,
         "decision_use": x.get("decision_use"),
@@ -91,6 +93,9 @@ def _lane_currency_overlay(x: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("currency-hedge allocator overlay funding/leverage boundary changed")
     if b.get("allocator_mutation") is not False:
         raise RuntimeError("currency-hedge allocator overlay gained allocator mutation authority")
+    requested = x.get("market_data_asof")
+    latest = x.get("latest_common_market_date")
+    common_precedes = bool(requested and latest and str(latest)[:10] < str(requested)[:10])
     return {
         "program_id": x["program_id"],
         "kind": "portfolio_level_currency_hedge_allocator_challenger",
@@ -109,6 +114,14 @@ def _lane_currency_overlay(x: dict[str, Any]) -> dict[str, Any]:
             "clock_semantics": "cross-program comparisons use elapsed_close_to_close_sessions; forward_sessions is retained as legacy inclusive-entry count",
             "entry_rule": contract.get("entry_rule"),
             "holding_rule": contract.get("holding_rule"),
+            "requested_market_data_asof": requested,
+            "latest_common_market_date": latest,
+        },
+        "source_health": {
+            "requested_market_data_asof": requested,
+            "latest_common_market_date": latest,
+            "common_calendar_precedes_requested_asof": common_precedes,
+            "interpretation": "Date discrepancy requires session/event review; it is not itself proof of absent data or losing alpha.",
         },
         "paper_action": {"status": "OBSERVE_ONLY", "portfolio_authority": False},
         "action_text": (
@@ -142,13 +155,18 @@ def enrich(
     ids = {row["program_id"] for row in additions}
     lanes = [row for row in lanes if row.get("program_id") not in ids] + additions
     scoreboard["lanes"] = lanes
+    scoreboard.setdefault("freshness", {})["currency_overlay_common_calendar_precedes_requested_asof"] = (
+        additions[-1]["source_health"]["common_calendar_precedes_requested_asof"]
+    )
 
     coverage = scoreboard.setdefault("coverage", {})
     coverage["challenger_observers"] = {
         "P160_FIXED_P46_P47_COMBINATION": {
             "present": True,
             "state": p160.get("state"),
-            "scientific_forward_credit": bool(p160.get("scientific_forward_credit", False)),
+            "scientific_forward_credit": False,
+            "observer_declared_prospective_eligibility": bool(p160.get("scientific_forward_credit", False)),
+            "forward_credit_stage": "SOURCE_ONLY_ORIGINAL_ISSUER_UNADMITTED",
         },
         "DEVELOPED_EXUS_CURRENCY_HEDGE": {
             "present": True,
@@ -169,7 +187,7 @@ def enrich(
             "source": "P160_FIXED_P46_P47_COMBINATION",
             "intel": "Frozen cross-asset + industry combination challenger",
             "state": (p160.get("paper_action") or {}).get("target_weights", {}),
-            "authority": "descriptive_prestart" if not p160.get("scientific_forward_credit") else "prospective_validation_only",
+            "authority": "prospective_eligibility_not_earned_credit" if p160.get("scientific_forward_credit") else "descriptive_prestart",
         },
         {
             "source": "DEVELOPED_EXUS_CURRENCY_HEDGE",
@@ -186,6 +204,8 @@ def enrich(
             "state": {
                 "forward_state": currency_overlay.get("state"),
                 "entry_date": currency_overlay.get("entry_date"),
+                "requested_market_data_asof": currency_overlay.get("market_data_asof"),
+                "latest_common_market_date": currency_overlay.get("latest_common_market_date"),
                 "scorecard": currency_overlay.get("scorecard"),
             },
             "authority": "prospective_validation_only",
@@ -197,7 +217,9 @@ def enrich(
         "P160": {
             "state": p160.get("state"),
             "target_weights": (p160.get("paper_action") or {}).get("target_weights", {}),
-            "scientific_forward_credit": bool(p160.get("scientific_forward_credit", False)),
+            "scientific_forward_credit": False,
+            "observer_declared_prospective_eligibility": bool(p160.get("scientific_forward_credit", False)),
+            "forward_credit_stage": "SOURCE_ONLY_ORIGINAL_ISSUER_UNADMITTED",
             "role": "independent_validation_not_allocation",
         }
     }
@@ -217,6 +239,8 @@ def enrich(
         "scorecard": currency_overlay.get("scorecard"),
         "funding_source": (currency_overlay.get("contract") or {}).get("funding_source"),
         "overlay_weight": (currency_overlay.get("contract") or {}).get("overlay_weight"),
+        "requested_market_data_asof": currency_overlay.get("market_data_asof"),
+        "latest_common_market_date": currency_overlay.get("latest_common_market_date"),
         "role": "portfolio_level_matched_control_challenger",
     }
     realized = chain.setdefault("realized_excess", {})
@@ -233,6 +257,7 @@ def enrich(
     interpretation = scoreboard.setdefault("interpretation", {})
     interpretation["challenger_observers_do_not_grant_allocator_authority"] = True
     interpretation["p160_prestart_shadow_is_not_forward_credit"] = True
+    interpretation["p160_observer_eligibility_is_not_earned_forward_credit"] = True
     interpretation["currency_regime_context_is_not_timing_authority"] = True
     interpretation["currency_overlay_is_observation_not_allocator_mutation"] = True
     interpretation["currency_overlay_is_cash_funded_without_leverage"] = True
@@ -314,6 +339,25 @@ def self_test() -> None:
     assert out["interpretation"]["currency_overlay_is_observation_not_allocator_mutation"] is True
     assert by_id["DEVELOPED_EXUS_CURRENCY_HEDGE"]["timing"]["elapsed_close_to_close_sessions"] == 0
     assert by_id["CURRENCY_HEDGE_ALLOCATOR_OVERLAY"]["timing"]["elapsed_close_to_close_sessions"] == 0
+    lagged = dict(overlay, market_data_asof="2026-10-21", latest_common_market_date="2026-10-19")
+    lane = _lane_currency_overlay(lagged)
+    assert lane["source_health"]["common_calendar_precedes_requested_asof"] is True
+    assert lane["timing"]["latest_common_market_date"] == "2026-10-19"
+    assert lane["scorecard"] is None and lane["boundaries"]["allocator_mutation"] is False
+    assert enrich({"lanes": [], "coverage": {}, "actionable_context": [], "decision_chain": {}, "interpretation": {}}, p160, currency, lagged)["freshness"]["currency_overlay_common_calendar_precedes_requested_asof"] is True
+    # An observer may be prospectively eligible without an independently
+    # authenticated original adjusted-source/calendar issuer or funded NAV.
+    p160_eligible = dict(p160, state="PROSPECTIVE_ELIGIBLE", scientific_forward_credit=True)
+    eligible_out = enrich(out, p160_eligible, currency, overlay)
+    p160_lane = next(row for row in eligible_out["lanes"] if row["program_id"] == p160_eligible["program_id"])
+    assert p160_lane["validation_grade"] == "PROSPECTIVE_ELIGIBLE"
+    assert p160_lane["observer_declared_prospective_eligibility"] is True
+    assert p160_lane["scientific_forward_credit"] is False
+    assert p160_lane["scorecard"] is None
+    assert p160_lane["forward_credit_stage"] == "SOURCE_ONLY_ORIGINAL_ISSUER_UNADMITTED"
+    assert eligible_out["coverage"]["challenger_observers"][p160_eligible["program_id"]]["scientific_forward_credit"] is False
+    assert eligible_out["decision_chain"]["construction_challengers"]["P160"]["scientific_forward_credit"] is False
+    assert eligible_out["interpretation"]["p160_observer_eligibility_is_not_earned_forward_credit"] is True
     print("FORWARD_CHALLENGER_SCOREBOARD_ENRICHMENT_SELF_TEST=PASS")
 
 

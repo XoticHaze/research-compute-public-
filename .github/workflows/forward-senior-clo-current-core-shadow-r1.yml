@@ -10,7 +10,8 @@ on:
       - 'research/forward_senior_clo_current_core_shadow_r1.py'
       - '.github/workflows/forward-senior-clo-current-core-shadow-r1.yml'
   schedule:
-    - cron: '50 22 * * 1-5'
+    # Mon-Fri 20:35 EST / 21:35 EDT, after the canonical 18:30 America/New_York completed-session cutoff.
+    - cron: '35 1 * * 2-6'
   workflow_dispatch:
 permissions: {contents: read}
 jobs:
@@ -23,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
-      - run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 yfinance==0.2.65
+      - run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 yfinance==0.2.65 pandas_market_calendars==5.5.0 exchange_calendars==4.13.2
       - id: observer
         run: |
           python research/forward_senior_clo_current_core_shadow_r1.py

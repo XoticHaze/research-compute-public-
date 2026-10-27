@@ -155,6 +155,215 @@ def _month_costs(previous: dict[str, dict[str, float]] | None, current: dict[str
     }
 
 
+def _observed_close_returns(close: pd.DataFrame) -> pd.DataFrame:
+    """Missing daily closes must remain missing, never a synthetic flat return."""
+    return close.pct_change(fill_method=None)
+
+
+def _expected_forward_sessions(start: pd.Timestamp, completed_date: date) -> pd.DatetimeIndex:
+    """Use an independent NYSE schedule, not provider rows, as the session clock.
+
+    A Yahoo outage that omits every symbol on one exchange session must not
+    silently compress the prospective funded path. Missing calendar support
+    fails the observer rather than falling back to provider-derived dates.
+    """
+    from importlib.metadata import version
+    import pandas_market_calendars as mcal
+
+    if version("pandas_market_calendars") != "5.5.0" or version("exchange_calendars") != "4.13.2":
+        raise RuntimeError("P249_EXCHANGE_CALENDAR_DEPENDENCY_MISMATCH")
+    schedule = mcal.get_calendar("NYSE").schedule(
+        start_date=start.date().isoformat(), end_date=completed_date.isoformat()
+    )
+    return pd.DatetimeIndex(schedule.index).normalize()
+
+
+def _held_symbols_ready(day: pd.Series, state: dict[str, dict[str, float]]) -> bool:
+    """Only score a date when both frozen arms have actual paired daily closes."""
+    held = set(state["p249_core"]) | set(state["p249_plus_p266"])
+    return bool(held) and bool(day.reindex(sorted(held)).notna().all())
+
+
+
+def _implicit_target_reset_turnover_audit(
+    rows: list[dict[str, object]],
+    daily_returns: pd.DataFrame,
+    month_states: dict[str, dict[str, dict[str, float]]],
+) -> dict[str, object]:
+    """Describe the uncharged daily resets implied by constant-target shadow returns.
+
+    This is NOT an executed trade ledger, a funded monthly-hold counterfactual,
+    or an economic re-scoring. It consumes only the exact already-scored daily
+    returns and frozen monthly target weights, and never changes either arm.
+    """
+    arms = ("p249_core", "p249_plus_p266")
+    result = {
+        arm: {
+            "intramonth_one_way_turnover": 0.0,
+            "intramonth_reset_count": 0,
+            "month_boundary_one_way_turnover": 0.0,
+            "month_boundary_count": 0,
+        }
+        for arm in arms
+    }
+    for current, following in zip(rows, rows[1:]):
+        current_day = str(current["date"])
+        next_day = str(following["date"])
+        if current_day >= next_day:
+            raise ValueError("P249_TURNOVER_AUDIT_NONCHRONOLOGICAL")
+        current_month = str(current["holding_month"])
+        next_month = str(following["holding_month"])
+        for arm in arms:
+            weights = month_states[current_month][arm]
+            next_weights = month_states[next_month][arm]
+            if not math.isclose(sum(weights.values()), 1.0, abs_tol=1e-8):
+                raise ValueError("P249_TURNOVER_AUDIT_INVALID_TARGET")
+            if not math.isclose(sum(next_weights.values()), 1.0, abs_tol=1e-8):
+                raise ValueError("P249_TURNOVER_AUDIT_INVALID_NEXT_TARGET")
+            gross = float(current[f"{arm}_gross"])
+            wealth = 1.0 + gross
+            if not math.isfinite(wealth) or wealth <= 0:
+                raise ValueError("P249_TURNOVER_AUDIT_INVALID_WEALTH")
+            pretrade = {}
+            for symbol, weight in weights.items():
+                daily = float(daily_returns.at[pd.Timestamp(current_day), symbol])
+                if not math.isfinite(daily) or daily <= -1.0 or weight < 0:
+                    raise ValueError("P249_TURNOVER_AUDIT_INVALID_HELD_RETURN")
+                pretrade[symbol] = weight * (1.0 + daily) / wealth
+            if not math.isclose(sum(pretrade.values()), 1.0, abs_tol=1e-8):
+                raise ValueError("P249_TURNOVER_AUDIT_PRETRADE_SUM")
+            one_way = 0.5 * sum(
+                abs(next_weights.get(symbol, 0.0) - pretrade.get(symbol, 0.0))
+                for symbol in set(pretrade) | set(next_weights)
+            )
+            kind = "intramonth" if current_month == next_month else "month_boundary"
+            result[arm][f"{kind}_one_way_turnover"] += one_way
+            result[arm][f"{kind}_{'reset_count' if kind == 'intramonth' else 'count'}"] += 1
+    return {
+        "status": "DIAGNOSTIC_ONLY_UNCHARGED_IMPLICIT_RESETS",
+        "scored_sessions": len(rows),
+        "transitions": max(0, len(rows) - 1),
+        "source": "exact_already_scored_daily_returns_and_frozen_month_targets",
+        "not_actual_trades_or_funded_monthly_hold": True,
+        "not_fee_adjusted_or_alpha_credit": True,
+        "arms": result,
+    }
+
+
+
+def _monthly_hold_drift_diagnostic(
+    rows: list[dict[str, object]],
+    daily_returns: pd.DataFrame,
+    month_states: dict[str, dict[str, dict[str, float]]],
+) -> dict[str, object]:
+    """Same-source monthly buy/hold drift diagnostic; never a broker fill ledger.
+
+    Retains the original monthly target and first-session legacy cost convention,
+    but does not reset component weights inside the holding month. No new price
+    fetch, weight selection, or change to the original constant-target series.
+    """
+    arms = ("p249_core", "p249_plus_p266")
+    if not rows:
+        return {"status": "NO_SCORED_SESSIONS", "arms": {}, "not_broker_or_alpha_credit": True}
+    result: dict[str, dict[str, object]] = {}
+    for arm in arms:
+        positions: dict[str, float] = {}
+        last_date = ""
+        last_month = ""
+        nav_path: list[dict[str, object]] = []
+        realized_month_turnover = 0.0
+        rebalance_count = 0
+        total_legacy_fee_on_nav = 0.0
+        for row in rows:
+            day = str(row["date"])
+            month = str(row["holding_month"])
+            if (last_date and day <= last_date) or not day.startswith(month):
+                raise ValueError("P249_MONTHLY_DRIFT_NONCHRONOLOGICAL")
+            target = month_states[month][arm]
+            if (not target or any(not math.isfinite(float(w)) or float(w) < 0 for w in target.values())
+                    or not math.isclose(sum(float(w) for w in target.values()), 1.0, abs_tol=1e-8)):
+                raise ValueError("P249_MONTHLY_DRIFT_INVALID_TARGET")
+            pre_nav = sum(positions.values()) if positions else 1.0
+            if not math.isfinite(pre_nav) or pre_nav <= 0:
+                raise ValueError("P249_MONTHLY_DRIFT_UNFUNDED_NAV")
+            first_of_month = month != last_month
+            if first_of_month:
+                if row.get("cost_detail") is None:
+                    raise ValueError("P249_MONTHLY_DRIFT_MISSING_MONTH_COST")
+                if positions:
+                    before = {s: v / pre_nav for s, v in positions.items()}
+                    realized_month_turnover += 0.5 * sum(
+                        abs(float(target.get(s, 0.0)) - before.get(s, 0.0))
+                        for s in set(before) | set(target)
+                    )
+                else:
+                    realized_month_turnover += 1.0
+                positions = {s: pre_nav * float(w) for s, w in target.items()}
+                rebalance_count += 1
+                fee_rate = float(row[f"{arm}_gross"]) - float(row[f"{arm}_net"])
+                if not math.isfinite(fee_rate) or fee_rate < -1e-12 or fee_rate >= 1:
+                    raise ValueError("P249_MONTHLY_DRIFT_INVALID_LEGACY_FEE")
+                fee_rate = max(0.0, fee_rate)
+            else:
+                if row.get("cost_detail") is not None:
+                    raise ValueError("P249_MONTHLY_DRIFT_UNEXPECTED_INTRAMONTH_COST")
+                fee_rate = 0.0
+            for symbol in positions:
+                daily = float(daily_returns.at[pd.Timestamp(day), symbol])
+                if not math.isfinite(daily) or daily <= -1.0:
+                    raise ValueError("P249_MONTHLY_DRIFT_INVALID_HELD_RETURN")
+                positions[symbol] *= 1.0 + daily
+            before_fee = sum(positions.values())
+            fee_nav = pre_nav * fee_rate
+            after_fee = before_fee - fee_nav
+            if not math.isfinite(after_fee) or after_fee <= 0 or before_fee <= 0:
+                raise ValueError("P249_MONTHLY_DRIFT_UNFUNDED_AFTER_FEE")
+            if first_of_month:
+                observed_gross = before_fee / pre_nav - 1.0
+                if not math.isclose(observed_gross, float(row[f"{arm}_gross"]), rel_tol=1e-9, abs_tol=1e-10):
+                    raise ValueError("P249_MONTHLY_DRIFT_FIRST_DAY_SOURCE_MISMATCH")
+            fee_scale = after_fee / before_fee
+            positions = {s: v * fee_scale for s, v in positions.items()}
+            total_legacy_fee_on_nav += fee_nav
+            nav_path.append({"date": day, "holding_month": month, "nav": after_fee,
+                             "monthly_rebalance": first_of_month})
+            last_date, last_month = day, month
+        navs = [float(x["nav"]) for x in nav_path]
+        peak = 1.0
+        drawdown = 0.0
+        for nav in navs:
+            peak = max(peak, nav)
+            drawdown = min(drawdown, nav / peak - 1.0)
+        result[arm] = {
+            "terminal_nav": navs[-1],
+            "cumulative_return": navs[-1] - 1.0,
+            "max_drawdown": drawdown,
+            "monthly_rebalances_including_initial": rebalance_count,
+            "realized_month_boundary_one_way_turnover_including_initial": realized_month_turnover,
+            "legacy_monthly_fee_nav_total": total_legacy_fee_on_nav,
+            "daily_nav": nav_path,
+        }
+    core = float(result["p249_core"]["terminal_nav"])
+    combo = float(result["p249_plus_p266"]["terminal_nav"])
+    original_core = math.prod(1.0 + float(row["p249_core_net"]) for row in rows)
+    original_combo = math.prod(1.0 + float(row["p249_plus_p266_net"]) for row in rows)
+    if min(core, combo, original_core, original_combo) <= 0:
+        raise ValueError("P249_MONTHLY_DRIFT_INVALID_COMPARISON_NAV")
+    return {
+        "status": "SAME_SOURCE_MONTHLY_HOLD_DRIFT_DIAGNOSTIC",
+        "scored_sessions": len(rows),
+        "source": "exact_existing_yfinance_adjusted_close_scored_returns_and_frozen_month_targets",
+        "legacy_month_costs_preserved_not_actual_drift_turnover_pricing": True,
+        "not_broker_or_alpha_credit": True,
+        "no_new_original_issuer_or_execution_provenance": True,
+        "arms": result,
+        "matched_relative_wealth_bp": 10000.0 * (combo / core - 1.0),
+        "original_constant_target_relative_wealth_bp": 10000.0 * (original_combo / original_core - 1.0),
+        "monthly_drift_minus_constant_target_relative_bp":
+            10000.0 * (combo / core - original_combo / original_core),
+    }
+
+
 def _metrics(returns: pd.Series) -> dict[str, float | int | None]:
     q = returns.dropna().astype(float)
     if q.empty:
@@ -193,19 +402,52 @@ def main() -> None:
     )
 
     decision_date = DECISION_AT.tz_convert(None).normalize()
-    ret = close.pct_change()
-    forward_ix = ret.index[ret.index >= decision_date]
+    ret = _observed_close_returns(close)
+    forward_ix = _expected_forward_sessions(decision_date, completed_data_date)
+    observed_forward_ix = ret.index[(ret.index >= decision_date) & (ret.index <= pd.Timestamp(completed_data_date))]
+    unexpected_forward_ix = observed_forward_ix.difference(forward_ix)
+    if len(unexpected_forward_ix):
+        raise RuntimeError("P249_NONEXCHANGE_FORWARD_SESSION:" + unexpected_forward_ix[0].date().isoformat())
     rows = []
     month_states: dict[str, dict[str, dict[str, float]]] = {}
     prev_state = None
     seen_months: set[str] = set()
+    unresolved_gap: dict[str, object] | None = None
 
     for dt in forward_ix:
+        if dt not in ret.index:
+            unresolved_gap = {
+                "first_unresolved_session": dt.date().isoformat(),
+                "reason": "MISSING_EXCHANGE_SESSION_ALL_SYMBOLS",
+                "missing_held_symbols": [],
+            }
+            break
         period = dt.to_period("M")
         key = str(period)
         if key not in month_states:
             month_states[key] = _portfolio_weights(close.loc[:dt], period)
         state = month_states[key]
+        day = ret.loc[dt]
+        if not _held_symbols_ready(day, state):
+            # A later complete daily return cannot repair exposure lost across
+            # an earlier missing held close. Stop, do not resume one-day NAV.
+            held = sorted(set(state["p249_core"]) | set(state["p249_plus_p266"]))
+            unresolved_gap = {
+                "first_unresolved_session": dt.date().isoformat(),
+                "reason": "MISSING_HELD_SYMBOL_RETURN",
+                "missing_held_symbols": [symbol for symbol in held if pd.isna(day.get(symbol, np.nan))],
+            }
+            break
+        core_gross = sum(state["p249_core"].get(s, 0.0) * float(day.get(s, np.nan)) for s in state["p249_core"])
+        sat_gross = sum(state["p249_plus_p266"].get(s, 0.0) * float(day.get(s, np.nan)) for s in state["p249_plus_p266"])
+        if not np.isfinite(core_gross) or not np.isfinite(sat_gross):
+            unresolved_gap = {
+                "first_unresolved_session": dt.date().isoformat(),
+                "reason": "NONFINITE_HELD_PORTFOLIO_RETURN",
+                "missing_held_symbols": [],
+            }
+            break
+        # A skipped/incomplete first session must not consume the monthly cost.
         core_cost = 0.0
         sat_cost = 0.0
         cost_detail = None
@@ -213,11 +455,6 @@ def main() -> None:
             core_cost, sat_cost, cost_detail = _month_costs(prev_state, state)
             seen_months.add(key)
             prev_state = state
-        day = ret.loc[dt]
-        core_gross = sum(state["p249_core"].get(s, 0.0) * float(day.get(s, np.nan)) for s in state["p249_core"])
-        sat_gross = sum(state["p249_plus_p266"].get(s, 0.0) * float(day.get(s, np.nan)) for s in state["p249_plus_p266"])
-        if np.isnan(core_gross) or np.isnan(sat_gross):
-            continue
         rows.append({
             "date": dt.date().isoformat(),
             "holding_month": key,
@@ -241,21 +478,56 @@ def main() -> None:
         sat_net = obs["p249_plus_p266_net"]
         increment = obs["satellite_increment_net"]
 
+    try:
+        turnover_audit = _implicit_target_reset_turnover_audit(rows, ret, month_states)
+    except (KeyError, ValueError, TypeError, ArithmeticError) as exc:
+        # Audit-only failure cannot silently change frozen economic arms.
+        turnover_audit = {
+            "status": "DIAGNOSTIC_UNAVAILABLE",
+            "reason": str(exc) if str(exc).startswith("P249_TURNOVER_AUDIT_") else "AUDIT_SOURCE_UNAVAILABLE",
+            "not_actual_trades_or_funded_monthly_hold": True,
+            "not_fee_adjusted_or_alpha_credit": True,
+        }
+
+    if unresolved_gap is not None:
+        # A partial prefix is not an economically current monthly-hold path.
+        # Keep the original source-gap stop and do not publish a diagnostic NAV
+        # as if later sessions had been scored or backfilled.
+        monthly_drift_diagnostic = {
+            "status": "SOURCE_GAP_UNRESOLVED_NO_ECONOMIC_CURRENT",
+            "first_unresolved_session": unresolved_gap["first_unresolved_session"],
+            "not_broker_or_alpha_credit": True,
+        }
+    else:
+        try:
+            monthly_drift_diagnostic = _monthly_hold_drift_diagnostic(rows, ret, month_states)
+        except (KeyError, ValueError, TypeError, ArithmeticError) as exc:
+            monthly_drift_diagnostic = {
+                "status": "DIAGNOSTIC_UNAVAILABLE",
+                "reason": str(exc) if str(exc).startswith("P249_MONTHLY_DRIFT_") else "SOURCE_UNAVAILABLE",
+                "not_broker_or_alpha_credit": True,
+            }
+
     result = {
         "schema": "research.p279_p249_p266_forward_shadow_observer_r1",
         "parent": "P249/P266/P278/P279",
         "decision_at": DECISION_AT.isoformat(),
         "observed_at": now.isoformat(),
-        "status": "FORWARD_OBSERVING" if len(rows) else "BASELINE_FROZEN_NO_FORWARD_CLOSES",
+        "status": "SOURCE_GAP_UNRESOLVED" if unresolved_gap else ("FORWARD_OBSERVING" if len(rows) else "BASELINE_FROZEN_NO_FORWARD_CLOSES"),
         "source_health": {
             "provider": "yfinance_adjusted_close",
             "completed_session_request_date": completed_data_date.isoformat(),
+            "exchange_calendar": "NYSE:pandas_market_calendars==5.5.0:exchange_calendars==4.13.2",
+            "expected_completed_exchange_sessions": int(len(forward_ix)),
+            "observed_completed_exchange_sessions": int(len(observed_forward_ix)),
+            "all_expected_exchange_sessions_present": bool(not len(forward_ix.difference(observed_forward_ix))),
             "in_progress_session_excluded": True,
             "source_max_date": source_max_date,
             "latest_by_symbol": latest_by_symbol,
             "lagging_symbols_vs_source_max": lagging_symbols,
             "all_symbols_share_latest_date": not lagging_symbols and len(dated) == len(ALL),
             "latest_scored_common_session": rows[-1]["date"] if rows else None,
+            "unresolved_forward_gap": unresolved_gap,
             "common_session_lags_source_max": bool(rows and source_max_date and rows[-1]["date"] < source_max_date),
         },
         "contract": {
@@ -277,11 +549,14 @@ def main() -> None:
         "current_holding_month": str(current_month),
         "current_state": current_state,
         "forward": {
+            "economic_continuity_verified": unresolved_gap is None,
             "first_close": rows[0]["date"] if rows else None,
             "latest_close": rows[-1]["date"] if rows else None,
             "p249_core_net": _metrics(core_net),
             "p249_plus_p266_net": _metrics(sat_net),
             "satellite_increment_cumulative": float((1 + increment).prod() - 1) if len(increment) else 0.0,
+            "implicit_target_reset_turnover_audit": turnover_audit,
+            "monthly_hold_drift_diagnostic": monthly_drift_diagnostic,
             "observations": rows,
         },
         "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
