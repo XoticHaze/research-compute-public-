@@ -82,6 +82,9 @@ ALLOWED_ACCEPTANCE_FILES = {
     # Exact local node:test modules only; no network, broker or promotion issuer.
     "ui-react/src/lib/pilotFundedTerminalDrawdown.product.test.mjs",
     "ui-react/src/lib/promotionCandidateEvidencePresentation.test.mjs",
+    # Release #975 Product #1347: exact bound paper-bar observation UI test,
+    # pure node:test with local imports, no broker, network or live authority.
+    "ui-react/src/lib/paperBoundaryObservation.test.mjs",
 }
 
 
