@@ -1194,3 +1194,20 @@ def test_selected_p0_forward_new_exact_modules_networkless_only():
         for denied in (module + "_extra", module + "_live_submit", module + ".py"):
             with pytest.raises(ValueError):
                 validated_modules(denied)
+
+
+def test_selected_p0_privacy_risk_followons_exact_networkless_only():
+    # Admission is source-only; no private job placement or broker authority.
+    modules = (
+        "tests.test_operator_lifecycle_snapshot_privacy_product_20261027",
+        "tests.test_selected_runtime_live_preflight_risk_roll_product_20261027",
+    )
+    assert validated_modules(",".join(modules)) == list(modules)
+    for module in modules:
+        command = pytest_container_command("sealed-selected-p0-privacy-risk", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for rejected in (module + "_extra", module + "_live_submit", module + "_broker", module + ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(rejected)
