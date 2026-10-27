@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from mmibkr_private_test_probe_v1 import (
+    SAFE_EXACT,
     module_file_path,
     validate_native_fire_boolean,
     pytest_container_command,
@@ -41,6 +42,27 @@ def test_allowlist_accepts_research_autotuner_registry_and_data_materializer():
 def test_allowlist_rejects_authority_or_unknown_modules(module):
     with pytest.raises(ValueError):
         validated_modules(module)
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        "tests.test_ibkr_account_context",
+        "tests.test_ibkr_production_live_account_context_v1",
+        "tests.test_ibkr_remote_account_hygiene_slot_v1",
+        "tests.test_selected_runtime_submit_authority",
+        "tests.test_paper_flatten_canonical_route_authority_667",
+        "tests.test_selected_runtime_account_sizing_submit_hook_14th31lg",
+    ],
+)
+def test_exact_sensitive_named_modules_are_network_isolated(module):
+    # Exact allowlist admission cannot override network isolation for a
+    # broker/account/submit/flatten test. These are source-only regressions.
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-test-image", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
 
 
 def test_exact_live_seal_source_only_p0_modules_run_without_network_or_live_authority():
@@ -113,6 +135,49 @@ def test_exact_pi_docker_endpoint_preflight_is_networkless():
     ):
         with pytest.raises(ValueError):
             validated_modules(rejected)
+
+
+def test_exact_readonly_market_data_consumer_is_networkless_only():
+    module = "tests.test_ibkr_remote_readonly_market_data_consumer_v1"
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-test-image", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+    for denied in (
+        "tests.test_ibkr_remote_readonly_market_data_consumer_v1_live_submit",
+        "tests.test_ibkr_remote_readonly_market_data_consumer_v1_broker_probe",
+        "tests.test_ibkr_remote_readonly_market_data_consumer_v1_extra",
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        "tests.test_autotuner_parameter_consumption",
+        "tests.test_capital_timestamp_binding_product_20261026",
+        "tests.test_cloud_operator_snapshot_forward_root_binding_product_20261026",
+        "tests.test_cloud_operator_snapshot_health_adapter_v1",
+        "tests.test_cloud_operator_snapshot_inventory_readonly_product_20261027",
+        "tests.test_crw_backtest_rth_asset_contract_product_20261027",
+        "tests.test_survivor_paper_trade_evidence_materializer_v1",
+    "tests.test_futures_range_tail_coverage_product_20261027",
+    "tests.test_market_feed_range_orchestration_14th31ix",
+    ],
+)
+def test_exact_selected_product_regressions_are_networkless_only(module):
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-test-image", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+    # The legacy autotuner prefix is separately allowed; all other Product
+    # names must be exact, not arbitrary suffixed executable modules.
+    if not module.startswith("tests.test_autotuner_"):
+        with pytest.raises(ValueError):
+            validated_modules(module + "_extra")
 
 
 def test_exact_selected_backfill_native_conid_guard_is_networkless():
@@ -355,6 +420,17 @@ def test_allowlist_accepts_only_exact_forward_historical_tick_evidence_modules()
             validated_modules(rejected)
 
 
+@pytest.mark.parametrize("module", sorted(SAFE_EXACT))
+def test_every_exact_allowlisted_module_is_networkless_even_without_sensitive_name(module):
+    # Exact allowlist admission is not a network permission. Source-only
+    # validation must not reach external data, brokers or arbitrary hosts.
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-test-image", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+
+
 def test_module_file_path_and_pytest_command_are_exact_and_shell_free():
     assert module_file_path("tests.test_model_lab_xgboost") == "tests/test_model_lab_xgboost.py"
     command = pytest_container_command("probe:test", "tests.test_model_lab_xgboost")
@@ -362,6 +438,8 @@ def test_module_file_path_and_pytest_command_are_exact_and_shell_free():
         "docker",
         "run",
         "--rm",
+        "--network",
+        "none",
         "-e",
         "ENABLE_LIVE_TRADING=0",
         "-e",
@@ -1029,5 +1107,60 @@ def test_exact_builder_reviewed_http_apply_routes_are_networkless_and_fail_close
     assert command[-1] == module_file_path(module)
     for denied in (module + "_live_submit", module + "_broker_mutation", module + "_extra",
                    module + ".py", "../" + module):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
+
+
+def test_legacy_autotuner_prefix_cannot_get_network():
+    # The historical prefix admits more than the exact selected module set.
+    # A private-source test must never gain network egress just by selecting
+    # another syntactically permitted autotuner module name.
+    for module in (
+        "tests.test_autotuner_strategy_family_catalog_vnext",
+        "tests.test_autotuner_future_synthetic",
+    ):
+        assert validated_modules(module) == [module]
+        command = pytest_container_command("sealed-private-test-image", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+    with pytest.raises(ValueError):
+        validated_modules("tests.test_autotuner_live_submit")
+
+
+def test_selected_975_new_source_only_modules_exact_networkless_and_no_aliases():
+    # Exact Product/Research postimages consumed by selected broad #975.
+    # This only validates public probe admission, not private test execution.
+    modules = (
+        "tests.test_selected_runtime_forward_execution_lifecycle_v1",
+        "tests.test_selected_runtime_forward_lifecycle_ledger_failclosed_product_20261027",
+        "tests.test_cc44_source_cache_first_12m_r1",
+        "tests.test_cc44_source_cache_session_gap_guard_r1",
+        "tests.test_builder_cross_lane_condition_ids_product_20261027",
+        "tests.test_strategy_builder_review_apply",
+        "tests.test_strategy_builder_review_guard",
+        "tests.test_mnq_dca_event_export",
+        "tests.test_mnq_dca_path_outcomes",
+    )
+    assert validated_modules(",".join(modules)) == list(modules)
+    for module in modules:
+        command = pytest_container_command("sealed-selected-source-only", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for rejected in (module + "_extra", module + "_live_submit", module + ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(rejected)
+
+
+def test_selected_builder_prebuilt_timeframe_exact_networkless_only():
+    # Exact #975 Builder cadence guard: public admission only, never broker execution.
+    module = "tests.test_builder_prebuilt_timeframe_identity_product_20261027"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-selected-builder", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for denied in (module + "_extra", module + "_live_submit", module + ".py", "../" + module):
         with pytest.raises(ValueError):
             validated_modules(denied)
