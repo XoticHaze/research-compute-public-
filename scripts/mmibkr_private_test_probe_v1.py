@@ -310,6 +310,8 @@ SOURCE_ONLY_SELECTED_PRODUCT_MODULES = frozenset({
     # Exact selected P0/forward source-only regressions; no broker credentials or network.
     "tests.test_selected_runtime_live_incumbent_preflight_v1",
     "tests.test_selected_runtime_forward_completed_trade_admission_v1",
+    # Product #1313 exact affirmative completed-bar/no-new-bar snapshot truth.
+    "tests.test_product_operator_snapshot_strict_bar_evidence_20261027",
     "tests.test_selected_runtime_cloud_daemon_v1",
     # Exact selected #1275 futures-roll cutoff fail-close, mocked/read-only only.
     "tests.test_selected_runtime_futures_roll_maintenance_v1",
