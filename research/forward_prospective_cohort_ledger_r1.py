@@ -138,7 +138,7 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
         # Frozen cohort membership must be one unique, nonempty ticker per row.
         # Duplicate names otherwise double-count one security in forward science.
         raw_symbols = signal.get("admitted_symbols") or []
-        if not isinstance(raw_symbols, list) or any(
+        if not isinstance(raw_symbols, list) or not raw_symbols or any(
             not isinstance(symbol, str)
             or re.fullmatch(r"[A-Z][A-Z0-9.-]*", symbol) is None
             for symbol in raw_symbols
@@ -1253,6 +1253,10 @@ def self_test() -> None:
         ({**home_signal, "admitted_symbols": ["CCS", "CCS"]},
          "FORWARD_HOMEBUILDERS_DUPLICATE_SYMBOL"),
         ({**home_signal, "admitted_symbols": ["CCS", ""]},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "admitted_symbols": []},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "admitted_symbols": False},
          "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
         ({**home_signal, "admitted_symbols": ["CCS", "ccs"]},
          "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
