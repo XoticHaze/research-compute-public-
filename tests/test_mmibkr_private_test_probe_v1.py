@@ -1293,3 +1293,21 @@ def test_selected_pi983_product_1317_typed_preflight_exact_networkless_only():
         for suffix in ("_live_submit", "_broker", "_extra", ".py"):
             with pytest.raises(ValueError):
                 validated_modules(module + suffix)
+
+
+def test_selected_product_1321_1323_exact_networkless_modules():
+    # Selected #975@8ba3 changed source: pure operator health and inert MNQ
+    # historical-refresh denial; no network, broker, submit or cache writes.
+    exact = (
+        "tests.test_cloud_operator_health_v1",
+        "tests.test_builder_mnq_backend_refresh_failclose_product_20261027",
+    )
+    assert validated_modules(" ".join(exact)) == list(exact)
+    for module in exact:
+        command = pytest_container_command("sealed-selected-operator-health-mnq", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for suffix in ("_extra", "_broker", "_live_submit", ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(module + suffix)
