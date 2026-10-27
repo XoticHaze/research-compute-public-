@@ -73,10 +73,17 @@ def _load_native_adapters(root: Path) -> dict[str, dict[str, Any]]:
     for path in root.rglob("*.json"):
         try:
             raw = path.read_bytes()
-            payload = json.loads(raw)
+            # Preserve top-level schema pairs during discovery. A recognized
+            # adapter must not evade strict validation by repeating "schema"
+            # with a later unrelated value (default json.loads is last-wins).
+            # Unrelated artifacts, including nested lookalikes, remain ignored.
+            top_pairs = json.loads(raw, object_pairs_hook=lambda pairs: pairs)
         except (json.JSONDecodeError, UnicodeDecodeError):
             continue
-        if not isinstance(payload, dict) or payload.get("schema") != ADAPTER_SCHEMA:
+        if not isinstance(top_pairs, list) or not any(
+            isinstance(pair, tuple) and pair[0] == "schema" and pair[1] == ADAPTER_SCHEMA
+            for pair in top_pairs
+        ):
             continue
         # Reuse the canonical prospective ledger's strict native-adapter parser.
         # A nested duplicate key or NaN can otherwise change model/source
@@ -1381,6 +1388,24 @@ def self_test() -> None:
         # An unrelated JSON artifact must not poison recognized native inputs.
         unrelated = root / "unrelated-duplicate.json"
         unrelated.write_text('{"not_an_adapter":1,"not_an_adapter":2}')
+        assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
+        # A first recognized schema overwritten by a later unrelated schema
+        # must not silently bypass the canonical strict adapter parser.
+        for malformed in (
+            '{"schema":"foundry.forward_program_adapter.v1","schema":"unrelated"}',
+            '{"schema":"unrelated","schema":"foundry.forward_program_adapter.v1"}',
+        ):
+            unrelated.write_text(malformed)
+            try:
+                _load_native_adapters(root)
+            except RuntimeError as exc:
+                assert str(exc) == "FORWARD_ADAPTER_DUPLICATE_JSON_KEY"
+            else:
+                raise AssertionError("duplicate top-level native schema bypassed strict parsing")
+        # A nested schema lookalike is not a top-level native adapter.
+        unrelated.write_text(
+            '{"schema":"unrelated","nested":{"schema":"foundry.forward_program_adapter.v1","k":1,"k":2}}'
+        )
         assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
         unrelated.unlink()
 
