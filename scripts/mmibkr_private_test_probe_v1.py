@@ -174,6 +174,17 @@ SAFE_EXACT = {
     # Pure scheduler/dry-plan builders with no broker client or live enable.
     "tests.test_selected_runtime_cloud_bar_clock_v1",
     "tests.test_selected_runtime_cloud_runner_dry_plan_v1",
+    # Exact new selected #975 source-only regression modules, all networkless.
+    # Admission of test names is not a trusted placement or private execution.
+    "tests.test_selected_runtime_forward_execution_lifecycle_v1",
+    "tests.test_selected_runtime_forward_lifecycle_ledger_failclosed_product_20261027",
+    "tests.test_cc44_source_cache_first_12m_r1",
+    "tests.test_cc44_source_cache_session_gap_guard_r1",
+    "tests.test_builder_cross_lane_condition_ids_product_20261027",
+    "tests.test_strategy_builder_review_apply",
+    "tests.test_strategy_builder_review_guard",
+    "tests.test_mnq_dca_event_export",
+    "tests.test_mnq_dca_path_outcomes",
 }
 
 # Exact selected Model Lab cancellation/identity regressions from MM-IBKR
@@ -248,15 +259,34 @@ SOURCE_ONLY_BUILDER_MODULES = frozenset({
     "tests.test_reviewed_apply_packet_safety_product_20261025",
     # Exact #1076 server-side reviewed Builder HTTP write gate, synthetic/no broker.
     "tests.test_builder_review_http_route_binding_product_20261025",
+    # Selected #975 Product #1267/#1269 prebuilt and fresh cadence alias guards.
+    "tests.test_builder_prebuilt_timeframe_identity_product_20261027",
 })
 SAFE_EXACT.update(SOURCE_ONLY_BUILDER_MODULES)
 # Exact selected #888 admitted futures row-identity synthetic test, no external data.
 SOURCE_ONLY_MARKET_DATA_MODULES = frozenset({
+    # Exact #1132 synthetic, signed read-only OHLCV admission tests only.
+    # This is NOT the B1 producer or a live/paper broker-session test.
+    "tests.test_ibkr_remote_readonly_market_data_consumer_v1",
     "tests.test_admitted_futures_source_strict_identity_product_20261025",
     # Exact selected source-only regression; Docker network disabled.
     "tests.test_futures_signal_only_execution_authority_product_20261025",
 })
 SAFE_EXACT.update(SOURCE_ONLY_MARKET_DATA_MODULES)
+# Exact brokerless selected #975 Product regressions, never a live broker
+# probe. Each is source-only and must run inside the networkless test container.
+SOURCE_ONLY_SELECTED_PRODUCT_MODULES = frozenset({
+    "tests.test_autotuner_parameter_consumption",
+    "tests.test_capital_timestamp_binding_product_20261026",
+    "tests.test_cloud_operator_snapshot_forward_root_binding_product_20261026",
+    "tests.test_cloud_operator_snapshot_health_adapter_v1",
+    "tests.test_cloud_operator_snapshot_inventory_readonly_product_20261027",
+    "tests.test_crw_backtest_rth_asset_contract_product_20261027",
+    "tests.test_survivor_paper_trade_evidence_materializer_v1",
+    "tests.test_futures_range_tail_coverage_product_20261027",
+    "tests.test_market_feed_range_orchestration_14th31ix",
+})
+SAFE_EXACT.update(SOURCE_ONLY_SELECTED_PRODUCT_MODULES)
 STATUS_STAGE_MODULES = {
     "tests.test_market_features_provenance_contract",
 }
@@ -338,7 +368,11 @@ def pytest_container_command(image_tag: str, module: str) -> list[str]:
         "docker",
         "run",
         "--rm",
-        *(["--network", "none"] if module in (SOURCE_ONLY_P0_MODULES | SOURCE_ONLY_MODEL_LAB_MODULES | SOURCE_ONLY_PNL_MODULES | SOURCE_ONLY_MODEL_ISSUER_MODULES | SOURCE_ONLY_BUILDER_MODULES | SOURCE_ONLY_MARKET_DATA_MODULES) else []),
+        # All admitted tests are source-only/brokerless. Never grant a
+        # selected private test module network egress merely because its
+        # exact name lacks an authority-sensitive token.
+        "--network",
+        "none",
         "-e",
         "ENABLE_LIVE_TRADING=0",
         "-e",

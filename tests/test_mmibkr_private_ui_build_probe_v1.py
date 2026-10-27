@@ -343,6 +343,7 @@ def _synthetic_safe_public_receipt():
         },
         "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
         "npm_ci": dict(step), "node_acceptance": dict(step), "vite_build": dict(step),
+        "vite_failure_class": None,
         "dist_index_present": True, "dist_file_count": 2,
         "dist_digest_sha256": "e" * 64,
         "authority": {
@@ -564,6 +565,68 @@ def test_selected_builder_decimal_threshold_exact_allowlist_and_lookalike_denial
         "ui-react/src/lib/builderLiteralValue.decimalAdmission.product.live-submit.test.mjs",
         "ui-react/src/lib/../pages/builderLiteralValue.decimalAdmission.product.test.mjs",
         "ui-react/src/lib/builderLiteralValue.decimalAdmission.product.test.mjs.py",
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
+
+
+
+def test_safe_vite_receipt_class_and_main_diagnostic_both_survive_merge():
+    raw = "Could not resolve private-module\\n/runner/private/ui-react/src/pages/BotConsolePage.jsx:42:7"
+    assert mod._safe_vite_receipt_class(raw) == "IMPORT_RESOLUTION"
+    diagnostic = mod._safe_vite_failure_class(raw)
+    assert diagnostic["class"] == "UNRESOLVED_IMPORT"
+    assert diagnostic["source_line"] == 42
+    assert "/runner/private" not in json.dumps(diagnostic)
+    assert "private-module" not in json.dumps(diagnostic)
+    assert mod._safe_vite_receipt_class("out of memory") == "RESOURCE_EXHAUSTION"
+
+
+def test_public_vite_receipt_fixed_enum_requires_failed_build():
+    import copy
+    valid = _synthetic_safe_public_receipt()
+    valid["vite_build"]["status"] = "FAIL"
+    valid["vite_build"]["exit_code"] = 1
+    valid["vite_failure_class"] = "IMPORT_RESOLUTION"
+    assert mod._public_receipt(valid) == valid
+    bad = copy.deepcopy(valid)
+    bad["vite_failure_class"] = "private/source/path"
+    with pytest.raises(ValueError, match="public_receipt_vite_failure_class_rejected"):
+        mod._public_receipt(bad)
+    success = copy.deepcopy(valid)
+    success["vite_build"]["status"] = "PASS"
+    with pytest.raises(ValueError, match="public_receipt_vite_failure_class_rejected"):
+        mod._public_receipt(success)
+
+
+
+def test_safe_vite_marker_and_fixed_receipt_class_in_diagnose_mode(tmp_path, capsys):
+    import sys
+    raw = "Could not resolve synthetic-private-module\\n"
+    log = tmp_path / "vite-build.log"
+    code = "import sys;sys.stdout.write(" + repr(raw) + ");sys.exit(1)"
+    result = mod._run_captured(
+        [sys.executable, "-c", code],
+        cwd=tmp_path, log_path=log, timeout=15, diagnose_vite=True,
+    )
+    output = capsys.readouterr()
+    assert result["status"] == "FAIL"
+    assert result["_safe_vite_failure_class"] == "IMPORT_RESOLUTION"
+    assert "MMIBKR_PRIVATE_UI_VITE_SAFE_FAILURE=" in output.out
+    assert "synthetic-private-module" not in output.out + output.err
+    assert not log.exists()
+
+
+def test_selected_builder_coverage_review_exact_node_acceptance_only():
+    # Selected #975 Product #1254: pure Node coverage/refresh truth test.
+    exact = "ui-react/src/lib/builderBacktestCoverageReview.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        "ui-react/src/lib/builderBacktestCoverageReview.mjs",
+        exact + ".bak",
+        exact + ".js",
+        "ui-react/src/pages/builderBacktestCoverageReview.test.mjs",
+        "ui-react/src/lib/../lib/builderBacktestCoverageReview.test.mjs",
     ):
         with pytest.raises(ValueError):
             mod.validate_acceptance_file(denied)

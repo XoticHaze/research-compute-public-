@@ -300,7 +300,7 @@ async function verifyAccess(request, env) {
     .split(',')
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
-  if (allowedEmails.length && !allowedEmails.includes(email)) {
+  if (!allowedEmails.length || !email || !allowedEmails.includes(email)) {
     throw new Error('access_email_rejected');
   }
 
@@ -310,17 +310,81 @@ async function verifyAccess(request, env) {
   };
 }
 
-function snapshotSourceSha(node) {
-  return String(node?.runtime?.source_sha || '').trim().toLowerCase();
+// Browser promotion decisions mutate durable review state. Cloudflare Access
+// authenticates the operator but is not, by itself, a cross-site request
+// forgery boundary. Only same-origin JSON requests may reach the decision
+// writer. Machine OIDC publisher/reader routes remain separate.
+export function operatorDecisionRequestIsSameOrigin(request) {
+  const url = new URL(request.url);
+  const origin = request.headers.get('origin');
+  const fetchSite = request.headers.get('sec-fetch-site');
+  const contentType = String(request.headers.get('content-type') || '').trim();
+  return origin === url.origin
+    && (!fetchSite || fetchSite === 'same-origin')
+    && /^application\/json(?:\s*;\s*charset\s*=\s*utf-8)?$/i.test(contentType);
 }
 
-function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
+function snapshotSourceSha(node) {
+  const value = String(node?.runtime?.source_sha || '').trim().toLowerCase();
+  // Carrying navigation-only rows requires an actual immutable source ID.
+  // Two matching placeholders such as "unknown" are not source continuity.
+  return /^[0-9a-f]{40}$/.test(value) ? value : '';
+}
+
+// GitHub publisher jobs can finish out of order. A later HTTP receipt is
+// not proof that its underlying boundary snapshot is the latest observation.
+function snapshotGeneratedAtMs(node) {
+  const value = node?.generated_at_utc;
+  if (typeof value !== 'string'
+      || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value)) {
+    return null;
+  }
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return null;
+  // Date.parse normalizes impossible Gregorian dates and 24:00 into a
+  // different instant. An invalid producer clock must not advance or roll
+  // back the durable operator snapshot ordering authority.
+  return new Date(parsed).toISOString().slice(0, 19) === value.slice(0, 19)
+    ? parsed : null;
+}
+
+// Compare full signed UTC observation precision, not Date.parse's
+// millisecond-truncated value. Python producers can emit microseconds;
+// lexical UTC seconds + zero-padded nanoseconds preserves exact ordering.
+function snapshotGeneratedAtOrderKey(node) {
+  if (snapshotGeneratedAtMs(node) === null) return null;
+  const value = node?.generated_at_utc;
+  const match = typeof value === 'string'
+    ? /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?Z$/.exec(value)
+    : null;
+  if (!match) return null;
+  return `${match[1]}.${(match[2] || '').padEnd(9, '0')}`;
+}
+
+export function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
+  // A duplicate or malformed incoming runtime ID must never be silently
+  // collapsed by Map last-wins semantics before the UI sees the snapshot.
+  validateSnapshot(incomingSnapshot);
   const previous = previousRecord?.snapshot;
   if (!previous || typeof previous !== 'object' || Array.isArray(previous)) {
     return {
       snapshot: incomingSnapshot,
       runtimeMergeApplied: false,
       previousRuntimeCount: 0,
+    };
+  }
+
+  // Persisted state may predate the current runtime-ID/privacy validator.
+  // Never carry legacy malformed rows through Map last-wins deduplication;
+  // keep the independently validated incoming boundary without inheritance.
+  try {
+    validateSnapshot(previous);
+  } catch {
+    return {
+      snapshot: incomingSnapshot,
+      runtimeMergeApplied: false,
+      previousRuntimeCount: Array.isArray(previous.runtimes)
+        ? previous.runtimes.length : 0,
     };
   }
 
@@ -341,9 +405,90 @@ function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
     ? incomingSnapshot.runtimes
     : [];
   const merged = new Map();
+  const incomingIds = new Set(incomingRuntimes.map((row) => String(row?.runtime_id || '').trim()));
   for (const row of previousRuntimes) {
     const runtimeId = String(row?.runtime_id || '').trim();
-    if (runtimeId) merged.set(runtimeId, row);
+    if (!runtimeId || incomingIds.has(runtimeId)) continue;
+    // A prior source-matched runtime is retained for navigation only. It is
+    // NOT a new bar, position, quote, actionable signal or live owner proof.
+    // The top-level generated_at_utc belongs to the incoming snapshot.
+    merged.set(runtimeId, {
+      // Rebuild a carried card from an explicit navigation-only schema.
+      // Spreading the old row would retain unknown historical top-level
+      // broker/order/authority fields even after nested policy is cleared.
+      runtime_id: runtimeId,
+      symbol: typeof row.symbol === 'string' ? row.symbol : null,
+      signal_symbol: typeof row.signal_symbol === 'string' ? row.signal_symbol : null,
+      strategy_id: typeof row.strategy_id === 'string' ? row.strategy_id : null,
+      strategy_profile: typeof row.strategy_profile === 'string' ? row.strategy_profile : null,
+      timeframe: typeof row.timeframe === 'string' ? row.timeframe : null,
+      // Contract identity can roll while the runtime is unobserved; do not
+      // present a prior conId/expiry as current on a navigation-only card.
+      execution_contract: null,
+      state: 'unobserved',
+      position: null,
+      broker_symbol_position: null,
+      broker_symbol_position_observed: false,
+      position_ownership: {
+        // Explicit allowlist: no unknown historical ownership/ledger field may
+        // leak into a new boundary's navigation-only projection.
+        attributed: false,
+        account_wide_position_is_not_strategy_ownership: true,
+        // Prior ledger provenance belongs to the earlier observation, not
+        // this unobserved boundary. The UI renders provenance_kind even when
+        // attributed=false, so leaving it here falsely reports current
+        // execution-backed inventory on a navigation-only carried card.
+        source: null,
+        provenance_kind: null,
+        processed_execution_count: null,
+        execution_history_present: null,
+        reviewed_migration_seed_present: null,
+        pre_seed_transition_continuity_proven: null,
+        ledger_updated_at_utc: null,
+        runtime_updated_at_utc: null,
+        attribution_unverified_this_boundary: true,
+        carried_from_previous_snapshot: true,
+      },
+      last_action: 'NOT_OBSERVED',
+      // A carried runtime is navigation-only. Never inherit an earlier
+      // eligible/execute disposition as if this boundary evaluated it.
+      disposition: 'not_due_this_boundary',
+      candidate_ready: false,
+      broker_action: false,
+      // Policy flags and limits can change between boundaries. The prior
+      // paper/DCA settings are not a current authority observation either.
+      execution_policy: {
+        paper_submit_enabled: null,
+        live_submit_enabled: null,
+        dca_enabled: null,
+        max_dca_adds: null,
+        max_contracts: null,
+        max_shares: null,
+        carried_from_previous_snapshot: true,
+        policy_unverified_this_boundary: true,
+      },
+      primary_metric: null,
+      conditions: [],
+      position_context: null,
+      market_context: { features: [], quote: null },
+      data_health: {
+        // Explicit carry schema: only timestamps remain historical context.
+        // Unknown previous health keys must not become fresh eligibility.
+        target_bar_close_utc: row?.data_health?.target_bar_close_utc ?? null,
+        latest_timestamp: row?.data_health?.latest_timestamp ?? null,
+        current: false,
+        observed_this_boundary: false,
+        not_due_this_boundary: true,
+        // Prior positive bar/refresh evidence is historical only. A carried
+        // card cannot claim this boundary had a completed/no-new bar.
+        bar_close_identity_ok: false,
+        no_new_completed_target_bar: false,
+        bar_close_gap_sec: null,
+        warmup: {},
+        freshness: {},
+        carried_from_previous_snapshot: true,
+      },
+    });
   }
   for (const row of incomingRuntimes) {
     const runtimeId = String(row?.runtime_id || '').trim();
@@ -360,6 +505,95 @@ function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
     runtimeMergeApplied: runtimes.length > incomingRuntimes.length,
     previousRuntimeCount: previousRuntimes.length,
   };
+}
+
+// Publisher privacy declarations are necessary but cannot authorize storing
+// raw broker account IDs or credentials hidden in nested projection rows.
+// The canonical producer emits only sanitized account summary/position fields.
+const FORBIDDEN_OPERATOR_SNAPSHOT_KEYS = new Set([
+  'accountid', 'accountnumber', 'accountcode', 'acctnumber', 'ibaccount',
+  'username', 'ibusername', 'password', 'ibpassword', 'passwd',
+  'apikey', 'accesstoken', 'refreshtoken', 'token', 'secret',
+  'privatekey', 'credential', 'credentials',
+]);
+function rejectSensitiveSnapshotFields(value, depth = 0) {
+  if (depth > 32) throw new Error('snapshot_nested_depth_rejected');
+  if (!value || typeof value !== 'object') return;
+  if (Array.isArray(value)) {
+    for (const child of value) rejectSensitiveSnapshotFields(child, depth + 1);
+    return;
+  }
+  for (const [key, child] of Object.entries(value)) {
+    // Canonical public snapshot keys are ASCII. Reject Unicode confusables,
+    // invisible separators and non-ASCII aliases before any key matching.
+    if (!/^[\x20-\x7e]+$/.test(key)) throw new Error('snapshot_sensitive_field_rejected');
+    // Fold Unicode compatibility forms before the ASCII key denylist.
+    // Fullwidth ａｃｃｏｕｎｔｉｄ must not bypass account-ID rejection.
+    const normalized = key.normalize('NFKC').replace(/[^a-z0-9]/gi, '').toLowerCase();
+    // The root account summary is an admitted numerical projection. A nested
+    // account field is not, even when privacy.account_identifiers_included=false.
+    // Only the exact root key `account` receives typed projection validation.
+    // Case/punctuation/Unicode aliases must not bypass that validator.
+    if (FORBIDDEN_OPERATOR_SNAPSHOT_KEYS.has(normalized)
+        || (normalized === 'account' && (depth !== 0 || key !== 'account'))) {
+      throw new Error('snapshot_sensitive_field_rejected');
+    }
+    rejectSensitiveSnapshotFields(child, depth + 1);
+  }
+}
+
+// Root account summary is a narrowly typed financial projection. The generic
+// nested-key privacy guard alone cannot reject an account ID disguised as
+// account: "DU..." or account: { equity: "DU..." } at the allowed root key.
+const ACCOUNT_MONEY_FIELDS = new Set([
+  'equity', 'cash', 'buying_power', 'available_funds', 'excess_liquidity',
+  'init_margin_req', 'maint_margin_req', 'equity_with_loan_value',
+  'gross_position_value', 'unrealized_pnl', 'realized_pnl',
+]);
+const ACCOUNT_BOOLEAN_FIELDS = new Set([
+  'positions_capability', 'positions_observed_complete',
+  'open_orders_capability', 'open_orders_observed_complete',
+  'account_scope_verified', 'expected_account_matched',
+]);
+const ACCOUNT_COUNT_FIELDS = new Set(['positions_count', 'open_orders_count']);
+function validateAccountProjection(account) {
+  if (account === undefined || account === null) return;
+  if (typeof account !== 'object' || Array.isArray(account)) {
+    throw new Error('snapshot_account_projection_rejected');
+  }
+  for (const [field, value] of Object.entries(account)) {
+    if (ACCOUNT_MONEY_FIELDS.has(field)) {
+      if (value !== null && (typeof value !== 'number' || !Number.isFinite(value))) {
+        throw new Error('snapshot_account_projection_rejected');
+      }
+    } else if (ACCOUNT_BOOLEAN_FIELDS.has(field)) {
+      if (value !== null && typeof value !== 'boolean') {
+        throw new Error('snapshot_account_projection_rejected');
+      }
+    } else if (ACCOUNT_COUNT_FIELDS.has(field)) {
+      if (value !== null && (!Number.isSafeInteger(value) || value < 0)) {
+        throw new Error('snapshot_account_projection_rejected');
+      }
+    } else if (field === 'observed_at_utc') {
+      if (value !== null && (typeof value !== 'string'
+          || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value))) {
+        throw new Error('snapshot_account_projection_rejected');
+      }
+    } else if (field === 'currencies') {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new Error('snapshot_account_projection_rejected');
+      }
+      for (const [moneyField, currency] of Object.entries(value)) {
+        if (!ACCOUNT_MONEY_FIELDS.has(moneyField)
+            || typeof currency !== 'string'
+            || !/^(?:[A-Z]{3}|BASE)$/.test(currency)) {
+          throw new Error('snapshot_account_projection_rejected');
+        }
+      }
+    } else {
+      throw new Error('snapshot_account_projection_rejected');
+    }
+  }
 }
 
 function validateSnapshot(node) {
@@ -400,6 +634,18 @@ function validateSnapshot(node) {
   if (runtimes.length > 100 || positions.length > 500) {
     throw new Error('snapshot_collection_size_rejected');
   }
+  rejectSensitiveSnapshotFields(node);
+  validateAccountProjection(node.account);
+  const seenRuntimeIds = new Set();
+  for (const row of runtimes) {
+    const id = row?.runtime_id;
+    if (!row || typeof row !== 'object' || Array.isArray(row)
+        || typeof id !== 'string' || !id || id !== id.trim()
+        || seenRuntimeIds.has(id)) {
+      throw new Error('snapshot_runtime_identity_invalid_or_duplicate');
+    }
+    seenRuntimeIds.add(id);
+  }
   return node;
 }
 
@@ -438,30 +684,53 @@ export class OperatorState {
     if (request.method === 'POST' && url.pathname === '/store') {
       const body = await request.json();
       const incomingSnapshot = validateSnapshot(body.snapshot);
-      const previousRecord = await this.ctx.storage.get('latest');
-      const merged = mergeRuntimeProjection(previousRecord, incomingSnapshot);
-      const snapshot = merged.snapshot;
-      const transport = body.transport && typeof body.transport === 'object'
-        ? body.transport
-        : {};
-      const record = {
-        schema: 'mmibkr.operator_console_state.v1',
-        stored_at_utc: new Date().toISOString(),
-        snapshot,
-        transport: {
-          publisher: transport.publisher || {},
-          published_at_utc: transport.published_at_utc || null,
-          received_runtime_count: incomingSnapshot.runtimes.length,
-          stored_runtime_count: snapshot.runtimes.length,
-          runtime_merge_applied: merged.runtimeMergeApplied,
-        },
-      };
-      await this.ctx.storage.put('latest', record);
+      const incomingGeneratedAt = snapshotGeneratedAtMs(incomingSnapshot);
+      const incomingOrderKey = snapshotGeneratedAtOrderKey(incomingSnapshot);
+      if (incomingGeneratedAt === null || incomingOrderKey === null || incomingGeneratedAt > Date.now() + 60_000) {
+        return json({ error: 'snapshot_generated_at_invalid' }, 400);
+      }
+      // Compare-and-store must share a Durable Object storage transaction.
+      // Independent read/put awaits can otherwise interleave concurrent
+      // publishers and allow an older completion to overwrite a newer bar.
+      const accepted = await this.ctx.storage.transaction(async (txn) => {
+        const previousRecord = await txn.get('latest');
+        const previousOrderKey = snapshotGeneratedAtOrderKey(previousRecord?.snapshot);
+        if (previousOrderKey !== null && incomingOrderKey < previousOrderKey) {
+          return { outOfOrder: true };
+        }
+        const merged = mergeRuntimeProjection(previousRecord, incomingSnapshot);
+        const snapshot = merged.snapshot;
+        const transport = body.transport && typeof body.transport === 'object'
+          ? body.transport
+          : {};
+        const record = {
+          schema: 'mmibkr.operator_console_state.v1',
+          // A timestamp plus collection counts is not a durable record
+          // identity: another publisher can replace the value before the
+          // independent readback. Generate a unique private write identity.
+          write_id: crypto.randomUUID(),
+          stored_at_utc: new Date().toISOString(),
+          snapshot,
+          transport: {
+            publisher: transport.publisher || {},
+            published_at_utc: transport.published_at_utc || null,
+            received_runtime_count: incomingSnapshot.runtimes.length,
+            stored_runtime_count: snapshot.runtimes.length,
+            runtime_merge_applied: merged.runtimeMergeApplied,
+          },
+        };
+        await txn.put('latest', record);
+        return { record, merged, snapshot };
+      });
+      if (accepted.outOfOrder) return json({ error: 'snapshot_out_of_order' }, 409);
+      const { record, merged, snapshot } = accepted;
       const readback = await this.ctx.storage.get('latest');
       const readbackVerified = Boolean(
         readback
         && readback.schema === record.schema
         && readback.stored_at_utc === record.stored_at_utc
+        && typeof record.write_id === 'string'
+        && readback.write_id === record.write_id
         && readback.snapshot?.schema === snapshot.schema
         && Array.isArray(readback.snapshot?.runtimes)
         && readback.snapshot.runtimes.length === snapshot.runtimes.length
@@ -534,17 +803,6 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    if (request.method === 'GET' && url.pathname === '/healthz') {
-      return json({
-        ok: true,
-        service: 'mmibkr-operator-console',
-        access_configured: Boolean(env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD),
-        operator_state_configured: Boolean(env.OPERATOR_STATE),
-        static_assets_configured: Boolean(env.ASSETS),
-        live_execution_allowed: false,
-      });
-    }
-
     if (request.method === 'POST' && url.pathname === '/v1/operator-snapshot') {
       const length = Number(request.headers.get('content-length') || 0);
       if (Number.isFinite(length) && length > MAX_SNAPSHOT_BYTES) {
@@ -585,6 +843,7 @@ export default {
           },
         }),
       }));
+      if (stored.status === 409) return json({ error: 'snapshot_out_of_order' }, 409);
       if (!stored.ok) return json({ error: 'snapshot_store_failed' }, 502);
       const receipt = await stored.json();
       if (receipt.durable_readback_verified !== true) {
@@ -710,6 +969,26 @@ export default {
       return json({ error: 'access_denied' }, 403);
     }
 
+    // This dedicated Access-locked host is the operator console, not the
+    // full MM backend. React's generic '/' route targets unsupported Markets.
+    if (request.method === 'GET' && url.pathname === '/') {
+      return new Response(null, {
+        status: 302,
+        headers: { location: '/bot-console', 'cache-control': 'private, no-store' },
+      });
+    }
+
+    if (request.method === 'GET' && url.pathname === '/healthz') {
+      return json({
+        ok: true,
+        service: 'mmibkr-operator-console',
+        access_configured: Boolean(env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD),
+        operator_state_configured: Boolean(env.OPERATOR_STATE),
+        static_assets_configured: Boolean(env.ASSETS),
+        live_execution_allowed: false,
+      });
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/promotion-review') {
       const stored = await stateStub(env).fetch(
         new Request('https://operator-state.internal/promotion/latest'),
@@ -718,6 +997,9 @@ export default {
     }
 
     if (request.method === 'POST' && url.pathname === '/api/promotion-review/decision') {
+      if (!operatorDecisionRequestIsSameOrigin(request)) {
+        return json({ error: 'operator_mutation_origin_rejected' }, 403);
+      }
       let decision;
       try {
         const raw = await request.text();
@@ -744,7 +1026,20 @@ export default {
       );
       if (!stored.ok) return stored;
       const record = await stored.json();
-      return json(record.snapshot, 200);
+      let snapshot;
+      try {
+        snapshot = validateSnapshot(record.snapshot);
+      } catch {
+        return json({ error: 'operator_snapshot_state_invalid' }, 502);
+      }
+      return json(snapshot, 200);
+    }
+
+    // This Worker only exposes the explicitly admitted read-only/operator APIs.
+    // Never return SPA HTML with HTTP 200 for an unsupported MM backend API.
+    if (url.pathname === '/api' || url.pathname.startsWith('/api/')
+        || url.pathname === '/v1' || url.pathname.startsWith('/v1/')) {
+      return json({ error: 'operator_api_not_supported' }, 404);
     }
 
     if (!env.ASSETS) return json({ error: 'static_assets_not_deployed' }, 503);
