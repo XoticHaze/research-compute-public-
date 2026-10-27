@@ -23,6 +23,10 @@ const previousRow = {
   runtime_id: 'AMAT-15Min', symbol: 'AMAT', state: 'managing',
   last_action: 'BUY', disposition: 'eligible_execute', candidate_ready: true, broker_action: true,
   position: { position: 4 }, broker_symbol_position: { position: 4 },
+  execution_policy: {
+    paper_submit_enabled: true, live_submit_enabled: false, dca_enabled: true,
+    max_dca_adds: 2, max_contracts: 4, max_shares: 10,
+  },
   broker_symbol_position_observed: true,
   position_ownership: {
     attributed: true, source: 'previous_only',
@@ -61,6 +65,16 @@ assert.equal(carried.disposition, 'not_due_this_boundary',
 assert.equal(previousRow.disposition, 'eligible_execute', 'do not mutate previous durable evidence');
 assert.equal(carried.candidate_ready, false);
 assert.equal(carried.broker_action, false);
+for (const field of [
+  'paper_submit_enabled', 'live_submit_enabled', 'dca_enabled',
+  'max_dca_adds', 'max_contracts', 'max_shares',
+]) {
+  assert.equal(carried.execution_policy[field], null,
+    'carried runtime policy must be unverified, not current: ' + field);
+}
+assert.equal(carried.execution_policy.policy_unverified_this_boundary, true);
+assert.equal(previousRow.execution_policy.paper_submit_enabled, true,
+  'historical selected policy evidence remains immutable');
 assert.equal(carried.position, null);
 assert.equal(carried.broker_symbol_position, null);
 assert.equal(carried.broker_symbol_position_observed, false);
