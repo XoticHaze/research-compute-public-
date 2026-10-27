@@ -352,7 +352,7 @@ function snapshotGeneratedAtOrderKey(node) {
   if (snapshotGeneratedAtMs(node) === null) return null;
   const value = node?.generated_at_utc;
   const match = typeof value === 'string'
-    ? /^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})(?:\\.(\\d{1,9}))?Z$/.exec(value)
+    ? /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?Z$/.exec(value)
     : null;
   if (!match) return null;
   return `${match[1]}.${(match[2] || '').padEnd(9, '0')}`;
