@@ -356,3 +356,33 @@ const cleanPrivacy = snapshot('a'.repeat(40), [{ ...incomingRow }]);
 cleanPrivacy.account = { equity: 123, positions_count: 0, currencies: { equity: 'USD' } };
 assert.equal(mergeRuntimeProjection(null, cleanPrivacy).snapshot.account.equity, 123);
 console.log('MMIBKR_OPERATOR_CONSOLE_NESTED_PRIVACY_FAILCLOSED=PASS');
+
+// The allowed top-level account key must not become a privacy bypass:
+// account IDs can be laundered as the whole value, a money value, a
+// currency, or an unknown generic field without any forbidden key name.
+for (const [name, account] of [
+  ['raw account string', 'DU-PRIVATE'],
+  ['account list', ['DU-PRIVATE']],
+  ['account money string', { equity: 'DU-PRIVATE' }],
+  ['unknown account field', { equity: 1, note: 'DU-PRIVATE' }],
+  ['nested root account', { account: { value: 'DU-PRIVATE' } }],
+  ['currency account identifier', { currencies: { equity: 'DU-PRIVATE' } }],
+  ['nonfinite money', { equity: Infinity }],
+  ['negative count', { positions_count: -1 }],
+]) {
+  const contaminated = snapshot('a'.repeat(40), [{ ...incomingRow }]);
+  contaminated.account = account;
+  assert.throws(() => mergeRuntimeProjection(null, contaminated),
+    /snapshot_account_projection_rejected/, name);
+}
+const fullSafeAccount = snapshot('a'.repeat(40), [{ ...incomingRow }]);
+fullSafeAccount.account = {
+  equity: 123, excess_liquidity: null, positions_count: 0,
+  open_orders_count: 0, positions_capability: true,
+  open_orders_capability: null, account_scope_verified: null,
+  observed_at_utc: '2026-10-27T04:00:00Z',
+  currencies: { equity: 'USD', cash: 'BASE' },
+};
+assert.equal(mergeRuntimeProjection(null, fullSafeAccount).snapshot.account.equity, 123);
+console.log('MMIBKR_OPERATOR_CONSOLE_ACCOUNT_PROJECTION_PRIVACY=PASS');
+
