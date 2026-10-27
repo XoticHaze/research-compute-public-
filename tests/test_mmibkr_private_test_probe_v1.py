@@ -1216,3 +1216,15 @@ def test_selected_p0_privacy_risk_followons_exact_networkless_only():
         for rejected in (module + "_extra", module + "_live_submit", module + "_broker", module + ".py"):
             with pytest.raises(ValueError):
                 validated_modules(rejected)
+
+def test_exact_product_1302_pilot_funded_capital_receipt_is_networkless_only():
+    # Existing Promotion Review/Pilot receipt consumer, never a promotion issuer.
+    module = "tests.test_pilot_capital_context_failclosed_product_20261027"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-selected-pilot-capital", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for denied in (module + "_extra", module + "_live_submit", module + "_promote", module + ".py"):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
