@@ -1268,3 +1268,10 @@ def test_selected_product_1308_bounded_history_exact_networkless():
     for denied in (module + "_extra", module + "_live_submit", module + "_broker", module + ".py"):
         with pytest.raises(ValueError):
             validated_modules(denied)
+
+
+def test_selected_product_1313_strict_bar_evidence_is_exact_source_only_module():
+    exact = "tests.test_product_operator_snapshot_strict_bar_evidence_20261027"
+    assert validated_modules(exact) == [exact]
+    with pytest.raises(ValueError, match="test_module_not_allowlisted"):
+        validated_modules("tests.test_product_operator_snapshot_strict_bar_evidence_20261027_extra")
