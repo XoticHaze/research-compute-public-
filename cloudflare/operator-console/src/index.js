@@ -325,7 +325,10 @@ export function operatorDecisionRequestIsSameOrigin(request) {
 }
 
 function snapshotSourceSha(node) {
-  return String(node?.runtime?.source_sha || '').trim().toLowerCase();
+  const value = String(node?.runtime?.source_sha || '').trim().toLowerCase();
+  // Carrying navigation-only rows requires an actual immutable source ID.
+  // Two matching placeholders such as "unknown" are not source continuity.
+  return /^[0-9a-f]{40}$/.test(value) ? value : '';
 }
 
 // GitHub publisher jobs can finish out of order. A later HTTP receipt is
