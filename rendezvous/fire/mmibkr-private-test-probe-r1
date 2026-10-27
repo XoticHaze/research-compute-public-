@@ -1,19 +1,20 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "f77d0ab03d67fb83e985f771e1a71f4ceb551bb1",
+  "source_ref": "eca188fe048a0482fb9934ec50535c7532df5d87",
   "test_modules": [
-    "tests.test_selected_runtime_initial_backfill_ingest_v1",
-    "tests.test_autotuner_parameter_consumption"
+    "tests.test_strategy_builder_review_guard",
+    "tests.test_strategy_builder_review_apply",
+    "tests.test_strategy_builder_review_preview_semantic_20261027"
   ],
-  "ui_acceptance_file": "",
+  "ui_acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
   "crw_consumer_reprobe": false,
   "s3_composition_economics": false,
   "s4_layered_mtf_economics": false,
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "manual-worker-f77d-corrected-test-native-20261026220756737",
-  "purpose": "Exact f77d two test fixture fixes after red selected B1 OHLC and AutoTuner keyword helper cases; rerun same two networkless modules via existing encrypted test probe only, no broker/live",
+  "requested_by": "continue-release-selected-builder-preview-20261027",
+  "purpose": "Exact encrypted selected #975 eca Builder Preview semantic write-gate Python direct-writer tests plus unchanged guard/apply regression and native UI Vite build, brokerless/no deployment",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -21,8 +22,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "manual-worker-native-f77d-backfill-autotuner-r2",
+  "request_nonce": "release-selected-eca188f-builder-preview-exact-native-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "f77d0ab03d67fb83e985f771e1a71f4ceb551bb1",
+  "current_private_reference": "eca188fe048a0482fb9934ec50535c7532df5d87",
   "parity_public_key_b64": ""
 }
