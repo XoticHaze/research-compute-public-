@@ -1,12 +1,12 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "eca188fe048a0482fb9934ec50535c7532df5d87",
+  "source_ref": "3c9726da543ad8873e7743702862bd9c35828e3b",
   "test_modules": [
     "tests.test_strategy_builder_review_guard",
     "tests.test_strategy_builder_review_apply",
     "tests.test_strategy_builder_review_preview_semantic_20261027"
   ],
-  "ui_acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
+  "ui_acceptance_file": "ui-react/src/lib/builderPreviewResponse.test.mjs",
   "crw_consumer_reprobe": false,
   "s3_composition_economics": false,
   "s4_layered_mtf_economics": false,
@@ -14,7 +14,7 @@
     "trust_mode": "public_encrypted"
   },
   "requested_by": "continue-release-selected-builder-preview-20261027",
-  "purpose": "Exact encrypted selected #975 eca Builder Preview semantic write-gate Python direct-writer tests plus unchanged guard/apply regression and native UI Vite build, brokerless/no deployment",
+  "purpose": "Exact encrypted selected #975 3c9726d canonical Builder Preview Python direct-writer semantic guard plus UI malformed-empty-array Node regression and Vite build, no broker/live/deploy",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -22,8 +22,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "release-selected-eca188f-builder-preview-exact-native-r1",
+  "request_nonce": "release-selected-3c9726d-builder-preview-final-native-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "eca188fe048a0482fb9934ec50535c7532df5d87",
+  "current_private_reference": "3c9726da543ad8873e7743702862bd9c35828e3b",
   "parity_public_key_b64": ""
 }
