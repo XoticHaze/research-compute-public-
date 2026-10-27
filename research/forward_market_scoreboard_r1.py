@@ -12,8 +12,14 @@ from typing import Any
 # Use the already-merged standalone economic CURRENT admission, never a parallel source gate.
 if __package__:
     from .forward_p249_p266_shadow_r1 import current_publication_admitted
+    from .forward_prospective_cohort_ledger_r1 import (
+        _reject_adapter_duplicate_keys, _reject_adapter_nonfinite_constant,
+    )
 else:
     from forward_p249_p266_shadow_r1 import current_publication_admitted
+    from forward_prospective_cohort_ledger_r1 import (
+        _reject_adapter_duplicate_keys, _reject_adapter_nonfinite_constant,
+    )
 
 SCHEMA = "research.forward_market_scoreboard_r1"
 ADAPTER_SCHEMA = "foundry.forward_program_adapter.v1"
@@ -63,6 +69,15 @@ def _load_native_adapters(root: Path) -> dict[str, dict[str, Any]]:
             continue
         if not isinstance(payload, dict) or payload.get("schema") != ADAPTER_SCHEMA:
             continue
+        # Reuse the canonical prospective ledger's strict native-adapter parser.
+        # A nested duplicate key or NaN can otherwise change model/source
+        # identity in the scoreboard while the ledger rejects the same bytes.
+        # Only recognized native adapters are strict-parsed: unrelated JSON
+        # artifacts must not become accidental scoreboard source blockers.
+        payload = json.loads(
+            raw, object_pairs_hook=_reject_adapter_duplicate_keys,
+            parse_constant=_reject_adapter_nonfinite_constant,
+        )
         program_id = str(payload.get("program_id") or "")
         if program_id not in EXPECTED_PRIVATE_ADAPTERS:
             continue
@@ -1335,6 +1350,30 @@ def self_test() -> None:
         duplicate_adapter.unlink()
         original_adapter.write_text(json.dumps(semi))
         assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
+
+        # The canonical prospective ledger already rejects nested duplicate
+        # adapter keys and nonfinite JSON constants. The scoreboard must make
+        # the same source decision rather than silently using last-wins JSON.
+        assert "signal" in semi
+        for malformed, code in (
+            (json.dumps(semi)[:-1] + ',"signal":{"positive_symbols":["FAKE"]}}',
+             "FORWARD_ADAPTER_DUPLICATE_JSON_KEY"),
+            (json.dumps(semi)[:-1] + ',"synthetic_nonfinite":NaN}',
+             "FORWARD_ADAPTER_NONFINITE_JSON_CONSTANT"),
+        ):
+            original_adapter.write_text(malformed)
+            try:
+                _load_native_adapters(root)
+            except RuntimeError as exc:
+                assert str(exc) == code
+            else:
+                raise AssertionError("ambiguous native adapter JSON admitted")
+        original_adapter.write_text(json.dumps(semi))
+        # An unrelated JSON artifact must not poison recognized native inputs.
+        unrelated = root / "unrelated-duplicate.json"
+        unrelated.write_text('{"not_an_adapter":1,"not_an_adapter":2}')
+        assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
+        unrelated.unlink()
 
     # Homebuilders legacy stock-net vs ITB-gross is not matched-after-cost alpha.
     homebuilders_cost_ledger = {
