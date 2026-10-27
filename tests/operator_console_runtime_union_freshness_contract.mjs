@@ -355,6 +355,8 @@ for (const [name, mutate] of [
   ['fullwidth root account alias', (s) => { s['ａｃｃｏｕｎｔ'] = 'DU-PRIVATE'; }],
   ['punctuated root account alias', (s) => { s['a.c.c.o.u.n.t'] = 'DU-PRIVATE'; }],
   ['uppercase root account alias', (s) => { s['ACCOUNT'] = 'DU-PRIVATE'; }],
+  ['Cyrillic account homoglyph', (s) => { s['аccount'] = 'DU-PRIVATE'; }],
+  ['zero-width account key', (s) => { s['acc\u200bount'] = 'DU-PRIVATE'; }],
 ]) {
   const contaminated = snapshot('a'.repeat(40), [{ ...incomingRow }]);
   mutate(contaminated);
