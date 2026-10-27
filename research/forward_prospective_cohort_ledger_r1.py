@@ -73,7 +73,14 @@ def _sha(data: bytes) -> str:
 def _read_json(path: Path | None) -> dict[str, Any] | None:
     if path is None or not path.is_file():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    # Prior first-seen state is immutable chronology, not a last-wins JSON
+    # dictionary. Share the same strict parser as incoming adapters.
+    payload = json.loads(path.read_text(encoding="utf-8"),
+                         object_pairs_hook=_reject_adapter_duplicate_keys,
+                         parse_constant=_reject_adapter_nonfinite_constant)
+    if not isinstance(payload, dict):
+        raise RuntimeError("FORWARD_PRIOR_ROOT_NOT_OBJECT")
+    return payload
 
 
 def _reject_adapter_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -1080,6 +1087,21 @@ def self_test() -> None:
             try:
                 _adapter(adapter_path)
                 raise AssertionError("ambiguous/nonfinite adapter JSON admitted")
+            except RuntimeError as exc:
+                assert code in str(exc)
+    # An existing first-seen clock must not be rewritten by nested last-wins
+    # JSON, even when the cohort_id itself appears only once.
+    with tempfile.TemporaryDirectory() as prior_dir:
+        prior_path = Path(prior_dir) / "prior.json"
+        for raw, code in [
+            ('{"cohorts":[{"cohort_id":"x","first_registered_at":"old","first_registered_at":"new"}]}', "FORWARD_ADAPTER_DUPLICATE_JSON_KEY"),
+            ('{"cohorts":[{"mark":NaN}]}', "FORWARD_ADAPTER_NONFINITE_JSON_CONSTANT"),
+            ('[{"cohorts":[]}]', "FORWARD_PRIOR_ROOT_NOT_OBJECT"),
+        ]:
+            prior_path.write_text(raw, encoding="utf-8")
+            try:
+                _read_json(prior_path)
+                raise AssertionError("ambiguous prior first-seen JSON admitted")
             except RuntimeError as exc:
                 assert code in str(exc)
     for bad_date in ("2026-09-11junk", "2026-02-30", "2026-9-11"):
