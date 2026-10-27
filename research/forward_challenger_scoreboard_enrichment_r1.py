@@ -155,9 +155,13 @@ def enrich(
     ids = {row["program_id"] for row in additions}
     lanes = [row for row in lanes if row.get("program_id") not in ids] + additions
     scoreboard["lanes"] = lanes
-    scoreboard.setdefault("freshness", {})["currency_overlay_common_calendar_precedes_requested_asof"] = (
-        additions[-1]["source_health"]["common_calendar_precedes_requested_asof"]
-    )
+    freshness = scoreboard.setdefault("freshness", {})
+    overlay_source_review = additions[-1]["source_health"]["common_calendar_precedes_requested_asof"]
+    freshness["currency_overlay_common_calendar_precedes_requested_asof"] = overlay_source_review
+    # An ACTIVE prospective observer cannot leave the aggregate freshness
+    # green while its own common source calendar predates requested as-of.
+    # This flags source review, not confirmed missing bars or losing alpha.
+    freshness["freshness_gap_visible"] = bool(freshness.get("freshness_gap_visible") or overlay_source_review)
 
     coverage = scoreboard.setdefault("coverage", {})
     coverage["challenger_observers"] = {
@@ -344,7 +348,11 @@ def self_test() -> None:
     assert lane["source_health"]["common_calendar_precedes_requested_asof"] is True
     assert lane["timing"]["latest_common_market_date"] == "2026-10-19"
     assert lane["scorecard"] is None and lane["boundaries"]["allocator_mutation"] is False
-    assert enrich({"lanes": [], "coverage": {}, "actionable_context": [], "decision_chain": {}, "interpretation": {}}, p160, currency, lagged)["freshness"]["currency_overlay_common_calendar_precedes_requested_asof"] is True
+    lagged_scoreboard = enrich({"lanes": [], "coverage": {}, "actionable_context": [], "decision_chain": {}, "interpretation": {}, "freshness": {"freshness_gap_visible": False}}, p160, currency, lagged)
+    assert lagged_scoreboard["freshness"]["currency_overlay_common_calendar_precedes_requested_asof"] is True
+    assert lagged_scoreboard["freshness"]["freshness_gap_visible"] is True
+    assert "not itself proof of absent data or losing alpha" in lagged_scoreboard["lanes"][-1]["source_health"]["interpretation"]
+    assert out["freshness"]["freshness_gap_visible"] is False
     # An observer may be prospectively eligible without an independently
     # authenticated original adjusted-source/calendar issuer or funded NAV.
     p160_eligible = dict(p160, state="PROSPECTIVE_ELIGIBLE", scientific_forward_credit=True)
