@@ -1,8 +1,9 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "04848626b1627d9db48d3eb001be2191796c4be9",
+  "source_ref": "f77d0ab03d67fb83e985f771e1a71f4ceb551bb1",
   "test_modules": [
-    "tests.test_selected_runtime_live_order_intent_journal_v1"
+    "tests.test_selected_runtime_initial_backfill_ingest_v1",
+    "tests.test_autotuner_parameter_consumption"
   ],
   "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
@@ -11,8 +12,8 @@
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-20261024-clockin-20261024162001495",
-  "purpose": "Exact Product #1007 P0 paper/alias account PREPARED fail-close networkless selected journal test, existing encrypted Source Vault; no broker/live/deploy",
+  "requested_by": "manual-worker-f77d-corrected-test-native-20261026220756737",
+  "purpose": "Exact f77d two test fixture fixes after red selected B1 OHLC and AutoTuner keyword helper cases; rerun same two networkless modules via existing encrypted test probe only, no broker/live",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -20,8 +21,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "release-p0-journal-1007-04848626-20261024-r1",
+  "request_nonce": "manual-worker-native-f77d-backfill-autotuner-r2",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "04848626b1627d9db48d3eb001be2191796c4be9",
+  "current_private_reference": "f77d0ab03d67fb83e985f771e1a71f4ceb551bb1",
   "parity_public_key_b64": ""
 }
