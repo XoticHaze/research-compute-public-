@@ -42,9 +42,9 @@ class PublicReceiptAllowlistTests(unittest.TestCase):
         source = Path(consumer.__file__).read_text(encoding='utf-8')
         self.assertIn('  pull_request:', workflow)
         self.assertIn('  contents: write', workflow)
-        self.assertIn('\\njobs:\\n  consume:\\n', workflow)
-        consume = workflow.split('\\njobs:\\n  consume:\\n', 1)[1]
-        pre_runner = consume.split('\\n    runs-on:', 1)[0]
+        self.assertIn('\njobs:\n  consume:\n', workflow)
+        consume = workflow.split('\njobs:\n  consume:\n', 1)[1]
+        pre_runner = consume.split('\n    runs-on:', 1)[0]
         self.assertIn('    if: ${{ false }}', pre_runner)
         self.assertIn('sender_public_b64', source)
         self.assertIn("subprocess.run(['node',ENTRYPOINT,SNAPSHOT,str(out)]", source)
