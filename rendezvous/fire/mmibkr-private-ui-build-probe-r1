@@ -1,13 +1,13 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "934005c8907c86fc2b0f998afb4ac625803c3279",
+  "source_ref": "b77a78acf196dc8c7a748cdb07ba26239dc8992d",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-exact-selected-ui-20261027",
-  "purpose": "Exact encrypted-vault-admitted selected #975/#888 Product #1280 operator UI Bot Console native acceptance and Vite build, no Cloudflare deploy/broker/live",
-  "request_nonce": "release-selected-934005c-native-ui-20261027-r1",
+  "requested_by": "continue-release-selected-bot-console-verify-20261027",
+  "purpose": "Exact encrypted Source Vault accepted selected #975@b77a after Product #1283 merged verify:bot-console runtime-selection test inclusion; native Bot Console Node acceptance and Vite build only, no broker/live/Cloudflare deployment",
+  "request_nonce": "release-selected-b77a-bot-console-verify-native-20261027-r1",
   "authority": {
     "research_only": true,
     "broker": false,
