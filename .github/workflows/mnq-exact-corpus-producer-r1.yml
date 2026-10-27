@@ -1,12 +1,6 @@
 name: MNQ Exact Corpus Producer R1
 
 on:
-  workflow_dispatch:
-    inputs:
-      run_id:
-        description: Public canonical-session GitHub run id with a fresh MNQ recipient
-        required: true
-        type: string
   push:
     branches:
       - main
