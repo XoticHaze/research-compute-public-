@@ -352,6 +352,9 @@ for (const [name, mutate] of [
   ['fullwidth broker account ID', (s) => { s.fills = [{ 'ａｃｃｏｕｎｔｉｄ': 'DU-PRIVATE' }]; }],
   ['fullwidth punctuated broker ID', (s) => { s.positions = [{ 'ＡＣＣＯＵＮＴ－ＩＤ': 'DU-PRIVATE' }]; }],
   ['fullwidth credential', (s) => { s.runtimes[0].data_health = { 'ｐａｓｓｗｏｒｄ': 'private' }; }],
+  ['fullwidth root account alias', (s) => { s['ａｃｃｏｕｎｔ'] = 'DU-PRIVATE'; }],
+  ['punctuated root account alias', (s) => { s['a.c.c.o.u.n.t'] = 'DU-PRIVATE'; }],
+  ['uppercase root account alias', (s) => { s['ACCOUNT'] = 'DU-PRIVATE'; }],
 ]) {
   const contaminated = snapshot('a'.repeat(40), [{ ...incomingRow }]);
   mutate(contaminated);
