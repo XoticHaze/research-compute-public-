@@ -81,6 +81,17 @@ class LiveWritablePushReplayGuardTests(unittest.TestCase):
         self.assertIn("supervised_5h", source)
         self.assertNotIn("gh api --method POST", _dispatch_script())
 
+    def test_legacy_broker_login_push_dispatcher_is_inert(self):
+        root = WORKFLOW.parents[2]
+        legacy = (root / ".github/workflows/ibkr-broker-login-dispatch.yml").read_text(encoding="utf-8")
+        self.assertIn("  push:", legacy)
+        job = legacy.split("\njobs:\n  dispatch:\n", 1)[1].split("\n    runs-on:", 1)[0]
+        self.assertIn("    if: ${{ false }}", job)
+        self.assertIn("caller-authored", job)
+        # Existing direct attended workflow remains available without this push relay.
+        operator = (root / ".github/workflows/ibkr-cloudflare-readonly-b1-r1.yml").read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", operator)
+
     def test_old_marker_not_newly_added_cannot_replay(self):
         outcome, post = self._run(" live_owner_approved_dispatch_request_20261019_abcdef: true")
         self.assertEqual(outcome.returncode, 64, outcome.stderr)
