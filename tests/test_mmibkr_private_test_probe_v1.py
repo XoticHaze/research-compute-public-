@@ -1240,3 +1240,19 @@ def test_exact_product_1304_private_operator_snapshot_atomic_is_networkless_only
     for denied in (module + "_extra", module + "_live_submit", module + "_symlink_bypass", module + ".py"):
         with pytest.raises(ValueError):
             validated_modules(denied)
+
+
+def test_selected_product_1306_1307_exact_readonly_consumer_modules():
+    # Exact private selected-source admission, not a broker or live runtime probe.
+    for module in (
+        "tests.test_cloud_operator_health_bound_read_return_product_20261027",
+        "tests.test_cloud_forward_lifecycle_size_guard_product_20261027",
+    ):
+        assert validated_modules(module) == [module]
+        command = pytest_container_command("sealed-selected-operator-evidence", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for denied in (module + "_extra", module + "_live_submit", module + "_broker", module + ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(denied)
