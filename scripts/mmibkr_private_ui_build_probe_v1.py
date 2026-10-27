@@ -74,6 +74,10 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/lib/botConsoleRecentActivity.test.mjs",
     # Product #1309 read-only persisted paper history date/freshness guard.
     "ui-react/src/lib/paperBoundaryHistory.test.mjs",
+    # Selected #975 current changed-source incumbent runtime identity/contract
+    # and model forward-sanity presentation, pure Node, no broker or network.
+    "ui-react/src/lib/selectedIncumbentCoverage.test.mjs",
+    "ui-react/src/lib/tradingProductReadiness.test.mjs",
 }
 
 
