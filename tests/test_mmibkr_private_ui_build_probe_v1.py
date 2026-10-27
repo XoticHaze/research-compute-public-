@@ -765,3 +765,20 @@ def test_selected_model_evidence_presentation_exact_node_acceptance_only():
     ):
         with pytest.raises(ValueError):
             mod.validate_acceptance_file(denied)
+
+def test_release_selected_975_bound_paper_bar_node_acceptance_exact_only():
+    # Product #1347 is an exact, read-only node:test source acceptance.
+    # This does not admit arbitrary JSX, broker commands, or UI deployment.
+    exact = "ui-react/src/lib/paperBoundaryObservation.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak",
+        exact + ".js",
+        exact.replace(".test.mjs", ".mjs"),
+        exact.replace(".test.mjs", ".live-submit.test.mjs"),
+        "ui-react/src/pages/paperBoundaryObservation.test.mjs",
+        "ui-react/src/lib/../lib/paperBoundaryObservation.test.mjs",
+        "/" + exact,
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
