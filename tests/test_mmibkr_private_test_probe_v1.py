@@ -1258,6 +1258,19 @@ def test_selected_product_1306_1307_exact_readonly_consumer_modules():
                 validated_modules(denied)
 
 
+def test_selected_current_operator_lifecycle_snapshot_exact_networkless():
+    # New selected #975 source-only snapshot event/identity projection tests.
+    module = "tests.test_cloud_operator_snapshot_forward_lifecycle_v1"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-selected-operator-lifecycle", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for denied in (module + "_extra", module + "_live_submit", module + "_broker", module + ".py"):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
+
+
 def test_selected_product_1308_bounded_history_exact_networkless():
     module = "tests.test_cloud_paper_boundary_history_v1"
     assert validated_modules(module) == [module]
