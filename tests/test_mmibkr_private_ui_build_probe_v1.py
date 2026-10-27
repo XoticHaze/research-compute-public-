@@ -85,6 +85,25 @@ def test_vite_safe_failure_diagnostic_is_bounded_and_never_prints_private_source
 
 
 
+def test_selected_current_incumbent_and_model_node_acceptance_is_exact_and_brokerless():
+    # These selected #975 source tests use node:test, local imports and optional
+    # readFile of UI source only. They never import a broker client or network.
+    for exact in (
+        "ui-react/src/lib/selectedIncumbentCoverage.test.mjs",
+        "ui-react/src/lib/tradingProductReadiness.test.mjs",
+    ):
+        assert mod.validate_acceptance_file(exact) == exact
+        for denied in (
+            exact + ".bak",
+            exact.replace(".test.mjs", ".live-submit.test.mjs"),
+            exact.replace(".test.mjs", ".test.js"),
+            "ui-react/src/lib/../lib/" + exact.rsplit("/", 1)[-1],
+            "/" + exact,
+        ):
+            with pytest.raises(ValueError, match="not_allowlisted"):
+                mod.validate_acceptance_file(denied)
+
+
 def test_selected_fe30_recent_activity_acceptance_is_exact_and_readonly():
     # Exact changed-source Node module, not a wildcard or broker-command grant.
     exact = "ui-react/src/lib/botConsoleRecentActivity.test.mjs"
