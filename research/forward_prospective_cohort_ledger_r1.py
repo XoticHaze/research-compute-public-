@@ -135,12 +135,35 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
     signal = adapter.get("signal") or {}
 
     if program == "HOMEBUILDERS":
-        symbols = [str(x) for x in signal.get("admitted_symbols") or []]
-        horizons = {str(k): int(v) for k, v in (signal.get("duration_horizon_sessions_by_symbol") or {}).items()}
+        # Frozen cohort membership must be one unique, nonempty ticker per row.
+        # Duplicate names otherwise double-count one security in forward science.
+        raw_symbols = signal.get("admitted_symbols") or []
+        if not isinstance(raw_symbols, list) or any(
+            not isinstance(symbol, str) or not symbol.strip() for symbol in raw_symbols
+        ):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_SYMBOL_INVALID")
+        symbols = list(raw_symbols)
         if not symbols:
             return None
-        if set(symbols) - set(horizons):
-            raise RuntimeError("Homebuilders admitted symbol missing frozen duration horizon")
+        if len(symbols) != len(set(symbols)):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_DUPLICATE_SYMBOL")
+        raw_horizons = signal.get("duration_horizon_sessions_by_symbol")
+        if not isinstance(raw_horizons, dict) or set(raw_horizons) != set(symbols):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_HORIZON_MEMBERSHIP_MISMATCH")
+        horizons: dict[str, int] = {}
+        for symbol in symbols:
+            value = raw_horizons[symbol]
+            # bool/int coercion and fractional/zero/negative horizons can
+            # silently create an impossible entry/exit chronology.
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value < 1
+                or int(value) != value
+            ):
+                raise RuntimeError("FORWARD_HOMEBUILDERS_HORIZON_INVALID")
+            horizons[symbol] = int(value)
         return {
             "cohort_id": _cohort_id(program, signal_date, adapter_sha256),
             "program_id": program,
@@ -1160,6 +1183,44 @@ def self_test() -> None:
         except RuntimeError as exc:
             assert "FORWARD_ADAPTER_SIGNAL_DATE_INVALID" in str(exc)
     assert _canonical_signal_date("2026-09-11") == "2026-09-11"
+    # A duplicated Homebuilders ticker used to count as two independent
+    # observations; bool/zero/fractional horizons could distort frozen exits.
+    home_signal = {
+        "admitted_symbols": ["CCS", "DHI"],
+        "duration_horizon_sessions_by_symbol": {"CCS": 5, "DHI": 10},
+    }
+    home_adapter = {
+        "program_id": "HOMEBUILDERS",
+        "signal_date": "2026-09-11",
+        "signal": home_signal,
+    }
+    admitted_home = _new_cohort(home_adapter, "test", "2026-09-11T00:00:00Z")
+    assert admitted_home is not None
+    assert admitted_home["symbols"] == ["CCS", "DHI"]
+    assert admitted_home["horizon_sessions_by_symbol"] == {"CCS": 5, "DHI": 10}
+    for bad_signal, code in [
+        ({**home_signal, "admitted_symbols": ["CCS", "CCS"]},
+         "FORWARD_HOMEBUILDERS_DUPLICATE_SYMBOL"),
+        ({**home_signal, "admitted_symbols": ["CCS", ""]},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": 5}},
+         "FORWARD_HOMEBUILDERS_HORIZON_MEMBERSHIP_MISMATCH"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": 5, "DHI": 10, "X": 2}},
+         "FORWARD_HOMEBUILDERS_HORIZON_MEMBERSHIP_MISMATCH"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": 0, "DHI": 10}},
+         "FORWARD_HOMEBUILDERS_HORIZON_INVALID"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": -1, "DHI": 10}},
+         "FORWARD_HOMEBUILDERS_HORIZON_INVALID"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": 1.5, "DHI": 10}},
+         "FORWARD_HOMEBUILDERS_HORIZON_INVALID"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": True, "DHI": 10}},
+         "FORWARD_HOMEBUILDERS_HORIZON_INVALID"),
+    ]:
+        try:
+            _new_cohort({**home_adapter, "signal": bad_signal}, "test", "2026-09-11T00:00:00Z")
+            raise AssertionError("ambiguous Homebuilders frozen cohort admitted")
+        except RuntimeError as exc:
+            assert code in str(exc)
     # Frozen positive-symbol membership and ticker-book weights must match.
     # A foreign weight used to dilute the realized book without a signal,
     # and a missing positive weight used to silently drop a position.
