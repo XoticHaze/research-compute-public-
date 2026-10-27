@@ -955,6 +955,12 @@ def build(root: Path) -> dict[str, Any]:
         if completed_reference not in (None, "") else "NO_INDEPENDENT_COMPLETED_SESSION"
     )
     forward_source_lag = {}
+    terminal_cohort_source_snapshots = {}
+    cohort_rows = (ledger or {}).get("cohorts") or []
+    # Terminal cohorts deliberately preserve their original exit-tape/source
+    # snapshot. Only unresolved cohorts need a current completed-session tape.
+    # Missing/malformed lineage stays fail-closed as an active freshness risk.
+    cohort_rows = cohort_rows if isinstance(cohort_rows, list) else []
     for program, health in (ledger_freshness.get("source_health_by_program") or {}).items():
         if not isinstance(health, dict):
             forward_source_lag[program] = {"state": "INVALID_SOURCE_HEALTH"}
@@ -968,6 +974,18 @@ def build(root: Path) -> dict[str, Any]:
         if reference_day is None:
             continue
         if source_day < reference_day:
+            states = [
+                row.get("status") for row in cohort_rows
+                if isinstance(row, dict) and row.get("program_id") == program
+            ]
+            if states and all(state in {"RESOLVED", "LATE_REGISTRATION_REJECTED"} for state in states):
+                terminal_cohort_source_snapshots[program] = {
+                    "state": "FROZEN_TERMINAL_COHORT_SOURCE_HISTORY_NOT_ACTIVE_STALENESS",
+                    "source_max_date": source_max,
+                    "observed_completed_reference_session": completed_reference,
+                    "terminal_cohort_count": len(states),
+                }
+                continue
             forward_source_lag[program] = {
                 "state": "SOURCE_HISTORY_BEHIND_OBSERVED_COMPLETED_SESSION",
                 "source_max_date": source_max,
@@ -978,6 +996,7 @@ def build(root: Path) -> dict[str, Any]:
         "p249_p266_source_health": p249_health,
         "prospective_ledger": ledger_freshness,
         "forward_source_lag_vs_observed_completed_session": forward_source_lag,
+        "terminal_cohort_source_snapshots": terminal_cohort_source_snapshots,
         "forward_source_reference_state": reference_state,
         "freshness_gap_visible": bool(
             p249_health.get("common_session_lags_source_max")
@@ -1395,6 +1414,20 @@ def self_test() -> None:
         stale_result = build(root)
         assert stale_result["freshness"]["freshness_gap_visible"] is True
         assert stale_result["freshness"]["forward_source_lag_vs_observed_completed_session"]["SEMICONDUCTOR_SHARED_RIDGE"]["source_max_date"] == "2026-10-12"
+        # The actual current ledger has only RESOLVED cohorts: its source
+        # snapshots freeze at the original exit by design, not provider outage.
+        stale_ledger["cohorts"] = [{"cohort_id": "FROZEN_H20", "program_id": "SEMICONDUCTOR_SHARED_RIDGE", "status": "RESOLVED"}]
+        ledger_path.write_text(json.dumps(stale_ledger))
+        terminal_result = build(root)
+        assert terminal_result["freshness"]["forward_source_lag_vs_observed_completed_session"] == {}
+        assert terminal_result["freshness"]["freshness_gap_visible"] is False
+        assert terminal_result["freshness"]["terminal_cohort_source_snapshots"]["SEMICONDUCTOR_SHARED_RIDGE"]["state"] == "FROZEN_TERMINAL_COHORT_SOURCE_HISTORY_NOT_ACTIVE_STALENESS"
+        stale_ledger["cohorts"][0]["status"] = "OPEN"
+        ledger_path.write_text(json.dumps(stale_ledger))
+        active_result = build(root)
+        assert active_result["freshness"]["freshness_gap_visible"] is True
+        assert active_result["freshness"]["forward_source_lag_vs_observed_completed_session"]["SEMICONDUCTOR_SHARED_RIDGE"]["source_max_date"] == "2026-10-12"
+        stale_ledger["cohorts"] = []
         stale_ledger["freshness"]["source_health_by_program"]["SEMICONDUCTOR_SHARED_RIDGE"]["source_max_date"] = "2026-10-23"
         ledger_path.write_text(json.dumps(stale_ledger))
         current_result = build(root)
