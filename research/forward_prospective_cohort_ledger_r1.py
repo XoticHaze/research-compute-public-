@@ -1240,7 +1240,7 @@ def self_test() -> None:
          "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
         ({**home_signal, "admitted_symbols": ["CCS", "CCS "]},
          "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
-        ({**home_signal, "admitted_symbols": ["CCS", "CCS\\u200b"]},
+        ({**home_signal, "admitted_symbols": ["CCS", "CCS\u200b"]},
          "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
         ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": 5}},
          "FORWARD_HOMEBUILDERS_HORIZON_MEMBERSHIP_MISMATCH"),
