@@ -213,7 +213,9 @@ def _p46(x: dict[str, Any] | None) -> dict[str, Any]:
         return {"program_id": "P46", "status": "MISSING", "decision_use": "unavailable"}
     d = x.get("decision", {})
     shadow = x.get("operational_shadow", {})
-    credit = bool(d.get("scientific_forward_credit_authorized", False))
+    # A nonempty string such as "false" must never grant forward credit.
+    # Only the producer's literal JSON boolean true may enable the projection.
+    credit = d.get("scientific_forward_credit_authorized") is True
     selected = list(d.get("selected", []))
     weights = d.get("target_weights", {})
     return {
@@ -485,7 +487,8 @@ def _p438_semiconductor_predecessor(x: dict[str, Any] | None) -> dict[str, Any]:
         "latest_common_date": latest[-1] if latest else None,
         "elapsed_close_to_close_sessions": max(elapsed) if elapsed else None,
         "remaining_sessions_to_fixed20": max(remaining) if remaining else None,
-        "all_rows_terminal": bool(rows) and all(bool(row.get("final_target_resolved")) for row in rows),
+        # String "false" and numeric 1 are not independently resolved outcomes.
+        "all_rows_terminal": bool(rows) and all(row.get("final_target_resolved") is True for row in rows),
         "sample_combination_authorized": False,
         "combination_rule": (
             "Predecessor and current-cohort sessions may overlap in calendar time and have different frozen identities; "
@@ -1100,6 +1103,17 @@ def build(root: Path) -> dict[str, Any]:
 
 def self_test() -> None:
     import tempfile
+
+    # Source-only truthiness falsifiers: a syntactically valid JSON string
+    # must not become scientific credit or a resolved predecessor cohort.
+    for flag in ("false", "true", 1, 0, None, [], {}):
+        p46 = _p46({"decision": {"scientific_forward_credit_authorized": flag}})
+        assert p46["scientific_forward_credit"] is False
+        assert p46["validation_grade"] == "SHAKEDOWN_ONLY"
+        p438 = _p438_semiconductor_predecessor({"rows": [{"final_target_resolved": flag}]})
+        assert p438["all_rows_terminal"] is False
+    assert _p46({"decision": {"scientific_forward_credit_authorized": True}})["scientific_forward_credit"] is True
+    assert _p438_semiconductor_predecessor({"rows": [{"final_target_resolved": True}]})["all_rows_terminal"] is True
 
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
