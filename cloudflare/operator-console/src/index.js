@@ -413,7 +413,18 @@ export function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
     // NOT a new bar, position, quote, actionable signal or live owner proof.
     // The top-level generated_at_utc belongs to the incoming snapshot.
     merged.set(runtimeId, {
-      ...row,
+      // Rebuild a carried card from an explicit navigation-only schema.
+      // Spreading the old row would retain unknown historical top-level
+      // broker/order/authority fields even after nested policy is cleared.
+      runtime_id: runtimeId,
+      symbol: typeof row.symbol === 'string' ? row.symbol : null,
+      signal_symbol: typeof row.signal_symbol === 'string' ? row.signal_symbol : null,
+      strategy_id: typeof row.strategy_id === 'string' ? row.strategy_id : null,
+      strategy_profile: typeof row.strategy_profile === 'string' ? row.strategy_profile : null,
+      timeframe: typeof row.timeframe === 'string' ? row.timeframe : null,
+      // Contract identity can roll while the runtime is unobserved; do not
+      // present a prior conId/expiry as current on a navigation-only card.
+      execution_contract: null,
       state: 'unobserved',
       position: null,
       broker_symbol_position: null,

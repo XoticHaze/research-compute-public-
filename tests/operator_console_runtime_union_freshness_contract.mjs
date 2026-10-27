@@ -22,6 +22,8 @@ function snapshot(source, runtimes) {
 const previousRow = {
   runtime_id: 'AMAT-15Min', symbol: 'AMAT', state: 'managing',
   last_action: 'BUY', disposition: 'eligible_execute', candidate_ready: true, broker_action: true,
+  stale_top_level_order_authority: { submit_allowed: true, prior_order_id: 'stale-only' },
+  execution_contract: { symbol: 'AMAT', secType: 'STK', conId: 12345, stale_unknown_authority: true },
   position: { position: 4 }, broker_symbol_position: { position: 4 },
   execution_policy: {
     paper_submit_enabled: true, live_submit_enabled: false, dca_enabled: true,
@@ -67,6 +69,12 @@ assert.equal(carried.disposition, 'not_due_this_boundary',
 assert.equal(previousRow.disposition, 'eligible_execute', 'do not mutate previous durable evidence');
 assert.equal(carried.candidate_ready, false);
 assert.equal(carried.broker_action, false);
+assert.equal(Object.hasOwn(carried, 'stale_top_level_order_authority'), false,
+  'unknown historical top-level broker/order authority must not survive carry');
+assert.equal(carried.execution_contract, null,
+  'unobserved runtime must not present a stale contract/conId as current');
+assert.equal(carried.symbol, 'AMAT', 'static navigation identity must remain visible');
+assert.equal(carried.runtime_id, previousRow.runtime_id);
 for (const field of [
   'paper_submit_enabled', 'live_submit_enabled', 'dca_enabled',
   'max_dca_adds', 'max_contracts', 'max_shares',
