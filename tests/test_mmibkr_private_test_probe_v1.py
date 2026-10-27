@@ -1358,3 +1358,15 @@ def test_release_selected_975_three_exact_new_python_modules_are_networkless():
         for suffix in ("_extra", "_broker", "_live_submit", ".py"):
             with pytest.raises(ValueError):
                 validated_modules(module + suffix)
+
+def test_release_selected_975_partial_interval_source_only_exact_networkless():
+    # Product #1353 is a deterministic finer-bar envelope, not broker realized P&L.
+    module = "tests.test_selected_runtime_forward_partial_interval_v1"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-selected-partial-interval", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for denied in (module + "_extra", module + "_live_submit", module + ".py", "../" + module):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
