@@ -187,6 +187,46 @@ assert.ok(outcomes.some((response) => response.status === 201));
 assert.ok(outcomes.some((response) => response.status === 409));
 assert.equal((await storage.get('latest')).snapshot.generated_at_utc, concurrentNew.generated_at_utc,
   'concurrent out-of-order publisher completion cannot roll back durable state');
+// A concurrent writer can replace a just-committed record before the
+// independent readback. Matching timestamp, schema and collection counts
+// are not proof that the record being acknowledged is still the one written.
+const overwritten = new Map();
+let substituteReadback = false;
+const sameShapeReplacementStorage = {
+  async get(key) {
+    const stored = overwritten.get(key);
+    if (substituteReadback && key === 'latest') {
+      return {
+        ...stored,
+        write_id: 'different-committed-record',
+        snapshot: {
+          ...stored.snapshot,
+          runtimes: stored.snapshot.runtimes.map((row) => ({
+            ...row, last_action: 'FOREIGN_BOUNDARY',
+          })),
+        },
+      };
+    }
+    return stored;
+  },
+  async put(key, value) { overwritten.set(key, value); },
+  async transaction(fn) {
+    const result = await fn(this);
+    substituteReadback = true;
+    return result;
+  },
+};
+const substitutedState = new OperatorState({ storage: sameShapeReplacementStorage }, {});
+const substitutedResponse = await substitutedState.fetch(new Request(
+  'https://operator-state.internal/store',
+  { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ snapshot: firstBoundary, transport: {} }) },
+));
+assert.equal(substitutedResponse.status, 502,
+  'same timestamp/count but different committed record cannot earn durable readback');
+assert.equal((await substitutedResponse.json()).error, 'operator_snapshot_readback_failed');
+console.log('MMIBKR_OPERATOR_CONSOLE_READBACK_IDENTITY_FAILCLOSED=PASS');
+
 console.log('MMIBKR_OPERATOR_CONSOLE_MONOTONIC_SNAPSHOT_FRESHNESS=PASS');
 
 
