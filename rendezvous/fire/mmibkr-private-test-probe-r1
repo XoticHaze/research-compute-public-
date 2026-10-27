@@ -1,20 +1,18 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "3c9726da543ad8873e7743702862bd9c35828e3b",
+  "source_ref": "3e684341ca10d9cc878ec0d788508345e950cb96",
   "test_modules": [
-    "tests.test_strategy_builder_review_guard",
-    "tests.test_strategy_builder_review_apply",
-    "tests.test_strategy_builder_review_preview_semantic_20261027"
+    "tests.test_cloud_operator_snapshot_v1"
   ],
-  "ui_acceptance_file": "ui-react/src/lib/builderPreviewResponse.test.mjs",
+  "ui_acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
   "crw_consumer_reprobe": false,
   "s3_composition_economics": false,
   "s4_layered_mtf_economics": false,
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-selected-builder-preview-20261027",
-  "purpose": "Exact encrypted selected #975 3c9726d canonical Builder Preview Python direct-writer semantic guard plus UI malformed-empty-array Node regression and Vite build, no broker/live/deploy",
+  "requested_by": "continue-release-selected-bot-runtime-row-20261027",
+  "purpose": "Exact encrypted selected #975@3e684 Bot Console runtime-row identity changed-source Node acceptance and native Vite build; one required networkless brokerless Python module; no broker/live/deploy",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -22,8 +20,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "release-selected-3c9726d-builder-preview-final-native-r1",
+  "request_nonce": "release-selected-3e684-bot-console-exact-runtime-row-native-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "3c9726da543ad8873e7743702862bd9c35828e3b",
+  "current_private_reference": "3e684341ca10d9cc878ec0d788508345e950cb96",
   "parity_public_key_b64": ""
 }
