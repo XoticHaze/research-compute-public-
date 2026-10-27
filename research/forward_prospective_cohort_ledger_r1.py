@@ -166,15 +166,37 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
     validation = adapter.get("validation") or {}
     if not positive or validation.get("scientific_forward_credit") is not True:
         return None
+    # A foreign/missing ticker-book key silently changes funded participation:
+    # the old normalizer divided by *all* keys while scoring positive only.
+    if any(not isinstance(x, str) or not x.strip() for x in signal.get("positive_symbols") or []):
+        raise RuntimeError("FORWARD_COHORT_POSITIVE_SYMBOL_INVALID")
+    if len(positive) != len(set(positive)):
+        raise RuntimeError("FORWARD_COHORT_DUPLICATE_POSITIVE_SYMBOL")
     book = ((adapter.get("paper_action") or {}).get("ticker_book") or {})
-    raw_weights = {str(k): float(v) for k, v in (book.get("cohort_target_weights_nav") or {}).items() if float(v) > 0}
-    if not raw_weights:
-        raise RuntimeError("Semiconductor prospective cohort missing frozen ticker-book weights")
+    weight_source = book.get("cohort_target_weights_nav")
+    if not isinstance(weight_source, dict) or set(weight_source) != set(positive):
+        raise RuntimeError("FORWARD_COHORT_TICKER_BOOK_SYMBOL_MISMATCH")
+    raw_weights: dict[str, float] = {}
+    for symbol in positive:
+        value = weight_source[symbol]
+        if isinstance(value, bool):
+            raise RuntimeError("FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID")
+        try:
+            weight = float(value)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise RuntimeError("FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID") from exc
+        if not math.isfinite(weight) or weight <= 0:
+            raise RuntimeError("FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID")
+        raw_weights[symbol] = weight
     gross = sum(raw_weights.values())
+    if not math.isfinite(gross) or gross <= 0:
+        raise RuntimeError("FORWARD_COHORT_TICKER_BOOK_GROSS_INVALID")
     ticker_weights = {k: v / gross for k, v in raw_weights.items()}
     predictions = {
         str(k): float(v) for k, v in (signal.get("predicted_fixed20_net_value_bps") or {}).items()
     }
+    if any(not math.isfinite(value) for value in predictions.values()):
+        raise RuntimeError("FORWARD_COHORT_PREDICTION_NONFINITE")
     return {
         "cohort_id": _cohort_id(program, signal_date, adapter_sha256),
         "program_id": program,
@@ -1135,6 +1157,55 @@ def self_test() -> None:
         except RuntimeError as exc:
             assert "FORWARD_ADAPTER_SIGNAL_DATE_INVALID" in str(exc)
     assert _canonical_signal_date("2026-09-11") == "2026-09-11"
+    # Frozen positive-symbol membership and ticker-book weights must match.
+    # A foreign weight used to dilute the realized book without a signal,
+    # and a missing positive weight used to silently drop a position.
+    weight_adapter = {
+        "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+        "signal_date": "2026-10-01",
+        "signal": {
+            "positive_symbols": ["AAA", "BBB"],
+            "predicted_fixed20_net_value_bps": {"AAA": 100.0, "BBB": 200.0},
+        },
+        "validation": {"scientific_forward_credit": True},
+        "paper_action": {"ticker_book": {
+            "cohort_target_weights_nav": {"AAA": 0.02, "BBB": 0.03},
+        }},
+    }
+    clean_weight_cohort = _new_cohort(weight_adapter, "test", "2026-10-01T00:00:00Z")
+    assert clean_weight_cohort is not None
+    assert set(clean_weight_cohort["ticker_book_weights_within_cohort"]) == {"AAA", "BBB"}
+    assert abs(sum(clean_weight_cohort["ticker_book_weights_within_cohort"].values()) - 1.0) < 1e-12
+    for bad_weights, code in [
+        ({"AAA": 0.02, "FOREIGN": 0.03}, "FORWARD_COHORT_TICKER_BOOK_SYMBOL_MISMATCH"),
+        ({"AAA": 0.02}, "FORWARD_COHORT_TICKER_BOOK_SYMBOL_MISMATCH"),
+        ({"AAA": 0.02, "BBB": 0.0}, "FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID"),
+        ({"AAA": 0.02, "BBB": float("nan")}, "FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID"),
+        ({"AAA": 0.02, "BBB": True}, "FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID"),
+        ({"AAA": 1e308, "BBB": 1e308}, "FORWARD_COHORT_TICKER_BOOK_GROSS_INVALID"),
+    ]:
+        invalid = json.loads(json.dumps(weight_adapter))
+        invalid["paper_action"]["ticker_book"]["cohort_target_weights_nav"] = bad_weights
+        try:
+            _new_cohort(invalid, "test", "2026-10-01T00:00:00Z")
+            raise AssertionError("ambiguous frozen ticker book admitted")
+        except RuntimeError as exc:
+            assert code in str(exc)
+    duplicate_symbols = json.loads(json.dumps(weight_adapter))
+    duplicate_symbols["signal"]["positive_symbols"] = ["AAA", "AAA"]
+    try:
+        _new_cohort(duplicate_symbols, "test", "2026-10-01T00:00:00Z")
+        raise AssertionError("duplicate positive symbol admitted")
+    except RuntimeError as exc:
+        assert "FORWARD_COHORT_DUPLICATE_POSITIVE_SYMBOL" in str(exc)
+    nonfinite_prediction = json.loads(json.dumps(weight_adapter))
+    nonfinite_prediction["signal"]["predicted_fixed20_net_value_bps"]["AAA"] = float("inf")
+    try:
+        _new_cohort(nonfinite_prediction, "test", "2026-10-01T00:00:00Z")
+        raise AssertionError("nonfinite forward prediction admitted")
+    except RuntimeError as exc:
+        assert "FORWARD_COHORT_PREDICTION_NONFINITE" in str(exc)
+
     # Duplicate prior cohort IDs must never silently replace the original
     # first-seen registration clock, even if the later row is otherwise valid.
     with tempfile.TemporaryDirectory() as duplicate_dir:
