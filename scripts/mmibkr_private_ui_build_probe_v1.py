@@ -70,6 +70,8 @@ ALLOWED_ACCEPTANCE_FILES = {
     # Product #1301 exact read-only forward unknown-vs-zero evidence consumers.
     "ui-react/src/lib/arenaForwardEvidence.test.mjs",
     "ui-react/src/lib/forwardEvidenceExactIdentity.test.mjs",
+    # Selected #975 fe30: exact read-only Bot Console activity/offset identity guard.
+    "ui-react/src/lib/botConsoleRecentActivity.test.mjs",
     # Product #1309 read-only persisted paper history date/freshness guard.
     "ui-react/src/lib/paperBoundaryHistory.test.mjs",
 }
