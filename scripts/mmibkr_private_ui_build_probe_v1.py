@@ -63,6 +63,8 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.cross-timeframe-capability.test.mjs",
     "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.local-draft-storage.test.mjs",
     "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
+    # Product #1315 exact paper execution identity and trade-claim tri-state.
+    "ui-react/src/pages/ForwardExecutionEvidencePage.acceptance.test.mjs",
     # Product #1301 exact read-only forward unknown-vs-zero evidence consumers.
     "ui-react/src/lib/arenaForwardEvidence.test.mjs",
     "ui-react/src/lib/forwardEvidenceExactIdentity.test.mjs",
