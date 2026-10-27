@@ -285,6 +285,10 @@ SOURCE_ONLY_SELECTED_PRODUCT_MODULES = frozenset({
     "tests.test_survivor_paper_trade_evidence_materializer_v1",
     "tests.test_futures_range_tail_coverage_product_20261027",
     "tests.test_market_feed_range_orchestration_14th31ix",
+    # Exact selected P0/forward source-only regressions; no broker credentials or network.
+    "tests.test_selected_runtime_live_incumbent_preflight_v1",
+    "tests.test_selected_runtime_forward_completed_trade_admission_v1",
+    "tests.test_selected_runtime_cloud_daemon_v1",
 })
 SAFE_EXACT.update(SOURCE_ONLY_SELECTED_PRODUCT_MODULES)
 STATUS_STAGE_MODULES = {
