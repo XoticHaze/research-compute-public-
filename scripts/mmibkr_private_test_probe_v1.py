@@ -260,6 +260,18 @@ SOURCE_ONLY_MARKET_DATA_MODULES = frozenset({
     "tests.test_futures_signal_only_execution_authority_product_20261025",
 })
 SAFE_EXACT.update(SOURCE_ONLY_MARKET_DATA_MODULES)
+# Exact brokerless selected #975 Product regressions, never a live broker
+# probe. Each is source-only and must run inside the networkless test container.
+SOURCE_ONLY_SELECTED_PRODUCT_MODULES = frozenset({
+    "tests.test_autotuner_parameter_consumption",
+    "tests.test_capital_timestamp_binding_product_20261026",
+    "tests.test_cloud_operator_snapshot_forward_root_binding_product_20261026",
+    "tests.test_cloud_operator_snapshot_health_adapter_v1",
+    "tests.test_cloud_operator_snapshot_inventory_readonly_product_20261027",
+    "tests.test_crw_backtest_rth_asset_contract_product_20261027",
+    "tests.test_survivor_paper_trade_evidence_materializer_v1",
+})
+SAFE_EXACT.update(SOURCE_ONLY_SELECTED_PRODUCT_MODULES)
 STATUS_STAGE_MODULES = {
     "tests.test_market_features_provenance_contract",
 }
@@ -341,7 +353,7 @@ def pytest_container_command(image_tag: str, module: str) -> list[str]:
         "docker",
         "run",
         "--rm",
-        *(["--network", "none"] if module in (SOURCE_ONLY_P0_MODULES | SOURCE_ONLY_MODEL_LAB_MODULES | SOURCE_ONLY_PNL_MODULES | SOURCE_ONLY_MODEL_ISSUER_MODULES | SOURCE_ONLY_BUILDER_MODULES | SOURCE_ONLY_MARKET_DATA_MODULES) else []),
+        *(["--network", "none"] if module in (SOURCE_ONLY_P0_MODULES | SOURCE_ONLY_MODEL_LAB_MODULES | SOURCE_ONLY_PNL_MODULES | SOURCE_ONLY_MODEL_ISSUER_MODULES | SOURCE_ONLY_BUILDER_MODULES | SOURCE_ONLY_MARKET_DATA_MODULES | SOURCE_ONLY_SELECTED_PRODUCT_MODULES) else []),
         "-e",
         "ENABLE_LIVE_TRADING=0",
         "-e",
