@@ -974,18 +974,40 @@ def build(root: Path) -> dict[str, Any]:
         if reference_day is None:
             continue
         if source_day < reference_day:
-            states = [
-                row.get("status") for row in cohort_rows
+            program_rows = [
+                row for row in cohort_rows
                 if isinstance(row, dict) and row.get("program_id") == program
             ]
-            if states and all(state in {"RESOLVED", "LATE_REGISTRATION_REJECTED"} for state in states):
-                terminal_cohort_source_snapshots[program] = {
-                    "state": "FROZEN_TERMINAL_COHORT_SOURCE_HISTORY_NOT_ACTIVE_STALENESS",
-                    "source_max_date": source_max,
-                    "observed_completed_reference_session": completed_reference,
-                    "terminal_cohort_count": len(states),
-                }
-                continue
+            # Do not bless a caller-supplied RESOLVED label alone. Require
+            # each frozen terminal exit to be covered by a synchronized tape.
+            terminal_exits = []
+            for row in program_rows:
+                if row.get("status") != "RESOLVED":
+                    break
+                resolution = row.get("resolution")
+                if not isinstance(resolution, dict):
+                    break
+                exits = (
+                    [resolution.get("exit_date")]
+                    if program != "HOMEBUILDERS" else
+                    [obs.get("exit_date") for obs in (resolution.get("observations") or [])
+                     if isinstance(obs, dict) and obs.get("status") == "RESOLVED"]
+                )
+                if not exits or any(strict_session_day(value) is None for value in exits):
+                    break
+                terminal_exits.extend(strict_session_day(value) for value in exits)
+            else:
+                if (program_rows and terminal_exits
+                        and health.get("all_symbols_share_latest_date") is True
+                        and health.get("lagging_symbols_vs_source_max") == []
+                        and max(terminal_exits) <= source_day):
+                    terminal_cohort_source_snapshots[program] = {
+                        "state": "FROZEN_TERMINAL_COHORT_SOURCE_HISTORY_NOT_ACTIVE_STALENESS",
+                        "source_max_date": source_max,
+                        "observed_completed_reference_session": completed_reference,
+                        "terminal_cohort_count": len(program_rows),
+                    }
+                    continue
             forward_source_lag[program] = {
                 "state": "SOURCE_HISTORY_BEHIND_OBSERVED_COMPLETED_SESSION",
                 "source_max_date": source_max,
@@ -1416,12 +1438,21 @@ def self_test() -> None:
         assert stale_result["freshness"]["forward_source_lag_vs_observed_completed_session"]["SEMICONDUCTOR_SHARED_RIDGE"]["source_max_date"] == "2026-10-12"
         # The actual current ledger has only RESOLVED cohorts: its source
         # snapshots freeze at the original exit by design, not provider outage.
-        stale_ledger["cohorts"] = [{"cohort_id": "FROZEN_H20", "program_id": "SEMICONDUCTOR_SHARED_RIDGE", "status": "RESOLVED"}]
+        stale_ledger["freshness"]["source_health_by_program"]["SEMICONDUCTOR_SHARED_RIDGE"]["lagging_symbols_vs_source_max"] = []
+        stale_ledger["cohorts"] = [{
+            "cohort_id": "FROZEN_H20", "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+            "status": "RESOLVED", "resolution": {"exit_date": "2026-10-12"},
+        }]
         ledger_path.write_text(json.dumps(stale_ledger))
         terminal_result = build(root)
         assert terminal_result["freshness"]["forward_source_lag_vs_observed_completed_session"] == {}
         assert terminal_result["freshness"]["freshness_gap_visible"] is False
         assert terminal_result["freshness"]["terminal_cohort_source_snapshots"]["SEMICONDUCTOR_SHARED_RIDGE"]["state"] == "FROZEN_TERMINAL_COHORT_SOURCE_HISTORY_NOT_ACTIVE_STALENESS"
+        # Missing exit identity must fail closed even with a RESOLVED label.
+        stale_ledger["cohorts"][0]["resolution"] = {}
+        ledger_path.write_text(json.dumps(stale_ledger))
+        unbound_terminal = build(root)
+        assert unbound_terminal["freshness"]["freshness_gap_visible"] is True
         stale_ledger["cohorts"][0]["status"] = "OPEN"
         ledger_path.write_text(json.dumps(stale_ledger))
         active_result = build(root)
