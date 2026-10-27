@@ -1,13 +1,13 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "934005c8907c86fc2b0f998afb4ac625803c3279",
+  "source_ref": "237d726d286b306023b0dc631da5d82761bcba1a",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-exact-selected-ui-20261027",
-  "purpose": "Exact encrypted-vault-admitted selected #975/#888 Product #1280 operator UI Bot Console native acceptance and Vite build, no Cloudflare deploy/broker/live",
-  "request_nonce": "release-selected-934005c-native-ui-20261027-r1",
+  "requested_by": "continue-release-selected-bot-console-arena-20261027",
+  "purpose": "Exact encrypted-vault-admitted selected #975@237d after Product #1283/#1286/#1288 and UI #1284/#1285 no-loss consumption; native Bot Console Node acceptance and Vite build only, no broker/live/Cloudflare deploy",
+  "request_nonce": "release-selected-237d-arena-canonical-bar-activity-native-ui-20261027-r1",
   "authority": {
     "research_only": true,
     "broker": false,
