@@ -358,6 +358,21 @@ function snapshotGeneratedAtOrderKey(node) {
   return `${match[1]}.${(match[2] || '').padEnd(9, '0')}`;
 }
 
+// Four 15Min incumbent boundaries without a new publisher is not a current
+// operator observation. Preserve the durable last-known record but never
+// return it as an actionable/current browser or machine projection.
+const MAX_OPERATOR_SNAPSHOT_AGE_MS = 60 * 60 * 1000;
+export function operatorSnapshotFreshness(node, nowMs = Date.now()) {
+  const generated = snapshotGeneratedAtMs(node);
+  if (generated === null || !Number.isFinite(nowMs)) {
+    return { ok: false, reason: 'invalid_clock' };
+  }
+  const age = nowMs - generated;
+  if (age < -60_000) return { ok: false, reason: 'future' };
+  if (age > MAX_OPERATOR_SNAPSHOT_AGE_MS) return { ok: false, reason: 'stale' };
+  return { ok: true, age_ms: Math.max(0, age) };
+}
+
 export function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
   // A duplicate or malformed incoming runtime ID must never be silently
   // collapsed by Map last-wins semantics before the UI sees the snapshot.
@@ -812,6 +827,10 @@ export default {
         return json({ error: 'operator_snapshot_state_invalid' }, 502);
       }
 
+      const freshness = operatorSnapshotFreshness(snapshot);
+      if (!freshness.ok) {
+        return json({ error: 'operator_snapshot_not_current', reason: freshness.reason }, 503);
+      }
       return json({
         ok: true,
         schema: 'mmibkr.operator_console_machine_read.v1',
@@ -897,6 +916,10 @@ export default {
         snapshot = validateSnapshot(record.snapshot);
       } catch {
         return json({ error: 'operator_snapshot_state_invalid' }, 502);
+      }
+      const freshness = operatorSnapshotFreshness(snapshot);
+      if (!freshness.ok) {
+        return json({ error: 'operator_snapshot_not_current', reason: freshness.reason }, 503);
       }
       return json(snapshot, 200);
     }
