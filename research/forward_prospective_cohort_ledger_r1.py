@@ -192,9 +192,12 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
     if not math.isfinite(gross) or gross <= 0:
         raise RuntimeError("FORWARD_COHORT_TICKER_BOOK_GROSS_INVALID")
     ticker_weights = {k: v / gross for k, v in raw_weights.items()}
-    predictions = {
-        str(k): float(v) for k, v in (signal.get("predicted_fixed20_net_value_bps") or {}).items()
-    }
+    prediction_source = signal.get("predicted_fixed20_net_value_bps")
+    # Every funded positive ticker must have exactly one frozen prediction;
+    # partial prediction maps silently shrink forward calibration denominators.
+    if not isinstance(prediction_source, dict) or set(prediction_source) != set(positive):
+        raise RuntimeError("FORWARD_COHORT_PREDICTION_SYMBOL_MISMATCH")
+    predictions = {str(k): float(v) for k, v in prediction_source.items()}
     if any(not math.isfinite(value) for value in predictions.values()):
         raise RuntimeError("FORWARD_COHORT_PREDICTION_NONFINITE")
     return {
@@ -216,7 +219,7 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
         ),
         "expression_variant_start_signal_date": SEMICONDUCTOR_VARIANT_START_SIGNAL_DATE,
         "expression_variants": None,
-        "predicted_fixed20_net_value_bps": {s: predictions[s] for s in positive if s in predictions},
+        "predicted_fixed20_net_value_bps": {s: predictions[s] for s in positive},
         "positive_breadth": float(signal.get("positive_breadth", 0.0)),
         "benchmarks": ["CASH", "SMH", "QQQ", "EQUAL_WEIGHT_13"],
         "stock_round_trip_cost_bps": 25.0,
@@ -1205,6 +1208,18 @@ def self_test() -> None:
         raise AssertionError("nonfinite forward prediction admitted")
     except RuntimeError as exc:
         assert "FORWARD_COHORT_PREDICTION_NONFINITE" in str(exc)
+    for bad_predictions in (
+        {"AAA": 100.0},
+        {"AAA": 100.0, "BBB": 200.0, "FOREIGN": 300.0},
+        None,
+    ):
+        invalid = json.loads(json.dumps(weight_adapter))
+        invalid["signal"]["predicted_fixed20_net_value_bps"] = bad_predictions
+        try:
+            _new_cohort(invalid, "test", "2026-10-01T00:00:00Z")
+            raise AssertionError("partial/foreign frozen prediction population admitted")
+        except RuntimeError as exc:
+            assert "FORWARD_COHORT_PREDICTION_SYMBOL_MISMATCH" in str(exc)
 
     # Duplicate prior cohort IDs must never silently replace the original
     # first-seen registration clock, even if the later row is otherwise valid.
