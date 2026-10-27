@@ -21,7 +21,7 @@ function snapshot(source, runtimes) {
 
 const previousRow = {
   runtime_id: 'AMAT-15Min', symbol: 'AMAT', state: 'managing',
-  last_action: 'BUY', candidate_ready: true, broker_action: true,
+  last_action: 'BUY', disposition: 'eligible_execute', candidate_ready: true, broker_action: true,
   position: { position: 4 }, broker_symbol_position: { position: 4 },
   broker_symbol_position_observed: true,
   position_ownership: { attributed: true, source: 'previous_only' },
@@ -46,6 +46,9 @@ const fresh = result.snapshot.runtimes.find((row) => row.runtime_id === incoming
 assert.deepEqual(fresh, incomingRow, 'fresh incoming runtime must win unchanged');
 assert.equal(carried.state, 'unobserved');
 assert.equal(carried.last_action, 'NOT_OBSERVED');
+assert.equal(carried.disposition, 'not_due_this_boundary',
+  'carried runtime must not retain a previously actionable disposition');
+assert.equal(previousRow.disposition, 'eligible_execute', 'do not mutate previous durable evidence');
 assert.equal(carried.candidate_ready, false);
 assert.equal(carried.broker_action, false);
 assert.equal(carried.position, null);
