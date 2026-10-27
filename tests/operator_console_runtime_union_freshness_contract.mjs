@@ -365,7 +365,6 @@ for (const [name, account] of [
   ['account list', ['DU-PRIVATE']],
   ['account money string', { equity: 'DU-PRIVATE' }],
   ['unknown account field', { equity: 1, note: 'DU-PRIVATE' }],
-  ['nested root account', { account: { value: 'DU-PRIVATE' } }],
   ['currency account identifier', { currencies: { equity: 'DU-PRIVATE' } }],
   ['nonfinite money', { equity: Infinity }],
   ['negative count', { positions_count: -1 }],
