@@ -47,7 +47,16 @@ def _load(root: Path, name: str) -> dict[str, Any] | None:
     for path in matches[1:]:
         if hashlib.sha256(path.read_bytes()).digest() != digest:
             raise ValueError(f"CONFLICTING_SCOREBOARD_INPUT:{name}")
-    payload = json.loads(raw)
+    # The canonical prospective ledger rejects ambiguous JSON on its own
+    # first-seen read path. Preserve that exact parser on scoreboard consumption
+    # so a last-wins duplicate cohort/clock cannot gain different report credit.
+    if name == "forward_prospective_cohort_ledger_r1.json":
+        payload = json.loads(
+            raw, object_pairs_hook=_reject_adapter_duplicate_keys,
+            parse_constant=_reject_adapter_nonfinite_constant,
+        )
+    else:
+        payload = json.loads(raw)
     if not isinstance(payload, dict):
         raise ValueError(f"INVALID_SCOREBOARD_INPUT:{name}")
     return payload
@@ -1706,6 +1715,22 @@ def self_test() -> None:
         fresh = current / name
         fresh.write_text(json.dumps({"source": "fresh"}))
         assert _load_prospective_ledger(root) == {"source": "fresh"}
+        # The prospective producer's own strict prior parser rejects these
+        # ambiguous ledger bytes. The scoreboard must reject them too.
+        for malformed, code in (
+            ('{"source":"fresh","cohorts":[],"cohorts":[{"cohort_id":"FORGED"}]}',
+             "FORWARD_ADAPTER_DUPLICATE_JSON_KEY"),
+            ('{"source":"fresh","cohorts":[{"first_registered_at":NaN}]}',
+             "FORWARD_ADAPTER_NONFINITE_JSON_CONSTANT"),
+        ):
+            fresh.write_text(malformed)
+            try:
+                _load_prospective_ledger(root)
+            except RuntimeError as exc:
+                assert str(exc) == code
+            else:
+                raise AssertionError("ambiguous prospective ledger JSON admitted")
+        fresh.write_text(json.dumps({"source": "fresh"}))
         duplicate = current / "nested-copy"
         duplicate.mkdir()
         (duplicate / name).write_text(json.dumps({"source": "different-current"}))
