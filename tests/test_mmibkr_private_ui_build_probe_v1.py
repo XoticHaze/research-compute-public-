@@ -618,7 +618,7 @@ def test_safe_vite_marker_and_fixed_receipt_class_in_diagnose_mode(tmp_path, cap
 
 
 def test_selected_builder_coverage_review_exact_node_acceptance_only():
-    # Collision-safe adoption from selected #2017; no private UI execution.
+    # Selected #975 Product #1254: pure Node coverage/refresh truth test.
     exact = "ui-react/src/lib/builderBacktestCoverageReview.test.mjs"
     assert mod.validate_acceptance_file(exact) == exact
     for denied in (
