@@ -198,6 +198,9 @@ SAFE_EXACT = {
     # Admission of test names is not a trusted placement or private execution.
     "tests.test_selected_runtime_forward_execution_lifecycle_v1",
     "tests.test_selected_runtime_forward_lifecycle_ledger_failclosed_product_20261027",
+    # Exact selected #975 read-only operator snapshot lifecycle projection;
+    # pytest tmp_path/monkeypatch only, no network or broker imports.
+    "tests.test_cloud_operator_snapshot_forward_lifecycle_v1",
     "tests.test_cc44_source_cache_first_12m_r1",
     "tests.test_cc44_source_cache_session_gap_guard_r1",
     "tests.test_builder_cross_lane_condition_ids_product_20261027",
