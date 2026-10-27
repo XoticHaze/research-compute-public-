@@ -135,12 +135,70 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
     signal = adapter.get("signal") or {}
 
     if program == "HOMEBUILDERS":
-        symbols = [str(x) for x in signal.get("admitted_symbols") or []]
-        horizons = {str(k): int(v) for k, v in (signal.get("duration_horizon_sessions_by_symbol") or {}).items()}
+        # Frozen cohort membership must be one unique, nonempty ticker per row.
+        # Duplicate names otherwise double-count one security in forward science.
+        raw_symbols = signal.get("admitted_symbols") or []
+        if not isinstance(raw_symbols, list) or not raw_symbols or any(
+            not isinstance(symbol, str)
+            or re.fullmatch(r"[A-Z][A-Z0-9.-]*", symbol) is None
+            for symbol in raw_symbols
+        ):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_SYMBOL_INVALID")
+        symbols = list(raw_symbols)
         if not symbols:
             return None
-        if set(symbols) - set(horizons):
-            raise RuntimeError("Homebuilders admitted symbol missing frozen duration horizon")
+        if len(symbols) != len(set(symbols)):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_DUPLICATE_SYMBOL")
+        raw_horizons = signal.get("duration_horizon_sessions_by_symbol")
+        if not isinstance(raw_horizons, dict) or set(raw_horizons) != set(symbols):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_HORIZON_MEMBERSHIP_MISMATCH")
+        horizons: dict[str, int] = {}
+        for symbol in symbols:
+            value = raw_horizons[symbol]
+            # bool/int coercion and fractional/zero/negative horizons can
+            # silently create an impossible entry/exit chronology.
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value < 1
+                or int(value) != value
+            ):
+                raise RuntimeError("FORWARD_HOMEBUILDERS_HORIZON_INVALID")
+            horizons[symbol] = int(value)
+        # A positive integer can still violate the frozen adaptive-duration
+        # envelope; an arbitrary long horizon must not silently join science.
+        timing = adapter.get("timing") or {}
+        allowed_source = timing.get("candidate_holding_horizons_sessions")
+        if (
+            not isinstance(allowed_source, list)
+            or not allowed_source
+            or any(
+                isinstance(h, bool) or not isinstance(h, int) or h < 1
+                for h in allowed_source
+            )
+        ):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_ALLOWED_HORIZON_ENVELOPE_INVALID")
+        allowed_horizons = set(allowed_source)
+        if any(horizon not in allowed_horizons for horizon in horizons.values()):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_HORIZON_OUTSIDE_FROZEN_ENVELOPE")
+        # Partial forecast maps silently shrink forward calibration sample size,
+        # even while the same funded symbols contribute realized observations.
+        prediction_source = signal.get("predicted_fixed20_net25_bps")
+        if not isinstance(prediction_source, dict) or set(prediction_source) != set(symbols):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_PREDICTION_SYMBOL_MISMATCH")
+        predictions: dict[str, float] = {}
+        for symbol in symbols:
+            try:
+                value = prediction_source[symbol]
+                if isinstance(value, bool):
+                    raise ValueError("boolean prediction")
+                prediction = float(value)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise RuntimeError("FORWARD_HOMEBUILDERS_PREDICTION_INVALID") from exc
+            if not math.isfinite(prediction):
+                raise RuntimeError("FORWARD_HOMEBUILDERS_PREDICTION_INVALID")
+            predictions[symbol] = prediction
         return {
             "cohort_id": _cohort_id(program, signal_date, adapter_sha256),
             "program_id": program,
@@ -152,11 +210,7 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
             "execution_delay_sessions": 1,
             "symbols": symbols,
             "horizon_sessions_by_symbol": {s: horizons[s] for s in symbols},
-            "admission_score_fixed20_net25_bps": {
-                s: float((signal.get("predicted_fixed20_net25_bps") or {})[s])
-                for s in symbols
-                if s in (signal.get("predicted_fixed20_net25_bps") or {})
-            },
+            "admission_score_fixed20_net25_bps": {s: predictions[s] for s in symbols},
             "benchmarks": ["ITB", "QQQ"],
             "stock_round_trip_cost_bps": 25.0,
             "resolution": None,
@@ -197,9 +251,27 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
     # partial prediction maps silently shrink forward calibration denominators.
     if not isinstance(prediction_source, dict) or set(prediction_source) != set(positive):
         raise RuntimeError("FORWARD_COHORT_PREDICTION_SYMBOL_MISMATCH")
-    predictions = {str(k): float(v) for k, v in prediction_source.items()}
-    if any(not math.isfinite(value) for value in predictions.values()):
-        raise RuntimeError("FORWARD_COHORT_PREDICTION_NONFINITE")
+    predictions: dict[str, float] = {}
+    for symbol in positive:
+        raw_prediction = prediction_source[symbol]
+        if isinstance(raw_prediction, bool):
+            raise RuntimeError("FORWARD_COHORT_PREDICTION_INVALID")
+        try:
+            prediction = float(raw_prediction)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise RuntimeError("FORWARD_COHORT_PREDICTION_INVALID") from exc
+        if not math.isfinite(prediction):
+            raise RuntimeError("FORWARD_COHORT_PREDICTION_NONFINITE")
+        predictions[symbol] = prediction
+    raw_breadth = signal.get("positive_breadth", 0.0)
+    if isinstance(raw_breadth, bool):
+        raise RuntimeError("FORWARD_COHORT_POSITIVE_BREADTH_INVALID")
+    try:
+        positive_breadth = float(raw_breadth)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise RuntimeError("FORWARD_COHORT_POSITIVE_BREADTH_INVALID") from exc
+    if not math.isfinite(positive_breadth):
+        raise RuntimeError("FORWARD_COHORT_POSITIVE_BREADTH_INVALID")
     return {
         "cohort_id": _cohort_id(program, signal_date, adapter_sha256),
         "program_id": program,
@@ -220,7 +292,7 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
         "expression_variant_start_signal_date": SEMICONDUCTOR_VARIANT_START_SIGNAL_DATE,
         "expression_variants": None,
         "predicted_fixed20_net_value_bps": {s: predictions[s] for s in positive},
-        "positive_breadth": float(signal.get("positive_breadth", 0.0)),
+        "positive_breadth": positive_breadth,
         "benchmarks": ["CASH", "SMH", "QQQ", "EQUAL_WEIGHT_13"],
         "stock_round_trip_cost_bps": 25.0,
         "industry_round_trip_cost_bps": 10.0,
@@ -1160,6 +1232,78 @@ def self_test() -> None:
         except RuntimeError as exc:
             assert "FORWARD_ADAPTER_SIGNAL_DATE_INVALID" in str(exc)
     assert _canonical_signal_date("2026-09-11") == "2026-09-11"
+    # A duplicated Homebuilders ticker used to count as two independent
+    # observations; bool/zero/fractional horizons could distort frozen exits.
+    home_signal = {
+        "admitted_symbols": ["CCS", "DHI"],
+        "duration_horizon_sessions_by_symbol": {"CCS": 5, "DHI": 10},
+        "predicted_fixed20_net25_bps": {"CCS": 120.0, "DHI": -25.0},
+    }
+    home_adapter = {
+        "program_id": "HOMEBUILDERS",
+        "signal_date": "2026-09-11",
+        "signal": home_signal,
+        "timing": {"candidate_holding_horizons_sessions": [5, 10]},
+    }
+    admitted_home = _new_cohort(home_adapter, "test", "2026-09-11T00:00:00Z")
+    assert admitted_home is not None
+    assert admitted_home["symbols"] == ["CCS", "DHI"]
+    assert admitted_home["horizon_sessions_by_symbol"] == {"CCS": 5, "DHI": 10}
+    for bad_signal, code in [
+        ({**home_signal, "admitted_symbols": ["CCS", "CCS"]},
+         "FORWARD_HOMEBUILDERS_DUPLICATE_SYMBOL"),
+        ({**home_signal, "admitted_symbols": ["CCS", ""]},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "admitted_symbols": []},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "admitted_symbols": False},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "admitted_symbols": ["CCS", "ccs"]},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "admitted_symbols": ["CCS", "CCS "]},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "admitted_symbols": ["CCS", "CCS\u200b"]},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": 5}},
+         "FORWARD_HOMEBUILDERS_HORIZON_MEMBERSHIP_MISMATCH"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": 5, "DHI": 10, "X": 2}},
+         "FORWARD_HOMEBUILDERS_HORIZON_MEMBERSHIP_MISMATCH"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": 0, "DHI": 10}},
+         "FORWARD_HOMEBUILDERS_HORIZON_INVALID"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": -1, "DHI": 10}},
+         "FORWARD_HOMEBUILDERS_HORIZON_INVALID"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": 1.5, "DHI": 10}},
+         "FORWARD_HOMEBUILDERS_HORIZON_INVALID"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": True, "DHI": 10}},
+         "FORWARD_HOMEBUILDERS_HORIZON_INVALID"),
+        ({**home_signal, "predicted_fixed20_net25_bps": {"CCS": 120.0}},
+         "FORWARD_HOMEBUILDERS_PREDICTION_SYMBOL_MISMATCH"),
+        ({**home_signal, "predicted_fixed20_net25_bps": {"CCS": 120.0, "DHI": -25.0, "X": 5.0}},
+         "FORWARD_HOMEBUILDERS_PREDICTION_SYMBOL_MISMATCH"),
+        ({**home_signal, "predicted_fixed20_net25_bps": {"CCS": 120.0, "DHI": float("nan")}},
+         "FORWARD_HOMEBUILDERS_PREDICTION_INVALID"),
+        ({**home_signal, "predicted_fixed20_net25_bps": {"CCS": True, "DHI": -25.0}},
+         "FORWARD_HOMEBUILDERS_PREDICTION_INVALID"),
+    ]:
+        try:
+            _new_cohort({**home_adapter, "signal": bad_signal}, "test", "2026-09-11T00:00:00Z")
+            raise AssertionError("ambiguous Homebuilders frozen cohort admitted")
+        except RuntimeError as exc:
+            assert code in str(exc)
+    for bad_timing, code in [
+        ({"candidate_holding_horizons_sessions": [5]},
+         "FORWARD_HOMEBUILDERS_HORIZON_OUTSIDE_FROZEN_ENVELOPE"),
+        ({"candidate_holding_horizons_sessions": [5, 10, 0]},
+         "FORWARD_HOMEBUILDERS_ALLOWED_HORIZON_ENVELOPE_INVALID"),
+        ({"candidate_holding_horizons_sessions": [5, True]},
+         "FORWARD_HOMEBUILDERS_ALLOWED_HORIZON_ENVELOPE_INVALID"),
+        ({}, "FORWARD_HOMEBUILDERS_ALLOWED_HORIZON_ENVELOPE_INVALID"),
+    ]:
+        try:
+            _new_cohort({**home_adapter, "timing": bad_timing}, "test", "2026-09-11T00:00:00Z")
+            raise AssertionError("Homebuilders duration outside frozen envelope admitted")
+        except RuntimeError as exc:
+            assert code in str(exc)
     # Frozen positive-symbol membership and ticker-book weights must match.
     # A foreign weight used to dilute the realized book without a signal,
     # and a missing positive weight used to silently drop a position.
@@ -1208,6 +1352,26 @@ def self_test() -> None:
         raise AssertionError("nonfinite forward prediction admitted")
     except RuntimeError as exc:
         assert "FORWARD_COHORT_PREDICTION_NONFINITE" in str(exc)
+    for bad_prediction, code in [
+        (True, "FORWARD_COHORT_PREDICTION_INVALID"),
+        ("not-a-number", "FORWARD_COHORT_PREDICTION_INVALID"),
+        (float("inf"), "FORWARD_COHORT_PREDICTION_NONFINITE"),
+    ]:
+        invalid = json.loads(json.dumps(weight_adapter))
+        invalid["signal"]["predicted_fixed20_net_value_bps"]["AAA"] = bad_prediction
+        try:
+            _new_cohort(invalid, "test", "2026-10-01T00:00:00Z")
+            raise AssertionError("malformed semiconductor prediction admitted")
+        except RuntimeError as exc:
+            assert code in str(exc)
+    for bad_breadth in (True, float("nan"), float("inf"), "not-a-number"):
+        invalid = json.loads(json.dumps(weight_adapter))
+        invalid["signal"]["positive_breadth"] = bad_breadth
+        try:
+            _new_cohort(invalid, "test", "2026-10-01T00:00:00Z")
+            raise AssertionError("nonfinite/boolean semiconductor breadth admitted")
+        except RuntimeError as exc:
+            assert "FORWARD_COHORT_POSITIVE_BREADTH_INVALID" in str(exc)
     for bad_predictions in (
         {"AAA": 100.0},
         {"AAA": 100.0, "BBB": 200.0, "FOREIGN": 300.0},
