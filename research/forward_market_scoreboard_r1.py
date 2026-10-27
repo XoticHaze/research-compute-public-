@@ -47,16 +47,14 @@ def _load(root: Path, name: str) -> dict[str, Any] | None:
     for path in matches[1:]:
         if hashlib.sha256(path.read_bytes()).digest() != digest:
             raise ValueError(f"CONFLICTING_SCOREBOARD_INPUT:{name}")
-    # The canonical prospective ledger rejects ambiguous JSON on its own
-    # first-seen read path. Preserve that exact parser on scoreboard consumption
-    # so a last-wins duplicate cohort/clock cannot gain different report credit.
-    if name == "forward_prospective_cohort_ledger_r1.json":
-        payload = json.loads(
-            raw, object_pairs_hook=_reject_adapter_duplicate_keys,
-            parse_constant=_reject_adapter_nonfinite_constant,
-        )
-    else:
-        payload = json.loads(raw)
+    # Every explicitly named canonical producer can affect forward score/health.
+    # Last-wins duplicate keys or NaN must not silently change P249/P46/P558/
+    # CLO freshness, matched economics or prospective ledger identities.
+    # Reuse the existing strict prospective JSON parser, not a second gate.
+    payload = json.loads(
+        raw, object_pairs_hook=_reject_adapter_duplicate_keys,
+        parse_constant=_reject_adapter_nonfinite_constant,
+    )
     if not isinstance(payload, dict):
         raise ValueError(f"INVALID_SCOREBOARD_INPUT:{name}")
     return payload
@@ -1716,6 +1714,31 @@ def self_test() -> None:
                         raise AssertionError("conflicting canonical input was silently accepted")
             first.unlink()
             second.unlink()
+        # New exact canonical producer falsifier: the old default json.loads
+        # silently took the last duplicate freshness/score key. Unrelated
+        # artifact files remain ignored; only these named producer inputs fail.
+        for canonical in (
+            "p46_forward_observation_v2.json",
+            "forward_p249_p266_shadow_r1.json",
+            "forward_p558_current_core_shadow_r1.json",
+            "forward_senior_clo_current_core_shadow_r1.json",
+            "p438_semiconductor_forward_mtd_r1.json",
+            "forward_prospective_cohort_ledger_r1.json",
+        ):
+            target = root / canonical
+            for ambiguous in (
+                '{"source_health":{"source_max_date":"2026-10-23","source_max_date":"2026-10-12"}}',
+                '{"source_health":{"source_max_date":"2026-10-23"},"source_health":{"source_max_date":"2026-10-12"}}',
+                '{"source_health":{"source_max_date":"2026-10-23"},"score":NaN}',
+            ):
+                target.write_text(ambiguous)
+                try:
+                    _load(root, canonical)
+                except ValueError:
+                    pass
+                else:
+                    raise AssertionError("ambiguous canonical scoreboard JSON was silently accepted")
+            target.unlink()
         invalid = root / "forward_p249_p266_shadow_r1.json"
         invalid.write_text("[]")
         try:
