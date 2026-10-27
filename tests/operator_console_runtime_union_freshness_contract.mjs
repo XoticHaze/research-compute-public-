@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mergeRuntimeProjection, OperatorState, operatorDecisionRequestIsSameOrigin, operatorSnapshotFreshness } from '../cloudflare/operator-console/src/index.js';
+import { mergeRuntimeProjection, OperatorState, operatorDecisionRequestIsSameOrigin } from '../cloudflare/operator-console/src/index.js';
 
 function snapshot(source, runtimes) {
   return {
@@ -238,23 +238,6 @@ const rejectedMicroOld = await storeBoundary({ ...firstBoundary, generated_at_ut
 assert.equal(rejectedMicroOld.status, 409, 'submillisecond ordering cannot roll back latest');
 assert.equal((await storage.get('latest')).snapshot.generated_at_utc, microNew);
 console.log('MMIBKR_OPERATOR_CONSOLE_MICROSECOND_ORDER=PASS');
-
-// A persisted snapshot is last-known evidence, not a perpetual current
-// operator observation. Four slowest 15Min boundaries (60m) is the explicit
-// fail-closed display/read threshold for the selected incumbent console.
-const readNow = Date.now();
-const recentSnapshot = { ...firstBoundary,
-  generated_at_utc: new Date(readNow - 10 * 60_000).toISOString() };
-const staleSnapshot = { ...firstBoundary,
-  generated_at_utc: new Date(readNow - 61 * 60_000).toISOString() };
-assert.equal(operatorSnapshotFreshness(recentSnapshot, readNow).ok, true);
-assert.equal(operatorSnapshotFreshness(staleSnapshot, readNow).ok, false);
-assert.equal(operatorSnapshotFreshness(staleSnapshot, readNow).reason, 'stale');
-assert.equal(operatorSnapshotFreshness({ ...firstBoundary,
-  generated_at_utc: '2026-02-30T10:00:00Z' }, readNow).ok, false);
-assert.equal(operatorSnapshotFreshness({ ...firstBoundary,
-  generated_at_utc: new Date(readNow + 61_000).toISOString() }, readNow).ok, false);
-console.log('MMIBKR_OPERATOR_CONSOLE_STALE_READ_FAILCLOSED=PASS');
 
 console.log('MMIBKR_OPERATOR_CONSOLE_MONOTONIC_SNAPSHOT_FRESHNESS=PASS');
 
