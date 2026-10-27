@@ -197,9 +197,27 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
     # partial prediction maps silently shrink forward calibration denominators.
     if not isinstance(prediction_source, dict) or set(prediction_source) != set(positive):
         raise RuntimeError("FORWARD_COHORT_PREDICTION_SYMBOL_MISMATCH")
-    predictions = {str(k): float(v) for k, v in prediction_source.items()}
-    if any(not math.isfinite(value) for value in predictions.values()):
-        raise RuntimeError("FORWARD_COHORT_PREDICTION_NONFINITE")
+    predictions: dict[str, float] = {}
+    for symbol in positive:
+        raw_prediction = prediction_source[symbol]
+        if isinstance(raw_prediction, bool):
+            raise RuntimeError("FORWARD_COHORT_PREDICTION_INVALID")
+        try:
+            prediction = float(raw_prediction)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise RuntimeError("FORWARD_COHORT_PREDICTION_INVALID") from exc
+        if not math.isfinite(prediction):
+            raise RuntimeError("FORWARD_COHORT_PREDICTION_NONFINITE")
+        predictions[symbol] = prediction
+    raw_breadth = signal.get("positive_breadth", 0.0)
+    if isinstance(raw_breadth, bool):
+        raise RuntimeError("FORWARD_COHORT_POSITIVE_BREADTH_INVALID")
+    try:
+        positive_breadth = float(raw_breadth)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise RuntimeError("FORWARD_COHORT_POSITIVE_BREADTH_INVALID") from exc
+    if not math.isfinite(positive_breadth):
+        raise RuntimeError("FORWARD_COHORT_POSITIVE_BREADTH_INVALID")
     return {
         "cohort_id": _cohort_id(program, signal_date, adapter_sha256),
         "program_id": program,
@@ -220,7 +238,7 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
         "expression_variant_start_signal_date": SEMICONDUCTOR_VARIANT_START_SIGNAL_DATE,
         "expression_variants": None,
         "predicted_fixed20_net_value_bps": {s: predictions[s] for s in positive},
-        "positive_breadth": float(signal.get("positive_breadth", 0.0)),
+        "positive_breadth": positive_breadth,
         "benchmarks": ["CASH", "SMH", "QQQ", "EQUAL_WEIGHT_13"],
         "stock_round_trip_cost_bps": 25.0,
         "industry_round_trip_cost_bps": 10.0,
@@ -1208,6 +1226,26 @@ def self_test() -> None:
         raise AssertionError("nonfinite forward prediction admitted")
     except RuntimeError as exc:
         assert "FORWARD_COHORT_PREDICTION_NONFINITE" in str(exc)
+    for bad_prediction, code in [
+        (True, "FORWARD_COHORT_PREDICTION_INVALID"),
+        ("not-a-number", "FORWARD_COHORT_PREDICTION_INVALID"),
+        (float("inf"), "FORWARD_COHORT_PREDICTION_NONFINITE"),
+    ]:
+        invalid = json.loads(json.dumps(weight_adapter))
+        invalid["signal"]["predicted_fixed20_net_value_bps"]["AAA"] = bad_prediction
+        try:
+            _new_cohort(invalid, "test", "2026-10-01T00:00:00Z")
+            raise AssertionError("malformed semiconductor prediction admitted")
+        except RuntimeError as exc:
+            assert code in str(exc)
+    for bad_breadth in (True, float("nan"), float("inf"), "not-a-number"):
+        invalid = json.loads(json.dumps(weight_adapter))
+        invalid["signal"]["positive_breadth"] = bad_breadth
+        try:
+            _new_cohort(invalid, "test", "2026-10-01T00:00:00Z")
+            raise AssertionError("nonfinite/boolean semiconductor breadth admitted")
+        except RuntimeError as exc:
+            assert "FORWARD_COHORT_POSITIVE_BREADTH_INVALID" in str(exc)
     for bad_predictions in (
         {"AAA": 100.0},
         {"AAA": 100.0, "BBB": 200.0, "FOREIGN": 300.0},
