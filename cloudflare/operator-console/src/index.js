@@ -524,6 +524,9 @@ function rejectSensitiveSnapshotFields(value, depth = 0) {
     return;
   }
   for (const [key, child] of Object.entries(value)) {
+    // Canonical public snapshot keys are ASCII. Reject Unicode confusables,
+    // invisible separators and non-ASCII aliases before any key matching.
+    if (!/^[\x20-\x7e]+$/.test(key)) throw new Error('snapshot_sensitive_field_rejected');
     // Fold Unicode compatibility forms before the ASCII key denylist.
     // Fullwidth ａｃｃｏｕｎｔｉｄ must not bypass account-ID rejection.
     const normalized = key.normalize('NFKC').replace(/[^a-z0-9]/gi, '').toLowerCase();
