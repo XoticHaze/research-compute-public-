@@ -355,7 +355,11 @@ def pytest_container_command(image_tag: str, module: str) -> list[str]:
         "docker",
         "run",
         "--rm",
-        *(["--network", "none"] if module.startswith(SAFE_PREFIXES) or any(token in module.lower() for token in DENY_TOKENS) or module in (SOURCE_ONLY_P0_MODULES | SOURCE_ONLY_MODEL_LAB_MODULES | SOURCE_ONLY_PNL_MODULES | SOURCE_ONLY_MODEL_ISSUER_MODULES | SOURCE_ONLY_BUILDER_MODULES | SOURCE_ONLY_MARKET_DATA_MODULES | SOURCE_ONLY_SELECTED_PRODUCT_MODULES) else []),
+        # All admitted tests are source-only/brokerless. Never grant a
+        # selected private test module network egress merely because its
+        # exact name lacks an authority-sensitive token.
+        "--network",
+        "none",
         "-e",
         "ENABLE_LIVE_TRADING=0",
         "-e",
