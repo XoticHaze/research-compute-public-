@@ -1,9 +1,8 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "8110c69410de32b0ba5a378b420c21163fa02b03",
+  "source_ref": "6f913a2c6370159dd5f5469d1d62baed2b59426d",
   "test_modules": [
-    "tests.test_cloud_operator_snapshot_v1",
-    "tests.test_cloud_operator_snapshot_health_adapter_v1"
+    "tests.test_promotion_review_store"
   ],
   "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
@@ -12,8 +11,8 @@
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-selected-8110-privacy-existing-native-20261027",
-  "purpose": "Exact selected #975 8110 private operator snapshot privacy changed-source regression using two already-allowlisted networkless modules, encrypted vault; no broker, live, UI deploy or promotion",
+  "requested_by": "continue-release-selected-6f913-product1302-native-existing-backend-20261027",
+  "purpose": "Exact selected #975 6f913 Pilot funded-capital Promotion Review backend changed-source existing networkless test; no promotion, broker or live",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -21,8 +20,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "release-selected-8110-privacy-allowlisted-native-20261027-r1",
+  "request_nonce": "release-selected-6f913-pilot-backend-native-20261027-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "8110c69410de32b0ba5a378b420c21163fa02b03",
+  "current_private_reference": "6f913a2c6370159dd5f5469d1d62baed2b59426d",
   "parity_public_key_b64": ""
 }
