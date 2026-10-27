@@ -13,12 +13,12 @@ from typing import Any
 if __package__:
     from .forward_p249_p266_shadow_r1 import current_publication_admitted
     from .forward_prospective_cohort_ledger_r1 import (
-        _reject_adapter_duplicate_keys, _reject_adapter_nonfinite_constant,
+        CONTRACTS, _reject_adapter_duplicate_keys, _reject_adapter_nonfinite_constant,
     )
 else:
     from forward_p249_p266_shadow_r1 import current_publication_admitted
     from forward_prospective_cohort_ledger_r1 import (
-        _reject_adapter_duplicate_keys, _reject_adapter_nonfinite_constant,
+        CONTRACTS, _reject_adapter_duplicate_keys, _reject_adapter_nonfinite_constant,
     )
 
 SCHEMA = "research.forward_market_scoreboard_r1"
@@ -540,14 +540,23 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
     # as reaching the stronger full-promotion floor.
     actual_registered = len(rows)
     actual_resolved = sum(c.get("status") == "RESOLVED" for c in rows)
-    reported_registered = summary.get("registered_cohorts", actual_registered)
-    reported_resolved = summary.get("resolved_cohorts", actual_resolved)
-    if (
-        type(reported_registered) is not int or type(reported_resolved) is not int
-        or reported_registered != actual_registered
-        or reported_resolved != actual_resolved
-    ):
+    actual_open = sum(c.get("status") in {"REGISTERED", "AWAITING_ENTRY_SESSION", "OPEN", "PARTIALLY_RESOLVED"} for c in rows)
+    actual_late = sum(c.get("status") == "LATE_REGISTRATION_REJECTED" for c in rows)
+    actual_counts = (actual_registered, actual_resolved, actual_open, actual_late)
+    reported_counts = (
+        summary.get("registered_cohorts", actual_registered),
+        summary.get("resolved_cohorts", actual_resolved),
+        summary.get("open_cohorts", actual_open),
+        summary.get("late_registration_rejections", actual_late),
+    )
+    if any(type(value) is not int for value in reported_counts) or reported_counts != actual_counts:
         raise ValueError(f"PROSPECTIVE_COHORT_SUMMARY_COUNT_MISMATCH:{program_id}")
+    # The stronger full-promotion floor is an owning producer contract, not
+    # caller-authored summary metadata (e.g. 1 replacing frozen fixed20).
+    contract_floor = CONTRACTS.get(program_id, {}).get("minimum_resolved_for_promotion")
+    reported_floor = summary.get("minimum_resolved_for_promotion", contract_floor)
+    if type(reported_floor) is not type(contract_floor) or reported_floor != contract_floor:
+        raise ValueError(f"PROSPECTIVE_COHORT_PROMOTION_FLOOR_MISMATCH:{program_id}")
     current = max(
         rows,
         key=lambda c: (str(c.get("signal_date") or ""), str(c.get("first_registered_at") or "")),
@@ -559,9 +568,9 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
         "market_data_asof": ledger.get("market_data_asof"),
         "registered_cohorts": actual_registered,
         "resolved_cohorts": actual_resolved,
-        "open_cohorts": int(summary.get("open_cohorts", 0) or 0),
-        "late_registration_rejections": int(summary.get("late_registration_rejections", 0) or 0),
-        "minimum_resolved_for_promotion": summary.get("minimum_resolved_for_promotion"),
+        "open_cohorts": actual_open,
+        "late_registration_rejections": actual_late,
+        "minimum_resolved_for_promotion": contract_floor,
         "promotion_authority": False,
     }
     out["forward_science_stages"] = _separate_forward_science_stages(out)
@@ -1371,6 +1380,28 @@ def self_test() -> None:
             assert str(exc) == "PROSPECTIVE_COHORT_SUMMARY_COUNT_MISMATCH:SEMICONDUCTOR_SHARED_RIDGE"
         else:
             raise AssertionError("unverified summary claimed extra registered cohorts")
+        for status, wrong_field in (("OPEN", "open_cohorts"), ("LATE_REGISTRATION_REJECTED", "late_registration_rejections")):
+            tampered = {**ledger, "cohorts": [{**frozen, "status": status}],
+                        "summary": {"SEMICONDUCTOR_SHARED_RIDGE": {
+                            "registered_cohorts": 1, "resolved_cohorts": 0,
+                            "open_cohorts": 0, "late_registration_rejections": 0,
+                            "minimum_resolved_for_promotion": 20}}}
+            try:
+                _prospective_state(tampered, "SEMICONDUCTOR_SHARED_RIDGE")
+            except ValueError as exc:
+                assert str(exc) == "PROSPECTIVE_COHORT_SUMMARY_COUNT_MISMATCH:SEMICONDUCTOR_SHARED_RIDGE"
+            else:
+                raise AssertionError(f"unverified {wrong_field} hid {status} source row")
+        floor_spoof = {**ledger, "summary": {"SEMICONDUCTOR_SHARED_RIDGE": {
+            **ledger["summary"]["SEMICONDUCTOR_SHARED_RIDGE"],
+            "minimum_resolved_for_promotion": 1,
+        }}}
+        try:
+            _prospective_state(floor_spoof, "SEMICONDUCTOR_SHARED_RIDGE")
+        except ValueError as exc:
+            assert str(exc) == "PROSPECTIVE_COHORT_PROMOTION_FLOOR_MISMATCH:SEMICONDUCTOR_SHARED_RIDGE"
+        else:
+            raise AssertionError("one resolved cohort lowered frozen full-promotion floor")
         assert state["forward_science_stages"]["full_promotion_sample_floor_reached"] is False
         assert state["mean_ticker_book_excess_vs_smh_bps"] == -18.3719
         assert state["mean_ticker_book_excess_vs_smh_net_bps"] == -8.3719
