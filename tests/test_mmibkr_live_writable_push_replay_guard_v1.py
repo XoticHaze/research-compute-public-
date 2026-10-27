@@ -62,19 +62,24 @@ class LiveWritablePushReplayGuardTests(unittest.TestCase):
         self.assertIn("LIVE_WRITABLE_PUSH_DISPATCH_REQUIRES_INDEPENDENT_ADMISSION=1", outcome.stdout)
         self.assertEqual(post, "")
 
-    def test_readonly_pool_marker_preserves_exact_dispatch(self):
+    def test_readonly_pool_push_requires_independent_operator_issuer(self):
         outcome, post = self._run("+gateway_pool_5h_readonly_dispatch_request_20261022_abcdef: 15m")
-        self.assertEqual(outcome.returncode, 0, outcome.stderr)
-        self.assertIn("LIVE_OWNER_FIRE_DISPATCHED_ADMISSION_ONLY=true", outcome.stdout)
-        self.assertIn("LIVE_OWNER_FIRE_DISPATCHED_MODE=gateway_pool_5h", outcome.stdout)
-        self.assertIn("inputs[admission_only]=true", post)
-        self.assertNotIn("inputs[admission_only]=false", post)
+        self.assertEqual(outcome.returncode, 64, outcome.stderr)
+        self.assertIn("LIVE_READONLY_PUSH_DISPATCH_REQUIRES_INDEPENDENT_OPERATOR_ISSUER=1", outcome.stdout)
+        self.assertEqual(post, "")
 
-    def test_supervised_readonly_marker_preserved(self):
+    def test_supervised_readonly_push_requires_independent_operator_issuer(self):
         outcome, post = self._run("+supervised_5h_dispatch_request_20261023_abcdef: true")
-        self.assertEqual(outcome.returncode, 0, outcome.stderr)
-        self.assertIn("LIVE_OWNER_FIRE_DISPATCHED_ADMISSION_ONLY=true", outcome.stdout)
-        self.assertIn("inputs[warm_handoff_mode]=supervised_5h", post)
+        self.assertEqual(outcome.returncode, 64, outcome.stderr)
+        self.assertIn("LIVE_READONLY_PUSH_DISPATCH_REQUIRES_INDEPENDENT_OPERATOR_ISSUER=1", outcome.stdout)
+        self.assertEqual(post, "")
+
+    def test_direct_attended_operator_dispatch_remains_declared(self):
+        source = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", source)
+        self.assertIn("gateway_pool_5h", source)
+        self.assertIn("supervised_5h", source)
+        self.assertNotIn("gh api --method POST", _dispatch_script())
 
     def test_old_marker_not_newly_added_cannot_replay(self):
         outcome, post = self._run(" live_owner_approved_dispatch_request_20261019_abcdef: true")
