@@ -1,13 +1,13 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "99d74edfb4ae682c5745542e3b98afc524dee6fe",
+  "source_ref": "a02996a5888995aac3a31afbe9500498e76c0d1b",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "user-directed-free-tier-ui-production-release-20261027",
-  "purpose": "Native Node acceptance and Vite build on exact selected Access-locked console source 99d before explicit Free-only deployment, encrypted vault, no broker/live",
-  "request_nonce": "manual-console-release-build-99d-20261027-r1",
+  "requested_by": "manual-free-ui-release-20261027-dual-ownership-acceptance",
+  "purpose": "Exact native encrypted UI build after test-only correction for dual runtime ownership verified flat; latest selected UI #888 and broad #975; no Cloudflare deploy/broker/live.",
+  "request_nonce": "free-ui-native-a029-dual-ownership-20261027-r1",
   "authority": {
     "research_only": true,
     "broker": false,
