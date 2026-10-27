@@ -682,3 +682,10 @@ def test_product_1309_paper_history_exact_node_acceptance_only():
     ):
         with pytest.raises(ValueError):
             mod.validate_acceptance_file(denied)
+
+
+def test_selected_product_1315_forward_execution_page_is_exact_ui_acceptance_only():
+    exact = "ui-react/src/pages/ForwardExecutionEvidencePage.acceptance.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    with pytest.raises(ValueError, match="not_allowlisted"):
+        mod.validate_acceptance_file("ui-react/src/pages/ForwardExecutionEvidencePage.acceptance.test.mjs.extra")
