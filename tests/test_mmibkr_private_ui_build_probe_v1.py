@@ -689,3 +689,18 @@ def test_selected_product_1315_forward_execution_page_is_exact_ui_acceptance_onl
     assert mod.validate_acceptance_file(exact) == exact
     with pytest.raises(ValueError, match="not_allowlisted"):
         mod.validate_acceptance_file("ui-react/src/pages/ForwardExecutionEvidencePage.acceptance.test.mjs.extra")
+
+
+def test_selected_product_1322_pilot_handoff_presentation_exact_node_only():
+    # Selected #975@8ba3 pure UI blocker/identity display, not Pilot promotion.
+    exact = "ui-react/src/lib/pilotHandoffPresentationTruth.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak",
+        exact + ".js",
+        exact.replace(".test.mjs", ".mjs"),
+        "ui-react/src/pages/pilotHandoffPresentationTruth.test.mjs",
+        "ui-react/src/lib/../lib/pilotHandoffPresentationTruth.test.mjs",
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
