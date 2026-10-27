@@ -346,6 +346,9 @@ for (const [name, mutate] of [
   ['nested broker credential', (s) => { s.runtimes[0].position_context = { credentials: { password: 'private' } }; }],
   ['account summary identifier', (s) => { s.account = { equity: 1, account_code: 'DU-PRIVATE' }; }],
   ['runtime secret token', (s) => { s.runtimes[0].data_health = { nested: { access_token: 'private' } }; }],
+  ['spaced broker account ID', (s) => { s.positions = [{ 'account id': 'DU-PRIVATE' }]; }],
+  ['dotted broker account ID', (s) => { s.fills = [{ 'account.id': 'DU-PRIVATE' }]; }],
+  ['punctuated credential', (s) => { s.runtimes[0].data_health = { 'pass.word': 'private' }; }],
 ]) {
   const contaminated = snapshot('a'.repeat(40), [{ ...incomingRow }]);
   mutate(contaminated);
