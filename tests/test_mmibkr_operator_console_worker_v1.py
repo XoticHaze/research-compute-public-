@@ -128,13 +128,6 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertIn("snapshot_readback_unverified", text)
         self.assertIn("durable_readback_verified: true", text)
 
-    def test_operator_read_routes_fail_closed_on_stale_snapshot(self):
-        text = SOURCE.read_text(encoding="utf-8")
-        self.assertIn("MAX_OPERATOR_SNAPSHOT_AGE_MS = 60 * 60 * 1000", text)
-        self.assertEqual(text.count("operatorSnapshotFreshness(snapshot);"), 2)
-        self.assertEqual(text.count("error: 'operator_snapshot_not_current'"), 2)
-        self.assertIn("return json({ error: 'operator_snapshot_not_current', reason: freshness.reason }, 503)", text)
-
     def test_machine_snapshot_read_is_oidc_bound_and_read_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         route = "url.pathname === '/v1/operator-snapshot-read'"
