@@ -16,6 +16,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 from datetime import date, datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -147,9 +148,13 @@ def build(
     if not symbols:
         raise RuntimeError("large-cap transport has no symbols")
 
-    signal_date = str(adapter.get("signal_date") or "")[:10]
-    if not signal_date:
-        raise RuntimeError("large-cap transport missing signal_date")
+    raw_signal_date = adapter.get("signal_date")
+    if not isinstance(raw_signal_date, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", raw_signal_date):
+        raise RuntimeError("LARGECAP_SIGNAL_DATE_INVALID: exact YYYY-MM-DD required")
+    try:
+        signal_date = date.fromisoformat(raw_signal_date).isoformat()
+    except ValueError as exc:
+        raise RuntimeError("LARGECAP_SIGNAL_DATE_INVALID: impossible calendar date") from exc
     timing = adapter.get("timing") or {}
     delay = int(timing["execution_delay_sessions"])
     horizon = int(timing["holding_horizon_sessions"])
@@ -550,6 +555,14 @@ def self_test() -> None:
             raise AssertionError(f"invalid source admitted: {code}")
         except RuntimeError as exc:
             assert code in str(exc)
+    # Prefix-only adapter dates must not borrow a valid frozen signal identity.
+    for invalid_date in ("2026-01-02garbage", "2026-02-30", "2026-1-2"):
+        malformed_adapter = dict(adapter, signal_date=invalid_date)
+        try:
+            build(malformed_adapter, date(2026, 1, 9), "2026-01-09T00:00:00+00:00", loader)
+            raise AssertionError("malformed signal_date admitted")
+        except RuntimeError as exc:
+            assert "LARGECAP_SIGNAL_DATE_INVALID" in str(exc)
     print("FORWARD_LARGECAP_TRANSPORT_OBSERVER_SELF_TEST=PASS")
 
 
