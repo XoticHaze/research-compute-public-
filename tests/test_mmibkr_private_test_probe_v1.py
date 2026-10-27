@@ -1201,6 +1201,7 @@ def test_selected_p0_privacy_risk_followons_exact_networkless_only():
     modules = (
         "tests.test_operator_lifecycle_snapshot_privacy_product_20261027",
         "tests.test_selected_runtime_live_preflight_risk_roll_product_20261027",
+        "tests.test_live_canary_exact_contract_identity_product_20261027",
     )
     assert validated_modules(",".join(modules)) == list(modules)
     for module in modules:
