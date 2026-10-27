@@ -1340,3 +1340,21 @@ def test_selected_product_1321_1323_exact_networkless_modules():
         for suffix in ("_extra", "_broker", "_live_submit", ".py"):
             with pytest.raises(ValueError):
                 validated_modules(module + suffix)
+
+def test_release_selected_975_three_exact_new_python_modules_are_networkless():
+    # Exact selected source tests: paper P&L chronology, retained paper
+    # strategy inventory and bounded pre-issuer model run ID. No wildcard.
+    exact = (
+        "tests.test_cloud_forward_performance_v1",
+        "tests.test_forward_lifecycle_retained_state_product_20261027",
+        "tests.test_foundry_model_run_id_bounded_product_20261027",
+    )
+    assert validated_modules(" ".join(exact)) == list(exact)
+    for module in exact:
+        command = pytest_container_command("sealed-selected-975", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for suffix in ("_extra", "_broker", "_live_submit", ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(module + suffix)
