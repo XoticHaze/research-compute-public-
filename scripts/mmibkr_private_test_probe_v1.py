@@ -306,6 +306,9 @@ SOURCE_ONLY_SELECTED_PRODUCT_MODULES = frozenset({
     "tests.test_cloud_operator_snapshot_forward_root_binding_product_20261026",
     "tests.test_cloud_operator_snapshot_health_adapter_v1",
     "tests.test_cloud_operator_snapshot_inventory_readonly_product_20261027",
+    # Selected #975 Product atomic one-time operator snapshot publication after lifecycle.
+    # Pure mocked tmp-path pytest; no broker, network, order, or live authority.
+    "tests.test_cloud_operator_snapshot_single_publish_product_20261027",
     "tests.test_crw_backtest_rth_asset_contract_product_20261027",
     "tests.test_survivor_paper_trade_evidence_materializer_v1",
     "tests.test_futures_range_tail_coverage_product_20261027",
