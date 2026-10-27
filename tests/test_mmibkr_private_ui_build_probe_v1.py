@@ -85,6 +85,21 @@ def test_vite_safe_failure_diagnostic_is_bounded_and_never_prints_private_source
 
 
 
+def test_selected_fe30_recent_activity_acceptance_is_exact_and_readonly():
+    # Exact changed-source Node module, not a wildcard or broker-command grant.
+    exact = "ui-react/src/lib/botConsoleRecentActivity.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak",
+        exact.replace(".test.mjs", ".live-submit.test.mjs"),
+        exact.replace(".test.mjs", ".test.js"),
+        "ui-react/src/lib/../lib/botConsoleRecentActivity.test.mjs",
+        "/" + exact,
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
+
+
 def test_product_1301_forward_unknown_count_acceptance_is_exact_and_brokerless():
     # Existing native UI probe runs only one fixed read-only test file per request.
     for exact in (
