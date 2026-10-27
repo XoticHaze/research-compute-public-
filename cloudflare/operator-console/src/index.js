@@ -423,6 +423,13 @@ export function mergeRuntimeProjection(previousRecord, incomingSnapshot) {
         current: false,
         observed_this_boundary: false,
         not_due_this_boundary: true,
+        // Prior positive bar/refresh evidence is historical only. A carried
+        // card cannot claim this boundary had a completed/no-new bar.
+        bar_close_identity_ok: false,
+        no_new_completed_target_bar: false,
+        bar_close_gap_sec: null,
+        warmup: {},
+        freshness: {},
         carried_from_previous_snapshot: true,
       },
     });
