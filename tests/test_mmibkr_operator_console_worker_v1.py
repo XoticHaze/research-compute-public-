@@ -10,6 +10,31 @@ WRANGLER = ROOT / "cloudflare" / "operator-console" / "wrangler.jsonc"
 
 
 class OperatorConsoleWorkerContractTests(unittest.TestCase):
+    def test_authenticated_console_root_lands_on_supported_bot_console(self):
+        text = (ROOT / "cloudflare/operator-console/src/index.js").read_text(encoding="utf-8")
+        root_gate = "request.method === 'GET' && url.pathname === '/'"
+        self.assertIn(root_gate, text)
+        self.assertIn("location: '/bot-console'", text)
+        self.assertLess(text.index("await verifyAccess(request, env)"), text.index(root_gate))
+        self.assertLess(text.index(root_gate), text.index("env.ASSETS.fetch(request)"))
+
+    def test_unknown_api_routes_reject_spa_fallback(self):
+        text = (ROOT / "cloudflare/operator-console/src/index.js").read_text(encoding="utf-8")
+        gate = "url.pathname === '/api' || url.pathname.startsWith('/api/')"
+        self.assertIn(gate, text)
+        self.assertIn("return json({ error: 'operator_api_not_supported' }, 404)", text)
+        self.assertLess(text.index(gate), text.index("env.ASSETS.fetch(request)"))
+        self.assertLess(text.index("await verifyAccess(request, env)"), text.index(gate))
+
+    def test_unknown_machine_v1_paths_reject_spa_fallback(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("url.pathname === '/v1' || url.pathname.startsWith('/v1/')", text)
+        self.assertLess(text.index("await verifyAccess(request, env)"),
+                        text.index("url.pathname === '/v1' || url.pathname.startsWith('/v1/')"))
+        self.assertLess(text.index("url.pathname === '/v1' || url.pathname.startsWith('/v1/')"),
+                        text.index("env.ASSETS.fetch(request)"))
+        self.assertIn("return json({ error: 'operator_api_not_supported' }, 404)", text)
+
     def test_browser_surface_requires_cloudflare_access_jwt(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("cf-access-jwt-assertion", text)
@@ -18,6 +43,26 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertIn("/cdn-cgi/access/certs", text)
         self.assertIn("access_denied", text)
         self.assertIn("verifyAccess(request, env)", text)
+
+    def test_access_email_allowlist_must_be_nonempty_and_match(self):
+        # A valid Access audience alone is insufficient when the per-operator
+        # allowlist secret is missing, empty, or the JWT omits an email.
+        text = SOURCE.read_text(encoding="utf-8")
+        self.assertIn(
+            "if (!allowedEmails.length || !email || !allowedEmails.includes(email)) {",
+            text,
+        )
+        self.assertNotIn(
+            "if (allowedEmails.length && !allowedEmails.includes(email)) {",
+            text,
+        )
+
+    def test_healthz_requires_worker_access_before_status(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        access_gate = text.index("let accessIdentity;")
+        health = text.index("url.pathname === '/healthz'")
+        self.assertLess(access_gate, health)
+        self.assertIn("access_denied", text[access_gate:health])
 
     def test_publisher_is_github_oidc_bound_to_cloud_owner_workflows(self):
         text = SOURCE.read_text(encoding="utf-8")
@@ -75,7 +120,9 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
 
     def test_publish_201_requires_durable_object_readback(self):
         text = SOURCE.read_text(encoding="utf-8")
-        self.assertIn("await this.ctx.storage.put('latest', record)", text)
+        self.assertIn("this.ctx.storage.transaction(async (txn) =>", text)
+        self.assertIn("await txn.get('latest')", text)
+        self.assertIn("await txn.put('latest', record)", text)
         self.assertIn("await this.ctx.storage.get('latest')", text)
         self.assertIn("operator_snapshot_readback_failed", text)
         self.assertIn("snapshot_readback_unverified", text)
@@ -158,6 +205,19 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertIn("selected_runtime_write: false", contract)
         self.assertIn("live_execution_allowed: false", contract)
 
+    def test_access_gated_promotion_decision_requires_same_origin_json_before_mutation(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        start = text.index("url.pathname === '/api/promotion-review/decision'")
+        end = text.index("url.pathname === '/api/operator-snapshot'", start)
+        route = text[start:end]
+        self.assertIn("operatorDecisionRequestIsSameOrigin(request)", route)
+        self.assertIn("operator_mutation_origin_rejected", route)
+        self.assertLess(route.index("operatorDecisionRequestIsSameOrigin(request)"),
+                        route.index("await request.text()"))
+        self.assertLess(route.index("operatorDecisionRequestIsSameOrigin(request)"),
+                        route.index("operator-state.internal/promotion/decision"))
+        self.assertLess(text.index("await verifyAccess(request, env)"), start)
+
     def test_promotion_candidate_publisher_is_separate_from_snapshot_publisher(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("const ALLOWED_PROMOTION_PUBLISHERS", text)
@@ -207,7 +267,9 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         )
         self.assertEqual(config["exports"]["OperatorState"]["storage"], "sqlite")
         text = SOURCE.read_text(encoding="utf-8")
-        self.assertIn("this.ctx.storage.put('latest'", text)
+        self.assertIn("this.ctx.storage.transaction(async (txn) =>", text)
+        self.assertIn("await txn.get('latest')", text)
+        self.assertIn("await txn.put('latest', record)", text)
         self.assertIn("this.ctx.storage.get('latest')", text)
 
     def test_worker_does_not_embed_broker_or_private_source_credentials(self):
@@ -260,6 +322,24 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         self.assertIn("runtime_count: receipt.received_runtime_count", text)
         self.assertIn("stored_runtime_count: receipt.runtime_count", text)
         self.assertIn("received_runtime_count: receipt.received_runtime_count", text)
+
+
+    def test_machine_and_browser_snapshot_reads_reject_invalid_stored_state(self):
+        text = SOURCE.read_text(encoding="utf-8")
+        machine = text.split("url.pathname === '/v1/operator-snapshot-read'", 1)[1].split(
+            "let accessIdentity", 1
+        )[0]
+        browser = text.split("url.pathname === '/api/operator-snapshot'", 1)[1].split(
+            "// This Worker only exposes", 1
+        )[0]
+        for route in (machine, browser):
+            with self.subTest(route="machine" if route is machine else "browser"):
+                self.assertIn("validateSnapshot(record.snapshot)", route)
+                self.assertIn("operator_snapshot_state_invalid", route)
+                self.assertIn("502", route)
+                self.assertIn("return json(", route)
+        self.assertNotIn("return json(record.snapshot, 200)", browser)
+        self.assertIn("return json(snapshot, 200)", browser)
 
 
 if __name__ == "__main__":
