@@ -1,8 +1,8 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "cae30a77243a62f61ea756af5c8610dce61e0d11",
+  "source_ref": "6f913a2c6370159dd5f5469d1d62baed2b59426d",
   "test_modules": [
-    "tests.test_selected_runtime_forward_exact_extrema_v1"
+    "tests.test_promotion_review_store"
   ],
   "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
@@ -11,8 +11,8 @@
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-selected-cae30-product1300-native-existing-regression-20261027",
-  "purpose": "Exact newly admitted selected #975 cae30 source, existing networkless forward exact extrema native test after Product #1300 conId/tick-second fix; no broker/live/protected main",
+  "requested_by": "continue-release-selected-6f913-product1302-native-existing-backend-20261027",
+  "purpose": "Exact selected #975 6f913 Pilot funded-capital Promotion Review backend changed-source existing networkless test; no promotion, broker or live",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -20,8 +20,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "release-selected-cae30-forward-exact-native-20261027-r1",
+  "request_nonce": "release-selected-6f913-pilot-backend-native-20261027-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "cae30a77243a62f61ea756af5c8610dce61e0d11",
+  "current_private_reference": "6f913a2c6370159dd5f5469d1d62baed2b59426d",
   "parity_public_key_b64": ""
 }
