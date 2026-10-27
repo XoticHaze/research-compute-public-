@@ -11,7 +11,20 @@
     "causal_vintage": "original CNMS daily file",
     "updated_files": "diagnostic only; never silently replace a consumed original",
     "semantics": "FINRA TRF/ADF off-exchange publicly disseminated activity; not exchange-consolidated shorting and not short interest",
-    "facility_scope": "Consolidated TRF/ADF NMS file; retain facility-level raw rows for diagnostics but primary feature is date+symbol aggregate."
+    "facility_scope": "Consolidated TRF/ADF NMS file; retain facility-level raw rows for diagnostics but primary feature is date+symbol aggregate.",
+    "original_file_integrity": {
+      "authority": "FINRA 2011+ daily short-sale file layout and SR-FINRA-2009-064 public release semantics; pre-original-economic source admission only",
+      "required_original_member": "CNMSshvolYYYYMMDD.txt original daily file with independently recorded first-publication clock before frozen D+1 regular-session OPEN",
+      "first_publication_not_last_modified": "Modern HTTP Last-Modified, file re-download time, current API query or an updated file does not independently prove original D+1 09:30 ET availability; require authenticated original vintage/issuer or mark source-asof unadmitted",
+      "header": "Validate original file header against the official 2011+ six-field daily layout; reject unexpected/missing/duplicated required columns, do not infer columns by position after a mismatch",
+      "trailer": "Parse original trailer record count and require exact match to all original data rows before filtering symbols/facilities; reject truncated, missing or conflicting trailer",
+      "filename_date": "Every data-row Date must match the filename YYYYMMDD; reject foreign, invalid or duplicate original member identities rather than silently shifting date",
+      "numeric": "ShortVolume, ShortExemptVolume and TotalVolume must be parseable nonnegative integer counts; ShortExemptVolume is included in ShortVolume; reject zero aggregate TotalVolume for a scored ratio, nonfinite ratio, or numerator greater than denominator",
+      "facility": "Preserve all original Market/facility rows and raw row count; do not hardcode an incomplete historical facility-code enumeration; aggregate numeric counts by date+PIT-symbol before dividing",
+      "source_vintage": "Persist original URL, first-observed acquisition time, bytes/hash, response metadata, missing/updated-vintage distinction and rejected member reasons; never splice revised members into an already consumed original",
+      "failure": "SOURCE_ASOF_OR_FILE_INTEGRITY_UNADMITTED; no original economic credit, no date/horizon/cost/threshold/window/holdout rescue",
+      "no_2026_holdout_read": true
+    }
   },
   "panel": [
     "AAPL",
