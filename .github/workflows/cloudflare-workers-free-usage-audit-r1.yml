@@ -234,7 +234,11 @@ jobs:
           deploy_token = os.environ.get('CF_DEPLOY_TOKEN', '')
           allowed = os.environ.get('ACCESS_ALLOWED_EMAILS', '')
           addresses = [s.strip() for s in allowed.split(',') if s.strip()]
-          email_ok = bool(addresses) and all(re.fullmatch(r'[^\\s@]+@[^\\s@]+\\.[^\\s@]+', s) for s in addresses)
+          email_ok = bool(addresses) and all(
+              s.count('@') == 1 and 0 < len(s) <= 254
+              and '.' in s.rsplit('@', 1)[1] and not any(ch.isspace() for ch in s)
+              for s in addresses
+          )
           print('MMIBKR_RELEASE_ACCESS_EMAIL_ALLOWLIST=' + ('CONFIGURED' if email_ok else 'MISSING_OR_INVALID'))
           print('MMIBKR_RELEASE_CLOUDFLARE_ACCESS_TOKEN=' + ('CONFIGURED' if access_token else 'MISSING'))
           print('MMIBKR_RELEASE_CLOUDFLARE_DEPLOY_TOKEN=' + ('CONFIGURED' if deploy_token else 'MISSING'))
