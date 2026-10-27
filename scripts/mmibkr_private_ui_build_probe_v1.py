@@ -78,6 +78,10 @@ ALLOWED_ACCEPTANCE_FILES = {
     # and model forward-sanity presentation, pure Node, no broker or network.
     "ui-react/src/lib/selectedIncumbentCoverage.test.mjs",
     "ui-react/src/lib/tradingProductReadiness.test.mjs",
+    # Selected #975 new Product funded-Pilot and model-review evidence presentation tests.
+    # Exact local node:test modules only; no network, broker or promotion issuer.
+    "ui-react/src/lib/pilotFundedTerminalDrawdown.product.test.mjs",
+    "ui-react/src/lib/promotionCandidateEvidencePresentation.test.mjs",
 }
 
 
