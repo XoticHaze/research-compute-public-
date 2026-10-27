@@ -1074,3 +1074,20 @@ def test_exact_builder_reviewed_http_apply_routes_are_networkless_and_fail_close
                    module + ".py", "../" + module):
         with pytest.raises(ValueError):
             validated_modules(denied)
+
+
+def test_legacy_autotuner_prefix_cannot_get_network():
+    # The historical prefix admits more than the exact selected module set.
+    # A private-source test must never gain network egress just by selecting
+    # another syntactically permitted autotuner module name.
+    for module in (
+        "tests.test_autotuner_strategy_family_catalog_vnext",
+        "tests.test_autotuner_future_synthetic",
+    ):
+        assert validated_modules(module) == [module]
+        command = pytest_container_command("sealed-private-test-image", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+    with pytest.raises(ValueError):
+        validated_modules("tests.test_autotuner_live_submit")
