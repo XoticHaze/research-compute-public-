@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import json
 import math
+import tempfile
 from datetime import date, datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -969,7 +970,20 @@ def build(
     now_iso: str,
     loader: Callable[[str, date, date], pd.Series] = _download_close,
 ) -> dict[str, Any]:
-    existing = {str(c["cohort_id"]): dict(c) for c in ((prior or {}).get("cohorts") or [])}
+    # Prior first-seen timestamps are scientific chronology. Dict-comprehension
+    # last-write-wins would silently replace a duplicate immutable cohort ID
+    # with a different first_registered_at and change forward eligibility.
+    prior_rows = (prior or {}).get("cohorts") or []
+    if not isinstance(prior_rows, list):
+        raise RuntimeError("INVALID_PRIOR_COHORT_ROWS")
+    existing = {}
+    for row in prior_rows:
+        if not isinstance(row, dict) or not isinstance(row.get("cohort_id"), str) or not row["cohort_id"]:
+            raise RuntimeError("INVALID_PRIOR_COHORT_ID")
+        identity = row["cohort_id"]
+        if identity in existing:
+            raise RuntimeError("DUPLICATE_PRIOR_COHORT_ID")
+        existing[identity] = dict(row)
     discovered: dict[str, dict[str, Any]] = {}
     for filename in ("homebuilders.json", "semiconductor_shared_ridge.json"):
         path = adapter_dir / filename
@@ -1029,6 +1043,24 @@ def build(
 
 
 def self_test() -> None:
+    # Duplicate prior cohort IDs must never silently replace the original
+    # first-seen registration clock, even if the later row is otherwise valid.
+    with tempfile.TemporaryDirectory() as duplicate_dir:
+        empty_adapters = Path(duplicate_dir)
+        first = {
+            "cohort_id": "HOMEBUILDERS:2026-09-11:immutable",
+            "program_id": "HOMEBUILDERS", "status": "RESOLVED",
+            "first_registered_at": "2026-09-13T04:55:23Z",
+        }
+        second = {**first, "first_registered_at": "2026-09-15T04:55:23Z"}
+        try:
+            build(empty_adapters, {"cohorts": [first, second]},
+                  date(2026, 10, 25), "2026-10-25T12:00:00Z")
+        except RuntimeError as exc:
+            assert str(exc) == "DUPLICATE_PRIOR_COHORT_ID"
+        else:
+            raise AssertionError("conflicting prior first-seen cohort was silently overwritten")
+
     assert _completed_market_data_date(datetime(2026, 9, 29, 18, 43, tzinfo=timezone.utc)) == date(2026, 9, 28)
     assert _completed_market_data_date(datetime(2026, 9, 29, 23, 10, tzinfo=timezone.utc)) == date(2026, 9, 29)
     dates = pd.to_datetime([
