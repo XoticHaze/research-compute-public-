@@ -204,12 +204,26 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
 
 
 def _normalize_series(series: pd.Series) -> pd.Series:
-    x = series.dropna().astype(float).copy()
-    idx = pd.to_datetime(x.index)
-    if getattr(idx, "tz", None) is not None:
-        idx = idx.tz_convert(None)
-    x.index = pd.DatetimeIndex(idx).normalize()
-    return x[~x.index.duplicated(keep="last")].sort_index()
+    # A duplicate, missing or invalid daily bar is source ambiguity, not an
+    # invitation to choose last-wins or silently shorten a frozen H20 tape.
+    if not isinstance(series, pd.Series) or series.empty:
+        raise RuntimeError("SOURCE_PRICE_INVALID: empty or non-series input")
+    try:
+        idx = pd.to_datetime(series.index, errors="raise")
+        if getattr(idx, "tz", None) is not None:
+            idx = idx.tz_convert(None)
+        idx = pd.DatetimeIndex(idx).normalize()
+        x = pd.to_numeric(series, errors="raise").astype(float).copy()
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise RuntimeError("SOURCE_PRICE_INVALID: unparseable clock or close") from exc
+    if idx.isna().any():
+        raise RuntimeError("SOURCE_PRICE_INVALID: null session date")
+    if idx.has_duplicates:
+        raise RuntimeError("SOURCE_DUPLICATE_SESSION: duplicate adjusted close date")
+    if x.isna().any() or not x.map(math.isfinite).all() or (x <= 0).any():
+        raise RuntimeError("SOURCE_PRICE_INVALID: missing, nonfinite or nonpositive adjusted close")
+    x.index = idx
+    return x.sort_index()
 
 
 def _download_close(symbol: str, start: date, end: date) -> pd.Series:
@@ -247,10 +261,15 @@ def _download_close(symbol: str, start: date, end: date) -> pd.Series:
 
 
 def _common_calendar(prices: dict[str, pd.Series], symbols: list[str]) -> pd.DatetimeIndex:
-    sets = [set(prices[s].index) for s in symbols]
-    if not sets:
+    if not symbols:
         return pd.DatetimeIndex([])
-    return pd.DatetimeIndex(sorted(set.intersection(*sets)))
+    # An intersection can compress +1/fixed20 when a single constituent or
+    # benchmark misses an interior session, even if latest dates still match.
+    reference = prices[symbols[0]].index
+    for symbol in symbols[1:]:
+        if not prices[symbol].index.equals(reference):
+            raise RuntimeError(f"SOURCE_CALENDAR_INCOMPLETE: {symbol} session dates differ")
+    return pd.DatetimeIndex(reference)
 
 
 def _ret_bps(series: pd.Series, entry: pd.Timestamp, exit_: pd.Timestamp) -> float:
@@ -330,7 +349,7 @@ def _prices_for(cohort: dict[str, Any], asof: date, loader: Callable[[str, date,
     )
     out: dict[str, pd.Series] = {}
     for symbol in dict.fromkeys(required):
-        out[symbol] = loader(symbol, start, asof)
+        out[symbol] = _normalize_series(loader(symbol, start, asof))
     return out
 
 
@@ -1133,6 +1152,47 @@ def self_test() -> None:
             assert str(exc) == "DUPLICATE_PRIOR_COHORT_ID"
         else:
             raise AssertionError("conflicting prior first-seen cohort was silently overwritten")
+
+    # The forward ledger previously dropped bad rows, kept duplicate-last and
+    # intersected missing interior sessions. Each can change frozen +1/H20.
+    source_dates = pd.to_datetime(["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22"])
+    source_good = pd.Series([100.0, 101.0, 102.0, 103.0], index=source_dates)
+    for bad, code in [
+        (pd.concat([source_good, source_good.iloc[-1:]]), "SOURCE_DUPLICATE_SESSION"),
+        (source_good.mask(source_good.index == source_dates[1]), "SOURCE_PRICE_INVALID"),
+        (source_good.replace(102.0, float("inf")), "SOURCE_PRICE_INVALID"),
+        (source_good.replace(102.0, 0.0), "SOURCE_PRICE_INVALID"),
+        (source_good.replace(102.0, -1.0), "SOURCE_PRICE_INVALID"),
+        (pd.Series([100.0, 101.0], index=["2026-10-19", "bad-date"]), "SOURCE_PRICE_INVALID"),
+    ]:
+        try:
+            _normalize_series(bad)
+            raise AssertionError("ambiguous forward price source admitted")
+        except RuntimeError as exc:
+            assert code in str(exc)
+    assert _normalize_series(source_good).equals(source_good)
+    try:
+        _common_calendar({"AAA": source_good, "SMH": source_good.drop(source_dates[1])},
+                         ["AAA", "SMH"])
+        raise AssertionError("missing interior H20 source session compressed horizon")
+    except RuntimeError as exc:
+        assert "SOURCE_CALENDAR_INCOMPLETE" in str(exc)
+    assert _common_calendar({"AAA": source_good, "SMH": source_good},
+                            ["AAA", "SMH"]).equals(source_dates)
+    source_cohort = {
+        "program_id": "HOMEBUILDERS", "signal_date": "2026-10-19",
+        "symbols": ["AAA"], "status": "REGISTERED",
+    }
+    def bad_source_loader(symbol: str, _start: date, _end: date) -> pd.Series:
+        return pd.concat([source_good, source_good.iloc[-1:]]) if symbol == "AAA" else source_good
+    try:
+        _prices_for(source_cohort, date(2026, 10, 22), bad_source_loader)
+        raise AssertionError("custom loader bypassed source integrity guard")
+    except RuntimeError as exc:
+        assert "SOURCE_DUPLICATE_SESSION" in str(exc)
+    # Prior RESOLVED evidence is immutable and must not be re-scored.
+    frozen_terminal = {**source_cohort, "status": "RESOLVED", "resolution": {"immutable": True}}
+    assert _advance_cohort(frozen_terminal, False, date(2026, 10, 22), bad_source_loader) == frozen_terminal
 
     assert _completed_market_data_date(datetime(2026, 9, 29, 18, 43, tzinfo=timezone.utc)) == date(2026, 9, 28)
     assert _completed_market_data_date(datetime(2026, 9, 29, 23, 10, tzinfo=timezone.utc)) == date(2026, 9, 29)
