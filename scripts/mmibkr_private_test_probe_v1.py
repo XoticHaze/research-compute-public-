@@ -115,6 +115,8 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_forward_exact_tick_contract_integrity_product_20261027",
     # Product #1302 Pilot funded-capital receipt numeric admission, no promotion.
     "tests.test_pilot_capital_context_failclosed_product_20261027",
+    # Product #1304 private operator snapshot atomic/symlink write-through guard.
+    "tests.test_operator_snapshot_private_atomic_product_20261027",
 })
 
 SAFE_EXACT = {
