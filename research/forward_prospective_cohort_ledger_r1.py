@@ -164,6 +164,23 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
             ):
                 raise RuntimeError("FORWARD_HOMEBUILDERS_HORIZON_INVALID")
             horizons[symbol] = int(value)
+        # Partial forecast maps silently shrink forward calibration sample size,
+        # even while the same funded symbols contribute realized observations.
+        prediction_source = signal.get("predicted_fixed20_net25_bps")
+        if not isinstance(prediction_source, dict) or set(prediction_source) != set(symbols):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_PREDICTION_SYMBOL_MISMATCH")
+        predictions: dict[str, float] = {}
+        for symbol in symbols:
+            try:
+                value = prediction_source[symbol]
+                if isinstance(value, bool):
+                    raise ValueError("boolean prediction")
+                prediction = float(value)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise RuntimeError("FORWARD_HOMEBUILDERS_PREDICTION_INVALID") from exc
+            if not math.isfinite(prediction):
+                raise RuntimeError("FORWARD_HOMEBUILDERS_PREDICTION_INVALID")
+            predictions[symbol] = prediction
         return {
             "cohort_id": _cohort_id(program, signal_date, adapter_sha256),
             "program_id": program,
@@ -175,11 +192,7 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
             "execution_delay_sessions": 1,
             "symbols": symbols,
             "horizon_sessions_by_symbol": {s: horizons[s] for s in symbols},
-            "admission_score_fixed20_net25_bps": {
-                s: float((signal.get("predicted_fixed20_net25_bps") or {})[s])
-                for s in symbols
-                if s in (signal.get("predicted_fixed20_net25_bps") or {})
-            },
+            "admission_score_fixed20_net25_bps": {s: predictions[s] for s in symbols},
             "benchmarks": ["ITB", "QQQ"],
             "stock_round_trip_cost_bps": 25.0,
             "resolution": None,
@@ -1188,6 +1201,7 @@ def self_test() -> None:
     home_signal = {
         "admitted_symbols": ["CCS", "DHI"],
         "duration_horizon_sessions_by_symbol": {"CCS": 5, "DHI": 10},
+        "predicted_fixed20_net25_bps": {"CCS": 120.0, "DHI": -25.0},
     }
     home_adapter = {
         "program_id": "HOMEBUILDERS",
@@ -1215,6 +1229,14 @@ def self_test() -> None:
          "FORWARD_HOMEBUILDERS_HORIZON_INVALID"),
         ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": True, "DHI": 10}},
          "FORWARD_HOMEBUILDERS_HORIZON_INVALID"),
+        ({**home_signal, "predicted_fixed20_net25_bps": {"CCS": 120.0}},
+         "FORWARD_HOMEBUILDERS_PREDICTION_SYMBOL_MISMATCH"),
+        ({**home_signal, "predicted_fixed20_net25_bps": {"CCS": 120.0, "DHI": -25.0, "X": 5.0}},
+         "FORWARD_HOMEBUILDERS_PREDICTION_SYMBOL_MISMATCH"),
+        ({**home_signal, "predicted_fixed20_net25_bps": {"CCS": 120.0, "DHI": float("nan")}},
+         "FORWARD_HOMEBUILDERS_PREDICTION_INVALID"),
+        ({**home_signal, "predicted_fixed20_net25_bps": {"CCS": True, "DHI": -25.0}},
+         "FORWARD_HOMEBUILDERS_PREDICTION_INVALID"),
     ]:
         try:
             _new_cohort({**home_adapter, "signal": bad_signal}, "test", "2026-09-11T00:00:00Z")
