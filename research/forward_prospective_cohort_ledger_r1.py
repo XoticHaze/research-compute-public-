@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 import tempfile
 from datetime import date, datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
@@ -72,12 +73,44 @@ def _sha(data: bytes) -> str:
 def _read_json(path: Path | None) -> dict[str, Any] | None:
     if path is None or not path.is_file():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    # Prior first-seen state is immutable chronology, not a last-wins JSON
+    # dictionary. Share the same strict parser as incoming adapters.
+    payload = json.loads(path.read_text(encoding="utf-8"),
+                         object_pairs_hook=_reject_adapter_duplicate_keys,
+                         parse_constant=_reject_adapter_nonfinite_constant)
+    if not isinstance(payload, dict):
+        raise RuntimeError("FORWARD_PRIOR_ROOT_NOT_OBJECT")
+    return payload
+
+
+def _reject_adapter_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise RuntimeError("FORWARD_ADAPTER_DUPLICATE_JSON_KEY")
+        result[key] = value
+    return result
+
+
+def _reject_adapter_nonfinite_constant(value: str) -> None:
+    raise RuntimeError("FORWARD_ADAPTER_NONFINITE_JSON_CONSTANT")
+
+
+def _canonical_signal_date(raw: Any) -> str:
+    if not isinstance(raw, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", raw):
+        raise RuntimeError("FORWARD_ADAPTER_SIGNAL_DATE_INVALID: exact YYYY-MM-DD required")
+    try:
+        return date.fromisoformat(raw).isoformat()
+    except ValueError as exc:
+        raise RuntimeError("FORWARD_ADAPTER_SIGNAL_DATE_INVALID: impossible calendar date") from exc
 
 
 def _adapter(path: Path) -> tuple[dict[str, Any], str]:
     raw = path.read_bytes()
-    x = json.loads(raw)
+    x = json.loads(raw, object_pairs_hook=_reject_adapter_duplicate_keys,
+                   parse_constant=_reject_adapter_nonfinite_constant)
+    if not isinstance(x, dict):
+        raise RuntimeError("FORWARD_ADAPTER_ROOT_NOT_OBJECT")
     if x.get("schema") != ADAPTER_SCHEMA:
         raise RuntimeError(f"unexpected adapter schema path={path}")
     program = str(x.get("program_id") or "")
@@ -96,9 +129,8 @@ def _cohort_id(program: str, signal_date: str, adapter_sha256: str) -> str:
 
 def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str) -> dict[str, Any] | None:
     program = str(adapter["program_id"])
-    signal_date = str(adapter.get("signal_date") or "")[:10]
-    if not signal_date:
-        raise RuntimeError(f"missing signal_date program={program}")
+    # Never borrow a valid frozen cohort identity from a malformed suffix.
+    signal_date = _canonical_signal_date(adapter.get("signal_date"))
     contract = CONTRACTS[program]
     signal = adapter.get("signal") or {}
 
@@ -134,15 +166,37 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
     validation = adapter.get("validation") or {}
     if not positive or validation.get("scientific_forward_credit") is not True:
         return None
+    # A foreign/missing ticker-book key silently changes funded participation:
+    # the old normalizer divided by *all* keys while scoring positive only.
+    if any(not isinstance(x, str) or not x.strip() for x in signal.get("positive_symbols") or []):
+        raise RuntimeError("FORWARD_COHORT_POSITIVE_SYMBOL_INVALID")
+    if len(positive) != len(set(positive)):
+        raise RuntimeError("FORWARD_COHORT_DUPLICATE_POSITIVE_SYMBOL")
     book = ((adapter.get("paper_action") or {}).get("ticker_book") or {})
-    raw_weights = {str(k): float(v) for k, v in (book.get("cohort_target_weights_nav") or {}).items() if float(v) > 0}
-    if not raw_weights:
-        raise RuntimeError("Semiconductor prospective cohort missing frozen ticker-book weights")
+    weight_source = book.get("cohort_target_weights_nav")
+    if not isinstance(weight_source, dict) or set(weight_source) != set(positive):
+        raise RuntimeError("FORWARD_COHORT_TICKER_BOOK_SYMBOL_MISMATCH")
+    raw_weights: dict[str, float] = {}
+    for symbol in positive:
+        value = weight_source[symbol]
+        if isinstance(value, bool):
+            raise RuntimeError("FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID")
+        try:
+            weight = float(value)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise RuntimeError("FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID") from exc
+        if not math.isfinite(weight) or weight <= 0:
+            raise RuntimeError("FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID")
+        raw_weights[symbol] = weight
     gross = sum(raw_weights.values())
+    if not math.isfinite(gross) or gross <= 0:
+        raise RuntimeError("FORWARD_COHORT_TICKER_BOOK_GROSS_INVALID")
     ticker_weights = {k: v / gross for k, v in raw_weights.items()}
     predictions = {
         str(k): float(v) for k, v in (signal.get("predicted_fixed20_net_value_bps") or {}).items()
     }
+    if any(not math.isfinite(value) for value in predictions.values()):
+        raise RuntimeError("FORWARD_COHORT_PREDICTION_NONFINITE")
     return {
         "cohort_id": _cohort_id(program, signal_date, adapter_sha256),
         "program_id": program,
@@ -172,12 +226,26 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
 
 
 def _normalize_series(series: pd.Series) -> pd.Series:
-    x = series.dropna().astype(float).copy()
-    idx = pd.to_datetime(x.index)
-    if getattr(idx, "tz", None) is not None:
-        idx = idx.tz_convert(None)
-    x.index = pd.DatetimeIndex(idx).normalize()
-    return x[~x.index.duplicated(keep="last")].sort_index()
+    # A duplicate, missing or invalid daily bar is source ambiguity, not an
+    # invitation to choose last-wins or silently shorten a frozen H20 tape.
+    if not isinstance(series, pd.Series) or series.empty:
+        raise RuntimeError("SOURCE_PRICE_INVALID: empty or non-series input")
+    try:
+        idx = pd.to_datetime(series.index, errors="raise")
+        if getattr(idx, "tz", None) is not None:
+            idx = idx.tz_convert(None)
+        idx = pd.DatetimeIndex(idx).normalize()
+        x = pd.to_numeric(series, errors="raise").astype(float).copy()
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise RuntimeError("SOURCE_PRICE_INVALID: unparseable clock or close") from exc
+    if idx.isna().any():
+        raise RuntimeError("SOURCE_PRICE_INVALID: null session date")
+    if idx.has_duplicates:
+        raise RuntimeError("SOURCE_DUPLICATE_SESSION: duplicate adjusted close date")
+    if x.isna().any() or not x.map(math.isfinite).all() or (x <= 0).any():
+        raise RuntimeError("SOURCE_PRICE_INVALID: missing, nonfinite or nonpositive adjusted close")
+    x.index = idx
+    return x.sort_index()
 
 
 def _download_close(symbol: str, start: date, end: date) -> pd.Series:
@@ -215,10 +283,15 @@ def _download_close(symbol: str, start: date, end: date) -> pd.Series:
 
 
 def _common_calendar(prices: dict[str, pd.Series], symbols: list[str]) -> pd.DatetimeIndex:
-    sets = [set(prices[s].index) for s in symbols]
-    if not sets:
+    if not symbols:
         return pd.DatetimeIndex([])
-    return pd.DatetimeIndex(sorted(set.intersection(*sets)))
+    # An intersection can compress +1/fixed20 when a single constituent or
+    # benchmark misses an interior session, even if latest dates still match.
+    reference = prices[symbols[0]].index
+    for symbol in symbols[1:]:
+        if not prices[symbol].index.equals(reference):
+            raise RuntimeError(f"SOURCE_CALENDAR_INCOMPLETE: {symbol} session dates differ")
+    return pd.DatetimeIndex(reference)
 
 
 def _ret_bps(series: pd.Series, entry: pd.Timestamp, exit_: pd.Timestamp) -> float:
@@ -298,7 +371,7 @@ def _prices_for(cohort: dict[str, Any], asof: date, loader: Callable[[str, date,
     )
     out: dict[str, pd.Series] = {}
     for symbol in dict.fromkeys(required):
-        out[symbol] = loader(symbol, start, asof)
+        out[symbol] = _normalize_series(loader(symbol, start, asof))
     return out
 
 
@@ -1043,6 +1116,96 @@ def build(
 
 
 def self_test() -> None:
+    # Nested JSON duplicates and nonfinite constants cannot be trusted adapter
+    # identities even if a last-wins parser would retain a valid-looking key.
+    with tempfile.TemporaryDirectory() as source_dir:
+        adapter_path = Path(source_dir) / "adapter.json"
+        for raw, code in [
+            ('{"schema":"foundry.forward_program_adapter.v1","schema":"bad"}', "FORWARD_ADAPTER_DUPLICATE_JSON_KEY"),
+            ('{"schema":"foundry.forward_program_adapter.v1","program_id":"HOMEBUILDERS","signal":{"score":NaN}}', "FORWARD_ADAPTER_NONFINITE_JSON_CONSTANT"),
+        ]:
+            adapter_path.write_text(raw, encoding="utf-8")
+            try:
+                _adapter(adapter_path)
+                raise AssertionError("ambiguous/nonfinite adapter JSON admitted")
+            except RuntimeError as exc:
+                assert code in str(exc)
+    # An existing first-seen clock must not be rewritten by nested last-wins
+    # JSON, even when the cohort_id itself appears only once.
+    with tempfile.TemporaryDirectory() as prior_dir:
+        prior_path = Path(prior_dir) / "prior.json"
+        for raw, code in [
+            ('{"cohorts":[{"cohort_id":"x","first_registered_at":"old","first_registered_at":"new"}]}', "FORWARD_ADAPTER_DUPLICATE_JSON_KEY"),
+            ('{"cohorts":[{"mark":NaN}]}', "FORWARD_ADAPTER_NONFINITE_JSON_CONSTANT"),
+            ('[{"cohorts":[]}]', "FORWARD_PRIOR_ROOT_NOT_OBJECT"),
+        ]:
+            prior_path.write_text(raw, encoding="utf-8")
+            try:
+                _read_json(prior_path)
+                raise AssertionError("ambiguous prior first-seen JSON admitted")
+            except RuntimeError as exc:
+                assert code in str(exc)
+    for bad_date in ("2026-09-11junk", "2026-02-30", "2026-9-11"):
+        bad_adapter = {
+            "program_id": "HOMEBUILDERS", "signal_date": bad_date,
+            "signal": {"admitted_symbols": ["CCS"],
+                       "duration_horizon_sessions_by_symbol": {"CCS": 5}},
+        }
+        try:
+            _new_cohort(bad_adapter, "test", "2026-09-12T00:00:00Z")
+            raise AssertionError("malformed frozen signal date admitted")
+        except RuntimeError as exc:
+            assert "FORWARD_ADAPTER_SIGNAL_DATE_INVALID" in str(exc)
+    assert _canonical_signal_date("2026-09-11") == "2026-09-11"
+    # Frozen positive-symbol membership and ticker-book weights must match.
+    # A foreign weight used to dilute the realized book without a signal,
+    # and a missing positive weight used to silently drop a position.
+    weight_adapter = {
+        "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+        "signal_date": "2026-10-01",
+        "signal": {
+            "positive_symbols": ["AAA", "BBB"],
+            "predicted_fixed20_net_value_bps": {"AAA": 100.0, "BBB": 200.0},
+        },
+        "validation": {"scientific_forward_credit": True},
+        "paper_action": {"ticker_book": {
+            "cohort_target_weights_nav": {"AAA": 0.02, "BBB": 0.03},
+        }},
+    }
+    clean_weight_cohort = _new_cohort(weight_adapter, "test", "2026-10-01T00:00:00Z")
+    assert clean_weight_cohort is not None
+    assert set(clean_weight_cohort["ticker_book_weights_within_cohort"]) == {"AAA", "BBB"}
+    assert abs(sum(clean_weight_cohort["ticker_book_weights_within_cohort"].values()) - 1.0) < 1e-12
+    for bad_weights, code in [
+        ({"AAA": 0.02, "FOREIGN": 0.03}, "FORWARD_COHORT_TICKER_BOOK_SYMBOL_MISMATCH"),
+        ({"AAA": 0.02}, "FORWARD_COHORT_TICKER_BOOK_SYMBOL_MISMATCH"),
+        ({"AAA": 0.02, "BBB": 0.0}, "FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID"),
+        ({"AAA": 0.02, "BBB": float("nan")}, "FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID"),
+        ({"AAA": 0.02, "BBB": True}, "FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID"),
+        ({"AAA": 1e308, "BBB": 1e308}, "FORWARD_COHORT_TICKER_BOOK_GROSS_INVALID"),
+    ]:
+        invalid = json.loads(json.dumps(weight_adapter))
+        invalid["paper_action"]["ticker_book"]["cohort_target_weights_nav"] = bad_weights
+        try:
+            _new_cohort(invalid, "test", "2026-10-01T00:00:00Z")
+            raise AssertionError("ambiguous frozen ticker book admitted")
+        except RuntimeError as exc:
+            assert code in str(exc)
+    duplicate_symbols = json.loads(json.dumps(weight_adapter))
+    duplicate_symbols["signal"]["positive_symbols"] = ["AAA", "AAA"]
+    try:
+        _new_cohort(duplicate_symbols, "test", "2026-10-01T00:00:00Z")
+        raise AssertionError("duplicate positive symbol admitted")
+    except RuntimeError as exc:
+        assert "FORWARD_COHORT_DUPLICATE_POSITIVE_SYMBOL" in str(exc)
+    nonfinite_prediction = json.loads(json.dumps(weight_adapter))
+    nonfinite_prediction["signal"]["predicted_fixed20_net_value_bps"]["AAA"] = float("inf")
+    try:
+        _new_cohort(nonfinite_prediction, "test", "2026-10-01T00:00:00Z")
+        raise AssertionError("nonfinite forward prediction admitted")
+    except RuntimeError as exc:
+        assert "FORWARD_COHORT_PREDICTION_NONFINITE" in str(exc)
+
     # Duplicate prior cohort IDs must never silently replace the original
     # first-seen registration clock, even if the later row is otherwise valid.
     with tempfile.TemporaryDirectory() as duplicate_dir:
@@ -1060,6 +1223,47 @@ def self_test() -> None:
             assert str(exc) == "DUPLICATE_PRIOR_COHORT_ID"
         else:
             raise AssertionError("conflicting prior first-seen cohort was silently overwritten")
+
+    # The forward ledger previously dropped bad rows, kept duplicate-last and
+    # intersected missing interior sessions. Each can change frozen +1/H20.
+    source_dates = pd.to_datetime(["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22"])
+    source_good = pd.Series([100.0, 101.0, 102.0, 103.0], index=source_dates)
+    for bad, code in [
+        (pd.concat([source_good, source_good.iloc[-1:]]), "SOURCE_DUPLICATE_SESSION"),
+        (source_good.mask(source_good.index == source_dates[1]), "SOURCE_PRICE_INVALID"),
+        (source_good.replace(102.0, float("inf")), "SOURCE_PRICE_INVALID"),
+        (source_good.replace(102.0, 0.0), "SOURCE_PRICE_INVALID"),
+        (source_good.replace(102.0, -1.0), "SOURCE_PRICE_INVALID"),
+        (pd.Series([100.0, 101.0], index=["2026-10-19", "bad-date"]), "SOURCE_PRICE_INVALID"),
+    ]:
+        try:
+            _normalize_series(bad)
+            raise AssertionError("ambiguous forward price source admitted")
+        except RuntimeError as exc:
+            assert code in str(exc)
+    assert _normalize_series(source_good).equals(source_good)
+    try:
+        _common_calendar({"AAA": source_good, "SMH": source_good.drop(source_dates[1])},
+                         ["AAA", "SMH"])
+        raise AssertionError("missing interior H20 source session compressed horizon")
+    except RuntimeError as exc:
+        assert "SOURCE_CALENDAR_INCOMPLETE" in str(exc)
+    assert _common_calendar({"AAA": source_good, "SMH": source_good},
+                            ["AAA", "SMH"]).equals(source_dates)
+    source_cohort = {
+        "program_id": "HOMEBUILDERS", "signal_date": "2026-10-19",
+        "symbols": ["AAA"], "status": "REGISTERED",
+    }
+    def bad_source_loader(symbol: str, _start: date, _end: date) -> pd.Series:
+        return pd.concat([source_good, source_good.iloc[-1:]]) if symbol == "AAA" else source_good
+    try:
+        _prices_for(source_cohort, date(2026, 10, 22), bad_source_loader)
+        raise AssertionError("custom loader bypassed source integrity guard")
+    except RuntimeError as exc:
+        assert "SOURCE_DUPLICATE_SESSION" in str(exc)
+    # Prior RESOLVED evidence is immutable and must not be re-scored.
+    frozen_terminal = {**source_cohort, "status": "RESOLVED", "resolution": {"immutable": True}}
+    assert _advance_cohort(frozen_terminal, False, date(2026, 10, 22), bad_source_loader) == frozen_terminal
 
     assert _completed_market_data_date(datetime(2026, 9, 29, 18, 43, tzinfo=timezone.utc)) == date(2026, 9, 28)
     assert _completed_market_data_date(datetime(2026, 9, 29, 23, 10, tzinfo=timezone.utc)) == date(2026, 9, 29)
