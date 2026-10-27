@@ -1275,3 +1275,21 @@ def test_selected_product_1313_strict_bar_evidence_is_exact_source_only_module()
     assert validated_modules(exact) == [exact]
     with pytest.raises(ValueError, match="test_module_not_allowlisted"):
         validated_modules("tests.test_product_operator_snapshot_strict_bar_evidence_20261027_extra")
+
+
+def test_selected_pi983_product_1317_typed_preflight_exact_networkless_only():
+    # Exactly three changed-source synthetic Pi tests, never broker or Docker.
+    exact = (
+        "tests.test_ccpi_ibkr_malformed_proof_product_20261027",
+        "tests.test_ccpi_ibkr_typed_host_preflight_v2",
+        "tests.test_persistent_gateway_non_takeover_release_20261027",
+    )
+    assert validated_modules(" ".join(exact)) == list(exact)
+    for module in exact:
+        command = pytest_container_command("sealed-selected-pi983", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for suffix in ("_live_submit", "_broker", "_extra", ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(module + suffix)
