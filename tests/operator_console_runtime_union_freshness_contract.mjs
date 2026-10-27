@@ -227,6 +227,18 @@ assert.equal(substitutedResponse.status, 502,
 assert.equal((await substitutedResponse.json()).error, 'operator_snapshot_readback_failed');
 console.log('MMIBKR_OPERATOR_CONSOLE_READBACK_IDENTITY_FAILCLOSED=PASS');
 
+// Python UTC snapshot producers may emit six fractional digits. Date.parse
+// truncates them to milliseconds; an older .123455 boundary must not
+// overwrite a newer .123456 boundary just because both parse to .123 ms.
+const microPrefix = new Date(Date.now() - 5_000).toISOString().slice(0, 19);
+const microNew = `${microPrefix}.123456Z`;
+const microOld = `${microPrefix}.123455Z`;
+assert.equal((await storeBoundary({ ...firstBoundary, generated_at_utc: microNew })).status, 201);
+const rejectedMicroOld = await storeBoundary({ ...firstBoundary, generated_at_utc: microOld });
+assert.equal(rejectedMicroOld.status, 409, 'submillisecond ordering cannot roll back latest');
+assert.equal((await storage.get('latest')).snapshot.generated_at_utc, microNew);
+console.log('MMIBKR_OPERATOR_CONSOLE_MICROSECOND_ORDER=PASS');
+
 console.log('MMIBKR_OPERATOR_CONSOLE_MONOTONIC_SNAPSHOT_FRESHNESS=PASS');
 
 
