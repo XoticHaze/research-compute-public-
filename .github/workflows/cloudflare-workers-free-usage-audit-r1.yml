@@ -145,5 +145,62 @@ jobs:
                   print("CF_" + label + "_OVER_80_PERCENT=" + ("1" if total >= 80000 else "0"))
               except (ValueError, TypeError, AttributeError):
                   print("CF_" + label + "_RESULT=SANITIZED_PARSING_FAILED")
+          # One extra read-only GraphQL query for Durable Object demand.
+          # This is a trailing 48h window, not a per-day billing total.
+          do_start = (today - timedelta(days=2)).date().isoformat()
+          do_query = (
+              'query { viewer { accounts(filter: {accountTag: "' + account + '"}) { '
+              'durableObjectsInvocationsAdaptiveGroups('
+              'filter: {date_gt: "' + do_start + '"}, limit: 1000) {sum {requests}} '
+              'durableObjectsStorageGroups('
+              'filter: {date_gt: "' + do_start + '"}, limit: 1000) {max {storedBytes}} '
+              '} } }'
+          )
+          request = Request(
+              "https://api.cloudflare.com/client/v4/graphql",
+              data=json.dumps({"query": do_query}).encode("utf-8"),
+              headers={
+                  "Authorization": "Bearer " + token,
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "User-Agent": "mmibkr-free-do-read-only-usage/1",
+              },
+              method="POST",
+          )
+          try:
+              with urlopen(request, timeout=20) as response:
+                  do_status = response.status
+                  do_body = response.read(262144)
+              print("CF_DO_HTTP_STATUS=" + str(do_status))
+              parsed = json.loads(do_body)
+              if parsed.get("errors"):
+                  print("CF_DO_RESULT=GRAPHQL_SCOPE_OR_SCHEMA_UNAVAILABLE")
+              else:
+                  accounts = (parsed.get("data") or {}).get("viewer", {}).get("accounts") or []
+                  if len(accounts) != 1:
+                      print("CF_DO_RESULT=ACCOUNT_NOT_READABLE")
+                  else:
+                      node = accounts[0]
+                      inv = node.get("durableObjectsInvocationsAdaptiveGroups") or []
+                      sto = node.get("durableObjectsStorageGroups") or []
+                      req = sum(int((row.get("sum") or {}).get("requests") or 0) for row in inv)
+                      sizes = [int((row.get("max") or {}).get("storedBytes") or 0) for row in sto]
+                      if req < 0 or any(size < 0 for size in sizes):
+                          raise ValueError("invalid DO metrics")
+                      print("CF_DO_RESULT=OBSERVED")
+                      print("CF_DO_WINDOW_START_DATE_EXCLUSIVE=" + do_start)
+                      print("CF_DO_WINDOW_REQUESTS=" + str(req))
+                      print("CF_DO_INVOCATION_GROUPS=" + str(len(inv)))
+                      print("CF_DO_STORAGE_REPORTED_MAX_ROW_BYTES=" + str(max(sizes, default=0)))
+                      print("CF_DO_STORAGE_GROUPS=" + str(len(sto)))
+                      print("CF_DO_GROUP_TRUNCATION_UNCERTAIN=" + ("1" if max(len(inv), len(sto)) >= 1000 else "0"))
+          except HTTPError as exc:
+              print("CF_DO_HTTP_STATUS=" + str(exc.code))
+              print("CF_DO_RESULT=TOKEN_SCOPE_OR_API_DENIED")
+          except (URLError, TimeoutError):
+              print("CF_DO_RESULT=TRANSPORT_UNAVAILABLE")
+          except (ValueError, TypeError, AttributeError):
+              print("CF_DO_RESULT=SANITIZED_PARSING_FAILED")
+
           print("CF_AUDIT_COMPLETE=1")
           PY
