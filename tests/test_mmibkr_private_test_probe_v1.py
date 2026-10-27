@@ -1172,6 +1172,7 @@ def test_selected_p0_forward_new_exact_modules_networkless_only():
         "tests.test_selected_runtime_live_incumbent_preflight_v1",
         "tests.test_selected_runtime_forward_completed_trade_admission_v1",
         "tests.test_selected_runtime_cloud_daemon_v1",
+        "tests.test_selected_runtime_futures_roll_maintenance_v1",
     )
     assert validated_modules(",".join(modules)) == list(modules)
     for module in modules:

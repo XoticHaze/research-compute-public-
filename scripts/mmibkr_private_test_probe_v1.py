@@ -289,6 +289,8 @@ SOURCE_ONLY_SELECTED_PRODUCT_MODULES = frozenset({
     "tests.test_selected_runtime_live_incumbent_preflight_v1",
     "tests.test_selected_runtime_forward_completed_trade_admission_v1",
     "tests.test_selected_runtime_cloud_daemon_v1",
+    # Exact selected #1275 futures-roll cutoff fail-close, mocked/read-only only.
+    "tests.test_selected_runtime_futures_roll_maintenance_v1",
 })
 SAFE_EXACT.update(SOURCE_ONLY_SELECTED_PRODUCT_MODULES)
 STATUS_STAGE_MODULES = {
