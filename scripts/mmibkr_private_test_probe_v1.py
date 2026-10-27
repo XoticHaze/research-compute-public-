@@ -113,6 +113,8 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_selected_runtime_forward_partial_capture_product_20261027",
     # Product #1300 exact conId and integer historical tick-second read-only regression.
     "tests.test_forward_exact_tick_contract_integrity_product_20261027",
+    # Product #1302 Pilot funded-capital receipt numeric admission, no promotion.
+    "tests.test_pilot_capital_context_failclosed_product_20261027",
 })
 
 SAFE_EXACT = {
