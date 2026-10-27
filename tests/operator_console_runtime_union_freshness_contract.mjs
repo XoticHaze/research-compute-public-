@@ -349,6 +349,9 @@ for (const [name, mutate] of [
   ['spaced broker account ID', (s) => { s.positions = [{ 'account id': 'DU-PRIVATE' }]; }],
   ['dotted broker account ID', (s) => { s.fills = [{ 'account.id': 'DU-PRIVATE' }]; }],
   ['punctuated credential', (s) => { s.runtimes[0].data_health = { 'pass.word': 'private' }; }],
+  ['fullwidth broker account ID', (s) => { s.fills = [{ 'ａｃｃｏｕｎｔｉｄ': 'DU-PRIVATE' }]; }],
+  ['fullwidth punctuated broker ID', (s) => { s.positions = [{ 'ＡＣＣＯＵＮＴ－ＩＤ': 'DU-PRIVATE' }]; }],
+  ['fullwidth credential', (s) => { s.runtimes[0].data_health = { 'ｐａｓｓｗｏｒｄ': 'private' }; }],
 ]) {
   const contaminated = snapshot('a'.repeat(40), [{ ...incomingRow }]);
   mutate(contaminated);
