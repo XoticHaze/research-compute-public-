@@ -782,3 +782,22 @@ def test_release_selected_975_bound_paper_bar_node_acceptance_exact_only():
     ):
         with pytest.raises(ValueError, match="not_allowlisted"):
             mod.validate_acceptance_file(denied)
+
+def test_release_selected_975_pilot_utc_and_builder_id_exact_node_only():
+    # Product #1350/#1351: local node:test/readFile/vm, no network or broker.
+    exact = (
+        "ui-react/src/lib/builderConditionInspector.test.mjs",
+        "ui-react/src/lib/pilotOverlayLineSeries.test.mjs",
+        "ui-react/src/pages/PilotRunDetailPage.candle-integrity.test.mjs",
+    )
+    for path in exact:
+        assert mod.validate_acceptance_file(path) == path
+        for denied in (
+            path + ".bak",
+            path + ".js",
+            path.replace(".test.mjs", ".live-submit.test.mjs"),
+            "../" + path,
+            "/" + path,
+        ):
+            with pytest.raises(ValueError, match="not_allowlisted"):
+                mod.validate_acceptance_file(denied)
