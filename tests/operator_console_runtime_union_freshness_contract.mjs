@@ -28,7 +28,10 @@ const previousRow = {
   primary_metric: { current: 1, target: 2 },
   conditions: [{ status: 'pass' }], position_context: { open: true },
   market_context: { features: [{ name: 'RSI', value: 70 }], quote: { price: 150 } },
-  data_health: { current: true, observed_this_boundary: true, target_bar_close_utc: '2026-10-25T14:00:00Z' },
+  data_health: { current: true, observed_this_boundary: true,
+    bar_close_identity_ok: true, no_new_completed_target_bar: true, bar_close_gap_sec: 0,
+    warmup: { ready: true }, freshness: { execution_eligible: true },
+    target_bar_close_utc: '2026-10-25T14:00:00Z' },
 };
 const incomingRow = {
   runtime_id: 'MNQ-12Min', symbol: 'MNQ', state: 'watching',
@@ -64,6 +67,13 @@ assert.deepEqual(carried.market_context, { features: [], quote: null });
 assert.equal(carried.data_health.current, false);
 assert.equal(carried.data_health.observed_this_boundary, false);
 assert.equal(carried.data_health.not_due_this_boundary, true);
+assert.equal(carried.data_health.bar_close_identity_ok, false);
+assert.equal(carried.data_health.no_new_completed_target_bar, false,
+  'historical no-new-bar status must not impersonate the new unobserved boundary');
+assert.equal(carried.data_health.bar_close_gap_sec, null);
+assert.deepEqual(carried.data_health.warmup, {});
+assert.deepEqual(carried.data_health.freshness, {});
+assert.equal(previousRow.data_health.no_new_completed_target_bar, true);
 assert.equal(carried.data_health.carried_from_previous_snapshot, true);
 assert.equal(carried.data_health.target_bar_close_utc, '2026-10-25T14:00:00Z');
 assert.equal(previousRow.data_health.current, true, 'never mutate durable prior record');
