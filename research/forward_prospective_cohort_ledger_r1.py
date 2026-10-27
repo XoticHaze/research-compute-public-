@@ -139,7 +139,9 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
         # Duplicate names otherwise double-count one security in forward science.
         raw_symbols = signal.get("admitted_symbols") or []
         if not isinstance(raw_symbols, list) or any(
-            not isinstance(symbol, str) or not symbol.strip() for symbol in raw_symbols
+            not isinstance(symbol, str)
+            or re.fullmatch(r"[A-Z][A-Z0-9.-]*", symbol) is None
+            for symbol in raw_symbols
         ):
             raise RuntimeError("FORWARD_HOMEBUILDERS_SYMBOL_INVALID")
         symbols = list(raw_symbols)
@@ -1233,6 +1235,12 @@ def self_test() -> None:
         ({**home_signal, "admitted_symbols": ["CCS", "CCS"]},
          "FORWARD_HOMEBUILDERS_DUPLICATE_SYMBOL"),
         ({**home_signal, "admitted_symbols": ["CCS", ""]},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "admitted_symbols": ["CCS", "ccs"]},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "admitted_symbols": ["CCS", "CCS "]},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "admitted_symbols": ["CCS", "CCS\\u200b"]},
          "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
         ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": 5}},
          "FORWARD_HOMEBUILDERS_HORIZON_MEMBERSHIP_MISMATCH"),
