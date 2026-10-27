@@ -1309,6 +1309,21 @@ def test_selected_pi983_product_1317_typed_preflight_exact_networkless_only():
                 validated_modules(module + suffix)
 
 
+
+def test_pi983_reauth_lock_exact_module_is_networkless_and_no_live():
+    # Selected #983 changed lock ownership/nofollow safety; no Gateway start,
+    # broker session, phone delivery, order, or unrestricted Python execution.
+    module = "tests.test_ibkr_persistent_reauth_monitor_v1"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-selected-pi983", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for suffix in ("_broker", "_live_submit", "_extra", ".py"):
+        with pytest.raises(ValueError):
+            validated_modules(module + suffix)
+
+
 def test_selected_product_1321_1323_exact_networkless_modules():
     # Selected #975@8ba3 changed source: pure operator health and inert MNQ
     # historical-refresh denial; no network, broker, submit or cache writes.
