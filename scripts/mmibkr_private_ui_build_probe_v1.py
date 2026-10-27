@@ -85,6 +85,10 @@ ALLOWED_ACCEPTANCE_FILES = {
     # Release #975 Product #1347: exact bound paper-bar observation UI test,
     # pure node:test with local imports, no broker, network or live authority.
     "ui-react/src/lib/paperBoundaryObservation.test.mjs",
+    # Selected #975 Product #1350/#1351: pure Node Pilot UTC and Builder ID guards.
+    "ui-react/src/lib/builderConditionInspector.test.mjs",
+    "ui-react/src/lib/pilotOverlayLineSeries.test.mjs",
+    "ui-react/src/pages/PilotRunDetailPage.candle-integrity.test.mjs",
 }
 
 
