@@ -6,7 +6,7 @@ on:
       source_sha:
         description: Exact accepted private MM-IBKR source SHA containing the Bot Console
         required: true
-        default: e927b48fba8c48dfad45d4d538b8805799750d8f
+        default: 99d74edfb4ae682c5745542e3b98afc524dee6fe
         type: string
   # Mainline source changes are review/CI only. Only an explicit release fire
   # marker or owner workflow_dispatch can request an Access-locked deploy.
@@ -35,7 +35,7 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  CANONICAL_PRIVATE_SOURCE_SHA: e927b48fba8c48dfad45d4d538b8805799750d8f
+  CANONICAL_PRIVATE_SOURCE_SHA: 99d74edfb4ae682c5745542e3b98afc524dee6fe
   OPERATOR_CONSOLE_URL: https://mmibkr-operator-console.slenderiq.workers.dev
 
 jobs:
