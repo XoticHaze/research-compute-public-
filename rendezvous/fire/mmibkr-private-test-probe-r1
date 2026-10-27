@@ -1,9 +1,9 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "0a83ccee25407a672dd92463a28a338d7bc9c243",
+  "source_ref": "8110c69410de32b0ba5a378b420c21163fa02b03",
   "test_modules": [
     "tests.test_cloud_operator_snapshot_v1",
-    "tests.test_promotion_review_store"
+    "tests.test_cloud_operator_snapshot_health_adapter_v1"
   ],
   "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
@@ -12,8 +12,8 @@
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "continue-release-product1290-1292-selected-native-20261027",
-  "purpose": "Changed selected #975 source-only Python integration after Product #1290 atomic snapshot, #1291 unknown trade count and #1292 Pilot collision guard; run only existing allowlisted operator snapshot and promotion review modules; no UI duplicate/broker/live/deploy",
+  "requested_by": "continue-release-selected-8110-privacy-existing-native-20261027",
+  "purpose": "Exact selected #975 8110 private operator snapshot privacy changed-source regression using two already-allowlisted networkless modules, encrypted vault; no broker, live, UI deploy or promotion",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -21,8 +21,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "release-selected-0a83-product1290-1292-native-python-20261027-r1",
+  "request_nonce": "release-selected-8110-privacy-allowlisted-native-20261027-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "0a83ccee25407a672dd92463a28a338d7bc9c243",
+  "current_private_reference": "8110c69410de32b0ba5a378b420c21163fa02b03",
   "parity_public_key_b64": ""
 }
