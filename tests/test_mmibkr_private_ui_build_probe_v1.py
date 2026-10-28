@@ -816,3 +816,21 @@ def test_selected_product_1367_dca_policy_node_is_exact_and_brokerless():
     ):
         with pytest.raises(ValueError, match="not_allowlisted"):
             mod.validate_acceptance_file(denied)
+
+
+def test_selected_product_1368_1369_exact_readonly_node_acceptance():
+    # Selected #975 pure Node quote-freshness and Pilot economics guards.
+    for exact in (
+        "ui-react/src/lib/botConsoleIndicativeMark.test.mjs",
+        "ui-react/src/lib/pilotReceiptEconomicBinding.test.mjs",
+    ):
+        assert mod.validate_acceptance_file(exact) == exact
+        for denied in (
+            exact + ".bak",
+            exact.replace(".test.mjs", ".live-submit.test.mjs"),
+            exact.replace(".test.mjs", ".test.js"),
+            "ui-react/src/lib/../lib/" + exact.rsplit("/", 1)[-1],
+            "/" + exact,
+        ):
+            with pytest.raises(ValueError, match="not_allowlisted"):
+                mod.validate_acceptance_file(denied)

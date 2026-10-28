@@ -81,6 +81,9 @@ ALLOWED_ACCEPTANCE_FILES = {
     # Product #1367 read-only selected execution-policy DCA truth for operator UI.
     # Pure Node helper; no StrategySpec, broker, live flag or network authority.
     "ui-react/src/lib/selectedRuntimeDcaTruth.test.mjs",
+    # Selected #975 Product #1368/#1369: pure read-only quote/Pilot economics.
+    "ui-react/src/lib/botConsoleIndicativeMark.test.mjs",
+    "ui-react/src/lib/pilotReceiptEconomicBinding.test.mjs",
     # Selected #975 new Product funded-Pilot and model-review evidence presentation tests.
     # Exact local node:test modules only; no network, broker or promotion issuer.
     "ui-react/src/lib/pilotFundedTerminalDrawdown.product.test.mjs",

@@ -1387,3 +1387,16 @@ def test_selected_product_1365_cloud_lifecycle_unpaired_is_exact_networkless_onl
     ):
         with pytest.raises(ValueError):
             validated_modules(denied)
+
+
+def test_release_selected_975_dca_max_add_source_module_is_exact_networkless():
+    # Product #1370 pure Python helper, not a broker/order or live-mode test.
+    module = "tests.test_selected_dca_forward_policy_v1"
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-selected-975", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+    for suffix in ("_extra", "_broker", "_live_submit", ".py"):
+        with pytest.raises(ValueError):
+            validated_modules(module + suffix)
