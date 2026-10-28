@@ -337,6 +337,9 @@ SOURCE_ONLY_SELECTED_PRODUCT_MODULES = frozenset({
     # Release #975: exact changed-source paper P&L, retained inventory and
     # bounded Foundry source-run parser regressions. All are offline, no broker.
     "tests.test_cloud_forward_performance_v1",
+    # Product #1365 exact cloud paper event-partition/source-ref fail-close,
+    # temporary files and synthetic ledgers only; no broker/network/live.
+    "tests.test_cloud_forward_lifecycle_unpaired_integrity_product_20261028",
     "tests.test_forward_lifecycle_retained_state_product_20261027",
     "tests.test_foundry_model_run_id_bounded_product_20261027",
 })
