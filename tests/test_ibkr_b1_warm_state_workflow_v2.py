@@ -1,0 +1,380 @@
+from pathlib import Path
+import unittest
+
+
+WORKFLOW = Path('.github/workflows/ibkr-cloudflare-readonly-b1-r1.yml')
+
+
+class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.text = WORKFLOW.read_text(encoding='utf-8')
+
+    def test_authority_request_path_has_no_mutable_sha_or_health_preflight(self):
+        self.assertIn('FLEET_AUTHORITY_URL:', self.text)
+        self.assertIn('scripts/fleet_authority_envelope_consumer_v1.py', self.text)
+        self.assertNotIn('FLEET_AUTHORITY_HEALTH', self.text)
+        self.assertNotIn('Require deployed B1 authority contract', self.text)
+        self.assertNotIn('/healthz', self.text)
+        self.assertNotIn('allowed_workflow_sha', self.text)
+        self.assertNotIn('ALLOWED_WORKFLOW_SHA', self.text)
+        self.assertNotIn("expected_sha = os.environ['GITHUB_SHA']", self.text)
+        self.assertNotIn('deployed fleet authority provenance does not match this workflow SHA', self.text)
+
+        obtain = self.text.index('name: Obtain one-run sealed gateway environment')
+        restore = self.text.index('name: Restore encrypted warm Gateway state if available')
+        self.assertLess(obtain, restore)
+
+    def test_encrypted_warm_source_is_exact_prior_canonical_b1_run(self):
+        self.assertIn("warm_source_run=", self.text)
+        self.assertIn("warm_source_branch=", self.text)
+        self.assertIn("warm_source_sha=", self.text)
+        self.assertIn('IBKR_WARM_SOURCE_RUN_ID_INVALID=1', self.text)
+        self.assertIn('IBKR_WARM_SOURCE_HEAD_INVALID=1', self.text)
+        self.assertIn('IBKR_WARM_SELF_ARTIFACT_REFUSED=1', self.text)
+        self.assertIn('IBKR_WARM_FOREIGN_BRANCH_REFUSED=1', self.text)
+        self.assertIn('IBKR_WARM_SOURCE_EXACT_REPOSITORY_BRANCH=PASS', self.text)
+        self.assertIn('IBKR_WARM_SOURCE_RUN_ID=', self.text)
+        self.assertIn('IBKR_WARM_SOURCE_ARTIFACT_ID=', self.text)
+        self.assertLess(self.text.index('warm_source_run='), self.text.index('ibkr-b1-warm-state.zip'))
+
+    def test_fresh_and_restored_sessions_are_classified_separately(self):
+        self.assertIn('${{ steps.restore.outputs.restored }}', self.text)
+        self.assertIn('IBKR_AUTH_PATH=WARM_STATE_RESTORED', self.text)
+        self.assertIn('IBKR_AUTH_PATH=FRESH_SESSION', self.text)
+        self.assertIn('IBKR_WARM_SESSION_REUSED=1', self.text)
+        self.assertIn('IBKR_WARM_SESSION_REUSED=0', self.text)
+        self.assertIn('IBKR_OPERATOR_ACTION=NONE_WARM_SESSION_REUSED', self.text)
+        self.assertIn('IBKR_OPERATOR_ACTION=NONE_FRESH_SESSION_ESTABLISHED', self.text)
+
+    def test_warm_reuse_ready_is_not_claimed_at_api_ready_boundary(self):
+        api_ready = self.text.index("echo 'IBKR_GATEWAY_API_READY=1'")
+        graceful_stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
+        reuse_ready = self.text.index("print('IBKR_WARM_REUSE_READY=1')")
+        self.assertLess(api_ready, graceful_stop)
+        self.assertLess(graceful_stop, reuse_ready)
+        self.assertNotIn('IBKR_WARM_REUSE_READY=1', self.text[api_ready:graceful_stop])
+
+    def test_gateway_is_gracefully_stopped_before_snapshot(self):
+        graceful_stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
+        stop_command = self.text.index('docker stop --time 90 ibkr-cloudflare-b1', graceful_stop)
+        seal = self.text.index('name: Seal authenticated Gateway warm state')
+        publish = self.text.index('name: Publish reusable encrypted warm state')
+        self.assertLess(graceful_stop, stop_command)
+        self.assertLess(stop_command, seal)
+        self.assertLess(seal, publish)
+        self.assertNotIn('docker stop --time 10 ibkr-cloudflare-b1', self.text)
+
+    def test_snapshot_requires_confirmed_clean_stop(self):
+        self.assertIn('id: graceful_stop', self.text)
+        self.assertIn("echo 'stopped=1' >> \"$GITHUB_OUTPUT\"", self.text)
+        self.assertIn("steps.auth_boundary.outcome == 'success' && steps.graceful_stop.outputs.stopped == '1'", self.text)
+        self.assertIn("steps.seal_warm_state.outcome == 'success' && steps.graceful_stop.outputs.stopped == '1'", self.text)
+        self.assertIn('IBKR_GATEWAY_GRACEFUL_STOP=1', self.text)
+
+    def test_post_auth_failure_still_cleans_ephemeral_gateway_without_false_reseal(self):
+        stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
+        seal = self.text.index('name: Seal authenticated Gateway warm state')
+        block = self.text[stop:seal]
+        self.assertIn('if: ${{ always() }}', block)
+        self.assertIn('IBKR_GATEWAY_CLEANUP_CONTAINER_ABSENT=1', block)
+        self.assertIn('docker stop --time 90 ibkr-cloudflare-b1', block)
+        self.assertIn('id: seal_warm_state', self.text)
+        self.assertIn('id: publish_warm_state', self.text)
+        self.assertEqual(
+            self.text.count('IBKR_WARM_STATE_PUBLISH_OUTCOME=${{ steps.publish_warm_state.outcome }}'), 4
+        )
+        self.assertNotIn('Gateway was stopped and warm state was resealed', self.text)
+
+    def test_reusable_state_claim_requires_seal(self):
+        sealed = self.text.index("print('IBKR_WARM_STATE_SEALED=1')")
+        persisted = self.text.index("print('IBKR_WARM_STATE_PERSISTED=1')")
+        ready = self.text.index("print('IBKR_WARM_REUSE_READY=1')")
+        self.assertLess(sealed, persisted)
+        self.assertLess(persisted, ready)
+
+    def test_clean_stop_generation_does_not_consume_legacy_live_snapshot(self):
+        self.assertIn('name=ibkr-b1-warm-state-clean-v2&per_page=20', self.text)
+        self.assertIn('name: ibkr-b1-warm-state-clean-v2', self.text)
+        self.assertNotIn('name=ibkr-b1-warm-state&per_page=20', self.text)
+        self.assertNotIn('name: ibkr-b1-warm-state\n', self.text)
+
+    def test_controller_native_warm_seed_is_separate_from_live_settings(self):
+        self.assertIn('warm_volume="ibkr-b1-warm-seed-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"', self.text)
+        self.assertIn('-v "$warm_volume:/warm-seed"', self.text)
+        self.assertIn('tar -xzf /import/ibkr-b1-warm-state.tgz -C /warm-seed', self.text)
+        self.assertIn('-e GATEWAY_WARM_STATE=/home/ibgateway/warm-state', self.text)
+        self.assertIn('-v "$warm_volume:/home/ibgateway/warm-state:ro"', self.text)
+        self.assertIn('-e TWS_SETTINGS_PATH=/home/ibgateway/Jts_b1', self.text)
+        self.assertIn('-v "$jts_volume:/home/ibgateway/Jts_b1"', self.text)
+        self.assertIn("test \"$GATEWAY_WARM_STATE\" != \"$TWS_SETTINGS_PATH\"", self.text)
+        self.assertIn('IBKR_CONTROLLER_NATIVE_WARM_SEED_BOUND=1', self.text)
+        self.assertIn('IBKR_WARM_STATE_SEED_MODE=CONTROLLER_NATIVE', self.text)
+        self.assertNotIn('-v "$jts_volume:/state" -v "$RUNNER_TEMP:/import:ro" alpine:3.22 sh -lc \'tar -xzf /import/ibkr-b1-warm-state.tgz -C /state', self.text)
+
+    def test_restored_seed_is_owned_and_readable_by_controller_runtime_user(self):
+        self.assertIn('gateway_uid="$(docker run --rm --entrypoint /usr/bin/id "$IBKR_CONTROLLER_IMAGE" -u)"', self.text)
+        self.assertIn('gateway_gid="$(docker run --rm --entrypoint /usr/bin/id "$IBKR_CONTROLLER_IMAGE" -g)"', self.text)
+        self.assertIn('-e GATEWAY_UID="$gateway_uid"', self.text)
+        self.assertIn('-e GATEWAY_GID="$gateway_gid"', self.text)
+        self.assertIn('chown -R "$GATEWAY_UID:$GATEWAY_GID" /warm-seed', self.text)
+        self.assertIn('-v "$warm_volume:/warm-seed:ro"', self.text)
+        self.assertIn('cp -a /warm-seed/. /tmp/warm-read-check/', self.text)
+        self.assertIn('IBKR_WARM_STATE_SEED_READABLE=1', self.text)
+
+    def test_native_seed_volume_is_destroyed_with_private_runtime(self):
+        self.assertIn('docker volume rm -f "$warm_volume"', self.text)
+
+    def test_consumer_acceptance_marker_is_emitted_after_post_auth_pipeline(self):
+        post_auth = self.text.index('python scripts/ibkr_post_auth_pipeline_v1.py')
+        consumer_ready = self.text.index("echo 'IBKR_CONSUMER_READY=1'", post_auth)
+        self.assertLess(post_auth, consumer_ready)
+
+    def test_readonly_remains_default_and_writable_api_requires_explicit_mutation_mode(self):
+        self.assertIn('default: readonly', self.text)
+        self.assertIn('- paper_submit_proof', self.text)
+        self.assertIn('- paper_execute', self.text)
+        self.assertIn('- paper_account_hygiene', self.text)
+        self.assertIn("IBKR_PAPER_PROOF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' && '1' || '0' }}", self.text)
+        self.assertIn("IBKR_PAPER_EXECUTE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_execute' && '1' || '0' }}", self.text)
+        self.assertIn("IBKR_PAPER_ACCOUNT_HYGIENE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_account_hygiene' && '1' || '0' }}", self.text)
+        self.assertIn('api_read_only=yes', self.text)
+        self.assertIn('if [ "$IBKR_PAPER_PROOF_MODE" = "1" ] || [ "$IBKR_PAPER_EXECUTE_MODE" = "1" ] || [ "$IBKR_PAPER_ACCOUNT_HYGIENE_MODE" = "1" ]; then', self.text)
+        self.assertIn('api_read_only=no', self.text)
+        self.assertIn('-e READ_ONLY_API="$api_read_only"', self.text)
+        self.assertNotIn('-e READ_ONLY_API=no', self.text)
+
+    def test_explicit_dispatch_nonce_is_bound_into_run_identity(self):
+        self.assertIn('dispatch_nonce:', self.text)
+        self.assertIn("format('{0} {1}', inputs.mode, inputs.dispatch_nonce)", self.text)
+        self.assertIn('run-name: >-', self.text)
+
+    def test_paper_proof_uses_existing_warm_job_and_encrypted_command_gate(self):
+        post_auth = self.text.index('name: Materialize canonical post-auth broker and forward-data handoff')
+        proof = self.text.index('name: Execute one encrypted MM-authorized selected-runtime paper proof')
+        stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
+        self.assertLess(post_auth, proof)
+        self.assertLess(proof, stop)
+        self.assertIn("if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' }}", self.text)
+        self.assertIn('python scripts/ibkr_warm_selected_runtime_activation_v1.py', self.text)
+        self.assertIn('--exchange-ref rendezvous-exchange', self.text)
+        self.assertIn('GH_TOKEN: ${{ github.token }}', self.text)
+
+    def test_all_broker_mutation_modes_require_restored_warm_state(self):
+        restore = self.text.index('name: Restore encrypted warm Gateway state if available')
+        require = self.text.index('name: Require restored warm state for broker-mutating selected-runtime command')
+        auth = self.text.index('name: Resolve authenticated session boundary')
+        self.assertLess(restore, require)
+        self.assertLess(require, auth)
+        guard = self.text[require:auth]
+        self.assertIn("env.IBKR_PAPER_PROOF_MODE == '1' || env.IBKR_PAPER_EXECUTE_MODE == '1' || env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE == '1'", guard)
+        self.assertIn('steps.restore.outputs.restored', guard)
+        self.assertIn('IBKR_PAPER_MUTATION_WARM_STATE_REQUIRED=1', guard)
+
+    def test_persistent_execute_uses_same_warm_job_but_has_distinct_mode(self):
+        post_auth = self.text.index('name: Materialize canonical post-auth broker and forward-data handoff')
+        execute = self.text.index('name: Execute one encrypted MM-authorized persistent paper command')
+        stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
+        self.assertLess(post_auth, execute)
+        self.assertLess(execute, stop)
+        block = self.text[execute:stop]
+        self.assertIn("inputs.mode == 'paper_execute'", block)
+        self.assertIn('--mode paper_execute', block)
+        self.assertIn('id: paper_execute', block)
+        self.assertIn('continue-on-error: true', block)
+
+    def test_account_hygiene_uses_same_warm_job_and_is_assessed_after_reseal(self):
+        post_auth = self.text.index('name: Materialize canonical post-auth broker and forward-data handoff')
+        hygiene = self.text.index('name: Execute one encrypted operator-authorized paper account hygiene command')
+        stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
+        seal = self.text.index('name: Seal authenticated Gateway warm state')
+        publish = self.text.index('name: Publish reusable encrypted warm state')
+        assess = self.text.index('name: Enforce paper account hygiene result after warm-state persistence')
+        cleanup = self.text.index('name: Destroy private runtime material')
+        self.assertLess(post_auth, hygiene)
+        self.assertLess(hygiene, stop)
+        self.assertLess(stop, seal)
+        self.assertLess(seal, publish)
+        self.assertLess(publish, assess)
+        self.assertLess(assess, cleanup)
+        block = self.text[hygiene:stop]
+        self.assertIn("inputs.mode == 'paper_account_hygiene'", block)
+        self.assertIn('--mode paper_account_hygiene', block)
+        self.assertIn('id: account_hygiene', block)
+        self.assertIn('continue-on-error: true', block)
+        self.assertIn('steps.account_hygiene.outcome', self.text[assess:cleanup])
+        self.assertIn('IBKR_WARM_PAPER_ACCOUNT_HYGIENE_ACCEPTED=0', self.text[assess:cleanup])
+
+    def test_account_hygiene_does_not_depend_on_strategy_historical_data_pipeline(self):
+        post_auth = self.text.index(
+            'name: Materialize canonical post-auth broker and forward-data handoff'
+        )
+        hygiene = self.text.index(
+            'name: Execute one encrypted operator-authorized paper account hygiene command'
+        )
+        publish = self.text.index(
+            'name: Publish canonical session and forward-data handoff'
+        )
+        self.assertLess(post_auth, hygiene)
+        self.assertIn(
+            "if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1'",
+            self.text[post_auth:hygiene],
+        )
+        self.assertIn(
+            "if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1'",
+            self.text[publish:],
+        )
+        hygiene_block = self.text[hygiene:self.text.index(
+            'name: Gracefully stop authenticated Gateway before warm-state snapshot'
+        )]
+        self.assertNotIn('ibkr_post_auth_pipeline_v1.py', hygiene_block)
+        self.assertIn('--mode paper_account_hygiene', hygiene_block)
+
+    def test_persistent_execute_failure_is_reported_only_after_warm_state_persistence(self):
+        execute = self.text.index('name: Execute one encrypted MM-authorized persistent paper command')
+        stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
+        seal = self.text.index('name: Seal authenticated Gateway warm state')
+        publish = self.text.index('name: Publish reusable encrypted warm state')
+        assess = self.text.index('name: Enforce persistent paper execute result after warm-state persistence')
+        cleanup = self.text.index('name: Destroy private runtime material')
+        self.assertLess(execute, stop)
+        self.assertLess(stop, seal)
+        self.assertLess(seal, publish)
+        self.assertLess(publish, assess)
+        self.assertLess(assess, cleanup)
+        self.assertIn('steps.paper_execute.outcome', self.text[assess:cleanup])
+        self.assertIn('IBKR_WARM_SELECTED_RUNTIME_PAPER_EXECUTE_ACCEPTED=0', self.text[assess:cleanup])
+
+    def test_paper_proof_failure_is_reported_only_after_warm_state_persistence(self):
+        proof = self.text.index('name: Execute one encrypted MM-authorized selected-runtime paper proof')
+        stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
+        seal = self.text.index('name: Seal authenticated Gateway warm state')
+        publish = self.text.index('name: Publish reusable encrypted warm state')
+        assess = self.text.index('name: Enforce paper proof result after warm-state persistence')
+        cleanup = self.text.index('name: Destroy private runtime material')
+        self.assertLess(proof, stop)
+        self.assertLess(stop, seal)
+        self.assertLess(seal, publish)
+        self.assertLess(publish, assess)
+        self.assertLess(assess, cleanup)
+        proof_block = self.text[proof:stop]
+        self.assertIn('id: paper_proof', proof_block)
+        self.assertIn('continue-on-error: true', proof_block)
+        self.assertIn('steps.paper_proof.outcome', self.text[assess:cleanup])
+        self.assertIn('IBKR_WARM_SELECTED_RUNTIME_PAPER_PROOF_ACCEPTED=0', self.text[assess:cleanup])
+
+    def test_broker_job_write_permission_is_scoped_to_same_job_and_live_stays_disabled(self):
+        broker = self.text.index('broker-data-proof:')
+        broker_tail = self.text[broker:]
+        self.assertIn('permissions:\n      contents: write\n      actions: read\n      id-token: write', broker_tail)
+        self.assertIn('IBKR_REMOTE_GLOBAL_CANCEL_CALLED=0', Path('scripts/ibkr_warm_selected_runtime_activation_v1.py').read_text(encoding='utf-8'))
+        activator = Path('scripts/ibkr_warm_selected_runtime_activation_v1.py').read_text(encoding='utf-8')
+        self.assertIn('"ENABLE_LIVE_TRADING": "0"', activator)
+        self.assertIn('"STRATEGY_IBKR_PAPER_GLOBAL_CANCEL_ENABLED_13Z37D": "0"', activator)
+
+    def test_activation_private_material_is_destroyed_with_gateway_runtime(self):
+        self.assertIn('docker rm -f mmibkr-warm-selected-runtime-proof', self.text)
+        self.assertIn('docker image rm "mmibkr-warm-proof:${GITHUB_RUN_ID}"', self.text)
+        self.assertIn('"$RUNNER_TEMP/ibkr-command-private.b64"', self.text)
+        self.assertIn('"$RUNNER_TEMP/ibkr-paper-proof-return"', self.text)
+        self.assertIn('"$RUNNER_TEMP/ibkr-paper-account-hygiene-receipt.json"', self.text)
+        self.assertIn('"$RUNNER_TEMP/mm-ibkr-source"', self.text)
+
+
+    def test_forward_exact_ticks_stays_read_only_and_skips_unrelated_bar_pipeline(self):
+        self.assertIn('- forward_exact_ticks', self.text)
+        self.assertIn(
+            "IBKR_FORWARD_EXACT_TICKS_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'forward_exact_ticks' && '1' || '0' }}",
+            self.text,
+        )
+        read_only_block = self.text[
+            self.text.index('api_read_only=yes'):
+            self.text.index('echo "IBKR_GATEWAY_READ_ONLY_API=${api_read_only}"')
+        ]
+        self.assertNotIn('IBKR_FORWARD_EXACT_TICKS_MODE', read_only_block)
+        self.assertIn('api_read_only=yes', read_only_block)
+
+        post_auth = self.text.index(
+            'name: Materialize canonical post-auth broker and forward-data handoff'
+        )
+        tick = self.text.index(
+            'name: Execute one encrypted MM-owned exact historical tick command'
+        )
+        stop = self.text.index(
+            'name: Gracefully stop authenticated Gateway before warm-state snapshot'
+        )
+        self.assertLess(post_auth, tick)
+        self.assertLess(tick, stop)
+        post_auth_guard = self.text[post_auth:tick]
+        self.assertIn("env.IBKR_FORWARD_EXACT_TICKS_MODE != '1'", post_auth_guard)
+        tick_block = self.text[tick:stop]
+        self.assertIn("inputs.mode == 'forward_exact_ticks'", tick_block)
+        self.assertIn('--mode forward_exact_ticks', tick_block)
+        self.assertNotIn('ibkr_post_auth_pipeline_v1.py', tick_block)
+        self.assertNotIn('start_canonical_runtime', tick_block)
+
+    def test_forward_exact_ticks_is_not_classified_as_broker_mutation_mode(self):
+        require = self.text.index(
+            'name: Require restored warm state for broker-mutating selected-runtime command'
+        )
+        auth = self.text.index('name: Resolve authenticated session boundary')
+        guard = self.text[require:auth]
+        self.assertNotIn('IBKR_FORWARD_EXACT_TICKS_MODE', guard)
+        self.assertIn('IBKR_PAPER_PROOF_MODE', guard)
+        self.assertIn('IBKR_PAPER_EXECUTE_MODE', guard)
+        self.assertIn('IBKR_PAPER_ACCOUNT_HYGIENE_MODE', guard)
+
+    def test_forward_exact_ticks_private_material_is_destroyed_and_result_checked_after_reseal(self):
+        tick = self.text.index(
+            'name: Execute one encrypted MM-owned exact historical tick command'
+        )
+        stop = self.text.index(
+            'name: Gracefully stop authenticated Gateway before warm-state snapshot'
+        )
+        assess = self.text.index(
+            'name: Enforce exact historical tick result after warm-state persistence'
+        )
+        cleanup = self.text.index('name: Destroy private runtime material')
+        self.assertLess(tick, stop)
+        self.assertLess(stop, assess)
+        self.assertLess(assess, cleanup)
+        self.assertIn('steps.forward_exact_ticks.outcome', self.text[assess:cleanup])
+        self.assertIn('"$RUNNER_TEMP/ibkr-forward-exact-ticks-receipt.json"', self.text)
+        self.assertIn('"$RUNNER_TEMP/ibkr-forward-exact-ticks-return"', self.text)
+
+
+def test_optional_warm_read_return_is_readonly_run_bound_and_encrypted(self):
+    self.assertIn('read_return_recipient_b64:', self.text)
+    self.assertIn('read_return_recipient_key_id:', self.text)
+    self.assertIn('symbols:', self.text)
+    self.assertIn("(inputs.mode == 'readonly' || inputs.mode == 'paper_execute')", self.text)
+    self.assertIn('IBKR_WARM_READ_RETURN_REQUEST_VALID=1', self.text)
+    self.assertIn('python scripts/ibkr_warm_read_return_v1.py', self.text)
+    self.assertIn('--run-id "$GITHUB_RUN_ID"', self.text)
+    self.assertIn('--public-head "$GITHUB_SHA"', self.text)
+    self.assertIn('rendezvous/returns/{run_id}/', self.text)
+    self.assertIn('IBKR_WARM_READ_RETURN_PLAINTEXT_PUBLISHED=0', self.text)
+    self.assertIn('"$RUNNER_TEMP/ibkr-warm-read-return"', self.text)
+    post_auth = self.text.index('name: Materialize canonical post-auth broker and forward-data handoff')
+    encrypt = self.text.index('name: Encrypt optional detailed warm read snapshot for private consumer')
+    publish = self.text.index('name: Publish encrypted warm read return')
+    proof = self.text.index('name: Execute one encrypted MM-authorized selected-runtime paper proof')
+    stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
+    self.assertLess(post_auth, encrypt)
+    self.assertLess(encrypt, publish)
+    self.assertLess(publish, proof)
+    self.assertLess(proof, stop)
+
+def test_warm_read_return_can_share_paper_execute_run_without_owning_mutation(self):
+    needle = "IBKR_WARM_READ_RETURN_REQUESTED: $" + "{{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'paper_execute')"
+    self.assertIn(needle, self.text)
+    self.assertIn("mode not in {'readonly','paper_execute'}", self.text)
+    snapshot = self.text.index('name: Publish encrypted warm read return')
+    execute = self.text.index('name: Execute one encrypted MM-authorized persistent paper command')
+    self.assertLess(snapshot, execute)
+    activator = Path('scripts/ibkr_warm_selected_runtime_activation_v1.py').read_text(encoding='utf-8')
+    self.assertIn('"ENABLE_LIVE_TRADING": "0"', activator)
+    self.assertIn('IBKR_REMOTE_GLOBAL_CANCEL_CALLED=0', activator)
+
+if __name__ == '__main__':
+    unittest.main()
