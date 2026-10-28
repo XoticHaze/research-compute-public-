@@ -877,19 +877,22 @@ jobs:
           exit 0
 
       - name: Save sanitized successor checkpoint cache
-        if: ${{ steps.checkpoint.outputs.ready == 'true' }}
+        # A failed owner can still produce a privacy-checked checkpoint. Do
+        # not let GitHub's implicit success() discard it after an earlier
+        # runtime failure; acceptance/auto-handoff remain independent.
+        if: ${{ always() && steps.checkpoint.outputs.ready == 'true' }}
         uses: actions/cache/save@1bd1e32a3bdc45362d1e726936510720a7c30a57
         with:
           path: ${{ runner.temp }}/mmibkr-checkpoint
           key: ${{ env.CHECKPOINT_CACHE_PREFIX }}${{ github.run_id }}-${{ env.PRIVATE_HEAD }}
 
       - name: Remove local checkpoint before cache round-trip proof
-        if: ${{ steps.checkpoint.outputs.ready == 'true' }}
+        if: ${{ always() && steps.checkpoint.outputs.ready == 'true' }}
         run: rm -f "$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
 
       - name: Restore just-saved checkpoint cache for round-trip proof
         id: verify_checkpoint_cache
-        if: ${{ steps.checkpoint.outputs.ready == 'true' }}
+        if: ${{ always() && steps.checkpoint.outputs.ready == 'true' }}
         continue-on-error: true
         uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57
         with:
