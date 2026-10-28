@@ -1,18 +1,18 @@
 {
-  "source_ref": "cd431670749a4c48d87c07b164ef1e4219bef7ca",
+  "source_ref": "8e293daa6fe3448ea3fc8d7740c3b5811a9e307e",
   "session_seconds": "1200",
   "max_cycles": "1",
   "self_handoff": false,
-  "requested_by": "assistant-exact-budget-first-cycle-canary",
-  "source_public_run_id": "35407829303",
+  "requested_by": "manual-worker-MW-20261028084230744",
+  "source_public_run_id": "40659244165",
   "expected_checkpoint_cache_key": "",
   "expected_checkpoint_sha256": "",
   "require_terminal_continuity": false,
   "predecessor_proof_run": null,
   "predecessor_v2_receipt_accepted": false,
   "failed_owner_run": null,
-  "recovery_reason": "retry exact current-source canary after deterministic zero-cycle budget-gate repair",
-  "purpose": "bounded one-cycle paper canary proving exact-budget daemon enters cycle one on current MM source",
+  "recovery_reason": "single_20m_bounded_current_selected_paper_source_after_exact_encrypted_admission",
+  "purpose": "One bounded current selected-runtime broker-paper owner pass (max_cycles=1, self_handoff=false, no live); observe actual IBKR paper cycle, terminal checkpoint and operator snapshot for console. No Pi or production-live handoff.",
   "live_execution_allowed": false,
   "allow_unpinned_bootstrap": true
 }
