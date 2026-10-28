@@ -107,6 +107,8 @@ ALLOWED_ACCEPTANCE_FILES = {
     # Exact local node:test files; no broker, network, order or live authority.
     "ui-react/src/lib/portfolioSummaryTruth.product.test.mjs",
     "ui-react/src/pages/ExecutionControlPlanePage.unknown-broker.product.test.mjs",
+    # Selected #975@23cc: exact pure Node missing Pilot config evidence.
+    "ui-react/src/lib/pilotRunConfigEvidence.test.mjs",
 }
 
 

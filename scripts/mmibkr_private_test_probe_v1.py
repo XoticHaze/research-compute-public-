@@ -213,6 +213,10 @@ SAFE_EXACT = {
     "tests.test_strategy_builder_review_preview_semantic_20261027",
     "tests.test_mnq_dca_event_export",
     "tests.test_mnq_dca_path_outcomes",
+    # Selected #883@bc926 and #975@23cc: exact brokerless nofollow inventory tests.
+    "tests.test_live_inventory_parent_nofollow_product_20261028",
+    "tests.test_live_fill_commit_inventory_trust_product_20261028",
+    "tests.test_cloud_operator_snapshot_inventory_read_trust_product_20261028",
 }
 
 # Exact selected Model Lab cancellation/identity regressions from MM-IBKR

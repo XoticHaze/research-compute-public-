@@ -1400,3 +1400,21 @@ def test_release_selected_975_dca_max_add_source_module_is_exact_networkless():
     for suffix in ("_extra", "_broker", "_live_submit", ".py"):
         with pytest.raises(ValueError):
             validated_modules(module + suffix)
+
+
+def test_selected_20261028_live_inventory_and_operator_truth_exact_networkless():
+    # Exact selected-source brokerless regression admission only; not private execution.
+    modules = (
+        "tests.test_live_inventory_parent_nofollow_product_20261028",
+        "tests.test_live_fill_commit_inventory_trust_product_20261028",
+        "tests.test_cloud_operator_snapshot_inventory_read_trust_product_20261028",
+    )
+    assert validated_modules(",".join(modules)) == list(modules)
+    for module in modules:
+        cmd = pytest_container_command("sealed-selected-inventory-trust", module)
+        assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in cmd
+        assert cmd[-1] == module_file_path(module)
+        for denied in (module + "_extra", module + "_live_submit", module + ".py", "../" + module):
+            with pytest.raises(ValueError):
+                validated_modules(denied)
