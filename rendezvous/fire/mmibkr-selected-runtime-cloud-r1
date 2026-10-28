@@ -1,18 +1,18 @@
 {
-  "source_ref": "3d15d36e28dec27295446f1e121ae7bfca542640",
+  "source_ref": "296d88ef78ee97b46f7f9b6731e8a6a7009300d2",
   "session_seconds": "1200",
   "max_cycles": "1",
   "self_handoff": false,
-  "requested_by": "manual-worker-MW-20261028084230744-native-r2",
-  "source_public_run_id": "40661297725",
+  "requested_by": "manual-worker-MW-20261028084230744-final",
+  "source_public_run_id": "40662296546",
   "expected_checkpoint_cache_key": "",
   "expected_checkpoint_sha256": "",
   "require_terminal_continuity": false,
   "predecessor_proof_run": null,
   "predecessor_v2_receipt_accepted": false,
   "failed_owner_run": null,
-  "recovery_reason": "one_bounded_paper_owner_retry_after_exact_native_fixture_reconcile",
-  "purpose": "One bounded paper-only owner cycle on newly encrypted strict-native source 3d15, after real prebroker native failures repaired in test-only selected PR #1413. No live, no Pi, no self handoff.",
+  "recovery_reason": "second_native_run_snapshot_unknown_assert_fixed_final_bounded_owner",
+  "purpose": "One 1200s one-cycle paper-only selected-runtime owner on fixed exact native-accepted source; no live, no self-handoff. Require authentic broker/runtime and terminal evidence.",
   "live_execution_allowed": false,
   "allow_unpinned_bootstrap": true
 }

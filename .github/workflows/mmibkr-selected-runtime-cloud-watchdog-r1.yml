@@ -154,7 +154,7 @@ jobs:
               raise SystemExit(0)
 
           checkpoint_prefix='mmibkr-selected-runtime-cloud-checkpoint-v1-'
-          canonical_source='3d15d36e28dec27295446f1e121ae7bfca542640'
+          canonical_source='296d88ef78ee97b46f7f9b6731e8a6a7009300d2'
 
           def receipt_for(run):
               run_id=str(run.get('id') or '')
@@ -247,7 +247,7 @@ jobs:
           payload=json.dumps({
               'ref':'main',
               'inputs':{
-                  'source_ref':'3d15d36e28dec27295446f1e121ae7bfca542640',
+                  'source_ref':'296d88ef78ee97b46f7f9b6731e8a6a7009300d2',
                   'session_seconds':'18000',
                   'max_cycles':'0',
                   'expected_checkpoint_cache_key':checkpoint_key,
