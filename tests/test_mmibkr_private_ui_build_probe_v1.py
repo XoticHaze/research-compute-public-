@@ -801,3 +801,18 @@ def test_release_selected_975_pilot_utc_and_builder_id_exact_node_only():
         ):
             with pytest.raises(ValueError, match="not_allowlisted"):
                 mod.validate_acceptance_file(denied)
+
+
+def test_selected_product_1367_dca_policy_node_is_exact_and_brokerless():
+    # Exact selected read-only operator DCA display test, no wildcard authority.
+    exact = "ui-react/src/lib/selectedRuntimeDcaTruth.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak",
+        exact.replace(".test.mjs", ".live-submit.test.mjs"),
+        exact.replace(".test.mjs", ".test.js"),
+        "ui-react/src/lib/../lib/selectedRuntimeDcaTruth.test.mjs",
+        "/" + exact,
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
