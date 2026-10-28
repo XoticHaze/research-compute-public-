@@ -1117,6 +1117,7 @@ jobs:
               receipt = {
                   'schema': 'mmibkr.selected_runtime_cloud_session_receipt.v2',
                   'ok': False,
+                  'session_accepted': False,
                   'status': 'session_receipt_missing_after_runtime_failure',
                   'run_id': os.environ['GITHUB_RUN_ID'],
                   'public_head': os.environ.get('GITHUB_SHA'),
