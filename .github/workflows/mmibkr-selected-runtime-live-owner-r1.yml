@@ -464,6 +464,11 @@ jobs:
       - name: Verify reset-window bounded read-only observation (brokerless)
         run: python -m unittest -v tests.test_mmibkr_live_gateway_reset_window_observation_v1
 
+      - name: Verify Pi sealed handoff cryptography and read-only acceptance (brokerless)
+        run: |
+          python -m pip install --disable-pip-version-check cryptography==46.0.1
+          python -m unittest discover -s tests -p 'test_mmibkr_pi_credential_handoff_v1.py' -v
+
   pi_credentials:
     # The existing authorized workflow owns GitHub OIDC. No new Cloudflare
     # credential-release identity, arbitrary recipient input or broker run.
