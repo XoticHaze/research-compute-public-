@@ -1408,6 +1408,7 @@ def test_selected_20261028_live_inventory_and_operator_truth_exact_networkless()
         "tests.test_live_inventory_parent_nofollow_product_20261028",
         "tests.test_live_fill_commit_inventory_trust_product_20261028",
         "tests.test_cloud_operator_snapshot_inventory_read_trust_product_20261028",
+        "tests.test_operator_lifecycle_parent_nofollow_product_20261028",
     )
     assert validated_modules(",".join(modules)) == list(modules)
     for module in modules:
