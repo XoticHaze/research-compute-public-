@@ -109,6 +109,8 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/pages/ExecutionControlPlanePage.unknown-broker.product.test.mjs",
     # Selected #975@23cc: exact pure Node missing Pilot config evidence.
     "ui-react/src/lib/pilotRunConfigEvidence.test.mjs",
+    # Selected #975@6a2e: pure Node Builder historical unknown-vs-zero truth.
+    "ui-react/src/components/strategyHistoricalExpectedEvidence.test.mjs",
 }
 
 

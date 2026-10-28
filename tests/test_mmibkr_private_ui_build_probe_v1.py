@@ -885,3 +885,16 @@ def test_selected_20261028_pilot_config_unknown_truth_exact_node_only():
     ):
         with pytest.raises(ValueError, match="not_allowlisted"):
             mod.validate_acceptance_file(denied)
+
+
+def test_selected_20261028_builder_historical_unknown_truth_exact_node_only():
+    exact = "ui-react/src/components/strategyHistoricalExpectedEvidence.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak", exact + ".js",
+        exact.replace(".test.mjs", ".live-submit.test.mjs"),
+        "../" + exact, "/" + exact,
+        exact.replace("ui-react/src/", "ui-react/src/../src/"),
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)

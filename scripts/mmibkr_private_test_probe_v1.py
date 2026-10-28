@@ -217,6 +217,9 @@ SAFE_EXACT = {
     "tests.test_live_inventory_parent_nofollow_product_20261028",
     "tests.test_live_fill_commit_inventory_trust_product_20261028",
     "tests.test_cloud_operator_snapshot_inventory_read_trust_product_20261028",
+    # Selected #975@6a2e: lifecycle-only/boundary-only paper audit and consumer.
+    "tests.test_survivor_run_data_availability_audit_v1",
+    "tests.test_survivor_completed_trade_input_status_v1",
 }
 
 # Exact selected Model Lab cancellation/identity regressions from MM-IBKR

@@ -1418,3 +1418,20 @@ def test_selected_20261028_live_inventory_and_operator_truth_exact_networkless()
         for denied in (module + "_extra", module + "_live_submit", module + ".py", "../" + module):
             with pytest.raises(ValueError):
                 validated_modules(denied)
+
+
+def test_selected_20261028_paper_lifecycle_audit_consumer_exact_networkless():
+    # Read-only lifecycle/terminal metadata; never accept broker fills or PnL.
+    modules = (
+        "tests.test_survivor_run_data_availability_audit_v1",
+        "tests.test_survivor_completed_trade_input_status_v1",
+    )
+    assert validated_modules(",".join(modules)) == list(modules)
+    for module in modules:
+        cmd = pytest_container_command("sealed-selected-paper-continuity", module)
+        assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in cmd
+        assert cmd[-1] == module_file_path(module)
+        for denied in (module + "_extra", module + "_live_submit", module + ".py", "../" + module):
+            with pytest.raises(ValueError):
+                validated_modules(denied)
