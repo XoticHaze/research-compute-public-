@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 from scripts.mmibkr_public_cloud_receipt_projection_v1 import project
 from scripts import mmibkr_cloud_session_acceptance_v1 as acceptance
