@@ -111,6 +111,23 @@ def test_exact_live_owner_journal_writer_and_broker_provenance_are_source_only()
         validated_modules("tests.test_selected_runtime_live_broker_submit_v1")
 
 
+def test_selected_p0_currency_multiplier_identity_tests_are_exact_networkless_only():
+    # Newly consumed Product #1509/#1511 source: no broker/API or live authority.
+    modules = (
+        "tests.test_live_owner_currency_multiplier_identity_product_20261028",
+        "tests.test_ibkr_split_gateway_portability_v1",
+    )
+    assert validated_modules(" ".join(modules)) == list(modules)
+    for module in modules:
+        cmd = pytest_container_command("sealed-test-image", module)
+        assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in cmd
+        assert cmd[-1] == module_file_path(module)
+        for rejected in (module + "_extra", module + "_live_submit"):
+            with pytest.raises(ValueError):
+                validated_modules(rejected)
+
+
 def test_signed_owner_candidate_is_allowlisted_only_as_networkless_disabled_source():
     module = "tests.test_selected_runtime_live_owner_candidate_certificate_v1"
     assert validated_modules(module) == [module]
