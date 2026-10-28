@@ -849,3 +849,25 @@ def test_selected_product_1371_safe_chain_readiness_exact_node_only():
     ):
         with pytest.raises(ValueError, match="not_allowlisted"):
             mod.validate_acceptance_file(denied)
+
+
+def test_selected_product_1393_1396_human_truth_exact_node_only():
+    # Four exact selected #975 source-only Node tests, no broker or live route.
+    exact_files = (
+        "ui-react/src/components/StrategyBuilderHumanNavigation.product.test.mjs",
+        "ui-react/src/pages/PilotRunDetailPage.slice-evidence.product.test.mjs",
+        "ui-react/src/lib/portfolioSummaryTruth.product.test.mjs",
+        "ui-react/src/pages/ExecutionControlPlanePage.unknown-broker.product.test.mjs",
+    )
+    for exact in exact_files:
+        assert mod.validate_acceptance_file(exact) == exact
+        for denied in (
+            exact + ".bak",
+            exact + ".js",
+            exact.replace(".test.mjs", ".live-submit.test.mjs"),
+            "../" + exact,
+            "/" + exact,
+            exact.replace("ui-react/src/", "ui-react/src/../src/"),
+        ):
+            with pytest.raises(ValueError, match="not_allowlisted"):
+                mod.validate_acceptance_file(denied)
