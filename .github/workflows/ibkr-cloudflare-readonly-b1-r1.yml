@@ -1164,11 +1164,20 @@ jobs:
 
       - name: Gracefully stop authenticated Gateway before warm-state snapshot
         id: graceful_stop
+        # Preserve failed post-auth paper runs without touching persistent Pi Gateway.
+        if: ${{ always() }}
         run: |
           set -euo pipefail
-          docker stop --time 90 ibkr-cloudflare-b1 >/dev/null
-          running="$(docker inspect -f '{{.State.Running}}' ibkr-cloudflare-b1 2>/dev/null || echo false)"
+          running="$(docker inspect -f '{{.State.Running}}' ibkr-cloudflare-b1 2>/dev/null || echo missing)"
+          if [ "$running" = missing ]; then
+            echo 'IBKR_GATEWAY_CLEANUP_CONTAINER_ABSENT=1'
+            exit 0
+          fi
           if [ "$running" = true ]; then
+            docker stop --time 90 ibkr-cloudflare-b1 >/dev/null
+          fi
+          running="$(docker inspect -f '{{.State.Running}}' ibkr-cloudflare-b1 2>/dev/null || echo missing)"
+          if [ "$running" != false ]; then
             echo 'IBKR_GATEWAY_GRACEFUL_STOP=0'
             exit 46
           fi
@@ -1176,7 +1185,8 @@ jobs:
           echo 'stopped=1' >> "$GITHUB_OUTPUT"
 
       - name: Seal authenticated Gateway warm state
-        if: steps.graceful_stop.outputs.stopped == '1' && env.IBKR_PRODUCTION_LIVE_READONLY_MODE != '1'
+        id: seal_warm_state
+        if: ${{ always() && steps.auth_boundary.outcome == 'success' && steps.graceful_stop.outputs.stopped == '1' && env.IBKR_PRODUCTION_LIVE_READONLY_MODE != '1' }}
         run: |
           set -euo pipefail
           jts_volume="ibkr-b1-jts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
@@ -1207,7 +1217,8 @@ jobs:
           PY
 
       - name: Publish reusable encrypted warm state
-        if: steps.graceful_stop.outputs.stopped == '1' && env.IBKR_PRODUCTION_LIVE_READONLY_MODE != '1'
+        id: publish_warm_state
+        if: ${{ always() && steps.seal_warm_state.outcome == 'success' && steps.graceful_stop.outputs.stopped == '1' && env.IBKR_PRODUCTION_LIVE_READONLY_MODE != '1' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ibkr-b1-warm-state-clean-v2
@@ -1233,7 +1244,8 @@ jobs:
           set -euo pipefail
           if [ "${{ steps.paper_proof.outcome }}" != "success" ]; then
             echo 'IBKR_WARM_SELECTED_RUNTIME_PAPER_PROOF_ACCEPTED=0'
-            echo 'Paper proof failed or was blocked; Gateway was stopped and warm state was resealed before surfacing this failure.'
+            echo 'IBKR_WARM_STATE_PUBLISH_OUTCOME=${{ steps.publish_warm_state.outcome }}'
+            echo 'Paper proof failed or was blocked; warm-state publication is independently reported above.'
             exit 52
           fi
           echo 'IBKR_WARM_SELECTED_RUNTIME_PAPER_PROOF_ACCEPTED=1'
@@ -1244,7 +1256,8 @@ jobs:
           set -euo pipefail
           if [ "${{ steps.paper_execute.outcome }}" != "success" ]; then
             echo 'IBKR_WARM_SELECTED_RUNTIME_PAPER_EXECUTE_ACCEPTED=0'
-            echo 'Persistent paper execute failed or was blocked; Gateway was stopped and warm state was resealed before surfacing this failure.'
+            echo 'IBKR_WARM_STATE_PUBLISH_OUTCOME=${{ steps.publish_warm_state.outcome }}'
+            echo 'Persistent paper execute failed or was blocked; warm-state publication is independently reported above.'
             exit 53
           fi
           if [ "${{ steps.paper_execute.outputs.no_command }}" = "true" ]; then
@@ -1260,7 +1273,8 @@ jobs:
           set -euo pipefail
           if [ "${{ steps.account_hygiene.outcome }}" != "success" ]; then
             echo 'IBKR_WARM_PAPER_ACCOUNT_HYGIENE_ACCEPTED=0'
-            echo 'Paper account hygiene failed or was blocked; Gateway was stopped and warm state was resealed before surfacing this failure.'
+            echo 'IBKR_WARM_STATE_PUBLISH_OUTCOME=${{ steps.publish_warm_state.outcome }}'
+            echo 'Paper account hygiene failed or was blocked; warm-state publication is independently reported above.'
             exit 54
           fi
           echo 'IBKR_WARM_PAPER_ACCOUNT_HYGIENE_ACCEPTED=1'
@@ -1271,7 +1285,8 @@ jobs:
           set -euo pipefail
           if [ "${{ steps.forward_exact_ticks.outcome }}" != "success" ]; then
             echo 'IBKR_FORWARD_EXACT_TICKS_ACCEPTED=0'
-            echo 'Exact historical tick transport failed; Gateway was stopped and warm state was resealed before surfacing this failure.'
+            echo 'IBKR_WARM_STATE_PUBLISH_OUTCOME=${{ steps.publish_warm_state.outcome }}'
+            echo 'Exact historical tick transport failed; warm-state publication is independently reported above.'
             exit 55
           fi
           echo 'IBKR_FORWARD_EXACT_TICKS_ACCEPTED=1'
