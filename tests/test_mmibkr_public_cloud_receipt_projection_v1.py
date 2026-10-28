@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import unittest
 
 from scripts.mmibkr_public_cloud_receipt_projection_v1 import project
@@ -138,6 +139,45 @@ class PublicReceiptProjectionTests(unittest.TestCase):
                 receipt["initial_backfill_ingest"][field] = value
                 with self.assertRaisesRegex(ValueError, "nested_identity_rejected"):
                     project(receipt)
+
+    def test_failed_owner_missing_session_fallback_has_typed_false_acceptance(self):
+        # Actual public run 40681875150 restored and resealed its checkpoint,
+        # but the daemon session file was absent after step-20 failure.
+        # The workflow's fallback must remain publishable as NOT accepted.
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github" / "workflows" / "mmibkr-selected-runtime-cloud-r1.yml"
+        ).read_text(encoding="utf-8")
+        marker = "'status': 'session_receipt_missing_after_runtime_failure'"
+        self.assertEqual(workflow.count(marker), 1)
+        fallback = workflow[workflow.index(marker):workflow.index(marker) + 180]
+        self.assertIn("'session_accepted': False", fallback)
+
+        receipt = {
+            "schema": "mmibkr.selected_runtime_cloud_session_receipt.v2",
+            "ok": False,
+            "session_accepted": False,
+            "status": "session_receipt_missing_after_runtime_failure",
+            "run_id": "40681875150",
+            "public_head": "a" * 40,
+            "private_head": "b" * 40,
+            "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
+            "private_repository_token_used": False,
+            "live_execution_allowed": False,
+            "credentials_included": False,
+            "account_state_included": False,
+            "positions_included": False,
+            "orders_included": False,
+            "initial_backfill_ingest": {},
+            "operator_snapshot_publish": {},
+        }
+        public = project(receipt)
+        self.assertIs(public["session_accepted"], False)
+        self.assertIs(public["ok"], False)
+        self.assertEqual(public["status"], "not_accepted")
+        self.assertEqual(public["last_cycle"], {})
+        self.assertEqual(public["futures_roll_maintenance"], {})
+        self.assertFalse(public["live_execution_allowed"])
 
     def test_malformed_schema_and_acceptance_fail_closed(self):
         receipt = self._fixture()
