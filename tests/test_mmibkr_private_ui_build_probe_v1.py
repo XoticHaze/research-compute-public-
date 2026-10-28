@@ -834,3 +834,18 @@ def test_selected_product_1368_1369_exact_readonly_node_acceptance():
         ):
             with pytest.raises(ValueError, match="not_allowlisted"):
                 mod.validate_acceptance_file(denied)
+
+
+def test_selected_product_1371_safe_chain_readiness_exact_node_only():
+    # Source-only UI contradiction guard. No broker, submit or runtime authority.
+    exact = "ui-react/src/lib/operatorSafeChainReadiness.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak",
+        exact.replace(".test.mjs", ".live-submit.test.mjs"),
+        exact.replace(".test.mjs", ".test.js"),
+        "ui-react/src/lib/../lib/operatorSafeChainReadiness.test.mjs",
+        "/" + exact,
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
