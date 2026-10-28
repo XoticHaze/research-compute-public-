@@ -68,8 +68,23 @@ class IbkrB1WarmStateWorkflowV2Tests(unittest.TestCase):
     def test_snapshot_requires_confirmed_clean_stop(self):
         self.assertIn('id: graceful_stop', self.text)
         self.assertIn("echo 'stopped=1' >> \"$GITHUB_OUTPUT\"", self.text)
-        self.assertIn("if: steps.graceful_stop.outputs.stopped == '1'", self.text)
+        self.assertIn("steps.auth_boundary.outcome == 'success' && steps.graceful_stop.outputs.stopped == '1'", self.text)
+        self.assertIn("steps.seal_warm_state.outcome == 'success' && steps.graceful_stop.outputs.stopped == '1'", self.text)
         self.assertIn('IBKR_GATEWAY_GRACEFUL_STOP=1', self.text)
+
+    def test_post_auth_failure_still_cleans_ephemeral_gateway_without_false_reseal(self):
+        stop = self.text.index('name: Gracefully stop authenticated Gateway before warm-state snapshot')
+        seal = self.text.index('name: Seal authenticated Gateway warm state')
+        block = self.text[stop:seal]
+        self.assertIn('if: ${{ always() }}', block)
+        self.assertIn('IBKR_GATEWAY_CLEANUP_CONTAINER_ABSENT=1', block)
+        self.assertIn('docker stop --time 90 ibkr-cloudflare-b1', block)
+        self.assertIn('id: seal_warm_state', self.text)
+        self.assertIn('id: publish_warm_state', self.text)
+        self.assertEqual(
+            self.text.count('IBKR_WARM_STATE_PUBLISH_OUTCOME=${{ steps.publish_warm_state.outcome }}'), 4
+        )
+        self.assertNotIn('Gateway was stopped and warm state was resealed', self.text)
 
     def test_reusable_state_claim_requires_seal(self):
         sealed = self.text.index("print('IBKR_WARM_STATE_SEALED=1')")
