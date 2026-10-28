@@ -1,9 +1,8 @@
 {
   "schema": "mmibkr.private_test_probe_fire.v1",
-  "source_ref": "f77d0ab03d67fb83e985f771e1a71f4ceb551bb1",
+  "source_ref": "6f913a2c6370159dd5f5469d1d62baed2b59426d",
   "test_modules": [
-    "tests.test_selected_runtime_initial_backfill_ingest_v1",
-    "tests.test_autotuner_parameter_consumption"
+    "tests.test_promotion_review_store"
   ],
   "ui_acceptance_file": "",
   "crw_consumer_reprobe": false,
@@ -12,8 +11,8 @@
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "manual-worker-f77d-corrected-test-native-20261026220756737",
-  "purpose": "Exact f77d two test fixture fixes after red selected B1 OHLC and AutoTuner keyword helper cases; rerun same two networkless modules via existing encrypted test probe only, no broker/live",
+  "requested_by": "continue-release-selected-6f913-product1302-native-existing-backend-20261027",
+  "purpose": "Exact selected #975 6f913 Pilot funded-capital Promotion Review backend changed-source existing networkless test; no promotion, broker or live",
   "authority": {
     "research_only": true,
     "broker": false,
@@ -21,8 +20,8 @@
     "promotion_mutation": false,
     "live": false
   },
-  "request_nonce": "manual-worker-native-f77d-backfill-autotuner-r2",
+  "request_nonce": "release-selected-6f913-pilot-backend-native-20261027-r1",
   "source_transport": "fleet_authority_exact_sha_encrypted_snapshot_vault",
-  "current_private_reference": "f77d0ab03d67fb83e985f771e1a71f4ceb551bb1",
+  "current_private_reference": "6f913a2c6370159dd5f5469d1d62baed2b59426d",
   "parity_public_key_b64": ""
 }
