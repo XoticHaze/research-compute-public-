@@ -1370,3 +1370,20 @@ def test_release_selected_975_partial_interval_source_only_exact_networkless():
     for denied in (module + "_extra", module + "_live_submit", module + ".py", "../" + module):
         with pytest.raises(ValueError):
             validated_modules(denied)
+
+
+def test_selected_product_1365_cloud_lifecycle_unpaired_is_exact_networkless_only():
+    # Only the existing read-only lifecycle consumer's synthetic temporary-file
+    # regression is admitted. Never grant an arbitrary Python or broker probe.
+    module = "tests.test_cloud_forward_lifecycle_unpaired_integrity_product_20261028"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-selected-product-1365-source-only", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for denied in (
+        module + "_extra", module + "_live_submit", module + ".py",
+        module.replace("unpaired_integrity", "broker_submit"),
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
