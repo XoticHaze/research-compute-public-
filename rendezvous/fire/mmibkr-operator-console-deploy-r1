@@ -1,11 +1,11 @@
 {
   "schema": "mmibkr-operator-console-deploy-fire-v1",
-  "source_sha": "8e293daa6fe3448ea3fc8d7740c3b5811a9e307e",
+  "source_sha": "afae1cbab604b737b59b1edf5c58b32e35425b09",
   "mode": "locked_private",
   "access_required": true,
   "public_fallback_allowed": false,
   "live_execution_allowed": false,
-  "reason": "selected_current_ui_975_strict_native_source_vault_then_access_locked_release_only",
-  "requested_by": "manual-worker-MW-20261028084230744",
-  "request_id": "20261028T0842Z-ui-selected975-8e293-no-broker"
+  "reason": "strict_ui_account_scope_verified_native_fix_owner_release_approval_required",
+  "requested_by": "manual-20261028-after-user-approved-console-release",
+  "request_id": "20261028-ui-strong-account-scope-exact-native-source-afae1c"
 }
