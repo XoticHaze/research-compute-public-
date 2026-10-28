@@ -6,7 +6,7 @@ on:
       source_ref:
         description: Exact approved private MM-IBKR source SHA to materialize from the reusable encrypted Fleet vault
         required: true
-        default: 935c756a63227dafb9fcbba024ef5c7ef865b3d5
+        default: 8e293daa6fe3448ea3fc8d7740c3b5811a9e307e
         type: string
       session_seconds:
         description: Bounded daemon session length
@@ -260,7 +260,7 @@ jobs:
       cancel-in-progress: false
     env:
       IBKR_REMOTE_EXCHANGE_TOKEN: ${{ github.token }}
-      CANONICAL_SOURCE_REF: 935c756a63227dafb9fcbba024ef5c7ef865b3d5
+      CANONICAL_SOURCE_REF: 8e293daa6fe3448ea3fc8d7740c3b5811a9e307e
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -877,19 +877,22 @@ jobs:
           exit 0
 
       - name: Save sanitized successor checkpoint cache
-        if: ${{ steps.checkpoint.outputs.ready == 'true' }}
+        # A failed owner can still produce a privacy-checked checkpoint. Do
+        # not let GitHub's implicit success() discard it after an earlier
+        # runtime failure; acceptance/auto-handoff remain independent.
+        if: ${{ always() && steps.checkpoint.outputs.ready == 'true' }}
         uses: actions/cache/save@1bd1e32a3bdc45362d1e726936510720a7c30a57
         with:
           path: ${{ runner.temp }}/mmibkr-checkpoint
           key: ${{ env.CHECKPOINT_CACHE_PREFIX }}${{ github.run_id }}-${{ env.PRIVATE_HEAD }}
 
       - name: Remove local checkpoint before cache round-trip proof
-        if: ${{ steps.checkpoint.outputs.ready == 'true' }}
+        if: ${{ always() && steps.checkpoint.outputs.ready == 'true' }}
         run: rm -f "$RUNNER_TEMP/mmibkr-checkpoint/latest.tgz"
 
       - name: Restore just-saved checkpoint cache for round-trip proof
         id: verify_checkpoint_cache
-        if: ${{ steps.checkpoint.outputs.ready == 'true' }}
+        if: ${{ always() && steps.checkpoint.outputs.ready == 'true' }}
         continue-on-error: true
         uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57
         with:
@@ -1379,7 +1382,7 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
-      CANONICAL_SOURCE_REF: 935c756a63227dafb9fcbba024ef5c7ef865b3d5
+      CANONICAL_SOURCE_REF: 8e293daa6fe3448ea3fc8d7740c3b5811a9e307e
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -1729,7 +1732,7 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
-      CANONICAL_SOURCE_REF: 935c756a63227dafb9fcbba024ef5c7ef865b3d5
+      CANONICAL_SOURCE_REF: 8e293daa6fe3448ea3fc8d7740c3b5811a9e307e
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -2177,7 +2180,7 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
-      CANONICAL_SOURCE_REF: 935c756a63227dafb9fcbba024ef5c7ef865b3d5
+      CANONICAL_SOURCE_REF: 8e293daa6fe3448ea3fc8d7740c3b5811a9e307e
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 

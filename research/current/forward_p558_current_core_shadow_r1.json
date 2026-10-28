@@ -880,7 +880,7 @@
       }
     ]
   },
-  "observed_at": "2026-10-28T06:55:09.694793+00:00",
+  "observed_at": "2026-10-28T08:46:38.618578+00:00",
   "operator_note": "Research shadow only. Always display diversification deltas together with capital opportunity cost versus the unchanged incumbent. No allocation, runtime, broker, or live-trading authority.",
   "parent": "P558 / P249+P266",
   "schema": "research.forward_p558_current_core_shadow_r1",
