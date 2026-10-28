@@ -98,6 +98,15 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/lib/builderConditionInspector.test.mjs",
     "ui-react/src/lib/pilotOverlayLineSeries.test.mjs",
     "ui-react/src/pages/PilotRunDetailPage.candle-integrity.test.mjs",
+    # Selected #975 Product #1393/#1394: functional Builder shortcuts and
+    # unavailable Pilot slice evidence; read-only source assertions only.
+    "ui-react/src/components/StrategyBuilderHumanNavigation.product.test.mjs",
+    "ui-react/src/pages/PilotRunDetailPage.slice-evidence.product.test.mjs",
+    # Selected #975 Product #1395/#1396: missing portfolio/broker money,
+    # inventory, fills and orders are unknown, never fabricated zero.
+    # Exact local node:test files; no broker, network, order or live authority.
+    "ui-react/src/lib/portfolioSummaryTruth.product.test.mjs",
+    "ui-react/src/pages/ExecutionControlPlanePage.unknown-broker.product.test.mjs",
 }
 
 
