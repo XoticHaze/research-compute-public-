@@ -200,6 +200,15 @@ class GatewayPoolContractTests(unittest.TestCase):
         self.assertIn('relogin_after_twofa_timeout=no',owner)
         self.assertIn("tag:mmibkr-gateway",owner)
 
+    def test_push_origin_reader_dispatch_stays_held_without_operator_issuer(self):
+        root = Path(__file__).resolve().parents[1]
+        wf = (root / ".github/workflows/mmibkr-gh-independent-readers-r1.yml").read_text(encoding="utf-8")
+        push_job = wf.split("  dispatch_readonly_reader:", 1)[1].split("\n  contract:", 1)[0]
+        self.assertIn("    if: ${{ false }}", push_job.split("    runs-on:", 1)[0])
+        self.assertIn("caller-authored push marker", push_job)
+        self.assertIn("workflow_dispatch:", wf)
+        self.assertIn("gateway_run_id:", wf)
+
     def test_independent_clients_do_not_dispatch_or_start_gateway(self):
         wf=(Path(__file__).resolve().parents[1]/
             ".github/workflows/mmibkr-gh-independent-readers-r1.yml").read_text()
