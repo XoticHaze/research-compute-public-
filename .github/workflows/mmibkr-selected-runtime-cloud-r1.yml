@@ -587,7 +587,7 @@ jobs:
           if reuse_rows="$(docker run --rm -i \
             -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro" \
             "mmibkr-cloud:${GITHUB_RUN_ID}" \
-            python - <<'PY'
+            python - 2>/dev/null <<'PY'
           import json
           from pathlib import Path
 
