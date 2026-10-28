@@ -64,6 +64,9 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_selected_runtime_live_order_intent_journal_v1",
     "tests.test_selected_runtime_live_execution_ledger_v1",
     "tests.test_selected_runtime_live_broker_provenance_v1",
+    # Exact selected P0 #883 currency/multiplier identity falsifiers; brokerless.
+    "tests.test_live_owner_currency_multiplier_identity_product_20261028",
+    "tests.test_ibkr_split_gateway_portability_v1",
     "tests.test_selected_runtime_live_p0_integrated_checkpoint_v1",
     "tests.test_selected_runtime_live_owner_candidate_certificate_v1",
     # Brokerless selected-account what-if guard/hook tests must not access a network.
