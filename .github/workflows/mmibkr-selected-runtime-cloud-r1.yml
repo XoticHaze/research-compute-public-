@@ -6,7 +6,7 @@ on:
       source_ref:
         description: Exact approved private MM-IBKR source SHA to materialize from the reusable encrypted Fleet vault
         required: true
-        default: 3d15d36e28dec27295446f1e121ae7bfca542640
+        default: 296d88ef78ee97b46f7f9b6731e8a6a7009300d2
         type: string
       session_seconds:
         description: Bounded daemon session length
@@ -94,8 +94,8 @@ env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
   OPERATOR_CONSOLE_URL: https://mmibkr-operator-console.slenderiq.workers.dev
   MAX_CONSECUTIVE_OWNER_FAILURES: '4'
-  INITIAL_BACKFILL_RUN_ID: '35407829303'
-  INITIAL_BACKFILL_ARTIFACT: ibkr-cloudflare-readonly-b1-35407829303
+  INITIAL_BACKFILL_RUN_ID: '40665095081'
+  INITIAL_BACKFILL_ARTIFACT: ibkr-cloudflare-readonly-b1-40665095081
 
 jobs:
   route:
@@ -260,7 +260,7 @@ jobs:
       cancel-in-progress: false
     env:
       IBKR_REMOTE_EXCHANGE_TOKEN: ${{ github.token }}
-      CANONICAL_SOURCE_REF: 3d15d36e28dec27295446f1e121ae7bfca542640
+      CANONICAL_SOURCE_REF: 296d88ef78ee97b46f7f9b6731e8a6a7009300d2
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -599,7 +599,7 @@ jobs:
           ok = (
               node.get('schema') == 'mmibkr.selected_runtime_signal_history_contracts.v1'
               and node.get('ok') is True
-              and str(node.get('public_run_id') or '') == '35407829303'
+              and str(node.get('public_run_id') or '') == '40665095081'
               and int(node.get('runtime_count') or 0) == 3
               and len(rows) == 3
               and all(isinstance(row, dict) and row.get('warmup_ready') is True for row in rows.values())
@@ -656,7 +656,7 @@ jobs:
           if node.get('ok') is not True or node.get('all_warmups_ready') is not True:
               raise SystemExit('initial backfill did not satisfy all warmups')
           artifact = node.get('artifact') if isinstance(node.get('artifact'), dict) else {}
-          if str(artifact.get('public_run_id') or '') != '35407829303':
+          if str(artifact.get('public_run_id') or '') != '40665095081':
               raise SystemExit('initial backfill public run mismatch')
           symbols = node.get('symbols') if isinstance(node.get('symbols'), dict) else {}
           if set(symbols) != {'AMAT', 'APH', 'MNQ'}:
@@ -1118,6 +1118,7 @@ jobs:
                   'schema': 'mmibkr.selected_runtime_cloud_session_receipt.v2',
                   'ok': False,
                   'status': 'session_receipt_missing_after_runtime_failure',
+                  'session_accepted': False,
                   'run_id': os.environ['GITHUB_RUN_ID'],
                   'public_head': os.environ.get('GITHUB_SHA'),
                   'private_head': os.environ.get('PRIVATE_HEAD'),
@@ -1208,7 +1209,7 @@ jobs:
                   str(os.environ.get('MMIBKR_RECEIPT_INITIAL_BACKFILL_PUBLIC_RUN_ID') or '').strip()
                   or None
               ),
-              'artifact_name': 'ibkr-cloudflare-readonly-b1-35407829303',
+              'artifact_name': 'ibkr-cloudflare-readonly-b1-40665095081',
               'amat_target_rows': optional_int(
                   'MMIBKR_RECEIPT_INITIAL_BACKFILL_AMAT_TARGET_ROWS'
               ),
@@ -1382,7 +1383,7 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
-      CANONICAL_SOURCE_REF: 3d15d36e28dec27295446f1e121ae7bfca542640
+      CANONICAL_SOURCE_REF: 296d88ef78ee97b46f7f9b6731e8a6a7009300d2
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -1515,7 +1516,7 @@ jobs:
           if node.get('ok') is not True or node.get('all_warmups_ready') is not True:
               raise SystemExit('initial backfill warmup incomplete')
           artifact = node.get('artifact') if isinstance(node.get('artifact'), dict) else {}
-          if str(artifact.get('public_run_id') or '') != '35407829303':
+          if str(artifact.get('public_run_id') or '') != '40665095081':
               raise SystemExit('initial backfill public run mismatch')
           symbols = node.get('symbols') if isinstance(node.get('symbols'), dict) else {}
           if set(symbols) != {'AMAT', 'APH', 'MNQ'}:
@@ -1732,7 +1733,7 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
-      CANONICAL_SOURCE_REF: 3d15d36e28dec27295446f1e121ae7bfca542640
+      CANONICAL_SOURCE_REF: 296d88ef78ee97b46f7f9b6731e8a6a7009300d2
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
@@ -2033,7 +2034,7 @@ jobs:
               raise SystemExit('restored signal-history schema mismatch')
           if node.get('ok') is not True:
               raise SystemExit('restored signal-history not ok')
-          if str(node.get('public_run_id') or '') != '35407829303':
+          if str(node.get('public_run_id') or '') != '40665095081':
               raise SystemExit('restored signal-history public run mismatch')
           if int(node.get('runtime_count') or 0) != 3 or len(rows) != 3:
               raise SystemExit('restored signal-history runtime count mismatch')
@@ -2180,7 +2181,7 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
-      CANONICAL_SOURCE_REF: 3d15d36e28dec27295446f1e121ae7bfca542640
+      CANONICAL_SOURCE_REF: 296d88ef78ee97b46f7f9b6731e8a6a7009300d2
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
