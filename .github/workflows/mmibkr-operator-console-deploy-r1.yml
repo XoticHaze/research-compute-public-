@@ -35,7 +35,7 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  CANONICAL_PRIVATE_SOURCE_SHA: afae1cbab604b737b59b1edf5c58b32e35425b09
+  CANONICAL_PRIVATE_SOURCE_SHA: f6f6dcdcbad3df8c5d50cab5ac2652b4781a648d
   OPERATOR_CONSOLE_URL: https://mmibkr-operator-console.slenderiq.workers.dev
 
 jobs:
