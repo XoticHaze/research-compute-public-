@@ -46,7 +46,10 @@ permissions:
 
 jobs:
   dispatch_readonly_reader:
-    if: github.event_name == 'push'
+    # A caller-authored push marker is not independent operator authorization
+    # to attach new IBKR-account readers, even to an already authenticated pool.
+    # Direct attended workflow_dispatch and owner-run reader handoff remain.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

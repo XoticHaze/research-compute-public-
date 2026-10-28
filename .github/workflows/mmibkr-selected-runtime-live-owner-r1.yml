@@ -21,6 +21,11 @@ on:
           - successor
           - supervised_5h
           - gateway_pool_5h
+      pi_credential_handoff:
+        description: One-time read-only Pi Gateway credential handoff, no IBKR login or bot
+        type: boolean
+        required: true
+        default: false
       pool_transport:
         description: Private network adapter for the read-only GitHub Gateway pool
         type: choice
@@ -60,7 +65,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PRIVATE_SOURCE_SHA: bc485b8deb32492b2be2d55de4f4f38af300cfd1
+  PRIVATE_SOURCE_SHA: bc926cbe1901d4bf965915171f21a5bc79ca1aa5
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
   LIVE_SEAL_URL: https://fleet-authority.slenderiq.workers.dev/v1/authorities/ibkr-live-bot/seal
   IBKR_CONTROLLER_IMAGE: ghcr.io/code-hustler-ft3d/ibg-controller@sha256:2e4f4911991386e941f6e95d58ee38a8242474dd3be239f21ad82557d24b4368
@@ -129,18 +134,11 @@ jobs:
               exit 1
             fi
           fi
-          gh api --method POST \
-            "/repos/${GITHUB_REPOSITORY}/actions/workflows/mmibkr-selected-runtime-live-owner-r1.yml/dispatches" \
-            -f ref=main \
-            -f "inputs[admission_only]=$admission_only" \
-            -f "inputs[warm_handoff_mode]=$mode" \
-            -f "inputs[pool_transport]=cloudflare_access_ssh" \
-            -f "inputs[pool_session_minutes]=$pool_session_minutes" \
-            -f "inputs[warm_predecessor_run]=$predecessor_run"
-          echo "LIVE_OWNER_FIRE_DISPATCHED_ADMISSION_ONLY=$admission_only"
-          echo "LIVE_OWNER_FIRE_DISPATCHED_MODE=$mode"
-          echo "LIVE_OWNER_FIRE_DISPATCHED_POOL_SESSION_MINUTES=$pool_session_minutes"
-          echo "LIVE_OWNER_FIRE_DISPATCHED_PREDECESSOR=$predecessor_run"
+          # A caller-authored Git push marker is not independent operator
+          # authorization for IBKR identity, even when READ_ONLY_API=yes.
+          # Canonical operator workflow_dispatch retains supervised/pool modes.
+          echo 'LIVE_READONLY_PUSH_DISPATCH_REQUIRES_INDEPENDENT_OPERATOR_ISSUER=1'
+          exit 64
 
   contract:
     if: github.event_name == 'pull_request'
@@ -207,11 +205,12 @@ jobs:
           print("LIVE_OWNER_PROTECTED_SOURCE_PIN_NEGATIVE_CASES=PASS")
           assert "if: " + chr(36) + "{{ !inputs.admission_only }}" in owner
           assert "if: " + chr(36) + "{{ inputs.admission_only }}" in owner
-          assert '"inputs[admission_only]=$admission_only"' in s
-          assert "'inputs[warm_handoff_mode]=$mode'" in s or 'inputs[warm_handoff_mode]=$mode' in s
+          push_fire=s.split('  dispatch_admission:',1)[1].split('  contract:',1)[0]
           assert 'supervised_5h_dispatch_request_[0-9]{8}_[a-z0-9]{6}' in s
           assert 'mode=legacy' in s and 'mode=supervised_5h' in s
-          assert 'inputs[warm_predecessor_run]=$predecessor_run' in s
+          assert 'LIVE_READONLY_PUSH_DISPATCH_REQUIRES_INDEPENDENT_OPERATOR_ISSUER=1' in push_fire
+          assert 'gh api --method POST' not in push_fire
+          assert 'workflow_dispatch:' in s and 'gateway_pool_5h' in s
           # Workflow dispatch string must never be interpolated directly into
           # shell source before its numeric validation. Pass via step env.
           restore=owner.split('      - name: Restore existing encrypted live Gateway warm state',1)[1].split('      - name: Start the established IBKR controller',1)[0]
@@ -459,8 +458,73 @@ jobs:
       - name: Verify reset-window bounded read-only observation (brokerless)
         run: python -m unittest -v tests.test_mmibkr_live_gateway_reset_window_observation_v1
 
+      - name: Verify Pi sealed handoff cryptography and read-only acceptance (brokerless)
+        run: |
+          python -m pip install --disable-pip-version-check cryptography==46.0.1
+          python -m unittest discover -s tests -p 'test_mmibkr_pi_credential_handoff_v1.py' -v
+
+  pi_credentials:
+    # The existing authorized workflow owns GitHub OIDC. No new Cloudflare
+    # credential-release identity, arbitrary recipient input or broker run.
+    if: github.event_name == 'workflow_dispatch' && inputs.pi_credential_handoff && inputs.admission_only && inputs.warm_handoff_mode == 'legacy' && inputs.warm_predecessor_run == ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+      - name: Validate registered Pi recipient (public key only)
+        env:
+          PI_RECIPIENT_PUBLIC_B64: ${{ vars.MMIBKR_PI_RECIPIENT_PUBLIC_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$PI_RECIPIENT_PUBLIC_B64"
+          python - <<'PY'
+          import base64,os
+          p=base64.b64decode(os.environ['PI_RECIPIENT_PUBLIC_B64'],validate=True)
+          assert len(p)==32, 'PI_RECIPIENT_KEY_INVALID'
+          print('PI_RECIPIENT_REGISTERED=1')
+          PY
+      - name: Prepare existing Fleet credential consumer
+        run: python -m pip install --disable-pip-version-check cryptography==46.0.1
+      - name: Create recipient-only encrypted credential handoff
+        env:
+          PI_RECIPIENT_PUBLIC_B64: ${{ vars.MMIBKR_PI_RECIPIENT_PUBLIC_B64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f "$RUNNER_TEMP/mmibkr-pi-plaintext.env" "$RUNNER_TEMP/mmibkr-pi-fleet-receipt.json"' EXIT
+          python scripts/fleet_authority_envelope_consumer_v1.py \
+            --authority-url "$LIVE_SEAL_URL" \
+            --profile production_live_bot \
+            --run-id "$GITHUB_RUN_ID" \
+            --output "$RUNNER_TEMP/mmibkr-pi-plaintext.env" \
+            --receipt "$RUNNER_TEMP/mmibkr-pi-fleet-receipt.json"
+          python scripts/mmibkr_pi_credential_handoff_v1.py seal \
+            --source-env "$RUNNER_TEMP/mmibkr-pi-plaintext.env" \
+            --recipient-public-key-b64 "$PI_RECIPIENT_PUBLIC_B64" \
+            --run-id "$GITHUB_RUN_ID" \
+            --output "$RUNNER_TEMP/mmibkr-pi-credential-envelope.json"
+          echo 'PI_GATEWAY_CREDENTIAL_HANDOFF_ENCRYPTED=1'
+      - name: Publish ciphertext only (1-day expiry)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mmibkr-pi-encrypted-gateway-${{ github.run_id }}
+          path: ${{ runner.temp }}/mmibkr-pi-credential-envelope.json
+          retention-days: 1
+          if-no-files-found: error
+      - name: Remove local handoff files
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/mmibkr-pi-plaintext.env" "$RUNNER_TEMP/mmibkr-pi-fleet-receipt.json" \
+            "$RUNNER_TEMP/mmibkr-pi-credential-envelope.json"
+
   owner:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !inputs.pi_credential_handoff
     runs-on: ubuntu-24.04
     timeout-minutes: 340
     # Needed ONLY for bounded read-only reader dispatch after live account proof.

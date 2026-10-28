@@ -11,9 +11,9 @@ WORKFLOW = ROOT / ".github" / "workflows" / "mmibkr-selected-runtime-cloud-r1.ym
 class InitialBackfillCanonicalIngestWorkflowTests(unittest.TestCase):
     def test_exact_proven_public_artifact_is_pinned(self):
         text = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("INITIAL_BACKFILL_RUN_ID: '35407829303'", text)
+        self.assertIn("INITIAL_BACKFILL_RUN_ID: '40665095081'", text)
         self.assertIn(
-            "INITIAL_BACKFILL_ARTIFACT: ibkr-cloudflare-readonly-b1-35407829303",
+            "INITIAL_BACKFILL_ARTIFACT: ibkr-cloudflare-readonly-b1-40665095081",
             text,
         )
         self.assertIn('gh run download "$INITIAL_BACKFILL_RUN_ID"', text)
@@ -100,7 +100,7 @@ class InitialBackfillCanonicalIngestWorkflowTests(unittest.TestCase):
         self.assertIn("MMIBKR_RECEIPT_INITIAL_BACKFILL_PERFORMED", text)
         self.assertIn("MMIBKR_RECEIPT_INITIAL_BACKFILL_PUBLIC_RUN_ID", text)
         self.assertIn("receipt['initial_backfill_ingest']", text)
-        self.assertIn("'artifact_name': 'ibkr-cloudflare-readonly-b1-35407829303'", text)
+        self.assertIn("'artifact_name': 'ibkr-cloudflare-readonly-b1-40665095081'", text)
         self.assertIn("'broker_action': False", text)
         self.assertIn("'runtime_execution_contract_mutated': False", text)
         self.assertIn("'live_execution_allowed': False", text)
