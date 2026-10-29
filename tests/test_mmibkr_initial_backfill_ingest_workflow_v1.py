@@ -78,6 +78,21 @@ class InitialBackfillCanonicalIngestWorkflowTests(unittest.TestCase):
         self.assertNotIn("cancelOrder", section)
         self.assertNotIn("globalCancel", section)
 
+    def test_warmup_reuse_crossbinds_index_to_exact_ingest_runtime_contracts(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        start = text.index("- name: Consume proven initial selected-runtime backfill through canonical ingest")
+        end = text.index("- name: Run bounded selected-runtime cloud owner")
+        section = text[start:end]
+        self.assertIn(
+            "from scripts.operator.selected_runtime_signal_history_contract_v1 import contract_digest",
+            section,
+        )
+        self.assertIn("row.get('selected_execution_contract_digest') != contract_digest(selected_contract)", section)
+        self.assertIn("row.get('symbol') != symbol", section)
+        self.assertIn("row.get('target_timeframe') != source.get('target_timeframe')", section)
+        self.assertIn("len(set(runtime_ids)) != 3 or set(rows) != set(runtime_ids)", section)
+        self.assertIn("'execution_authority_included', 'execution_contract_values_included'", section)
+
     def test_existing_canonical_checkpoint_is_restored_before_ingest_and_saved_after(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         restore = text.index("- name: Restore canonical market-data and terminal-continuity state")
