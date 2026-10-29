@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -240,6 +241,18 @@ def _run(cmd: list[str], root: Path, timeout: int = 1200) -> None:
         raise RuntimeError(f"private native harness failed rc={run.returncode}")
 
 
+def _canonical_generation_date(value: object) -> str:
+    """A private native date must not become a public-runner output path."""
+    if type(value) is not str or re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value) is None:
+        raise RuntimeError("native generation date invalid")
+    try:
+        if date.fromisoformat(value).isoformat() != value:
+            raise ValueError("noncanonical date")
+    except ValueError as exc:
+        raise RuntimeError("native generation date invalid") from exc
+    return value
+
+
 def _execute(root: Path, harness: str, adapter_script: Path) -> tuple[Path, Path | None, Path]:
     spec = HARNESS_SPECS[harness]
     adapter = root / "artifacts" / f"forward_program_adapter_{spec['program_id'].lower()}.json"
@@ -249,10 +262,11 @@ def _execute(root: Path, harness: str, adapter_script: Path) -> tuple[Path, Path
         native.parent.mkdir(parents=True, exist_ok=True)
         _run([sys.executable, "-m", "research.semiconductor_external_forward_standalone_20260910", "--output", str(native.relative_to(root))], root)
         prediction = json.loads(native.read_text(encoding="utf-8"))
-        generation = str(prediction["generation_bar_date"])
+        generation = _canonical_generation_date(prediction.get("generation_bar_date"))
         contract = json.loads((root / "research/semiconductor_three_book_forward_contract_20260910.json").read_text(encoding="utf-8"))
+        prospective_start = _canonical_generation_date(contract.get("prospective_start_signal_date"))
         book: Path | None = None
-        if generation >= str(contract["prospective_start_signal_date"]):
+        if date.fromisoformat(generation) >= date.fromisoformat(prospective_start):
             book = root / "research/results/semiconductor_three_book_forward" / f"{generation}.json"
             book.parent.mkdir(parents=True, exist_ok=True)
             _run([
@@ -385,6 +399,16 @@ def self_test() -> None:
     assert HARNESS_SPECS["homebuilders_adaptive_duration_v1"]["source_ref"] == "b2f933b57efbbf4297620492aa415d0fcd2f613c"
     assert "research/run_homebuilders_adaptive_duration_forward_20260905.py" in HARNESS_SPECS["homebuilders_adaptive_duration_v1"]["files"]
     assert HARNESS_SPECS["generalized_largecap_ridge_v1"]["program_id"] == "GENERALIZED_LARGECAP_RIDGE"
+    # Reject malformed native dates before they can become relative paths or
+    # lexicographically bypass the frozen prospective-start boundary.
+    assert _canonical_generation_date("2026-10-29") == "2026-10-29"
+    for invalid in ("../../private", "2026-02-30", "2026-9-1"):
+        try:
+            _canonical_generation_date(invalid)
+        except RuntimeError as exc:
+            assert str(exc) == "native generation date invalid"
+        else:
+            raise AssertionError("unsafe native generation date accepted")
     # Synthetic-only, no private model bytes. Verify exact existing tar producer shape.
     spec = HARNESS_SPECS["semiconductor_shared_ridge_three_book_v1"]
     fake = {name: b"synthetic-source" for name in spec["files"]}
