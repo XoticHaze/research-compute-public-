@@ -23,6 +23,8 @@ on:
       - 'cloudflare/operator-console/**'
       - 'tests/test_mmibkr_operator_console_worker_v1.py'
       - 'tests/test_mmibkr_operator_console_access_reconcile_v1.py'
+      - 'tests/test_mmibkr_operator_console_deploy_token_route_v1.py'
+      - 'scripts/mmibkr_operator_console_deploy_token_route_v1.py'
       - 'tests/test_fleet_source_vault_contract_v1.py'
 
 permissions:
@@ -63,6 +65,7 @@ jobs:
           python -m unittest -v \
             tests.test_mmibkr_operator_console_worker_v1 \
             tests.test_mmibkr_operator_console_access_reconcile_v1 \
+            tests.test_mmibkr_operator_console_deploy_token_route_v1 \
             tests.test_fleet_source_vault_contract_v1
           mkdir -p cloudflare/operator-console/dist
           printf '%s\n' '<!doctype html><title>MM-IBKR locked operator console</title>' > cloudflare/operator-console/dist/index.html
@@ -232,6 +235,18 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/cloudflare_r2_scope_preflight.py
+
+      # Wrangler queries the ACCOUNT workers/subdomain endpoint after it
+      # uploads assets; a Worker-scoped editor token can fail there with 10000.
+      # Reuse the existing credentials if either proves exact required reads;
+      # otherwise fail BEFORE changing the served Worker, without secrets/logs.
+      - name: Select existing token with Workers subdomain deployment access
+        id: deploy_auth
+        env:
+          CLOUDFLARE_DEPLOY_TOKEN_R2: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 }}
+          CLOUDFLARE_LEGACY_WORKERS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python -m scripts.mmibkr_operator_console_deploy_token_route_v1
 
       - name: Preflight Access release credentials before Worker deployment
         env:
@@ -692,7 +707,7 @@ jobs:
 
       - name: Deploy locked operator-console Worker and private static assets
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ steps.deploy_auth.outputs.route == 'scoped_r2' && secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         shell: bash
         run: |
@@ -703,7 +718,7 @@ jobs:
 
       - name: Prove deployed Worker through Cloudflare control plane
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ steps.deploy_auth.outputs.route == 'scoped_r2' && secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         shell: bash
         run: |
@@ -753,7 +768,7 @@ jobs:
 
       - name: Bind Worker defense-in-depth Access verifier
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ steps.deploy_auth.outputs.route == 'scoped_r2' && secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           ACCESS_ALLOWED_EMAILS: ${{ secrets.MMIBKR_ACCESS_ALLOWED_EMAILS }}
         shell: bash
@@ -945,6 +960,8 @@ jobs:
 
       - name: Publish scoped R2 MM deployment receipt
         if: ${{ success() }}
+        env:
+          MMIBKR_WORKER_DEPLOY_CREDENTIAL_ROUTE: ${{ steps.deploy_auth.outputs.route }}
         shell: bash
         run: |
           set -euo pipefail
@@ -958,10 +975,8 @@ jobs:
           node = {
               "schema": "mmibkr.operator_console.deploy_receipt.r2",
               "worker": "mmibkr-operator-console",
-              "worker_deploy_credential": (
-                  "scoped_r2"
-                  if os.environ.get("CLOUDFLARE_DEPLOY_TOKEN_R2")
-                  else "legacy_fallback"
+              "worker_deploy_credential": os.environ.get(
+                  "MMIBKR_WORKER_DEPLOY_CREDENTIAL_ROUTE", "not_proven"
               ),
               "access_reconciliation_credential": (
                   "legacy_access_capable_token" if access_configured else "not_exercised"
