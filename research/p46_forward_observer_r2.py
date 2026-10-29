@@ -110,6 +110,46 @@ def _feature_cutoff(px: pd.DataFrame, observed_at: pd.Timestamp) -> pd.Timestamp
     return observed_month.start_time - pd.Timedelta(days=1)
 
 
+
+def _official_prior_feature_month_health(px: pd.DataFrame, observed_at: pd.Timestamp) -> dict:
+    """Reject incomplete prior-month source even when every ticker misses the same day.
+
+    This is a source-admission gate, not a new P46 feature or a second calendar.
+    The prior month is selected from observation time, never from last source row.
+    """
+    required = observed_at.tz_convert(None).to_period("M") - 1
+    first = required.start_time
+    last = required.end_time.normalize()
+    try:
+        import exchange_calendars as xc
+
+        nyse = xc.get_calendar("XNYS").sessions_in_range(first, last).tz_localize(None)
+        nasdaq = xc.get_calendar("XNAS").sessions_in_range(first, last).tz_localize(None)
+    except Exception as exc:
+        raise RuntimeError("P46_OFFICIAL_CALENDAR_UNAVAILABLE") from exc
+    if not nyse.equals(nasdaq):
+        raise RuntimeError("P46_OFFICIAL_CALENDAR_CONFLICT")
+    actual = pd.DatetimeIndex(px.index[px.index.to_period("M") == required]).normalize()
+    missing = nyse.difference(actual)
+    extra = actual.difference(nyse)
+    if not actual.equals(nyse):
+        raise RuntimeError(
+            "P46_PRIOR_MONTH_SOURCE_INCOMPLETE: "
+            f"required={required} expected={len(nyse)} observed={len(actual)} "
+            f"missing={list(missing.strftime('%Y-%m-%d'))} "
+            f"extra={list(extra.strftime('%Y-%m-%d'))}"
+        )
+    return {
+        "required_feature_month": str(required),
+        "expected_official_sessions": int(len(nyse)),
+        "observed_common_sessions": int(len(actual)),
+        "last_official_session": str(nyse[-1].date()),
+        "last_observed_session": str(actual[-1].date()),
+        "calendar_authority": "exchange_calendars_XNYS_XNAS_agree",
+        "source_complete": True,
+    }
+
+
 def _decision(px: pd.DataFrame, observed_at: pd.Timestamp) -> dict:
     cutoff = _feature_cutoff(px, observed_at)
     d = px.loc[px.index <= cutoff]
@@ -204,6 +244,7 @@ def main() -> None:
     bars = _yahoo_normalized()
     fixture = _ibkr_shape_fixture()
     px, excluded_partial, completed_cutoff = _completed_common_close_panel(bars, observed_at)
+    official_feature_month_health = _official_prior_feature_month_health(px, observed_at)
     decision = _decision(px, observed_at)
     shakedown = _shakedown_mark(px)
     latest_bar = pd.Timestamp(px.index.max()).tz_localize("UTC")
@@ -244,6 +285,7 @@ def main() -> None:
             "completed_bar_authority": "existing_forward_prospective_cohort_ledger_18_30_ET",
             "calendar_age_days": int((observed_at.normalize() - latest_bar.normalize()).days),
             "all_universe_members_present": list(px.columns) == list(U),
+            "prior_feature_month_official_calendar": official_feature_month_health,
         },
         "decision": decision,
         "operational_shadow": shakedown,
