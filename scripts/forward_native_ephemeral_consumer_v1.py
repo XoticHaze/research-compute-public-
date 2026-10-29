@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tarfile
@@ -135,6 +136,9 @@ def _derive(shared: bytes, aad: bytes, info: bytes) -> bytes:
 
 
 def _decrypt_input(envelope: dict, private_raw: bytes, run_id: str, harness: str) -> bytes:
+    if harness == "semiconductor_shared_ridge_three_book_v1":
+        if type(run_id) not in (str, int) or not re.fullmatch(r"[1-9][0-9]{0,19}", str(run_id)):
+            raise RuntimeError("public run identity invalid")
     # The frozen semiconductor capsule uses the digestless public field set.
     # Other harnesses retain their existing strict legacy contract.
     required = {
@@ -485,6 +489,13 @@ def self_test() -> None:
         serialization.NoEncryption(),
     )
     assert _decrypt_input(incoming, private_raw, "123", "semiconductor_shared_ridge_three_book_v1") == payload
+    try:
+        _decrypt_input(incoming, private_raw, "PRIVATE_SENTINEL_DO_NOT_LOG",
+                       "semiconductor_shared_ridge_three_book_v1")
+    except RuntimeError as exc:
+        assert str(exc) == "public run identity invalid"
+    else:
+        raise AssertionError("caller-authored public run identity admitted")
     try:
         _decrypt_input({**incoming, "plaintext_sha256": _sha(payload)}, private_raw,
                        "123", "semiconductor_shared_ridge_three_book_v1")
