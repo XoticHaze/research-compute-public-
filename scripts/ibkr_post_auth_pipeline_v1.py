@@ -110,7 +110,7 @@ def _historical_session_conflict_failure_receipt() -> dict[str, object]:
         "paper_execute_accepted": False,
         "historical_data_valid": False,
         "completed_trade_evidence_materialized": False,
-        "broker_mutation_attempted": False,
+        "post_auth_broker_mutation_attempted": False,
         "operator_action": "CLOSE_COMPETING_IBKR_SESSION",
     }
 
