@@ -135,10 +135,14 @@ def _derive(shared: bytes, aad: bytes, info: bytes) -> bytes:
 
 
 def _decrypt_input(envelope: dict, private_raw: bytes, run_id: str, harness: str) -> bytes:
+    # The frozen semiconductor capsule uses the digestless public field set.
+    # Other harnesses retain their existing strict legacy contract.
     required = {
         "schema", "run_id", "authority", "harness", "recipient_key_id",
-        "sender_public_b64", "nonce_b64", "ciphertext_b64", "plaintext_sha256",
+        "sender_public_b64", "nonce_b64", "ciphertext_b64",
     }
+    if harness != "semiconductor_shared_ridge_three_book_v1":
+        required.add("plaintext_sha256")
     if set(envelope) != required:
         raise RuntimeError("input envelope field-set mismatch")
     if envelope["schema"] != SCHEMA or str(envelope["run_id"]) != str(run_id):
@@ -157,8 +161,10 @@ def _decrypt_input(envelope: dict, private_raw: bytes, run_id: str, harness: str
     aad = _aad(SCHEMA, run_id, harness, expected_id)
     shared = private.exchange(x25519.X25519PublicKey.from_public_bytes(sender_raw))
     plaintext = ChaCha20Poly1305(_derive(shared, aad, INFO)).decrypt(nonce, _b64d(envelope["ciphertext_b64"]), aad)
-    if len(plaintext) > MAX_PLAINTEXT_BYTES or _sha(plaintext) != envelope["plaintext_sha256"]:
-        raise RuntimeError("input plaintext size/digest mismatch")
+    if len(plaintext) > MAX_PLAINTEXT_BYTES:
+        raise RuntimeError("input plaintext size bound")
+    if harness != "semiconductor_shared_ridge_three_book_v1" and _sha(plaintext) != envelope["plaintext_sha256"]:
+        raise RuntimeError("input plaintext digest mismatch")
     return plaintext
 
 
@@ -307,7 +313,7 @@ def _encrypt_return(payload: bytes, manifest: dict, run_id: str, harness: str) -
     shared = sender.exchange(x25519.X25519PublicKey.from_public_bytes(recipient_raw))
     nonce = os.urandom(12)
     ciphertext = ChaCha20Poly1305(_derive(shared, aad, RETURN_INFO)).encrypt(nonce, payload, aad)
-    return {
+    envelope = {
         "schema": RETURN_SCHEMA,
         "run_id": str(run_id),
         "authority": "research_only",
@@ -316,8 +322,11 @@ def _encrypt_return(payload: bytes, manifest: dict, run_id: str, harness: str) -
         "sender_public_b64": base64.b64encode(sender_public).decode("ascii"),
         "nonce_b64": base64.b64encode(nonce).decode("ascii"),
         "ciphertext_b64": base64.b64encode(ciphertext).decode("ascii"),
-        "plaintext_sha256": _sha(payload),
     }
+    # AEAD authenticates the private result without a public plaintext hash.
+    if harness != "semiconductor_shared_ridge_three_book_v1":
+        envelope["plaintext_sha256"] = _sha(payload)
+    return envelope
 
 
 def consume(
@@ -435,6 +444,54 @@ def self_test() -> None:
     )
     assert check.returncode == 1 and not check.stderr
     assert "PRIVATE_SENTINEL" not in check.stdout and '"status": "REJECTED"' in check.stdout
+    # Synthetic-only two-sided field-set and AEAD integrity checks.
+    key = x25519.X25519PrivateKey.generate()
+    public_raw = key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    manifest = {
+        "return_recipient_b64": base64.b64encode(public_raw).decode("ascii"),
+        "return_recipient_key_id": _key_id(public_raw),
+    }
+    new_return = _encrypt_return(b"PRIVATE_SENTINEL", manifest, "123", "semiconductor_shared_ridge_three_book_v1")
+    assert set(new_return) == {
+        "schema", "run_id", "authority", "harness", "recipient_key_id",
+        "sender_public_b64", "nonce_b64", "ciphertext_b64",
+    }
+    legacy_return = _encrypt_return(b"synthetic", manifest, "123", "homebuilders_adaptive_duration_v1")
+    assert legacy_return["plaintext_sha256"] == _sha(b"synthetic")
+    sender = x25519.X25519PrivateKey.generate()
+    sender_raw = sender.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    recipient_id = _key_id(public_raw)
+    aad = _aad(SCHEMA, "123", "semiconductor_shared_ridge_three_book_v1", recipient_id)
+    nonce = os.urandom(12)
+    payload = b"synthetic"
+    ciphertext = ChaCha20Poly1305(_derive(
+        sender.exchange(x25519.X25519PublicKey.from_public_bytes(public_raw)),
+        aad, INFO,
+    )).encrypt(nonce, payload, aad)
+    incoming = {
+        "schema": SCHEMA, "run_id": "123", "authority": "research_only",
+        "harness": "semiconductor_shared_ridge_three_book_v1",
+        "recipient_key_id": recipient_id,
+        "sender_public_b64": base64.b64encode(sender_raw).decode("ascii"),
+        "nonce_b64": base64.b64encode(nonce).decode("ascii"),
+        "ciphertext_b64": base64.b64encode(ciphertext).decode("ascii"),
+    }
+    private_raw = key.private_bytes(
+        serialization.Encoding.Raw, serialization.PrivateFormat.Raw,
+        serialization.NoEncryption(),
+    )
+    assert _decrypt_input(incoming, private_raw, "123", "semiconductor_shared_ridge_three_book_v1") == payload
+    try:
+        _decrypt_input({**incoming, "plaintext_sha256": _sha(payload)}, private_raw,
+                       "123", "semiconductor_shared_ridge_three_book_v1")
+    except RuntimeError as exc:
+        assert str(exc) == "input envelope field-set mismatch"
+    else:
+        raise AssertionError("public plaintext digest admitted")
     print("FORWARD_NATIVE_PUBLIC_EGRESS_TAR_BOUNDS_SELF_TEST=PASS")
     print("FORWARD_NATIVE_EPHEMERAL_CONSUMER_SELF_TEST=PASS")
 
