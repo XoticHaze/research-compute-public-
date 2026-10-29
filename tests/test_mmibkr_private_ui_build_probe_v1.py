@@ -85,6 +85,57 @@ def test_vite_safe_failure_diagnostic_is_bounded_and_never_prints_private_source
 
 
 
+def test_selected_current_incumbent_and_model_node_acceptance_is_exact_and_brokerless():
+    # These selected #975 source tests use node:test, local imports and optional
+    # readFile of UI source only. They never import a broker client or network.
+    for exact in (
+        "ui-react/src/lib/selectedIncumbentCoverage.test.mjs",
+        "ui-react/src/lib/tradingProductReadiness.test.mjs",
+    ):
+        assert mod.validate_acceptance_file(exact) == exact
+        for denied in (
+            exact + ".bak",
+            exact.replace(".test.mjs", ".live-submit.test.mjs"),
+            exact.replace(".test.mjs", ".test.js"),
+            "ui-react/src/lib/../lib/" + exact.rsplit("/", 1)[-1],
+            "/" + exact,
+        ):
+            with pytest.raises(ValueError, match="not_allowlisted"):
+                mod.validate_acceptance_file(denied)
+
+
+def test_selected_fe30_recent_activity_acceptance_is_exact_and_readonly():
+    # Exact changed-source Node module, not a wildcard or broker-command grant.
+    exact = "ui-react/src/lib/botConsoleRecentActivity.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak",
+        exact.replace(".test.mjs", ".live-submit.test.mjs"),
+        exact.replace(".test.mjs", ".test.js"),
+        "ui-react/src/lib/../lib/botConsoleRecentActivity.test.mjs",
+        "/" + exact,
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
+
+
+def test_product_1301_forward_unknown_count_acceptance_is_exact_and_brokerless():
+    # Existing native UI probe runs only one fixed read-only test file per request.
+    for exact in (
+        "ui-react/src/lib/arenaForwardEvidence.test.mjs",
+        "ui-react/src/lib/forwardEvidenceExactIdentity.test.mjs",
+    ):
+        assert mod.validate_acceptance_file(exact) == exact
+        for denied in (
+            exact + ".bak",
+            exact.replace(".test.mjs", ".mjs"),
+            exact.replace(".test.mjs", ".live-submit.test.mjs"),
+            "ui-react/src/lib/../lib/" + exact.rsplit("/", 1)[-1],
+        ):
+            with pytest.raises(ValueError, match="not_allowlisted"):
+                mod.validate_acceptance_file(denied)
+
+
 def test_acceptance_file_is_exact_allowlist():
     assert (
         mod.validate_acceptance_file(
@@ -637,3 +688,213 @@ def test_exact_builder_preview_semantic_error_ui_acceptance_allowlist():
     assert mod.validate_acceptance_file(exact) == exact
     with pytest.raises(ValueError, match="not_allowlisted"):
         mod.validate_acceptance_file("ui-react/src/lib/builderPreviewResponse.evil.mjs")
+
+
+def test_selected_limited_model_promotion_review_exact_node_acceptance_only():
+    # Pure UI request construction, not Foundry approval or broker mutation.
+    exact = "ui-react/src/lib/promotionReview.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak",
+        exact + ".js",
+        "ui-react/src/pages/promotionReview.test.mjs",
+        "ui-react/src/lib/../lib/promotionReview.test.mjs",
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
+
+
+def test_product_1309_paper_history_exact_node_acceptance_only():
+    exact = "ui-react/src/lib/paperBoundaryHistory.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak",
+        exact + ".js",
+        exact.replace(".test.mjs", ".mjs"),
+        "ui-react/src/pages/paperBoundaryHistory.test.mjs",
+        "ui-react/src/lib/../lib/paperBoundaryHistory.test.mjs",
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
+
+
+def test_selected_product_1315_forward_execution_page_is_exact_ui_acceptance_only():
+    exact = "ui-react/src/pages/ForwardExecutionEvidencePage.acceptance.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    with pytest.raises(ValueError, match="not_allowlisted"):
+        mod.validate_acceptance_file("ui-react/src/pages/ForwardExecutionEvidencePage.acceptance.test.mjs.extra")
+
+
+def test_selected_product_1322_pilot_handoff_presentation_exact_node_only():
+    # Selected #975@8ba3 pure UI blocker/identity display, not Pilot promotion.
+    exact = "ui-react/src/lib/pilotHandoffPresentationTruth.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak",
+        exact + ".js",
+        exact.replace(".test.mjs", ".mjs"),
+        "ui-react/src/pages/pilotHandoffPresentationTruth.test.mjs",
+        "ui-react/src/lib/../lib/pilotHandoffPresentationTruth.test.mjs",
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
+
+def test_selected_funded_pilot_terminal_drawdown_exact_node_acceptance_only():
+    # Product #1337 was consumed into selected #975. Read-only funded-NAV guard.
+    exact = "ui-react/src/lib/pilotFundedTerminalDrawdown.product.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak", exact + ".js",
+        exact.replace(".test.mjs", ".mjs"),
+        "ui-react/src/pages/pilotFundedTerminalDrawdown.product.test.mjs",
+        "ui-react/src/lib/../lib/pilotFundedTerminalDrawdown.product.test.mjs",
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
+
+
+def test_selected_model_evidence_presentation_exact_node_acceptance_only():
+    # Selected #975 Product model-review display; not an issuer or promotion grant.
+    exact = "ui-react/src/lib/promotionCandidateEvidencePresentation.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak", exact + ".js",
+        exact.replace(".test.mjs", ".mjs"),
+        "ui-react/src/pages/promotionCandidateEvidencePresentation.test.mjs",
+        "ui-react/src/lib/../lib/promotionCandidateEvidencePresentation.test.mjs",
+    ):
+        with pytest.raises(ValueError):
+            mod.validate_acceptance_file(denied)
+
+def test_release_selected_975_bound_paper_bar_node_acceptance_exact_only():
+    # Product #1347 is an exact, read-only node:test source acceptance.
+    # This does not admit arbitrary JSX, broker commands, or UI deployment.
+    exact = "ui-react/src/lib/paperBoundaryObservation.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak",
+        exact + ".js",
+        exact.replace(".test.mjs", ".mjs"),
+        exact.replace(".test.mjs", ".live-submit.test.mjs"),
+        "ui-react/src/pages/paperBoundaryObservation.test.mjs",
+        "ui-react/src/lib/../lib/paperBoundaryObservation.test.mjs",
+        "/" + exact,
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
+
+def test_release_selected_975_pilot_utc_and_builder_id_exact_node_only():
+    # Product #1350/#1351: local node:test/readFile/vm, no network or broker.
+    exact = (
+        "ui-react/src/lib/builderConditionInspector.test.mjs",
+        "ui-react/src/lib/pilotOverlayLineSeries.test.mjs",
+        "ui-react/src/pages/PilotRunDetailPage.candle-integrity.test.mjs",
+    )
+    for path in exact:
+        assert mod.validate_acceptance_file(path) == path
+        for denied in (
+            path + ".bak",
+            path + ".js",
+            path.replace(".test.mjs", ".live-submit.test.mjs"),
+            "../" + path,
+            "/" + path,
+        ):
+            with pytest.raises(ValueError, match="not_allowlisted"):
+                mod.validate_acceptance_file(denied)
+
+
+def test_selected_product_1367_dca_policy_node_is_exact_and_brokerless():
+    # Exact selected read-only operator DCA display test, no wildcard authority.
+    exact = "ui-react/src/lib/selectedRuntimeDcaTruth.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak",
+        exact.replace(".test.mjs", ".live-submit.test.mjs"),
+        exact.replace(".test.mjs", ".test.js"),
+        "ui-react/src/lib/../lib/selectedRuntimeDcaTruth.test.mjs",
+        "/" + exact,
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
+
+
+def test_selected_product_1368_1369_exact_readonly_node_acceptance():
+    # Selected #975 pure Node quote-freshness and Pilot economics guards.
+    for exact in (
+        "ui-react/src/lib/botConsoleIndicativeMark.test.mjs",
+        "ui-react/src/lib/pilotReceiptEconomicBinding.test.mjs",
+    ):
+        assert mod.validate_acceptance_file(exact) == exact
+        for denied in (
+            exact + ".bak",
+            exact.replace(".test.mjs", ".live-submit.test.mjs"),
+            exact.replace(".test.mjs", ".test.js"),
+            "ui-react/src/lib/../lib/" + exact.rsplit("/", 1)[-1],
+            "/" + exact,
+        ):
+            with pytest.raises(ValueError, match="not_allowlisted"):
+                mod.validate_acceptance_file(denied)
+
+
+def test_selected_product_1371_safe_chain_readiness_exact_node_only():
+    # Source-only UI contradiction guard. No broker, submit or runtime authority.
+    exact = "ui-react/src/lib/operatorSafeChainReadiness.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak",
+        exact.replace(".test.mjs", ".live-submit.test.mjs"),
+        exact.replace(".test.mjs", ".test.js"),
+        "ui-react/src/lib/../lib/operatorSafeChainReadiness.test.mjs",
+        "/" + exact,
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
+
+
+def test_selected_product_1393_1396_human_truth_exact_node_only():
+    # Four exact selected #975 source-only Node tests, no broker or live route.
+    exact_files = (
+        "ui-react/src/components/StrategyBuilderHumanNavigation.product.test.mjs",
+        "ui-react/src/pages/PilotRunDetailPage.slice-evidence.product.test.mjs",
+        "ui-react/src/lib/portfolioSummaryTruth.product.test.mjs",
+        "ui-react/src/pages/ExecutionControlPlanePage.unknown-broker.product.test.mjs",
+    )
+    for exact in exact_files:
+        assert mod.validate_acceptance_file(exact) == exact
+        for denied in (
+            exact + ".bak",
+            exact + ".js",
+            exact.replace(".test.mjs", ".live-submit.test.mjs"),
+            "../" + exact,
+            "/" + exact,
+            exact.replace("ui-react/src/", "ui-react/src/../src/"),
+        ):
+            with pytest.raises(ValueError, match="not_allowlisted"):
+                mod.validate_acceptance_file(denied)
+
+
+def test_selected_20261028_pilot_config_unknown_truth_exact_node_only():
+    # Pure Node source acceptance; no browser network, broker, strategy or live grant.
+    exact = "ui-react/src/lib/pilotRunConfigEvidence.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak", exact + ".js",
+        exact.replace(".test.mjs", ".live-submit.test.mjs"),
+        "../" + exact, "/" + exact,
+        exact.replace("ui-react/src/", "ui-react/src/../src/"),
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)
+
+
+def test_selected_20261028_builder_historical_unknown_truth_exact_node_only():
+    exact = "ui-react/src/components/strategyHistoricalExpectedEvidence.test.mjs"
+    assert mod.validate_acceptance_file(exact) == exact
+    for denied in (
+        exact + ".bak", exact + ".js",
+        exact.replace(".test.mjs", ".live-submit.test.mjs"),
+        "../" + exact, "/" + exact,
+        exact.replace("ui-react/src/", "ui-react/src/../src/"),
+    ):
+        with pytest.raises(ValueError, match="not_allowlisted"):
+            mod.validate_acceptance_file(denied)

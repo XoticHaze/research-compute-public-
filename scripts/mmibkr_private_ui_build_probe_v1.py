@@ -26,6 +26,8 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/canonical-market-chart-provenance.acceptance.test.mjs",
     "ui-react/src/lib/pilotStrategySpecHandoff.acceptance.test.mjs",
     "ui-react/src/lib/pilotPromotionAdmissionExport.acceptance.test.mjs",
+    # Exact selected #888 Product limited forward-sanity promotion-review fail-close.
+    "ui-react/src/lib/promotionReview.test.mjs",
     # Selected MM-IBKR UI #937 source-only contradictory account-scope safety regression.
     "ui-react/src/lib/accountMarginSafety.test.mjs",
     # Selected MM-IBKR UI #949 exact read-only broker cache/cancel guard regression.
@@ -37,6 +39,8 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/lib/botConsolePositionTruth.test.mjs",
     # Selected #975 Product #1254 exact Builder coverage truth acceptance.
     "ui-react/src/lib/builderBacktestCoverageReview.test.mjs",
+    # Product #1322 blocked exact Pilot handoff presentation, pure Node only.
+    "ui-react/src/lib/pilotHandoffPresentationTruth.test.mjs",
     # Exact selected Builder Preview malformed-error semantic parity, source-only Node.
     "ui-react/src/lib/builderPreviewResponse.test.mjs",
     # Exact selected P0/UI #975 account-scoped open-order projection (pure Node).
@@ -61,6 +65,52 @@ ALLOWED_ACCEPTANCE_FILES = {
     "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.cross-timeframe-capability.test.mjs",
     "ui-react/src/components/CRWStrategyBuilderBacktestWorkbenchBase.local-draft-storage.test.mjs",
     "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
+    # Product #1315 exact paper execution identity and trade-claim tri-state.
+    "ui-react/src/pages/ForwardExecutionEvidencePage.acceptance.test.mjs",
+    # Product #1301 exact read-only forward unknown-vs-zero evidence consumers.
+    "ui-react/src/lib/arenaForwardEvidence.test.mjs",
+    "ui-react/src/lib/forwardEvidenceExactIdentity.test.mjs",
+    # Selected #975 fe30: exact read-only Bot Console activity/offset identity guard.
+    "ui-react/src/lib/botConsoleRecentActivity.test.mjs",
+    # Product #1309 read-only persisted paper history date/freshness guard.
+    "ui-react/src/lib/paperBoundaryHistory.test.mjs",
+    # Selected #975 current changed-source incumbent runtime identity/contract
+    # and model forward-sanity presentation, pure Node, no broker or network.
+    "ui-react/src/lib/selectedIncumbentCoverage.test.mjs",
+    "ui-react/src/lib/tradingProductReadiness.test.mjs",
+    # Product #1367 read-only selected execution-policy DCA truth for operator UI.
+    # Pure Node helper; no StrategySpec, broker, live flag or network authority.
+    "ui-react/src/lib/selectedRuntimeDcaTruth.test.mjs",
+    # Selected #975 Product #1371: read-only safe-chain contradictory submit display.
+    # Exact pure Node acceptance, not broker submit or live authorization.
+    "ui-react/src/lib/operatorSafeChainReadiness.test.mjs",
+    # Selected #975 Product #1368/#1369: pure read-only quote/Pilot economics.
+    "ui-react/src/lib/botConsoleIndicativeMark.test.mjs",
+    "ui-react/src/lib/pilotReceiptEconomicBinding.test.mjs",
+    # Selected #975 new Product funded-Pilot and model-review evidence presentation tests.
+    # Exact local node:test modules only; no network, broker or promotion issuer.
+    "ui-react/src/lib/pilotFundedTerminalDrawdown.product.test.mjs",
+    "ui-react/src/lib/promotionCandidateEvidencePresentation.test.mjs",
+    # Release #975 Product #1347: exact bound paper-bar observation UI test,
+    # pure node:test with local imports, no broker, network or live authority.
+    "ui-react/src/lib/paperBoundaryObservation.test.mjs",
+    # Selected #975 Product #1350/#1351: pure Node Pilot UTC and Builder ID guards.
+    "ui-react/src/lib/builderConditionInspector.test.mjs",
+    "ui-react/src/lib/pilotOverlayLineSeries.test.mjs",
+    "ui-react/src/pages/PilotRunDetailPage.candle-integrity.test.mjs",
+    # Selected #975 Product #1393/#1394: functional Builder shortcuts and
+    # unavailable Pilot slice evidence; read-only source assertions only.
+    "ui-react/src/components/StrategyBuilderHumanNavigation.product.test.mjs",
+    "ui-react/src/pages/PilotRunDetailPage.slice-evidence.product.test.mjs",
+    # Selected #975 Product #1395/#1396: missing portfolio/broker money,
+    # inventory, fills and orders are unknown, never fabricated zero.
+    # Exact local node:test files; no broker, network, order or live authority.
+    "ui-react/src/lib/portfolioSummaryTruth.product.test.mjs",
+    "ui-react/src/pages/ExecutionControlPlanePage.unknown-broker.product.test.mjs",
+    # Selected #975@23cc: exact pure Node missing Pilot config evidence.
+    "ui-react/src/lib/pilotRunConfigEvidence.test.mjs",
+    # Selected #975@6a2e: pure Node Builder historical unknown-vs-zero truth.
+    "ui-react/src/components/strategyHistoricalExpectedEvidence.test.mjs",
 }
 
 
