@@ -99,6 +99,22 @@ def _is_historical_session_conflict(error_code: object, error_string: object) ->
     )
 
 
+def _historical_session_conflict_failure_receipt() -> dict[str, object]:
+    """Fixed-field public-safe failure evidence; never broker identity or data."""
+    return {
+        "schema": "ibkr.post_auth_historical_session_conflict.v1",
+        "ok": False,
+        "status": "HISTORICAL_SESSION_CONFLICT_DIFFERENT_IP",
+        "session_accepted": False,
+        "consumer_ready": False,
+        "paper_execute_accepted": False,
+        "historical_data_valid": False,
+        "completed_trade_evidence_materialized": False,
+        "broker_mutation_attempted": False,
+        "operator_action": "CLOSE_COMPETING_IBKR_SESSION",
+    }
+
+
 def _bar_size_seconds(value: str) -> int | None:
     match = re.fullmatch(
         r"([1-9][0-9]{0,2}) (sec|secs|min|mins|hour|hours|day|week|month)",
@@ -701,6 +717,13 @@ def main() -> int:
                     ib.errorEvent -= _capture_historical_session_conflict
 
                 if historical_session_conflicts:
+                    # The public failed-owner path needs a durable, fixed-field
+                    # nonaccepted artifact even when no bar handoff exists.
+                    # Never serialize broker errors, accounts, contracts or bars.
+                    Path(args.output).write_text(
+                        json.dumps(_historical_session_conflict_failure_receipt(), sort_keys=True) + "\n",
+                        encoding="utf-8",
+                    )
                     print("IBKR_HISTORICAL_SESSION_CONFLICT=DIFFERENT_IP")
                     print("IBKR_OPERATOR_ACTION=CLOSE_COMPETING_IBKR_SESSION")
                     raise RuntimeError(
