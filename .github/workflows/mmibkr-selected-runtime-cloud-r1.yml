@@ -590,6 +590,7 @@ jobs:
             python - 2>/dev/null <<'PY'
           import json
           from pathlib import Path
+          from scripts.operator.selected_runtime_signal_history_contract_v1 import contract_digest
 
           path = Path('/app/data/strategy_runtime/selected_runtime_signal_history_contracts_v1/latest.json')
           if not path.is_file():
@@ -624,6 +625,36 @@ jobs:
           )
           if not ok:
               raise SystemExit(1)
+          # The warmup index and ingest are separate persistent files. A ready
+          # index from a different selected runtime/contract must not bypass
+          # canonical backfill just because counts and public run IDs match.
+          runtime_ids = []
+          for symbol in ('AMAT', 'APH', 'MNQ'):
+              source = symbols[symbol]
+              runtime_id = source.get('runtime_id')
+              selected_contract = source.get('selected_execution_contract')
+              if (not isinstance(runtime_id, str) or not runtime_id
+                      or not isinstance(selected_contract, dict) or not selected_contract):
+                  raise SystemExit(1)
+              runtime_ids.append(runtime_id)
+              row = rows.get(runtime_id)
+              if (not isinstance(row, dict)
+                      or row.get('runtime_id') != runtime_id
+                      or row.get('symbol') != symbol
+                      or row.get('instrument_class') != source.get('instrument_class')
+                      or row.get('target_timeframe') != source.get('target_timeframe')
+                      or row.get('source_timeframe') != source.get('source_timeframe')
+                      or row.get('selected_execution_contract_digest') != contract_digest(selected_contract)):
+                  raise SystemExit(1)
+          if len(set(runtime_ids)) != 3 or set(rows) != set(runtime_ids):
+              raise SystemExit(1)
+          for flag in (
+              'execution_authority_included', 'execution_contract_values_included',
+              'account_state_included', 'positions_included', 'orders_included',
+              'credentials_included', 'broker_action',
+          ):
+              if node.get(flag) is not False:
+                  raise SystemExit(1)
           counts = {
               'AMAT_TARGET_ROWS': symbols['AMAT'].get('target_rows'),
               'APH_TARGET_ROWS': symbols['APH'].get('target_rows'),
