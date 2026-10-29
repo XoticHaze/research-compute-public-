@@ -837,6 +837,7 @@ def _matched_after_cost_projections(cohorts: list[dict[str, Any]]) -> dict[str, 
         # selected-positive average to a full-13 matched control for a partial
         # breadth cohort. Preserve its immutable original terminal result.
         if (not isinstance(members, list) or len(members) != 13
+                or any(type(s) is not str for s in members)
                 or set(members) != FROZEN_SEMICONDUCTOR_UNIVERSE):
             out[identity] = {
                 "status": "FULL_13_EQUAL_WEIGHT_CONTROL_NOT_OBSERVED",
