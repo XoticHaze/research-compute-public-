@@ -1239,13 +1239,59 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish fixed-field historical session-conflict failure
+      - name: Validate and re-emit only the fixed-field historical session-conflict receipt
+        id: sanitized_historical_conflict
         if: ${{ always() && steps.post_auth.outcome == 'failure' && env.IBKR_PRODUCTION_LIVE_READONLY_MODE != '1' }}
+        env:
+          IBKR_CONFLICT_CANDIDATE: ${{ runner.temp }}/ibkr-post-auth-handoff.json
+          IBKR_CONFLICT_SAFE: ${{ runner.temp }}/ibkr-b1-historical-session-conflict-safe.json
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import stat
+
+          expected = {
+              "schema": "ibkr.post_auth_historical_session_conflict.v1",
+              "ok": False,
+              "status": "HISTORICAL_SESSION_CONFLICT_DIFFERENT_IP",
+              "session_accepted": False,
+              "consumer_ready": False,
+              "paper_execute_accepted": False,
+              "historical_data_valid": False,
+              "completed_trade_evidence_materialized": False,
+              "post_auth_broker_mutation_attempted": False,
+              "operator_action": "CLOSE_COMPETING_IBKR_SESSION",
+          }
+          source = os.environ["IBKR_CONFLICT_CANDIDATE"]
+          fd = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+          try:
+              st = os.fstat(fd)
+              if not stat.S_ISREG(st.st_mode) or not 0 < st.st_size <= 4096:
+                  raise SystemExit("CONFLICT_RECEIPT_INVALID")
+              payload = json.loads(os.read(fd, 4097))
+          finally:
+              os.close(fd)
+          if (type(payload) is not dict or set(payload) != set(expected)
+                  or any(type(payload[k]) is not type(value) or payload[k] != value
+                         for k, value in expected.items())):
+              raise SystemExit("CONFLICT_RECEIPT_NOT_ALLOWLISTED")
+          target = os.environ["IBKR_CONFLICT_SAFE"]
+          out_fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+          try:
+              with os.fdopen(out_fd, "w", encoding="utf-8") as stream:
+                  stream.write(json.dumps(expected, sort_keys=True) + "\\n")
+          except BaseException:
+              raise
+          PY
+
+      - name: Publish fixed-field historical session-conflict failure
+        if: ${{ always() && steps.sanitized_historical_conflict.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ibkr-b1-historical-session-conflict-${{ github.run_id }}
-          path: ${{ runner.temp }}/ibkr-post-auth-handoff.json
-          if-no-files-found: ignore
+          path: ${{ runner.temp }}/ibkr-b1-historical-session-conflict-safe.json
+          if-no-files-found: error
           retention-days: 30
 
       - name: Enforce paper proof result after warm-state persistence
