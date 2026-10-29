@@ -1,11 +1,11 @@
 {
   "schema": "mmibkr-operator-console-deploy-fire-v1",
-  "source_sha": "f6f6dcdcbad3df8c5d50cab5ac2652b4781a648d",
+  "source_sha": "2641a85c812af869df7ddb2a9c0a8feb0944d45a",
   "mode": "locked_private",
   "access_required": true,
   "public_fallback_allowed": false,
   "live_execution_allowed": false,
-  "reason": "owner_approved_f6f6_and_new_workers_subdomain_token_route_on_main; fail_closed_if_both_denied",
-  "requested_by": "MW-20261029024437942",
-  "request_id": "mw-20261029024437942-ui-owner-approved-token-preflight"
+  "reason": "frozen_2641_strict_ui_source_vault_native_pending_owner_sha_approval_no_auto_deploy",
+  "requested_by": "ContinueRelease-R19-20261029034854187",
+  "request_id": "release-20261029-ui2641-owner-review-only"
 }
