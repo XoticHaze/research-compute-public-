@@ -27,6 +27,28 @@ def _utc_now() -> pd.Timestamp:
     return pd.Timestamp(datetime.now(timezone.utc))
 
 
+def _first_public_yahoo_ohlc_violation(rows: list[dict]) -> dict | None:
+    """Identify the first public provider OHLC failure; never repair a price.
+
+    Mirrors the shared bar contract's 1e-7 relative high/low tolerance for
+    diagnostic provenance only. The shared validator remains authoritative.
+    """
+    for row in rows:
+        o, h, l, close = (float(row[k]) for k in ("open", "high", "low", "close"))
+        scale = max(abs(o), abs(h), abs(l), abs(close), 1.0)
+        high_gap = max(o, close, l) - h
+        low_gap = l - min(o, close, h)
+        if high_gap > 1e-7 * scale or low_gap > 1e-7 * scale:
+            return {
+                "symbol": str(row["symbol"]),
+                "session": pd.Timestamp(row["timestamp"]).date().isoformat(),
+                "kind": "HIGH_BELOW_OHLC" if high_gap > 1e-7 * scale else "LOW_ABOVE_OHLC",
+                "relative_gap": round(max(high_gap, low_gap) / scale, 10),
+                "provider": "yahoo_adjusted_research_only",
+            }
+    return None
+
+
 def _yahoo_normalized() -> pd.DataFrame:
     raw = yf.download(
         list(U), start="2005-01-01", auto_adjust=True, progress=False,
@@ -54,7 +76,20 @@ def _yahoo_normalized() -> pd.DataFrame:
                 "wap": np.nan,
                 "bar_count": np.nan,
             })
-    return normalize_frame(rows)
+    try:
+        return normalize_frame(rows)
+    except ValueError as exc:
+        if "invariant failed beyond numeric tolerance" not in str(exc):
+            raise
+        offending = _first_public_yahoo_ohlc_violation(rows)
+        if offending is None:
+            raise
+        # Public Yahoo symbol/date/dimension only. No price repair, dropping,
+        # tolerance change, alternate source, private payload or hidden fallback.
+        raise ValueError(
+            "P46_PUBLIC_YAHOO_ADJUSTED_OHLC_SOURCE_INVALID "
+            + json.dumps(offending, sort_keys=True)
+        ) from exc
 
 
 def _ibkr_shape_fixture() -> dict:
