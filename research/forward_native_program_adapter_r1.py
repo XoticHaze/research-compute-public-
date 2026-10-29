@@ -208,6 +208,9 @@ def adapt_semiconductor(prediction: dict[str, Any], book: dict[str, Any] | None 
     )
     values = _prediction_map(rows, "predicted_fixed20_net_value_bps", "predicted_fixed20_net25_bps")
     positives = [str(r["symbol"]) for r in rows if _positive(r)]
+    semiconductor_symbols = {str(r["symbol"]) for r in rows}
+    if semiconductor_symbols != FROZEN_SYMBOLS["SEMICONDUCTOR_SHARED_RIDGE"] or len(rows) != len(FROZEN_SYMBOLS["SEMICONDUCTOR_SHARED_RIDGE"]):
+        raise ValueError("public semiconductor adapter requires exact frozen 13-name universe")
     breadth = len(positives) / len(rows)
     eligible = signal_date >= "2026-09-10"
     if book:
@@ -381,16 +384,30 @@ def adapt(program: str, native: dict[str, Any], book: dict[str, Any] | None = No
 
 
 def self_test() -> None:
+    def semi_rows(*, positive: set[str] = frozenset({"AMAT"})) -> list[dict[str, Any]]:
+        return [
+            {
+                "symbol": symbol,
+                "predicted_fixed20_net_value_bps": 500.0 if symbol in positive else -10.0,
+                "positive_value_opportunity": symbol in positive,
+            }
+            for symbol in sorted(FROZEN_SYMBOLS["SEMICONDUCTOR_SHARED_RIDGE"])
+        ]
+
     semi = adapt_semiconductor({
         "generation_bar_date": "2026-09-10",
-        "observations": [
-            {"symbol": "AMAT", "predicted_fixed20_net_value_bps": 500.0, "positive_value_opportunity": True},
-            {"symbol": "NVDA", "predicted_fixed20_net_value_bps": -10.0, "positive_value_opportunity": False},
-        ],
+        "observations": semi_rows(),
     })
     assert semi["timing"]["execution_delay_sessions"] == 1
     assert semi["timing"]["holding_horizon_sessions"] == 20
-    assert semi["paper_action"]["industry_book_indicative_nav_fraction"] == 0.025
+    assert abs(semi["paper_action"]["industry_book_indicative_nav_fraction"] - 0.05 / 13.0) < 1e-15
+    for bad_rows in (semi_rows()[:-1], [*semi_rows()[:-1], {"symbol": "PRIVATE_SENTINEL"}]):
+        try:
+            adapt_semiconductor({"generation_bar_date": "2026-09-10", "observations": bad_rows})
+        except ValueError as exc:
+            assert "SENTINEL" not in str(exc)
+        else:
+            raise AssertionError("incomplete/foreign semiconductor universe reached public adapter")
     hb = adapt_homebuilders({
         "schema": "foundry.research.homebuilders_adaptive_duration_forward.v1",
         "duration_snapshot": {"timestamp": "2026-09-10T00:00:00+00:00"},
@@ -428,7 +445,7 @@ def self_test() -> None:
     try:
         adapt_semiconductor({
             "generation_bar_date": "2026-09-10",
-            "observations": [{"symbol": "AMAT", "predicted_fixed20_net_value_bps": 10.0}],
+            "observations": semi_rows(),
         }, book={
             "ticker_book": {"status": "PAPER_COHORT_READY", "PRIVATE_SENTINEL": {"secret": "never_public"}},
             "industry_book": {"status": "PAPER_COHORT_READY"},
@@ -472,7 +489,7 @@ def self_test() -> None:
     }
     admitted_book = adapt_semiconductor({
         "generation_bar_date": "2026-09-10",
-        "observations": [{"symbol": "AMAT", "predicted_fixed20_net_value_bps": 10.0}],
+        "observations": semi_rows(),
         "boundaries": {"runtime_mutation": False, "broker_authority": False,
                        "sizing_authority": False, "promotion_authority": False,
                        "live_trading_authority": False},
