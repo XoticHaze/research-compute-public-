@@ -39,14 +39,14 @@ class PostAuthPipelineContractTests(unittest.TestCase):
         self.assertEqual(set(receipt), {
             "schema", "ok", "status", "session_accepted", "consumer_ready",
             "paper_execute_accepted", "historical_data_valid",
-            "completed_trade_evidence_materialized", "broker_mutation_attempted",
+            "completed_trade_evidence_materialized", "post_auth_broker_mutation_attempted",
             "operator_action",
         })
         self.assertEqual(receipt["status"], "HISTORICAL_SESSION_CONFLICT_DIFFERENT_IP")
         self.assertTrue(all(receipt[key] is False for key in (
             "ok", "session_accepted", "consumer_ready", "paper_execute_accepted",
             "historical_data_valid", "completed_trade_evidence_materialized",
-            "broker_mutation_attempted",
+            "post_auth_broker_mutation_attempted",
         )))
         self.assertNotIn("account", json.dumps(receipt).lower())
         workflow = (Path(__file__).resolve().parents[1] /
