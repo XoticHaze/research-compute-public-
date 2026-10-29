@@ -55,6 +55,50 @@ class PostAuthPipelineContractTests(unittest.TestCase):
         self.assertIn("steps.post_auth.outcome == 'failure'", workflow)
         self.assertIn("ibkr-b1-historical-session-conflict-", workflow)
 
+    def test_public_failure_upload_requires_exact_fixed_field_sanitizer(self):
+        import os
+        from pathlib import Path
+        import subprocess
+        import sys
+        import tempfile
+        import textwrap
+
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/ibkr-cloudflare-readonly-b1-r1.yml").read_text()
+        start_marker = "      - name: Validate and re-emit only the fixed-field historical session-conflict receipt"
+        end_marker = "      - name: Publish fixed-field historical session-conflict failure"
+        section = workflow.split(start_marker, 1)[1].split(end_marker, 1)[0]
+        script = textwrap.dedent(section.split("          python - <<'PY'\\n", 1)[1].split("          PY\\n", 1)[0])
+        upload = workflow.split(end_marker, 1)[1].split("      - name:", 1)[0]
+        self.assertIn("steps.sanitized_historical_conflict.outcome == 'success'", upload)
+        self.assertIn("ibkr-b1-historical-session-conflict-safe.json", upload)
+        self.assertNotIn("path: ${{ runner.temp }}/ibkr-post-auth-handoff.json", upload)
+        self.assertIn("if-no-files-found: error", upload)
+
+        valid = mod._historical_session_conflict_failure_receipt()
+        variants = [
+            ("valid", valid, True),
+            ("extra_nested_sentinel", {**valid, "nested": {"account": "SENTINEL"}}, False),
+            ("bool_integer_confusion", {**valid, "ok": 0}, False),
+            ("wrong_failure_reason", {**valid, "status": "UNRELATED_FAILURE"}, False),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            candidate = Path(tmp) / "handoff.json"
+            safe = Path(tmp) / "safe.json"
+            env = {**os.environ, "IBKR_CONFLICT_CANDIDATE": str(candidate),
+                   "IBKR_CONFLICT_SAFE": str(safe)}
+            for name, payload, admitted in variants:
+                with self.subTest(name=name):
+                    safe.unlink(missing_ok=True)
+                    candidate.write_text(json.dumps(payload), encoding="utf-8")
+                    completed = subprocess.run([sys.executable, "-c", script],
+                                               env=env, capture_output=True, text=True,
+                                               timeout=10, check=False)
+                    self.assertEqual(completed.returncode == 0, admitted)
+                    self.assertEqual(safe.exists(), admitted)
+                    if admitted:
+                        self.assertEqual(json.loads(safe.read_text()), valid)
+
     def test_exact_mm_futures_contract_is_preserved(self):
         hints = mod.parse_contract_hints(json.dumps({
             "MNQ": {
