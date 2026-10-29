@@ -40,7 +40,7 @@ class _PublicSafeArgumentParser(argparse.ArgumentParser):
 HARNESS_SPECS: dict[str, dict[str, Any]] = {
     "semiconductor_shared_ridge_three_book_v1": {
         "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
-        "source_ref": "e73ec9b15180e208de541ce5d5304888e5550433",
+        "source_ref": "142783730a9e048c3c5ac543b362f07aa4944a18",
         "files": {
             "research/semiconductor_external_forward_standalone_20260910.py",
             "research/semiconductor_three_book_forward_contract_20260910.json",
