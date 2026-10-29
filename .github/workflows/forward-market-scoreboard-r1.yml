@@ -95,7 +95,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
-      - run: python -m pip install --disable-pip-version-check numpy pandas yfinance
+      - run: python -m pip install --disable-pip-version-check numpy pandas yfinance exchange_calendars==4.13.2
       - run: python -m research.p46_forward_observer_r2
       - uses: actions/upload-artifact@v4
         with:
