@@ -68,7 +68,7 @@ class PostAuthPipelineContractTests(unittest.TestCase):
         start_marker = "      - name: Validate and re-emit only the fixed-field historical session-conflict receipt"
         end_marker = "      - name: Publish fixed-field historical session-conflict failure"
         section = workflow.split(start_marker, 1)[1].split(end_marker, 1)[0]
-        script = textwrap.dedent(section.split("          python - <<'PY'\\n", 1)[1].split("          PY\\n", 1)[0])
+        script = textwrap.dedent(section.split("          python - <<'PY'\n", 1)[1].split("          PY\n", 1)[0])
         upload = workflow.split(end_marker, 1)[1].split("      - name:", 1)[0]
         self.assertIn("steps.sanitized_historical_conflict.outcome == 'success'", upload)
         self.assertIn("ibkr-b1-historical-session-conflict-safe.json", upload)
