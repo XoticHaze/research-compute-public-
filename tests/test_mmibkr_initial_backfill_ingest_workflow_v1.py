@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import contextlib
+import hashlib
+import io
+import json
+import tempfile
+import textwrap
 import unittest
 
 
@@ -119,6 +125,98 @@ class InitialBackfillCanonicalIngestWorkflowTests(unittest.TestCase):
         self.assertIn("'broker_action': False", text)
         self.assertIn("'runtime_execution_contract_mutated': False", text)
         self.assertIn("'live_execution_allowed': False", text)
+
+
+    def test_warmup_reuse_probe_rejects_crossfile_runtime_or_digest_drift(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        start = text.index("if reuse_rows=\"$(docker run --rm -i")
+        probe_start = text.index("          import json\n", start)
+        probe_end = text.index("          PY\n", probe_start)
+        probe = textwrap.dedent(text[probe_start:probe_end])
+        import_line = (
+            "from scripts.operator.selected_runtime_signal_history_contract_v1 "
+            "import contract_digest\n"
+        )
+        self.assertIn(import_line, probe)
+        # Replace only the private image's canonical import with a synthetic
+        # digest helper. This never loads private source or market data.
+        probe = probe.replace(import_line, "")
+        def digest(contract):
+            raw = json.dumps(contract, sort_keys=True, separators=(",", ":")).encode()
+            return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            index_path = root / "signal.json"
+            ingest_path = root / "ingest.json"
+            probe = probe.replace(
+                "/app/data/strategy_runtime/selected_runtime_signal_history_contracts_v1/latest.json",
+                str(index_path),
+            ).replace(
+                "/app/data/strategy_runtime/selected_runtime_initial_backfill_v1/latest.json",
+                str(ingest_path),
+            )
+            symbols = {}
+            rows = {}
+            for symbol, tf, cls in (("AMAT", "15Min", "STK"),
+                                    ("APH", "15Min", "STK"),
+                                    ("MNQ", "12Min", "FUT")):
+                runtime_id = "synthetic_" + symbol.lower()
+                contract = {"conId": len(symbol), "symbol": symbol, "secType": cls}
+                symbols[symbol] = {
+                    "runtime_id": runtime_id,
+                    "instrument_class": cls,
+                    "target_timeframe": tf,
+                    "source_timeframe": "1Min",
+                    "selected_execution_contract": contract,
+                    "warmup": {"ready": True, "continuity_covered": True},
+                    "source_rows": 5000,
+                    "target_rows": 500,
+                }
+                rows[runtime_id] = {
+                    "runtime_id": runtime_id,
+                    "symbol": symbol,
+                    "instrument_class": cls,
+                    "target_timeframe": tf,
+                    "source_timeframe": "1Min",
+                    "selected_execution_contract_digest": digest(contract),
+                    "warmup_ready": True,
+                }
+            index = {
+                "schema": "mmibkr.selected_runtime_signal_history_contracts.v1",
+                "ok": True, "public_run_id": "40665095081",
+                "runtime_count": 3, "runtimes": rows,
+                **{flag: False for flag in (
+                    "execution_authority_included", "execution_contract_values_included",
+                    "account_state_included", "positions_included", "orders_included",
+                    "credentials_included", "broker_action",
+                )},
+            }
+            ingest = {
+                "schema": "mmibkr.selected_runtime_initial_backfill_ingest.v1",
+                "ok": True, "all_warmups_ready": True,
+                "artifact": {"public_run_id": "40665095081"},
+                "symbols": symbols, "broker_action": False,
+                "runtime_execution_contract_mutated": False,
+                "live_execution_allowed": False,
+            }
+            def evaluate():
+                index_path.write_text(json.dumps(index), encoding="utf-8")
+                ingest_path.write_text(json.dumps(ingest), encoding="utf-8")
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    exec(compile(probe, "<synthetic-warmup-reuse>", "exec"),
+                         {"contract_digest": digest})
+                return output.getvalue()
+
+            self.assertIn("MNQ_SOURCE_ROWS=5000", evaluate())
+            rows["synthetic_mnq"]["symbol"] = "APH"
+            with self.assertRaises(SystemExit):
+                evaluate()
+            rows["synthetic_mnq"]["symbol"] = "MNQ"
+            rows["synthetic_mnq"]["selected_execution_contract_digest"] = "sha256:" + "0" * 64
+            with self.assertRaises(SystemExit):
+                evaluate()
 
 
 if __name__ == "__main__":
