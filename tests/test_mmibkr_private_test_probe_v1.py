@@ -111,6 +111,23 @@ def test_exact_live_owner_journal_writer_and_broker_provenance_are_source_only()
         validated_modules("tests.test_selected_runtime_live_broker_submit_v1")
 
 
+def test_selected_p0_currency_multiplier_identity_tests_are_exact_networkless_only():
+    # Newly consumed Product #1509/#1511 source: no broker/API or live authority.
+    modules = (
+        "tests.test_live_owner_currency_multiplier_identity_product_20261028",
+        "tests.test_ibkr_split_gateway_portability_v1",
+    )
+    assert validated_modules(" ".join(modules)) == list(modules)
+    for module in modules:
+        cmd = pytest_container_command("sealed-test-image", module)
+        assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in cmd
+        assert cmd[-1] == module_file_path(module)
+        for rejected in (module + "_extra", module + "_live_submit"):
+            with pytest.raises(ValueError):
+                validated_modules(rejected)
+
+
 def test_signed_owner_candidate_is_allowlisted_only_as_networkless_disabled_source():
     module = "tests.test_selected_runtime_live_owner_candidate_certificate_v1"
     assert validated_modules(module) == [module]
@@ -161,6 +178,7 @@ def test_exact_readonly_market_data_consumer_is_networkless_only():
         "tests.test_cloud_operator_snapshot_forward_root_binding_product_20261026",
         "tests.test_cloud_operator_snapshot_health_adapter_v1",
         "tests.test_cloud_operator_snapshot_inventory_readonly_product_20261027",
+        "tests.test_cloud_operator_snapshot_single_publish_product_20261027",
         "tests.test_crw_backtest_rth_asset_contract_product_20261027",
         "tests.test_survivor_paper_trade_evidence_materializer_v1",
     "tests.test_futures_range_tail_coverage_product_20261027",
@@ -1175,3 +1193,263 @@ def test_exact_builder_preview_semantic_writer_guard_is_networkless_and_allowlis
     assert cmd[-1] == module_file_path(module)
     with pytest.raises(ValueError):
         validated_modules("tests.test_strategy_builder_review_preview_semantic_untrusted")
+
+
+def test_selected_p0_forward_new_exact_modules_networkless_only():
+    # Exact selected source guards; this tests public admission, not private execution.
+    modules = (
+        "tests.test_selected_runtime_live_incumbent_preflight_v1",
+        "tests.test_selected_runtime_forward_completed_trade_admission_v1",
+        "tests.test_selected_runtime_cloud_daemon_v1",
+        "tests.test_selected_runtime_futures_roll_maintenance_v1",
+    )
+    assert validated_modules(",".join(modules)) == list(modules)
+    for module in modules:
+        command = pytest_container_command("sealed-selected-source-only", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for denied in (module + "_extra", module + "_live_submit", module + ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(denied)
+
+
+def test_selected_p0_privacy_risk_followons_exact_networkless_only():
+    # Admission is source-only; no private job placement or broker authority.
+    modules = (
+        "tests.test_operator_lifecycle_snapshot_privacy_product_20261027",
+        "tests.test_selected_runtime_live_preflight_risk_roll_product_20261027",
+        "tests.test_live_canary_exact_contract_identity_product_20261027",
+        "tests.test_active_runtime_identity_failclosed_product_20261027",
+        "tests.test_selected_runtime_forward_execution_lifecycle_v1",
+        "tests.test_selected_runtime_forward_partial_capture_product_20261027",
+        "tests.test_forward_exact_tick_contract_integrity_product_20261027",
+    )
+    assert validated_modules(",".join(modules)) == list(modules)
+    for module in modules:
+        command = pytest_container_command("sealed-selected-p0-privacy-risk", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for rejected in (module + "_extra", module + "_live_submit", module + "_broker", module + ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(rejected)
+
+def test_exact_product_1302_pilot_funded_capital_receipt_is_networkless_only():
+    # Existing Promotion Review/Pilot receipt consumer, never a promotion issuer.
+    module = "tests.test_pilot_capital_context_failclosed_product_20261027"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-selected-pilot-capital", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for denied in (module + "_extra", module + "_live_submit", module + "_promote", module + ".py"):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
+
+def test_exact_product_1304_private_operator_snapshot_atomic_is_networkless_only():
+    # Private Access snapshot persistence must never write outside its root.
+    module = "tests.test_operator_snapshot_private_atomic_product_20261027"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-selected-operator-snapshot", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for denied in (module + "_extra", module + "_live_submit", module + "_symlink_bypass", module + ".py"):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
+
+
+def test_selected_product_1306_1307_exact_readonly_consumer_modules():
+    # Exact private selected-source admission, not a broker or live runtime probe.
+    for module in (
+        "tests.test_cloud_operator_health_bound_read_return_product_20261027",
+        "tests.test_cloud_forward_lifecycle_size_guard_product_20261027",
+    ):
+        assert validated_modules(module) == [module]
+        command = pytest_container_command("sealed-selected-operator-evidence", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for denied in (module + "_extra", module + "_live_submit", module + "_broker", module + ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(denied)
+
+
+def test_selected_current_operator_lifecycle_snapshot_exact_networkless():
+    # New selected #975 source-only snapshot event/identity projection tests.
+    module = "tests.test_cloud_operator_snapshot_forward_lifecycle_v1"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-selected-operator-lifecycle", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for denied in (module + "_extra", module + "_live_submit", module + "_broker", module + ".py"):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
+
+
+def test_selected_product_1308_bounded_history_exact_networkless():
+    module = "tests.test_cloud_paper_boundary_history_v1"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-selected-boundary-history", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for denied in (module + "_extra", module + "_live_submit", module + "_broker", module + ".py"):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
+
+
+def test_selected_product_1313_strict_bar_evidence_is_exact_source_only_module():
+    exact = "tests.test_product_operator_snapshot_strict_bar_evidence_20261027"
+    assert validated_modules(exact) == [exact]
+    with pytest.raises(ValueError, match="test_module_not_allowlisted"):
+        validated_modules("tests.test_product_operator_snapshot_strict_bar_evidence_20261027_extra")
+
+
+def test_selected_pi983_product_1317_typed_preflight_exact_networkless_only():
+    # Exactly three changed-source synthetic Pi tests, never broker or Docker.
+    exact = (
+        "tests.test_ccpi_ibkr_malformed_proof_product_20261027",
+        "tests.test_ccpi_ibkr_typed_host_preflight_v2",
+        "tests.test_persistent_gateway_non_takeover_release_20261027",
+    )
+    assert validated_modules(" ".join(exact)) == list(exact)
+    for module in exact:
+        command = pytest_container_command("sealed-selected-pi983", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for suffix in ("_live_submit", "_broker", "_extra", ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(module + suffix)
+
+
+
+def test_pi983_reauth_lock_exact_module_is_networkless_and_no_live():
+    # Selected #983 changed lock ownership/nofollow safety; no Gateway start,
+    # broker session, phone delivery, order, or unrestricted Python execution.
+    module = "tests.test_ibkr_persistent_reauth_monitor_v1"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-selected-pi983", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for suffix in ("_broker", "_live_submit", "_extra", ".py"):
+        with pytest.raises(ValueError):
+            validated_modules(module + suffix)
+
+
+def test_selected_product_1321_1323_exact_networkless_modules():
+    # Selected #975@8ba3 changed source: pure operator health and inert MNQ
+    # historical-refresh denial; no network, broker, submit or cache writes.
+    exact = (
+        "tests.test_cloud_operator_health_v1",
+        "tests.test_builder_mnq_backend_refresh_failclose_product_20261027",
+    )
+    assert validated_modules(" ".join(exact)) == list(exact)
+    for module in exact:
+        command = pytest_container_command("sealed-selected-operator-health-mnq", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for suffix in ("_extra", "_broker", "_live_submit", ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(module + suffix)
+
+def test_release_selected_975_three_exact_new_python_modules_are_networkless():
+    # Exact selected source tests: paper P&L chronology, retained paper
+    # strategy inventory and bounded pre-issuer model run ID. No wildcard.
+    exact = (
+        "tests.test_cloud_forward_performance_v1",
+        "tests.test_forward_lifecycle_retained_state_product_20261027",
+        "tests.test_foundry_model_run_id_bounded_product_20261027",
+    )
+    assert validated_modules(" ".join(exact)) == list(exact)
+    for module in exact:
+        command = pytest_container_command("sealed-selected-975", module)
+        assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in command
+        assert command[-1] == module_file_path(module)
+        for suffix in ("_extra", "_broker", "_live_submit", ".py"):
+            with pytest.raises(ValueError):
+                validated_modules(module + suffix)
+
+def test_release_selected_975_partial_interval_source_only_exact_networkless():
+    # Product #1353 is a deterministic finer-bar envelope, not broker realized P&L.
+    module = "tests.test_selected_runtime_forward_partial_interval_v1"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-selected-partial-interval", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for denied in (module + "_extra", module + "_live_submit", module + ".py", "../" + module):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
+
+
+def test_selected_product_1365_cloud_lifecycle_unpaired_is_exact_networkless_only():
+    # Only the existing read-only lifecycle consumer's synthetic temporary-file
+    # regression is admitted. Never grant an arbitrary Python or broker probe.
+    module = "tests.test_cloud_forward_lifecycle_unpaired_integrity_product_20261028"
+    assert validated_modules(module) == [module]
+    command = pytest_container_command("sealed-selected-product-1365-source-only", module)
+    assert command[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in command
+    assert command[-1] == module_file_path(module)
+    for denied in (
+        module + "_extra", module + "_live_submit", module + ".py",
+        module.replace("unpaired_integrity", "broker_submit"),
+    ):
+        with pytest.raises(ValueError):
+            validated_modules(denied)
+
+
+def test_release_selected_975_dca_max_add_source_module_is_exact_networkless():
+    # Product #1370 pure Python helper, not a broker/order or live-mode test.
+    module = "tests.test_selected_dca_forward_policy_v1"
+    assert validated_modules(module) == [module]
+    cmd = pytest_container_command("sealed-selected-975", module)
+    assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+    assert "ENABLE_LIVE_TRADING=0" in cmd
+    assert cmd[-1] == module_file_path(module)
+    for suffix in ("_extra", "_broker", "_live_submit", ".py"):
+        with pytest.raises(ValueError):
+            validated_modules(module + suffix)
+
+
+def test_selected_20261028_live_inventory_and_operator_truth_exact_networkless():
+    # Exact selected-source brokerless regression admission only; not private execution.
+    modules = (
+        "tests.test_live_inventory_parent_nofollow_product_20261028",
+        "tests.test_live_fill_commit_inventory_trust_product_20261028",
+        "tests.test_cloud_operator_snapshot_inventory_read_trust_product_20261028",
+        "tests.test_operator_lifecycle_parent_nofollow_product_20261028",
+    )
+    assert validated_modules(",".join(modules)) == list(modules)
+    for module in modules:
+        cmd = pytest_container_command("sealed-selected-inventory-trust", module)
+        assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in cmd
+        assert cmd[-1] == module_file_path(module)
+        for denied in (module + "_extra", module + "_live_submit", module + ".py", "../" + module):
+            with pytest.raises(ValueError):
+                validated_modules(denied)
+
+
+def test_selected_20261028_paper_lifecycle_audit_consumer_exact_networkless():
+    # Read-only lifecycle/terminal metadata; never accept broker fills or PnL.
+    modules = (
+        "tests.test_survivor_run_data_availability_audit_v1",
+        "tests.test_survivor_completed_trade_input_status_v1",
+    )
+    assert validated_modules(",".join(modules)) == list(modules)
+    for module in modules:
+        cmd = pytest_container_command("sealed-selected-paper-continuity", module)
+        assert cmd[:5] == ["docker", "run", "--rm", "--network", "none"]
+        assert "ENABLE_LIVE_TRADING=0" in cmd
+        assert cmd[-1] == module_file_path(module)
+        for denied in (module + "_extra", module + "_live_submit", module + ".py", "../" + module):
+            with pytest.raises(ValueError):
+                validated_modules(denied)
