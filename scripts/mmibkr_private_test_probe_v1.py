@@ -64,6 +64,9 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_selected_runtime_live_order_intent_journal_v1",
     "tests.test_selected_runtime_live_execution_ledger_v1",
     "tests.test_selected_runtime_live_broker_provenance_v1",
+    # Exact selected P0 #883 currency/multiplier identity falsifiers; brokerless.
+    "tests.test_live_owner_currency_multiplier_identity_product_20261028",
+    "tests.test_ibkr_split_gateway_portability_v1",
     "tests.test_selected_runtime_live_p0_integrated_checkpoint_v1",
     "tests.test_selected_runtime_live_owner_candidate_certificate_v1",
     # Brokerless selected-account what-if guard/hook tests must not access a network.
@@ -71,6 +74,14 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_selected_runtime_margin_whatif_hook_14th31lg",
     # Exact synthetic Pi Docker endpoint-locality preflight; no daemon/broker access.
     "tests.test_ibkr_persistent_host_preflight_v1",
+    # Selected Pi #983 Product #1317 typed proof and non-takeover source-only
+    # regressions; synthetic local data only, no Docker daemon or broker.
+    "tests.test_ccpi_ibkr_malformed_proof_product_20261027",
+    "tests.test_ccpi_ibkr_typed_host_preflight_v2",
+    "tests.test_persistent_gateway_non_takeover_release_20261027",
+    # Changed #983 no-login continuity lock ownership/nofollow regression.
+    # Exact module, Docker --network none and live trading disabled.
+    "tests.test_ibkr_persistent_reauth_monitor_v1",
     # New exact paper post-execution quarantine regression, no broker access.
     "tests.test_selected_runtime_cloud_cycle_v1",
     # Exact canonical read-only B1 initial-backfill contract integrity, brokerless.
@@ -102,6 +113,21 @@ SOURCE_ONLY_P0_MODULES = frozenset({
     "tests.test_live_broker_position_residue_product_20261024",
     # Exact operator snapshot contract identity, brokerless synthetic tests.
     "tests.test_cloud_operator_exact_contract_position_product_20261024",
+    # Exact selected #975 Product #1294/#1296 operator privacy and #1295 risk/roll
+    # pure brokerless regressions. These names are not generic test wildcards.
+    "tests.test_operator_lifecycle_snapshot_privacy_product_20261027",
+    "tests.test_selected_runtime_live_preflight_risk_roll_product_20261027",
+    # Product #1297 exact conId and MNQ expiry guard, brokerless only.
+    "tests.test_live_canary_exact_contract_identity_product_20261027",
+    # Exact Product #1298 active ID fail-close and #1299 prospective partial bars.
+    "tests.test_active_runtime_identity_failclosed_product_20261027",
+    "tests.test_selected_runtime_forward_partial_capture_product_20261027",
+    # Product #1300 exact conId and integer historical tick-second read-only regression.
+    "tests.test_forward_exact_tick_contract_integrity_product_20261027",
+    # Product #1302 Pilot funded-capital receipt numeric admission, no promotion.
+    "tests.test_pilot_capital_context_failclosed_product_20261027",
+    # Product #1304 private operator snapshot atomic/symlink write-through guard.
+    "tests.test_operator_snapshot_private_atomic_product_20261027",
 })
 
 SAFE_EXACT = {
@@ -178,6 +204,9 @@ SAFE_EXACT = {
     # Admission of test names is not a trusted placement or private execution.
     "tests.test_selected_runtime_forward_execution_lifecycle_v1",
     "tests.test_selected_runtime_forward_lifecycle_ledger_failclosed_product_20261027",
+    # Exact selected #975 read-only operator snapshot lifecycle projection;
+    # pytest tmp_path/monkeypatch only, no network or broker imports.
+    "tests.test_cloud_operator_snapshot_forward_lifecycle_v1",
     "tests.test_cc44_source_cache_first_12m_r1",
     "tests.test_cc44_source_cache_session_gap_guard_r1",
     "tests.test_builder_cross_lane_condition_ids_product_20261027",
@@ -187,6 +216,15 @@ SAFE_EXACT = {
     "tests.test_strategy_builder_review_preview_semantic_20261027",
     "tests.test_mnq_dca_event_export",
     "tests.test_mnq_dca_path_outcomes",
+    # Selected #883@bc926 and #975@23cc: exact brokerless nofollow inventory tests.
+    "tests.test_live_inventory_parent_nofollow_product_20261028",
+    "tests.test_live_fill_commit_inventory_trust_product_20261028",
+    "tests.test_cloud_operator_snapshot_inventory_read_trust_product_20261028",
+    # Selected #975@76f99: read-only lifecycle ledger parent nofollow regression.
+    "tests.test_operator_lifecycle_parent_nofollow_product_20261028",
+    # Selected #975@6a2e: lifecycle-only/boundary-only paper audit and consumer.
+    "tests.test_survivor_run_data_availability_audit_v1",
+    "tests.test_survivor_completed_trade_input_status_v1",
 }
 
 # Exact selected Model Lab cancellation/identity regressions from MM-IBKR
@@ -283,10 +321,41 @@ SOURCE_ONLY_SELECTED_PRODUCT_MODULES = frozenset({
     "tests.test_cloud_operator_snapshot_forward_root_binding_product_20261026",
     "tests.test_cloud_operator_snapshot_health_adapter_v1",
     "tests.test_cloud_operator_snapshot_inventory_readonly_product_20261027",
+    # Selected #975 Product atomic one-time operator snapshot publication after lifecycle.
+    # Pure mocked tmp-path pytest; no broker, network, order, or live authority.
+    "tests.test_cloud_operator_snapshot_single_publish_product_20261027",
     "tests.test_crw_backtest_rth_asset_contract_product_20261027",
     "tests.test_survivor_paper_trade_evidence_materializer_v1",
     "tests.test_futures_range_tail_coverage_product_20261027",
     "tests.test_market_feed_range_orchestration_14th31ix",
+    # Selected #975 Product #1306/#1307 brokerless read-only consumer regressions.
+    "tests.test_cloud_operator_health_bound_read_return_product_20261027",
+    "tests.test_cloud_forward_lifecycle_size_guard_product_20261027",
+    # Product #1321/#1323 exact source-only operator health and MNQ refresh denial.
+    "tests.test_cloud_operator_health_v1",
+    "tests.test_builder_mnq_backend_refresh_failclose_product_20261027",
+    # Product #1308 exact bounded private paper boundary-history consumer.
+    "tests.test_cloud_paper_boundary_history_v1",
+    # Exact selected P0/forward source-only regressions; no broker credentials or network.
+    "tests.test_selected_runtime_live_incumbent_preflight_v1",
+    "tests.test_selected_runtime_forward_completed_trade_admission_v1",
+    # Selected #975 Product #1353 pure finer-bar price-integrity regression.
+    "tests.test_selected_runtime_forward_partial_interval_v1",
+    # Product #1313 exact affirmative completed-bar/no-new-bar snapshot truth.
+    "tests.test_product_operator_snapshot_strict_bar_evidence_20261027",
+    "tests.test_selected_runtime_cloud_daemon_v1",
+    # Exact selected #1275 futures-roll cutoff fail-close, mocked/read-only only.
+    "tests.test_selected_runtime_futures_roll_maintenance_v1",
+    # Release #975: exact changed-source paper P&L, retained inventory and
+    # bounded Foundry source-run parser regressions. All are offline, no broker.
+    "tests.test_cloud_forward_performance_v1",
+    # Selected #975 Product #1370: pure read-only DCA max-add policy; no broker.
+    "tests.test_selected_dca_forward_policy_v1",
+    # Product #1365 exact cloud paper event-partition/source-ref fail-close,
+    # temporary files and synthetic ledgers only; no broker/network/live.
+    "tests.test_cloud_forward_lifecycle_unpaired_integrity_product_20261028",
+    "tests.test_forward_lifecycle_retained_state_product_20261027",
+    "tests.test_foundry_model_run_id_bounded_product_20261027",
 })
 SAFE_EXACT.update(SOURCE_ONLY_SELECTED_PRODUCT_MODULES)
 STATUS_STAGE_MODULES = {

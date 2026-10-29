@@ -1118,6 +1118,7 @@ jobs:
                   'schema': 'mmibkr.selected_runtime_cloud_session_receipt.v2',
                   'ok': False,
                   'status': 'session_receipt_missing_after_runtime_failure',
+                  'session_accepted': False,
                   'run_id': os.environ['GITHUB_RUN_ID'],
                   'public_head': os.environ.get('GITHUB_SHA'),
                   'private_head': os.environ.get('PRIVATE_HEAD'),
