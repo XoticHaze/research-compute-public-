@@ -43,9 +43,11 @@ def worker_token_ready(token: str, account: str) -> bool:
 
 
 def select_route(account: str, scoped: str, legacy: str,
-                 probe=worker_token_ready) -> str:
+                 probe=None) -> str:
     if not account:
         raise ValueError("CLOUDFLARE_ACCOUNT_ID_REQUIRED")
+    if probe is None:
+        probe = worker_token_ready
     if scoped and probe(scoped, account):
         return "scoped_r2"
     if legacy and probe(legacy, account):
