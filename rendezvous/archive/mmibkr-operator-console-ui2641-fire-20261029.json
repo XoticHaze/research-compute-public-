@@ -1,0 +1,13 @@
+{
+  "schema": "mmibkr-operator-console-deploy-fire-v1",
+  "source_sha": "2641a85c812af869df7ddb2a9c0a8feb0944d45a",
+  "mode": "locked_private",
+  "access_required": true,
+  "public_fallback_allowed": false,
+  "live_execution_allowed": false,
+  "reason": "frozen_2641_strict_ui_source_vault_native_pending_owner_sha_approval_no_auto_deploy",
+  "requested_by": "ContinueRelease-R19-20261029034854187",
+  "request_id": "release-20261029-ui2641-owner-review-only",
+  "archived_reason": "Preserve historical 2641 draft public release fire, source-only and not deployed, before prospective selected #975@64494130 no-loss source pin refresh. Native/owner approval still held.",
+  "archived_by": "ContinueRelease-R19-20261029204325538"
+}
