@@ -33,6 +33,28 @@ class PostAuthPipelineContractTests(unittest.TestCase):
         self.assertIn("competing TWS/Gateway ", source)
         self.assertIn("session is connected from a different IP address", source)
 
+    def test_historical_conflict_failure_artifact_is_fixed_field_and_nonaccepted(self):
+        from pathlib import Path
+        receipt = mod._historical_session_conflict_failure_receipt()
+        self.assertEqual(set(receipt), {
+            "schema", "ok", "status", "session_accepted", "consumer_ready",
+            "paper_execute_accepted", "historical_data_valid",
+            "completed_trade_evidence_materialized", "broker_mutation_attempted",
+            "operator_action",
+        })
+        self.assertEqual(receipt["status"], "HISTORICAL_SESSION_CONFLICT_DIFFERENT_IP")
+        self.assertTrue(all(receipt[key] is False for key in (
+            "ok", "session_accepted", "consumer_ready", "paper_execute_accepted",
+            "historical_data_valid", "completed_trade_evidence_materialized",
+            "broker_mutation_attempted",
+        )))
+        self.assertNotIn("account", json.dumps(receipt).lower())
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/ibkr-cloudflare-readonly-b1-r1.yml").read_text()
+        self.assertIn("id: post_auth", workflow)
+        self.assertIn("steps.post_auth.outcome == 'failure'", workflow)
+        self.assertIn("ibkr-b1-historical-session-conflict-", workflow)
+
     def test_exact_mm_futures_contract_is_preserved(self):
         hints = mod.parse_contract_hints(json.dumps({
             "MNQ": {
