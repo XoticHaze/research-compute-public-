@@ -2,7 +2,8 @@ name: MR P01 CRW EXIT encrypted capsule
 on:
   push:
     branches: [mr-p01-crw-exit-capsule-20260919]
-  workflow_dispatch:
+  # No workflow_dispatch: GitHub permits dispatch against historical branch refs,
+  # some of which retain pre-hold confidential EXIT job definitions.
 jobs:
   evaluate:
     # Legacy EXIT capsule publishes private evaluation JSON as a public artifact.
