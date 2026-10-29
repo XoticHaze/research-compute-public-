@@ -712,8 +712,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes wrangler@4.131.2 deploy \
-            --config cloudflare/operator-console/wrangler.jsonc
+          # The existing Worker and workers.dev/Access trigger remain unchanged.
+          # Wrangler deploy re-writes account workers/subdomain after uploading;
+          # the observed scoped token returned Cloudflare 10000 at that leaf.
+          # Versions upload/deploy changes only the reviewed Worker version.
+          MMIBKR_CONSOLE_VERSION_TAG="console-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          case "$MMIBKR_CONSOLE_VERSION_TAG" in
+            *[!a-zA-Z0-9-]*) echo 'MMIBKR_CONSOLE_VERSION_TAG_INVALID=1'; exit 46 ;;
+          esac
+          test "${#MMIBKR_CONSOLE_VERSION_TAG}" -le 25
+          npx --yes wrangler@4.131.2 versions upload \
+            --config cloudflare/operator-console/wrangler.jsonc \
+            --tag "$MMIBKR_CONSOLE_VERSION_TAG"
+          npx --yes wrangler@4.131.2 versions deploy \
+            --config cloudflare/operator-console/wrangler.jsonc \
+            --version-tag "${MMIBKR_CONSOLE_VERSION_TAG}@100%" --yes
           echo 'MMIBKR_OPERATOR_CONSOLE_WORKER_DEPLOYED=1'
 
       - name: Prove deployed Worker through Cloudflare control plane
