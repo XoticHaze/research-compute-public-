@@ -9,6 +9,33 @@ from scripts import ibkr_post_auth_pipeline_v1 as mod
 
 
 class PostAuthPipelineContractTests(unittest.TestCase):
+    def test_public_broker_library_loggers_are_suppressed_before_connection(self):
+        import logging
+        from pathlib import Path
+
+        names = ("ib_insync.wrapper", "ib_insync.client", "ib_insync.ib", "ib_insync.Decoder")
+        loggers = [logging.getLogger(name) for name in names]
+        original = [logger.disabled for logger in loggers]
+        try:
+            mod._silence_raw_public_ibkr_logs()
+            self.assertTrue(all(logger.disabled for logger in loggers))
+        finally:
+            for logger, was_disabled in zip(loggers, original):
+                logger.disabled = was_disabled
+        source = Path(mod.__file__).read_text(encoding="utf-8")
+        self.assertIn("_silence_raw_public_ibkr_logs()\n    ib = IB()", source)
+
+    def test_public_conflict_exception_omits_runtime_symbol_and_timeframe(self):
+        from pathlib import Path
+
+        source = Path(mod.__file__).read_text(encoding="utf-8")
+        self.assertIn(
+            '"IBKR historical data session conflict: competing TWS/Gateway '
+            'session is connected from a different IP address"', source,
+        )
+        self.assertNotIn('f"IBKR historical data session conflict for {symbol}', source)
+        self.assertNotIn("f\"{bar_request['source_timeframe']}: competing", source)
+
     def test_historical_different_ip_session_conflict_is_classified_exactly(self):
         self.assertTrue(mod._is_historical_session_conflict(
             162,

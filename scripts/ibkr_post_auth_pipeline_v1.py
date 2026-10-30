@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import math
 import re
 import sys
@@ -557,6 +558,18 @@ def _dedupe_identical_history_records(records: list[dict[str, object]]) -> tuple
     return out, dropped
 
 
+def _silence_raw_public_ibkr_logs() -> None:
+    """The public B1 job emits fixed-field receipts, never raw broker errors.
+
+    ib_insync.wrapper logs Error 162 with repr(contract) before errorEvent
+    callbacks can create the already-admitted sanitized conflict receipt.
+    Disable only the library's broker-facing loggers in this public process;
+    the explicit fixed-field errorEvent classification remains unchanged.
+    """
+    for name in ("ib_insync.wrapper", "ib_insync.client", "ib_insync.ib", "ib_insync.Decoder"):
+        logging.getLogger(name).disabled = True
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
@@ -579,6 +592,7 @@ def main() -> int:
     if unexpected_hints:
         raise RuntimeError("contract hints include unrequested symbols: " + ",".join(unexpected_hints))
 
+    _silence_raw_public_ibkr_logs()
     ib = IB()
     pipeline_started = time.perf_counter()
     connect_elapsed_ms = None
@@ -727,9 +741,7 @@ def main() -> int:
                     print("IBKR_HISTORICAL_SESSION_CONFLICT=DIFFERENT_IP")
                     print("IBKR_OPERATOR_ACTION=CLOSE_COMPETING_IBKR_SESSION")
                     raise RuntimeError(
-                        f"IBKR historical data session conflict for {symbol} "
-                        f"{bar_request['source_timeframe']}: competing TWS/Gateway "
-                        "session is connected from a different IP address"
+                        "IBKR historical data session conflict: competing TWS/Gateway session is connected from a different IP address"
                     )
                 if not bars and not allow_empty:
                     raise RuntimeError(
