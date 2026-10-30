@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,15 @@ def _guard_boundaries(name: str, x: dict[str, Any]) -> dict[str, Any]:
     if b.get("allocation_authority") is not False or b.get("promotion_authority") is not False:
         raise RuntimeError(f"{name} gained forbidden allocation/promotion authority")
     return b
+
+
+def _strict_source_day(value: Any) -> date | None:
+    if not isinstance(value, str) or len(value) != 10:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
 
 
 def _lane_p160(x: dict[str, Any]) -> dict[str, Any]:
@@ -158,10 +168,39 @@ def enrich(
     freshness = scoreboard.setdefault("freshness", {})
     overlay_source_review = additions[-1]["source_health"]["common_calendar_precedes_requested_asof"]
     freshness["currency_overlay_common_calendar_precedes_requested_asof"] = overlay_source_review
-    # An ACTIVE prospective observer cannot leave the aggregate freshness
-    # green while its own common source calendar predates requested as-of.
-    # This flags source review, not confirmed missing bars or losing alpha.
-    freshness["freshness_gap_visible"] = bool(freshness.get("freshness_gap_visible") or overlay_source_review)
+    # An active currency mechanism can be one completed source session behind
+    # the scoreboard even when both report the same market_data_asof label.
+    # Preserve its frozen scorecard, but never present it as current without
+    # the producer's own completed-session clock.
+    currency_active = currency.get("state") == "PROSPECTIVE_OPEN"
+    currency_requested = _strict_source_day(currency.get("market_data_asof"))
+    currency_latest = _strict_source_day(currency.get("latest_common_market_date"))
+    scoreboard_latest = _strict_source_day(freshness.get("common_market_data_asof"))
+    currency_clock_missing = currency_active and (currency_requested is None or currency_latest is None)
+    currency_own_lag = bool(currency_active and currency_latest and currency_requested
+                            and currency_latest < currency_requested)
+    currency_scoreboard_lag = bool(currency_active and currency_latest and scoreboard_latest
+                                   and currency_latest < scoreboard_latest)
+    currency_source_review = bool(currency_clock_missing or currency_own_lag or currency_scoreboard_lag)
+    currency_health = {
+        "requested_market_data_asof": currency.get("market_data_asof"),
+        "latest_common_market_date": currency.get("latest_common_market_date"),
+        "scoreboard_common_market_data_asof": freshness.get("common_market_data_asof"),
+        "missing_or_invalid_active_source_clock": bool(currency_clock_missing),
+        "producer_lags_own_requested_asof": currency_own_lag,
+        "producer_lags_scoreboard_completed_asof": currency_scoreboard_lag,
+        "source_review_required": currency_source_review,
+        "interpretation": "Source-clock review only; not missing-bar proof, a strategy reversal, or alpha promotion.",
+    }
+    additions[1]["source_health"] = currency_health
+    additions[1]["timing"]["latest_common_market_date"] = currency.get("latest_common_market_date")
+    additions[1]["timing"]["market_data_asof"] = currency.get("market_data_asof")
+    freshness["currency_mechanism_source_review_required"] = currency_source_review
+    # Both observer source clocks must be considered before a green aggregate
+    # freshness flag. A stale currency lane cannot inherit the global as-of.
+    freshness["freshness_gap_visible"] = bool(
+        freshness.get("freshness_gap_visible") or overlay_source_review or currency_source_review
+    )
 
     coverage = scoreboard.setdefault("coverage", {})
     coverage["challenger_observers"] = {
@@ -176,6 +215,7 @@ def enrich(
             "present": True,
             "state": currency.get("state"),
             "scientific_forward_credit": bool(currency.get("scientific_forward_credit", False)),
+            "source_review_required": currency_source_review,
         },
         "CURRENCY_HEDGE_ALLOCATOR_OVERLAY": {
             "present": True,
@@ -232,6 +272,7 @@ def enrich(
         "state": currency.get("state"),
         "regime_context": currency.get("regime_context", {}),
         "scorecard": currency.get("scorecard"),
+        "source_health": currency_health,
         "role": "matched-control_mechanism_challenger",
     }
     div["CURRENCY_HEDGE_ALLOCATOR_OVERLAY"] = {
@@ -353,6 +394,29 @@ def self_test() -> None:
     assert lagged_scoreboard["freshness"]["freshness_gap_visible"] is True
     assert "not itself proof of absent data or losing alpha" in lagged_scoreboard["lanes"][-1]["source_health"]["interpretation"]
     assert out["freshness"]["freshness_gap_visible"] is False
+    # Exact current-source defect: an active mechanism's 33/32 source clock
+    # must not inherit a 34/33 completed scoreboard clock or same-day label.
+    stale_currency = dict(currency, state="PROSPECTIVE_OPEN",
+                          market_data_asof="2026-10-29",
+                          latest_common_market_date="2026-10-28",
+                          forward_sessions=33, elapsed_close_to_close_sessions=32)
+    currency_board = {"lanes": [], "coverage": {}, "actionable_context": [],
+                      "decision_chain": {}, "interpretation": {},
+                      "freshness": {"common_market_data_asof": "2026-10-29",
+                                    "freshness_gap_visible": False}}
+    stale_currency_out = enrich(currency_board, p160, stale_currency, overlay)
+    assert stale_currency_out["freshness"]["currency_mechanism_source_review_required"] is True
+    assert stale_currency_out["freshness"]["freshness_gap_visible"] is True
+    assert stale_currency_out["coverage"]["challenger_observers"]["DEVELOPED_EXUS_CURRENCY_HEDGE"]["source_review_required"] is True
+    fresh_currency = dict(stale_currency, latest_common_market_date="2026-10-29",
+                          forward_sessions=34, elapsed_close_to_close_sessions=33)
+    fresh_currency_out = enrich({"lanes": [], "coverage": {}, "actionable_context": [],
+                                 "decision_chain": {}, "interpretation": {},
+                                 "freshness": {"common_market_data_asof": "2026-10-29",
+                                               "freshness_gap_visible": False}},
+                                p160, fresh_currency, overlay)
+    assert fresh_currency_out["freshness"]["currency_mechanism_source_review_required"] is False
+    assert fresh_currency_out["freshness"]["freshness_gap_visible"] is False
     # An observer may be prospectively eligible without an independently
     # authenticated original adjusted-source/calendar issuer or funded NAV.
     p160_eligible = dict(p160, state="PROSPECTIVE_ELIGIBLE", scientific_forward_credit=True)
