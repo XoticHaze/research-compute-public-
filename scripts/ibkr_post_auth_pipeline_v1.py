@@ -741,7 +741,7 @@ def main() -> int:
                     print("IBKR_HISTORICAL_SESSION_CONFLICT=DIFFERENT_IP")
                     print("IBKR_OPERATOR_ACTION=CLOSE_COMPETING_IBKR_SESSION")
                     raise RuntimeError(
-                        "IBKR historical data session is connected from a different IP address"
+                        "IBKR historical data session conflict: competing TWS/Gateway session is connected from a different IP address"
                     )
                 if not bars and not allow_empty:
                     raise RuntimeError(
