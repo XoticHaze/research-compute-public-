@@ -369,6 +369,8 @@ def _monthly_hold_heterogeneous_fee_shadow(
     rows: list[dict[str, object]],
     daily_returns: pd.DataFrame,
     month_states: dict[str, dict[str, dict[str, float]]],
+    *,
+    small_value_rebalance_fee_bp: float = 0.0,
 ) -> dict[str, object]:
     """Price frozen monthly holdings using per-symbol one-way notional fees.
 
@@ -381,6 +383,8 @@ def _monthly_hold_heterogeneous_fee_shadow(
         return {"status": "NO_SCORED_SESSIONS", "not_broker_or_alpha_credit": True}
     if P64_COST_BP != P36_COST_BP or P64_COST_BP != P266_COST_BP:
         raise ValueError("P249_HETEROGENEOUS_FEE_COMPONENT_RATE_DIVERGENCE")
+    if small_value_rebalance_fee_bp not in (0.0, SMALL_VALUE_ENTRY_BP):
+        raise ValueError("P249_HETEROGENEOUS_FEE_UNFROZEN_COST_EXTENSION")
     result: dict[str, dict[str, object]] = {}
     for arm in arms:
         positions: dict[str, float] = {}
@@ -407,7 +411,9 @@ def _monthly_hold_heterogeneous_fee_shadow(
                     raise ValueError("P249_HETEROGENEOUS_FEE_INVALID_PRIOR_NAV")
                 symbols = set(before) | set(target)
                 def rate(symbol: str) -> float:
-                    return (SMALL_VALUE_ENTRY_BP if symbol in SMALL_VALUE else P64_COST_BP) / 10000.0
+                    if symbol in SMALL_VALUE:
+                        return (SMALL_VALUE_ENTRY_BP if not before else small_value_rebalance_fee_bp) / 10000.0
+                    return P64_COST_BP / 10000.0
                 def fee_at(after_nav: float) -> float:
                     return sum(rate(s) * abs(after_nav * float(target.get(s, 0.0)) - before.get(s, 0.0))
                                for s in symbols)
@@ -468,8 +474,15 @@ def _monthly_hold_heterogeneous_fee_shadow(
         "status": "SOURCE_ONLY_HETEROGENEOUS_MONTHLY_HOLD_FEE_SHADOW",
         "scored_sessions": len(rows),
         "source": "unchanged_scored_daily_returns_and_frozen_monthly_targets",
-        "one_way_cost_bps": {"small_value": SMALL_VALUE_ENTRY_BP, "p64_p36_p266": P64_COST_BP},
-        "small_value_rebalance_fee_is_explicit_extension_of_frozen_entry_rate": True,
+        "one_way_cost_bps": {
+            "small_value_initial_entry": SMALL_VALUE_ENTRY_BP,
+            "small_value_monthly_rebalance": small_value_rebalance_fee_bp,
+            "p64_p36_p266": P64_COST_BP,
+        },
+        "small_value_rebalance_fee_is_explicit_extension_of_frozen_entry_rate":
+            small_value_rebalance_fee_bp != 0.0,
+        "small_value_entry_only_frozen_convention_preserved":
+            small_value_rebalance_fee_bp == 0.0,
         "same_cost_as_original_legacy_component_monthly_fee": False,
         "self_financing_pre_return_rebalance": True,
         "no_intramonth_target_resets": True,
@@ -632,15 +645,20 @@ def main() -> None:
             "first_unresolved_session": unresolved_gap["first_unresolved_session"],
             "not_broker_or_alpha_credit": True,
         }
+        heterogeneous_fee_extension_shadow = dict(heterogeneous_fee_shadow)
     else:
         try:
             heterogeneous_fee_shadow = _monthly_hold_heterogeneous_fee_shadow(rows, ret, month_states)
+            heterogeneous_fee_extension_shadow = _monthly_hold_heterogeneous_fee_shadow(
+                rows, ret, month_states, small_value_rebalance_fee_bp=SMALL_VALUE_ENTRY_BP
+            )
         except (KeyError, ValueError, TypeError, ArithmeticError) as exc:
             heterogeneous_fee_shadow = {
                 "status": "DIAGNOSTIC_UNAVAILABLE",
                 "reason": str(exc) if str(exc).startswith("P249_HETEROGENEOUS_FEE_") else "SOURCE_UNAVAILABLE",
                 "not_broker_or_alpha_credit": True,
             }
+            heterogeneous_fee_extension_shadow = dict(heterogeneous_fee_shadow)
 
     result = {
         "schema": "research.p279_p249_p266_forward_shadow_observer_r1",
@@ -692,6 +710,7 @@ def main() -> None:
             "implicit_target_reset_turnover_audit": turnover_audit,
             "monthly_hold_drift_diagnostic": monthly_drift_diagnostic,
             "monthly_hold_heterogeneous_fee_shadow": heterogeneous_fee_shadow,
+            "monthly_hold_heterogeneous_fee_extension_shadow": heterogeneous_fee_extension_shadow,
             "observations": rows,
         },
         "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
