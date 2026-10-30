@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +17,15 @@ def _guard_boundaries(name: str, x: dict[str, Any]) -> dict[str, Any]:
     if b.get("allocation_authority") is not False or b.get("promotion_authority") is not False:
         raise RuntimeError(f"{name} gained forbidden allocation/promotion authority")
     return b
+
+
+def _strict_source_day(value: Any) -> date | None:
+    if not isinstance(value, str) or len(value) != 10:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
 
 
 def _lane_p160(x: dict[str, Any]) -> dict[str, Any]:
@@ -158,10 +169,52 @@ def enrich(
     freshness = scoreboard.setdefault("freshness", {})
     overlay_source_review = additions[-1]["source_health"]["common_calendar_precedes_requested_asof"]
     freshness["currency_overlay_common_calendar_precedes_requested_asof"] = overlay_source_review
-    # An ACTIVE prospective observer cannot leave the aggregate freshness
-    # green while its own common source calendar predates requested as-of.
-    # This flags source review, not confirmed missing bars or losing alpha.
-    freshness["freshness_gap_visible"] = bool(freshness.get("freshness_gap_visible") or overlay_source_review)
+    # An active currency mechanism can be one completed source session behind
+    # the scoreboard even when both report the same market_data_asof label.
+    # Preserve its frozen scorecard, but never present it as current without
+    # the producer's own completed-session clock.
+    currency_active = currency.get("state") == "PROSPECTIVE_OPEN"
+    currency_requested = _strict_source_day(currency.get("market_data_asof"))
+    currency_latest = _strict_source_day(currency.get("latest_common_market_date"))
+    scoreboard_latest = _strict_source_day(freshness.get("common_market_data_asof"))
+    currency_clock_missing = currency_active and (currency_requested is None or currency_latest is None)
+    # The direct producer declares inclusive-entry and elapsed clocks separately.
+    # Reject a missing, boolean, negative, or internally inconsistent active
+    # source count; a same-day date label alone cannot repair it.
+    counts = [currency.get(k) for k in (
+        "forward_sessions", "market_sessions_observed_including_entry",
+        "elapsed_close_to_close_sessions"
+    )]
+    currency_count_invalid = bool(currency_active and (
+        any(type(v) is not int or v < 0 for v in counts) or
+        (all(type(v) is int for v in counts) and
+         (counts[0] != counts[1] or counts[2] != max(0, counts[0] - 1)))
+    ))
+    currency_own_lag = bool(currency_active and currency_latest and currency_requested
+                            and currency_latest < currency_requested)
+    currency_scoreboard_lag = bool(currency_active and currency_latest and scoreboard_latest
+                                   and currency_latest < scoreboard_latest)
+    currency_source_review = bool(currency_clock_missing or currency_count_invalid or currency_own_lag or currency_scoreboard_lag)
+    currency_health = {
+        "requested_market_data_asof": currency.get("market_data_asof"),
+        "latest_common_market_date": currency.get("latest_common_market_date"),
+        "scoreboard_common_market_data_asof": freshness.get("common_market_data_asof"),
+        "missing_or_invalid_active_source_clock": bool(currency_clock_missing),
+        "active_source_session_counts_inconsistent": currency_count_invalid,
+        "producer_lags_own_requested_asof": currency_own_lag,
+        "producer_lags_scoreboard_completed_asof": currency_scoreboard_lag,
+        "source_review_required": currency_source_review,
+        "interpretation": "Source-clock review only; not missing-bar proof, a strategy reversal, or alpha promotion.",
+    }
+    additions[1]["source_health"] = currency_health
+    additions[1]["timing"]["latest_common_market_date"] = currency.get("latest_common_market_date")
+    additions[1]["timing"]["market_data_asof"] = currency.get("market_data_asof")
+    freshness["currency_mechanism_source_review_required"] = currency_source_review
+    # Both observer source clocks must be considered before a green aggregate
+    # freshness flag. A stale currency lane cannot inherit the global as-of.
+    freshness["freshness_gap_visible"] = bool(
+        freshness.get("freshness_gap_visible") or overlay_source_review or currency_source_review
+    )
 
     coverage = scoreboard.setdefault("coverage", {})
     coverage["challenger_observers"] = {
@@ -176,6 +229,7 @@ def enrich(
             "present": True,
             "state": currency.get("state"),
             "scientific_forward_credit": bool(currency.get("scientific_forward_credit", False)),
+            "source_review_required": currency_source_review,
         },
         "CURRENCY_HEDGE_ALLOCATOR_OVERLAY": {
             "present": True,
@@ -232,6 +286,7 @@ def enrich(
         "state": currency.get("state"),
         "regime_context": currency.get("regime_context", {}),
         "scorecard": currency.get("scorecard"),
+        "source_health": currency_health,
         "role": "matched-control_mechanism_challenger",
     }
     div["CURRENCY_HEDGE_ALLOCATOR_OVERLAY"] = {
@@ -353,6 +408,39 @@ def self_test() -> None:
     assert lagged_scoreboard["freshness"]["freshness_gap_visible"] is True
     assert "not itself proof of absent data or losing alpha" in lagged_scoreboard["lanes"][-1]["source_health"]["interpretation"]
     assert out["freshness"]["freshness_gap_visible"] is False
+    # Exact current-source defect: an active mechanism's 33/32 source clock
+    # must not inherit a 34/33 completed scoreboard clock or same-day label.
+    stale_currency = dict(currency, state="PROSPECTIVE_OPEN",
+                          market_data_asof="2026-10-29",
+                          latest_common_market_date="2026-10-28",
+                          forward_sessions=33, market_sessions_observed_including_entry=33,
+                          elapsed_close_to_close_sessions=32)
+    currency_board = {"lanes": [], "coverage": {}, "actionable_context": [],
+                      "decision_chain": {}, "interpretation": {},
+                      "freshness": {"common_market_data_asof": "2026-10-29",
+                                    "freshness_gap_visible": False}}
+    stale_currency_out = enrich(currency_board, p160, stale_currency, overlay)
+    assert stale_currency_out["freshness"]["currency_mechanism_source_review_required"] is True
+    assert stale_currency_out["freshness"]["freshness_gap_visible"] is True
+    assert stale_currency_out["coverage"]["challenger_observers"]["DEVELOPED_EXUS_CURRENCY_HEDGE"]["source_review_required"] is True
+    fresh_currency = dict(stale_currency, latest_common_market_date="2026-10-29",
+                          forward_sessions=34, market_sessions_observed_including_entry=34,
+                          elapsed_close_to_close_sessions=33)
+    fresh_currency_out = enrich({"lanes": [], "coverage": {}, "actionable_context": [],
+                                 "decision_chain": {}, "interpretation": {},
+                                 "freshness": {"common_market_data_asof": "2026-10-29",
+                                               "freshness_gap_visible": False}},
+                                p160, fresh_currency, overlay)
+    assert fresh_currency_out["freshness"]["currency_mechanism_source_review_required"] is False
+    assert fresh_currency_out["freshness"]["freshness_gap_visible"] is False
+    inconsistent_currency = dict(fresh_currency, elapsed_close_to_close_sessions=32)
+    inconsistent_out = enrich({"lanes": [], "coverage": {}, "actionable_context": [],
+                               "decision_chain": {}, "interpretation": {},
+                               "freshness": {"common_market_data_asof": "2026-10-29",
+                                             "freshness_gap_visible": False}},
+                              p160, inconsistent_currency, overlay)
+    assert inconsistent_out["freshness"]["currency_mechanism_source_review_required"] is True
+    assert inconsistent_out["lanes"][-2]["source_health"]["active_source_session_counts_inconsistent"] is True
     # An observer may be prospectively eligible without an independently
     # authenticated original adjusted-source/calendar issuer or funded NAV.
     p160_eligible = dict(p160, state="PROSPECTIVE_ELIGIBLE", scientific_forward_credit=True)
@@ -385,9 +473,24 @@ def main() -> None:
         p.error("scoreboard, p160, currency, currency-overlay and output are required")
     scoreboard = json.loads(Path(args.scoreboard).read_text())
     p160 = json.loads(Path(args.p160).read_text())
-    currency = json.loads(Path(args.currency).read_text())
+    currency_raw = Path(args.currency).read_bytes()
+    currency = json.loads(currency_raw)
     currency_overlay = json.loads(Path(args.currency_overlay).read_text())
     out = enrich(scoreboard, p160, currency, currency_overlay)
+    # Bind the actual producer bytes, not just a global market-data-asof label.
+    # This lets private owning consumers detect same-day producer revisions too.
+    out.setdefault("input_lineage", {})["currency_mechanism_source"] = {
+        "sha256": hashlib.sha256(currency_raw).hexdigest(),
+        "git_blob_sha1": hashlib.sha1(
+            b"blob " + str(len(currency_raw)).encode("ascii") + bytes([0]) + currency_raw
+        ).hexdigest(),
+        "market_data_asof": currency.get("market_data_asof"),
+        "latest_common_market_date": currency.get("latest_common_market_date"),
+        "forward_sessions": currency.get("forward_sessions"),
+        "market_sessions_observed_including_entry": currency.get("market_sessions_observed_including_entry"),
+        "elapsed_close_to_close_sessions": currency.get("elapsed_close_to_close_sessions"),
+        "source_identity_only_not_issuer_or_rights_admission": True,
+    }
     Path(args.output).write_text(json.dumps(out, indent=2, sort_keys=True, allow_nan=False) + "\n")
     print(json.dumps({
         "challenger_observers": out["coverage"]["challenger_observers"],
