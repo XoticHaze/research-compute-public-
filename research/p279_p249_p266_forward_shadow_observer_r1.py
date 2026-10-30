@@ -469,6 +469,8 @@ def _monthly_hold_heterogeneous_fee_shadow(
         "scored_sessions": len(rows),
         "source": "unchanged_scored_daily_returns_and_frozen_monthly_targets",
         "one_way_cost_bps": {"small_value": SMALL_VALUE_ENTRY_BP, "p64_p36_p266": P64_COST_BP},
+        "small_value_rebalance_fee_is_explicit_extension_of_frozen_entry_rate": True,
+        "same_cost_as_original_legacy_component_monthly_fee": False,
         "self_financing_pre_return_rebalance": True,
         "no_intramonth_target_resets": True,
         "no_hypothetical_terminal_liquidation_fee": True,
