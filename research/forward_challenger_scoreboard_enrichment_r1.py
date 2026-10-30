@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from datetime import date
 from pathlib import Path
@@ -449,9 +450,19 @@ def main() -> None:
         p.error("scoreboard, p160, currency, currency-overlay and output are required")
     scoreboard = json.loads(Path(args.scoreboard).read_text())
     p160 = json.loads(Path(args.p160).read_text())
-    currency = json.loads(Path(args.currency).read_text())
+    currency_raw = Path(args.currency).read_bytes()
+    currency = json.loads(currency_raw)
     currency_overlay = json.loads(Path(args.currency_overlay).read_text())
     out = enrich(scoreboard, p160, currency, currency_overlay)
+    # Bind the actual producer bytes, not just a global market-data-asof label.
+    # This lets private owning consumers detect same-day producer revisions too.
+    out.setdefault("input_lineage", {})["currency_mechanism_source"] = {
+        "sha256": hashlib.sha256(currency_raw).hexdigest(),
+        "market_data_asof": currency.get("market_data_asof"),
+        "latest_common_market_date": currency.get("latest_common_market_date"),
+        "elapsed_close_to_close_sessions": currency.get("elapsed_close_to_close_sessions"),
+        "source_identity_only_not_issuer_or_rights_admission": True,
+    }
     Path(args.output).write_text(json.dumps(out, indent=2, sort_keys=True, allow_nan=False) + "\n")
     print(json.dumps({
         "challenger_observers": out["coverage"]["challenger_observers"],
