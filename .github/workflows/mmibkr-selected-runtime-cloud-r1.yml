@@ -412,6 +412,12 @@ jobs:
 
           archive = root / 'mm-ibkr-source.tar.gz'
           source_root = Path(node['source_root'])
+          expected_root = root / 'extracted' / 'mm-ibkr'
+          if source_root != expected_root or any(
+              item.is_symlink() for item in
+              (root, root / 'extracted', source_root, source_root / 'Dockerfile.bot')
+          ):
+              raise SystemExit('private source layout invalid')
           if not archive.is_file() or not (source_root / 'Dockerfile.bot').is_file():
               raise SystemExit('materialized source layout incomplete')
 
@@ -436,7 +442,6 @@ jobs:
           )
           with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
               fh.write('PRIVATE_HEAD=' + node['source_sha'] + '\n')
-              fh.write('PRIVATE_SOURCE_ROOT=' + str(source_root) + '\n')
           print('MMIBKR_PRIVATE_HEAD=' + node['source_sha'])
           print('MMIBKR_SOURCE_ARCHIVE_SHA256=' + node['source_archive_sha256'])
           print('MMIBKR_SOURCE_MANIFEST_SHA256=' + node['source_manifest_sha256'])
@@ -446,7 +451,7 @@ jobs:
       - name: Build exact private MM-IBKR bot image
         run: |
           set -euo pipefail
-          docker build             -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot"             --target bot             -t "mmibkr-cloud:${GITHUB_RUN_ID}"             "$PRIVATE_SOURCE_ROOT" >/dev/null
+          docker build             -f "$RUNNER_TEMP/mmibkr-source/extracted/mm-ibkr/Dockerfile.bot"             --target bot             -t "mmibkr-cloud:${GITHUB_RUN_ID}"             "$RUNNER_TEMP/mmibkr-source/extracted/mm-ibkr" >/dev/null 2>&1 || { echo 'MMIBKR_PRIVATE_IMAGE_BUILD=FAIL_CLOSED' >&2; exit 1; }
 
       - name: Validate private hostless/runtime contracts in exact image
         run: |
@@ -1501,11 +1506,16 @@ jobs:
               raise SystemExit('live execution authority unexpectedly enabled')
 
           source_root = Path(node['source_root'])
+          expected_root = root / 'extracted' / 'mm-ibkr'
+          if source_root != expected_root or any(
+              item.is_symlink() for item in
+              (root, root / 'extracted', source_root, source_root / 'Dockerfile.bot')
+          ):
+              raise SystemExit('private source layout invalid')
           if not (source_root / 'Dockerfile.bot').is_file():
               raise SystemExit('materialized source layout incomplete')
           with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
               fh.write('PRIVATE_HEAD=' + node['source_sha'] + '\n')
-              fh.write('PRIVATE_SOURCE_ROOT=' + str(source_root) + '\n')
           print('MMIBKR_CHECKPOINT_ACCEPTANCE_PRIVATE_HEAD=' + node['source_sha'])
           PY
 
@@ -1513,10 +1523,10 @@ jobs:
         run: |
           set -euo pipefail
           docker build \
-            -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" \
+            -f "$RUNNER_TEMP/mmibkr-source/extracted/mm-ibkr/Dockerfile.bot" \
             --target bot \
             -t "mmibkr-checkpoint-acceptance:${GITHUB_RUN_ID}" \
-            "$PRIVATE_SOURCE_ROOT" >/dev/null
+            "$RUNNER_TEMP/mmibkr-source/extracted/mm-ibkr" >/dev/null 2>&1 || { echo 'MMIBKR_PRIVATE_IMAGE_BUILD=FAIL_CLOSED' >&2; exit 1; }
 
       - name: Validate exact private ingest and checkpoint owners
         run: |
@@ -1891,11 +1901,16 @@ jobs:
           if node.get('live_execution_allowed') is not False:
               raise SystemExit('live execution authority unexpectedly enabled')
           source_root = Path(node['source_root'])
+          expected_root = root / 'extracted' / 'mm-ibkr'
+          if source_root != expected_root or any(
+              item.is_symlink() for item in
+              (root, root / 'extracted', source_root, source_root / 'Dockerfile.bot')
+          ):
+              raise SystemExit('private source layout invalid')
           if not (source_root / 'Dockerfile.bot').is_file():
               raise SystemExit('materialized source layout incomplete')
           with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
               fh.write('PRIVATE_HEAD=' + node['source_sha'] + '\n')
-              fh.write('PRIVATE_SOURCE_ROOT=' + str(source_root) + '\n')
           print('MMIBKR_SUCCESSOR_RESTORE_PRIVATE_HEAD=' + node['source_sha'])
           PY
 
@@ -1903,10 +1918,10 @@ jobs:
         run: |
           set -euo pipefail
           docker build \
-            -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" \
+            -f "$RUNNER_TEMP/mmibkr-source/extracted/mm-ibkr/Dockerfile.bot" \
             --target bot \
             -t "mmibkr-successor-restore-acceptance:$GITHUB_RUN_ID" \
-            "$PRIVATE_SOURCE_ROOT" >/dev/null
+            "$RUNNER_TEMP/mmibkr-source/extracted/mm-ibkr" >/dev/null 2>&1 || { echo 'MMIBKR_PRIVATE_IMAGE_BUILD=FAIL_CLOSED' >&2; exit 1; }
 
       - name: Validate exact private checkpoint restore owners
         run: |
@@ -2360,11 +2375,16 @@ jobs:
               raise SystemExit('live execution authority unexpectedly enabled')
 
           source_root = Path(node['source_root'])
+          expected_root = root / 'extracted' / 'mm-ibkr'
+          if source_root != expected_root or any(
+              item.is_symlink() for item in
+              (root, root / 'extracted', source_root, source_root / 'Dockerfile.bot')
+          ):
+              raise SystemExit('private source layout invalid')
           if not (source_root / 'Dockerfile.bot').is_file():
               raise SystemExit('materialized source layout incomplete')
           with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
               fh.write('PRIVATE_HEAD=' + node['source_sha'] + '\n')
-              fh.write('PRIVATE_SOURCE_ROOT=' + str(source_root) + '\n')
           print('MMIBKR_SIGNAL_HISTORY_RECONCILE_PRIVATE_HEAD=' + node['source_sha'])
           PY
 
@@ -2372,10 +2392,10 @@ jobs:
         run: |
           set -euo pipefail
           docker build \
-            -f "$PRIVATE_SOURCE_ROOT/Dockerfile.bot" \
+            -f "$RUNNER_TEMP/mmibkr-source/extracted/mm-ibkr/Dockerfile.bot" \
             --target bot \
             -t "mmibkr-signal-reconcile:$GITHUB_RUN_ID" \
-            "$PRIVATE_SOURCE_ROOT" >/dev/null
+            "$RUNNER_TEMP/mmibkr-source/extracted/mm-ibkr" >/dev/null 2>&1 || { echo 'MMIBKR_PRIVATE_IMAGE_BUILD=FAIL_CLOSED' >&2; exit 1; }
 
       - name: Validate private reconciliation dependencies
         run: |
