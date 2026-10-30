@@ -364,6 +364,122 @@ def _monthly_hold_drift_diagnostic(
     }
 
 
+
+def _monthly_hold_heterogeneous_fee_shadow(
+    rows: list[dict[str, object]],
+    daily_returns: pd.DataFrame,
+    month_states: dict[str, dict[str, dict[str, float]]],
+) -> dict[str, object]:
+    """Price frozen monthly holdings using per-symbol one-way notional fees.
+
+    Additive shadow only, not an actual fill ledger or a replacement for the
+    original constant-target/legacy-fee economics. Rebalance before the first
+    session return, solve fees self-financing, and never reset within a month.
+    """
+    arms = ("p249_core", "p249_plus_p266")
+    if not rows:
+        return {"status": "NO_SCORED_SESSIONS", "not_broker_or_alpha_credit": True}
+    if P64_COST_BP != P36_COST_BP or P64_COST_BP != P266_COST_BP:
+        raise ValueError("P249_HETEROGENEOUS_FEE_COMPONENT_RATE_DIVERGENCE")
+    result: dict[str, dict[str, object]] = {}
+    for arm in arms:
+        positions: dict[str, float] = {}
+        last_date = ""
+        last_month = ""
+        nav_path: list[dict[str, object]] = []
+        fee_events: list[dict[str, object]] = []
+        for row in rows:
+            day, month = str(row["date"]), str(row["holding_month"])
+            if (last_date and day <= last_date) or not day.startswith(month):
+                raise ValueError("P249_HETEROGENEOUS_FEE_NONCHRONOLOGICAL")
+            target = month_states[month][arm]
+            if (not target or any(s not in ALL or not math.isfinite(float(w)) or float(w) < 0
+                                  for s, w in target.items())
+                    or not math.isclose(sum(float(w) for w in target.values()), 1.0, abs_tol=1e-8)):
+                raise ValueError("P249_HETEROGENEOUS_FEE_INVALID_TARGET")
+            rebalance = month != last_month
+            if rebalance:
+                if row.get("cost_detail") is None:
+                    raise ValueError("P249_HETEROGENEOUS_FEE_MISSING_MONTH_BOUNDARY")
+                before = dict(positions)
+                pre_nav = sum(before.values()) if before else 1.0
+                if not math.isfinite(pre_nav) or pre_nav <= 0:
+                    raise ValueError("P249_HETEROGENEOUS_FEE_INVALID_PRIOR_NAV")
+                symbols = set(before) | set(target)
+                def rate(symbol: str) -> float:
+                    return (SMALL_VALUE_ENTRY_BP if symbol in SMALL_VALUE else P64_COST_BP) / 10000.0
+                def fee_at(after_nav: float) -> float:
+                    return sum(rate(s) * abs(after_nav * float(target.get(s, 0.0)) - before.get(s, 0.0))
+                               for s in symbols)
+                lo, hi = 0.0, pre_nav
+                for _ in range(80):
+                    mid = (lo + hi) / 2.0
+                    if mid + fee_at(mid) > pre_nav:
+                        hi = mid
+                    else:
+                        lo = mid
+                post_nav = (lo + hi) / 2.0
+                fee = fee_at(post_nav)
+                if (not math.isfinite(post_nav) or post_nav <= 0
+                        or not math.isclose(post_nav + fee, pre_nav, rel_tol=1e-11, abs_tol=1e-11)):
+                    raise ValueError("P249_HETEROGENEOUS_FEE_NOT_SELF_FINANCING")
+                buys = sum(max(0.0, post_nav * float(target.get(s, 0.0)) - before.get(s, 0.0)) for s in symbols)
+                sells = sum(max(0.0, before.get(s, 0.0) - post_nav * float(target.get(s, 0.0))) for s in symbols)
+                if not math.isclose(buys - sells + fee, pre_nav if not before else 0.0,
+                                    rel_tol=1e-10, abs_tol=1e-10):
+                    raise ValueError("P249_HETEROGENEOUS_FEE_TRADE_CASH_IDENTITY")
+                positions = {s: post_nav * float(w) for s, w in target.items() if float(w) > 0}
+                fee_events.append({
+                    "date": day, "holding_month": month, "initial_entry": not bool(before),
+                    "pretrade_nav": pre_nav, "postfee_nav": post_nav,
+                    "gross_buy_notional_nav": buys, "gross_sell_notional_nav": sells,
+                    "fee_nav": fee, "fee_bp_of_pretrade_nav": fee / pre_nav * 10000.0,
+                })
+            elif row.get("cost_detail") is not None:
+                raise ValueError("P249_HETEROGENEOUS_FEE_UNEXPECTED_INTRAMONTH_COST")
+            for symbol in positions:
+                daily = float(daily_returns.at[pd.Timestamp(day), symbol])
+                if not math.isfinite(daily) or daily <= -1.0:
+                    raise ValueError("P249_HETEROGENEOUS_FEE_INVALID_HELD_RETURN")
+                positions[symbol] *= 1.0 + daily
+            nav = sum(positions.values())
+            if not math.isfinite(nav) or nav <= 0:
+                raise ValueError("P249_HETEROGENEOUS_FEE_INVALID_FUNDED_NAV")
+            nav_path.append({"date": day, "holding_month": month, "nav": nav,
+                             "monthly_rebalance": rebalance})
+            last_date, last_month = day, month
+        peak, drawdown = 1.0, 0.0
+        for item in nav_path:
+            peak = max(peak, float(item["nav"]))
+            drawdown = min(drawdown, float(item["nav"]) / peak - 1.0)
+        result[arm] = {
+            "terminal_nav": nav_path[-1]["nav"],
+            "cumulative_return": nav_path[-1]["nav"] - 1.0,
+            "max_drawdown": drawdown,
+            "total_fee_nav": sum(float(e["fee_nav"]) for e in fee_events),
+            "fee_events": fee_events,
+            "monthly_rebalances_including_initial": len(fee_events),
+            "daily_nav": nav_path,
+        }
+    core, combo = (float(result[arm]["terminal_nav"]) for arm in arms)
+    if min(core, combo) <= 0:
+        raise ValueError("P249_HETEROGENEOUS_FEE_INVALID_COMPARISON_NAV")
+    return {
+        "status": "SOURCE_ONLY_HETEROGENEOUS_MONTHLY_HOLD_FEE_SHADOW",
+        "scored_sessions": len(rows),
+        "source": "unchanged_scored_daily_returns_and_frozen_monthly_targets",
+        "one_way_cost_bps": {"small_value": SMALL_VALUE_ENTRY_BP, "p64_p36_p266": P64_COST_BP},
+        "self_financing_pre_return_rebalance": True,
+        "no_intramonth_target_resets": True,
+        "no_hypothetical_terminal_liquidation_fee": True,
+        "no_legacy_month_fee_double_charge": True,
+        "not_actual_fills_or_issuer_admission": True,
+        "not_broker_or_alpha_credit": True,
+        "arms": result,
+        "matched_relative_wealth_bp": 10000.0 * (combo / core - 1.0),
+    }
+
+
 def _metrics(returns: pd.Series) -> dict[str, float | int | None]:
     q = returns.dropna().astype(float)
     if q.empty:
@@ -508,6 +624,22 @@ def main() -> None:
                 "not_broker_or_alpha_credit": True,
             }
 
+    if unresolved_gap is not None:
+        heterogeneous_fee_shadow = {
+            "status": "SOURCE_GAP_UNRESOLVED_NO_ECONOMIC_CURRENT",
+            "first_unresolved_session": unresolved_gap["first_unresolved_session"],
+            "not_broker_or_alpha_credit": True,
+        }
+    else:
+        try:
+            heterogeneous_fee_shadow = _monthly_hold_heterogeneous_fee_shadow(rows, ret, month_states)
+        except (KeyError, ValueError, TypeError, ArithmeticError) as exc:
+            heterogeneous_fee_shadow = {
+                "status": "DIAGNOSTIC_UNAVAILABLE",
+                "reason": str(exc) if str(exc).startswith("P249_HETEROGENEOUS_FEE_") else "SOURCE_UNAVAILABLE",
+                "not_broker_or_alpha_credit": True,
+            }
+
     result = {
         "schema": "research.p279_p249_p266_forward_shadow_observer_r1",
         "parent": "P249/P266/P278/P279",
@@ -557,6 +689,7 @@ def main() -> None:
             "satellite_increment_cumulative": float((1 + increment).prod() - 1) if len(increment) else 0.0,
             "implicit_target_reset_turnover_audit": turnover_audit,
             "monthly_hold_drift_diagnostic": monthly_drift_diagnostic,
+            "monthly_hold_heterogeneous_fee_shadow": heterogeneous_fee_shadow,
             "observations": rows,
         },
         "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
