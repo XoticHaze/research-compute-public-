@@ -88,6 +88,11 @@ jobs:
           print('HAOS_CF_TUNNEL_READ='+tunnels_status)
           if tunnels_status=='OK':
               print('HAOS_CF_TUNNEL_LIST_COMPLETENESS='+('PARTIAL' if partial(tunnels) else 'FIRST_PAGE_COMPLETE'))
+              observed=tunnels.get('result') or []
+              print('HAOS_CF_TUNNEL_FIRST_PAGE_COUNT='+str(len(observed)))
+              inf=tunnels.get('result_info') or {}
+              total=inf.get('total_count')
+              print('HAOS_CF_TUNNEL_REPORTED_TOTAL='+str(total) if isinstance(total,int) and 0<=total<10000 else 'HAOS_CF_TUNNEL_REPORTED_TOTAL=UNKNOWN')
               selected={t.get('name'):t for t in (tunnels.get('result') or []) if t.get('name') in NAMES}
               for name in NAMES:
                   t=selected.get(name)
