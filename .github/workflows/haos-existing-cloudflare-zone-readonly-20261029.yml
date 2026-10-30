@@ -125,6 +125,14 @@ jobs:
               label=('PARTIAL' if state=='OK' and partial(records) else
                      'PRESENT' if hit else 'ABSENT' if state=='OK' else state)
               print('DNS_HOST_'+str(HOSTS.index(h))+'='+label)
+          astate,apps=get('/accounts/'+account+'/access/apps','?per_page=100')
+          print('HAOS_CF_ACCESS_APP_READ='+astate)
+          if astate=='OK':
+              print('HAOS_CF_ACCESS_APP_LIST_COMPLETENESS='+('PARTIAL' if partial(apps) else 'FIRST_PAGE_COMPLETE'))
+              listed=apps.get('result') or []
+              for h in HOSTS:
+                  matched=any(app.get('domain')==h for app in listed if isinstance(app,dict))
+                  print('ACCESS_HOST_'+str(HOSTS.index(h))+'='+('PRESENT' if matched else 'NOT_IN_FIRST_PAGE'))
           state,hosts=get('/zones/'+zid+'/certificate_authorities/hostname_associations')
           print('HAOS_CF_MTLS_HOST_ASSOCIATIONS_READ='+state)
           if state=='OK':
