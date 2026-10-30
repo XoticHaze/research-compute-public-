@@ -34,6 +34,21 @@ def valid_receipt():
 
 
 class PublicReceiptAllowlistTests(unittest.TestCase):
+    def test_untrusted_executable_capsule_job_stays_fail_closed(self):
+        """Source contract only: never decrypt or execute a capsule in this test."""
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / '.github/workflows/p01-autotuner-html-ephemeral-rendezvous.yml').read_text(encoding='utf-8')
+        source = Path(consumer.__file__).read_text(encoding='utf-8')
+        self.assertIn('  pull_request:', workflow)
+        self.assertIn('  contents: write', workflow)
+        self.assertIn('\njobs:\n  consume:\n', workflow)
+        consume = workflow.split('\njobs:\n  consume:\n', 1)[1]
+        pre_runner = consume.split('\n    runs-on:', 1)[0]
+        self.assertIn('    if: ${{ false }}', pre_runner)
+        self.assertIn('sender_public_b64', source)
+        self.assertIn("subprocess.run(['node',ENTRYPOINT,SNAPSHOT,str(out)]", source)
+
     def run_cli(self, *, result=None, error=None):
         out, err = StringIO(), StringIO()
         argv = ['p01_autotuner_html_consumer_v1.py', '--envelope', 'synthetic.json',

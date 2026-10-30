@@ -82,6 +82,17 @@ def _fixture(*, replace: tuple[str, str] | None = None,
 
 
 class P02ExactCapsuleInventoryTest(unittest.TestCase):
+    def test_untrusted_executable_capsule_job_stays_fail_closed(self):
+        """Source contract only: never decrypt or execute an untrusted Python capsule."""
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/p02-model-lab-xgboost-ephemeral-rendezvous.yml").read_text(encoding="utf-8")
+        self.assertIn("  pull_request:", workflow)
+        self.assertIn("  contents: write", workflow)
+        self.assertIn("\njobs:\n  consume:\n", workflow)
+        pre_runner = workflow.split("\njobs:\n  consume:\n", 1)[1].split("\n    runs-on:", 1)[0]
+        self.assertIn("    if: ${{ false }}", pre_runner)
+        self.assertIn("_run_private_consumer", consumer_path.read_text(encoding="utf-8"))
+
     def test_pinned_private_packager_shape_is_accepted(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
