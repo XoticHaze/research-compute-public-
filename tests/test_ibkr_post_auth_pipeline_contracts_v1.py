@@ -13,7 +13,7 @@ class PostAuthPipelineContractTests(unittest.TestCase):
         import logging
         from pathlib import Path
 
-        names = ("ib_insync.wrapper", "ib_insync.client", "ib_insync.ib")
+        names = ("ib_insync.wrapper", "ib_insync.client", "ib_insync.ib", "ib_insync.Decoder")
         loggers = [logging.getLogger(name) for name in names]
         original = [logger.disabled for logger in loggers]
         try:
