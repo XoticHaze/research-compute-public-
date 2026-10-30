@@ -39,13 +39,22 @@ class MonthlyHeterogeneousFeeShadowTests(unittest.TestCase):
 
     def test_exact_initial_fee_and_month_boundary_cash_identity(self) -> None:
         result = _monthly_hold_heterogeneous_fee_shadow(self.rows, self.daily, self.months)
+        extension = _monthly_hold_heterogeneous_fee_shadow(
+            self.rows, self.daily, self.months, small_value_rebalance_fee_bp=10.0
+        )
         self.assertEqual(result["status"], "SOURCE_ONLY_HETEROGENEOUS_MONTHLY_HOLD_FEE_SHADOW")
+        self.assertTrue(result["small_value_entry_only_frozen_convention_preserved"])
+        self.assertFalse(extension["small_value_entry_only_frozen_convention_preserved"])
+        self.assertTrue(extension["small_value_rebalance_fee_is_explicit_extension_of_frozen_entry_rate"])
         self.assertTrue(result["no_legacy_month_fee_double_charge"])
         for arm, initial_fee in [("p249_core", 0.003), ("p249_plus_p266", 0.004)]:
             data = result["arms"][arm]
             self.assertEqual(len(data["fee_events"]), 2)
             self.assertEqual(len(data["daily_nav"]), 3)
             first, second = data["fee_events"]
+            extension_events = extension["arms"][arm]["fee_events"]
+            self.assertAlmostEqual(first["fee_nav"], extension_events[0]["fee_nav"], places=12)
+            self.assertGreater(extension_events[1]["fee_nav"], second["fee_nav"])
             self.assertTrue(first["initial_entry"])
             self.assertFalse(second["initial_entry"])
             self.assertAlmostEqual(first["postfee_nav"], 1.0 / (1.0 + initial_fee), places=12)
