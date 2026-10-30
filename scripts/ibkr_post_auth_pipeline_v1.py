@@ -566,7 +566,7 @@ def _silence_raw_public_ibkr_logs() -> None:
     Disable only the library's broker-facing loggers in this public process;
     the explicit fixed-field errorEvent classification remains unchanged.
     """
-    for name in ("ib_insync.wrapper", "ib_insync.client", "ib_insync.ib"):
+    for name in ("ib_insync.wrapper", "ib_insync.client", "ib_insync.ib", "ib_insync.Decoder"):
         logging.getLogger(name).disabled = True
 
 
