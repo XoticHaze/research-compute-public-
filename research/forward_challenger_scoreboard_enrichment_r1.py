@@ -482,7 +482,7 @@ def main() -> None:
     out.setdefault("input_lineage", {})["currency_mechanism_source"] = {
         "sha256": hashlib.sha256(currency_raw).hexdigest(),
         "git_blob_sha1": hashlib.sha1(
-            b"blob " + str(len(currency_raw)).encode("ascii") + b"\\0" + currency_raw
+            b"blob " + str(len(currency_raw)).encode("ascii") + bytes([0]) + currency_raw
         ).hexdigest(),
         "market_data_asof": currency.get("market_data_asof"),
         "latest_common_market_date": currency.get("latest_common_market_date"),
