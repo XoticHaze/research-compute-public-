@@ -6,7 +6,7 @@ on:
       source_sha:
         description: Exact accepted private MM-IBKR source SHA containing the Bot Console
         required: true
-        default: f6f6dcdcbad3df8c5d50cab5ac2652b4781a648d
+        default: 6449413089eb4d01ce26bd1220d0130f363a64e1
         type: string
   # Mainline source changes are review/CI only. Only an explicit release fire
   # marker or owner workflow_dispatch can request an Access-locked deploy.
@@ -37,7 +37,7 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  CANONICAL_PRIVATE_SOURCE_SHA: f6f6dcdcbad3df8c5d50cab5ac2652b4781a648d
+  CANONICAL_PRIVATE_SOURCE_SHA: 6449413089eb4d01ce26bd1220d0130f363a64e1
   OPERATOR_CONSOLE_URL: https://mmibkr-operator-console.slenderiq.workers.dev
 
 jobs:
@@ -180,12 +180,17 @@ jobs:
           if node.get('live_execution_allowed') is not False:
               raise SystemExit('live execution authority unexpectedly enabled')
           source_root = Path(node['source_root'])
+          expected_root = root / 'extracted' / 'mm-ibkr'
           ui = source_root / 'ui-react'
+          # Never build a caller-selected or symlink-aliased private source tree.
+          # The encrypted consumer already materialized to this exact run-local root.
+          if (source_root != expected_root or
+                  any(p.is_symlink() for p in (root, root / 'extracted', source_root, ui))):
+              raise SystemExit('operator-console private source root untrusted')
+          if any((ui / name).is_symlink() for name in ('package.json', 'package-lock.json')):
+              raise SystemExit('operator-console private package alias untrusted')
           if not (ui / 'package.json').is_file() or not (ui / 'package-lock.json').is_file():
               raise SystemExit('private ui-react source incomplete')
-          with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
-              fh.write('PRIVATE_SOURCE_ROOT=' + str(source_root) + '\n')
-              fh.write('PRIVATE_UI_ROOT=' + str(ui) + '\n')
           print('MMIBKR_OPERATOR_CONSOLE_VAULT_SOURCE=PASS')
           print('MMIBKR_OPERATOR_CONSOLE_SOURCE_MANIFEST=' + str(node['source_manifest_sha256']))
           PY
@@ -194,7 +199,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cd "$PRIVATE_UI_ROOT"
+          cd "$RUNNER_TEMP/mmibkr-operator-console-source/extracted/mm-ibkr/ui-react"
           npm ci --ignore-scripts --no-audit --no-fund
           npm run verify:bot-console
           npm run build
