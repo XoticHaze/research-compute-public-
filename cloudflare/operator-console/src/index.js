@@ -711,8 +711,11 @@ export class OperatorState {
 
     if (request.method === 'POST' && url.pathname === '/pi/store') {
       let envelope;
+      let sourceEnvelope;
       try {
-        envelope = validatePiObservationEnvelope((await request.json()).envelope);
+        sourceEnvelope = (await request.json()).envelope;
+        envelope = validatePiObservationEnvelope(sourceEnvelope);
+        await verifyPiOutboxSnapshotDigest(sourceEnvelope);
       } catch {
         return json({ error: 'pi_observation_rejected' }, 400);
       }
@@ -727,13 +730,14 @@ export class OperatorState {
         }
         const prior = await txn.get('pi_account_latest');
         const currentTime = Date.parse(envelope.observation.observed_at);
-        const priorTime = Date.parse(prior?.envelope?.observation?.observed_at || '');
+        const priorTime = Date.parse(prior?.envelope?.observation?.observed_at
+          || prior?.envelope?.record?.snapshot?.observed_at || '');
         if (Number.isFinite(priorTime) && priorTime >= currentTime) {
           return { rejected: true };
         }
         const record = {
           schema: 'mmibkr.pi_account_store.v1', write_id: crypto.randomUUID(),
-          stored_at_utc: new Date().toISOString(), envelope,
+          stored_at_utc: new Date().toISOString(), envelope: sourceEnvelope,
         };
         await txn.put('pi_replay_ledger', replayLedger);
         await txn.put('pi_account_latest', record);
@@ -890,12 +894,13 @@ export default {
         return json({ error: 'pi_observation_too_large' }, 413);
       }
       let envelope;
+      let incoming;
       try {
         const raw = await request.text();
         if (new TextEncoder().encode(raw).length > MAX_PI_OBSERVATION_BYTES) {
           return json({ error: 'pi_observation_too_large' }, 413);
         }
-        const incoming = JSON.parse(raw);
+        incoming = JSON.parse(raw);
         envelope = validatePiObservationEnvelope(incoming);
         await verifyPiOutboxSnapshotDigest(incoming);
       } catch {
@@ -903,7 +908,7 @@ export default {
       }
       const stored = await stateStub(env).fetch(new Request('https://operator-state.internal/pi/store', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ envelope, publisher }),
+        body: JSON.stringify({ envelope: incoming, publisher }),
       }));
       if (!stored.ok) return stored;
       const receipt = await stored.json();
