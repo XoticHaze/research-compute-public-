@@ -42,6 +42,18 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertIn("publisher_status != 401", text)
         self.assertIn("MMIBKR_OPERATOR_CONSOLE_PUBLISHER_UNAUTHENTICATED_DENIED=1", text)
 
+    def test_pi_observation_ingress_is_path_scoped_and_denies_anonymous_at_worker(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("pi_publisher_domain = hostname + '/v1/pi-account-observation'", text)
+        self.assertIn("'name': pi_publisher_app_name", text)
+        self.assertIn("'domain': pi_publisher_domain", text)
+        self.assertIn("'id': publisher_policy_id", text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_PI_PUBLISHER_INGRESS=OIDC_WORKER_GATED_NOT_ADMITTED", text)
+        self.assertIn("pi_publisher_status != 401", text)
+        self.assertIn("unauthenticated Pi publisher path did not reach Worker OIDC gate", text)
+        self.assertLess(text.index("existing_pi_publisher_app = next("),
+                        text.index("Deploy locked operator-console Worker and private static assets"))
+
     def test_reader_path_is_specific_bypass_with_worker_oidc_gate(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("MM-IBKR Operator Snapshot Reader", text)
@@ -320,6 +332,29 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertNotIn("'.github/workflows/mmibkr-operator-console-deploy-r1.yml'", push)
         self.assertNotIn("'cloudflare/operator-console/**'", push)
         self.assertIn("MMIBKR_OPERATOR_CONSOLE_OWNER_RELEASE_APPROVAL_MISSING_OR_INVALID=1", text)
+
+
+    def test_selected_pi_backend_preserves_private_source_path_guard(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("expected_root = root / 'extracted' / 'mm-ibkr'", workflow)
+        self.assertIn("operator-console private source root untrusted", workflow)
+        self.assertIn("operator-console private package alias untrusted", workflow)
+        self.assertNotIn("fh.write('PRIVATE_SOURCE_ROOT=", workflow)
+        self.assertNotIn("fh.write('PRIVATE_UI_ROOT=", workflow)
+        self.assertIn('cd "$RUNNER_TEMP/mmibkr-operator-console-source/extracted/mm-ibkr/ui-react"', workflow)
+
+    def test_dedicated_console_does_not_fall_back_to_full_react_routes(self):
+        worker = (ROOT / "cloudflare" / "operator-console" / "src" / "index.js").read_text(encoding="utf-8")
+        self.assertIn("const dedicatedBrowserRoutes = new Set([", worker)
+        routes = worker.split("const dedicatedBrowserRoutes = new Set([", 1)[1].split("]);", 1)[0]
+        for route in ("/bot-console", "/operator/forward-execution", "/operator/promotion-review"):
+            self.assertIn(f"'{route}'", routes)
+        for full_app_route in ("/markets", "/portfolio", "/research", "/strategies", "/bot-control"):
+            self.assertNotIn(f"'{full_app_route}'", routes)
+        self.assertIn("operator_browser_route_not_supported", worker)
+        self.assertIn("operator_browser_method_not_supported", worker)
+        self.assertLess(worker.index("operator_browser_route_not_supported"), worker.index("return secureAssetResponse(await env.ASSETS.fetch(request));"))
+        self.assertIn("request.method !== 'GET' && request.method !== 'HEAD'", worker)
 
 
 if __name__ == "__main__":
