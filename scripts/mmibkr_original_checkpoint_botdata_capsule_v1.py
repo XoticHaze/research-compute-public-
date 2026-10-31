@@ -88,7 +88,7 @@ def make_botdata_tar(authenticated_plaintext: bytes) -> tuple[bytes, int]:
     return data, written
 
 
-def seal_quarantine(authenticated_plaintext: bytes, recipient_public_b64: str, consumer_run: str) -> tuple[bytes, dict]:
+def seal_quarantine(authenticated_plaintext: bytes, recipient_public_b64: str, consumer_run: str, approved_recipient_key_id: str) -> tuple[bytes, dict]:
     if not re.fullmatch(r'[0-9]{4,24}', consumer_run) or consumer_run == EXPECTED_PRODUCER:
         raise ValueError('consumer_run_invalid')
     try:
@@ -99,6 +99,12 @@ def seal_quarantine(authenticated_plaintext: bytes, recipient_public_b64: str, c
         raise ValueError('recipient_public_key_size_invalid')
     tar, count = make_botdata_tar(authenticated_plaintext)
     recipient_id = 'sha256:' + digest(recipient_raw)
+    # A public key string in a repository variable is not Pi authentication.
+    # Independently reviewed operator/root fingerprint must match exactly.
+    if not re.fullmatch(r'sha256:[0-9a-f]{64}', approved_recipient_key_id):
+        raise ValueError('approved_pi_recipient_key_id_missing_or_invalid')
+    if recipient_id != approved_recipient_key_id:
+        raise ValueError('pi_recipient_public_key_unapproved')
     sender = x25519.X25519PrivateKey.generate()
     sender_pub = sender.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     salt = os.urandom(32)
