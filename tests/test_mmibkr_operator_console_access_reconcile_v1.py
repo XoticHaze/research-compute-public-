@@ -334,5 +334,28 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertIn("MMIBKR_OPERATOR_CONSOLE_OWNER_RELEASE_APPROVAL_MISSING_OR_INVALID=1", text)
 
 
+    def test_selected_pi_backend_preserves_private_source_path_guard(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("expected_root = root / 'extracted' / 'mm-ibkr'", workflow)
+        self.assertIn("operator-console private source root untrusted", workflow)
+        self.assertIn("operator-console private package alias untrusted", workflow)
+        self.assertNotIn("fh.write('PRIVATE_SOURCE_ROOT=", workflow)
+        self.assertNotIn("fh.write('PRIVATE_UI_ROOT=", workflow)
+        self.assertIn('cd "$RUNNER_TEMP/mmibkr-operator-console-source/extracted/mm-ibkr/ui-react"', workflow)
+
+    def test_dedicated_console_does_not_fall_back_to_full_react_routes(self):
+        worker = (ROOT / "cloudflare" / "operator-console" / "src" / "index.js").read_text(encoding="utf-8")
+        self.assertIn("const dedicatedBrowserRoutes = new Set([", worker)
+        routes = worker.split("const dedicatedBrowserRoutes = new Set([", 1)[1].split("]);", 1)[0]
+        for route in ("/bot-console", "/operator/forward-execution", "/operator/promotion-review"):
+            self.assertIn(f"'{route}'", routes)
+        for full_app_route in ("/markets", "/portfolio", "/research", "/strategies", "/bot-control"):
+            self.assertNotIn(f"'{full_app_route}'", routes)
+        self.assertIn("operator_browser_route_not_supported", worker)
+        self.assertIn("operator_browser_method_not_supported", worker)
+        self.assertLess(worker.index("operator_browser_route_not_supported"), worker.index("return secureAssetResponse(await env.ASSETS.fetch(request));"))
+        self.assertIn("request.method !== 'GET' && request.method !== 'HEAD'", worker)
+
+
 if __name__ == "__main__":
     unittest.main()
