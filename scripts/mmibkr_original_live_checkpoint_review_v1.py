@@ -103,9 +103,10 @@ def main() -> int:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--consumer-run-id", required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--recipient-public-b64", required=True)
-    parser.add_argument("--approved-recipient-key-id", required=True)
-    parser.add_argument("--capsule-dir", type=Path, required=True)
+    parser.add_argument("--recipient-public-b64")
+    parser.add_argument("--approved-recipient-key-id")
+    parser.add_argument("--capsule-dir", type=Path)
+    parser.add_argument("--authenticate-only", action="store_true")
     args = parser.parse_args()
     try:
         # Secret is read from the *existing* approved public workflow environment.
@@ -113,9 +114,16 @@ def main() -> int:
         blob = _read_bounded_regular_file(args.ciphertext, EXPECTED_CIPHER_BYTES)
         manifest = _read_bounded_regular_file(args.manifest, EXPECTED_MANIFEST_BYTES_MAX)
         result, authenticated_plaintext = _authenticate_report_and_raw(blob, manifest, key, args.consumer_run_id)
-        ciphertext, envelope = seal_quarantine(authenticated_plaintext, args.recipient_public_b64, args.consumer_run_id, args.approved_recipient_key_id)
-        write_capsule(args.capsule_dir, ciphertext, envelope)
-        result["recipient_botdata_quarantine_ciphertext_created"] = True
+        if args.authenticate_only:
+            if args.capsule_dir is not None or args.recipient_public_b64 or args.approved_recipient_key_id:
+                raise ValueError('authenticate_only_refuses_any_return_recipient')
+            result["recipient_botdata_quarantine_ciphertext_created"] = False
+        else:
+            if not (args.capsule_dir and args.recipient_public_b64 and args.approved_recipient_key_id):
+                raise ValueError('quarantine_requires_explicit_approved_recipient_and_directory')
+            ciphertext, envelope = seal_quarantine(authenticated_plaintext, args.recipient_public_b64, args.consumer_run_id, args.approved_recipient_key_id)
+            write_capsule(args.capsule_dir, ciphertext, envelope)
+            result["recipient_botdata_quarantine_ciphertext_created"] = True
         # Sanitized allowlist only, exclusive creation; never write raw/key.
         fd = os.open(args.output, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as fp:
@@ -124,8 +132,10 @@ def main() -> int:
             fp.flush()
             os.fsync(fp.fileno())
         print("MMIBKR_ORIGINAL_CHECKPOINT_AES_GCM=PASS")
-        print("MMIBKR_ORIGINAL_CHECKPOINT_BOT_DATA_CLASSIFICATION=WRITTEN_SANITIZED")
-        print("MMIBKR_ORIGINAL_CHECKPOINT_RECIPIENT_BOTDATA_CAPSULE=SEALED_QUARANTINE_ONLY")
+        if args.authenticate_only:
+            print("MMIBKR_ORIGINAL_CHECKPOINT_RETURN=NONE_AUTHENTICATION_ONLY")
+        else:
+            print("MMIBKR_ORIGINAL_CHECKPOINT_RECIPIENT_BOTDATA_CAPSULE=SEALED_QUARANTINE_ONLY")
         print("MMIBKR_NO_SUBMIT_OR_LIVE_ADMISSION=HELD")
         return 0
     except Exception as exc:
