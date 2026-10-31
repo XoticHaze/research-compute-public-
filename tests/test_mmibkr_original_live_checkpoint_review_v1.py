@@ -1,6 +1,8 @@
 """Brokerless tests for exact original encrypted checkpoint read-only review."""
 from __future__ import annotations
 import importlib.util
+import os
+import tempfile
 import sys
 import types
 from pathlib import Path
@@ -23,6 +25,9 @@ class OriginalReadonlyReview(unittest.TestCase):
             spec = importlib.util.spec_from_file_location("original_readonly_review", SCRIPT)
             cls.mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(cls.mod)
+        pspec = importlib.util.spec_from_file_location("original_vault_publisher", ROOT / "scripts/operator/mmibkr_original_checkpoint_vault_publish_macos_v1.py")
+        cls.publisher = importlib.util.module_from_spec(pspec)
+        pspec.loader.exec_module(cls.publisher)
 
     def test_exact_immutable_source_digest(self):
         m = self.mod
@@ -58,6 +63,33 @@ class OriginalReadonlyReview(unittest.TestCase):
         self.assertNotIn("mmibkr-selected-runtime-live-owner-r1.yml",workflow)
         self.assertNotIn("private-source-token",workflow)
         self.assertIn("if: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm_readonly_checkpoint_review }}",workflow)
+
+    def test_public_vault_publish_requires_explicit_approval_before_gh(self):
+        p = self.publisher
+        with patch.dict(os.environ, {p.CONSENT: ""}, clear=False):
+            with patch.object(p, "cmd", side_effect=AssertionError("network_not_allowed")):
+                with self.assertRaisesRegex(RuntimeError, "public_encrypted_ciphertext_operator_approval_missing"):
+                    p.publish(b"nothing", b"nothing")
+
+    def test_vault_publisher_binds_exact_original_archive(self):
+        p=self.publisher
+        self.assertEqual(p.ZIP_SHA, "13029f3f99fb4023e34540a34ad162ca9b165cd669b24066ac5672dfcc72f8ad")
+        self.assertEqual(p.BRANCH, "mmibkr-source-vault")
+        self.assertEqual(p.DEST, "checkpoint-vault/run39499524894")
+        self.assertEqual(p.MERGED_PR, "2077")
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "not-original.zip"
+            bad.write_bytes(b"wrong")
+            with self.assertRaisesRegex(ValueError, "original_archive_file_identity_mismatch"):
+                p.verify_exact_archive(bad)
+
+    def test_publisher_is_nonforce_and_ciphertext_only(self):
+        src=(ROOT / "scripts/operator/mmibkr_original_checkpoint_vault_publish_macos_v1.py").read_text()
+        self.assertIn("--publish-after-approved-review", src)
+        self.assertIn("mmibkr-source-vault",src)
+        self.assertNotIn("--force",src)
+        self.assertNotIn("MMIBKR_LIVE_GATEWAY_WARM_KEY_B64",src)
+        self.assertNotIn("placeOrder",src)
 
     def test_no_broker_or_secret_in_main(self):
         src=SCRIPT.read_text()
