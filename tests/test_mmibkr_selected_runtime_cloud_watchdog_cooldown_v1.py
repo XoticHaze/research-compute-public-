@@ -49,6 +49,25 @@ def broker_jobs(*run_ids: int) -> dict[str, list[dict]]:
     }
 
 
+def historical_conflict_jobs(*run_ids: int) -> dict[str, list[dict]]:
+    """Authenticated GitHub job steps, not caller-written failure labels."""
+    return {
+        str(run_id): [{
+            "run_id": run_id,
+            "conclusion": "failure",
+            "steps": [
+                {"name": "Materialize canonical post-auth broker and forward-data handoff",
+                 "status": "completed", "conclusion": "failure"},
+                {"name": "Validate and re-emit only the fixed-field historical session-conflict receipt",
+                 "status": "completed", "conclusion": "success"},
+                {"name": "Publish fixed-field historical session-conflict failure",
+                 "status": "completed", "conclusion": "success"},
+            ],
+        }]
+        for run_id in run_ids
+    }
+
+
 class SelectedRuntimeCloudWatchdogCooldownV1Tests(unittest.TestCase):
     def test_three_recent_consecutive_failures_suppress_dispatch(self):
         result = evaluate_b1_failure_cooldown(
@@ -117,6 +136,40 @@ class SelectedRuntimeCloudWatchdogCooldownV1Tests(unittest.TestCase):
         )
         self.assertFalse(result["suppress"])
         self.assertEqual(result["consecutive_failure_count"], 2)
+
+
+    def test_three_verified_fixed_field_different_ip_conflicts_suppress_dispatch(self):
+        runs = [run_row(3, minutes_ago=5), run_row(2, minutes_ago=10),
+                run_row(1, minutes_ago=15)]
+        result = evaluate_b1_failure_cooldown(
+            runs, job_evidence_by_run_id=historical_conflict_jobs(1, 2, 3),
+            now=NOW,
+        )
+        self.assertTrue(result["suppress"])
+        self.assertEqual(result["reason"], "recent_consecutive_b1_failures")
+        self.assertEqual(result["consecutive_failure_count"], 3)
+        self.assertEqual(result["latest_run_id"], "3")
+
+    def test_unpublished_conflict_receipt_never_claims_broker_failure(self):
+        runs = [run_row(i, minutes_ago=i * 5) for i in (3, 2, 1)]
+        jobs = historical_conflict_jobs(1, 2, 3)
+        jobs["1"][0]["steps"][2]["conclusion"] = "skipped"
+        result = evaluate_b1_failure_cooldown(
+            runs, job_evidence_by_run_id=jobs, now=NOW,
+        )
+        self.assertFalse(result["suppress"])
+        self.assertEqual(result["reason"], "b1_failure_unclassified")
+        self.assertEqual(result["consecutive_failure_count"], 0)
+
+    def test_fixed_field_conflict_requires_exact_github_run_identity(self):
+        runs = [run_row(i, minutes_ago=i * 5) for i in (3, 2, 1)]
+        jobs = historical_conflict_jobs(1, 2, 3)
+        jobs["1"][0]["run_id"] = 999
+        result = evaluate_b1_failure_cooldown(
+            runs, job_evidence_by_run_id=jobs, now=NOW,
+        )
+        self.assertFalse(result["suppress"])
+        self.assertEqual(result["reason"], "b1_failure_unclassified")
 
 
     def test_watchdog_reads_immutable_session_receipts_from_exchange_branch(self):

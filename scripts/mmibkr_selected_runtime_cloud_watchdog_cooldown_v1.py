@@ -15,6 +15,9 @@ FAILURE_THRESHOLD = 3
 COOLDOWN_SECONDS = 1800
 ACTIVE_STATUSES = {"queued", "in_progress", "waiting", "pending", "requested"}
 BROKER_DEPENDENCY_STEP = "Prove read-only broker session and historical data fetch"
+HISTORICAL_CONFLICT_HANDOFF_STEP = "Materialize canonical post-auth broker and forward-data handoff"
+HISTORICAL_CONFLICT_VALIDATION_STEP = "Validate and re-emit only the fixed-field historical session-conflict receipt"
+HISTORICAL_CONFLICT_PUBLISH_STEP = "Publish fixed-field historical session-conflict failure"
 
 
 def _utc(value: Any) -> datetime | None:
@@ -92,10 +95,14 @@ def checkpoint_receipt_origin_admitted(
 
 
 def _verified_broker_dependency_failure(run: Mapping[str, Any], jobs: Any) -> bool:
-    """Require GitHub job/step evidence of the actual broker dependency failure.
+    """Require independently observed GitHub steps for an actual broker failure.
 
-    A completed failed workflow summary, zero-step runner failure, checkout,
-    secret/source failure, or a caller-authored failure label is not broker proof.
+    Legacy B1 had a dedicated failing broker step. Current B1 fails its
+    post-auth handoff step and then validates/publishes a STRICT fixed-field
+    different-IP conflict receipt. All three must be completed in the SAME
+    failed GitHub job before the watchdog may claim broker-dependency cooldown.
+    A generic post-auth failure, missing/failed receipt, or zero-step nonstart
+    remains unclassified.
     """
     if not isinstance(jobs, list):
         return False
@@ -108,13 +115,21 @@ def _verified_broker_dependency_failure(run: Mapping[str, Any], jobs: Any) -> bo
         if (str(job.get("run_id") or "") != expected_run_id
                 or job.get("conclusion") != "failure"):
             continue
-        for step in job.get("steps") or []:
-            if (isinstance(step, Mapping)
-                    and step.get("name") == BROKER_DEPENDENCY_STEP
-                    and step.get("status") == "completed"
-                    and step.get("conclusion") == "failure"):
-                return True
+        steps = [step for step in (job.get("steps") or [])
+                 if isinstance(step, Mapping)]
+        def exact_step(name: str, conclusion: str) -> bool:
+            matches = [step for step in steps if step.get("name") == name]
+            return (len(matches) == 1
+                    and matches[0].get("status") == "completed"
+                    and matches[0].get("conclusion") == conclusion)
+        if exact_step(BROKER_DEPENDENCY_STEP, "failure"):
+            return True
+        if (exact_step(HISTORICAL_CONFLICT_HANDOFF_STEP, "failure")
+                and exact_step(HISTORICAL_CONFLICT_VALIDATION_STEP, "success")
+                and exact_step(HISTORICAL_CONFLICT_PUBLISH_STEP, "success")):
+            return True
     return False
+
 
 
 def evaluate_b1_failure_cooldown(
