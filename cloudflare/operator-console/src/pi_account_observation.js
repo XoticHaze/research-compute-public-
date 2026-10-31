@@ -127,7 +127,13 @@ export function validatePiObservationEnvelope(input, now = Date.now()) {
       reject('pi_observation_outbox_identity_rejected');
     }
     const clean = validatePiAccountObservation(input.record.snapshot, now);
-    if (input.record.observed_at !== clean.observed_at) {
+    // The Pi owner forms the immutable outbox identity from UTC observation
+    // second plus the canonical snapshot digest. A different second is not
+    // the same root-produced observation even when the payload is identical.
+    const utcSecond = new Date(clean.observed_at).toISOString().slice(0, 19)
+      .replace(/[-:T]/g, '');
+    if (input.record.observed_at !== clean.observed_at
+        || input.observation_id.slice(6, 20) !== utcSecond) {
       reject('pi_observation_outbox_timestamp_rejected');
     }
     return { schema: PI_OUTBOX_ENVELOPE_SCHEMA, node_id:'cc-pi4',
