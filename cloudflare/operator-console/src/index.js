@@ -5,6 +5,7 @@ import {
   storePromotionCandidates,
   validatePromotionCandidateSnapshot,
 } from './promotion_review_state.js';
+import { validatePiObservationEnvelope, piOperatorView } from './pi_account_observation.js';
 
 const GITHUB_ISSUER = 'https://token.actions.githubusercontent.com';
 const GITHUB_JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwks';
@@ -12,6 +13,13 @@ const GITHUB_AUDIENCE = 'mmibkr-operator-console';
 const SNAPSHOT_SCHEMA = 'mmibkr.cloud_operator_snapshot.v1';
 const MAX_SNAPSHOT_BYTES = 2 * 1024 * 1024;
 const MAX_PROMOTION_BYTES = 2 * 1024 * 1024;
+const MAX_PI_OBSERVATION_BYTES = 8192;
+// A dedicated, not-yet-admitted read-only public bridge; ordinary publishers cannot impersonate cc-pi4.
+const PI_OBSERVATION_PUBLISHER = Object.freeze({
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref: 'XoticHaze/research-compute-public-/.github/workflows/mmibkr-pi-operator-bridge-r1.yml@refs/heads/main',
+});
 
 const ALLOWED_PUBLISHERS = Object.freeze([
   Object.freeze({
@@ -189,6 +197,25 @@ async function verifyPublisher(request) {
     run_id: callerRunId,
     run_attempt: String(claims.run_attempt || ''),
   };
+}
+
+async function verifyPiObservationPublisher(request) {
+  const auth = String(request.headers.get('authorization') || '');
+  const callerRunId = String(request.headers.get('x-mmibkr-caller-run-id') || '');
+  if (!auth.startsWith('Bearer ') || auth.length > 16384
+      || !/^\d{4,24}$/.test(callerRunId)) throw new Error('pi_publisher_unauthorized');
+  const claims = await verifyRs256Jwt(auth.slice(7), GITHUB_JWKS);
+  if (claims.iss !== GITHUB_ISSUER
+      || !claimAudience(claims).includes(GITHUB_AUDIENCE)
+      || claims.repository_visibility !== 'public'
+      || claims.runner_environment !== 'github-hosted'
+      || !['push', 'workflow_dispatch'].includes(String(claims.event_name || ''))
+      || String(claims.run_id || '') !== callerRunId
+      || !identityMatches(claims, PI_OBSERVATION_PUBLISHER)) {
+    throw new Error('pi_publisher_identity_rejected');
+  }
+  return { repository: claims.repository, workflow_ref: claims.workflow_ref,
+    run_id: callerRunId, run_attempt: String(claims.run_attempt || '') };
 }
 
 async function verifyPromotionPublisher(request) {
@@ -681,6 +708,41 @@ export class OperatorState {
   async fetch(request) {
     const url = new URL(request.url);
 
+    if (request.method === 'POST' && url.pathname === '/pi/store') {
+      let envelope;
+      try {
+        envelope = validatePiObservationEnvelope((await request.json()).envelope);
+      } catch {
+        return json({ error: 'pi_observation_rejected' }, 400);
+      }
+      const result = await this.ctx.storage.transaction(async (txn) => {
+        const prior = await txn.get('pi_account_latest');
+        const currentTime = Date.parse(envelope.observation.observed_at);
+        const priorTime = Date.parse(prior?.envelope?.observation?.observed_at || '');
+        if (Number.isFinite(priorTime) && priorTime >= currentTime) {
+          return { rejected: true };
+        }
+        const record = {
+          schema: 'mmibkr.pi_account_store.v1', write_id: crypto.randomUUID(),
+          stored_at_utc: new Date().toISOString(), envelope,
+        };
+        await txn.put('pi_account_latest', record);
+        return { record };
+      });
+      if (result.rejected) return json({ error: 'pi_observation_out_of_order' }, 409);
+      const observed = await this.ctx.storage.get('pi_account_latest');
+      if (!observed || observed.write_id !== result.record.write_id
+          || observed.envelope?.result_commit_sha !== envelope.result_commit_sha) {
+        return json({ error: 'pi_observation_readback_failed' }, 502);
+      }
+      return json({ ok: true, durable_readback_verified: true,
+        stored_at_utc: result.record.stored_at_utc, observed_at: envelope.observation.observed_at }, 201);
+    }
+    if (request.method === 'GET' && url.pathname === '/pi/latest') {
+      const record = await this.ctx.storage.get('pi_account_latest');
+      return record ? json(record, 200) : json({ error: 'pi_observation_not_available' }, 404);
+    }
+
     if (request.method === 'POST' && url.pathname === '/store') {
       const body = await request.json();
       const incomingSnapshot = validateSnapshot(body.snapshot);
@@ -802,6 +864,40 @@ export class OperatorState {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    if (request.method === 'POST' && url.pathname === '/v1/pi-account-observation') {
+      // Machine ingress is deliberately separate from browser Access and paper-only ingestion.
+      let publisher;
+      try { publisher = await verifyPiObservationPublisher(request); }
+      catch { return json({ error: 'unauthorized' }, 401); }
+      const size = Number(request.headers.get('content-length') || 0);
+      if (Number.isFinite(size) && size > MAX_PI_OBSERVATION_BYTES) {
+        return json({ error: 'pi_observation_too_large' }, 413);
+      }
+      let envelope;
+      try {
+        const raw = await request.text();
+        if (new TextEncoder().encode(raw).length > MAX_PI_OBSERVATION_BYTES) {
+          return json({ error: 'pi_observation_too_large' }, 413);
+        }
+        envelope = validatePiObservationEnvelope(JSON.parse(raw));
+      } catch {
+        return json({ error: 'pi_observation_rejected' }, 400);
+      }
+      const stored = await stateStub(env).fetch(new Request('https://operator-state.internal/pi/store', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ envelope, publisher }),
+      }));
+      if (!stored.ok) return stored;
+      const receipt = await stored.json();
+      if (receipt.durable_readback_verified !== true) {
+        return json({ error: 'pi_observation_readback_unverified' }, 502);
+      }
+      return json({ ok: true, schema: 'mmibkr.pi_operator_publish_receipt.v1',
+        stored_at_utc: receipt.stored_at_utc, observed_at: receipt.observed_at,
+        durable_readback_verified: true, broker_mutation_authority: false,
+        live_execution_allowed: false }, 201);
+    }
 
     if (request.method === 'POST' && url.pathname === '/v1/operator-snapshot') {
       const length = Number(request.headers.get('content-length') || 0);
@@ -1018,6 +1114,14 @@ export default {
         }),
       );
       return stored;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/pi-account-observation') {
+      // Cloudflare Access already authenticated the human above. No browser broker socket.
+      const stored = await stateStub(env).fetch(new Request('https://operator-state.internal/pi/latest'));
+      if (!stored.ok) return stored;
+      try { return json(piOperatorView(await stored.json()), 200); }
+      catch { return json({ error: 'pi_observation_stale_or_unverified' }, 503); }
     }
 
     if (request.method === 'GET' && url.pathname === '/api/operator-snapshot') {
