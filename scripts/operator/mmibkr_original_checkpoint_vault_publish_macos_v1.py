@@ -8,6 +8,7 @@ No plaintext, broker interaction, Gateway, Pi, or protected master-key access.
 """
 from __future__ import annotations
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -29,6 +30,8 @@ BRANCH = 'mmibkr-source-vault'
 DEST = 'checkpoint-vault/run39499524894'
 MERGED_PR = '2077'
 CONSENT = 'MMIBKR_P0_ORIGINAL_CHECKPOINT_PUBLIC_ENCRYPTED_APPROVED'
+PROTECTED_MANIFEST_SECRET = 'MMIBKR_ORIGINAL_CHECKPOINT_39499524894_MANIFEST_B64'
+PROTECTED_CONSUMER_REPO = 'XoticHaze/research-compute-public-'
 
 
 def cmd(*args: str, cwd: Path | None = None) -> str:
@@ -85,6 +88,17 @@ def publish(ciphertext: bytes, manifest: bytes) -> None:
     if cmd('gh', 'pr', 'view', MERGED_PR, '--repo', 'XoticHaze/research-compute-public-',
            '--json', 'mergedAt', '--jq', '.mergedAt != null') != 'true':
         raise RuntimeError('checkpoint_consumer_pr_not_merged')
+    # The original manifest contains the digest of private decrypted data.
+    # Seal it to the protected Actions secret via authenticated gh stdin.
+    # Never publish it in public Git, argv, logs, or source-vault artifacts.
+    encoded = base64.b64encode(manifest).decode('ascii')
+    cp = subprocess.run(
+        ['gh', 'secret', 'set', PROTECTED_MANIFEST_SECRET, '--repo', PROTECTED_CONSUMER_REPO],
+        input=encoded, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        check=False,
+    )
+    if cp.returncode != 0:
+        raise RuntimeError('historical_manifest_protected_secret_registration_failed')
     with tempfile.TemporaryDirectory(prefix='mmibkr-original-ciphertext-vault-') as tmp:
         root = Path(tmp)
         repo = root / 'repository'
@@ -100,15 +114,14 @@ def publish(ciphertext: bytes, manifest: bytes) -> None:
             raise RuntimeError('immutable_checkpoint_vault_target_already_exists')
         target.mkdir(parents=True)
         (target / 'checkpoint.enc').write_bytes(ciphertext)
-        (target / 'manifest.json').write_bytes(manifest)
         cmd('git', 'add', '--', DEST, cwd=repo)
         staged = cmd('git', 'diff', '--cached', '--name-only', cwd=repo).splitlines()
-        if sorted(staged) != [DEST + '/checkpoint.enc', DEST + '/manifest.json']:
+        if sorted(staged) != [DEST + '/checkpoint.enc']:
             raise RuntimeError('unexpected_staged_file_set')
         cmd('git', 'commit', '-m', 'admit exact owner-reviewed encrypted historical checkpoint 39499524894 (no plaintext)', cwd=repo)
         cmd('git', 'push', 'origin', 'HEAD:refs/heads/' + BRANCH, cwd=repo)
-    print('MMIBKR_ORIGINAL_CHECKPOINT_PUBLIC_ENCRYPTED_PUBLISHED=1')
-    print('MMIBKR_MASTER_KEY_PUBLISHED=0; PLAINTEXT_PUBLISHED=0; BROKER_AND_PI_MUTATIONS=0')
+    print('MMIBKR_ORIGINAL_CHECKPOINT_CIPHERTEXT_ONLY_PUBLIC_PUBLISHED=1')
+    print('MMIBKR_HISTORICAL_MANIFEST_PUBLIC_PUBLISHED=0; MASTER_KEY_PUBLISHED=0; PLAINTEXT_PUBLISHED=0; BROKER_AND_PI_MUTATIONS=0')
 
 
 def main() -> int:
