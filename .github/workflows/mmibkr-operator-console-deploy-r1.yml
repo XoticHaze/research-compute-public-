@@ -937,6 +937,29 @@ jobs:
                   + str(publisher_status)
               )
 
+          # A path-scoped Access bypass must reach the *Worker* OIDC gate.
+          # A Cloudflare 403 here means the new Pi path was not reconciled.
+          pi_publisher_req = Request(
+              base + '/v1/pi-account-observation',
+              data=b'{}',
+              method='POST',
+              headers={
+                  'Content-Type':'application/json',
+                  'Accept':'application/json',
+                  'User-Agent':'mmibkr-pi-publisher-deny-proof',
+              },
+          )
+          try:
+              with opener.open(pi_publisher_req, timeout=10) as response:
+                  pi_publisher_status = int(response.status)
+          except HTTPError as exc:
+              pi_publisher_status = int(exc.code)
+          if pi_publisher_status != 401:
+              raise SystemExit(
+                  'unauthenticated Pi publisher path did not reach Worker OIDC gate: '
+                  + str(pi_publisher_status)
+              )
+
           reader_req = Request(
               base + '/v1/operator-snapshot-read',
               method='GET',
