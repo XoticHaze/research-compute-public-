@@ -60,6 +60,7 @@ jobs:
           set -euo pipefail
           node --check cloudflare/operator-console/src/index.js
           node tests/operator_console_runtime_union_freshness_contract.mjs
+          node tests/pi_account_observation_contract.mjs
           node --check cloudflare/operator-console/src/promotion_review_state.js
           node tests/promotion_review_state_contract.mjs
           python -m unittest -v \
