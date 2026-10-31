@@ -128,10 +128,7 @@ const outboxReplay=nextPiReplayLedger(null,normalizedOutbox,now);
 assert.equal(outboxReplay.entries[0].request_id,'outbox:'+outbox.observation_id);
 assert.throws(()=>nextPiReplayLedger(outboxReplay,normalizedOutbox,now+1),/pi_replay_detected/);
 assert.throws(()=>nextPiReplayLedger(outboxReplay,validatePiObservationEnvelope({
-  ...outbox, observation_id:'piobs-20261031125931-'+outbox.record.snapshot_sha256.slice(0,16),
-  source_path:'pi-node/observations/piobs-20261031125931-'+outbox.record.snapshot_sha256.slice(0,16)+'.json',
-  record:{...outbox.record,observation_id:'piobs-20261031125931-'+outbox.record.snapshot_sha256.slice(0,16)},
-},now),now+1),/pi_replay_detected/);
+  ...outbox, result_commit_sha:'d'.repeat(40)},now),now+1),/pi_replay_detected/);
 rejected(()=>validatePiObservationEnvelope({...outbox,command:'pi.ibkr_account_readonly'},now));
 rejected(()=>validatePiObservationEnvelope({...outbox,request_id:'fake-command'},now));
 rejected(()=>validatePiObservationEnvelope({...outbox,source_path:'pi-node/results/fake.json'},now));
