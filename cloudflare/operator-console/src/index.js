@@ -5,7 +5,7 @@ import {
   storePromotionCandidates,
   validatePromotionCandidateSnapshot,
 } from './promotion_review_state.js';
-import { validatePiObservationEnvelope, piOperatorView, piReplayIdentity } from './pi_account_observation.js';
+import { validatePiObservationEnvelope, piOperatorView, piReplayIdentity, verifyPiOutboxSnapshotDigest } from './pi_account_observation.js';
 import { nextPiReplayLedger } from './pi_replay_ledger.js';
 
 const GITHUB_ISSUER = 'https://token.actions.githubusercontent.com';
@@ -895,7 +895,9 @@ export default {
         if (new TextEncoder().encode(raw).length > MAX_PI_OBSERVATION_BYTES) {
           return json({ error: 'pi_observation_too_large' }, 413);
         }
-        envelope = validatePiObservationEnvelope(JSON.parse(raw));
+        const incoming = JSON.parse(raw);
+        envelope = validatePiObservationEnvelope(incoming);
+        await verifyPiOutboxSnapshotDigest(incoming);
       } catch {
         return json({ error: 'pi_observation_rejected' }, 400);
       }
