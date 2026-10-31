@@ -81,10 +81,11 @@ jobs:
       - run: python research/forward_challenger_scoreboard_enrichment_r1.py --self-test
       - run: python research/forward_deterministic_allocator_r1.py --self-test
       - run: python research/forward_scoreboard_lineage_r1.py --self-test
-      - run: python -m pip install --disable-pip-version-check pandas==2.3.2
+      - run: python -m pip install --disable-pip-version-check pandas==2.3.2 exchange_calendars==4.13.2 pytest==8.4.2
       - run: python research/forward_prospective_cohort_ledger_r1.py --self-test
       - run: python -m unittest discover -s tests -p 'test_p160_frozen_oct2026_forward_nav_consumer_r1.py' -v
       - run: python research/forward_largecap_transport_observer_r1.py --self-test
+      - run: python -m pytest -q tests/test_forward_largecap_official_session_completeness_20261027.py
       - run: python research/forward_bundle_publish_guard_r1.py --self-test
       - run: python research/forward_scoreboard_history_r1.py --self-test
 
@@ -176,7 +177,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
-      - run: python -m pip install --disable-pip-version-check pandas==2.3.2 yfinance==0.2.65
+      - run: python -m pip install --disable-pip-version-check pandas==2.3.2 yfinance==0.2.65 exchange_calendars==4.13.2
       - uses: actions/download-artifact@v4
         with:
           pattern: forward-*

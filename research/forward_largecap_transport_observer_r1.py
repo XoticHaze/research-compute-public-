@@ -102,6 +102,22 @@ def _common_calendar(prices: dict[str, pd.Series], symbols: list[str]) -> pd.Dat
     for symbol in symbols[1:]:
         if not prices[symbol].index.equals(reference):
             raise RuntimeError(f"SOURCE_CALENDAR_INCOMPLETE: {symbol} session dates differ")
+    # Identical per-symbol dates are necessary but insufficient: a provider-wide
+    # missing official session passes equality and silently moves +1/fixed20.
+    # Validate the *interior observed span* against an independent exchange
+    # calendar. Trailing as-of freshness is a separate source-health gate.
+    if len(reference):
+        try:
+            import exchange_calendars as xc
+            start, end = reference[0], reference[-1]
+            nyse = xc.get_calendar("XNYS").sessions_in_range(start, end).tz_localize(None)
+            nasdaq = xc.get_calendar("XNAS").sessions_in_range(start, end).tz_localize(None)
+        except Exception as exc:
+            raise RuntimeError("SOURCE_CALENDAR_AUTHORITY_UNAVAILABLE") from exc
+        if not nyse.equals(nasdaq):
+            raise RuntimeError("SOURCE_CALENDAR_AUTHORITY_CONFLICT")
+        if not reference.equals(nyse):
+            raise RuntimeError("SOURCE_CALENDAR_INCOMPLETE: official exchange session mismatch")
     return pd.DatetimeIndex(reference)
 
 
