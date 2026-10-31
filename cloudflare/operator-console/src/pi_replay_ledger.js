@@ -5,7 +5,9 @@ export function nextPiReplayLedger(prior, envelope, nowMs = Date.now()) {
   const TTL_MS = 24 * 60 * 60 * 1000;
   const MAX_ENTRIES = 2048;
   if (!Number.isSafeInteger(nowMs) || nowMs < 0) throw new Error('pi_replay_clock_invalid');
-  const requestId = piReplayIdentity(envelope);
+  // The Worker supplies a fully validated versioned envelope. Direct callers of
+  // this internal ledger helper may provide a prevalidated bare replay identity.
+  const requestId = envelope?.schema ? piReplayIdentity(envelope) : envelope?.request_id;
   const commitSha = envelope?.result_commit_sha;
   if (typeof requestId !== 'string' || !/^[A-Za-z0-9._:-]{6,100}$/.test(requestId)
       || typeof commitSha !== 'string' || !/^[0-9a-f]{40}$/.test(commitSha)) {
