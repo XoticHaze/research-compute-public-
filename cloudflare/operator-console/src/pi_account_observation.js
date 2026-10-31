@@ -148,6 +148,30 @@ export function piReplayIdentity(envelope) {
   reject('pi_replay_envelope_kind_rejected');
 }
 
+// A matching self-reported digest is necessary but NOT authentication of the
+// private Git commit or root. The independently admitted publisher owns those
+// proofs, and this check rejects bitwise-inconsistent payloads at Worker ingress.
+function canonicalSnapshot(value) {
+  if (Array.isArray(value)) return '[' + value.map(canonicalSnapshot).join(',') + ']';
+  if (isObject(value)) return '{' + Object.keys(value).sort()
+    .map((k) => JSON.stringify(k) + ':' + canonicalSnapshot(value[k])).join(',') + '}';
+  return JSON.stringify(value);
+}
+export async function verifyPiOutboxSnapshotDigest(raw) {
+  if (raw?.schema !== PI_OUTBOX_ENVELOPE_SCHEMA) return true;
+  const record = raw?.record;
+  if (!record || !isObject(record.snapshot)
+      || typeof record.snapshot_sha256 !== 'string') {
+    reject('pi_outbox_snapshot_digest_rejected');
+  }
+  const bytes = new TextEncoder().encode(canonicalSnapshot(record.snapshot));
+  const hashed = await crypto.subtle.digest('SHA-256', bytes);
+  const actual = [...new Uint8Array(hashed)]
+    .map((b) => b.toString(16).padStart(2, '0')).join('');
+  if (actual !== record.snapshot_sha256) reject('pi_outbox_snapshot_digest_rejected');
+  return true;
+}
+
 export function piOperatorView(record, now = Date.now()) {
   const input = validatePiObservationEnvelope(record.envelope, now);
   return { schema: 'mmibkr.pi_account_operator_view.v1', node_id: 'cc-pi4',
