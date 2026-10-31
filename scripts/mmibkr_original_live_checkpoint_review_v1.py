@@ -75,11 +75,6 @@ def _validate_exact_context(meta: dict) -> None:
 def classify_authenticated_archive(raw: bytes, successor_run_id: str) -> dict:
     if _sha(raw) != EXPECTED_RAW_SHA256:
         raise ValueError("historical_plaintext_sha256_mismatch")
-    paths = set()
-    with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as archive:
-        for member in archive.getmembers():
-            if member.isfile():
-                paths.add(member.name)
     return {
         "schema": SCHEMA,
         "historical_producer_run": RUN_ID,
@@ -87,8 +82,6 @@ def classify_authenticated_archive(raw: bytes, successor_run_id: str) -> dict:
         "selected_pi_source_sha": EXPECTED_SELECTED_SOURCE,
         "consumer_run_id": successor_run_id,
         "authenticated_aes_gcm": True,
-        "authenticated_plaintext_sha256": EXPECTED_RAW_SHA256,
-        "found_historical_state": {name: path in paths for name, path in OBSERVED_FIELDS.items()},
         "historical_gateway_tree_must_not_be_restored": True,
         "historical_live_policy_cannot_be_imported_directly": True,
         "postincident_broker_history_reconciliation_required": True,
@@ -138,7 +131,6 @@ def main() -> int:
         ciphertext, envelope = seal_quarantine(authenticated_plaintext, args.recipient_public_b64, args.consumer_run_id)
         write_capsule(args.capsule_dir, ciphertext, envelope)
         result["recipient_botdata_quarantine_ciphertext_created"] = True
-        result["recipient_key_id"] = envelope["recipient_key_id"]
         # Sanitized allowlist only, exclusive creation; never write raw/key.
         fd = os.open(args.output, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as fp:
