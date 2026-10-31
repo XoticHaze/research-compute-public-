@@ -37,11 +37,34 @@ jobs:
           mkdir -p "$RUNNER_TEMP/original-checkpoint-review"
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 90 \
             "$base/checkpoint.enc" -o "$RUNNER_TEMP/original-checkpoint-review/checkpoint.enc"
-          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 30 \
-            "$base/manifest.json" -o "$RUNNER_TEMP/original-checkpoint-review/manifest.json"
           test "$(wc -c < "$RUNNER_TEMP/original-checkpoint-review/checkpoint.enc" | tr -d ' ')" = 33560349
           echo 'MMIBKR_PINNED_ENCRYPTED_INPUT_ACQUIRED=1'
-      - name: Authenticate checkpoint in memory and publish only sanitized presence flags
+      - name: Materialize exact original manifest only from protected GitHub secret
+        env:
+          ORIGINAL_MANIFEST_B64: ${{ secrets.MMIBKR_ORIGINAL_CHECKPOINT_39499524894_MANIFEST_B64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PYCODE'
+          import base64, os
+          from pathlib import Path
+          value=os.environ.get('ORIGINAL_MANIFEST_B64') or ''
+          if not value or len(value)>16384:
+              raise SystemExit('PROTECTED_HISTORICAL_MANIFEST_MISSING_OR_OVERSIZED')
+          try:
+              original=base64.b64decode(value,validate=True)
+          except Exception:
+              raise SystemExit('PROTECTED_HISTORICAL_MANIFEST_INVALID_ENCODING')
+          if not 0<len(original)<=8192:
+              raise SystemExit('PROTECTED_HISTORICAL_MANIFEST_INVALID_LENGTH')
+          dest=Path(os.environ['RUNNER_TEMP'])/'original-checkpoint-review'/'manifest.json'
+          with dest.open('xb') as out:
+              out.write(original)
+          dest.chmod(0o600)
+          print('MMIBKR_PRIVATE_MANIFEST_PRESENT=1')
+          PYCODE
+      - name: Authenticate checkpoint in memory and return bounded encrypted quarantine
         env:
           MMIBKR_LIVE_GATEWAY_WARM_KEY_B64: ${{ secrets.MMIBKR_LIVE_GATEWAY_WARM_KEY_B64 }}
           PI_RECIPIENT_PUBLIC_B64: ${{ vars.MMIBKR_PI_RECIPIENT_PUBLIC_B64 }}
