@@ -35,6 +35,13 @@ rejected(()=>validatePiAccountObservation({...fixture(),observed_at:'2026-10-31T
 rejected(()=>validatePiAccountObservation({...fixture(),observed_at:'2026-10-31T12:59:00'},now));
 rejected(()=>validatePiAccountObservation({...fixture(),expected_account_symbol_position_counts:{AMAT:9,APH:2,MNQ:1,OTHER:0}},now));
 rejected(()=>validatePiAccountObservation({...fixture(),expected_account_position_count:5},now));
+// The actual root-owned Pi reader requires a single, fully attributed account.
+// Do not weaken its sole-account provenance at the public ingest boundary.
+rejected(()=>validatePiAccountObservation({...fixture(),managed_account_count:2},now));
+rejected(()=>validatePiAccountObservation({...fixture(),foreign_account_record_count:1},now));
+rejected(()=>validatePiAccountObservation({...fixture(),unattributed_record_count:1},now));
+rejected(()=>validatePiAccountObservation({...fixture(),expected_account_position_count:3,
+  expected_account_symbol_position_counts:{AMAT:1,APH:1,MNQ:1,OTHER:0}},now));
 rejected(()=>validatePiAccountObservation({...fixture(),expected_account_position_count:NaN},now));
 rejected(()=>validatePiObservationEnvelope({...envelope(),node_id:'other'},now));
 rejected(()=>validatePiObservationEnvelope({...envelope(),result_commit_sha:'bad'},now));
