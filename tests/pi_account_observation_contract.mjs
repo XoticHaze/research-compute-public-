@@ -75,3 +75,60 @@ assert.equal(nextPiReplayLedger(replayLedger,replaySecond,replayNow+1).entries.l
 assert.throws(()=>nextPiReplayLedger({schema:'wrong',entries:[]},replayFirst,replayNow),/pi_replay_ledger_invalid/);
 assert.equal(nextPiReplayLedger(null,{request_id:'ccpi:read:20261031',result_commit_sha:'c'.repeat(40)},replayNow).entries.length,1);
 assert.throws(()=>nextPiReplayLedger(null,{request_id:'../path',result_commit_sha:'d'.repeat(40)},replayNow),/pi_replay_identity_invalid/);
+
+ 
+// A root-approved periodic snapshot is a DISTINCT immutable-outbox producer.
+// It must never be relabeled as a typed request, and never inherit broker rights.
+function outboxEnvelope() {
+  const digest = 'f'.repeat(64);
+  const observationId = 'piobs-20261031125930-' + digest.slice(0,16);
+  return {
+    schema: 'mmibkr.pi_account_observation_envelope.v2',
+    node_id: 'cc-pi4',
+    producer_kind: 'root_approved_existing_agent_snapshot_reader',
+    observation_id: observationId,
+    source_path: 'pi-node/observations/' + observationId + '.json',
+    result_commit_sha: 'e'.repeat(40),
+    record: {
+      schema: 'commandcenter.pi.account_observation_outbox.v1',
+      node_id: 'cc-pi4',
+      observation_id: observationId,
+      observed_at: fixture().observed_at,
+      snapshot_sha256: digest,
+      snapshot: fixture(),
+      producer: 'root_approved_existing_agent_snapshot_reader',
+      read_only: true,
+      broker_mutation_attempted: false,
+    },
+  };
+}
+const outbox = outboxEnvelope();
+const normalizedOutbox = validatePiObservationEnvelope(outbox,now);
+assert.equal(normalizedOutbox.observation.expected_account_position_count,4);
+assert.equal(normalizedOutbox.observation_id,outbox.observation_id);
+assert.equal(normalizedOutbox.command,undefined);
+assert.equal(normalizedOutbox.request_id,undefined);
+const outboxView=piOperatorView({envelope:outbox,stored_at_utc:'2026-10-31T13:00:00Z'},now);
+assert.equal(outboxView.source,'root_observation_outbox');
+assert.equal(outboxView.strategy_authority,false);
+assert.equal(outboxView.live_execution_allowed,false);
+assert.equal(outboxView.canonical_execution_writer_verified,false);
+const outboxReplay=nextPiReplayLedger(null,normalizedOutbox,now);
+assert.equal(outboxReplay.entries[0].request_id,'outbox:'+outbox.observation_id);
+assert.throws(()=>nextPiReplayLedger(outboxReplay,normalizedOutbox,now+1),/pi_replay_detected/);
+assert.throws(()=>nextPiReplayLedger(outboxReplay,validatePiObservationEnvelope({
+  ...outbox, observation_id:'piobs-20261031125931-'+outbox.record.snapshot_sha256.slice(0,16),
+  source_path:'pi-node/observations/piobs-20261031125931-'+outbox.record.snapshot_sha256.slice(0,16)+'.json',
+  record:{...outbox.record,observation_id:'piobs-20261031125931-'+outbox.record.snapshot_sha256.slice(0,16)},
+},now),now+1),/pi_replay_detected/);
+rejected(()=>validatePiObservationEnvelope({...outbox,command:'pi.ibkr_account_readonly'},now));
+rejected(()=>validatePiObservationEnvelope({...outbox,request_id:'fake-command'},now));
+rejected(()=>validatePiObservationEnvelope({...outbox,source_path:'pi-node/results/fake.json'},now));
+rejected(()=>validatePiObservationEnvelope({...outbox,producer_kind:'pi.ibkr_account_readonly'},now));
+rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,producer:'unapproved'}},now));
+rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,read_only:false}},now));
+rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,snapshot_sha256:'0'.repeat(64)}},now));
+rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,observed_at:'2026-10-31T12:00:00+00:00'}},now));
+rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,snapshot:{...fixture(),account:'DUXXXX'}}},now));
+rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,snapshot:{...fixture(),observed_at:'2026-10-31T12:50:00+00:00'}}},now));
+console.log('Pi immutable root-outbox contract: producer separation, replay and fail-close verified');
