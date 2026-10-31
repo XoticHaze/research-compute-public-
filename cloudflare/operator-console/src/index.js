@@ -1170,7 +1170,7 @@ export default {
       '/operator/promotion-review',
     ]);
     const staticAssetPath = url.pathname.startsWith('/assets/')
-      || /^\\/[^/]+\\.(?:ico|svg|png|webp|jpe?g|gif|webmanifest|txt|js|css|woff2?|ttf)$/.test(url.pathname);
+      || /\.(?:ico|svg|png|webp|jpe?g|gif|webmanifest|txt|js|css|woff2?|ttf)$/.test(url.pathname);
     if (!dedicatedBrowserRoutes.has(url.pathname) && !staticAssetPath) {
       return json({ error: 'operator_browser_route_not_supported' }, 404);
     }
