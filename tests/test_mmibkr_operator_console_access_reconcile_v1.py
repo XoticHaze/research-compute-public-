@@ -42,6 +42,18 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertIn("publisher_status != 401", text)
         self.assertIn("MMIBKR_OPERATOR_CONSOLE_PUBLISHER_UNAUTHENTICATED_DENIED=1", text)
 
+    def test_pi_observation_ingress_is_path_scoped_and_denies_anonymous_at_worker(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("pi_publisher_domain = hostname + '/v1/pi-account-observation'", text)
+        self.assertIn("'name': pi_publisher_app_name", text)
+        self.assertIn("'domain': pi_publisher_domain", text)
+        self.assertIn("'id': publisher_policy_id", text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_PI_PUBLISHER_INGRESS=OIDC_WORKER_GATED_NOT_ADMITTED", text)
+        self.assertIn("pi_publisher_status != 401", text)
+        self.assertIn("unauthenticated Pi publisher path did not reach Worker OIDC gate", text)
+        self.assertLess(text.index("existing_pi_publisher_app = next("),
+                        text.index("Deploy locked operator-console Worker and private static assets"))
+
     def test_reader_path_is_specific_bypass_with_worker_oidc_gate(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("MM-IBKR Operator Snapshot Reader", text)
