@@ -51,4 +51,4 @@ for(const key of ['managed_account_count','position_count_all_managed','open_ord
   'expected_account_recent_execution_count','unattributed_record_count','foreign_account_record_count',
   'expected_account_symbol_position_counts','expected_account_symbol_open_order_counts']) blocked[key]=null;
 assert.equal(validatePiAccountObservation(blocked,now).status,'blocked');
-console.log('pi account observation contract: 22 assertions passed');
+console.log('pi account observation contract: bounded source assertions passed');
