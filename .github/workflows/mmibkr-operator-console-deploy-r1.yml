@@ -320,6 +320,8 @@ jobs:
           publisher_app_name = 'MM-IBKR Operator Snapshot Publisher'
           publisher_policy_name = 'MM-IBKR operator snapshot OIDC ingress'
           publisher_domain = hostname + '/v1/operator-snapshot'
+          pi_publisher_app_name = 'MM-IBKR Pi Account Observation Publisher'
+          pi_publisher_domain = hostname + '/v1/pi-account-observation'
           promotion_publisher_app_name = 'MM-IBKR Promotion Candidate Publisher'
           promotion_publisher_domain = hostname + '/v1/promotion-candidates'
           reader_app_name = 'MM-IBKR Operator Snapshot Reader'
@@ -570,6 +572,50 @@ jobs:
           if not publisher_app_id:
               raise SystemExit('Cloudflare publisher path app id missing')
 
+          # The Pi machine ingress is a distinct path-scoped Access application.
+          # Access bypass is only transport to the Worker; its exact GitHub-OIDC
+          # workflow-ref check still denies all callers until the independently
+          # admitted Pi bridge exists. Never expand the human or paper API routes.
+          existing_pi_publisher_app = next(
+              (
+                  row for row in apps
+                  if isinstance(row, dict)
+                  and (
+                      row.get('name') == pi_publisher_app_name
+                      or row.get('domain') == pi_publisher_domain
+                  )
+              ),
+              None,
+          )
+          pi_publisher_app_body = {
+              'name': pi_publisher_app_name,
+              'domain': pi_publisher_domain,
+              'type': 'self_hosted',
+              'session_duration': '24h',
+              'app_launcher_visible': False,
+              'policies': [{
+                  'id': publisher_policy_id,
+                  'account_id': account,
+                  'precedence': 1,
+              }],
+          }
+          if existing_pi_publisher_app:
+              pi_publisher_app_id = str(existing_pi_publisher_app.get('id') or '')
+              pi_publisher_app = api(
+                  'PUT',
+                  f'/accounts/{account}/access/apps/{pi_publisher_app_id}',
+                  pi_publisher_app_body,
+              )
+          else:
+              pi_publisher_app = api(
+                  'POST',
+                  f'/accounts/{account}/access/apps',
+                  pi_publisher_app_body,
+              )
+          pi_publisher_app_id = str((pi_publisher_app or {}).get('id') or '')
+          if not pi_publisher_app_id:
+              raise SystemExit('Cloudflare Pi publisher path app id missing')
+
           existing_reader_app = next(
               (
                   row for row in apps
@@ -698,6 +744,8 @@ jobs:
           print('MMIBKR_OPERATOR_CONSOLE_ACCESS_EMAIL_COUNT=' + str(len(emails)))
           print('MMIBKR_OPERATOR_CONSOLE_PUBLISHER_INGRESS=OIDC_WORKER_GATED')
           print('MMIBKR_OPERATOR_CONSOLE_PUBLISHER_PATH=/v1/operator-snapshot')
+          print('MMIBKR_OPERATOR_CONSOLE_PI_PUBLISHER_INGRESS=OIDC_WORKER_GATED_NOT_ADMITTED')
+          print('MMIBKR_OPERATOR_CONSOLE_PI_PUBLISHER_PATH=/v1/pi-account-observation')
           print('MMIBKR_OPERATOR_CONSOLE_PROMOTION_PUBLISHER_INGRESS=OIDC_WORKER_GATED')
           print('MMIBKR_OPERATOR_CONSOLE_PROMOTION_PUBLISHER_PATH=/v1/promotion-candidates')
           print('MMIBKR_OPERATOR_CONSOLE_READER_INGRESS=OIDC_WORKER_GATED')
