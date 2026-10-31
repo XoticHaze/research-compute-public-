@@ -70,6 +70,30 @@ class OriginalReadonlyReview(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "public_encrypted_ciphertext_operator_approval_missing"):
                     p.publish(b"nothing", b"nothing")
 
+    def test_protected_manifest_input_never_public_vault(self):
+        source=(ROOT / 'scripts/operator/mmibkr_original_checkpoint_vault_publish_macos_v1.py').read_text()
+        workflow=(ROOT / '.github/workflows/mmibkr-original-live-checkpoint-review-r1.yml').read_text()
+        self.assertIn("PROTECTED_MANIFEST_SECRET",source)
+        self.assertIn("['gh', 'secret', 'set', PROTECTED_MANIFEST_SECRET",source)
+        self.assertIn("input=encoded",source)
+        self.assertNotIn("(target / 'manifest.json').write_bytes(manifest)",source)
+        self.assertIn("[DEST + '/checkpoint.enc']",source)
+        self.assertNotIn('"$base/manifest.json"',workflow)
+        self.assertIn('secrets.MMIBKR_ORIGINAL_CHECKPOINT_39499524894_MANIFEST_B64',workflow)
+        self.assertIn("base64.b64decode(value,validate=True)",workflow)
+        self.assertNotIn('env | sort',workflow)
+
+    def test_protected_manifest_failure_prevents_ciphertext_push(self):
+        p=self.publisher
+        fake=types.SimpleNamespace(returncode=1)
+        with patch.dict(os.environ,{p.CONSENT:'YES_AFTER_SECURITY_REVIEW'}):
+            with patch.object(p,'cmd',return_value='true') as shell:
+                with patch.object(p.subprocess,'run',return_value=fake) as secret:
+                    with self.assertRaisesRegex(RuntimeError,'protected_secret_registration_failed'):
+                        p.publish(b'ciphertext',b'PRIVATE_ORIGINAL_MANIFEST')
+                    self.assertEqual(secret.call_args.kwargs['input'],__import__('base64').b64encode(b'PRIVATE_ORIGINAL_MANIFEST').decode())
+                    self.assertEqual(shell.call_count,1)
+
     def test_vault_publisher_binds_exact_original_archive(self):
         p=self.publisher
         self.assertEqual(p.ZIP_SHA, "13029f3f99fb4023e34540a34ad162ca9b165cd669b24066ac5672dfcc72f8ad")
