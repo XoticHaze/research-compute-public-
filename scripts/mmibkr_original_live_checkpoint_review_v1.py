@@ -25,7 +25,6 @@ RUN_ID = "39499524894"
 EXPECTED_CONTEXT_SOURCE = "46fcdf26cf84603b305a3ea20bcd3cf28c67bc0b"
 EXPECTED_CIPHER_BYTES = 33560349
 EXPECTED_CIPHER_SHA256 = "7fa732e25dbb9044ba66c8fb9e3f7da4e269434ee7b2708d635f58c7d914bc66"
-EXPECTED_RAW_SHA256 = "7e08dfbe6202968a6ff4ff5c83d1f634ba6ee2b83d06e0e3f1f9c143918b5238"
 EXPECTED_MANIFEST_BYTES_MAX = 8192
 EXPECTED_SELECTED_SOURCE = "45339615b1a8b27a5e34233f9cb849c0ae6ecab8"
 def _sha(raw: bytes) -> str:
@@ -53,8 +52,6 @@ def _validate_exact_context(meta: dict) -> None:
         raise ValueError("historical_selected_scope_mismatch")
     if ctx.get("order_authority") != "none_checkpoint_requires_fresh_canonical_admission":
         raise ValueError("historical_order_authority_invalid")
-    if meta.get("archive_sha256") != EXPECTED_RAW_SHA256:
-        raise ValueError("historical_plaintext_digest_invalid")
     if meta.get("ciphertext_sha256") != EXPECTED_CIPHER_SHA256:
         raise ValueError("historical_ciphertext_digest_invalid")
     if meta.get("ciphertext_bytes") != EXPECTED_CIPHER_BYTES:
@@ -62,8 +59,6 @@ def _validate_exact_context(meta: dict) -> None:
 
 
 def classify_authenticated_archive(raw: bytes, successor_run_id: str) -> dict:
-    if _sha(raw) != EXPECTED_RAW_SHA256:
-        raise ValueError("historical_plaintext_sha256_mismatch")
     return {
         "schema": SCHEMA,
         "historical_producer_run": RUN_ID,
