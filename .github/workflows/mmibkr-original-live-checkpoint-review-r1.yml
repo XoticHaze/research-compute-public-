@@ -44,22 +44,29 @@ jobs:
       - name: Authenticate checkpoint in memory and publish only sanitized presence flags
         env:
           MMIBKR_LIVE_GATEWAY_WARM_KEY_B64: ${{ secrets.MMIBKR_LIVE_GATEWAY_WARM_KEY_B64 }}
+          PI_RECIPIENT_PUBLIC_B64: ${{ vars.MMIBKR_PI_RECIPIENT_PUBLIC_B64 }}
         shell: bash
         run: |
           set -euo pipefail
           umask 077
           test -n "$MMIBKR_LIVE_GATEWAY_WARM_KEY_B64"
+          test -n "$PI_RECIPIENT_PUBLIC_B64"
           python -m scripts.mmibkr_original_live_checkpoint_review_v1 \
             --ciphertext "$RUNNER_TEMP/original-checkpoint-review/checkpoint.enc" \
             --manifest "$RUNNER_TEMP/original-checkpoint-review/manifest.json" \
             --consumer-run-id "$GITHUB_RUN_ID" \
+            --recipient-public-b64 "$PI_RECIPIENT_PUBLIC_B64" \
+            --capsule-dir "$RUNNER_TEMP/original-checkpoint-review/sealed-botdata" \
             --output "$RUNNER_TEMP/original-checkpoint-review/sanitized.json"
           test -s "$RUNNER_TEMP/original-checkpoint-review/sanitized.json"
-      - name: Return bounded sanitized no-admission audit only
+      - name: Return sanitized audit and recipient-encrypted botdata quarantine only
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: mmibkr-original-checkpoint-readonly-${{ github.run_id }}
-          path: ${{ runner.temp }}/original-checkpoint-review/sanitized.json
+          path: |
+            ${{ runner.temp }}/original-checkpoint-review/sanitized.json
+            ${{ runner.temp }}/original-checkpoint-review/sealed-botdata/ciphertext.bin
+            ${{ runner.temp }}/original-checkpoint-review/sealed-botdata/envelope.json
           if-no-files-found: error
           retention-days: 1
       - name: Delete ciphertext and classified output from ephemeral runner
