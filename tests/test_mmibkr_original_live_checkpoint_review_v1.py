@@ -122,7 +122,7 @@ class CapsuleRoundtrip(unittest.TestCase):
                 tf.addfile(ti, io.BytesIO(value))
         recipient=x25519.X25519PrivateKey.generate()
         public=recipient.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)
-        body,env=seal_quarantine(buf.getvalue(),base64.b64encode(public).decode(),'41159917178')
+        body,env=seal_quarantine(buf.getvalue(),base64.b64encode(public).decode(),'41159917178','sha256:'+hashlib.sha256(public).hexdigest())
         fields={k:env[k] for k in ('schema','producer_run','historical_source_sha','selected_pi_source_sha','consumer_run','recipient_key_id','root_import_authorized','live_submission_authorized','gateway_excluded')}
         aad=json.dumps(fields,sort_keys=True,separators=(',',':')).encode()
         ephemeral=x25519.X25519PublicKey.from_public_bytes(base64.b64decode(env['sender_public_b64']))
@@ -189,7 +189,7 @@ class CapsuleRoundtrip(unittest.TestCase):
             payload=b'SECRET_PRIVATE_SENTINEL_DATA_XOTIC'
             member=tarfile.TarInfo('bot_data/secret.txt'); member.size=len(payload)
             tf.addfile(member,io.BytesIO(payload))
-        ciphertext,envelope=seal_quarantine(raw.getvalue(),pub,'41159917178')
+        ciphertext,envelope=seal_quarantine(raw.getvalue(),pub,'41159917178','sha256:'+__import__('hashlib').sha256(base64.b64decode(pub)).hexdigest())
         public=__import__('json').dumps(envelope,sort_keys=True).encode()
         for forbidden in ('plaintext_sha256','plaintext_bytes','botdata_file_count','found_historical_state', 'recipient_public_fingerprint'):
             self.assertNotIn(forbidden, envelope)
@@ -238,3 +238,18 @@ class CapsuleRoundtrip(unittest.TestCase):
         self.assertEqual(set(receipt),allowed)
         self.assertFalse(receipt['live_order_submit_allowed'])
         self.assertFalse(receipt['no_submit_bot_start_allowed'])
+
+    def test_unapproved_recipient_fails_before_crypto_publish(self):
+        import base64,hashlib,io,tarfile
+        from cryptography.hazmat.primitives.asymmetric import x25519
+        from cryptography.hazmat.primitives import serialization
+        from scripts.mmibkr_original_checkpoint_botdata_capsule_v1 import seal_quarantine
+        key=x25519.X25519PrivateKey.generate()
+        pub=base64.b64encode(key.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)).decode()
+        tar=io.BytesIO()
+        with tarfile.open(fileobj=tar,mode='w:gz') as f:
+            m=tarfile.TarInfo('bot_data/ledger.json');m.size=2;f.addfile(m,io.BytesIO(b'{}'))
+        with self.assertRaisesRegex(ValueError,'pi_recipient_public_key_unapproved'):
+            seal_quarantine(tar.getvalue(),pub,'41159917178','sha256:'+'0'*64)
+        with self.assertRaisesRegex(ValueError,'approved_pi_recipient_key_id_missing_or_invalid'):
+            seal_quarantine(tar.getvalue(),pub,'41159917178','')
