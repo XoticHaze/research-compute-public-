@@ -1161,6 +1161,22 @@ export default {
       return json({ error: 'operator_api_not_supported' }, 404);
     }
 
+    // This Access-locked Worker is NOT the full /markets React application.
+    // Cloudflare static-asset SPA fallback must not serve a convincing 200
+    // for unsupported full-app or invented browser navigation routes.
+    const dedicatedBrowserRoutes = new Set([
+      '/bot-console',
+      '/operator/forward-execution',
+      '/operator/promotion-review',
+    ]);
+    const staticAssetPath = url.pathname.startsWith('/assets/')
+      || /^\\/[^/]+\\.(?:ico|svg|png|webp|jpe?g|gif|webmanifest|txt|js|css|woff2?|ttf)$/.test(url.pathname);
+    if (!dedicatedBrowserRoutes.has(url.pathname) && !staticAssetPath) {
+      return json({ error: 'operator_browser_route_not_supported' }, 404);
+    }
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      return json({ error: 'operator_browser_method_not_supported' }, 405);
+    }
     if (!env.ASSETS) return json({ error: 'static_assets_not_deployed' }, 503);
     return secureAssetResponse(await env.ASSETS.fetch(request));
   },
