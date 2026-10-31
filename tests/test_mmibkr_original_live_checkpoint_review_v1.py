@@ -4,6 +4,7 @@ import importlib.util
 import sys
 import types
 from pathlib import Path
+from unittest.mock import patch
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,11 +19,10 @@ class OriginalReadonlyReview(unittest.TestCase):
         gateway.read_master = lambda: b"x" * 32
         codec = types.ModuleType("scripts.mmibkr_live_runtime_checkpoint_v1")
         codec.unseal = lambda *args: (_ for _ in ()).throw(AssertionError("unseal_unexpected"))
-        sys.modules[gateway.__name__] = gateway
-        sys.modules[codec.__name__] = codec
-        spec = importlib.util.spec_from_file_location("original_readonly_review", SCRIPT)
-        cls.mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(cls.mod)
+        with patch.dict(sys.modules, {gateway.__name__: gateway, codec.__name__: codec}):
+            spec = importlib.util.spec_from_file_location("original_readonly_review", SCRIPT)
+            cls.mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(cls.mod)
 
     def test_exact_immutable_source_digest(self):
         m = self.mod
