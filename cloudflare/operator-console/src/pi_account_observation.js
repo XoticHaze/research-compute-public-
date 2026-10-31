@@ -52,9 +52,12 @@ export function validatePiAccountObservation(raw, now = Date.now()) {
         || ![...TOTALS, ...SCOPED, 'unattributed_record_count'].every((k) => boundedCount(raw[k]))
         || !groupsValid(raw.expected_account_symbol_position_counts, raw.expected_account_position_count)
         || !groupsValid(raw.expected_account_symbol_open_order_counts, raw.expected_account_open_order_count)
-        || raw.expected_account_position_count > raw.position_count_all_managed
-        || raw.expected_account_open_order_count > raw.open_order_count_all_managed
-        || raw.expected_account_recent_execution_count > raw.recent_execution_count_all_managed) {
+        || raw.managed_account_count !== 1
+        || raw.unattributed_record_count !== 0
+        || raw.foreign_account_record_count !== 0
+        || raw.expected_account_position_count !== raw.position_count_all_managed
+        || raw.expected_account_open_order_count !== raw.open_order_count_all_managed
+        || raw.expected_account_recent_execution_count !== raw.recent_execution_count_all_managed) {
       reject('pi_account_scope_rejected');
     }
   } else if (raw.status === 'readback_complete_unbound') {
