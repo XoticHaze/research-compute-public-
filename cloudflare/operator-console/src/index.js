@@ -6,6 +6,7 @@ import {
   validatePromotionCandidateSnapshot,
 } from './promotion_review_state.js';
 import { validatePiObservationEnvelope, piOperatorView } from './pi_account_observation.js';
+import { nextPiReplayLedger } from './pi_replay_ledger.js';
 
 const GITHUB_ISSUER = 'https://token.actions.githubusercontent.com';
 const GITHUB_JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwks';
@@ -716,6 +717,14 @@ export class OperatorState {
         return json({ error: 'pi_observation_rejected' }, 400);
       }
       const result = await this.ctx.storage.transaction(async (txn) => {
+        // Request-id and Git-commit replay are checked atomically with the state write.
+        // A malformed/full ledger fails closed; a caller cannot reset it.
+        let replayLedger;
+        try {
+          replayLedger = nextPiReplayLedger(await txn.get('pi_replay_ledger'), envelope, Date.now());
+        } catch {
+          return { rejected: 'pi_observation_replay_or_ledger_held' };
+        }
         const prior = await txn.get('pi_account_latest');
         const currentTime = Date.parse(envelope.observation.observed_at);
         const priorTime = Date.parse(prior?.envelope?.observation?.observed_at || '');
@@ -726,13 +735,19 @@ export class OperatorState {
           schema: 'mmibkr.pi_account_store.v1', write_id: crypto.randomUUID(),
           stored_at_utc: new Date().toISOString(), envelope,
         };
+        await txn.put('pi_replay_ledger', replayLedger);
         await txn.put('pi_account_latest', record);
         return { record };
       });
-      if (result.rejected) return json({ error: 'pi_observation_out_of_order' }, 409);
+      if (result.rejected) return json({ error: result.rejected === true
+        ? 'pi_observation_out_of_order' : result.rejected }, 409);
       const observed = await this.ctx.storage.get('pi_account_latest');
+      const seen = await this.ctx.storage.get('pi_replay_ledger');
       if (!observed || observed.write_id !== result.record.write_id
-          || observed.envelope?.result_commit_sha !== envelope.result_commit_sha) {
+          || observed.envelope?.result_commit_sha !== envelope.result_commit_sha
+          || !Array.isArray(seen?.entries)
+          || !seen.entries.some(row => row.request_id === envelope.request_id
+            && row.result_commit_sha === envelope.result_commit_sha)) {
         return json({ error: 'pi_observation_readback_failed' }, 502);
       }
       return json({ ok: true, durable_readback_verified: true,

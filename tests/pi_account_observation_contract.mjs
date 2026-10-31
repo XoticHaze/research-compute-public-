@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {validatePiAccountObservation,validatePiObservationEnvelope,piOperatorView} from '../cloudflare/operator-console/src/pi_account_observation.js';
+import {nextPiReplayLedger} from '../cloudflare/operator-console/src/pi_replay_ledger.js';
 const now=Date.parse('2026-10-31T13:00:00.000Z');
 function fixture() {
   return {schema:'commandcenter.pi.ibkr_account_readonly_snapshot.v1',node_id:'cc-pi4',
@@ -52,3 +53,16 @@ for(const key of ['managed_account_count','position_count_all_managed','open_ord
   'expected_account_symbol_position_counts','expected_account_symbol_open_order_counts']) blocked[key]=null;
 assert.equal(validatePiAccountObservation(blocked,now).status,'blocked');
 console.log('pi account observation contract: bounded source assertions passed');
+
+// A duplicate request or private Git commit cannot be accepted by the durable
+// state writer merely by changing the caller-supplied observation timestamp.
+const replayFirst={request_id:'ccpi-read-20261031',result_commit_sha:'a'.repeat(40)};
+const replaySecond={request_id:'ccpi-read-20261031-next',result_commit_sha:'b'.repeat(40)};
+const replayNow=1793455200000;
+const replayLedger=nextPiReplayLedger(null,replayFirst,replayNow);
+assert.equal(replayLedger.entries.length,1);
+assert.throws(()=>nextPiReplayLedger(replayLedger,replayFirst,replayNow+1),/pi_replay_detected/);
+assert.throws(()=>nextPiReplayLedger(replayLedger,{...replaySecond,result_commit_sha:replayFirst.result_commit_sha},replayNow+1),/pi_replay_detected/);
+assert.throws(()=>nextPiReplayLedger(replayLedger,{...replaySecond,request_id:replayFirst.request_id},replayNow+1),/pi_replay_detected/);
+assert.equal(nextPiReplayLedger(replayLedger,replaySecond,replayNow+1).entries.length,2);
+assert.throws(()=>nextPiReplayLedger({schema:'wrong',entries:[]},replayFirst,replayNow),/pi_replay_ledger_invalid/);
