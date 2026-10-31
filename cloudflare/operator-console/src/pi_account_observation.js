@@ -2,6 +2,9 @@
 // This is operator observability, never a broker, strategy, or submit authority.
 export const PI_ACCOUNT_SCHEMA = 'commandcenter.pi.ibkr_account_readonly_snapshot.v1';
 export const PI_ENVELOPE_SCHEMA = 'mmibkr.pi_account_observation_envelope.v1';
+// A root-approved periodic outbox snapshot is NOT a typed-command ACK.
+export const PI_OUTBOX_ENVELOPE_SCHEMA = 'mmibkr.pi_account_observation_envelope.v2';
+export const PI_OUTBOX_RECORD_SCHEMA = 'commandcenter.pi.account_observation_outbox.v1';
 export const MAX_PI_OBSERVATION_AGE_MS = 420000;
 const KEYS = ['schema','node_id','observed_at','read_only','broker_mutation_attempted',
   'historical_fills_complete','canonical_execution_writer_verified','account_numbers_emitted',
@@ -80,24 +83,77 @@ export function validatePiAccountObservation(raw, now = Date.now()) {
   return Object.fromEntries(KEYS.map((k) => [k, raw[k]]));
 }
 export function validatePiObservationEnvelope(input, now = Date.now()) {
-  const keys = ['schema','node_id','command','request_id','result_commit_sha','observation'];
-  if (!exactKeys(input, keys) || input.schema !== PI_ENVELOPE_SCHEMA
-      || input.node_id !== 'cc-pi4' || input.command !== 'pi.ibkr_account_readonly'
-      || typeof input.request_id !== 'string'
-      || !/^[A-Za-z0-9._:-]{6,100}$/.test(input.request_id)
+  const typedKeys = ['schema','node_id','command','request_id','result_commit_sha','observation'];
+  const outboxKeys = ['schema','node_id','producer_kind','observation_id',
+    'source_path','result_commit_sha','record'];
+  if (!isObject(input) || input.node_id !== 'cc-pi4'
       || typeof input.result_commit_sha !== 'string'
       || !/^[a-f0-9]{40}$/.test(input.result_commit_sha)) {
     reject('pi_observation_envelope_rejected');
   }
-  return { schema: PI_ENVELOPE_SCHEMA, node_id: 'cc-pi4',
-    command: input.command, request_id: input.request_id,
-    result_commit_sha: input.result_commit_sha,
-    observation: validatePiAccountObservation(input.observation, now) };
+  if (input.schema === PI_ENVELOPE_SCHEMA) {
+    if (!exactKeys(input, typedKeys) || input.command !== 'pi.ibkr_account_readonly'
+        || typeof input.request_id !== 'string'
+        || !/^[A-Za-z0-9._:-]{6,100}$/.test(input.request_id)) {
+      reject('pi_observation_typed_identity_rejected');
+    }
+    return { schema: PI_ENVELOPE_SCHEMA, node_id: 'cc-pi4',
+      command: input.command, request_id: input.request_id,
+      result_commit_sha: input.result_commit_sha,
+      observation: validatePiAccountObservation(input.observation, now) };
+  }
+  if (input.schema === PI_OUTBOX_ENVELOPE_SCHEMA) {
+    // This verifies bounded shape only. Source authentication, exact Git commit
+    // provenance, root approval and issuer replay MUST be independently verified
+    // before a trusted OIDC publisher invokes the existing ingestion endpoint.
+    const producer = 'root_approved_existing_agent_snapshot_reader';
+    const recordKeys = ['schema','node_id','observation_id','observed_at',
+      'snapshot_sha256','snapshot','producer','read_only','broker_mutation_attempted'];
+    if (!exactKeys(input, outboxKeys)
+        || input.producer_kind !== producer
+        || typeof input.observation_id !== 'string'
+        || !/^piobs-\d{14}-[a-f0-9]{16}$/.test(input.observation_id)
+        || input.source_path !== `pi-node/observations/${input.observation_id}.json`
+        || !exactKeys(input.record, recordKeys)
+        || input.record.schema !== PI_OUTBOX_RECORD_SCHEMA
+        || input.record.node_id !== 'cc-pi4'
+        || input.record.observation_id !== input.observation_id
+        || input.record.producer !== producer
+        || input.record.read_only !== true
+        || input.record.broker_mutation_attempted !== false
+        || typeof input.record.snapshot_sha256 !== 'string'
+        || !/^[a-f0-9]{64}$/.test(input.record.snapshot_sha256)
+        || !input.record.observation_id.endsWith(input.record.snapshot_sha256.slice(0,16))) {
+      reject('pi_observation_outbox_identity_rejected');
+    }
+    const clean = validatePiAccountObservation(input.record.snapshot, now);
+    if (input.record.observed_at !== clean.observed_at) {
+      reject('pi_observation_outbox_timestamp_rejected');
+    }
+    return { schema: PI_OUTBOX_ENVELOPE_SCHEMA, node_id:'cc-pi4',
+      producer_kind:producer, observation_id:input.observation_id,
+      source_path:input.source_path, result_commit_sha:input.result_commit_sha,
+      observation:clean };
+  }
+  reject('pi_observation_envelope_kind_rejected');
 }
+
+// The internal replay ledger key is NOT a fabricated typed request ID.
+// The two genuine producer namespaces cannot impersonate one another.
+export function piReplayIdentity(envelope) {
+  if (envelope?.schema === PI_ENVELOPE_SCHEMA) return envelope.request_id;
+  if (envelope?.schema === PI_OUTBOX_ENVELOPE_SCHEMA) {
+    return `outbox:${envelope.observation_id}`;
+  }
+  reject('pi_replay_envelope_kind_rejected');
+}
+
 export function piOperatorView(record, now = Date.now()) {
   const input = validatePiObservationEnvelope(record.envelope, now);
   return { schema: 'mmibkr.pi_account_operator_view.v1', node_id: 'cc-pi4',
-    source: 'authenticated_typed_pi_result', observed_at: input.observation.observed_at,
+    source: input.schema === PI_ENVELOPE_SCHEMA
+      ? 'authenticated_typed_pi_result' : 'root_observation_outbox',
+    observed_at: input.observation.observed_at,
     status: input.observation.status, reason: input.observation.reason,
     account_matched: input.observation.expected_account_matched,
     managed_account_count: input.observation.managed_account_count,
