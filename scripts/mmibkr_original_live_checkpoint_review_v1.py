@@ -9,14 +9,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import io
 import json
 import os
 from pathlib import Path
 import re
 import stat
 import sys
-import tarfile
 
 from scripts.mmibkr_live_gateway_state_envelope_v1 import read_master
 from scripts.mmibkr_live_runtime_checkpoint_v1 import unseal
@@ -30,15 +28,6 @@ EXPECTED_CIPHER_SHA256 = "7fa732e25dbb9044ba66c8fb9e3f7da4e269434ee7b2708d635f58
 EXPECTED_RAW_SHA256 = "7e08dfbe6202968a6ff4ff5c83d1f634ba6ee2b83d06e0e3f1f9c143918b5238"
 EXPECTED_MANIFEST_BYTES_MAX = 8192
 EXPECTED_SELECTED_SOURCE = "45339615b1a8b27a5e34233f9cb849c0ae6ecab8"
-OBSERVED_FIELDS = {
-    "selected_universe": "bot_data/strategy_runtime/selected_runtime_authority_14th31jv/selected_runtime_universe_14tu.json",
-    "canonical_inventory": "bot_data/strategy_runtime/selected_runtime_strategy_inventory_v1/ledger.json",
-    "canonical_execution_ledger": "bot_data/strategy_runtime/selected_runtime_live_execution_ledger_v1/ledger.json",
-    "historical_mounted_config": "bot_data/config/config.json",
-    "historical_live_config": "bot_data/strategy_runtime/selected_runtime_authority_14th31jv/live_bot_runtime_config.json",
-}
-
-
 def _sha(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
