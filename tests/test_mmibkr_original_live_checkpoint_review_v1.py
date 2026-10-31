@@ -147,3 +147,30 @@ class CapsuleRoundtrip(unittest.TestCase):
             tf.addfile(info,io.BytesIO(b'xxx'))
         with self.assertRaisesRegex(ValueError,'botdata_files_missing'):
             make_botdata_tar(buf.getvalue())
+
+    def test_duplicate_botdata_tar_members_fail_closed(self):
+        import io, tarfile
+        from scripts.mmibkr_original_checkpoint_botdata_capsule_v1 import make_botdata_tar
+        archive=io.BytesIO()
+        with tarfile.open(fileobj=archive,mode='w:gz') as tf:
+            for _ in range(2):
+                m=tarfile.TarInfo('bot_data/ledger.json')
+                m.size=2
+                tf.addfile(m,io.BytesIO(b'{}'))
+        with self.assertRaisesRegex(ValueError,'historical_botdata_duplicate_member'):
+            make_botdata_tar(archive.getvalue())
+
+    def test_noncanonical_botdata_paths_fail_closed(self):
+        import io, tarfile
+        from scripts.mmibkr_original_checkpoint_botdata_capsule_v1 import make_botdata_tar
+        for path in ('bot_data//ledger.json','bot_data/./ledger.json','bot_data/../ledger.json',r'bot_data\ledger.json'):
+            if not path.startswith('bot_data/'):
+                continue
+            with self.subTest(path=path):
+                archive=io.BytesIO()
+                with tarfile.open(fileobj=archive,mode='w:gz') as tf:
+                    m=tarfile.TarInfo(path)
+                    m.size=2
+                    tf.addfile(m,io.BytesIO(b'{}'))
+                with self.assertRaisesRegex(ValueError,'historical_botdata_path_invalid'):
+                    make_botdata_tar(archive.getvalue())
