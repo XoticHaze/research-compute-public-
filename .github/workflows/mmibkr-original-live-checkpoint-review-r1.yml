@@ -68,7 +68,7 @@ jobs:
             ${{ runner.temp }}/original-checkpoint-review/sealed-botdata/ciphertext.bin
             ${{ runner.temp }}/original-checkpoint-review/sealed-botdata/envelope.json
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
       - name: Delete ciphertext and classified output from ephemeral runner
         if: always()
         shell: bash
