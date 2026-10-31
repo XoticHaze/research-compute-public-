@@ -120,15 +120,11 @@ def seal_quarantine(authenticated_plaintext: bytes, recipient_public_b64: str, c
     encrypted = AESGCM(key).encrypt(nonce, tar, aad)
     envelope = {
         **aad_fields,
-        'recipient_public_fingerprint': recipient_id,
         'sender_public_b64': base64.b64encode(sender_pub).decode(),
         'salt_b64': base64.b64encode(salt).decode(),
         'nonce_b64': base64.b64encode(nonce).decode(),
         'ciphertext_sha256': digest(encrypted),
         'ciphertext_bytes': len(encrypted),
-        'plaintext_sha256': digest(tar),
-        'plaintext_bytes': len(tar),
-        'botdata_file_count': count,
         'plaintext_published': False,
         'master_key_published': False,
     }
