@@ -5,7 +5,7 @@ import {
   storePromotionCandidates,
   validatePromotionCandidateSnapshot,
 } from './promotion_review_state.js';
-import { validatePiObservationEnvelope, piOperatorView } from './pi_account_observation.js';
+import { validatePiObservationEnvelope, piOperatorView, piReplayIdentity } from './pi_account_observation.js';
 import { nextPiReplayLedger } from './pi_replay_ledger.js';
 
 const GITHUB_ISSUER = 'https://token.actions.githubusercontent.com';
@@ -717,7 +717,7 @@ export class OperatorState {
         return json({ error: 'pi_observation_rejected' }, 400);
       }
       const result = await this.ctx.storage.transaction(async (txn) => {
-        // Request-id and Git-commit replay are checked atomically with the state write.
+        // Typed request IDs or distinct root outbox IDs, plus Git commits, are replay-fenced atomically.
         // A malformed/full ledger fails closed; a caller cannot reset it.
         let replayLedger;
         try {
@@ -746,7 +746,7 @@ export class OperatorState {
       if (!observed || observed.write_id !== result.record.write_id
           || observed.envelope?.result_commit_sha !== envelope.result_commit_sha
           || !Array.isArray(seen?.entries)
-          || !seen.entries.some(row => row.request_id === envelope.request_id
+          || !seen.entries.some(row => row.request_id === piReplayIdentity(envelope)
             && row.result_commit_sha === envelope.result_commit_sha)) {
         return json({ error: 'pi_observation_readback_failed' }, 502);
       }
