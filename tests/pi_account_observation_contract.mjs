@@ -135,6 +135,10 @@ assert.throws(()=>nextPiReplayLedger(outboxReplay,validatePiObservationEnvelope(
 rejected(()=>validatePiObservationEnvelope({...outbox,command:'pi.ibkr_account_readonly'},now));
 rejected(()=>validatePiObservationEnvelope({...outbox,request_id:'fake-command'},now));
 rejected(()=>validatePiObservationEnvelope({...outbox,source_path:'pi-node/results/fake.json'},now));
+rejected(()=>validatePiObservationEnvelope({...outbox,
+  observation_id:'piobs-20261031125830-'+outbox.record.snapshot_sha256.slice(0,16),
+  source_path:'pi-node/observations/piobs-20261031125830-'+outbox.record.snapshot_sha256.slice(0,16)+'.json',
+  record:{...outbox.record,observation_id:'piobs-20261031125830-'+outbox.record.snapshot_sha256.slice(0,16)}},now));
 rejected(()=>validatePiObservationEnvelope({...outbox,producer_kind:'pi.ibkr_account_readonly'},now));
 rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,producer:'unapproved'}},now));
 rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,read_only:false}},now));
