@@ -130,7 +130,10 @@ class CapsuleRoundtrip(unittest.TestCase):
         shared=recipient.exchange(ephemeral)
         key=HKDF(algorithm=hashes.SHA256(),length=32,salt=base64.b64decode(env['salt_b64']),info=INFO+aad).derive(shared)
         tar=AESGCM(key).decrypt(base64.b64decode(env['nonce_b64']),body,aad)
-        self.assertEqual(env['plaintext_sha256'],hashlib.sha256(tar).hexdigest())
+        self.assertNotIn('plaintext_sha256',env)
+        self.assertNotIn('plaintext_bytes',env)
+        self.assertNotIn('botdata_file_count',env)
+        self.assertNotIn('recipient_public_fingerprint',env)
         with tarfile.open(fileobj=io.BytesIO(tar),mode='r:gz') as tf:
             names=tf.getnames()
             self.assertEqual(names,['bot_data/strategy_runtime/ledger.json'])
@@ -174,3 +177,39 @@ class CapsuleRoundtrip(unittest.TestCase):
                     tf.addfile(m,io.BytesIO(b'{}'))
                 with self.assertRaisesRegex(ValueError,'historical_botdata_path_invalid'):
                     make_botdata_tar(archive.getvalue())
+
+    def test_public_outputs_reject_plaintext_derived_metadata(self):
+        from scripts.mmibkr_original_checkpoint_botdata_capsule_v1 import seal_quarantine
+        import io,tarfile,base64
+        from cryptography.hazmat.primitives.asymmetric import x25519
+        from cryptography.hazmat.primitives import serialization
+        recipient=x25519.X25519PrivateKey.generate()
+        pub=base64.b64encode(recipient.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)).decode()
+        raw=io.BytesIO()
+        with tarfile.open(fileobj=raw,mode='w:gz') as tf:
+            payload=b'SECRET_PRIVATE_SENTINEL_DATA_XOTIC'
+            member=tarfile.TarInfo('bot_data/secret.txt'); member.size=len(payload)
+            tf.addfile(member,io.BytesIO(payload))
+        ciphertext,envelope=seal_quarantine(raw.getvalue(),pub,'41159917178')
+        public=__import__('json').dumps(envelope,sort_keys=True).encode()
+        for forbidden in ('plaintext_sha256','plaintext_bytes','botdata_file_count','found_historical_state', 'recipient_public_fingerprint'):
+            self.assertNotIn(forbidden, envelope)
+        self.assertNotIn(b'SECRET_PRIVATE_SENTINEL_DATA_XOTIC',public)
+        self.assertNotIn(b'SECRET_PRIVATE_SENTINEL_DATA_XOTIC',ciphertext)
+
+    def test_sanitized_report_is_only_fixed_no_submit_flags(self):
+        import importlib.util,sys,types
+        from unittest.mock import patch
+        repo=Path(__file__).resolve().parents[1]
+        gateway=types.ModuleType('scripts.mmibkr_live_gateway_state_envelope_v1')
+        gateway.read_master=lambda: b'0'*32
+        codec=types.ModuleType('scripts.mmibkr_live_runtime_checkpoint_v1')
+        codec.unseal=lambda *args:b''
+        with patch.dict(sys.modules,{gateway.__name__:gateway,codec.__name__:codec}):
+            spec=importlib.util.spec_from_file_location('original_readonly_review_sentinel',repo/'scripts/mmibkr_original_live_checkpoint_review_v1.py')
+            mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
+        # Public source must have no dynamic private archive field inventory.
+        src=(repo/'scripts/mmibkr_original_live_checkpoint_review_v1.py').read_text()
+        self.assertNotIn('"found_historical_state":',src)
+        self.assertNotIn('"authenticated_plaintext_sha256":',src)
+        self.assertNotIn('result["recipient_key_id"]',src)
