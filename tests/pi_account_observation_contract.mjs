@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {validatePiAccountObservation,validatePiObservationEnvelope,piOperatorView} from '../cloudflare/operator-console/src/pi_account_observation.js';
+import { createHash } from 'node:crypto';
+import {validatePiAccountObservation,validatePiObservationEnvelope,piOperatorView,verifyPiOutboxSnapshotDigest} from '../cloudflare/operator-console/src/pi_account_observation.js';
 import {nextPiReplayLedger} from '../cloudflare/operator-console/src/pi_replay_ledger.js';
 const now=Date.parse('2026-10-31T13:00:00.000Z');
 function fixture() {
@@ -79,8 +80,16 @@ assert.throws(()=>nextPiReplayLedger(null,{request_id:'../path',result_commit_sh
  
 // A root-approved periodic snapshot is a DISTINCT immutable-outbox producer.
 // It must never be relabeled as a typed request, and never inherit broker rights.
+function independentlyCanonicalForTest(value) {
+  if (Array.isArray(value)) return '[' + value.map(independentlyCanonicalForTest).join(',') + ']';
+  if (value !== null && typeof value === 'object') {
+    return '{' + Object.entries(value).sort(([a],[b]) => a.localeCompare(b))
+      .map(([k,v]) => JSON.stringify(k) + ':' + independentlyCanonicalForTest(v)).join(',') + '}';
+  }
+  return JSON.stringify(value);
+}
 function outboxEnvelope() {
-  const digest = 'f'.repeat(64);
+  const digest = createHash('sha256').update(independentlyCanonicalForTest(fixture())).digest('hex');
   const observationId = 'piobs-20261031125930-' + digest.slice(0,16);
   return {
     schema: 'mmibkr.pi_account_observation_envelope.v2',
@@ -104,6 +113,7 @@ function outboxEnvelope() {
 }
 const outbox = outboxEnvelope();
 const normalizedOutbox = validatePiObservationEnvelope(outbox,now);
+assert.equal(await verifyPiOutboxSnapshotDigest(outbox),true);
 assert.equal(normalizedOutbox.observation.expected_account_position_count,4);
 assert.equal(normalizedOutbox.observation_id,outbox.observation_id);
 assert.equal(normalizedOutbox.command,undefined);
@@ -132,3 +142,5 @@ rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,o
 rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,snapshot:{...fixture(),account:'DUXXXX'}}},now));
 rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,snapshot:{...fixture(),observed_at:'2026-10-31T12:50:00+00:00'}}},now));
 console.log('Pi immutable root-outbox contract: producer separation, replay and fail-close verified');
+
+await assert.rejects(async()=>verifyPiOutboxSnapshotDigest({...outbox,record:{...outbox.record,snapshot:{...fixture(),expected_account_position_count:3}}}),/pi_outbox_snapshot_digest_rejected/);
