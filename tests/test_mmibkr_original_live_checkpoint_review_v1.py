@@ -34,7 +34,6 @@ class OriginalReadonlyReview(unittest.TestCase):
         self.assertEqual(m.EXPECTED_CONTEXT_SOURCE, "46fcdf26cf84603b305a3ea20bcd3cf28c67bc0b")
         self.assertEqual(m.EXPECTED_CIPHER_BYTES, 33560349)
         self.assertEqual(m.EXPECTED_CIPHER_SHA256, "7fa732e25dbb9044ba66c8fb9e3f7da4e269434ee7b2708d635f58c7d914bc66")
-        self.assertEqual(m.EXPECTED_RAW_SHA256, "7e08dfbe6202968a6ff4ff5c83d1f634ba6ee2b83d06e0e3f1f9c143918b5238")
 
     def test_tampered_ciphertext_held_before_unseal(self):
         with self.assertRaisesRegex(ValueError, "historical_ciphertext_identity_invalid"):
@@ -47,7 +46,7 @@ class OriginalReadonlyReview(unittest.TestCase):
     def test_manifest_never_confers_order_authority(self):
         c={"run_id":"39499524894","source_sha":self.mod.EXPECTED_CONTEXT_SOURCE,
            "scope":["AMAT","APH","MNQ"],"order_authority":"live"}
-        node={"context":c,"archive_sha256":self.mod.EXPECTED_RAW_SHA256,
+        node={"context":c,"archive_sha256":"a"*64,
               "ciphertext_sha256":self.mod.EXPECTED_CIPHER_SHA256,
               "ciphertext_bytes":self.mod.EXPECTED_CIPHER_BYTES}
         with self.assertRaisesRegex(ValueError, "historical_order_authority_invalid"):
@@ -212,4 +211,5 @@ class CapsuleRoundtrip(unittest.TestCase):
         src=(repo/'scripts/mmibkr_original_live_checkpoint_review_v1.py').read_text()
         self.assertNotIn('"found_historical_state":',src)
         self.assertNotIn('"authenticated_plaintext_sha256":',src)
+        self.assertNotIn("EXPECTED_RAW_SHA256",src)
         self.assertNotIn('result["recipient_key_id"]',src)
