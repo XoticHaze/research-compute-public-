@@ -102,3 +102,48 @@ class OriginalReadonlyReview(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class CapsuleRoundtrip(unittest.TestCase):
+    def test_botdata_only_encrypted_recipient_return(self):
+        import base64
+        import hashlib
+        import io
+        import json
+        import tarfile
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import x25519
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+        from scripts.mmibkr_original_checkpoint_botdata_capsule_v1 import seal_quarantine, INFO
+        buf=io.BytesIO()
+        with tarfile.open(fileobj=buf, mode='w:gz') as tf:
+            for name, value in [('gateway/credentials.txt',b'SHOULD_NOT_ESCAPE'),('bot_data/strategy_runtime/ledger.json',b'{"entries":[]}')]:
+                ti=tarfile.TarInfo(name)
+                ti.size=len(value)
+                tf.addfile(ti, io.BytesIO(value))
+        recipient=x25519.X25519PrivateKey.generate()
+        public=recipient.public_key().public_bytes(serialization.Encoding.Raw,serialization.PublicFormat.Raw)
+        body,env=seal_quarantine(buf.getvalue(),base64.b64encode(public).decode(),'41159917178')
+        fields={k:env[k] for k in ('schema','producer_run','historical_source_sha','selected_pi_source_sha','consumer_run','recipient_key_id','root_import_authorized','live_submission_authorized','gateway_excluded')}
+        aad=json.dumps(fields,sort_keys=True,separators=(',',':')).encode()
+        ephemeral=x25519.X25519PublicKey.from_public_bytes(base64.b64decode(env['sender_public_b64']))
+        shared=recipient.exchange(ephemeral)
+        key=HKDF(algorithm=hashes.SHA256(),length=32,salt=base64.b64decode(env['salt_b64']),info=INFO+aad).derive(shared)
+        tar=AESGCM(key).decrypt(base64.b64decode(env['nonce_b64']),body,aad)
+        self.assertEqual(env['plaintext_sha256'],hashlib.sha256(tar).hexdigest())
+        with tarfile.open(fileobj=io.BytesIO(tar),mode='r:gz') as tf:
+            names=tf.getnames()
+            self.assertEqual(names,['bot_data/strategy_runtime/ledger.json'])
+        self.assertFalse(env['root_import_authorized'])
+        self.assertFalse(env['live_submission_authorized'])
+        self.assertTrue(env['gateway_excluded'])
+
+    def test_gateway_only_checkpoint_cannot_create_quarantine(self):
+        import io,tarfile
+        from scripts.mmibkr_original_checkpoint_botdata_capsule_v1 import make_botdata_tar
+        buf=io.BytesIO()
+        with tarfile.open(fileobj=buf, mode='w:gz') as tf:
+            info=tarfile.TarInfo('gateway/credentials.txt');info.size=3
+            tf.addfile(info,io.BytesIO(b'xxx'))
+        with self.assertRaisesRegex(ValueError,'botdata_files_missing'):
+            make_botdata_tar(buf.getvalue())
