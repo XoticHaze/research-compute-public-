@@ -41,6 +41,7 @@ def make_botdata_tar(authenticated_plaintext: bytes) -> tuple[bytes, int]:
     target = io.BytesIO()
     written = 0
     total = 0
+    seen_paths: set[str] = set()
     with tarfile.open(fileobj=io.BytesIO(authenticated_plaintext), mode='r:gz') as source:
         members = source.getmembers()
         if not 0 < len(members) <= MAX_FILE_MEMBERS:
@@ -54,8 +55,16 @@ def make_botdata_tar(authenticated_plaintext: bytes) -> tuple[bytes, int]:
                     continue
                 if original.issym() or original.islnk() or original.isdev() or not (original.isfile() or original.isdir()):
                     raise ValueError('historical_botdata_member_type_invalid')
-                if not name or name.startswith('/') or '..' in name.split('/'):
+                # Reject aliases, duplicate members and platform-specific paths
+                # before constructing any portable quarantine tar. Do not rely
+                # solely on PurePosixPath, which normalizes repeated separators.
+                parts = name.split('/')
+                if (name.startswith('/') or '\\' in name or
+                        any(part in ('', '.', '..') for part in parts)):
                     raise ValueError('historical_botdata_path_invalid')
+                if name in seen_paths:
+                    raise ValueError('historical_botdata_duplicate_member')
+                seen_paths.add(name)
                 if original.size < 0:
                     raise ValueError('historical_botdata_size_invalid')
                 total += original.size
