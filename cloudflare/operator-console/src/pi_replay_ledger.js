@@ -6,7 +6,7 @@ export function nextPiReplayLedger(prior, envelope, nowMs = Date.now()) {
   if (!Number.isSafeInteger(nowMs) || nowMs < 0) throw new Error('pi_replay_clock_invalid');
   const requestId = envelope?.request_id;
   const commitSha = envelope?.result_commit_sha;
-  if (typeof requestId !== 'string' || !/^[A-Za-z0-9._-]{6,100}$/.test(requestId)
+  if (typeof requestId !== 'string' || !/^[A-Za-z0-9._:-]{6,100}$/.test(requestId)
       || typeof commitSha !== 'string' || !/^[0-9a-f]{40}$/.test(commitSha)) {
     throw new Error('pi_replay_identity_invalid');
   }
@@ -17,7 +17,7 @@ export function nextPiReplayLedger(prior, envelope, nowMs = Date.now()) {
   const entries = [];
   for (const row of prior?.entries || []) {
     if (!row || typeof row.request_id !== 'string'
-        || !/^[A-Za-z0-9._-]{6,100}$/.test(row.request_id)
+        || !/^[A-Za-z0-9._:-]{6,100}$/.test(row.request_id)
         || typeof row.result_commit_sha !== 'string'
         || !/^[0-9a-f]{40}$/.test(row.result_commit_sha)
         || !Number.isSafeInteger(row.expires_at_ms) || row.expires_at_ms < 0) {

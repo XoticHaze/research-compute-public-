@@ -66,3 +66,5 @@ assert.throws(()=>nextPiReplayLedger(replayLedger,{...replaySecond,result_commit
 assert.throws(()=>nextPiReplayLedger(replayLedger,{...replaySecond,request_id:replayFirst.request_id},replayNow+1),/pi_replay_detected/);
 assert.equal(nextPiReplayLedger(replayLedger,replaySecond,replayNow+1).entries.length,2);
 assert.throws(()=>nextPiReplayLedger({schema:'wrong',entries:[]},replayFirst,replayNow),/pi_replay_ledger_invalid/);
+assert.equal(nextPiReplayLedger(null,{request_id:'ccpi:read:20261031',result_commit_sha:'c'.repeat(40)},replayNow).entries.length,1);
+assert.throws(()=>nextPiReplayLedger(null,{request_id:'../path',result_commit_sha:'d'.repeat(40)},replayNow),/pi_replay_identity_invalid/);
