@@ -12,8 +12,14 @@ from typing import Any
 # Use the already-merged standalone economic CURRENT admission, never a parallel source gate.
 if __package__:
     from .forward_p249_p266_shadow_r1 import current_publication_admitted
+    from .forward_prospective_cohort_ledger_r1 import (
+        CONTRACTS, _reject_adapter_duplicate_keys, _reject_adapter_nonfinite_constant,
+    )
 else:
     from forward_p249_p266_shadow_r1 import current_publication_admitted
+    from forward_prospective_cohort_ledger_r1 import (
+        CONTRACTS, _reject_adapter_duplicate_keys, _reject_adapter_nonfinite_constant,
+    )
 
 SCHEMA = "research.forward_market_scoreboard_r1"
 ADAPTER_SCHEMA = "foundry.forward_program_adapter.v1"
@@ -41,7 +47,14 @@ def _load(root: Path, name: str) -> dict[str, Any] | None:
     for path in matches[1:]:
         if hashlib.sha256(path.read_bytes()).digest() != digest:
             raise ValueError(f"CONFLICTING_SCOREBOARD_INPUT:{name}")
-    payload = json.loads(raw)
+    # Every explicitly named canonical producer can affect forward score/health.
+    # Last-wins duplicate keys or NaN must not silently change P249/P46/P558/
+    # CLO freshness, matched economics or prospective ledger identities.
+    # Reuse the existing strict prospective JSON parser, not a second gate.
+    payload = json.loads(
+        raw, object_pairs_hook=_reject_adapter_duplicate_keys,
+        parse_constant=_reject_adapter_nonfinite_constant,
+    )
     if not isinstance(payload, dict):
         raise ValueError(f"INVALID_SCOREBOARD_INPUT:{name}")
     return payload
@@ -58,11 +71,27 @@ def _load_native_adapters(root: Path) -> dict[str, dict[str, Any]]:
     for path in root.rglob("*.json"):
         try:
             raw = path.read_bytes()
-            payload = json.loads(raw)
+            # Preserve top-level schema pairs during discovery. A recognized
+            # adapter must not evade strict validation by repeating "schema"
+            # with a later unrelated value (default json.loads is last-wins).
+            # Unrelated artifacts, including nested lookalikes, remain ignored.
+            top_pairs = json.loads(raw, object_pairs_hook=lambda pairs: pairs)
         except (json.JSONDecodeError, UnicodeDecodeError):
             continue
-        if not isinstance(payload, dict) or payload.get("schema") != ADAPTER_SCHEMA:
+        if not isinstance(top_pairs, list) or not any(
+            isinstance(pair, tuple) and pair[0] == "schema" and pair[1] == ADAPTER_SCHEMA
+            for pair in top_pairs
+        ):
             continue
+        # Reuse the canonical prospective ledger's strict native-adapter parser.
+        # A nested duplicate key or NaN can otherwise change model/source
+        # identity in the scoreboard while the ledger rejects the same bytes.
+        # Only recognized native adapters are strict-parsed: unrelated JSON
+        # artifacts must not become accidental scoreboard source blockers.
+        payload = json.loads(
+            raw, object_pairs_hook=_reject_adapter_duplicate_keys,
+            parse_constant=_reject_adapter_nonfinite_constant,
+        )
         program_id = str(payload.get("program_id") or "")
         if program_id not in EXPECTED_PRIVATE_ADAPTERS:
             continue
@@ -184,7 +213,9 @@ def _p46(x: dict[str, Any] | None) -> dict[str, Any]:
         return {"program_id": "P46", "status": "MISSING", "decision_use": "unavailable"}
     d = x.get("decision", {})
     shadow = x.get("operational_shadow", {})
-    credit = bool(d.get("scientific_forward_credit_authorized", False))
+    # A nonempty string such as "false" must never grant forward credit.
+    # Only the producer's literal JSON boolean true may enable the projection.
+    credit = d.get("scientific_forward_credit_authorized") is True
     selected = list(d.get("selected", []))
     weights = d.get("target_weights", {})
     return {
@@ -456,7 +487,8 @@ def _p438_semiconductor_predecessor(x: dict[str, Any] | None) -> dict[str, Any]:
         "latest_common_date": latest[-1] if latest else None,
         "elapsed_close_to_close_sessions": max(elapsed) if elapsed else None,
         "remaining_sessions_to_fixed20": max(remaining) if remaining else None,
-        "all_rows_terminal": bool(rows) and all(bool(row.get("final_target_resolved")) for row in rows),
+        # String "false" and numeric 1 are not independently resolved outcomes.
+        "all_rows_terminal": bool(rows) and all(row.get("final_target_resolved") is True for row in rows),
         "sample_combination_authorized": False,
         "combination_rule": (
             "Predecessor and current-cohort sessions may overlap in calendar time and have different frozen identities; "
@@ -503,6 +535,28 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
         raise RuntimeError(f"unexpected prospective ledger schema {ledger.get('schema')}")
     rows = [c for c in (ledger.get("cohorts") or []) if c.get("program_id") == program_id]
     summary = dict((ledger.get("summary") or {}).get(program_id) or {})
+    # A summary is not independent cohort evidence. In particular, a caller-
+    # supplied resolved_cohorts=20 must not mark a one-row frozen H20 sample
+    # as reaching the stronger full-promotion floor.
+    actual_registered = len(rows)
+    actual_resolved = sum(c.get("status") == "RESOLVED" for c in rows)
+    actual_open = sum(c.get("status") in {"REGISTERED", "AWAITING_ENTRY_SESSION", "OPEN", "PARTIALLY_RESOLVED"} for c in rows)
+    actual_late = sum(c.get("status") == "LATE_REGISTRATION_REJECTED" for c in rows)
+    actual_counts = (actual_registered, actual_resolved, actual_open, actual_late)
+    reported_counts = (
+        summary.get("registered_cohorts", actual_registered),
+        summary.get("resolved_cohorts", actual_resolved),
+        summary.get("open_cohorts", actual_open),
+        summary.get("late_registration_rejections", actual_late),
+    )
+    if any(type(value) is not int for value in reported_counts) or reported_counts != actual_counts:
+        raise ValueError(f"PROSPECTIVE_COHORT_SUMMARY_COUNT_MISMATCH:{program_id}")
+    # The stronger full-promotion floor is an owning producer contract, not
+    # caller-authored summary metadata (e.g. 1 replacing frozen fixed20).
+    contract_floor = CONTRACTS.get(program_id, {}).get("minimum_resolved_for_promotion")
+    reported_floor = summary.get("minimum_resolved_for_promotion", contract_floor)
+    if type(reported_floor) is not type(contract_floor) or reported_floor != contract_floor:
+        raise ValueError(f"PROSPECTIVE_COHORT_PROMOTION_FLOOR_MISMATCH:{program_id}")
     current = max(
         rows,
         key=lambda c: (str(c.get("signal_date") or ""), str(c.get("first_registered_at") or "")),
@@ -512,11 +566,11 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
         "ledger_status": "PRESENT",
         "program_id": program_id,
         "market_data_asof": ledger.get("market_data_asof"),
-        "registered_cohorts": int(summary.get("registered_cohorts", len(rows)) or 0),
-        "resolved_cohorts": int(summary.get("resolved_cohorts", 0) or 0),
-        "open_cohorts": int(summary.get("open_cohorts", 0) or 0),
-        "late_registration_rejections": int(summary.get("late_registration_rejections", 0) or 0),
-        "minimum_resolved_for_promotion": summary.get("minimum_resolved_for_promotion"),
+        "registered_cohorts": actual_registered,
+        "resolved_cohorts": actual_resolved,
+        "open_cohorts": actual_open,
+        "late_registration_rejections": actual_late,
+        "minimum_resolved_for_promotion": contract_floor,
         "promotion_authority": False,
     }
     out["forward_science_stages"] = _separate_forward_science_stages(out)
@@ -1072,6 +1126,17 @@ def build(root: Path) -> dict[str, Any]:
 def self_test() -> None:
     import tempfile
 
+    # Source-only truthiness falsifiers: a syntactically valid JSON string
+    # must not become scientific credit or a resolved predecessor cohort.
+    for flag in ("false", "true", 1, 0, None, [], {}):
+        p46 = _p46({"decision": {"scientific_forward_credit_authorized": flag}})
+        assert p46["scientific_forward_credit"] is False
+        assert p46["validation_grade"] == "SHAKEDOWN_ONLY"
+        p438 = _p438_semiconductor_predecessor({"rows": [{"final_target_resolved": flag}]})
+        assert p438["all_rows_terminal"] is False
+    assert _p46({"decision": {"scientific_forward_credit_authorized": True}})["scientific_forward_credit"] is True
+    assert _p438_semiconductor_predecessor({"rows": [{"final_target_resolved": True}]})["all_rows_terminal"] is True
+
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
         (root / "p46_forward_observation_v2.json").write_text(json.dumps({
@@ -1291,6 +1356,53 @@ def self_test() -> None:
         }
         original_frozen = json.dumps(frozen, sort_keys=True)
         state = _prospective_state(ledger, "SEMICONDUCTOR_SHARED_RIDGE")
+        # The frozen one-cohort source cannot be promoted by a fabricated
+        # summary count, even if a separate matched-cost projection exists.
+        for bad in (20, "20", 20.0, True, -1):
+            changed = {**ledger, "summary": {"SEMICONDUCTOR_SHARED_RIDGE": {
+                **ledger["summary"]["SEMICONDUCTOR_SHARED_RIDGE"],
+                "resolved_cohorts": bad,
+                "minimum_resolved_for_promotion": 20,
+            }}}
+            try:
+                _prospective_state(changed, "SEMICONDUCTOR_SHARED_RIDGE")
+            except ValueError as exc:
+                assert str(exc) == "PROSPECTIVE_COHORT_SUMMARY_COUNT_MISMATCH:SEMICONDUCTOR_SHARED_RIDGE"
+            else:
+                raise AssertionError("unverified summary claimed twenty resolved H20 cohorts")
+        wrong_registered = {**ledger, "summary": {"SEMICONDUCTOR_SHARED_RIDGE": {
+            **ledger["summary"]["SEMICONDUCTOR_SHARED_RIDGE"],
+            "registered_cohorts": 2,
+        }}}
+        try:
+            _prospective_state(wrong_registered, "SEMICONDUCTOR_SHARED_RIDGE")
+        except ValueError as exc:
+            assert str(exc) == "PROSPECTIVE_COHORT_SUMMARY_COUNT_MISMATCH:SEMICONDUCTOR_SHARED_RIDGE"
+        else:
+            raise AssertionError("unverified summary claimed extra registered cohorts")
+        for status, wrong_field in (("OPEN", "open_cohorts"), ("LATE_REGISTRATION_REJECTED", "late_registration_rejections")):
+            tampered = {**ledger, "cohorts": [{**frozen, "status": status}],
+                        "summary": {"SEMICONDUCTOR_SHARED_RIDGE": {
+                            "registered_cohorts": 1, "resolved_cohorts": 0,
+                            "open_cohorts": 0, "late_registration_rejections": 0,
+                            "minimum_resolved_for_promotion": 20}}}
+            try:
+                _prospective_state(tampered, "SEMICONDUCTOR_SHARED_RIDGE")
+            except ValueError as exc:
+                assert str(exc) == "PROSPECTIVE_COHORT_SUMMARY_COUNT_MISMATCH:SEMICONDUCTOR_SHARED_RIDGE"
+            else:
+                raise AssertionError(f"unverified {wrong_field} hid {status} source row")
+        floor_spoof = {**ledger, "summary": {"SEMICONDUCTOR_SHARED_RIDGE": {
+            **ledger["summary"]["SEMICONDUCTOR_SHARED_RIDGE"],
+            "minimum_resolved_for_promotion": 1,
+        }}}
+        try:
+            _prospective_state(floor_spoof, "SEMICONDUCTOR_SHARED_RIDGE")
+        except ValueError as exc:
+            assert str(exc) == "PROSPECTIVE_COHORT_PROMOTION_FLOOR_MISMATCH:SEMICONDUCTOR_SHARED_RIDGE"
+        else:
+            raise AssertionError("one resolved cohort lowered frozen full-promotion floor")
+        assert state["forward_science_stages"]["full_promotion_sample_floor_reached"] is False
         assert state["mean_ticker_book_excess_vs_smh_bps"] == -18.3719
         assert state["mean_ticker_book_excess_vs_smh_net_bps"] == -8.3719
         assert state["mean_ticker_book_excess_vs_equal_weight_13_net_bps"] == -125.2211
@@ -1335,6 +1447,48 @@ def self_test() -> None:
         duplicate_adapter.unlink()
         original_adapter.write_text(json.dumps(semi))
         assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
+
+        # The canonical prospective ledger already rejects nested duplicate
+        # adapter keys and nonfinite JSON constants. The scoreboard must make
+        # the same source decision rather than silently using last-wins JSON.
+        assert "signal" in semi
+        for malformed, code in (
+            (json.dumps(semi)[:-1] + ',"signal":{"positive_symbols":["FAKE"]}}',
+             "FORWARD_ADAPTER_DUPLICATE_JSON_KEY"),
+            (json.dumps(semi)[:-1] + ',"synthetic_nonfinite":NaN}',
+             "FORWARD_ADAPTER_NONFINITE_JSON_CONSTANT"),
+        ):
+            original_adapter.write_text(malformed)
+            try:
+                _load_native_adapters(root)
+            except RuntimeError as exc:
+                assert str(exc) == code
+            else:
+                raise AssertionError("ambiguous native adapter JSON admitted")
+        original_adapter.write_text(json.dumps(semi))
+        # An unrelated JSON artifact must not poison recognized native inputs.
+        unrelated = root / "unrelated-duplicate.json"
+        unrelated.write_text('{"not_an_adapter":1,"not_an_adapter":2}')
+        assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
+        # A first recognized schema overwritten by a later unrelated schema
+        # must not silently bypass the canonical strict adapter parser.
+        for malformed in (
+            '{"schema":"foundry.forward_program_adapter.v1","schema":"unrelated"}',
+            '{"schema":"unrelated","schema":"foundry.forward_program_adapter.v1"}',
+        ):
+            unrelated.write_text(malformed)
+            try:
+                _load_native_adapters(root)
+            except RuntimeError as exc:
+                assert str(exc) == "FORWARD_ADAPTER_DUPLICATE_JSON_KEY"
+            else:
+                raise AssertionError("duplicate top-level native schema bypassed strict parsing")
+        # A nested schema lookalike is not a top-level native adapter.
+        unrelated.write_text(
+            '{"schema":"unrelated","nested":{"schema":"foundry.forward_program_adapter.v1","k":1,"k":2}}'
+        )
+        assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
+        unrelated.unlink()
 
     # Homebuilders legacy stock-net vs ITB-gross is not matched-after-cost alpha.
     homebuilders_cost_ledger = {
@@ -1643,6 +1797,31 @@ def self_test() -> None:
                         raise AssertionError("conflicting canonical input was silently accepted")
             first.unlink()
             second.unlink()
+        # New exact canonical producer falsifier: the old default json.loads
+        # silently took the last duplicate freshness/score key. Unrelated
+        # artifact files remain ignored; only these named producer inputs fail.
+        for canonical in (
+            "p46_forward_observation_v2.json",
+            "forward_p249_p266_shadow_r1.json",
+            "forward_p558_current_core_shadow_r1.json",
+            "forward_senior_clo_current_core_shadow_r1.json",
+            "p438_semiconductor_forward_mtd_r1.json",
+            "forward_prospective_cohort_ledger_r1.json",
+        ):
+            target = root / canonical
+            for ambiguous in (
+                '{"source_health":{"source_max_date":"2026-10-23","source_max_date":"2026-10-12"}}',
+                '{"source_health":{"source_max_date":"2026-10-23"},"source_health":{"source_max_date":"2026-10-12"}}',
+                '{"source_health":{"source_max_date":"2026-10-23"},"score":NaN}',
+            ):
+                target.write_text(ambiguous)
+                try:
+                    _load(root, canonical)
+                except ValueError:
+                    pass
+                else:
+                    raise AssertionError("ambiguous canonical scoreboard JSON was silently accepted")
+            target.unlink()
         invalid = root / "forward_p249_p266_shadow_r1.json"
         invalid.write_text("[]")
         try:
@@ -1667,6 +1846,22 @@ def self_test() -> None:
         fresh = current / name
         fresh.write_text(json.dumps({"source": "fresh"}))
         assert _load_prospective_ledger(root) == {"source": "fresh"}
+        # The prospective producer's own strict prior parser rejects these
+        # ambiguous ledger bytes. The scoreboard must reject them too.
+        for malformed, code in (
+            ('{"source":"fresh","cohorts":[],"cohorts":[{"cohort_id":"FORGED"}]}',
+             "FORWARD_ADAPTER_DUPLICATE_JSON_KEY"),
+            ('{"source":"fresh","cohorts":[{"first_registered_at":NaN}]}',
+             "FORWARD_ADAPTER_NONFINITE_JSON_CONSTANT"),
+        ):
+            fresh.write_text(malformed)
+            try:
+                _load_prospective_ledger(root)
+            except RuntimeError as exc:
+                assert str(exc) == code
+            else:
+                raise AssertionError("ambiguous prospective ledger JSON admitted")
+        fresh.write_text(json.dumps({"source": "fresh"}))
         duplicate = current / "nested-copy"
         duplicate.mkdir()
         (duplicate / name).write_text(json.dumps({"source": "different-current"}))
