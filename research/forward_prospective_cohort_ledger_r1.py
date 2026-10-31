@@ -14,6 +14,8 @@ import argparse
 import hashlib
 import json
 import math
+import re
+import tempfile
 from datetime import date, datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -71,12 +73,44 @@ def _sha(data: bytes) -> str:
 def _read_json(path: Path | None) -> dict[str, Any] | None:
     if path is None or not path.is_file():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    # Prior first-seen state is immutable chronology, not a last-wins JSON
+    # dictionary. Share the same strict parser as incoming adapters.
+    payload = json.loads(path.read_text(encoding="utf-8"),
+                         object_pairs_hook=_reject_adapter_duplicate_keys,
+                         parse_constant=_reject_adapter_nonfinite_constant)
+    if not isinstance(payload, dict):
+        raise RuntimeError("FORWARD_PRIOR_ROOT_NOT_OBJECT")
+    return payload
+
+
+def _reject_adapter_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise RuntimeError("FORWARD_ADAPTER_DUPLICATE_JSON_KEY")
+        result[key] = value
+    return result
+
+
+def _reject_adapter_nonfinite_constant(value: str) -> None:
+    raise RuntimeError("FORWARD_ADAPTER_NONFINITE_JSON_CONSTANT")
+
+
+def _canonical_signal_date(raw: Any) -> str:
+    if not isinstance(raw, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", raw):
+        raise RuntimeError("FORWARD_ADAPTER_SIGNAL_DATE_INVALID: exact YYYY-MM-DD required")
+    try:
+        return date.fromisoformat(raw).isoformat()
+    except ValueError as exc:
+        raise RuntimeError("FORWARD_ADAPTER_SIGNAL_DATE_INVALID: impossible calendar date") from exc
 
 
 def _adapter(path: Path) -> tuple[dict[str, Any], str]:
     raw = path.read_bytes()
-    x = json.loads(raw)
+    x = json.loads(raw, object_pairs_hook=_reject_adapter_duplicate_keys,
+                   parse_constant=_reject_adapter_nonfinite_constant)
+    if not isinstance(x, dict):
+        raise RuntimeError("FORWARD_ADAPTER_ROOT_NOT_OBJECT")
     if x.get("schema") != ADAPTER_SCHEMA:
         raise RuntimeError(f"unexpected adapter schema path={path}")
     program = str(x.get("program_id") or "")
@@ -95,19 +129,76 @@ def _cohort_id(program: str, signal_date: str, adapter_sha256: str) -> str:
 
 def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str) -> dict[str, Any] | None:
     program = str(adapter["program_id"])
-    signal_date = str(adapter.get("signal_date") or "")[:10]
-    if not signal_date:
-        raise RuntimeError(f"missing signal_date program={program}")
+    # Never borrow a valid frozen cohort identity from a malformed suffix.
+    signal_date = _canonical_signal_date(adapter.get("signal_date"))
     contract = CONTRACTS[program]
     signal = adapter.get("signal") or {}
 
     if program == "HOMEBUILDERS":
-        symbols = [str(x) for x in signal.get("admitted_symbols") or []]
-        horizons = {str(k): int(v) for k, v in (signal.get("duration_horizon_sessions_by_symbol") or {}).items()}
+        # Frozen cohort membership must be one unique, nonempty ticker per row.
+        # Duplicate names otherwise double-count one security in forward science.
+        raw_symbols = signal.get("admitted_symbols") or []
+        if not isinstance(raw_symbols, list) or not raw_symbols or any(
+            not isinstance(symbol, str)
+            or re.fullmatch(r"[A-Z][A-Z0-9.-]*", symbol) is None
+            for symbol in raw_symbols
+        ):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_SYMBOL_INVALID")
+        symbols = list(raw_symbols)
         if not symbols:
             return None
-        if set(symbols) - set(horizons):
-            raise RuntimeError("Homebuilders admitted symbol missing frozen duration horizon")
+        if len(symbols) != len(set(symbols)):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_DUPLICATE_SYMBOL")
+        raw_horizons = signal.get("duration_horizon_sessions_by_symbol")
+        if not isinstance(raw_horizons, dict) or set(raw_horizons) != set(symbols):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_HORIZON_MEMBERSHIP_MISMATCH")
+        horizons: dict[str, int] = {}
+        for symbol in symbols:
+            value = raw_horizons[symbol]
+            # bool/int coercion and fractional/zero/negative horizons can
+            # silently create an impossible entry/exit chronology.
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value < 1
+                or int(value) != value
+            ):
+                raise RuntimeError("FORWARD_HOMEBUILDERS_HORIZON_INVALID")
+            horizons[symbol] = int(value)
+        # A positive integer can still violate the frozen adaptive-duration
+        # envelope; an arbitrary long horizon must not silently join science.
+        timing = adapter.get("timing") or {}
+        allowed_source = timing.get("candidate_holding_horizons_sessions")
+        if (
+            not isinstance(allowed_source, list)
+            or not allowed_source
+            or any(
+                isinstance(h, bool) or not isinstance(h, int) or h < 1
+                for h in allowed_source
+            )
+        ):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_ALLOWED_HORIZON_ENVELOPE_INVALID")
+        allowed_horizons = set(allowed_source)
+        if any(horizon not in allowed_horizons for horizon in horizons.values()):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_HORIZON_OUTSIDE_FROZEN_ENVELOPE")
+        # Partial forecast maps silently shrink forward calibration sample size,
+        # even while the same funded symbols contribute realized observations.
+        prediction_source = signal.get("predicted_fixed20_net25_bps")
+        if not isinstance(prediction_source, dict) or set(prediction_source) != set(symbols):
+            raise RuntimeError("FORWARD_HOMEBUILDERS_PREDICTION_SYMBOL_MISMATCH")
+        predictions: dict[str, float] = {}
+        for symbol in symbols:
+            try:
+                value = prediction_source[symbol]
+                if isinstance(value, bool):
+                    raise ValueError("boolean prediction")
+                prediction = float(value)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise RuntimeError("FORWARD_HOMEBUILDERS_PREDICTION_INVALID") from exc
+            if not math.isfinite(prediction):
+                raise RuntimeError("FORWARD_HOMEBUILDERS_PREDICTION_INVALID")
+            predictions[symbol] = prediction
         return {
             "cohort_id": _cohort_id(program, signal_date, adapter_sha256),
             "program_id": program,
@@ -119,11 +210,7 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
             "execution_delay_sessions": 1,
             "symbols": symbols,
             "horizon_sessions_by_symbol": {s: horizons[s] for s in symbols},
-            "admission_score_fixed20_net25_bps": {
-                s: float((signal.get("predicted_fixed20_net25_bps") or {})[s])
-                for s in symbols
-                if s in (signal.get("predicted_fixed20_net25_bps") or {})
-            },
+            "admission_score_fixed20_net25_bps": {s: predictions[s] for s in symbols},
             "benchmarks": ["ITB", "QQQ"],
             "stock_round_trip_cost_bps": 25.0,
             "resolution": None,
@@ -133,15 +220,58 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
     validation = adapter.get("validation") or {}
     if not positive or validation.get("scientific_forward_credit") is not True:
         return None
+    # A foreign/missing ticker-book key silently changes funded participation:
+    # the old normalizer divided by *all* keys while scoring positive only.
+    if any(not isinstance(x, str) or not x.strip() for x in signal.get("positive_symbols") or []):
+        raise RuntimeError("FORWARD_COHORT_POSITIVE_SYMBOL_INVALID")
+    if len(positive) != len(set(positive)):
+        raise RuntimeError("FORWARD_COHORT_DUPLICATE_POSITIVE_SYMBOL")
     book = ((adapter.get("paper_action") or {}).get("ticker_book") or {})
-    raw_weights = {str(k): float(v) for k, v in (book.get("cohort_target_weights_nav") or {}).items() if float(v) > 0}
-    if not raw_weights:
-        raise RuntimeError("Semiconductor prospective cohort missing frozen ticker-book weights")
+    weight_source = book.get("cohort_target_weights_nav")
+    if not isinstance(weight_source, dict) or set(weight_source) != set(positive):
+        raise RuntimeError("FORWARD_COHORT_TICKER_BOOK_SYMBOL_MISMATCH")
+    raw_weights: dict[str, float] = {}
+    for symbol in positive:
+        value = weight_source[symbol]
+        if isinstance(value, bool):
+            raise RuntimeError("FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID")
+        try:
+            weight = float(value)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise RuntimeError("FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID") from exc
+        if not math.isfinite(weight) or weight <= 0:
+            raise RuntimeError("FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID")
+        raw_weights[symbol] = weight
     gross = sum(raw_weights.values())
+    if not math.isfinite(gross) or gross <= 0:
+        raise RuntimeError("FORWARD_COHORT_TICKER_BOOK_GROSS_INVALID")
     ticker_weights = {k: v / gross for k, v in raw_weights.items()}
-    predictions = {
-        str(k): float(v) for k, v in (signal.get("predicted_fixed20_net_value_bps") or {}).items()
-    }
+    prediction_source = signal.get("predicted_fixed20_net_value_bps")
+    # Every funded positive ticker must have exactly one frozen prediction;
+    # partial prediction maps silently shrink forward calibration denominators.
+    if not isinstance(prediction_source, dict) or set(prediction_source) != set(positive):
+        raise RuntimeError("FORWARD_COHORT_PREDICTION_SYMBOL_MISMATCH")
+    predictions: dict[str, float] = {}
+    for symbol in positive:
+        raw_prediction = prediction_source[symbol]
+        if isinstance(raw_prediction, bool):
+            raise RuntimeError("FORWARD_COHORT_PREDICTION_INVALID")
+        try:
+            prediction = float(raw_prediction)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise RuntimeError("FORWARD_COHORT_PREDICTION_INVALID") from exc
+        if not math.isfinite(prediction):
+            raise RuntimeError("FORWARD_COHORT_PREDICTION_NONFINITE")
+        predictions[symbol] = prediction
+    raw_breadth = signal.get("positive_breadth", 0.0)
+    if isinstance(raw_breadth, bool):
+        raise RuntimeError("FORWARD_COHORT_POSITIVE_BREADTH_INVALID")
+    try:
+        positive_breadth = float(raw_breadth)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise RuntimeError("FORWARD_COHORT_POSITIVE_BREADTH_INVALID") from exc
+    if not math.isfinite(positive_breadth):
+        raise RuntimeError("FORWARD_COHORT_POSITIVE_BREADTH_INVALID")
     return {
         "cohort_id": _cohort_id(program, signal_date, adapter_sha256),
         "program_id": program,
@@ -161,8 +291,8 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
         ),
         "expression_variant_start_signal_date": SEMICONDUCTOR_VARIANT_START_SIGNAL_DATE,
         "expression_variants": None,
-        "predicted_fixed20_net_value_bps": {s: predictions[s] for s in positive if s in predictions},
-        "positive_breadth": float(signal.get("positive_breadth", 0.0)),
+        "predicted_fixed20_net_value_bps": {s: predictions[s] for s in positive},
+        "positive_breadth": positive_breadth,
         "benchmarks": ["CASH", "SMH", "QQQ", "EQUAL_WEIGHT_13"],
         "stock_round_trip_cost_bps": 25.0,
         "industry_round_trip_cost_bps": 10.0,
@@ -171,12 +301,26 @@ def _new_cohort(adapter: dict[str, Any], adapter_sha256: str, registered_at: str
 
 
 def _normalize_series(series: pd.Series) -> pd.Series:
-    x = series.dropna().astype(float).copy()
-    idx = pd.to_datetime(x.index)
-    if getattr(idx, "tz", None) is not None:
-        idx = idx.tz_convert(None)
-    x.index = pd.DatetimeIndex(idx).normalize()
-    return x[~x.index.duplicated(keep="last")].sort_index()
+    # A duplicate, missing or invalid daily bar is source ambiguity, not an
+    # invitation to choose last-wins or silently shorten a frozen H20 tape.
+    if not isinstance(series, pd.Series) or series.empty:
+        raise RuntimeError("SOURCE_PRICE_INVALID: empty or non-series input")
+    try:
+        idx = pd.to_datetime(series.index, errors="raise")
+        if getattr(idx, "tz", None) is not None:
+            idx = idx.tz_convert(None)
+        idx = pd.DatetimeIndex(idx).normalize()
+        x = pd.to_numeric(series, errors="raise").astype(float).copy()
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise RuntimeError("SOURCE_PRICE_INVALID: unparseable clock or close") from exc
+    if idx.isna().any():
+        raise RuntimeError("SOURCE_PRICE_INVALID: null session date")
+    if idx.has_duplicates:
+        raise RuntimeError("SOURCE_DUPLICATE_SESSION: duplicate adjusted close date")
+    if x.isna().any() or not x.map(math.isfinite).all() or (x <= 0).any():
+        raise RuntimeError("SOURCE_PRICE_INVALID: missing, nonfinite or nonpositive adjusted close")
+    x.index = idx
+    return x.sort_index()
 
 
 def _download_close(symbol: str, start: date, end: date) -> pd.Series:
@@ -214,10 +358,15 @@ def _download_close(symbol: str, start: date, end: date) -> pd.Series:
 
 
 def _common_calendar(prices: dict[str, pd.Series], symbols: list[str]) -> pd.DatetimeIndex:
-    sets = [set(prices[s].index) for s in symbols]
-    if not sets:
+    if not symbols:
         return pd.DatetimeIndex([])
-    return pd.DatetimeIndex(sorted(set.intersection(*sets)))
+    # An intersection can compress +1/fixed20 when a single constituent or
+    # benchmark misses an interior session, even if latest dates still match.
+    reference = prices[symbols[0]].index
+    for symbol in symbols[1:]:
+        if not prices[symbol].index.equals(reference):
+            raise RuntimeError(f"SOURCE_CALENDAR_INCOMPLETE: {symbol} session dates differ")
+    return pd.DatetimeIndex(reference)
 
 
 def _ret_bps(series: pd.Series, entry: pd.Timestamp, exit_: pd.Timestamp) -> float:
@@ -297,7 +446,7 @@ def _prices_for(cohort: dict[str, Any], asof: date, loader: Callable[[str, date,
     )
     out: dict[str, pd.Series] = {}
     for symbol in dict.fromkeys(required):
-        out[symbol] = loader(symbol, start, asof)
+        out[symbol] = _normalize_series(loader(symbol, start, asof))
     return out
 
 
@@ -591,6 +740,13 @@ def _expression_variant_metrics(
             "ticker_book_net_return_bps": round(net, 4),
             "excess_vs_smh_bps": round(net - smh_bps, 4),
             "excess_vs_smh_net_bps": round(net - (smh_bps - industry_cost_bps), 4),
+            "comparison_cost_basis": {
+                "excess_vs_smh_bps": "MIXED_TICKER_NET_MINUS_SMH_GROSS_LEGACY",
+                "excess_vs_smh_net_bps": "MATCHED_TICKER_NET_MINUS_SMH_NET",
+                "excess_vs_qqq_bps": "MIXED_TICKER_NET_MINUS_QQQ_GROSS_NO_QQQ_FEE",
+                "excess_vs_equal_weight_universe_bps": "MIXED_TICKER_NET_MINUS_EQUAL_WEIGHT_GROSS",
+                "excess_vs_equal_weight_universe_net_bps": "MATCHED_TICKER_NET_MINUS_EQUAL_WEIGHT_NET",
+            },
             "excess_vs_qqq_bps": round(net - qqq_bps, 4),
             "excess_vs_equal_weight_universe_bps": round(
                 net - equal_weight_universe_bps, 4
@@ -667,8 +823,25 @@ def _resolve_semiconductor(cohort: dict[str, Any], prices: dict[str, pd.Series],
             "ticker_positive_hit_rate": round(sum(bool(row["sign_hit_current"]) for row in marks.values()) / len(marks), 6),
             "ticker_book_net_if_flattened_now_bps": round(ticker_net, 4),
             "ticker_book_matched_excess_vs_smh_bps": round(ticker_net - smh, 4),
+            "ticker_book_matched_excess_vs_smh_net_if_flattened_now_bps": round(
+                ticker_net - (smh - float(cohort["industry_round_trip_cost_bps"])), 4
+            ),
             "ticker_book_opportunity_excess_vs_qqq_bps": round(ticker_net - qqq, 4),
             "ticker_book_excess_vs_equal_weight_universe_bps": round(ticker_net - ew, 4),
+            "ticker_book_excess_vs_equal_weight_universe_net_if_flattened_now_bps": round(
+                ticker_net - (ew - stock_cost), 4
+            ),
+            "comparison_cost_basis": {
+                "ticker_book_matched_excess_vs_smh_bps": "MIXED_TICKER_NET_MINUS_SMH_GROSS_LEGACY",
+                "ticker_book_matched_excess_vs_smh_net_if_flattened_now_bps": "MATCHED_BOTH_NET_IF_FLATTENED_NOW",
+                "ticker_book_opportunity_excess_vs_qqq_bps": "MIXED_TICKER_NET_MINUS_QQQ_GROSS_NO_QQQ_FEE",
+                "ticker_book_excess_vs_equal_weight_universe_bps": "MIXED_TICKER_NET_MINUS_EQUAL_WEIGHT_GROSS",
+                "ticker_book_excess_vs_equal_weight_universe_net_if_flattened_now_bps": "MATCHED_BOTH_NET_IF_FLATTENED_NOW",
+            },
+            "smh_net_if_flattened_now_bps": round(
+                smh - float(cohort["industry_round_trip_cost_bps"]), 4
+            ),
+            "equal_weight_universe_net_if_flattened_now_bps": round(ew - stock_cost, 4),
             "smh_return_bps": round(smh, 4),
             "qqq_return_bps": round(qqq, 4),
             "equal_weight_universe_return_bps": round(ew, 4),
@@ -752,6 +925,13 @@ def _resolve_semiconductor(cohort: dict[str, Any], prices: dict[str, pd.Series],
             },
             "ticker_book_excess_vs_smh_bps": round(ticker_net - smh, 4),
             "ticker_book_excess_vs_smh_net_bps": round(ticker_net - industry_net, 4),
+            "comparison_cost_basis": {
+                "ticker_book_excess_vs_smh_bps": "MIXED_TICKER_NET_MINUS_SMH_GROSS_LEGACY",
+                "ticker_book_excess_vs_smh_net_bps": "MATCHED_TICKER_NET_MINUS_SMH_NET",
+                "ticker_book_excess_vs_qqq_bps": "MIXED_TICKER_NET_MINUS_QQQ_GROSS_NO_QQQ_FEE",
+                "ticker_book_excess_vs_equal_weight_13_bps": "MIXED_TICKER_NET_MINUS_EQUAL_WEIGHT_GROSS",
+                "ticker_book_excess_vs_equal_weight_13_net_bps": "MATCHED_TICKER_NET_MINUS_EQUAL_WEIGHT_NET",
+            },
             "ticker_book_excess_vs_qqq_bps": round(ticker_net - qqq, 4),
             "ticker_book_excess_vs_equal_weight_13_bps": round(ticker_net - ew13, 4),
             "ticker_book_excess_vs_equal_weight_13_net_bps": round(ticker_net - ew13_net, 4),
@@ -858,6 +1038,60 @@ def _matched_after_cost_projections(cohorts: list[dict[str, Any]]) -> dict[str, 
     return out
 
 
+
+def _homebuilders_cost_basis_projections(cohorts: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Label immutable Homebuilders returns without inventing an ITB/QQQ fee."""
+    out: dict[str, dict[str, Any]] = {}
+    for cohort in cohorts:
+        if cohort.get("program_id") != "HOMEBUILDERS" or cohort.get("status") not in {"RESOLVED", "PARTIALLY_RESOLVED"}:
+            continue
+        identity = str(cohort.get("cohort_id") or "")
+        if not identity:
+            continue
+        resolution = cohort.get("resolution")
+        rows = resolution.get("observations") if isinstance(resolution, dict) else None
+        if not isinstance(rows, list):
+            out[identity] = {"status": "MISSING_FROZEN_OBSERVATIONS_NO_PROJECTION"}
+            continue
+        resolved = [row for row in rows if isinstance(row, dict) and row.get("status") == "RESOLVED"]
+        if not resolved:
+            continue
+        stock_cost = cohort.get("stock_round_trip_cost_bps")
+        numeric = [stock_cost] + [row.get(key) for row in resolved for key in (
+            "net_return_bps", "itb_return_bps", "qqq_return_bps",
+            "excess_vs_itb_bps", "excess_vs_qqq_bps")]
+        if any(isinstance(value, bool) or not isinstance(value, (int, float))
+               or not math.isfinite(value) for value in numeric):
+            out[identity] = {"status": "INVALID_FROZEN_RETURN_OR_COST_NO_PROJECTION"}
+            continue
+        n = len(resolved)
+        stock_net = sum(float(row["net_return_bps"]) for row in resolved) / n
+        itb_gross = sum(float(row["itb_return_bps"]) for row in resolved) / n
+        qqq_gross = sum(float(row["qqq_return_bps"]) for row in resolved) / n
+        legacy_itb = sum(float(row["excess_vs_itb_bps"]) for row in resolved) / n
+        legacy_qqq = sum(float(row["excess_vs_qqq_bps"]) for row in resolved) / n
+        out[identity] = {
+            "status": "DERIVED_MIXED_COST_ONLY_BENCHMARK_FEES_UNFROZEN",
+            "observation_unit": "PER_SYMBOL_FROZEN_HORIZON_MEAN_NOT_FUNDED_PORTFOLIO",
+            "funded_portfolio_nav_return_bps": None,
+            "resolved_observations": n,
+            "stock_net_mean_bps": round(stock_net, 4),
+            "itb_gross_mean_bps": round(itb_gross, 4),
+            "qqq_gross_mean_bps": round(qqq_gross, 4),
+            "legacy_stock_net_minus_itb_gross_mean_bps": round(legacy_itb, 4),
+            "legacy_stock_net_minus_qqq_gross_mean_bps": round(legacy_qqq, 4),
+            "matched_stock_net_minus_itb_net_mean_bps": None,
+            "matched_stock_net_minus_qqq_net_mean_bps": None,
+            "stock_round_trip_cost_bps": float(stock_cost),
+            "itb_round_trip_cost_bps": None,
+            "qqq_round_trip_cost_bps": None,
+            "comparison_cost_basis": "STOCK_NET_MINUS_BENCHMARK_GROSS_LEGACY_NOT_MATCHED_AFTER_COST",
+            "original_resolution_mutated": False,
+            "alpha_or_promotion_authority": False,
+        }
+    return out
+
+
 def _observed_market_data_asof(cohorts: list[dict[str, Any]], requested: date) -> str:
     """Return the latest date supported by every active cohort's common tape.
 
@@ -884,7 +1118,20 @@ def build(
     now_iso: str,
     loader: Callable[[str, date, date], pd.Series] = _download_close,
 ) -> dict[str, Any]:
-    existing = {str(c["cohort_id"]): dict(c) for c in ((prior or {}).get("cohorts") or [])}
+    # Prior first-seen timestamps are scientific chronology. Dict-comprehension
+    # last-write-wins would silently replace a duplicate immutable cohort ID
+    # with a different first_registered_at and change forward eligibility.
+    prior_rows = (prior or {}).get("cohorts") or []
+    if not isinstance(prior_rows, list):
+        raise RuntimeError("INVALID_PRIOR_COHORT_ROWS")
+    existing = {}
+    for row in prior_rows:
+        if not isinstance(row, dict) or not isinstance(row.get("cohort_id"), str) or not row["cohort_id"]:
+            raise RuntimeError("INVALID_PRIOR_COHORT_ID")
+        identity = row["cohort_id"]
+        if identity in existing:
+            raise RuntimeError("DUPLICATE_PRIOR_COHORT_ID")
+        existing[identity] = dict(row)
     discovered: dict[str, dict[str, Any]] = {}
     for filename in ("homebuilders.json", "semiconductor_shared_ridge.json"):
         path = adapter_dir / filename
@@ -929,6 +1176,7 @@ def build(
         },
         "cohorts": cohorts,
         "matched_after_cost_projections": _matched_after_cost_projections(cohorts),
+        "homebuilders_cost_basis_projections": _homebuilders_cost_basis_projections(cohorts),
         "summary": _summary(cohorts),
         "boundaries": {
             "research_only": True,
@@ -943,6 +1191,259 @@ def build(
 
 
 def self_test() -> None:
+    # Nested JSON duplicates and nonfinite constants cannot be trusted adapter
+    # identities even if a last-wins parser would retain a valid-looking key.
+    with tempfile.TemporaryDirectory() as source_dir:
+        adapter_path = Path(source_dir) / "adapter.json"
+        for raw, code in [
+            ('{"schema":"foundry.forward_program_adapter.v1","schema":"bad"}', "FORWARD_ADAPTER_DUPLICATE_JSON_KEY"),
+            ('{"schema":"foundry.forward_program_adapter.v1","program_id":"HOMEBUILDERS","signal":{"score":NaN}}', "FORWARD_ADAPTER_NONFINITE_JSON_CONSTANT"),
+        ]:
+            adapter_path.write_text(raw, encoding="utf-8")
+            try:
+                _adapter(adapter_path)
+                raise AssertionError("ambiguous/nonfinite adapter JSON admitted")
+            except RuntimeError as exc:
+                assert code in str(exc)
+    # An existing first-seen clock must not be rewritten by nested last-wins
+    # JSON, even when the cohort_id itself appears only once.
+    with tempfile.TemporaryDirectory() as prior_dir:
+        prior_path = Path(prior_dir) / "prior.json"
+        for raw, code in [
+            ('{"cohorts":[{"cohort_id":"x","first_registered_at":"old","first_registered_at":"new"}]}', "FORWARD_ADAPTER_DUPLICATE_JSON_KEY"),
+            ('{"cohorts":[{"mark":NaN}]}', "FORWARD_ADAPTER_NONFINITE_JSON_CONSTANT"),
+            ('[{"cohorts":[]}]', "FORWARD_PRIOR_ROOT_NOT_OBJECT"),
+        ]:
+            prior_path.write_text(raw, encoding="utf-8")
+            try:
+                _read_json(prior_path)
+                raise AssertionError("ambiguous prior first-seen JSON admitted")
+            except RuntimeError as exc:
+                assert code in str(exc)
+    for bad_date in ("2026-09-11junk", "2026-02-30", "2026-9-11"):
+        bad_adapter = {
+            "program_id": "HOMEBUILDERS", "signal_date": bad_date,
+            "signal": {"admitted_symbols": ["CCS"],
+                       "duration_horizon_sessions_by_symbol": {"CCS": 5}},
+        }
+        try:
+            _new_cohort(bad_adapter, "test", "2026-09-12T00:00:00Z")
+            raise AssertionError("malformed frozen signal date admitted")
+        except RuntimeError as exc:
+            assert "FORWARD_ADAPTER_SIGNAL_DATE_INVALID" in str(exc)
+    assert _canonical_signal_date("2026-09-11") == "2026-09-11"
+    # A duplicated Homebuilders ticker used to count as two independent
+    # observations; bool/zero/fractional horizons could distort frozen exits.
+    home_signal = {
+        "admitted_symbols": ["CCS", "DHI"],
+        "duration_horizon_sessions_by_symbol": {"CCS": 5, "DHI": 10},
+        "predicted_fixed20_net25_bps": {"CCS": 120.0, "DHI": -25.0},
+    }
+    home_adapter = {
+        "program_id": "HOMEBUILDERS",
+        "signal_date": "2026-09-11",
+        "signal": home_signal,
+        "timing": {"candidate_holding_horizons_sessions": [5, 10]},
+    }
+    admitted_home = _new_cohort(home_adapter, "test", "2026-09-11T00:00:00Z")
+    assert admitted_home is not None
+    assert admitted_home["symbols"] == ["CCS", "DHI"]
+    assert admitted_home["horizon_sessions_by_symbol"] == {"CCS": 5, "DHI": 10}
+    for bad_signal, code in [
+        ({**home_signal, "admitted_symbols": ["CCS", "CCS"]},
+         "FORWARD_HOMEBUILDERS_DUPLICATE_SYMBOL"),
+        ({**home_signal, "admitted_symbols": ["CCS", ""]},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "admitted_symbols": []},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "admitted_symbols": False},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "admitted_symbols": ["CCS", "ccs"]},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "admitted_symbols": ["CCS", "CCS "]},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "admitted_symbols": ["CCS", "CCS\u200b"]},
+         "FORWARD_HOMEBUILDERS_SYMBOL_INVALID"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": 5}},
+         "FORWARD_HOMEBUILDERS_HORIZON_MEMBERSHIP_MISMATCH"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": 5, "DHI": 10, "X": 2}},
+         "FORWARD_HOMEBUILDERS_HORIZON_MEMBERSHIP_MISMATCH"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": 0, "DHI": 10}},
+         "FORWARD_HOMEBUILDERS_HORIZON_INVALID"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": -1, "DHI": 10}},
+         "FORWARD_HOMEBUILDERS_HORIZON_INVALID"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": 1.5, "DHI": 10}},
+         "FORWARD_HOMEBUILDERS_HORIZON_INVALID"),
+        ({**home_signal, "duration_horizon_sessions_by_symbol": {"CCS": True, "DHI": 10}},
+         "FORWARD_HOMEBUILDERS_HORIZON_INVALID"),
+        ({**home_signal, "predicted_fixed20_net25_bps": {"CCS": 120.0}},
+         "FORWARD_HOMEBUILDERS_PREDICTION_SYMBOL_MISMATCH"),
+        ({**home_signal, "predicted_fixed20_net25_bps": {"CCS": 120.0, "DHI": -25.0, "X": 5.0}},
+         "FORWARD_HOMEBUILDERS_PREDICTION_SYMBOL_MISMATCH"),
+        ({**home_signal, "predicted_fixed20_net25_bps": {"CCS": 120.0, "DHI": float("nan")}},
+         "FORWARD_HOMEBUILDERS_PREDICTION_INVALID"),
+        ({**home_signal, "predicted_fixed20_net25_bps": {"CCS": True, "DHI": -25.0}},
+         "FORWARD_HOMEBUILDERS_PREDICTION_INVALID"),
+    ]:
+        try:
+            _new_cohort({**home_adapter, "signal": bad_signal}, "test", "2026-09-11T00:00:00Z")
+            raise AssertionError("ambiguous Homebuilders frozen cohort admitted")
+        except RuntimeError as exc:
+            assert code in str(exc)
+    for bad_timing, code in [
+        ({"candidate_holding_horizons_sessions": [5]},
+         "FORWARD_HOMEBUILDERS_HORIZON_OUTSIDE_FROZEN_ENVELOPE"),
+        ({"candidate_holding_horizons_sessions": [5, 10, 0]},
+         "FORWARD_HOMEBUILDERS_ALLOWED_HORIZON_ENVELOPE_INVALID"),
+        ({"candidate_holding_horizons_sessions": [5, True]},
+         "FORWARD_HOMEBUILDERS_ALLOWED_HORIZON_ENVELOPE_INVALID"),
+        ({}, "FORWARD_HOMEBUILDERS_ALLOWED_HORIZON_ENVELOPE_INVALID"),
+    ]:
+        try:
+            _new_cohort({**home_adapter, "timing": bad_timing}, "test", "2026-09-11T00:00:00Z")
+            raise AssertionError("Homebuilders duration outside frozen envelope admitted")
+        except RuntimeError as exc:
+            assert code in str(exc)
+    # Frozen positive-symbol membership and ticker-book weights must match.
+    # A foreign weight used to dilute the realized book without a signal,
+    # and a missing positive weight used to silently drop a position.
+    weight_adapter = {
+        "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+        "signal_date": "2026-10-01",
+        "signal": {
+            "positive_symbols": ["AAA", "BBB"],
+            "predicted_fixed20_net_value_bps": {"AAA": 100.0, "BBB": 200.0},
+        },
+        "validation": {"scientific_forward_credit": True},
+        "paper_action": {"ticker_book": {
+            "cohort_target_weights_nav": {"AAA": 0.02, "BBB": 0.03},
+        }},
+    }
+    clean_weight_cohort = _new_cohort(weight_adapter, "test", "2026-10-01T00:00:00Z")
+    assert clean_weight_cohort is not None
+    assert set(clean_weight_cohort["ticker_book_weights_within_cohort"]) == {"AAA", "BBB"}
+    assert abs(sum(clean_weight_cohort["ticker_book_weights_within_cohort"].values()) - 1.0) < 1e-12
+    for bad_weights, code in [
+        ({"AAA": 0.02, "FOREIGN": 0.03}, "FORWARD_COHORT_TICKER_BOOK_SYMBOL_MISMATCH"),
+        ({"AAA": 0.02}, "FORWARD_COHORT_TICKER_BOOK_SYMBOL_MISMATCH"),
+        ({"AAA": 0.02, "BBB": 0.0}, "FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID"),
+        ({"AAA": 0.02, "BBB": float("nan")}, "FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID"),
+        ({"AAA": 0.02, "BBB": True}, "FORWARD_COHORT_TICKER_BOOK_WEIGHT_INVALID"),
+        ({"AAA": 1e308, "BBB": 1e308}, "FORWARD_COHORT_TICKER_BOOK_GROSS_INVALID"),
+    ]:
+        invalid = json.loads(json.dumps(weight_adapter))
+        invalid["paper_action"]["ticker_book"]["cohort_target_weights_nav"] = bad_weights
+        try:
+            _new_cohort(invalid, "test", "2026-10-01T00:00:00Z")
+            raise AssertionError("ambiguous frozen ticker book admitted")
+        except RuntimeError as exc:
+            assert code in str(exc)
+    duplicate_symbols = json.loads(json.dumps(weight_adapter))
+    duplicate_symbols["signal"]["positive_symbols"] = ["AAA", "AAA"]
+    try:
+        _new_cohort(duplicate_symbols, "test", "2026-10-01T00:00:00Z")
+        raise AssertionError("duplicate positive symbol admitted")
+    except RuntimeError as exc:
+        assert "FORWARD_COHORT_DUPLICATE_POSITIVE_SYMBOL" in str(exc)
+    nonfinite_prediction = json.loads(json.dumps(weight_adapter))
+    nonfinite_prediction["signal"]["predicted_fixed20_net_value_bps"]["AAA"] = float("inf")
+    try:
+        _new_cohort(nonfinite_prediction, "test", "2026-10-01T00:00:00Z")
+        raise AssertionError("nonfinite forward prediction admitted")
+    except RuntimeError as exc:
+        assert "FORWARD_COHORT_PREDICTION_NONFINITE" in str(exc)
+    for bad_prediction, code in [
+        (True, "FORWARD_COHORT_PREDICTION_INVALID"),
+        ("not-a-number", "FORWARD_COHORT_PREDICTION_INVALID"),
+        (float("inf"), "FORWARD_COHORT_PREDICTION_NONFINITE"),
+    ]:
+        invalid = json.loads(json.dumps(weight_adapter))
+        invalid["signal"]["predicted_fixed20_net_value_bps"]["AAA"] = bad_prediction
+        try:
+            _new_cohort(invalid, "test", "2026-10-01T00:00:00Z")
+            raise AssertionError("malformed semiconductor prediction admitted")
+        except RuntimeError as exc:
+            assert code in str(exc)
+    for bad_breadth in (True, float("nan"), float("inf"), "not-a-number"):
+        invalid = json.loads(json.dumps(weight_adapter))
+        invalid["signal"]["positive_breadth"] = bad_breadth
+        try:
+            _new_cohort(invalid, "test", "2026-10-01T00:00:00Z")
+            raise AssertionError("nonfinite/boolean semiconductor breadth admitted")
+        except RuntimeError as exc:
+            assert "FORWARD_COHORT_POSITIVE_BREADTH_INVALID" in str(exc)
+    for bad_predictions in (
+        {"AAA": 100.0},
+        {"AAA": 100.0, "BBB": 200.0, "FOREIGN": 300.0},
+        None,
+    ):
+        invalid = json.loads(json.dumps(weight_adapter))
+        invalid["signal"]["predicted_fixed20_net_value_bps"] = bad_predictions
+        try:
+            _new_cohort(invalid, "test", "2026-10-01T00:00:00Z")
+            raise AssertionError("partial/foreign frozen prediction population admitted")
+        except RuntimeError as exc:
+            assert "FORWARD_COHORT_PREDICTION_SYMBOL_MISMATCH" in str(exc)
+
+    # Duplicate prior cohort IDs must never silently replace the original
+    # first-seen registration clock, even if the later row is otherwise valid.
+    with tempfile.TemporaryDirectory() as duplicate_dir:
+        empty_adapters = Path(duplicate_dir)
+        first = {
+            "cohort_id": "HOMEBUILDERS:2026-09-11:immutable",
+            "program_id": "HOMEBUILDERS", "status": "RESOLVED",
+            "first_registered_at": "2026-09-13T04:55:23Z",
+        }
+        second = {**first, "first_registered_at": "2026-09-15T04:55:23Z"}
+        try:
+            build(empty_adapters, {"cohorts": [first, second]},
+                  date(2026, 10, 25), "2026-10-25T12:00:00Z")
+        except RuntimeError as exc:
+            assert str(exc) == "DUPLICATE_PRIOR_COHORT_ID"
+        else:
+            raise AssertionError("conflicting prior first-seen cohort was silently overwritten")
+
+    # The forward ledger previously dropped bad rows, kept duplicate-last and
+    # intersected missing interior sessions. Each can change frozen +1/H20.
+    source_dates = pd.to_datetime(["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22"])
+    source_good = pd.Series([100.0, 101.0, 102.0, 103.0], index=source_dates)
+    for bad, code in [
+        (pd.concat([source_good, source_good.iloc[-1:]]), "SOURCE_DUPLICATE_SESSION"),
+        (source_good.mask(source_good.index == source_dates[1]), "SOURCE_PRICE_INVALID"),
+        (source_good.replace(102.0, float("inf")), "SOURCE_PRICE_INVALID"),
+        (source_good.replace(102.0, 0.0), "SOURCE_PRICE_INVALID"),
+        (source_good.replace(102.0, -1.0), "SOURCE_PRICE_INVALID"),
+        (pd.Series([100.0, 101.0], index=["2026-10-19", "bad-date"]), "SOURCE_PRICE_INVALID"),
+    ]:
+        try:
+            _normalize_series(bad)
+            raise AssertionError("ambiguous forward price source admitted")
+        except RuntimeError as exc:
+            assert code in str(exc)
+    assert _normalize_series(source_good).equals(source_good)
+    try:
+        _common_calendar({"AAA": source_good, "SMH": source_good.drop(source_dates[1])},
+                         ["AAA", "SMH"])
+        raise AssertionError("missing interior H20 source session compressed horizon")
+    except RuntimeError as exc:
+        assert "SOURCE_CALENDAR_INCOMPLETE" in str(exc)
+    assert _common_calendar({"AAA": source_good, "SMH": source_good},
+                            ["AAA", "SMH"]).equals(source_dates)
+    source_cohort = {
+        "program_id": "HOMEBUILDERS", "signal_date": "2026-10-19",
+        "symbols": ["AAA"], "status": "REGISTERED",
+    }
+    def bad_source_loader(symbol: str, _start: date, _end: date) -> pd.Series:
+        return pd.concat([source_good, source_good.iloc[-1:]]) if symbol == "AAA" else source_good
+    try:
+        _prices_for(source_cohort, date(2026, 10, 22), bad_source_loader)
+        raise AssertionError("custom loader bypassed source integrity guard")
+    except RuntimeError as exc:
+        assert "SOURCE_DUPLICATE_SESSION" in str(exc)
+    # Prior RESOLVED evidence is immutable and must not be re-scored.
+    frozen_terminal = {**source_cohort, "status": "RESOLVED", "resolution": {"immutable": True}}
+    assert _advance_cohort(frozen_terminal, False, date(2026, 10, 22), bad_source_loader) == frozen_terminal
+
     assert _completed_market_data_date(datetime(2026, 9, 29, 18, 43, tzinfo=timezone.utc)) == date(2026, 9, 28)
     assert _completed_market_data_date(datetime(2026, 9, 29, 23, 10, tzinfo=timezone.utc)) == date(2026, 9, 29)
     dates = pd.to_datetime([
@@ -1070,6 +1571,28 @@ def self_test() -> None:
     assert projected["ticker_minus_smh_net_bps"] == -8.3719
     assert projected["original_resolution_mutated"] is False
     assert json.dumps(terminal, sort_keys=True) == original_terminal
+
+    # Read-only cost-basis labels never rewrite a frozen Homebuilders result.
+    homebuilders_frozen = {
+        "cohort_id": "HB_SYNTHETIC", "program_id": "HOMEBUILDERS",
+        "status": "RESOLVED", "stock_round_trip_cost_bps": 25,
+        "resolution": {"observations": [
+            {"status": "RESOLVED", "net_return_bps": 100, "itb_return_bps": 50, "qqq_return_bps": 60, "excess_vs_itb_bps": 50, "excess_vs_qqq_bps": 40},
+            {"status": "RESOLVED", "net_return_bps": 0, "itb_return_bps": 20, "qqq_return_bps": 40, "excess_vs_itb_bps": -20, "excess_vs_qqq_bps": -40},
+        ]},
+    }
+    original_homebuilders = json.dumps(homebuilders_frozen, sort_keys=True)
+    hb_projection = _homebuilders_cost_basis_projections([homebuilders_frozen])["HB_SYNTHETIC"]
+    assert hb_projection["stock_net_mean_bps"] == 50
+    assert hb_projection["legacy_stock_net_minus_itb_gross_mean_bps"] == 15
+    assert hb_projection["matched_stock_net_minus_itb_net_mean_bps"] is None
+    assert hb_projection["funded_portfolio_nav_return_bps"] is None
+    assert hb_projection["observation_unit"] == "PER_SYMBOL_FROZEN_HORIZON_MEAN_NOT_FUNDED_PORTFOLIO"
+    assert hb_projection["original_resolution_mutated"] is False
+    assert json.dumps(homebuilders_frozen, sort_keys=True) == original_homebuilders
+    homebuilders_frozen["stock_round_trip_cost_bps"] = True
+    assert _homebuilders_cost_basis_projections([homebuilders_frozen])["HB_SYNTHETIC"]["status"] == "INVALID_FROZEN_RETURN_OR_COST_NO_PROJECTION"
+
     print("FORWARD_PROSPECTIVE_COHORT_LEDGER_SELF_TEST=PASS")
 
 

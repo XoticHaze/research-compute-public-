@@ -15,6 +15,8 @@ excess only; prediction-magnitude calibration remains deliberately blocked.
 import argparse
 import hashlib
 import json
+import math
+import re
 from datetime import date, datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -48,12 +50,26 @@ RECOVERED_REGISTRATION_ANCHORS = {
 
 
 def _normalize_series(series: pd.Series) -> pd.Series:
-    x = series.dropna().astype(float).copy()
-    idx = pd.to_datetime(x.index)
-    if getattr(idx, "tz", None) is not None:
-        idx = idx.tz_convert(None)
-    x.index = pd.DatetimeIndex(idx).normalize()
-    return x[~x.index.duplicated(keep="last")].sort_index()
+    # Never repair an ambiguous source clock or price by dropping a row or
+    # choosing the last conflicting observation. Either can move fixed H20.
+    if not isinstance(series, pd.Series) or series.empty:
+        raise RuntimeError("SOURCE_PRICE_INVALID: empty or non-series input")
+    try:
+        idx = pd.to_datetime(series.index, errors="raise")
+        if getattr(idx, "tz", None) is not None:
+            idx = idx.tz_convert(None)
+        idx = pd.DatetimeIndex(idx).normalize()
+        x = pd.to_numeric(series, errors="raise").astype(float).copy()
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise RuntimeError("SOURCE_PRICE_INVALID: unparseable clock or close") from exc
+    if idx.isna().any():
+        raise RuntimeError("SOURCE_PRICE_INVALID: null session date")
+    if idx.has_duplicates:
+        raise RuntimeError("SOURCE_DUPLICATE_SESSION: duplicate adjusted close date")
+    if x.isna().any() or not x.map(math.isfinite).all() or (x <= 0).any():
+        raise RuntimeError("SOURCE_PRICE_INVALID: missing, nonfinite or nonpositive adjusted close")
+    x.index = idx
+    return x.sort_index()
 
 
 def _download_close(symbol: str, start: date, end: date) -> pd.Series:
@@ -78,10 +94,15 @@ def _download_close(symbol: str, start: date, end: date) -> pd.Series:
 
 
 def _common_calendar(prices: dict[str, pd.Series], symbols: list[str]) -> pd.DatetimeIndex:
-    sets = [set(prices[s].index) for s in symbols]
-    if not sets:
+    if not symbols:
         return pd.DatetimeIndex([])
-    return pd.DatetimeIndex(sorted(set.intersection(*sets)))
+    # Intersection silently compresses a frozen +1/fixed20 horizon when one
+    # symbol has an interior hole, even if every latest date still agrees.
+    reference = prices[symbols[0]].index
+    for symbol in symbols[1:]:
+        if not prices[symbol].index.equals(reference):
+            raise RuntimeError(f"SOURCE_CALENDAR_INCOMPLETE: {symbol} session dates differ")
+    return pd.DatetimeIndex(reference)
 
 
 def _ret_bps(series: pd.Series, entry: pd.Timestamp, exit_: pd.Timestamp) -> float:
@@ -127,9 +148,13 @@ def build(
     if not symbols:
         raise RuntimeError("large-cap transport has no symbols")
 
-    signal_date = str(adapter.get("signal_date") or "")[:10]
-    if not signal_date:
-        raise RuntimeError("large-cap transport missing signal_date")
+    raw_signal_date = adapter.get("signal_date")
+    if not isinstance(raw_signal_date, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", raw_signal_date):
+        raise RuntimeError("LARGECAP_SIGNAL_DATE_INVALID: exact YYYY-MM-DD required")
+    try:
+        signal_date = date.fromisoformat(raw_signal_date).isoformat()
+    except ValueError as exc:
+        raise RuntimeError("LARGECAP_SIGNAL_DATE_INVALID: impossible calendar date") from exc
     timing = adapter.get("timing") or {}
     delay = int(timing["execution_delay_sessions"])
     horizon = int(timing["holding_horizon_sessions"])
@@ -156,7 +181,7 @@ def build(
     )
     required = symbols + ["SPY", "QQQ"]
     start = date.fromisoformat(signal_date) - timedelta(days=10)
-    prices = {s: loader(s, start, asof) for s in dict.fromkeys(required)}
+    prices = {s: _normalize_series(loader(s, start, asof)) for s in dict.fromkeys(required)}
     latest_by_symbol = {
         symbol: (None if prices[symbol].empty else pd.Timestamp(prices[symbol].index.max()).date().isoformat())
         for symbol in required
@@ -204,6 +229,19 @@ def build(
         }
 
     entry_i, entry_ts = entry
+    # A recovered historical record proves the record existed, not that it
+    # existed before the selected next-session entry. With only daily close
+    # timestamps, require registration on a strictly earlier NY market date;
+    # same-day registration is unverified, not automatically prospective.
+    first_registration_et = datetime.fromisoformat(
+        first_registered_at.replace("Z", "+00:00")
+    ).astimezone(ZoneInfo("America/New_York"))
+    first_seen_before_entry = first_registration_et.date() < entry_ts.date()
+    # Neither a caller-provided prior JSON nor a recovered Git commit is an
+    # independently authenticated Foundry issuer. This consumer can establish
+    # clock consistency, never grant scientific prospective cohort credit.
+    pre_entry_clock_consistent = registration_evidence_present and first_seen_before_entry
+    prospective_forward_credit_eligible = False
     sessions_completed = max(0, len(calendar) - 1 - entry_i)
     terminal = entry_i + horizon < len(calendar)
     if terminal and not registration_evidence_present:
@@ -215,6 +253,8 @@ def build(
             "signal_date": signal_date,
             "first_registered_at": first_registered_at,
             "registration_anchor_source": registration_anchor_source,
+            "first_seen_before_entry": first_seen_before_entry,
+            "prospective_forward_credit_eligible": False,
             "state": "LATE_REGISTRATION_REJECTED",
             "source_health": source_health,
             "entry_date": entry_ts.date().isoformat(),
@@ -282,6 +322,10 @@ def build(
         "signal_date": signal_date,
         "first_registered_at": first_registered_at,
         "registration_anchor_source": registration_anchor_source,
+        "first_seen_before_entry": first_seen_before_entry,
+        "pre_entry_clock_consistent": pre_entry_clock_consistent,
+        "independent_original_issuer_authenticated": False,
+        "prospective_forward_credit_eligible": prospective_forward_credit_eligible,
         "state": "RESOLVED" if terminal else "PROSPECTIVE_OPEN",
         "source_health": {
             **source_health,
@@ -334,10 +378,24 @@ def enrich_scoreboard(
         "largecap_observation_generated_at": observation.get("generated_at"),
         "largecap_market_data_asof": observation.get("market_data_asof"),
     })
-    lane["evidence_grade"] = "FORWARD_OBSERVATION_RESOLVED" if observation.get("state") == "RESOLVED" else "FORWARD_OBSERVATION_OPEN"
+    # A historical recovery after entry can resolve a descriptive H20 tape,
+    # but it cannot establish an originally first-seen prospective cohort.
+    # The public observation cannot self-authenticate original Foundry issuer.
+    # A forged prior JSON or an asserted boolean is not promotion/forward credit.
+    qualified = False
+    clock_consistent = observation.get("first_seen_before_entry") is True
+    lane["evidence_grade"] = (
+        "PRE_ENTRY_CLOCK_CONSISTENT_SOURCE_ONLY" if observation.get("state") == "RESOLVED" and clock_consistent
+        else "RETROSPECTIVE_REGISTRATION_ONLY" if observation.get("state") == "RESOLVED"
+        else "FORWARD_OBSERVATION_OPEN_SOURCE_ONLY"
+    )
     scorecard = dict(lane.get("scorecard") or {})
     scorecard.update({
         "forward_state": observation.get("state"),
+        "first_seen_before_entry": observation.get("first_seen_before_entry"),
+        "pre_entry_clock_consistent": observation.get("pre_entry_clock_consistent"),
+        "independent_original_issuer_authenticated": False,
+        "prospective_forward_credit_eligible": qualified,
         "forward_sessions_completed": observation.get("sessions_completed"),
         "directional_sign_hit_rate_current": (observation.get("summary") or {}).get("directional_sign_hit_rate"),
         "mean_directional_excess_vs_spy_bps_current": (observation.get("summary") or {}).get("mean_directional_excess_vs_spy_bps"),
@@ -349,6 +407,7 @@ def enrich_scoreboard(
     scoreboard.setdefault("coverage", {})["largecap_transport_observer"] = {
         "present": True,
         "state": observation.get("state"),
+        "prospective_forward_credit_eligible": qualified,
         "generated_at": observation.get("generated_at"),
         "market_data_asof": observation.get("market_data_asof"),
         "sessions_completed": observation.get("sessions_completed"),
@@ -406,6 +465,11 @@ def self_test() -> None:
     out = build(adapter, date(2026, 1, 9), "2026-01-09T00:00:00+00:00", loader)
     assert out["state"] == "PROSPECTIVE_OPEN"
     assert out["first_registered_at"] == "2026-01-09T00:00:00+00:00"
+    assert out["first_seen_before_entry"] is False
+    assert out["prospective_forward_credit_eligible"] is False
+    timely = build(adapter, date(2026, 1, 9), "2026-01-02T22:00:00+00:00", loader)
+    assert timely["first_seen_before_entry"] is True
+    assert timely["prospective_forward_credit_eligible"] is False  # no prior durable anchor yet
     recovered_adapter = dict(adapter)
     recovered_adapter["signal_date"] = "2026-09-11"
     recovered = build(recovered_adapter, date(2026, 1, 9), "2026-09-18T06:00:00+00:00", loader)
@@ -431,6 +495,34 @@ def self_test() -> None:
     assert late["state"] == "LATE_REGISTRATION_REJECTED"
     resolved = build(adapter, long_dates[-1].date(), "2026-02-10T00:00:00+00:00", long_loader, prior=out)
     assert resolved["state"] == "RESOLVED"
+    assert resolved["first_seen_before_entry"] is False
+    assert resolved["prospective_forward_credit_eligible"] is False
+    timely_resolved = build(adapter, long_dates[-1].date(), "2026-02-10T00:00:00+00:00", long_loader, prior=timely)
+    assert timely_resolved["state"] == "RESOLVED"
+    assert timely_resolved["first_seen_before_entry"] is True
+    assert timely_resolved["pre_entry_clock_consistent"] is True
+    assert timely_resolved["prospective_forward_credit_eligible"] is False
+    late_score = enrich_scoreboard(
+        {"schema": SCOREBOARD_SCHEMA, "lanes": [{"program_id": PROGRAM_ID}], "coverage": {}, "decision_chain": {}},
+        resolved, "late-registration-test",
+    )
+    assert late_score["lanes"][0]["evidence_grade"] == "RETROSPECTIVE_REGISTRATION_ONLY"
+    assert late_score["lanes"][0]["scorecard"]["prospective_forward_credit_eligible"] is False
+    timely_score = enrich_scoreboard(
+        {"schema": SCOREBOARD_SCHEMA, "lanes": [{"program_id": PROGRAM_ID}], "coverage": {}, "decision_chain": {}},
+        timely_resolved, "timely-registration-test",
+    )
+    assert timely_score["lanes"][0]["evidence_grade"] == "PRE_ENTRY_CLOCK_CONSISTENT_SOURCE_ONLY"
+    assert timely_score["lanes"][0]["scorecard"]["prospective_forward_credit_eligible"] is False
+    # A caller-authored prior claiming issuer admission cannot upgrade grade.
+    forged = dict(timely_resolved, prospective_forward_credit_eligible=True,
+                  independent_original_issuer_authenticated=True)
+    forged_score = enrich_scoreboard(
+        {"schema": SCOREBOARD_SCHEMA, "lanes": [{"program_id": PROGRAM_ID}], "coverage": {}, "decision_chain": {}},
+        forged, "forged-source-only-issuer",
+    )
+    assert forged_score["lanes"][0]["evidence_grade"] == "PRE_ENTRY_CLOCK_CONSISTENT_SOURCE_ONLY"
+    assert forged_score["lanes"][0]["scorecard"]["prospective_forward_credit_eligible"] is False
 
     score = {"schema": SCOREBOARD_SCHEMA, "lanes": [{"program_id": PROGRAM_ID}], "coverage": {}, "decision_chain": {}}
     score = enrich_scoreboard(score, out, "test-largecap-sha")
@@ -438,6 +530,39 @@ def self_test() -> None:
     assert lane["observation_status"] == "ACTIVE"
     assert lane["scorecard"]["terminal_accuracy_available"] is False
     assert lane["observation_lineage"]["largecap_observation_sha256"] == "test-largecap-sha"
+    # New falsifiers: latest-date equality cannot excuse an interior hole.
+    missing_fake = dict(long_fake)
+    missing_fake["CAT"] = long_fake["CAT"].drop(long_dates[9])
+    assert all(s.index.max() == long_dates[-1] for s in missing_fake.values())
+    def missing_loader(symbol: str, _start: date, _end: date) -> pd.Series:
+        return missing_fake[symbol][missing_fake[symbol].index <= pd.Timestamp(_end)]
+    try:
+        build(adapter, long_dates[-1].date(), "2026-02-10T00:00:00+00:00", missing_loader)
+        raise AssertionError("interior source gap was silently compressed")
+    except RuntimeError as exc:
+        assert "SOURCE_CALENDAR_INCOMPLETE" in str(exc)
+
+    # A same-date conflicting adjusted close must never use keep='last'.
+    conflicting = pd.concat([fake["CAT"], pd.Series([999.0], index=[dates[1]])])
+    for malformed, code in [
+        (conflicting, "SOURCE_DUPLICATE_SESSION"),
+        (fake["CAT"].mask(fake["CAT"].index == dates[2]), "SOURCE_PRICE_INVALID"),
+        (fake["CAT"].replace(103.0, float("inf")), "SOURCE_PRICE_INVALID"),
+        (fake["CAT"].replace(103.0, 0.0), "SOURCE_PRICE_INVALID"),
+    ]:
+        try:
+            _normalize_series(malformed)
+            raise AssertionError(f"invalid source admitted: {code}")
+        except RuntimeError as exc:
+            assert code in str(exc)
+    # Prefix-only adapter dates must not borrow a valid frozen signal identity.
+    for invalid_date in ("2026-01-02garbage", "2026-02-30", "2026-1-2"):
+        malformed_adapter = dict(adapter, signal_date=invalid_date)
+        try:
+            build(malformed_adapter, date(2026, 1, 9), "2026-01-09T00:00:00+00:00", loader)
+            raise AssertionError("malformed signal_date admitted")
+        except RuntimeError as exc:
+            assert "LARGECAP_SIGNAL_DATE_INVALID" in str(exc)
     print("FORWARD_LARGECAP_TRANSPORT_OBSERVER_SELF_TEST=PASS")
 
 

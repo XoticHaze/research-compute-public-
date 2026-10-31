@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -24,24 +26,54 @@ EXPECTED_PRIVATE_ADAPTERS = (
 
 
 def _load(root: Path, name: str) -> dict[str, Any] | None:
-    matches = list(root.rglob(name))
+    """Reject conflicting transport copies of a canonical scoreboard input.
+
+    A recursive artifact root can contain multiple copies of the same producer
+    basename. Never select one by directory enumeration order. Byte-identical
+    copies are safe; a conflicting copy fails closed without exposing paths or
+    input contents in public logs.
+    """
+    matches = sorted(root.rglob(name))
     if not matches:
         return None
-    return json.loads(matches[0].read_text())
+    raw = matches[0].read_bytes()
+    digest = hashlib.sha256(raw).digest()
+    for path in matches[1:]:
+        if hashlib.sha256(path.read_bytes()).digest() != digest:
+            raise ValueError(f"CONFLICTING_SCOREBOARD_INPUT:{name}")
+    payload = json.loads(raw)
+    if not isinstance(payload, dict):
+        raise ValueError(f"INVALID_SCOREBOARD_INPUT:{name}")
+    return payload
 
 
 def _load_native_adapters(root: Path) -> dict[str, dict[str, Any]]:
+    """Never select a native program by filesystem enumeration order.
+
+    Identical byte-for-byte transport copies are harmless. Conflicting
+    first-seen program identities must fail before scoreboard construction.
+    """
     out: dict[str, dict[str, Any]] = {}
+    seen_sha256: dict[str, str] = {}
     for path in root.rglob("*.json"):
         try:
-            payload = json.loads(path.read_text())
+            raw = path.read_bytes()
+            payload = json.loads(raw)
         except (json.JSONDecodeError, UnicodeDecodeError):
             continue
-        if payload.get("schema") != ADAPTER_SCHEMA:
+        if not isinstance(payload, dict) or payload.get("schema") != ADAPTER_SCHEMA:
             continue
         program_id = str(payload.get("program_id") or "")
-        if program_id in EXPECTED_PRIVATE_ADAPTERS:
-            out[program_id] = payload
+        if program_id not in EXPECTED_PRIVATE_ADAPTERS:
+            continue
+        digest = hashlib.sha256(raw).hexdigest()
+        if program_id in seen_sha256:
+            if seen_sha256[program_id] != digest:
+                # Do not echo source paths, raw payloads or private identifiers.
+                raise ValueError(f"DUPLICATE_NATIVE_ADAPTER_PROGRAM_ID:{program_id}")
+            continue
+        seen_sha256[program_id] = digest
+        out[program_id] = payload
     return out
 
 
@@ -71,26 +103,60 @@ def _positive_session_stats(values: list[float]) -> dict[str, Any]:
 
 
 def _challenger_session_stats(fwd: dict[str, Any]) -> dict[str, Any]:
-    challenger = {
-        str(row.get("date")): row
-        for row in (fwd.get("challenger_observations") or [])
-        if row.get("date")
+    """Only report forward hit rates when the entire matched date book exists."""
+    empty = _positive_session_stats([])
+    invalid = {
+        "complete": False,
+        "vs_incumbent": empty,
+        "vs_matched_cash_control": empty,
     }
+    metrics = fwd.get("challenger_if_flattened_now") or {}
+    days = metrics.get("days")
+    challenger_rows = fwd.get("challenger_observations")
+    matched_rows = fwd.get("matched_control_observations")
+    if (
+        isinstance(days, bool) or not isinstance(days, int) or days < 0
+        or not isinstance(challenger_rows, list)
+        or not isinstance(matched_rows, list)
+        or len(challenger_rows) != days or len(matched_rows) != days
+    ):
+        return invalid
+
+    def indexed(rows: list[dict[str, Any]], required: tuple[str, ...]) -> dict[str, dict[str, Any]] | None:
+        by_day: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                return None
+            day = row.get("date")
+            if not isinstance(day, str) or not day or day in by_day:
+                return None
+            if any(
+                isinstance(row.get(key), bool)
+                or not isinstance(row.get(key), (int, float))
+                or not math.isfinite(row[key])
+                for key in required
+            ):
+                return None
+            by_day[day] = row
+        return by_day
+
+    challenger = indexed(challenger_rows, ("net_return", "core_return"))
+    matched = indexed(matched_rows, ("net_return",))
+    if challenger is None or matched is None or challenger.keys() != matched.keys():
+        return invalid
     incumbent_excess = [
-        float(row.get("net_return", 0.0)) - float(row.get("core_return", 0.0))
-        for row in challenger.values()
+        row["net_return"] - row["core_return"] for row in challenger.values()
     ]
-    matched = {
-        str(row.get("date")): row
-        for row in (fwd.get("matched_control_observations") or [])
-        if row.get("date")
-    }
     matched_excess = [
-        float(row.get("net_return", 0.0)) - float(matched[day].get("net_return", 0.0))
+        row["net_return"] - matched[day]["net_return"]
         for day, row in challenger.items()
-        if day in matched
     ]
+    # Individually finite returns can still overflow on subtraction.
+    # Never publish a complete matched book with nonfinite derived excess.
+    if not all(math.isfinite(value) for value in incumbent_excess + matched_excess):
+        return invalid
     return {
+        "complete": True,
         "vs_incumbent": _positive_session_stats(incumbent_excess),
         "vs_matched_cash_control": _positive_session_stats(matched_excess),
     }
@@ -220,6 +286,91 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
     days = int(metrics.get("days", 0) or 0)
     pos = x.get("current_positions", {}).get("challenger", {})
     session_stats = _challenger_session_stats(fwd)
+    matched_complete = session_stats["complete"]
+    basis = fwd.get("comparison_cost_basis") or {}
+    challenger_nav = metrics.get("cumulative_return")
+    incumbent_nav = (fwd.get("incumbent") or {}).get("cumulative_return")
+    matched_nav = (fwd.get("matched_control_if_flattened_now") or {}).get("cumulative_return")
+
+    def admitted_nav(value: Any) -> bool:
+        # A cost-basis declaration cannot authenticate missing, string, bool,
+        # nonfinite or bankrupt funded NAVs. Catch oversized JSON integers
+        # before float conversion; guard bps multiplication too.
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return False
+        try:
+            numeric = float(value)
+        except (OverflowError, ValueError):
+            return False
+        return (
+            math.isfinite(numeric) and numeric > -1.0
+            and math.isfinite(numeric * 10000.0)
+        )
+
+    def replayed_nav(rows: list[dict[str, Any]], key: str, exit_fee: float) -> float | None:
+        # The producer publishes daily net returns BEFORE its final 25bp
+        # flattening fee. Recompute all three books rather than trusting a
+        # declared cost basis plus unrelated finite terminal NAVs.
+        if not rows:
+            return None
+        wealth = 1.0
+        for index, row in enumerate(rows):
+            try:
+                daily = float(row[key]) - (exit_fee if index == len(rows) - 1 else 0.0)
+                wealth *= 1.0 + daily
+            except (KeyError, TypeError, ValueError, OverflowError):
+                return None
+            if not math.isfinite(wealth) or wealth <= 0.0:
+                return None
+        return wealth - 1.0
+
+    nav_reconciled = False
+    if (
+        matched_complete and days > 0
+        and x.get("contract", {}).get("entry_and_mark_to_market_exit_cost_bps_each") == 25
+        and all(admitted_nav(nav) for nav in (challenger_nav, incumbent_nav, matched_nav))
+    ):
+        challenger_rows = fwd["challenger_observations"]
+        matched_rows = fwd["matched_control_observations"]
+        expected = (
+            replayed_nav(challenger_rows, "net_return", 0.0025),
+            replayed_nav(challenger_rows, "core_return", 0.0),
+            replayed_nav(matched_rows, "net_return", 0.0025),
+        )
+        nav_reconciled = all(
+            value is not None and math.isfinite(value)
+            and math.isclose(value, published, rel_tol=1e-10, abs_tol=1e-10)
+            for value, published in zip(expected, (challenger_nav, incumbent_nav, matched_nav))
+        )
+
+    both_net = (
+        matched_complete
+        and days > 0
+        and nav_reconciled
+        and basis.get("challenger_minus_incumbent_cumulative")
+            == "CHALLENGER_NET_IF_FLATTENED_NOW_MINUS_UNCHANGED_INCUMBENT_NET"
+        and basis.get("challenger_minus_matched_cumulative")
+            == "BOTH_NET_IF_FLATTENED_NOW"
+        and basis.get("legacy_pre_exit_spreads_not_used") is True
+    )
+    incumbent_relative, _ = (
+        _funded_excess_metrics(incumbent_nav, challenger_nav)
+        if both_net else (None, None)
+    )
+    matched_relative, _ = (
+        _funded_excess_metrics(matched_nav, challenger_nav)
+        if both_net else (None, None)
+    )
+    # A near-zero control wealth can overflow a finite NAV ratio. Such a
+    # ratio is not a valid both-net scorecard, even if all inputs were finite.
+    both_net = (
+        both_net and incumbent_relative is not None and matched_relative is not None
+        and math.isfinite(incumbent_relative) and math.isfinite(matched_relative)
+        and math.isfinite(incumbent_relative * 10000.0)
+        and math.isfinite(matched_relative * 10000.0)
+    )
+    if not both_net:
+        incumbent_relative = matched_relative = None
     return {
         "program_id": program_id,
         "kind": "portfolio_diversification_challenger",
@@ -233,9 +384,19 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
         "action_text": f"Shadow {_weights_text(pos, 12)}.",
         "forward_days": days,
         "scorecard": {
-            "challenger_cumulative_bps": _bp(metrics.get("cumulative_return")),
-            "excess_vs_incumbent_bps": _bp(fwd.get("challenger_minus_incumbent_cumulative")),
-            "excess_vs_matched_cash_control_bps": _bp(fwd.get("challenger_minus_matched_cumulative")),
+            "challenger_cumulative_bps": _bp(challenger_nav) if admitted_nav(challenger_nav) else None,
+            # Preserve legacy common-capital differences. Wealth ratios are
+            # separate metrics, never substituted for the published fields.
+            "matched_cost_basis": "BOTH_NET_IF_FLATTENED_NOW" if both_net else "UNADMITTED_OR_INCOMPLETE",
+            "funded_nav_reconciliation": "PASS_THREE_BOOKS" if nav_reconciled else "FAIL_CLOSED",
+            "challenger_absolute_net_if_flattened_now_bps": _bp(challenger_nav) if both_net else None,
+            "incumbent_absolute_net_if_flattened_now_bps": _bp(incumbent_nav) if both_net else None,
+            "matched_control_absolute_net_if_flattened_now_bps": _bp(matched_nav) if both_net else None,
+            "challenger_vs_incumbent_relative_wealth_bps": _bp(incumbent_relative),
+            "challenger_vs_matched_control_relative_wealth_bps": _bp(matched_relative),
+            "excess_vs_incumbent_bps": _bp(fwd.get("challenger_minus_incumbent_cumulative")) if matched_complete else None,
+            "excess_vs_matched_cash_control_bps": _bp(fwd.get("challenger_minus_matched_cumulative")) if matched_complete else None,
+            "matched_observation_integrity": "COMPLETE" if matched_complete else "INCOMPLETE_FAIL_CLOSED",
             "vs_incumbent_observed_sessions": session_stats["vs_incumbent"]["observed_sessions"],
             "vs_incumbent_positive_sessions": session_stats["vs_incumbent"]["positive_sessions"],
             "vs_incumbent_session_hit_rate": session_stats["vs_incumbent"]["hit_rate"],
@@ -245,7 +406,7 @@ def _challenger(x: dict[str, Any] | None, program_id: str, alt: str) -> dict[str
             "max_drawdown": metrics.get("max_drawdown"),
             "annualized_vol": metrics.get("annualized_vol"),
         },
-        "validation_grade": _grade(days),
+        "validation_grade": _grade(days) if matched_complete else "FORWARD_MATCHED_OBSERVATIONS_INCOMPLETE",
         "decision_use": (
             f"Tests whether allocating half the incumbent portfolio to {alt} improves capital efficiency and diversification. "
             "A market decision requires positive excess versus both the unchanged incumbent and matched BIL control with enough forward observations."
@@ -402,6 +563,86 @@ def _prospective_state(ledger: dict[str, Any] | None, program_id: str) -> dict[s
             round(sum(v[1] for v in matched) / len(matched), 4) if complete else None
         )
         out["legacy_mean_ticker_book_excess_vs_smh_basis"] = "BOOK_NET_VS_SMH_GROSS"
+    if program_id == "HOMEBUILDERS":
+        # The frozen Homebuilders contract charges stock round trips but
+        # specifies no ITB/QQQ benchmark fee. Preserve the legacy mixed-cost
+        # numbers, never fabricate a matched-net benchmark comparison.
+        full = [c for c in rows if c.get("status") == "RESOLVED"]
+        partial = [
+            c for c in rows if c.get("status") == "PARTIALLY_RESOLVED"
+            and any(isinstance(row, dict) and row.get("status") == "RESOLVED"
+                    for row in ((c.get("resolution") or {}).get("observations") or []))
+        ]
+        reportable = full + partial
+        expected_full = int(summary.get("resolved_cohorts", len(full)) or 0)
+        projections = ledger.get("homebuilders_cost_basis_projections") or {}
+        valid = 0
+        for cohort in reportable:
+            projection = projections.get(str(cohort.get("cohort_id"))) or {}
+            legacy = projection.get("legacy_stock_net_minus_itb_gross_mean_bps")
+            # A finite caller-supplied projection is not proof that it was
+            # derived from THIS immutable cohort. Rebind the status label to
+            # the original resolved rows; do not alter the original returns.
+            resolution = cohort.get("resolution")
+            observations = resolution.get("observations") if isinstance(resolution, dict) else None
+            observations = observations if isinstance(observations, list) else []
+            resolved_obs = [r for r in observations if isinstance(r, dict)
+                            and r.get("status") == "RESOLVED"]
+            fields = {
+                "stock_net_mean_bps": "net_return_bps",
+                "itb_gross_mean_bps": "itb_return_bps",
+                "qqq_gross_mean_bps": "qqq_return_bps",
+                "legacy_stock_net_minus_itb_gross_mean_bps": "excess_vs_itb_bps",
+                "legacy_stock_net_minus_qqq_gross_mean_bps": "excess_vs_qqq_bps",
+            }
+            source_numeric = all(
+                isinstance(r.get(field), (int, float))
+                and not isinstance(r.get(field), bool)
+                and math.isfinite(r[field])
+                for r in resolved_obs for field in fields.values()
+            )
+            source_bound = (
+                bool(resolved_obs)
+                and source_numeric
+                and projection.get("resolved_observations") == len(resolved_obs)
+                and isinstance(cohort.get("stock_round_trip_cost_bps"), (int, float))
+                and not isinstance(cohort.get("stock_round_trip_cost_bps"), bool)
+                and math.isfinite(cohort["stock_round_trip_cost_bps"])
+                and projection.get("stock_round_trip_cost_bps") == float(cohort["stock_round_trip_cost_bps"])
+                and all(
+                    projection.get(projected) == round(
+                        sum(float(r[source]) for r in resolved_obs) / len(resolved_obs), 4
+                    )
+                    for projected, source in fields.items()
+                )
+                and (
+                    (cohort.get("status") == "RESOLVED" and len(resolved_obs) == len(observations))
+                    or (cohort.get("status") == "PARTIALLY_RESOLVED"
+                        and len(resolved_obs) < len(observations))
+                )
+            )
+            if (
+                source_bound
+                and projection.get("status") == "DERIVED_MIXED_COST_ONLY_BENCHMARK_FEES_UNFROZEN"
+                and projection.get("original_resolution_mutated") is False
+                and projection.get("alpha_or_promotion_authority") is False
+                and projection.get("matched_stock_net_minus_itb_net_mean_bps") is None
+                and isinstance(legacy, (int, float)) and not isinstance(legacy, bool)
+                and math.isfinite(legacy)
+            ):
+                valid += 1
+        complete = bool(reportable) and valid == len(reportable) and len(full) == expected_full
+        out["homebuilders_cost_basis_projection_status"] = (
+            "ALL_REPORTABLE_PARTIAL_COHORTS_MIXED_COST_LABELLED" if complete and partial
+            else "ALL_RESOLVED_COHORTS_MIXED_COST_LABELLED" if complete
+            else "NO_RESOLVED_OBSERVATIONS" if not reportable and expected_full == 0
+            else "MIXED_COST_PROJECTION_INCOMPLETE"
+        )
+        out["legacy_mean_excess_vs_itb_basis"] = "STOCK_NET_MINUS_ITB_GROSS_NOT_MATCHED_AFTER_COST"
+        out["mean_matched_after_cost_excess_vs_itb_bps"] = None
+        out["mean_matched_after_cost_excess_vs_qqq_bps"] = None
+        out["homebuilders_observation_unit"] = "PER_SYMBOL_FROZEN_HORIZON_MEAN_NOT_FUNDED_PORTFOLIO"
+        out["homebuilders_funded_portfolio_nav_return_bps"] = None
     if current:
         out.update(
             {
@@ -586,6 +827,11 @@ def _decision_chain(lanes: list[dict[str, Any]]) -> dict[str, Any]:
             "semiconductor_mean_ticker_book_excess_vs_equal_weight_13_net_bps": (semi.get("prospective_evidence") or {}).get("mean_ticker_book_excess_vs_equal_weight_13_net_bps"),
             "semiconductor_matched_cost_projection_status": (semi.get("prospective_evidence") or {}).get("matched_cost_projection_status"),
             "homebuilders_mean_excess_vs_itb_bps": (hb.get("prospective_evidence") or {}).get("mean_excess_vs_itb_bps"),
+            "homebuilders_legacy_itb_cost_basis": (hb.get("prospective_evidence") or {}).get("legacy_mean_excess_vs_itb_basis"),
+            "homebuilders_matched_after_cost_status": (hb.get("prospective_evidence") or {}).get("homebuilders_cost_basis_projection_status"),
+            "homebuilders_matched_after_cost_excess_vs_itb_bps": (hb.get("prospective_evidence") or {}).get("mean_matched_after_cost_excess_vs_itb_bps"),
+            "homebuilders_observation_unit": (hb.get("prospective_evidence") or {}).get("homebuilders_observation_unit"),
+            "homebuilders_funded_portfolio_nav_return_bps": (hb.get("prospective_evidence") or {}).get("homebuilders_funded_portfolio_nav_return_bps"),
         },
         "resulting_market_decision_rule": (
             "Use P249/P266 as the frozen base research portfolio; treat P46 as regime context; add only native prospectively "
@@ -595,8 +841,28 @@ def _decision_chain(lanes: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _load_prospective_ledger(root: Path) -> dict[str, Any] | None:
+    """Use the freshly resolved ledger, never the prior-current history copy.
+
+    The report job intentionally stages both a historical main snapshot under
+    prior-current/ and a newly resolved producer under prospective-current/.
+    They are different authorities, not conflicting copies of one current
+    artifact. Conflicting duplicates *within* the selected current producer
+    directory still fail closed through _load.
+    """
+    name = "forward_prospective_cohort_ledger_r1.json"
+    current = root / "prospective-current"
+    if current.is_dir():
+        if not (current / name).is_file():
+            raise ValueError("CURRENT_PROSPECTIVE_LEDGER_NOT_MATERIALIZED")
+        return _load(current, name)
+    if (root / "prior-current" / name).is_file():
+        raise ValueError("CURRENT_PROSPECTIVE_LEDGER_NOT_MATERIALIZED")
+    return _load(root, name)
+
+
 def build(root: Path) -> dict[str, Any]:
-    ledger = _load(root, "forward_prospective_cohort_ledger_r1.json")
+    ledger = _load_prospective_ledger(root)
     p438_predecessor = _p438_semiconductor_predecessor(
         _load(root, "p438_semiconductor_forward_mtd_r1.json")
     )
@@ -669,15 +935,99 @@ def build(root: Path) -> dict[str, Any]:
         if value
     ]
     common_asof = min(market_data_dates) if market_data_dates else None
+    # A ledger can be internally cross-symbol synchronized while every
+    # program's latest historical source date lags an independently observed
+    # completed market session. Do not present that as a fresh forward source.
+    def strict_session_day(value: Any):
+        # Never silently truncate malformed timestamps into valid-looking dates.
+        if not isinstance(value, str) or re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value) is None:
+            return None
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+    completed_reference = p249_health.get("latest_scored_common_session")
+    reference_day = strict_session_day(completed_reference)
+    reference_state = (
+        "OBSERVED_COMPLETED_SESSION" if reference_day is not None
+        else "INVALID_INDEPENDENT_COMPLETED_SESSION"
+        if completed_reference not in (None, "") else "NO_INDEPENDENT_COMPLETED_SESSION"
+    )
+    forward_source_lag = {}
+    terminal_cohort_source_snapshots = {}
+    cohort_rows = (ledger or {}).get("cohorts") or []
+    # Terminal cohorts deliberately preserve their original exit-tape/source
+    # snapshot. Only unresolved cohorts need a current completed-session tape.
+    # Missing/malformed lineage stays fail-closed as an active freshness risk.
+    cohort_rows = cohort_rows if isinstance(cohort_rows, list) else []
+    for program, health in (ledger_freshness.get("source_health_by_program") or {}).items():
+        if not isinstance(health, dict):
+            forward_source_lag[program] = {"state": "INVALID_SOURCE_HEALTH"}
+            continue
+        source_max = health.get("source_max_date")
+        source_day = strict_session_day(source_max)
+        if source_day is None:
+            # Do not reflect malformed, potentially sensitive raw values.
+            forward_source_lag[program] = {"state": "INVALID_SOURCE_DATE"}
+            continue
+        if reference_day is None:
+            continue
+        if source_day < reference_day:
+            program_rows = [
+                row for row in cohort_rows
+                if isinstance(row, dict) and row.get("program_id") == program
+            ]
+            # Do not bless a caller-supplied RESOLVED label alone. Require
+            # each frozen terminal exit to be covered by a synchronized tape.
+            terminal_exits = []
+            for row in program_rows:
+                if row.get("status") != "RESOLVED":
+                    break
+                resolution = row.get("resolution")
+                if not isinstance(resolution, dict):
+                    break
+                exits = (
+                    [resolution.get("exit_date")]
+                    if program != "HOMEBUILDERS" else
+                    [obs.get("exit_date") for obs in (resolution.get("observations") or [])
+                     if isinstance(obs, dict) and obs.get("status") == "RESOLVED"]
+                )
+                if not exits or any(strict_session_day(value) is None for value in exits):
+                    break
+                terminal_exits.extend(strict_session_day(value) for value in exits)
+            else:
+                if (program_rows and terminal_exits
+                        and health.get("all_symbols_share_latest_date") is True
+                        and health.get("lagging_symbols_vs_source_max") == []
+                        and max(terminal_exits) <= source_day):
+                    terminal_cohort_source_snapshots[program] = {
+                        "state": "FROZEN_TERMINAL_COHORT_SOURCE_HISTORY_NOT_ACTIVE_STALENESS",
+                        "source_max_date": source_max,
+                        "observed_completed_reference_session": completed_reference,
+                        "terminal_cohort_count": len(program_rows),
+                    }
+                    continue
+            forward_source_lag[program] = {
+                "state": "SOURCE_HISTORY_BEHIND_OBSERVED_COMPLETED_SESSION",
+                "source_max_date": source_max,
+                "observed_completed_reference_session": completed_reference,
+            }
     freshness = {
         "common_market_data_asof": common_asof,
         "p249_p266_source_health": p249_health,
         "prospective_ledger": ledger_freshness,
+        "forward_source_lag_vs_observed_completed_session": forward_source_lag,
+        "terminal_cohort_source_snapshots": terminal_cohort_source_snapshots,
+        "forward_source_reference_state": reference_state,
         "freshness_gap_visible": bool(
             p249_health.get("common_session_lags_source_max")
+            or p249_health.get("unresolved_forward_gap") is not None
             or ledger_freshness.get("freshness_gap_visible")
             or p249_health.get("lagging_symbols_vs_source_max")
             or ledger_freshness.get("lagging_symbols_by_program")
+            or forward_source_lag
+            or reference_day is None
         ),
         "rule": "A successful workflow is not sufficient freshness proof. Consumers must compare the common market-data date with the expected completed exchange session and inspect per-symbol source health.",
     }
@@ -836,6 +1186,7 @@ def self_test() -> None:
         assert "reapplies target weights daily" in funded["timing"]["holding_rule"]
         assert "not trade or funded rebalance evidence" in funded["timing"]["entry_rule"]
         stats = _challenger_session_stats({
+            "challenger_if_flattened_now": {"days": 2},
             "challenger_observations": [
                 {"date": "2026-09-10", "net_return": 0.02, "core_return": 0.01},
                 {"date": "2026-09-11", "net_return": -0.01, "core_return": 0.0},
@@ -847,6 +1198,47 @@ def self_test() -> None:
         })
         assert stats["vs_incumbent"] == {"observed_sessions": 2, "positive_sessions": 1, "hit_rate": 0.5}
         assert stats["vs_matched_cash_control"] == {"observed_sessions": 2, "positive_sessions": 2, "hit_rate": 1.0}
+        assert stats["complete"] is True
+        incomplete = {
+            "challenger_if_flattened_now": {"days": 2},
+            "challenger_observations": [
+                {"date": "2026-09-10", "net_return": 0.02, "core_return": 0.01},
+                {"date": "2026-09-11", "net_return": -0.01, "core_return": 0.0},
+            ],
+            "matched_control_observations": [
+                {"date": "2026-09-10", "net_return": 0.015},
+            ],
+            "challenger_minus_matched_cumulative": 0.99,
+            "challenger_minus_incumbent_cumulative": 0.88,
+        }
+        assert _challenger_session_stats(incomplete)["complete"] is False
+        guarded = _challenger({"forward": incomplete}, "P558", "KMLM")
+        assert guarded["validation_grade"] == "FORWARD_MATCHED_OBSERVATIONS_INCOMPLETE"
+        assert guarded["scorecard"]["matched_observation_integrity"] == "INCOMPLETE_FAIL_CLOSED"
+        assert guarded["scorecard"]["excess_vs_matched_cash_control_bps"] is None
+        assert guarded["scorecard"]["excess_vs_incumbent_bps"] is None
+        duplicate = dict(incomplete)
+        duplicate["matched_control_observations"] = [
+            {"date": "2026-09-10", "net_return": 0.015},
+            {"date": "2026-09-10", "net_return": -0.02},
+        ]
+        assert _challenger_session_stats(duplicate)["complete"] is False
+        missing_numeric = dict(incomplete)
+        missing_numeric["matched_control_observations"] = [
+            {"date": "2026-09-10", "net_return": 0.015},
+            {"date": "2026-09-11"},
+        ]
+        assert _challenger_session_stats(missing_numeric)["complete"] is False
+        derived_overflow = dict(incomplete)
+        derived_overflow["challenger_observations"] = [
+            {"date": "2026-09-10", "net_return": 1e308, "core_return": -1e308},
+            {"date": "2026-09-11", "net_return": 0.0, "core_return": 0.0},
+        ]
+        derived_overflow["matched_control_observations"] = [
+            {"date": "2026-09-10", "net_return": -1e308},
+            {"date": "2026-09-11", "net_return": 0.0},
+        ]
+        assert _challenger_session_stats(derived_overflow)["complete"] is False
         assert out["coverage"]["native_result_gaps"] == []
         assert out["decision_chain"]["sectors"]["homebuilders"]["horizons"] == {"CCS": 5}
         native_by_id = {x["program_id"]: x for x in out["lanes"]}
@@ -916,6 +1308,383 @@ def self_test() -> None:
         invalid = _prospective_state(ledger, "SEMICONDUCTOR_SHARED_RIDGE")
         assert invalid["matched_cost_projection_status"] == "MATCHED_COST_PROJECTION_INCOMPLETE"
         assert invalid["mean_ticker_book_excess_vs_smh_net_bps"] is None
+
+        # Consume the independently accepted #2006 duplicate-native-adapter
+        # identity guard in the selected #2012 composite without changing its
+        # matched-book, source freshness, or economic projection semantics.
+        duplicate_dir = root / "shadow-native"
+        duplicate_dir.mkdir()
+        original_adapter = root / "forward_program_adapter_0.json"
+        duplicate_adapter = duplicate_dir / "duplicate.json"
+        duplicate_adapter.write_bytes(original_adapter.read_bytes())
+        assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
+        duplicate_adapter.write_text(json.dumps(dict(semi, signal_date="2026-10-23")))
+        for original_payload, duplicate_payload in (
+            (semi, dict(semi, signal_date="2026-10-23")),
+            (dict(semi, signal_date="2026-10-23"), semi),
+        ):
+            original_adapter.write_text(json.dumps(original_payload))
+            duplicate_adapter.write_text(json.dumps(duplicate_payload))
+            for loader in (_load_native_adapters, build):
+                try:
+                    loader(root)
+                except ValueError as exc:
+                    assert str(exc) == "DUPLICATE_NATIVE_ADAPTER_PROGRAM_ID:SEMICONDUCTOR_SHARED_RIDGE"
+                else:
+                    raise AssertionError("conflicting native program identity was silently accepted")
+        duplicate_adapter.unlink()
+        original_adapter.write_text(json.dumps(semi))
+        assert _load_native_adapters(root)["SEMICONDUCTOR_SHARED_RIDGE"] == semi
+
+    # Homebuilders legacy stock-net vs ITB-gross is not matched-after-cost alpha.
+    homebuilders_cost_ledger = {
+        "schema": LEDGER_SCHEMA,
+        "cohorts": [{"cohort_id": "HB_COST", "program_id": "HOMEBUILDERS",
+                     "status": "RESOLVED", "signal_date": "2026-09-10",
+                     "first_registered_at": "2026-09-11T00:00:00+00:00",
+                     "stock_round_trip_cost_bps": 25.0,
+                     "resolution": {"observations": [{
+                         "status": "RESOLVED", "net_return_bps": 100.0,
+                         "itb_return_bps": 11.0361, "qqq_return_bps": 599.9839,
+                         "excess_vs_itb_bps": 88.9639,
+                         "excess_vs_qqq_bps": -499.9839}]}}],
+        "summary": {"HOMEBUILDERS": {"resolved_cohorts": 1,
+                                    "mean_excess_vs_itb_bps": 88.9639}},
+        "homebuilders_cost_basis_projections": {
+            "HB_COST": {"status": "DERIVED_MIXED_COST_ONLY_BENCHMARK_FEES_UNFROZEN",
+                        "resolved_observations": 1,
+                        "stock_round_trip_cost_bps": 25.0,
+                        "stock_net_mean_bps": 100.0,
+                        "itb_gross_mean_bps": 11.0361,
+                        "qqq_gross_mean_bps": 599.9839,
+                        "legacy_stock_net_minus_itb_gross_mean_bps": 88.9639,
+                        "legacy_stock_net_minus_qqq_gross_mean_bps": -499.9839,
+                        "matched_stock_net_minus_itb_net_mean_bps": None,
+                        "original_resolution_mutated": False,
+                        "alpha_or_promotion_authority": False}},
+    }
+    homebuilders_state = _prospective_state(homebuilders_cost_ledger, "HOMEBUILDERS")
+    assert homebuilders_state["homebuilders_cost_basis_projection_status"] == "ALL_RESOLVED_COHORTS_MIXED_COST_LABELLED"
+    assert homebuilders_state["mean_excess_vs_itb_bps"] == 88.9639
+    assert homebuilders_state["mean_matched_after_cost_excess_vs_itb_bps"] is None
+    assert homebuilders_state["homebuilders_funded_portfolio_nav_return_bps"] is None
+    assert homebuilders_state["legacy_mean_excess_vs_itb_basis"] == "STOCK_NET_MINUS_ITB_GROSS_NOT_MATCHED_AFTER_COST"
+    # False-green falsifiers: a status-only resolved cohort with zero rows,
+    # a stale cost projection and a changed original row must all fail closed.
+    empty_homebuilders = dict(homebuilders_cost_ledger)
+    empty_homebuilders["cohorts"] = [{
+        **homebuilders_cost_ledger["cohorts"][0], "resolution": {"observations": []}
+    }]
+    assert _prospective_state(empty_homebuilders, "HOMEBUILDERS")[
+        "homebuilders_cost_basis_projection_status"] == "MIXED_COST_PROJECTION_INCOMPLETE"
+    stale_homebuilders = dict(homebuilders_cost_ledger)
+    stale_homebuilders["homebuilders_cost_basis_projections"] = {
+        "HB_COST": {**homebuilders_cost_ledger["homebuilders_cost_basis_projections"]["HB_COST"],
+                    "stock_round_trip_cost_bps": 50.0}}
+    assert _prospective_state(stale_homebuilders, "HOMEBUILDERS")[
+        "homebuilders_cost_basis_projection_status"] == "MIXED_COST_PROJECTION_INCOMPLETE"
+    changed_homebuilders = dict(homebuilders_cost_ledger)
+    changed_homebuilders["cohorts"] = [{
+        **homebuilders_cost_ledger["cohorts"][0],
+        "resolution": {"observations": [{
+            **homebuilders_cost_ledger["cohorts"][0]["resolution"]["observations"][0],
+            "excess_vs_itb_bps": 77.0}]}
+    }]
+    assert _prospective_state(changed_homebuilders, "HOMEBUILDERS")[
+        "homebuilders_cost_basis_projection_status"] == "MIXED_COST_PROJECTION_INCOMPLETE"
+    partial_homebuilders = dict(homebuilders_cost_ledger)
+    partial_homebuilders["cohorts"] = [{
+        **homebuilders_cost_ledger["cohorts"][0],
+        "status": "PARTIALLY_RESOLVED",
+        "resolution": {"observations": [
+            dict(homebuilders_cost_ledger["cohorts"][0]["resolution"]["observations"][0]),
+            {"status": "OPEN"}]},
+    }]
+    partial_homebuilders["summary"] = {"HOMEBUILDERS": {"resolved_cohorts": 0}}
+    partial_state = _prospective_state(partial_homebuilders, "HOMEBUILDERS")
+    assert partial_state["homebuilders_cost_basis_projection_status"] == "ALL_REPORTABLE_PARTIAL_COHORTS_MIXED_COST_LABELLED"
+
+    # Cross-program freshness must not go green merely because all symbols
+    # stopped on the same old day while another observed source has a newer
+    # completed exchange session.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / "forward_p249_p266_shadow_r1.json").write_text(json.dumps({
+            "source_health": {
+                "latest_scored_common_session": "2026-10-23",
+                "common_session_lags_source_max": False,
+                "lagging_symbols_vs_source_max": [],
+            },
+        }))
+        ledger_path = root / "forward_prospective_cohort_ledger_r1.json"
+        stale_ledger = {
+            "schema": LEDGER_SCHEMA,
+            "market_data_asof": "2026-10-25",
+            "freshness": {
+                "freshness_gap_visible": False,
+                "lagging_symbols_by_program": {},
+                "source_health_by_program": {
+                    "SEMICONDUCTOR_SHARED_RIDGE": {
+                        "source_max_date": "2026-10-12",
+                        "all_symbols_share_latest_date": True,
+                    },
+                },
+            },
+            "cohorts": [],
+            "summary": {},
+        }
+        ledger_path.write_text(json.dumps(stale_ledger))
+        stale_result = build(root)
+        assert stale_result["freshness"]["freshness_gap_visible"] is True
+        assert stale_result["freshness"]["forward_source_lag_vs_observed_completed_session"]["SEMICONDUCTOR_SHARED_RIDGE"]["source_max_date"] == "2026-10-12"
+        # The actual current ledger has only RESOLVED cohorts: its source
+        # snapshots freeze at the original exit by design, not provider outage.
+        stale_ledger["freshness"]["source_health_by_program"]["SEMICONDUCTOR_SHARED_RIDGE"]["lagging_symbols_vs_source_max"] = []
+        stale_ledger["cohorts"] = [{
+            "cohort_id": "FROZEN_H20", "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+            "status": "RESOLVED", "resolution": {"exit_date": "2026-10-12"},
+        }]
+        ledger_path.write_text(json.dumps(stale_ledger))
+        terminal_result = build(root)
+        assert terminal_result["freshness"]["forward_source_lag_vs_observed_completed_session"] == {}
+        assert terminal_result["freshness"]["freshness_gap_visible"] is False
+        assert terminal_result["freshness"]["terminal_cohort_source_snapshots"]["SEMICONDUCTOR_SHARED_RIDGE"]["state"] == "FROZEN_TERMINAL_COHORT_SOURCE_HISTORY_NOT_ACTIVE_STALENESS"
+        # A synchronized P249 tape can still be missing a completed exchange
+        # session. Frozen terminal cohort snapshots must not mask that gap.
+        p249_gap_path = root / "forward_p249_p266_shadow_r1.json"
+        p249_gap = json.loads(p249_gap_path.read_text())
+        p249_gap["source_health"]["unresolved_forward_gap"] = {
+            "first_unresolved_session": "2026-10-23",
+            "missing_held_symbols": [],
+            "reason": "MISSING_EXCHANGE_SESSION_ALL_SYMBOLS",
+        }
+        p249_gap_path.write_text(json.dumps(p249_gap))
+        independent_gap = build(root)["freshness"]
+        assert independent_gap["freshness_gap_visible"] is True
+        assert independent_gap["terminal_cohort_source_snapshots"]["SEMICONDUCTOR_SHARED_RIDGE"]["state"] == "FROZEN_TERMINAL_COHORT_SOURCE_HISTORY_NOT_ACTIVE_STALENESS"
+        p249_gap["source_health"].pop("unresolved_forward_gap")
+        p249_gap_path.write_text(json.dumps(p249_gap))
+        # Missing exit identity must fail closed even with a RESOLVED label.
+        stale_ledger["cohorts"][0]["resolution"] = {}
+        ledger_path.write_text(json.dumps(stale_ledger))
+        unbound_terminal = build(root)
+        assert unbound_terminal["freshness"]["freshness_gap_visible"] is True
+        stale_ledger["cohorts"][0]["status"] = "OPEN"
+        ledger_path.write_text(json.dumps(stale_ledger))
+        active_result = build(root)
+        assert active_result["freshness"]["freshness_gap_visible"] is True
+        assert active_result["freshness"]["forward_source_lag_vs_observed_completed_session"]["SEMICONDUCTOR_SHARED_RIDGE"]["source_max_date"] == "2026-10-12"
+        stale_ledger["cohorts"] = []
+        stale_ledger["freshness"]["source_health_by_program"]["SEMICONDUCTOR_SHARED_RIDGE"]["source_max_date"] = "2026-10-23"
+        ledger_path.write_text(json.dumps(stale_ledger))
+        current_result = build(root)
+        assert current_result["freshness"]["forward_source_lag_vs_observed_completed_session"] == {}
+        assert current_result["freshness"]["freshness_gap_visible"] is False
+        stale_ledger["freshness"]["source_health_by_program"]["SEMICONDUCTOR_SHARED_RIDGE"]["source_max_date"] = "2026-10-23garbage"
+        ledger_path.write_text(json.dumps(stale_ledger))
+        malformed_source = build(root)["freshness"]
+        assert malformed_source["forward_source_lag_vs_observed_completed_session"]["SEMICONDUCTOR_SHARED_RIDGE"]["state"] == "INVALID_SOURCE_DATE"
+        assert malformed_source["freshness_gap_visible"] is True
+        stale_ledger["freshness"]["source_health_by_program"]["SEMICONDUCTOR_SHARED_RIDGE"]["source_max_date"] = "2026-10-23"
+        ledger_path.write_text(json.dumps(stale_ledger))
+        p249_path = root / "forward_p249_p266_shadow_r1.json"
+        p249 = json.loads(p249_path.read_text())
+        p249["source_health"]["latest_scored_common_session"] = "2026-10-23T99:99:99Z"
+        p249_path.write_text(json.dumps(p249))
+        malformed_reference = build(root)["freshness"]
+        assert malformed_reference["forward_source_reference_state"] == "INVALID_INDEPENDENT_COMPLETED_SESSION"
+        assert malformed_reference["freshness_gap_visible"] is True
+        p249["source_health"].pop("latest_scored_common_session")
+        p249_path.write_text(json.dumps(p249))
+        missing_reference = build(root)["freshness"]
+        assert missing_reference["forward_source_reference_state"] == "NO_INDEPENDENT_COMPLETED_SESSION"
+        assert missing_reference["freshness_gap_visible"] is True
+
+    # The new P558/JAAA wealth ratios require explicit both-net source basis,
+    # matched observation completeness and valid funded terminal NAVs.
+    challenger = {
+        "contract": {"entry_and_mark_to_market_exit_cost_bps_each": 25},
+        "current_positions": {"challenger": {"KMLM": 0.5}},
+        "forward": {
+            "challenger_if_flattened_now": {"days": 1, "cumulative_return": -0.02054759529211936},
+            "incumbent": {"cumulative_return": -0.0298141670103782},
+            "matched_control_if_flattened_now": {"cumulative_return": -0.017146162108331087},
+            "challenger_minus_incumbent_cumulative": 0.009266571718258843,
+            "challenger_minus_matched_cumulative": -0.0034014331837882716,
+            "challenger_observations": [{"date": "2026-10-23", "net_return": -0.01804759529211936, "core_return": -0.0298141670103782}],
+            "matched_control_observations": [{"date": "2026-10-23", "net_return": -0.014646162108331087}],
+            "comparison_cost_basis": {
+                "challenger_minus_incumbent_cumulative":
+                    "CHALLENGER_NET_IF_FLATTENED_NOW_MINUS_UNCHANGED_INCUMBENT_NET",
+                "challenger_minus_matched_cumulative": "BOTH_NET_IF_FLATTENED_NOW",
+                "legacy_pre_exit_spreads_not_used": True,
+            },
+        },
+    }
+    matched = _challenger(challenger, "P558", "KMLM")["scorecard"]
+    assert matched["matched_cost_basis"] == "BOTH_NET_IF_FLATTENED_NOW"
+    assert matched["challenger_absolute_net_if_flattened_now_bps"] == -205.48
+    assert matched["incumbent_absolute_net_if_flattened_now_bps"] == -298.14
+    assert matched["matched_control_absolute_net_if_flattened_now_bps"] == -171.46
+    assert matched["challenger_vs_incumbent_relative_wealth_bps"] == 95.51
+    assert matched["challenger_vs_matched_control_relative_wealth_bps"] == -34.61
+    challenger["contract"]["entry_and_mark_to_market_exit_cost_bps_each"] = 30
+    changed_fee = _challenger(challenger, "P558", "KMLM")["scorecard"]
+    assert changed_fee["funded_nav_reconciliation"] == "FAIL_CLOSED"
+    assert changed_fee["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
+    challenger["contract"]["entry_and_mark_to_market_exit_cost_bps_each"] = 25
+
+    # Complete, finite rows with a mismatched funded terminal NAV are not
+    # independent both-net evidence; a self-declared basis cannot rescue them.
+    original_incumbent = challenger["forward"]["incumbent"]["cumulative_return"]
+    challenger["forward"]["incumbent"]["cumulative_return"] += 0.001
+    tampered = _challenger(challenger, "P558", "KMLM")["scorecard"]
+    assert tampered["funded_nav_reconciliation"] == "FAIL_CLOSED"
+    assert tampered["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
+    challenger["forward"]["incumbent"]["cumulative_return"] = original_incumbent
+
+    challenger["forward"]["comparison_cost_basis"]["legacy_pre_exit_spreads_not_used"] = False
+    held = _challenger(challenger, "P558", "KMLM")["scorecard"]
+    assert held["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
+    assert held["challenger_vs_incumbent_relative_wealth_bps"] is None
+    challenger["forward"]["comparison_cost_basis"]["legacy_pre_exit_spreads_not_used"] = True
+    challenger["forward"]["matched_control_observations"] = []
+    held = _challenger(challenger, "P558", "KMLM")["scorecard"]
+    assert held["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
+    assert held["challenger_vs_matched_control_relative_wealth_bps"] is None
+    challenger["forward"]["matched_control_observations"] = []
+    challenger["forward"]["challenger_observations"] = []
+    challenger["forward"]["challenger_if_flattened_now"]["days"] = 0
+    zero_day = _challenger(challenger, "P558", "KMLM")["scorecard"]
+    assert zero_day["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
+    assert zero_day["challenger_vs_incumbent_relative_wealth_bps"] is None
+
+    # Explicit both-net labels must not survive invalid terminal NAV inputs,
+    # even when source metadata and matched rows look complete.
+    challenger["forward"]["challenger_if_flattened_now"]["days"] = 1
+    challenger["forward"]["challenger_observations"] = [
+        {"date": "2026-10-23", "net_return": -0.01804759529211936, "core_return": -0.0298141670103782}
+    ]
+    challenger["forward"]["matched_control_observations"] = [
+        {"date": "2026-10-23", "net_return": -0.014646162108331087}
+    ]
+    for key, invalid_nav in (
+        ("incumbent", None),
+        ("incumbent", float("nan")),
+        ("incumbent", float("inf")),
+        ("incumbent", -1.0),
+        ("incumbent", "0.02"),
+        ("incumbent", True),
+        ("incumbent", 10**400),
+        ("matched_control_if_flattened_now", 1e307),
+    ):
+        original_nav = challenger["forward"][key]["cumulative_return"]
+        challenger["forward"][key]["cumulative_return"] = invalid_nav
+        rejected = _challenger(challenger, "P558", "KMLM")["scorecard"]
+        assert rejected["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
+        assert rejected["challenger_vs_incumbent_relative_wealth_bps"] is None
+        assert rejected["challenger_vs_matched_control_relative_wealth_bps"] is None
+        assert rejected["incumbent_absolute_net_if_flattened_now_bps"] is None
+        challenger["forward"][key]["cumulative_return"] = original_nav
+    # Individually finite NAVs can still overflow their relative-wealth
+    # ratio when the control wealth is extremely close to zero.
+    challenger["forward"]["challenger_if_flattened_now"]["cumulative_return"] = 1e303
+    challenger["forward"]["incumbent"]["cumulative_return"] = -1.0 + 1e-16
+    challenger["forward"]["challenger_observations"][0]["net_return"] = 1e303
+    challenger["forward"]["challenger_observations"][0]["core_return"] = -1.0 + 1e-16
+    overflow = _challenger(challenger, "P558", "KMLM")["scorecard"]
+    assert overflow["funded_nav_reconciliation"] == "PASS_THREE_BOOKS"
+    assert overflow["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
+    assert overflow["challenger_vs_incumbent_relative_wealth_bps"] is None
+    challenger["forward"]["challenger_if_flattened_now"]["cumulative_return"] = -0.02054759529211936
+    challenger["forward"]["incumbent"]["cumulative_return"] = -0.0298141670103782
+    challenger["forward"]["challenger_observations"][0]["net_return"] = -0.01804759529211936
+    challenger["forward"]["challenger_observations"][0]["core_return"] = -0.0298141670103782
+
+    original_challenger_nav = challenger["forward"]["challenger_if_flattened_now"]["cumulative_return"]
+    challenger["forward"]["challenger_if_flattened_now"]["cumulative_return"] = float("nan")
+    rejected = _challenger(challenger, "P558", "KMLM")["scorecard"]
+    assert rejected["matched_cost_basis"] == "UNADMITTED_OR_INCOMPLETE"
+    assert rejected["challenger_cumulative_bps"] is None
+    challenger["forward"]["challenger_if_flattened_now"]["cumulative_return"] = original_challenger_nav
+
+    # Generic producer artifacts can be duplicated by nested artifact download.
+    # Byte-identical transport copies are harmless, but conflicting copies
+    # must not silently select a different frozen input by filesystem order.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        for name in (
+            "forward_prospective_cohort_ledger_r1.json",
+            "forward_p249_p266_shadow_r1.json",
+        ):
+            first = root / name
+            duplicate_dir = root / "nested-transport-copy"
+            duplicate_dir.mkdir(exist_ok=True)
+            second = duplicate_dir / name
+            first.write_text(json.dumps({"source_health": {"source_max_date": "2026-10-23"}}))
+            second.write_bytes(first.read_bytes())
+            assert _load(root, name) == {"source_health": {"source_max_date": "2026-10-23"}}
+            second.write_text(json.dumps({"source_health": {"source_max_date": "2026-10-12"}}))
+            for first_value, second_value in (
+                ("2026-10-23", "2026-10-12"),
+                ("2026-10-12", "2026-10-23"),
+            ):
+                first.write_text(json.dumps({"source_health": {"source_max_date": first_value}}))
+                second.write_text(json.dumps({"source_health": {"source_max_date": second_value}}))
+                for loader in (
+                    lambda: _load(root, name),
+                    lambda: build(root),
+                ):
+                    try:
+                        loader()
+                    except ValueError as exc:
+                        assert str(exc) == f"CONFLICTING_SCOREBOARD_INPUT:{name}"
+                    else:
+                        raise AssertionError("conflicting canonical input was silently accepted")
+            first.unlink()
+            second.unlink()
+        invalid = root / "forward_p249_p266_shadow_r1.json"
+        invalid.write_text("[]")
+        try:
+            _load(root, invalid.name)
+        except ValueError as exc:
+            assert str(exc) == f"INVALID_SCOREBOARD_INPUT:{invalid.name}"
+        else:
+            raise AssertionError("non-object canonical input was silently accepted")
+
+    # The actual report job stages prior-current historical bytes alongside
+    # newly resolved prospective-current bytes. They are intentionally
+    # different; select the fresh producer without weakening same-source
+    # duplicate-content fail-close.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        historical = root / "prior-current"
+        current = root / "prospective-current"
+        historical.mkdir()
+        current.mkdir()
+        name = "forward_prospective_cohort_ledger_r1.json"
+        (historical / name).write_text(json.dumps({"source": "prior"}))
+        fresh = current / name
+        fresh.write_text(json.dumps({"source": "fresh"}))
+        assert _load_prospective_ledger(root) == {"source": "fresh"}
+        duplicate = current / "nested-copy"
+        duplicate.mkdir()
+        (duplicate / name).write_text(json.dumps({"source": "different-current"}))
+        try:
+            _load_prospective_ledger(root)
+        except ValueError as exc:
+            assert str(exc) == f"CONFLICTING_SCOREBOARD_INPUT:{name}"
+        else:
+            raise AssertionError("conflicting current-producer copy was admitted")
+        (duplicate / name).unlink()
+        fresh.unlink()
+        try:
+            _load_prospective_ledger(root)
+        except ValueError as exc:
+            assert str(exc) == "CURRENT_PROSPECTIVE_LEDGER_NOT_MATERIALIZED"
+        else:
+            raise AssertionError("prior-current history substituted for missing fresh ledger")
+
     print("FORWARD_MARKET_SCOREBOARD_SELF_TEST=PASS")
 
 
