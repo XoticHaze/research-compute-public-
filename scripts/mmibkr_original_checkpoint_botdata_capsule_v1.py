@@ -97,7 +97,6 @@ def seal_quarantine(authenticated_plaintext: bytes, recipient_public_b64: str, c
         raise ValueError('recipient_public_key_invalid') from exc
     if len(recipient_raw) != 32:
         raise ValueError('recipient_public_key_size_invalid')
-    tar, count = make_botdata_tar(authenticated_plaintext)
     recipient_id = 'sha256:' + digest(recipient_raw)
     # A public key string in a repository variable is not Pi authentication.
     # Independently reviewed operator/root fingerprint must match exactly.
@@ -105,6 +104,7 @@ def seal_quarantine(authenticated_plaintext: bytes, recipient_public_b64: str, c
         raise ValueError('approved_pi_recipient_key_id_missing_or_invalid')
     if recipient_id != approved_recipient_key_id:
         raise ValueError('pi_recipient_public_key_unapproved')
+    tar, _ = make_botdata_tar(authenticated_plaintext)
     sender = x25519.X25519PrivateKey.generate()
     sender_pub = sender.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     salt = os.urandom(32)
