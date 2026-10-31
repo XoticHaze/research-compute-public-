@@ -20,6 +20,7 @@ import tarfile
 
 from scripts.mmibkr_live_gateway_state_envelope_v1 import read_master
 from scripts.mmibkr_live_runtime_checkpoint_v1 import unseal
+from scripts.mmibkr_original_checkpoint_botdata_capsule_v1 import seal_quarantine, write_capsule
 
 SCHEMA = "mmibkr.original_live_checkpoint_readonly_review.v1"
 RUN_ID = "39499524894"
@@ -102,7 +103,7 @@ def classify_authenticated_archive(raw: bytes, successor_run_id: str) -> dict:
     }
 
 
-def inspect_exact(envelope: bytes, manifest: bytes, key: bytes, successor_run_id: str) -> dict:
+def _authenticate_report_and_raw(envelope: bytes, manifest: bytes, key: bytes, successor_run_id: str) -> tuple[dict, bytes]:
     if _sha(envelope) != EXPECTED_CIPHER_SHA256 or len(envelope) != EXPECTED_CIPHER_BYTES:
         raise ValueError("historical_ciphertext_identity_invalid")
     if len(manifest) > EXPECTED_MANIFEST_BYTES_MAX:
@@ -112,7 +113,11 @@ def inspect_exact(envelope: bytes, manifest: bytes, key: bytes, successor_run_id
     if not re.fullmatch(r"[0-9]{4,24}", successor_run_id) or successor_run_id == RUN_ID:
         raise ValueError("current_consumer_run_identity_invalid")
     raw = unseal(envelope, meta, successor_run_id, key)
-    return classify_authenticated_archive(raw, successor_run_id)
+    return classify_authenticated_archive(raw, successor_run_id), raw
+
+
+def inspect_exact(envelope: bytes, manifest: bytes, key: bytes, successor_run_id: str) -> dict:
+    return _authenticate_report_and_raw(envelope, manifest, key, successor_run_id)[0]
 
 
 def main() -> int:
@@ -121,13 +126,19 @@ def main() -> int:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--consumer-run-id", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--recipient-public-b64", required=True)
+    parser.add_argument("--capsule-dir", type=Path, required=True)
     args = parser.parse_args()
     try:
         # Secret is read from the *existing* approved public workflow environment.
         key = read_master()
         blob = _read_bounded_regular_file(args.ciphertext, EXPECTED_CIPHER_BYTES)
         manifest = _read_bounded_regular_file(args.manifest, EXPECTED_MANIFEST_BYTES_MAX)
-        result = inspect_exact(blob, manifest, key, args.consumer_run_id)
+        result, authenticated_plaintext = _authenticate_report_and_raw(blob, manifest, key, args.consumer_run_id)
+        ciphertext, envelope = seal_quarantine(authenticated_plaintext, args.recipient_public_b64, args.consumer_run_id)
+        write_capsule(args.capsule_dir, ciphertext, envelope)
+        result["recipient_botdata_quarantine_ciphertext_created"] = True
+        result["recipient_key_id"] = envelope["recipient_key_id"]
         # Sanitized allowlist only, exclusive creation; never write raw/key.
         fd = os.open(args.output, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as fp:
@@ -137,6 +148,7 @@ def main() -> int:
             os.fsync(fp.fileno())
         print("MMIBKR_ORIGINAL_CHECKPOINT_AES_GCM=PASS")
         print("MMIBKR_ORIGINAL_CHECKPOINT_BOT_DATA_CLASSIFICATION=WRITTEN_SANITIZED")
+        print("MMIBKR_ORIGINAL_CHECKPOINT_RECIPIENT_BOTDATA_CAPSULE=SEALED_QUARANTINE_ONLY")
         print("MMIBKR_NO_SUBMIT_OR_LIVE_ADMISSION=HELD")
         return 0
     except Exception as exc:
