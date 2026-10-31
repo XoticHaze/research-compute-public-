@@ -213,3 +213,28 @@ class CapsuleRoundtrip(unittest.TestCase):
         self.assertNotIn('"authenticated_plaintext_sha256":',src)
         self.assertNotIn("EXPECTED_RAW_SHA256",src)
         self.assertNotIn('result["recipient_key_id"]',src)
+
+    def test_public_fixed_field_report_exact_allowlist(self):
+        import importlib.util,sys,types
+        from unittest.mock import patch
+        repo=Path(__file__).resolve().parents[1]
+        gateway=types.ModuleType('scripts.mmibkr_live_gateway_state_envelope_v1')
+        gateway.read_master=lambda: b'0'*32
+        codec=types.ModuleType('scripts.mmibkr_live_runtime_checkpoint_v1')
+        codec.unseal=lambda *args:b''
+        with patch.dict(sys.modules,{gateway.__name__:gateway,codec.__name__:codec}):
+            spec=importlib.util.spec_from_file_location('original_readonly_fixed_allowlist',repo/'scripts/mmibkr_original_live_checkpoint_review_v1.py')
+            mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
+        receipt=mod.classify_authenticated_archive(b'only_field_shape_test', '41159917178')
+        allowed={'schema','historical_producer_run','historical_producer_source_sha',
+                 'selected_pi_source_sha','consumer_run_id','authenticated_aes_gcm',
+                 'historical_gateway_tree_must_not_be_restored',
+                 'historical_live_policy_cannot_be_imported_directly',
+                 'postincident_broker_history_reconciliation_required',
+                 'protected_root_migration_approval_required',
+                 'no_submit_bot_start_allowed','live_order_submit_allowed',
+                 'decrypted_plaintext_artifact_published','master_key_emitted',
+                 'gateway_started','broker_contacted','pi_modified'}
+        self.assertEqual(set(receipt),allowed)
+        self.assertFalse(receipt['live_order_submit_allowed'])
+        self.assertFalse(receipt['no_submit_bot_start_allowed'])
