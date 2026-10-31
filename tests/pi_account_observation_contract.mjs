@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { OperatorState } from '../cloudflare/operator-console/src/index.js';
 import {validatePiAccountObservation,validatePiObservationEnvelope,piOperatorView,verifyPiOutboxSnapshotDigest} from '../cloudflare/operator-console/src/pi_account_observation.js';
 import {nextPiReplayLedger} from '../cloudflare/operator-console/src/pi_replay_ledger.js';
 const now=Date.parse('2026-10-31T13:00:00.000Z');
@@ -144,3 +145,40 @@ rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,s
 console.log('Pi immutable root-outbox contract: producer separation, replay and fail-close verified');
 
 await assert.rejects(async()=>verifyPiOutboxSnapshotDigest({...outbox,record:{...outbox.record,snapshot:{...fixture(),expected_account_position_count:3}}}),/pi_outbox_snapshot_digest_rejected/);
+
+// Pi durable-store end-to-end: the actual v2 outbox record must survive both
+// validation stages and round-trip through the same Durable Object contract.
+const previousDateNow = Date.now;
+const durable = new Map();
+const memoryStorage = {
+  transaction: async (callback) => callback({
+    get: async (key) => durable.get(key),
+    put: async (key,value) => { durable.set(key,value); },
+  }),
+  get: async (key) => durable.get(key),
+};
+try {
+  Date.now = () => now;
+  const worker = new OperatorState({storage:memoryStorage},{});
+  const request = () => new Request('https://operator-state.internal/pi/store',{
+    method:'POST',
+    headers:{'content-type':'application/json'},
+    body:JSON.stringify({envelope:outbox,publisher:{workflow_ref:'not_real_auth'}}),
+  });
+  const initial = await worker.fetch(request());
+  assert.equal(initial.status,201,JSON.stringify(await initial.clone().json()));
+  const acknowledged = await initial.json();
+  assert.equal(acknowledged.durable_readback_verified,true);
+  const latest = await worker.fetch(new Request('https://operator-state.internal/pi/latest'));
+  assert.equal(latest.status,200);
+  const stored = await latest.json();
+  assert.equal(stored.envelope.schema,outbox.schema);
+  assert.equal(stored.envelope.record.snapshot_sha256,outbox.record.snapshot_sha256);
+  assert.equal(piOperatorView(stored,now).source,'root_observation_outbox');
+  const replay = await worker.fetch(request());
+  assert.equal(replay.status,409);
+  assert.equal((await replay.json()).error,'pi_observation_replay_or_ledger_held');
+} finally {
+  Date.now = previousDateNow;
+}
+console.log('Pi durable-store end-to-end: v2 record preserved, replay and readback PASS');
