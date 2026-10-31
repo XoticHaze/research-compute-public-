@@ -104,6 +104,7 @@ def main() -> int:
     parser.add_argument("--consumer-run-id", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--recipient-public-b64", required=True)
+    parser.add_argument("--approved-recipient-key-id", required=True)
     parser.add_argument("--capsule-dir", type=Path, required=True)
     args = parser.parse_args()
     try:
@@ -112,7 +113,7 @@ def main() -> int:
         blob = _read_bounded_regular_file(args.ciphertext, EXPECTED_CIPHER_BYTES)
         manifest = _read_bounded_regular_file(args.manifest, EXPECTED_MANIFEST_BYTES_MAX)
         result, authenticated_plaintext = _authenticate_report_and_raw(blob, manifest, key, args.consumer_run_id)
-        ciphertext, envelope = seal_quarantine(authenticated_plaintext, args.recipient_public_b64, args.consumer_run_id)
+        ciphertext, envelope = seal_quarantine(authenticated_plaintext, args.recipient_public_b64, args.consumer_run_id, args.approved_recipient_key_id)
         write_capsule(args.capsule_dir, ciphertext, envelope)
         result["recipient_botdata_quarantine_ciphertext_created"] = True
         # Sanitized allowlist only, exclusive creation; never write raw/key.
