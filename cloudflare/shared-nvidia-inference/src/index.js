@@ -2,6 +2,7 @@
 // This Worker does not accept user prompts, model IDs, target URLs or camera content.
 // `NVIDIA_API_KEY` must be a Cloudflare account Secrets Store binding, not a plain var.
 import {runSyntheticRoleBatch} from "./benchmark_runner.js";
+import {runMicroWorkerBatch} from "./micro_worker_benchmark.js";
 const ORIGIN = "https://integrate.api.nvidia.com";
 const MODEL = "openai/gpt-oss-20b";
 const RUN_PATH = "/internal/diagnostics/nvidia";
@@ -153,6 +154,37 @@ export default {
     const url = new URL(request.url);
     // Existing Service Binding route only; public Worker and previews remain
     // disabled. No caller-authored prompts, tool execution, or target hosts.
+    // Fixed 24-case, two-model synthetic micro-worker benchmark. Private Service
+    // Binding only, disabled by default. No caller-supplied model or prompt.
+    if(request.method==="POST" && url.pathname==="/internal/diagnostics/nvidia-micro" && !url.search){
+      if(env.CC_NVIDIA_DIAGNOSTIC_ENABLED!=="1")return json(503,{error:"diagnostic_not_admitted"});
+      const n=Number(request.headers.get("content-length"));
+      if(!Number.isInteger(n)||n<1||n>60||
+         request.headers.get("content-type")!=="application/json")
+        return json(400,{error:"unsupported_fixed_micro_selector"});
+      let input;
+      try{input=await request.json();}catch{return json(400,{error:"invalid_fixed_micro_selector"});}
+      if(!input || typeof input!=="object" || Array.isArray(input) ||
+         Object.keys(input).sort().join(",")!=="batch,model_index" ||
+         !Number.isInteger(input.batch)||input.batch<0||input.batch>5 ||
+         !Number.isInteger(input.model_index)||input.model_index<0||input.model_index>1)
+        return json(400,{error:"invalid_fixed_micro_selector"});
+      if(typeof env.NVIDIA_API_KEY?.get!=="function")return json(503,{error:"binding_unavailable"});
+      let key;
+      try{key=await env.NVIDIA_API_KEY.get();}catch{return json(503,{error:"secret_unavailable"});}
+      if(typeof key!=="string" || key.length<8)return json(503,{error:"secret_unavailable"});
+      const authFetch=async(endpoint,options)=>{
+        const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
+        try{return await fetch(endpoint,{...options,headers:{
+          "Authorization":"Bearer "+key,"Content-Type":"application/json"
+        },redirect:"manual",signal:controller.signal});}
+        finally{clearTimeout(timer);}
+      };
+      const receipt=await runMicroWorkerBatch({
+        modelIndex:input.model_index,batch:input.batch,providerFetch:authFetch
+      });
+      return json(receipt.status==="batch_complete"?200:503,receipt);
+    }
     if (request.method === "POST" && url.pathname === "/internal/diagnostics/nvidia-roles" && !url.search) {
       if (env.CC_NVIDIA_DIAGNOSTIC_ENABLED !== "1") return json(503, {error:"diagnostic_not_admitted"});
       const n = Number(request.headers.get("content-length"));
