@@ -120,9 +120,12 @@ def select_record():
     require(-60 <= age <= 420)
     expected = "pibotobs-" + observed.strftime("%Y%m%d%H%M%S") + "-" + digest[:16]
     require(record["observation_id"] == expected and path == prefix + "/" + expected + ".json")
+    # Project no private repo/ref/path into the public ingress envelope.
+    opaque_binding = os.environ["PI_OUTBOX_OPAQUE_BINDING_ID"]
+    require(re.fullmatch(r"[A-Za-z0-9_-]{24,128}", opaque_binding))
     return {
         "schema": ENVELOPE_SCHEMA, "node_id": "cc-pi4",
-        "source_repo": repo, "source_ref": branch, "source_path": path,
+        "source_binding_id": opaque_binding,
         "result_commit_sha": commit_sha, "result_blob_sha": blob_sha,
         "record": record,
     }, record["observed_at"]
