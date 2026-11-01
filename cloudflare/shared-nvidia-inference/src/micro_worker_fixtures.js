@@ -191,3 +191,20 @@ export function scoreMicro(message,test){
   return {valid,passed:valid&&parsed.action===test.action&&parsed.route===test.route};
  }catch{return {valid:false,passed:false};}
 }
+
+const SAFE_ACTIONS=new Set(MICRO_CASES.map(x=>x.action));
+const SAFE_ROUTES=new Set(MICRO_CASES.map(x=>x.route));
+// Emit ONLY predefined public synthetic labels. No raw model reply is returned,
+// even for a valid JSON object containing arbitrary untrusted strings.
+export function classifiedMicroChoice(message){
+ const raw=message?.content;
+ if(typeof raw!=="string"||raw.length>240)return {observed_action:null,observed_route:null};
+ try{
+  const value=JSON.parse(raw.trim());
+  if(!value||typeof value!=="object"||Array.isArray(value))return {observed_action:null,observed_route:null};
+  return {
+   observed_action:SAFE_ACTIONS.has(value.action)?value.action:null,
+   observed_route:SAFE_ROUTES.has(value.route)?value.route:null
+  };
+ }catch{return {observed_action:null,observed_route:null};}
+}
