@@ -774,18 +774,28 @@ export class OperatorState {
         const ledger = await txn.get('pi_bot_live_ledger') || [];
         if (!Array.isArray(ledger) || ledger.length > 256) return { reject:'pi_bot_ledger_invalid' };
         const rid=validated.replayId, commit=validated.resultCommitSha;
-        if (ledger.some(row=>row.request_id===rid || row.commit===commit))
+        // Keep a bounded nonreplay window longer than the 420s signed-input
+        // freshness limit. A stale replay is rejected before this transaction,
+        // while a healthy 2-minute producer must never fill all 256 slots.
+        const minSeen=Date.now()-15*60*1000;
+        const liveLedger=ledger.filter(row => {
+          if (!row || typeof row.request_id !== 'string' || typeof row.commit !== 'string'
+              || !/^[a-f0-9]{40}$/.test(row.commit)) return true; // fail-closed legacy entry
+          if (!Number.isSafeInteger(row.observed_at_ms)) return true; // legacy entry
+          return row.observed_at_ms>=minSeen;
+        });
+        if (liveLedger.some(row=>row?.request_id===rid || row?.commit===commit))
           return { reject:'pi_bot_observation_replay' };
         const oldTime = Date.parse(old?.envelope?.receipt?.finished_at
           || old?.envelope?.record?.observed_at || '');
         if (Number.isFinite(oldTime) && validated.observedAtMs <= oldTime)
           return { reject:'pi_bot_observation_out_of_order' };
-        if (ledger.length === 256) return { reject:'pi_bot_ledger_capacity_held' };
+        if (liveLedger.length >= 256) return { reject:'pi_bot_ledger_capacity_held' };
         const record = {
           schema:'mmibkr.pi_bot_live_store.v1',write_id:crypto.randomUUID(),
           stored_at_utc:new Date().toISOString(), envelope
         };
-        await txn.put('pi_bot_live_ledger',[...ledger,{request_id:rid,commit}]);
+        await txn.put('pi_bot_live_ledger',[...liveLedger,{request_id:rid,commit,observed_at_ms:validated.observedAtMs}]);
         await txn.put('pi_bot_live_latest',record);
         return { record };
       });
