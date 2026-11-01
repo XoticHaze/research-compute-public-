@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { validatePiBotLiveEnvelope, piBotLiveOperatorView } from '../cloudflare/operator-console/src/pi_bot_live_observation.js'
+import { validatePiBotLiveEnvelope, piBotLiveOperatorView, verifyPiBotRootDigest } from '../cloudflare/operator-console/src/pi_bot_live_observation.js'
+import { createHash } from 'node:crypto'
 const now=Date.parse('2026-11-01T04:20:00Z')
 const stamp='2026-11-01T04:19:30Z',rid='pi-bot-live-status-202611010419'
 const observation={
@@ -41,3 +42,55 @@ fail({...envelope(),receipt:{...e.receipt,live_status:{...observation,broker_sub
 fail({...envelope(),receipt:{...e.receipt,live_status:{...observation,live_switches_enabled:false}}})
 assert.throws(()=>piBotLiveOperatorView(record,now+12*60000),/pi_bot_observation_rejected/)
 console.log('Authenticated Pi bot-origin public ingestion contract: PASS')
+
+
+// Recurring root-approved immutable observation, independently versioned
+// from the one-shot typed command. Test actual SHA256/ID binding with WebCrypto.
+function canonical(value) {
+  if (Array.isArray(value)) return '['+value.map(canonical).join(',')+']';
+  if (value!==null && typeof value==='object') return '{'
+    +Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+canonical(value[k])).join(',')+'}';
+  return JSON.stringify(value);
+}
+const rootStatus = structuredClone(observation);
+const rawDigest = createHash('sha256').update(canonical(rootStatus),'utf8').digest('hex');
+const rootId = 'pibotobs-20261101041930-'+rawDigest.slice(0,16);
+const rootRecord = {
+  schema:'commandcenter.pi.bot_live_observation_outbox.v1',node_id:'cc-pi4',
+  observation_id:rootId,observed_at:stamp,snapshot_sha256:rawDigest,snapshot:rootStatus,
+  producer:'root_approved_fixed_pi_bot_inspection',read_only:true,
+  broker_mutation_attempted:false,gateway_mutation_attempted:false,
+};
+const rootEnvelope = {
+  schema:'mmibkr.pi_bot_live_observation_envelope.v2',node_id:'cc-pi4',
+  source_repo:'XoticHaze/CommandCenter-gate-control',source_ref:'pi-node-outbox',
+  source_path:'pi-node/bot-observations/'+rootId+'.json',
+  result_commit_sha:'d'.repeat(40),result_blob_sha:'e'.repeat(40),record:rootRecord,
+};
+const validatedRoot=validatePiBotLiveEnvelope(rootEnvelope,now);
+assert.equal(validatedRoot.replayId,'root:'+rootId);
+assert.equal(validatedRoot.observedAt,stamp);
+assert.equal(await verifyPiBotRootDigest(rootEnvelope),true);
+const rootStored={
+  schema:'mmibkr.pi_bot_live_store.v1',envelope:rootEnvelope,
+  stored_at_utc:'2026-11-01T04:19:35Z',
+};
+const rootView=piBotLiveOperatorView(rootStored,now);
+assert.equal(rootView.schema,'mmibkr.pi_bot_live_operator_view.v1');
+assert.equal(rootView.source,'authenticated_root_bot_status');
+assert.equal(rootView.live_switches_enabled,true);
+assert.equal(rootView.broker_submission_verified,false);
+const changedDigest=structuredClone(rootEnvelope);
+changedDigest.record.snapshot.selected_live_policies.MNQ=false;
+await assert.rejects(()=>verifyPiBotRootDigest(changedDigest),/pi_bot_observation_rejected/);
+const changedId=structuredClone(rootEnvelope);
+changedId.record.observation_id='pibotobs-20261101041930-'+'f'.repeat(16);
+changedId.source_path='pi-node/bot-observations/'+changedId.record.observation_id+'.json';
+assert.equal(validatePiBotLiveEnvelope(changedId,now).replayId,'root:'+changedId.record.observation_id);
+await assert.rejects(()=>verifyPiBotRootDigest(changedId),/pi_bot_observation_rejected/);
+const wrongSource=structuredClone(rootEnvelope);wrongSource.source_path='pi-node/results/forged.json';
+assert.throws(()=>validatePiBotLiveEnvelope(wrongSource,now),/pi_bot_observation_rejected/);
+const mutated=structuredClone(rootEnvelope);mutated.record.broker_mutation_attempted=true;
+assert.throws(()=>validatePiBotLiveEnvelope(mutated,now),/pi_bot_observation_rejected/);
+assert.throws(()=>validatePiBotLiveEnvelope(rootEnvelope,now+12*60*1000),/pi_bot_observation_rejected/);
+console.log('Pi bot v2 recurring root outbox: SHA256, identity, freshness, source and no-mutation PASS')
