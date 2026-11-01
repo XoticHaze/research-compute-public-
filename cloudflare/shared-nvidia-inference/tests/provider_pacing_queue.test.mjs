@@ -16,7 +16,8 @@ test("serialized request starts never exceed the operator's 3 per second",async(
   assert.equal(starts.length,10);
   for(let i=1;i<starts.length;i++)
     assert(starts[i]-starts[i-1]>=MIN_PROVIDER_SPACING_MS);
-  assert.deepEqual(starts.slice(0,4),[0,334,668,1500]);
+  assert.deepEqual(starts.slice(0,3),[0,334,668]);
+  assert(starts[3]>=1500&&starts[3]<=1502); // ceil on fractional token refill
   // A rolling one-second window contains at most three actual request starts.
   for(let i=0;i<starts.length;i++)assert(starts.filter(t=>t>=starts[i]&&t<starts[i]+1000).length<=3);
   assert.equal(MIN_PROVIDER_SPACING_MS,334);
@@ -32,7 +33,8 @@ test("default 40 RPM soft ceiling allows short bursts but never exceeds rolling 
   assert.equal(pacer.softRpm,40);
   await Promise.all(Array.from({length:55},()=>pacer.fetch(URL,POST)));
   assert.equal(starts.length,55);
-  assert.deepEqual(starts.slice(0,4),[0,334,668,1500]);
+  assert.deepEqual(starts.slice(0,3),[0,334,668]);
+  assert(starts[3]>=1500&&starts[3]<=1502); // ceil on fractional token refill
   for(let i=0;i<starts.length;i++){
     const count=starts.filter(t=>t>=starts[i]&&t<starts[i]+60000).length;
     assert(count<=40, "rolling minute must have <=40 starts");
