@@ -200,7 +200,7 @@ async function verifyPublisher(request) {
   };
 }
 
-async function verifyPiObservationPublisher(request) {
+async function verifyPiObservationPublisher(request, env) {
   const auth = String(request.headers.get('authorization') || '');
   const callerRunId = String(request.headers.get('x-mmibkr-caller-run-id') || '');
   if (!auth.startsWith('Bearer ') || auth.length > 16384
@@ -212,6 +212,10 @@ async function verifyPiObservationPublisher(request) {
       || claims.runner_environment !== 'github-hosted'
       || !['push', 'workflow_dispatch'].includes(String(claims.event_name || ''))
       || String(claims.run_id || '') !== callerRunId
+      // Exact source identity is independently owner-pinned; workflow_ref alone is insufficient.
+      || !/^[0-9a-f]{40}$/.test(String(env.PI_OBSERVATION_PUBLISHER_APPROVED_SHA || ''))
+      || claims.workflow_sha !== env.PI_OBSERVATION_PUBLISHER_APPROVED_SHA
+      || claims.sha !== env.PI_OBSERVATION_PUBLISHER_APPROVED_SHA
       || !identityMatches(claims, PI_OBSERVATION_PUBLISHER)) {
     throw new Error('pi_publisher_identity_rejected');
   }
@@ -887,7 +891,7 @@ export default {
     if (request.method === 'POST' && url.pathname === '/v1/pi-account-observation') {
       // Machine ingress is deliberately separate from browser Access and paper-only ingestion.
       let publisher;
-      try { publisher = await verifyPiObservationPublisher(request); }
+      try { publisher = await verifyPiObservationPublisher(request, env); }
       catch { return json({ error: 'unauthorized' }, 401); }
       const size = Number(request.headers.get('content-length') || 0);
       if (Number.isFinite(size) && size > MAX_PI_OBSERVATION_BYTES) {
