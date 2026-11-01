@@ -25,6 +25,7 @@ jobs:
       PI_OUTBOX_REPO: ${{ secrets.PI_OUTBOX_REPO }}
       PI_OUTBOX_REF: ${{ secrets.PI_OUTBOX_REF }}
       PI_OUTBOX_PREFIX: ${{ secrets.PI_OUTBOX_PREFIX }}
+      PI_OUTBOX_OPAQUE_BINDING_ID: ${{ secrets.PI_OUTBOX_OPAQUE_BINDING_ID }}
       OPERATOR_CONSOLE_URL: https://mmibkr-operator-console.slenderiq.workers.dev
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
