@@ -7,7 +7,7 @@ import {
 } from './promotion_review_state.js';
 import { validatePiObservationEnvelope, piOperatorView, piReplayIdentity, verifyPiOutboxSnapshotDigest } from './pi_account_observation.js';
 import { nextPiReplayLedger } from './pi_replay_ledger.js';
-import { validatePiBotLiveEnvelope, piBotLiveOperatorView } from './pi_bot_live_observation.js';
+import { validatePiBotLiveEnvelope, piBotLiveOperatorView, verifyPiBotRootDigest } from './pi_bot_live_observation.js';
 
 const GITHUB_ISSUER = 'https://token.actions.githubusercontent.com';
 const GITHUB_JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwks';
@@ -767,6 +767,7 @@ export class OperatorState {
       try {
         envelope = (await request.json()).envelope;
         validated = validatePiBotLiveEnvelope(envelope);
+        await verifyPiBotRootDigest(envelope);
       } catch { return json({ error:'pi_bot_observation_rejected' },400); }
       const outcome = await this.ctx.storage.transaction(async txn => {
         const old = await txn.get('pi_bot_live_latest');
@@ -775,7 +776,8 @@ export class OperatorState {
         const rid=validated.replayId, commit=validated.resultCommitSha;
         if (ledger.some(row=>row.request_id===rid || row.commit===commit))
           return { reject:'pi_bot_observation_replay' };
-        const oldTime = Date.parse(old?.envelope?.receipt?.finished_at || '');
+        const oldTime = Date.parse(old?.envelope?.receipt?.finished_at
+          || old?.envelope?.record?.observed_at || '');
         if (Number.isFinite(oldTime) && validated.observedAtMs <= oldTime)
           return { reject:'pi_bot_observation_out_of_order' };
         if (ledger.length === 256) return { reject:'pi_bot_ledger_capacity_held' };
@@ -793,7 +795,7 @@ export class OperatorState {
           || readback.envelope.result_commit_sha!==validated.resultCommitSha)
         return json({error:'pi_bot_observation_readback_failed'},502);
       return json({ok:true,durable_readback_verified:true,
-        observed_at:readback.envelope.receipt.finished_at,
+        observed_at:validated.observedAt,
         stored_at_utc:readback.stored_at_utc},201);
     }
     if (request.method === 'GET' && url.pathname === '/pi-bot/latest') {
@@ -941,6 +943,7 @@ export default {
         if (new TextEncoder().encode(raw).length>8192) throw new Error('too_large');
         envelope=JSON.parse(raw);
         validatePiBotLiveEnvelope(envelope);
+        await verifyPiBotRootDigest(envelope);
       } catch { return json({error:'pi_bot_observation_rejected'},400); }
       const result=await stateStub(env).fetch(new Request('https://operator-state.internal/pi-bot/store',{
         method:'POST',headers:{'content-type':'application/json'},
