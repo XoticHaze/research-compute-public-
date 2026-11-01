@@ -1,8 +1,10 @@
 // Ephemeral operator-only caller. Never deploy. Run via wrangler dev bound to loopback.
 // Only its explicit Cloudflare Service Binding can reach the private inference Worker.
 import {sanitizeRolesReceipt} from "./roles_receipt.js";
+import {sanitizeMicroReceipt} from "./micro_receipt.js";
 const SOURCE_PATH = "/run-once";
 const ROLES_PATH = "/roles-batch";
+const MICRO_PATH = "/micro-batch";
 const DESTINATION = "https://cc-shared-nvidia-inference.invalid/internal/diagnostics/nvidia";
 const CLASSIFICATIONS = new Set([
   "unattempted", "secrets_store_binding_missing", "secrets_store_read_unavailable",
@@ -22,17 +24,32 @@ function bool(n) { return typeof n === "boolean" ? n : null; }
 export function createCaller() {
   let smokeInvoked = false;
   const roleBatchesInvoked = new Set();
+  const microBatchesInvoked = new Set();
   return {
     async fetch(request, env) {
       const url = new URL(request.url);
-      if (request.method !== "POST" || ![SOURCE_PATH, ROLES_PATH].includes(url.pathname) || url.search ||
+      if (request.method !== "POST" || ![SOURCE_PATH, ROLES_PATH, MICRO_PATH].includes(url.pathname) || url.search ||
           !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) {
         return reply(404, { classification: "local_route_unavailable" });
       }
       // Wrangler/workerd may represent a zero-byte POST as an empty stream.
       // Admit only a declared zero-length body; reject content-bearing posts.
       let roleBatch = null;
-      if(url.pathname===ROLES_PATH) {
+      let micro = null;
+      if(url.pathname===MICRO_PATH){
+        const size=Number(request.headers.get("content-length"));
+        if(!Number.isInteger(size)||size<1||size>60||
+           request.headers.get("content-type")!=="application/json")
+          return reply(400,{classification:"micro_selector_invalid"});
+        let candidate;
+        try{candidate=await request.json();}catch{return reply(400,{classification:"micro_selector_invalid"});}
+        if(!candidate||typeof candidate!=="object"||Array.isArray(candidate)||
+           Object.keys(candidate).sort().join(",")!=="batch,model_index"||
+           !Number.isInteger(candidate.batch)||candidate.batch<0||candidate.batch>5||
+           !Number.isInteger(candidate.model_index)||candidate.model_index<0||candidate.model_index>1)
+          return reply(400,{classification:"micro_selector_invalid"});
+        micro=candidate;
+      }else if(url.pathname===ROLES_PATH) {
         const size=Number(request.headers.get("content-length"));
         if(!Number.isInteger(size)||size<1||size>30||
            request.headers.get("content-type")!=="application/json")
@@ -46,18 +63,28 @@ export function createCaller() {
       } else if (request.body !== null && request.headers.get("content-length") !== "0") {
         return reply(400, { classification: "request_body_not_allowed" });
       }
-      if ((roleBatch === null && (smokeInvoked || roleBatchesInvoked.size)) ||
-          (roleBatch !== null && (smokeInvoked || roleBatchesInvoked.has(roleBatch) ||
-                                   roleBatchesInvoked.size >= 5)))
+      if ((micro===null && roleBatch === null && (smokeInvoked || roleBatchesInvoked.size || microBatchesInvoked.size)) ||
+          (micro!==null && (smokeInvoked || roleBatchesInvoked.size ||
+             microBatchesInvoked.has(micro.model_index+":"+micro.batch) ||
+             microBatchesInvoked.size>=5)) ||
+          (roleBatch !== null && (smokeInvoked || microBatchesInvoked.size ||
+             roleBatchesInvoked.has(roleBatch) || roleBatchesInvoked.size >= 5)))
         return reply(409, {classification:"caller_batch_limit_or_replay"});
       if (typeof env?.NVIDIA_SERVICE?.fetch !== "function") {
         return reply(503, { classification: "remote_service_binding_missing" });
       }
       // One request per local dev session, even if upstream errors.
-      if (roleBatch === null) smokeInvoked = true;
+      if(micro!==null)microBatchesInvoked.add(micro.model_index+":"+micro.batch);
+      else if (roleBatch === null) smokeInvoked = true;
       else roleBatchesInvoked.add(roleBatch);
       try {
-        const upstream = await env.NVIDIA_SERVICE.fetch(roleBatch===null
+        const upstream = await env.NVIDIA_SERVICE.fetch(micro!==null
+          ? new Request(DESTINATION.replace("/internal/diagnostics/nvidia",
+              "/internal/diagnostics/nvidia-micro"), {
+              method:"POST",headers:{"Content-Type":"application/json"},
+              body:JSON.stringify(micro)
+            })
+          : roleBatch===null
           ? new Request(DESTINATION, { method: "POST" })
           : new Request(DESTINATION.replace("/internal/diagnostics/nvidia",
               "/internal/diagnostics/nvidia-roles"), {
@@ -65,6 +92,13 @@ export function createCaller() {
               body:JSON.stringify({batch:roleBatch})
           }));
         const value = await upstream.json();
+        if(micro!==null){
+          const sanitized=sanitizeMicroReceipt(value);
+          if(!sanitized||sanitized.model_index!==micro.model_index||
+             sanitized.batch!==micro.batch)
+            return reply(502,{classification:"unexpected_micro_receipt"});
+          return reply(upstream.ok?200:502,sanitized);
+        }
         if(roleBatch!==null) {
           const sanitized=sanitizeRolesReceipt(value);
           if(!sanitized||sanitized.batch!==roleBatch)
