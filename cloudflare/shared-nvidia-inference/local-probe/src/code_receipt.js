@@ -18,6 +18,7 @@ export function sanitizeCodeReceipt(value){
    (value.source_valid_shape!==true||typeof code!=="string"||
     code.length>1051||code.length<75||
     !/^def retry_delay_ms\(attempt, max_attempts, base_ms, cap_ms\):\n/.test(code)||
+    /\b(?:import|exec|eval|open|globals|locals|lambda|class|del|while|for|yield|async|await|print|input|NVIDIA|secret|key|token)\b/i.test(code)||
     !/^[A-Za-z0-9_ ()*,+\-<>=:\n]+$/.test(code)||code.includes("__")))
     return null;
  return {
