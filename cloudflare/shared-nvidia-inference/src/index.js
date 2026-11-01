@@ -3,10 +3,17 @@
 // `NVIDIA_API_KEY` must be a Cloudflare account Secrets Store binding, not a plain var.
 import {runSyntheticRoleBatch} from "./benchmark_runner.js";
 import {runMicroWorkerBatch} from "./micro_worker_benchmark.js";
+import {NvidiaProviderPacingQueue} from "./provider_pacing_queue.js";
 const ORIGIN = "https://integrate.api.nvidia.com";
 const MODEL = "openai/gpt-oss-20b";
 const RUN_PATH = "/internal/diagnostics/nvidia";
 const HEADERS = Object.freeze({ "Content-Type": "application/json" });
+// Common outbound gate for catalog, role, micro-worker and fixed smoke probes.
+// All private diagnostic routes within this isolate use this one queue.
+const sharedNvidiaPacer = new NvidiaProviderPacingQueue({
+  providerFetch: (endpoint, opts) => fetch(endpoint, opts),
+});
+const pacedProviderFetch = (endpoint, opts) => sharedNvidiaPacer.fetch(endpoint, opts);
 
 function json(status, record) {
   return new Response(JSON.stringify(record), {
@@ -175,7 +182,7 @@ export default {
       if(typeof key!=="string" || key.length<8)return json(503,{error:"secret_unavailable"});
       const authFetch=async(endpoint,options)=>{
         const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
-        try{return await fetch(endpoint,{...options,headers:{
+        try{return await pacedProviderFetch(endpoint,{...options,headers:{
           "Authorization":"Bearer "+key,"Content-Type":"application/json"
         },redirect:"manual",signal:controller.signal});}
         finally{clearTimeout(timer);}
@@ -206,7 +213,7 @@ export default {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 18000);
         try {
-          return await fetch(endpoint, {...options,
+          return await pacedProviderFetch(endpoint, {...options,
             headers: {"Authorization":"Bearer " + key, "Content-Type":"application/json"},
             redirect:"manual", signal:controller.signal});
         } finally {
@@ -227,7 +234,7 @@ export default {
         request.headers.get("content-length") !== "0") {
       return json(400, { error: "request_body_not_supported" });
     }
-    const result = await probeNvidia(env);
+    const result = await probeNvidia(env, pacedProviderFetch);
     return json(result.classification === "completion_http_200" ? 200 : 503, result);
   },
 };
