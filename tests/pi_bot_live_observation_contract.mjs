@@ -135,9 +135,10 @@ try {
   assert.ok(ledger.length<256,'old entries not garbage collected');
   const read=await worker.fetch(new Request('https://operator-state.internal/pi-bot/latest'));
   assert.equal(read.status,200);
-  const view=piBotLiveOperatorView(await read.json(),Date.now());
-  assert.equal(view.schema,'mmibkr.pi_bot_live_operator_view.v1');
-  assert.equal(view.live_switches_enabled,true);
+  const stored=await read.json();
+  assert.equal(stored.schema,'mmibkr.pi_bot_live_store.v1');
+  assert.equal(stored.envelope.receipt,undefined);
+  assert.equal(stored.envelope.record.observation_id.startsWith('pibotobs-'),true);
 } finally {
   Date.now=originalNow;
 }
