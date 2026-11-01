@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {NvidiaProviderPacingQueue,MIN_PROVIDER_SPACING_MS,RATE_LIMITED_SPACING_MS,
-        parsedRetryAfterMs} from "../src/provider_pacing_queue.js";
+        DEFAULT_SOFT_RPM,parsedRetryAfterMs} from "../src/provider_pacing_queue.js";
 const URL="https://integrate.api.nvidia.com/v1/chat/completions";
 const POST={method:"POST",redirect:"manual"};
 
@@ -16,10 +16,45 @@ test("serialized request starts never exceed the operator's 3 per second",async(
   assert.equal(starts.length,10);
   for(let i=1;i<starts.length;i++)
     assert(starts[i]-starts[i-1]>=MIN_PROVIDER_SPACING_MS);
-  assert.deepEqual(starts.slice(0,4),[0,334,668,1002]);
+  assert.deepEqual(starts.slice(0,4),[0,334,668,1500]);
   // A rolling one-second window contains at most three actual request starts.
   for(let i=0;i<starts.length;i++)assert(starts.filter(t=>t>=starts[i]&&t<starts[i]+1000).length<=3);
   assert.equal(MIN_PROVIDER_SPACING_MS,334);
+});
+
+test("default 40 RPM soft ceiling allows short bursts but never exceeds rolling minute",async()=>{
+  let clock=0;const starts=[];
+  const pacer=new NvidiaProviderPacingQueue({
+    providerFetch:async()=>{starts.push(clock);return{status:200};},
+    now:()=>clock,sleep:async ms=>{clock+=ms;}
+  });
+  assert.equal(DEFAULT_SOFT_RPM,40);
+  assert.equal(pacer.softRpm,40);
+  await Promise.all(Array.from({length:55},()=>pacer.fetch(URL,POST)));
+  assert.equal(starts.length,55);
+  assert.deepEqual(starts.slice(0,4),[0,334,668,1500]);
+  for(let i=0;i<starts.length;i++){
+    const count=starts.filter(t=>t>=starts[i]&&t<starts[i]+60000).length;
+    assert(count<=40, "rolling minute must have <=40 starts");
+  }
+  for(let i=1;i<starts.length;i++)assert(starts[i]-starts[i-1]>=334);
+});
+
+test("soft RPM can be lowered or raised in reviewed constructor, independently of burst ceiling",async()=>{
+  for(const softRpm of [10,20,60]){
+    let clock=0;const starts=[];
+    const pacer=new NvidiaProviderPacingQueue({
+      softRpm,providerFetch:async()=>{starts.push(clock);return{status:200};},
+      now:()=>clock,sleep:async ms=>{clock+=ms;}
+    });
+    await Promise.all(Array.from({length:softRpm+3},()=>pacer.fetch(URL,POST)));
+    for(let i=0;i<starts.length;i++)
+      assert(starts.filter(t=>t>=starts[i]&&t<starts[i]+60000).length<=softRpm);
+  }
+  for(const rpm of [0,-1,181,40.5,"40",null])
+    assert.throws(()=>new NvidiaProviderPacingQueue({
+      providerFetch:async()=>({status:200}),softRpm:rpm
+    }),/invalid_private_provider_pacer/);
 });
 
 test("catalog GET and completion POST use the SAME pacing queue",async()=>{
