@@ -12,34 +12,25 @@ const hex40 = x => typeof x === 'string' && /^[0-9a-f]{40}$/.test(x);
 const hex64 = x => typeof x === 'string' && /^[0-9a-f]{64}$/.test(x);
 const utc = x => typeof x === 'string' && x.length <= 48
   && /(Z|\+00:00)$/.test(x) && Number.isFinite(Date.parse(x)) ? Date.parse(x) : NaN;
-const ek = new Set(['schema','node_id','source_repo','source_ref','source_path','result_commit_sha','result_blob_sha','receipt']);
-const rootEnvelopeKeys = new Set(['schema','node_id','source_repo','source_ref','source_path','result_commit_sha','result_blob_sha','record']);
+const ek = new Set(['schema','node_id','source_binding_id','result_commit_sha','result_blob_sha','receipt']);
+const rootEnvelopeKeys = new Set(['schema','node_id','source_binding_id','result_commit_sha','result_blob_sha','record']);
 const rootRecordKeys = new Set(['schema','node_id','observation_id','observed_at','snapshot_sha256','snapshot','producer','read_only','broker_mutation_attempted','gateway_mutation_attempted']);
 const rootProducer = 'root_approved_fixed_pi_bot_inspection';
 const rk = new Set(['schema','node_id','request_id','action','source_sha','image_digest','request_sha256','status','message','started_at','finished_at','broker_mutation_attempted','gateway_restart_attempted','bot_started','replay_allowed','live_status']);
 const ok = new Set(['schema','node_id','status','live_switches_enabled','bot_running','gateway_running','gateway_network_namespace_matched','single_canonical_main','global_live_flags','selected_live_policies','stock_canary_enabled','private_network_attested_by_launcher','legacy_backtest_disabled','restart_persistent','gateway_readonly_api_configuration','broker_submission_verified','broker_mutation_attempted','gateway_mutation_attempted','read_only']);
 const requiredIfEnabled = ['bot_running','gateway_running','gateway_network_namespace_matched','single_canonical_main','stock_canary_enabled','private_network_attested_by_launcher','legacy_backtest_disabled','restart_persistent'];
 function reject() { throw new Error('pi_bot_observation_rejected') }
-const sourceBindingKeys = new Set(['repository','ref','root_observation_prefix','typed_result_prefix']);
-function sourceMatches(input, raw, kind, identity) {
-  // Owner-provisioned secret binding, never a public private-repository locator.
-  if (typeof raw !== 'string' || raw.length > 1024 || raw.length < 24) return false;
-  let b;
-  try { b = JSON.parse(raw); } catch { return false; }
-  if (!keys(b, sourceBindingKeys)
-      || typeof b.repository !== 'string' || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(b.repository)
-      || typeof b.ref !== 'string' || !/^[A-Za-z0-9._\/-]{1,120}$/.test(b.ref)
-      || typeof identity !== 'string' || !/^[A-Za-z0-9._:-]{6,100}$/.test(identity)) return false;
-  const prefix = kind === 'root' ? b.root_observation_prefix : b.typed_result_prefix;
-  if (typeof prefix !== 'string' || prefix.length > 160 || !/^[A-Za-z0-9._\/-]+\/$/.test(prefix)
-      || prefix.startsWith('/') || prefix.includes('..') || prefix.includes('//')) return false;
-  return input.source_repo === b.repository && input.source_ref === b.ref
-    && input.source_path === prefix + identity + '.json';
+function sourceMatches(input, sourceBinding) {
+  // Exact source/path/blob verification belongs to the authenticated private-reading publisher.
+  // The public Worker sees only the independently configured opaque binding.
+  return typeof sourceBinding === 'string'
+    && /^[A-Za-z0-9_-]{24,128}$/.test(sourceBinding)
+    && input?.source_binding_id === sourceBinding;
 }
 export function validatePiBotLiveEnvelope(input, now = Date.now(), sourceBinding = null) {
   if (input?.schema === 'mmibkr.pi_bot_live_observation_envelope.v2') {
     if (!keys(input,rootEnvelopeKeys) || input.node_id!=='cc-pi4'
-        || !sourceMatches(input, sourceBinding, 'root', input.record?.observation_id)
+        || !sourceMatches(input, sourceBinding)
         || !hex40(input.result_commit_sha) || !hex40(input.result_blob_sha)
         || !keys(input.record,rootRecordKeys)) reject();
     const r=input.record, o=r.snapshot;
@@ -74,7 +65,7 @@ export function validatePiBotLiveEnvelope(input, now = Date.now(), sourceBinding
 
   if (!keys(input,ek) || input.schema !== 'mmibkr.pi_bot_live_observation_envelope.v1'
       || input.node_id !== 'cc-pi4'
-      || !sourceMatches(input, sourceBinding, 'typed', input.receipt?.request_id)
+      || !sourceMatches(input, sourceBinding)
       || !hex40(input.result_commit_sha) || !hex40(input.result_blob_sha)
       || !keys(input.receipt,rk)) reject();
   const receipt=input.receipt, status=receipt.live_status;
