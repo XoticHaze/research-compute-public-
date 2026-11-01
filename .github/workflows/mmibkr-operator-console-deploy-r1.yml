@@ -900,6 +900,46 @@ jobs:
           printf '%s' "$approved" | npx --yes wrangler@4.131.2 secret put PI_OBSERVATION_PUBLISHER_APPROVED_SHA --config cloudflare/operator-console/wrangler.jsonc >/dev/null
           echo 'MMIBKR_PI_BOT_OIDC_PUBLISHER_OWNER_PIN_BOUND=1'
 
+      # Bind owner-owned source identity under a Worker secret, never public
+      # JavaScript source or a public Actions variable. This is NOT a token.
+      - name: Bind protected Pi bot origin source identity
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ steps.deploy_auth.outputs.route == 'scoped_r2' && secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING: ${{ secrets.MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_binding="${MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING:-}"
+          if [ -f "$RUNNER_TEMP/mmibkr-operator-console-source/extracted/mm-ibkr/ui-react/src/components/PiBotLiveStatusCard.jsx" ] && [ -z "$source_binding" ]; then
+            echo 'MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING_MISSING=1'
+            exit 48
+          fi
+          if [ -z "$source_binding" ]; then
+            echo 'MMIBKR_PI_BOT_PRIVATE_SOURCE=NOT_ADMITTED'
+            exit 0
+          fi
+          python - <<'PY_PI_SOURCE'
+          import json, os, re
+          raw = os.environ['MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING']
+          if len(raw)>1024 or len(raw)<24 or any(c in raw for c in '\r\n\0'):
+              raise SystemExit('MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING_INVALID=1')
+          try:
+              node=json.loads(raw)
+          except (TypeError, ValueError):
+              raise SystemExit('MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING_INVALID=1') from None
+          required={'repository','ref','root_observation_prefix','typed_result_prefix'}
+          if not isinstance(node,dict) or set(node)!=required or not isinstance(node['repository'],str) or not isinstance(node['ref'],str) or not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+',node['repository']) or not re.fullmatch(r'[A-Za-z0-9._/-]{1,120}',node['ref']):
+              raise SystemExit('MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING_INVALID=1')
+          for k in ('root_observation_prefix','typed_result_prefix'):
+              p=node[k]
+              if not isinstance(p,str) or len(p)>160 or not re.fullmatch(r'[A-Za-z0-9._/-]+/',p) or p.startswith('/') or '..' in p or '//' in p:
+                  raise SystemExit('MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING_INVALID=1')
+          print('MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING_VALID=1')
+          PY_PI_SOURCE
+          printf '%s' "$source_binding" | npx --yes wrangler@4.131.2 secret put PI_BOT_PRIVATE_SOURCE_BINDING --config cloudflare/operator-console/wrangler.jsonc >/dev/null
+          echo 'MMIBKR_PI_BOT_PRIVATE_SOURCE_BOUND=1'
+
       - name: Prove unauthenticated surface fails closed
         shell: bash
         run: |

@@ -20,17 +20,31 @@ const rk = new Set(['schema','node_id','request_id','action','source_sha','image
 const ok = new Set(['schema','node_id','status','live_switches_enabled','bot_running','gateway_running','gateway_network_namespace_matched','single_canonical_main','global_live_flags','selected_live_policies','stock_canary_enabled','private_network_attested_by_launcher','legacy_backtest_disabled','restart_persistent','gateway_readonly_api_configuration','broker_submission_verified','broker_mutation_attempted','gateway_mutation_attempted','read_only']);
 const requiredIfEnabled = ['bot_running','gateway_running','gateway_network_namespace_matched','single_canonical_main','stock_canary_enabled','private_network_attested_by_launcher','legacy_backtest_disabled','restart_persistent'];
 function reject() { throw new Error('pi_bot_observation_rejected') }
-export function validatePiBotLiveEnvelope(input, now = Date.now()) {
+const sourceBindingKeys = new Set(['repository','ref','root_observation_prefix','typed_result_prefix']);
+function sourceMatches(input, raw, kind, identity) {
+  // Owner-provisioned secret binding, never a public private-repository locator.
+  if (typeof raw !== 'string' || raw.length > 1024 || raw.length < 24) return false;
+  let b;
+  try { b = JSON.parse(raw); } catch { return false; }
+  if (!keys(b, sourceBindingKeys)
+      || typeof b.repository !== 'string' || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(b.repository)
+      || typeof b.ref !== 'string' || !/^[A-Za-z0-9._\/-]{1,120}$/.test(b.ref)
+      || typeof identity !== 'string' || !/^[A-Za-z0-9._:-]{6,100}$/.test(identity)) return false;
+  const prefix = kind === 'root' ? b.root_observation_prefix : b.typed_result_prefix;
+  if (typeof prefix !== 'string' || prefix.length > 160 || !/^[A-Za-z0-9._\/-]+\/$/.test(prefix)
+      || prefix.startsWith('/') || prefix.includes('..') || prefix.includes('//')) return false;
+  return input.source_repo === b.repository && input.source_ref === b.ref
+    && input.source_path === prefix + identity + '.json';
+}
+export function validatePiBotLiveEnvelope(input, now = Date.now(), sourceBinding = null) {
   if (input?.schema === 'mmibkr.pi_bot_live_observation_envelope.v2') {
     if (!keys(input,rootEnvelopeKeys) || input.node_id!=='cc-pi4'
-        || input.source_repo!=='XoticHaze/CommandCenter-gate-control'
-        || input.source_ref!=='pi-node-outbox'
+        || !sourceMatches(input, sourceBinding, 'root', input.record?.observation_id)
         || !hex40(input.result_commit_sha) || !hex40(input.result_blob_sha)
         || !keys(input.record,rootRecordKeys)) reject();
     const r=input.record, o=r.snapshot;
     if (r.schema!=='commandcenter.pi.bot_live_observation_outbox.v1'
         || r.node_id!=='cc-pi4' || !/^pibotobs-[0-9]{14}-[0-9a-f]{16}$/.test(r.observation_id)
-        || input.source_path!=='pi-node/bot-observations/'+r.observation_id+'.json'
         || r.producer!==rootProducer
         || r.read_only!==true || r.broker_mutation_attempted!==false
         || r.gateway_mutation_attempted!==false || !hex64(r.snapshot_sha256)
@@ -59,8 +73,8 @@ export function validatePiBotLiveEnvelope(input, now = Date.now()) {
   }
 
   if (!keys(input,ek) || input.schema !== 'mmibkr.pi_bot_live_observation_envelope.v1'
-      || input.node_id !== 'cc-pi4' || input.source_repo !== 'XoticHaze/CommandCenter-gate-control'
-      || input.source_ref !== 'pi-node-outbox'
+      || input.node_id !== 'cc-pi4'
+      || !sourceMatches(input, sourceBinding, 'typed', input.receipt?.request_id)
       || !hex40(input.result_commit_sha) || !hex40(input.result_blob_sha)
       || !keys(input.receipt,rk)) reject();
   const receipt=input.receipt, status=receipt.live_status;
@@ -69,7 +83,6 @@ export function validatePiBotLiveEnvelope(input, now = Date.now()) {
       || receipt.action !== 'pi.bot.live_status'
       || typeof receipt.request_id !== 'string'
       || !/^[A-Za-z0-9._:-]{6,100}$/.test(receipt.request_id)
-      || input.source_path !== 'pi-node/bot-release-results/'+receipt.request_id+'.json'
       || !hex40(receipt.source_sha) || !hex64(receipt.image_digest) || !hex64(receipt.request_sha256)
       || receipt.status !== 'passed'
       || receipt.broker_mutation_attempted !== false
@@ -98,9 +111,9 @@ export function validatePiBotLiveEnvelope(input, now = Date.now()) {
     observedAtMs: finished, replayId: receipt.request_id,
     resultCommitSha: input.result_commit_sha };
 }
-export function piBotLiveOperatorView(record, now = Date.now()) {
+export function piBotLiveOperatorView(record, now = Date.now(), sourceBinding = null) {
   if (!record || record.schema !== 'mmibkr.pi_bot_live_store.v1') reject();
-  const v=validatePiBotLiveEnvelope(record.envelope,now);
+  const v=validatePiBotLiveEnvelope(record.envelope,now,sourceBinding);
   const stored=utc(record.stored_at_utc);
   if (!Number.isFinite(stored) || stored > now + NOW_SKEW_MS || now - stored > MAX_AGE_MS) reject();
   const o=v.observation;
