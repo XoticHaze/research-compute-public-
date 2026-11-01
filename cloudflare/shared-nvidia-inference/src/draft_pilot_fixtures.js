@@ -48,7 +48,7 @@ export function scoreDraft(message,fixture){
   result.draft_length_ok=txt.length>=90&&txt.length<=650;
   result.factual_anchor_groups=fixture.anchors.filter(group=>group.some(x=>txt.toLowerCase().includes(x.toLowerCase()))).length;
   result.unsupported_claim_flag=fixture.forbidden.some(pattern=>pattern.test(txt)) ||
-    /\b(Order #|tracking #|tracking number:|refund approved|we have restarted|executed the command)\b/i.test(txt);
+    /(?:Order #|tracking #|tracking number:|refund approved|we have restarted|executed the command)/i.test(txt);
   result.passed=result.human_review_flag&&result.draft_length_ok&&
     result.factual_anchor_groups===result.anchor_groups&&!result.unsupported_claim_flag;
   return result;
