@@ -1,6 +1,6 @@
 // Private, fixed-choice micro-worker benchmark. Every prompt/model comes from
 // the reviewed 24-case fixture. No general model proxy or command execution.
-import {MICRO_MODELS,MICRO_CASES,microRequest,scoreMicro} from "./micro_worker_fixtures.js";
+import {MICRO_MODELS,MICRO_CASES,microRequest,scoreMicro,classifiedMicroChoice} from "./micro_worker_fixtures.js";
 const API="https://integrate.api.nvidia.com";
 const SCHEMA="commandcenter.nvidia_micro_worker_synthetic.v1";
 export async function runMicroWorkerBatch({modelIndex,batch,providerFetch,now=()=>Date.now()}){
@@ -17,7 +17,7 @@ export async function runMicroWorkerBatch({modelIndex,batch,providerFetch,now=()
    const fixture=MICRO_CASES[batch*4+i];
    const t0=now();
    const row={id:fixture.id,category:fixture.category,http_status:null,latency_ms:null,
-      format_valid:false,passed:false,error:null};
+      format_valid:false,passed:false,observed_action:null,observed_route:null,error:null};
    try{
     out.calls++;
     const r=await providerFetch(API+"/v1/chat/completions",{
@@ -28,6 +28,9 @@ export async function runMicroWorkerBatch({modelIndex,batch,providerFetch,now=()
       const data=await r.json();
       const decision=scoreMicro(data?.choices?.[0]?.message,fixture);
       row.format_valid=decision.valid;row.passed=decision.passed;
+      const classified=classifiedMicroChoice(data?.choices?.[0]?.message);
+      row.observed_action=classified.observed_action;
+      row.observed_route=classified.observed_route;
     }
    }catch(e){
     row.error=e?.name==="AbortError"?"aborted":e?.name==="TimeoutError"?"timeout":"transport_error";

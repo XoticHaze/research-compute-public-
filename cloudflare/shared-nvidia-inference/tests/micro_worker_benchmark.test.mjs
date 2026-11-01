@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {MICRO_CASES,MICRO_MODELS,microRequest,scoreMicro} from "../src/micro_worker_fixtures.js";
+import {MICRO_CASES,MICRO_MODELS,microRequest,scoreMicro,classifiedMicroChoice} from "../src/micro_worker_fixtures.js";
 import {runMicroWorkerBatch} from "../src/micro_worker_benchmark.js";
 import {sanitizeMicroReceipt} from "../local-probe/src/micro_receipt.js";
 test("24 stable synthetic cases in six categories and fixed model allowlist",()=>{
@@ -66,4 +66,22 @@ test("sanitizer rejects arbitrary model IDs and invalid task keys",()=>{
   id:"Q99",category:"security",http_status:200,latency_ms:20,passed:true,format_valid:true
  }];
  assert.equal(sanitizeMicroReceipt(x),null);
+});
+
+test("safe enum diagnostics never surface arbitrary strings or model-provided prose",()=>{
+ const parsed=classifiedMicroChoice({content:'{"action":"hold","route":"operator","freeform":"DO_NOT_EXPORT_SECRET"}'});
+ assert.deepEqual(parsed,{observed_action:"hold",observed_route:"operator"});
+ const bad=classifiedMicroChoice({content:'{"action":"DO_NOT_EXPORT_SECRET","route":"https://malicious.example"}'});
+ assert.deepEqual(bad,{observed_action:null,observed_route:null});
+ const receipt={
+   schema:"commandcenter.nvidia_micro_worker_synthetic.v1",model:MICRO_MODELS[0],
+   model_index:0,batch:0,status:"batch_complete",calls:1,elapsed_ms:50,
+   results:[{id:"T01",category:"triage",http_status:200,latency_ms:30,
+      format_valid:true,passed:false,observed_action:"hold",observed_route:"operator",
+      secret:"DO_NOT_EXPORT_SECRET"}]
+ };
+ const sanitized=sanitizeMicroReceipt(receipt);
+ assert.equal(sanitized.results[0].observed_action,"hold");
+ assert.equal(sanitized.results[0].observed_route,"operator");
+ assert(!JSON.stringify(sanitized).includes("DO_NOT_EXPORT_SECRET"));
 });
