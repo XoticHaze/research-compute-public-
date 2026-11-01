@@ -87,7 +87,7 @@ test("real 429 downshifts this Worker isolate to no more than 40/minute",async()
  assert.equal(RATE_LIMITED_SPACING_MS,1500);
 });
 
-test("3-RPS initial ceiling is independent from the unverified NVIDIA account RPM",()=>{
+test("3-RPS initial ceiling is independent from the unverified NVIDIA account RPM",async()=>{
  let clock=0;
  const starts=[];
  const pacer=new NvidiaProviderPacingQueue({
