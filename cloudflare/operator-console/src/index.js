@@ -5,6 +5,9 @@ import {
   storePromotionCandidates,
   validatePromotionCandidateSnapshot,
 } from './promotion_review_state.js';
+import { validatePiObservationEnvelope, piOperatorView, piReplayIdentity, verifyPiOutboxSnapshotDigest } from './pi_account_observation.js';
+import { nextPiReplayLedger } from './pi_replay_ledger.js';
+import { validatePiBotLiveEnvelope, piBotLiveOperatorView, verifyPiBotRootDigest } from './pi_bot_live_observation.js';
 
 const GITHUB_ISSUER = 'https://token.actions.githubusercontent.com';
 const GITHUB_JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwks';
@@ -12,6 +15,13 @@ const GITHUB_AUDIENCE = 'mmibkr-operator-console';
 const SNAPSHOT_SCHEMA = 'mmibkr.cloud_operator_snapshot.v1';
 const MAX_SNAPSHOT_BYTES = 2 * 1024 * 1024;
 const MAX_PROMOTION_BYTES = 2 * 1024 * 1024;
+const MAX_PI_OBSERVATION_BYTES = 8192;
+// A dedicated, not-yet-admitted read-only public bridge; ordinary publishers cannot impersonate cc-pi4.
+const PI_OBSERVATION_PUBLISHER = Object.freeze({
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref: 'XoticHaze/research-compute-public-/.github/workflows/mmibkr-pi-operator-bridge-r1.yml@refs/heads/main',
+});
 
 const ALLOWED_PUBLISHERS = Object.freeze([
   Object.freeze({
@@ -189,6 +199,29 @@ async function verifyPublisher(request) {
     run_id: callerRunId,
     run_attempt: String(claims.run_attempt || ''),
   };
+}
+
+async function verifyPiObservationPublisher(request, env) {
+  const auth = String(request.headers.get('authorization') || '');
+  const callerRunId = String(request.headers.get('x-mmibkr-caller-run-id') || '');
+  if (!auth.startsWith('Bearer ') || auth.length > 16384
+      || !/^\d{4,24}$/.test(callerRunId)) throw new Error('pi_publisher_unauthorized');
+  const claims = await verifyRs256Jwt(auth.slice(7), GITHUB_JWKS);
+  if (claims.iss !== GITHUB_ISSUER
+      || !claimAudience(claims).includes(GITHUB_AUDIENCE)
+      || claims.repository_visibility !== 'public'
+      || claims.runner_environment !== 'github-hosted'
+      || !['push', 'workflow_dispatch'].includes(String(claims.event_name || ''))
+      || String(claims.run_id || '') !== callerRunId
+      // Exact source identity is independently owner-pinned; workflow_ref alone is insufficient.
+      || !/^[0-9a-f]{40}$/.test(String(env.PI_OBSERVATION_PUBLISHER_APPROVED_SHA || ''))
+      || claims.workflow_sha !== env.PI_OBSERVATION_PUBLISHER_APPROVED_SHA
+      || claims.sha !== env.PI_OBSERVATION_PUBLISHER_APPROVED_SHA
+      || !identityMatches(claims, PI_OBSERVATION_PUBLISHER)) {
+    throw new Error('pi_publisher_identity_rejected');
+  }
+  return { repository: claims.repository, workflow_ref: claims.workflow_ref,
+    run_id: callerRunId, run_attempt: String(claims.run_attempt || '') };
 }
 
 async function verifyPromotionPublisher(request) {
@@ -681,6 +714,110 @@ export class OperatorState {
   async fetch(request) {
     const url = new URL(request.url);
 
+    if (request.method === 'POST' && url.pathname === '/pi/store') {
+      let envelope;
+      let sourceEnvelope;
+      try {
+        sourceEnvelope = (await request.json()).envelope;
+        envelope = validatePiObservationEnvelope(sourceEnvelope);
+        await verifyPiOutboxSnapshotDigest(sourceEnvelope);
+      } catch {
+        return json({ error: 'pi_observation_rejected' }, 400);
+      }
+      const result = await this.ctx.storage.transaction(async (txn) => {
+        // Typed request IDs or distinct root outbox IDs, plus Git commits, are replay-fenced atomically.
+        // A malformed/full ledger fails closed; a caller cannot reset it.
+        let replayLedger;
+        try {
+          replayLedger = nextPiReplayLedger(await txn.get('pi_replay_ledger'), envelope, Date.now());
+        } catch {
+          return { rejected: 'pi_observation_replay_or_ledger_held' };
+        }
+        const prior = await txn.get('pi_account_latest');
+        const currentTime = Date.parse(envelope.observation.observed_at);
+        const priorTime = Date.parse(prior?.envelope?.observation?.observed_at
+          || prior?.envelope?.record?.snapshot?.observed_at || '');
+        if (Number.isFinite(priorTime) && priorTime >= currentTime) {
+          return { rejected: true };
+        }
+        const record = {
+          schema: 'mmibkr.pi_account_store.v1', write_id: crypto.randomUUID(),
+          stored_at_utc: new Date().toISOString(), envelope: sourceEnvelope,
+        };
+        await txn.put('pi_replay_ledger', replayLedger);
+        await txn.put('pi_account_latest', record);
+        return { record };
+      });
+      if (result.rejected) return json({ error: result.rejected === true
+        ? 'pi_observation_out_of_order' : result.rejected }, 409);
+      const observed = await this.ctx.storage.get('pi_account_latest');
+      const seen = await this.ctx.storage.get('pi_replay_ledger');
+      if (!observed || observed.write_id !== result.record.write_id
+          || observed.envelope?.result_commit_sha !== envelope.result_commit_sha
+          || !Array.isArray(seen?.entries)
+          || !seen.entries.some(row => row.request_id === piReplayIdentity(envelope)
+            && row.result_commit_sha === envelope.result_commit_sha)) {
+        return json({ error: 'pi_observation_readback_failed' }, 502);
+      }
+      return json({ ok: true, durable_readback_verified: true,
+        stored_at_utc: result.record.stored_at_utc, observed_at: envelope.observation.observed_at }, 201);
+    }
+    if (request.method === 'POST' && url.pathname === '/pi-bot/store') {
+      let envelope, validated;
+      try {
+        envelope = (await request.json()).envelope;
+        validated = validatePiBotLiveEnvelope(envelope);
+        await verifyPiBotRootDigest(envelope);
+      } catch { return json({ error:'pi_bot_observation_rejected' },400); }
+      const outcome = await this.ctx.storage.transaction(async txn => {
+        const old = await txn.get('pi_bot_live_latest');
+        const ledger = await txn.get('pi_bot_live_ledger') || [];
+        if (!Array.isArray(ledger) || ledger.length > 256) return { reject:'pi_bot_ledger_invalid' };
+        const rid=validated.replayId, commit=validated.resultCommitSha;
+        // Keep a bounded nonreplay window longer than the 420s signed-input
+        // freshness limit. A stale replay is rejected before this transaction,
+        // while a healthy 2-minute producer must never fill all 256 slots.
+        const minSeen=Date.now()-15*60*1000;
+        const liveLedger=ledger.filter(row => {
+          if (!row || typeof row.request_id !== 'string' || typeof row.commit !== 'string'
+              || !/^[a-f0-9]{40}$/.test(row.commit)) return true; // fail-closed legacy entry
+          if (!Number.isSafeInteger(row.observed_at_ms)) return true; // legacy entry
+          return row.observed_at_ms>=minSeen;
+        });
+        if (liveLedger.some(row=>row?.request_id===rid || row?.commit===commit))
+          return { reject:'pi_bot_observation_replay' };
+        const oldTime = Date.parse(old?.envelope?.receipt?.finished_at
+          || old?.envelope?.record?.observed_at || '');
+        if (Number.isFinite(oldTime) && validated.observedAtMs <= oldTime)
+          return { reject:'pi_bot_observation_out_of_order' };
+        if (liveLedger.length >= 256) return { reject:'pi_bot_ledger_capacity_held' };
+        const record = {
+          schema:'mmibkr.pi_bot_live_store.v1',write_id:crypto.randomUUID(),
+          stored_at_utc:new Date().toISOString(), envelope
+        };
+        await txn.put('pi_bot_live_ledger',[...liveLedger,{request_id:rid,commit,observed_at_ms:validated.observedAtMs}]);
+        await txn.put('pi_bot_live_latest',record);
+        return { record };
+      });
+      if (outcome.reject) return json({error:outcome.reject},409);
+      const readback=await this.ctx.storage.get('pi_bot_live_latest');
+      if (!readback || readback.write_id!==outcome.record.write_id
+          || readback.envelope.result_commit_sha!==validated.resultCommitSha)
+        return json({error:'pi_bot_observation_readback_failed'},502);
+      return json({ok:true,durable_readback_verified:true,
+        observed_at:validated.observedAt,
+        stored_at_utc:readback.stored_at_utc},201);
+    }
+    if (request.method === 'GET' && url.pathname === '/pi-bot/latest') {
+      const record=await this.ctx.storage.get('pi_bot_live_latest');
+      return record ? json(record,200) : json({error:'pi_bot_observation_not_available'},404);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/pi/latest') {
+      const record = await this.ctx.storage.get('pi_account_latest');
+      return record ? json(record, 200) : json({ error: 'pi_observation_not_available' }, 404);
+    }
+
     if (request.method === 'POST' && url.pathname === '/store') {
       const body = await request.json();
       const incomingSnapshot = validateSnapshot(body.snapshot);
@@ -802,6 +939,71 @@ export class OperatorState {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    if (request.method === 'POST' && url.pathname === '/v1/pi-bot-live-status') {
+      // Same approved exact-source OIDC publisher, distinct bot-origin action
+      // and replay scope. Never derive it from the paper/account envelope.
+      try { await verifyPiObservationPublisher(request, env); }
+      catch { return json({error:'unauthorized'},401); }
+      const length=Number(request.headers.get('content-length')||0);
+      if (Number.isFinite(length) && length>8192) return json({error:'pi_bot_payload_too_large'},413);
+      let envelope;
+      try {
+        const raw=await request.text();
+        if (new TextEncoder().encode(raw).length>8192) throw new Error('too_large');
+        envelope=JSON.parse(raw);
+        validatePiBotLiveEnvelope(envelope);
+        await verifyPiBotRootDigest(envelope);
+      } catch { return json({error:'pi_bot_observation_rejected'},400); }
+      const result=await stateStub(env).fetch(new Request('https://operator-state.internal/pi-bot/store',{
+        method:'POST',headers:{'content-type':'application/json'},
+        body:JSON.stringify({envelope}),
+      }));
+      if (!result.ok) return result;
+      const receipt=await result.json();
+      if (receipt.durable_readback_verified!==true)
+        return json({error:'pi_bot_readback_unverified'},502);
+      return json({ok:true,schema:'mmibkr.pi_bot_live_publish_receipt.v1',
+        observed_at:receipt.observed_at,stored_at_utc:receipt.stored_at_utc,
+        durable_readback_verified:true,broker_mutation_authority:false},201);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/v1/pi-account-observation') {
+      // Machine ingress is deliberately separate from browser Access and paper-only ingestion.
+      let publisher;
+      try { publisher = await verifyPiObservationPublisher(request, env); }
+      catch { return json({ error: 'unauthorized' }, 401); }
+      const size = Number(request.headers.get('content-length') || 0);
+      if (Number.isFinite(size) && size > MAX_PI_OBSERVATION_BYTES) {
+        return json({ error: 'pi_observation_too_large' }, 413);
+      }
+      let envelope;
+      let incoming;
+      try {
+        const raw = await request.text();
+        if (new TextEncoder().encode(raw).length > MAX_PI_OBSERVATION_BYTES) {
+          return json({ error: 'pi_observation_too_large' }, 413);
+        }
+        incoming = JSON.parse(raw);
+        envelope = validatePiObservationEnvelope(incoming);
+        await verifyPiOutboxSnapshotDigest(incoming);
+      } catch {
+        return json({ error: 'pi_observation_rejected' }, 400);
+      }
+      const stored = await stateStub(env).fetch(new Request('https://operator-state.internal/pi/store', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ envelope: incoming, publisher }),
+      }));
+      if (!stored.ok) return stored;
+      const receipt = await stored.json();
+      if (receipt.durable_readback_verified !== true) {
+        return json({ error: 'pi_observation_readback_unverified' }, 502);
+      }
+      return json({ ok: true, schema: 'mmibkr.pi_operator_publish_receipt.v1',
+        stored_at_utc: receipt.stored_at_utc, observed_at: receipt.observed_at,
+        durable_readback_verified: true, broker_mutation_authority: false,
+        live_execution_allowed: false }, 201);
+    }
 
     if (request.method === 'POST' && url.pathname === '/v1/operator-snapshot') {
       const length = Number(request.headers.get('content-length') || 0);
@@ -1020,6 +1222,22 @@ export default {
       return stored;
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/pi-bot-live-status') {
+      // Access-verified human only. No browser-to-Pi/broker requests.
+      const stored=await stateStub(env).fetch(new Request('https://operator-state.internal/pi-bot/latest'));
+      if (!stored.ok) return stored;
+      try { return json(piBotLiveOperatorView(await stored.json()),200); }
+      catch { return json({error:'pi_bot_observation_stale_or_unverified'},503); }
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/pi-account-observation') {
+      // Cloudflare Access already authenticated the human above. No browser broker socket.
+      const stored = await stateStub(env).fetch(new Request('https://operator-state.internal/pi/latest'));
+      if (!stored.ok) return stored;
+      try { return json(piOperatorView(await stored.json()), 200); }
+      catch { return json({ error: 'pi_observation_stale_or_unverified' }, 503); }
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/operator-snapshot') {
       const stored = await stateStub(env).fetch(
         new Request('https://operator-state.internal/latest'),
@@ -1042,6 +1260,22 @@ export default {
       return json({ error: 'operator_api_not_supported' }, 404);
     }
 
+    // This Access-locked Worker is NOT the full /markets React application.
+    // Cloudflare static-asset SPA fallback must not serve a convincing 200
+    // for unsupported full-app or invented browser navigation routes.
+    const dedicatedBrowserRoutes = new Set([
+      '/bot-console',
+      '/operator/forward-execution',
+      '/operator/promotion-review',
+    ]);
+    const staticAssetPath = url.pathname.startsWith('/assets/')
+      || /\.(?:ico|svg|png|webp|jpe?g|gif|webmanifest|txt|js|css|woff2?|ttf)$/.test(url.pathname);
+    if (!dedicatedBrowserRoutes.has(url.pathname) && !staticAssetPath) {
+      return json({ error: 'operator_browser_route_not_supported' }, 404);
+    }
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      return json({ error: 'operator_browser_method_not_supported' }, 405);
+    }
     if (!env.ASSETS) return json({ error: 'static_assets_not_deployed' }, 503);
     return secureAssetResponse(await env.ASSETS.fetch(request));
   },
