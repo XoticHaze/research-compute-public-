@@ -3,11 +3,15 @@
 // One queue is shared by all three diagnostic routes within a Worker isolate.
 // This controls this Worker's outbound requests, NOT other NVIDIA API consumers
 // or independent Cloudflare isolates. Only fixed upstream NVIDIA endpoints work.
-// Uses a deliberately conservative 2 requests/second ceiling (<= operator's
-// provisional 3/second), serializes in-flight provider work, and holds locally
-// after 429 without making further provider calls.
+// Starts at the operator-requested maximum of 3 requests per second
+// (334ms minimum interval). This is a CLIENT ceiling, NOT an NVIDIA quota
+// entitlement. First real provider 429 downshifts sustained egress to at most
+// 40 requests/minute (1500ms spacing) for this isolate, alongside Retry-After
+// circuit hold. NVIDIA model/account quotas may be lower or time-varying.
+// Nothing here authorizes a burst that exceeds a separate minute quota.
 // No secrets, model prompts, provider response bodies, or freeform headers are logged.
-export const MIN_PROVIDER_SPACING_MS = 500;
+export const MIN_PROVIDER_SPACING_MS = 334;
+export const RATE_LIMITED_SPACING_MS = 1500;
 const MAX_HOLD_MS = 4 * 60 * 60 * 1000;
 const BASE_429_HOLD_MS = 60 * 1000;
 const API = "https://integrate.api.nvidia.com";
@@ -39,6 +43,8 @@ export class NvidiaProviderPacingQueue {
     this.now = now;
     this.sleep = sleep;
     this.minSpacingMs = minSpacingMs;
+    this.effectiveSpacingMs = minSpacingMs;
+    this.rateLimitObserved = false;
     this.tail = Promise.resolve();
     this.nextEligibleMs = 0;
     this.holdUntilMs = 0;
@@ -60,10 +66,15 @@ export class NvidiaProviderPacingQueue {
       const delay = Math.max(0, this.nextEligibleMs - before);
       if (delay) await this.sleep(delay);
       // Claim spacing BEFORE the network attempt, including failures/timeouts.
-      this.nextEligibleMs = this.now() + this.minSpacingMs;
+      this.nextEligibleMs = this.now() + this.effectiveSpacingMs;
       const response = await this.providerFetch(url, opts);
       if (response?.status === 429) {
         this.consecutive429 = Math.min(7, this.consecutive429 + 1);
+        // A 429 is hard evidence that 3 RPS alone did not satisfy upstream
+        // admission. Retain slower pacing for this isolate, not just a retry sleep.
+        this.rateLimitObserved = true;
+        this.effectiveSpacingMs = Math.max(this.effectiveSpacingMs, RATE_LIMITED_SPACING_MS);
+        this.nextEligibleMs = Math.max(this.nextEligibleMs, this.now() + this.effectiveSpacingMs);
         const server = parsedRetryAfterMs(response.headers?.get?.("Retry-After"), this.now()) ?? 0;
         const defaultHold = Math.min(MAX_HOLD_MS, BASE_429_HOLD_MS * 2 ** (this.consecutive429 - 1));
         this.holdUntilMs = Math.max(this.holdUntilMs, this.now() + Math.max(server, defaultHold));

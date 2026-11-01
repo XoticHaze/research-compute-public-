@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {NvidiaProviderPacingQueue,MIN_PROVIDER_SPACING_MS,
+import {NvidiaProviderPacingQueue,MIN_PROVIDER_SPACING_MS,RATE_LIMITED_SPACING_MS,
         parsedRetryAfterMs} from "../src/provider_pacing_queue.js";
 const URL="https://integrate.api.nvidia.com/v1/chat/completions";
 const POST={method:"POST",redirect:"manual"};
@@ -16,8 +16,10 @@ test("serialized request starts never exceed the operator's 3 per second",async(
   assert.equal(starts.length,10);
   for(let i=1;i<starts.length;i++)
     assert(starts[i]-starts[i-1]>=MIN_PROVIDER_SPACING_MS);
-  assert.deepEqual(starts.slice(0,4),[0,500,1000,1500]);
-  assert.equal(MIN_PROVIDER_SPACING_MS,500);
+  assert.deepEqual(starts.slice(0,4),[0,334,668,1002]);
+  // A rolling one-second window contains at most three actual request starts.
+  for(let i=0;i<starts.length;i++)assert(starts.filter(t=>t>=starts[i]&&t<starts[i]+1000).length<=3);
+  assert.equal(MIN_PROVIDER_SPACING_MS,334);
 });
 
 test("catalog GET and completion POST use the SAME pacing queue",async()=>{
@@ -30,7 +32,7 @@ test("catalog GET and completion POST use the SAME pacing queue",async()=>{
  await pacer.fetch("https://integrate.api.nvidia.com/v1/models",
                    {method:"GET",redirect:"manual"});
  await pacer.fetch(URL,POST);
- assert.deepEqual(starts.map(x=>x.clock),[0,500]);
+ assert.deepEqual(starts.map(x=>x.clock),[0,334]);
 });
 
 test("429 opens local cooldown without wasting additional NVIDIA requests",async()=>{
@@ -64,6 +66,41 @@ test("429 without Retry-After remains held for at least 60 seconds",async()=>{
  assert.equal(calls,1);
 });
 
+test("real 429 downshifts this Worker isolate to no more than 40/minute",async()=>{
+ let clock=0,calls=0;
+ const times=[];
+ const pacer=new NvidiaProviderPacingQueue({
+  providerFetch:async()=>{
+   times.push(clock);calls++;
+   if(calls===1)return{status:429,headers:{get:()=>null}};
+   return{status:200};
+  },
+  now:()=>clock,sleep:async ms=>{clock+=ms;}
+ });
+ await pacer.fetch(URL,POST);
+ assert.equal(pacer.rateLimitObserved,true);
+ assert.equal(pacer.effectiveSpacingMs,RATE_LIMITED_SPACING_MS);
+ clock+=60000; // cooldown elapsed, not a repeated abusive request.
+ await Promise.all(Array.from({length:5},()=>pacer.fetch(URL,POST)));
+ assert.equal(calls,6);
+ for(let i=2;i<times.length;i++)assert(times[i]-times[i-1]>=1500);
+ assert.equal(RATE_LIMITED_SPACING_MS,1500);
+});
+
+test("3-RPS initial ceiling is independent from the unverified NVIDIA account RPM",async()=>{
+ let clock=0;
+ const starts=[];
+ const pacer=new NvidiaProviderPacingQueue({
+  providerFetch:async()=>{starts.push(clock);return{status:200};},
+  now:()=>clock,sleep:async ms=>{clock+=ms;}
+ });
+ await Promise.all(Array.from({length:10},()=>pacer.fetch(URL,POST)));
+ assert.equal(starts.length,10);
+ assert(starts.every((x,i)=>i===0||x-starts[i-1]>=334));
+ assert.equal(pacer.rateLimitObserved,false);
+ assert.equal(pacer.effectiveSpacingMs,334);
+});
+
 test("provider header parsing supports bounded seconds and HTTP date",()=>{
  assert.equal(parsedRetryAfterMs("12",0),12000);
  assert.equal(parsedRetryAfterMs("Sun, 01 Nov 2026 21:00:20 GMT",
@@ -90,5 +127,5 @@ test("network failure still consumes spacing and does not break queue",async()=>
  });
  await assert.rejects(()=>pacer.fetch(URL,POST),/synthetic transport/);
  const next=await pacer.fetch(URL,POST);
- assert.equal(next.status,200);assert.equal(clock,500);
+ assert.equal(next.status,200);assert.equal(clock,334);
 });
