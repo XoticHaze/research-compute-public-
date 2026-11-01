@@ -766,7 +766,7 @@ export class OperatorState {
       let envelope, validated;
       try {
         envelope = (await request.json()).envelope;
-        validated = validatePiBotLiveEnvelope(envelope, Date.now(), this.env.PI_BOT_PRIVATE_SOURCE_BINDING);
+        validated = validatePiBotLiveEnvelope(envelope, Date.now(), this.env.PI_BOT_OPAQUE_SOURCE_BINDING_ID);
         await verifyPiBotRootDigest(envelope);
       } catch { return json({ error:'pi_bot_observation_rejected' },400); }
       const outcome = await this.ctx.storage.transaction(async txn => {
@@ -952,7 +952,7 @@ export default {
         const raw=await request.text();
         if (new TextEncoder().encode(raw).length>8192) throw new Error('too_large');
         envelope=JSON.parse(raw);
-        validatePiBotLiveEnvelope(envelope, Date.now(), env.PI_BOT_PRIVATE_SOURCE_BINDING);
+        validatePiBotLiveEnvelope(envelope, Date.now(), env.PI_BOT_OPAQUE_SOURCE_BINDING_ID);
         await verifyPiBotRootDigest(envelope);
       } catch { return json({error:'pi_bot_observation_rejected'},400); }
       const result=await stateStub(env).fetch(new Request('https://operator-state.internal/pi-bot/store',{
@@ -1226,7 +1226,7 @@ export default {
       // Access-verified human only. No browser-to-Pi/broker requests.
       const stored=await stateStub(env).fetch(new Request('https://operator-state.internal/pi-bot/latest'));
       if (!stored.ok) return stored;
-      try { return json(piBotLiveOperatorView(await stored.json(), Date.now(), env.PI_BOT_PRIVATE_SOURCE_BINDING),200); }
+      try { return json(piBotLiveOperatorView(await stored.json(), Date.now(), env.PI_BOT_OPAQUE_SOURCE_BINDING_ID),200); }
       catch { return json({error:'pi_bot_observation_stale_or_unverified'},503); }
     }
 
