@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { validatePiBotLiveEnvelope, piBotLiveOperatorView, verifyPiBotRootDigest } from '../cloudflare/operator-console/src/pi_bot_live_observation.js'
+import { OperatorState } from '../cloudflare/operator-console/src/index.js'
 import { createHash } from 'node:crypto'
 const now=Date.parse('2026-11-01T04:20:00Z')
 const stamp='2026-11-01T04:19:30Z',rid='pi-bot-live-status-202611010419'
@@ -94,3 +95,50 @@ const mutated=structuredClone(rootEnvelope);mutated.record.broker_mutation_attem
 assert.throws(()=>validatePiBotLiveEnvelope(mutated,now),/pi_bot_observation_rejected/);
 assert.throws(()=>validatePiBotLiveEnvelope(rootEnvelope,now+12*60*1000),/pi_bot_observation_rejected/);
 console.log('Pi bot v2 recurring root outbox: SHA256, identity, freshness, source and no-mutation PASS')
+
+
+// Recurring 2-minute root observations must remain accepted past the former
+// fixed 256-entry replay-capacity ceiling. All observations are synthetic.
+const memory=new Map();
+const storage={
+  transaction:async fn=>fn({get:async k=>memory.get(k),put:async(k,v)=>{memory.set(k,v)}}),
+  get:async k=>memory.get(k)
+};
+const worker=new OperatorState({storage},{});
+const originalNow=Date.now;
+try {
+  const firstTime=Date.parse('2026-11-01T00:00:00Z');
+  for (let i=0;i<270;i++) {
+    const observed=new Date(firstTime+i*120000).toISOString().replace('.000Z','Z');
+    const tag=observed.slice(0,19).replace(/[-T:]/g,'');
+    const rid='pibotobs-'+tag+'-'+rawDigest.slice(0,16);
+    const incoming=structuredClone(rootEnvelope);
+    incoming.record.observed_at=observed;
+    incoming.record.observation_id=rid;
+    incoming.source_path='pi-node/bot-observations/'+rid+'.json';
+    incoming.result_commit_sha=(i+1).toString(16).padStart(40,'0');
+    incoming.result_blob_sha=(i+501).toString(16).padStart(40,'0');
+    const instant=firstTime+i*120000+30000;
+    Date.now=()=>instant;
+    const request=()=>new Request('https://operator-state.internal/pi-bot/store',{
+      method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({envelope:incoming})
+    });
+    const response=await worker.fetch(request());
+    assert.equal(response.status,201,'recurring observation '+i+' rejected: '+await response.clone().text());
+    if (i===269) {
+      const repeat=await worker.fetch(request());
+      assert.equal(repeat.status,409,'same fresh observation must be replay rejected');
+    }
+  }
+  const ledger=memory.get('pi_bot_live_ledger');
+  assert.ok(ledger.length<256,'old entries not garbage collected');
+  const read=await worker.fetch(new Request('https://operator-state.internal/pi-bot/latest'));
+  assert.equal(read.status,200);
+  const view=piBotLiveOperatorView(await read.json(),Date.now());
+  assert.equal(view.schema,'mmibkr.pi_bot_live_operator_view.v1');
+  assert.equal(view.live_switches_enabled,true);
+} finally {
+  Date.now=originalNow;
+}
+console.log('Pi bot root feed: >256 recurring observations, bounded replay and latest readback PASS');
