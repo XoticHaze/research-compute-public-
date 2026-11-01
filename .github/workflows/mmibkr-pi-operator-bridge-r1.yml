@@ -1,0 +1,39 @@
+name: MM-IBKR Pi Operator Bridge R1 (owner-gated review candidate)
+
+# Disabled by default: owner must independently admit private Git read issuer,
+# exact workflow SHA, Cloudflare Access/Worker binding and public execution route.
+# No push, pull_request, cron or repository_dispatch execution trigger.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: mmibkr-pi-operator-bridge-r1
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: ${{ vars.MMIBKR_PI_BRIDGE_OWNER_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      MMIBKR_PI_BRIDGE_OWNER_ENABLED: ${{ vars.MMIBKR_PI_BRIDGE_OWNER_ENABLED }}
+      PI_OUTBOX_GITHUB_READ_TOKEN: ${{ secrets.PI_OUTBOX_GITHUB_READ_TOKEN }}
+      PI_OUTBOX_REPO: ${{ secrets.PI_OUTBOX_REPO }}
+      PI_OUTBOX_REF: ${{ secrets.PI_OUTBOX_REF }}
+      PI_OUTBOX_PREFIX: ${{ secrets.PI_OUTBOX_PREFIX }}
+      OPERATOR_CONSOLE_URL: https://mmibkr-operator-console.slenderiq.workers.dev
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Publish one authenticated immutable root observation
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python scripts/mmibkr_pi_operator_bridge_v1.py
