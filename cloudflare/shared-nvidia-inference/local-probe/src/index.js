@@ -3,10 +3,12 @@
 import {sanitizeRolesReceipt} from "./roles_receipt.js";
 import {sanitizeMicroReceipt} from "./micro_receipt.js";
 import {sanitizeDraftReceipt} from "./draft_receipt.js";
+import {sanitizeCodeReceipt} from "./code_receipt.js";
 const SOURCE_PATH = "/run-once";
 const ROLES_PATH = "/roles-batch";
 const MICRO_PATH = "/micro-batch";
 const DRAFT_PATH = "/draft-pilot";
+const CODE_PATH = "/code-repair";
 const DESTINATION = "https://cc-shared-nvidia-inference.invalid/internal/diagnostics/nvidia";
 const CLASSIFICATIONS = new Set([
   "unattempted", "secrets_store_binding_missing", "secrets_store_read_unavailable",
@@ -26,12 +28,13 @@ function bool(n) { return typeof n === "boolean" ? n : null; }
 export function createCaller() {
   let smokeInvoked = false;
   let draftInvoked = false;
+  let codeInvoked = false;
   const roleBatchesInvoked = new Set();
   const microBatchesInvoked = new Set();
   return {
     async fetch(request, env) {
       const url = new URL(request.url);
-      if (request.method !== "POST" || ![SOURCE_PATH, ROLES_PATH, MICRO_PATH, DRAFT_PATH].includes(url.pathname) || url.search ||
+      if (request.method !== "POST" || ![SOURCE_PATH, ROLES_PATH, MICRO_PATH, DRAFT_PATH, CODE_PATH].includes(url.pathname) || url.search ||
           !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) {
         return reply(404, { classification: "local_route_unavailable" });
       }
@@ -39,7 +42,20 @@ export function createCaller() {
       // Admit only a declared zero-length body; reject content-bearing posts.
       let roleBatch = null;
       let micro = null;
-      if(url.pathname===MICRO_PATH){
+      let codeIndex = null;
+      if(url.pathname===CODE_PATH){
+        const size=Number(request.headers.get("content-length"));
+        if(!Number.isInteger(size)||size<1||size>36||
+           request.headers.get("content-type")!=="application/json")
+          return reply(400,{classification:"fixed_code_selector_invalid"});
+        let v;
+        try{v=await request.json();}catch{return reply(400,{classification:"fixed_code_selector_invalid"});}
+        if(!v||typeof v!=="object"||Array.isArray(v)||
+           Object.keys(v).join(",")!=="model_index"||
+           !Number.isInteger(v.model_index)||v.model_index<0||v.model_index>1)
+          return reply(400,{classification:"fixed_code_selector_invalid"});
+        codeIndex=v.model_index;
+      }else if(url.pathname===MICRO_PATH){
         const size=Number(request.headers.get("content-length"));
         if(!Number.isInteger(size)||size<1||size>60||
            request.headers.get("content-type")!=="application/json")
@@ -66,7 +82,8 @@ export function createCaller() {
       } else if (request.body !== null && request.headers.get("content-length") !== "0") {
         return reply(400, { classification: "request_body_not_allowed" });
       }
-      if ((micro===null && roleBatch === null && (smokeInvoked || draftInvoked || roleBatchesInvoked.size || microBatchesInvoked.size)) ||
+      if ((codeIndex===null && micro===null && roleBatch === null && (smokeInvoked || draftInvoked || codeInvoked || roleBatchesInvoked.size || microBatchesInvoked.size)) ||
+          (codeIndex!==null && (smokeInvoked || draftInvoked || codeInvoked || roleBatchesInvoked.size || microBatchesInvoked.size)) ||
           (url.pathname===DRAFT_PATH && (smokeInvoked || draftInvoked || roleBatchesInvoked.size || microBatchesInvoked.size)) ||
           (micro!==null && (smokeInvoked || draftInvoked || roleBatchesInvoked.size ||
              microBatchesInvoked.has(micro.model_index+":"+micro.batch) ||
@@ -78,12 +95,19 @@ export function createCaller() {
         return reply(503, { classification: "remote_service_binding_missing" });
       }
       // One request per local dev session, even if upstream errors.
-      if(url.pathname===DRAFT_PATH)draftInvoked=true;
+      if(codeIndex!==null)codeInvoked=true;
+      else if(url.pathname===DRAFT_PATH)draftInvoked=true;
       else if(micro!==null)microBatchesInvoked.add(micro.model_index+":"+micro.batch);
       else if (roleBatch === null) smokeInvoked = true;
       else roleBatchesInvoked.add(roleBatch);
       try {
-        const upstream = await env.NVIDIA_SERVICE.fetch(url.pathname===DRAFT_PATH
+        const upstream = await env.NVIDIA_SERVICE.fetch(codeIndex!==null
+          ? new Request(DESTINATION.replace("/internal/diagnostics/nvidia",
+               "/internal/diagnostics/nvidia-code-repair"),{
+              method:"POST",headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({model_index:codeIndex})
+            })
+          : url.pathname===DRAFT_PATH
           ? new Request(DESTINATION.replace("/internal/diagnostics/nvidia",
               "/internal/diagnostics/nvidia-draft-pilot"), {method:"POST"})
           : micro!==null
@@ -100,6 +124,12 @@ export function createCaller() {
               body:JSON.stringify({batch:roleBatch})
           }));
         const value = await upstream.json();
+        if(codeIndex!==null){
+          const sanitized=sanitizeCodeReceipt(value);
+          if(!sanitized||sanitized.model_index!==codeIndex)
+            return reply(502,{classification:"untrusted_fixed_code_receipt"});
+          return reply(upstream.ok?200:502,sanitized);
+        }
         if(url.pathname===DRAFT_PATH){
           const sanitized=sanitizeDraftReceipt(value);
           if(!sanitized)return reply(502,{classification:"invalid_fixed_draft_receipt"});
