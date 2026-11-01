@@ -1,0 +1,94 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {NvidiaProviderPacingQueue,MIN_PROVIDER_SPACING_MS,
+        parsedRetryAfterMs} from "../src/provider_pacing_queue.js";
+const URL="https://integrate.api.nvidia.com/v1/chat/completions";
+const POST={method:"POST",redirect:"manual"};
+
+test("serialized request starts never exceed the operator's 3 per second",async()=>{
+  let clock=0;
+  const starts=[];
+  const pacer=new NvidiaProviderPacingQueue({
+    providerFetch:async()=>{starts.push(clock);return{status:200};},
+    now:()=>clock,sleep:async delay=>{clock+=delay;},
+  });
+  await Promise.all(Array.from({length:10},()=>pacer.fetch(URL,POST)));
+  assert.equal(starts.length,10);
+  for(let i=1;i<starts.length;i++)
+    assert(starts[i]-starts[i-1]>=MIN_PROVIDER_SPACING_MS);
+  assert.deepEqual(starts.slice(0,4),[0,500,1000,1500]);
+  assert.equal(MIN_PROVIDER_SPACING_MS,500);
+});
+
+test("catalog GET and completion POST use the SAME pacing queue",async()=>{
+ let clock=0;
+ const starts=[];
+ const pacer=new NvidiaProviderPacingQueue({
+  providerFetch:async(url)=>{starts.push({url,clock});return{status:200};},
+  now:()=>clock,sleep:async ms=>{clock+=ms;}
+ });
+ await pacer.fetch("https://integrate.api.nvidia.com/v1/models",
+                   {method:"GET",redirect:"manual"});
+ await pacer.fetch(URL,POST);
+ assert.deepEqual(starts.map(x=>x.clock),[0,500]);
+});
+
+test("429 opens local cooldown without wasting additional NVIDIA requests",async()=>{
+ let clock=1000,calls=0;
+ const pacer=new NvidiaProviderPacingQueue({
+  providerFetch:async()=>{calls++;return calls===1
+    ?{status:429,headers:{get:k=>k==="Retry-After"?"90":null}}
+    :{status:200};},
+  now:()=>clock,sleep:async ms=>{clock+=ms;}
+ });
+ const denied=await pacer.fetch(URL,POST);
+ assert.equal(denied.status,429);
+ const localHold=await pacer.fetch(URL,POST);
+ assert.equal(localHold.status,429);
+ assert.equal(calls,1); // no request when the provider's cooldown is active
+ assert.equal(localHold.headers.get("Retry-After"),"90");
+ clock+=90000;
+ const accepted=await pacer.fetch(URL,POST);
+ assert.equal(accepted.status,200);assert.equal(calls,2);
+});
+
+test("429 without Retry-After remains held for at least 60 seconds",async()=>{
+ let clock=2000,calls=0;
+ const pacer=new NvidiaProviderPacingQueue({
+  providerFetch:async()=>{calls++;return{status:429,headers:{get:()=>null}};},
+  now:()=>clock,sleep:async ms=>{clock+=ms;}
+ });
+ await pacer.fetch(URL,POST);
+ clock+=30000;
+ assert.equal((await pacer.fetch(URL,POST)).status,429);
+ assert.equal(calls,1);
+});
+
+test("provider header parsing supports bounded seconds and HTTP date",()=>{
+ assert.equal(parsedRetryAfterMs("12",0),12000);
+ assert.equal(parsedRetryAfterMs("Sun, 01 Nov 2026 21:00:20 GMT",
+     Date.parse("Sun, 01 Nov 2026 21:00:00 GMT")),20000);
+ assert.equal(parsedRetryAfterMs("Bearer fake",0),null);
+ assert.equal(parsedRetryAfterMs("999999",0),4*60*60*1000);
+});
+
+test("unapproved hosts, methods, redirects and relaxed spacing fail closed",async()=>{
+ const pacer=new NvidiaProviderPacingQueue({providerFetch:async()=>({status:200})});
+ await assert.rejects(()=>pacer.fetch("https://not-nvidia.example/v1/models",
+    {method:"GET",redirect:"manual"}),/destination_or_method/);
+ await assert.rejects(()=>pacer.fetch(URL,{method:"GET",redirect:"manual"}),/destination_or_method/);
+ await assert.rejects(()=>pacer.fetch(URL,{method:"POST",redirect:"follow"}),/destination_or_method/);
+ assert.throws(()=>new NvidiaProviderPacingQueue({
+     providerFetch:async()=>({status:200}),minSpacingMs:250}),/invalid_private_provider_pacer/);
+});
+
+test("network failure still consumes spacing and does not break queue",async()=>{
+ let clock=0,calls=0;
+ const pacer=new NvidiaProviderPacingQueue({
+   providerFetch:async()=>{calls++;if(calls===1)throw Error("synthetic transport");return{status:200};},
+   now:()=>clock,sleep:async ms=>{clock+=ms;}
+ });
+ await assert.rejects(()=>pacer.fetch(URL,POST),/synthetic transport/);
+ const next=await pacer.fetch(URL,POST);
+ assert.equal(next.status,200);assert.equal(clock,500);
+});
