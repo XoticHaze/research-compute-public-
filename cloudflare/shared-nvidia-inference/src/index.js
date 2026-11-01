@@ -5,6 +5,7 @@ import {runSyntheticRoleBatch} from "./benchmark_runner.js";
 import {runMicroWorkerBatch} from "./micro_worker_benchmark.js";
 import {NvidiaProviderPacingQueue} from "./provider_pacing_queue.js";
 import {runFixedDraftPilot} from "./draft_pilot_runner.js";
+import {runFixedCodeRepair} from "./fixed_code_repair_runner.js";
 const ORIGIN = "https://integrate.api.nvidia.com";
 const MODEL = "openai/gpt-oss-20b";
 const RUN_PATH = "/internal/diagnostics/nvidia";
@@ -162,6 +163,34 @@ export default {
     const url = new URL(request.url);
     // Existing Service Binding route only; public Worker and previews remain
     // disabled. No caller-authored prompts, tool execution, or target hosts.
+    // A single fixed synthetic Python patch attempt. Restricted source bytes
+    // may leave this Worker only to an AST-only validator on synthetic compute.
+    // No private input, arbitrary prompt, provider model, or executable code.
+    if(request.method==="POST"&&url.pathname==="/internal/diagnostics/nvidia-code-repair"&&!url.search){
+      if(env.CC_NVIDIA_DIAGNOSTIC_ENABLED!=="1")return json(503,{error:"diagnostic_not_admitted"});
+      const n=Number(request.headers.get("content-length"));
+      if(!Number.isInteger(n)||n<1||n>36||request.headers.get("content-type")!=="application/json")
+        return json(400,{error:"invalid_fixed_code_selector"});
+      let args;
+      try{args=await request.json();}catch{return json(400,{error:"invalid_fixed_code_selector"});}
+      if(!args||typeof args!=="object"||Array.isArray(args)||
+        Object.keys(args).join(",")!=="model_index"||
+        !Number.isInteger(args.model_index)||args.model_index<0||args.model_index>1)
+        return json(400,{error:"invalid_fixed_code_selector"});
+      if(typeof env.NVIDIA_API_KEY?.get!=="function")return json(503,{error:"binding_unavailable"});
+      let key;
+      try{key=await env.NVIDIA_API_KEY.get();}catch{return json(503,{error:"secret_unavailable"});}
+      if(typeof key!=="string"||key.length<8)return json(503,{error:"secret_unavailable"});
+      const authFetch=async(endpoint,options)=>{
+        const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
+        try{return await pacedProviderFetch(endpoint,{...options,headers:{
+          "Authorization":"Bearer "+key,"Content-Type":"application/json"
+        },redirect:"manual",signal:controller.signal});}
+        finally{clearTimeout(timer);}
+      };
+      const receipt=await runFixedCodeRepair({modelIndex:args.model_index,providerFetch:authFetch});
+      return json(receipt.status==="candidate_unexecuted"?200:503,receipt);
+    }
     // Four fixed fictional writing tasks, no user-authored prompt or model.
     // Synthetic model text is scored privately and is NEVER returned.
     if(request.method==="POST" && url.pathname==="/internal/diagnostics/nvidia-draft-pilot" && !url.search){
