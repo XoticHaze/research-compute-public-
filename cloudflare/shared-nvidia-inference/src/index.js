@@ -4,6 +4,7 @@
 import {runSyntheticRoleBatch} from "./benchmark_runner.js";
 import {runMicroWorkerBatch} from "./micro_worker_benchmark.js";
 import {NvidiaProviderPacingQueue} from "./provider_pacing_queue.js";
+import {runFixedDraftPilot} from "./draft_pilot_runner.js";
 const ORIGIN = "https://integrate.api.nvidia.com";
 const MODEL = "openai/gpt-oss-20b";
 const RUN_PATH = "/internal/diagnostics/nvidia";
@@ -161,6 +162,26 @@ export default {
     const url = new URL(request.url);
     // Existing Service Binding route only; public Worker and previews remain
     // disabled. No caller-authored prompts, tool execution, or target hosts.
+    // Four fixed fictional writing tasks, no user-authored prompt or model.
+    // Synthetic model text is scored privately and is NEVER returned.
+    if(request.method==="POST" && url.pathname==="/internal/diagnostics/nvidia-draft-pilot" && !url.search){
+      if(env.CC_NVIDIA_DIAGNOSTIC_ENABLED!=="1")return json(503,{error:"diagnostic_not_admitted"});
+      if(request.body!==null && request.headers.get("content-length")!=="0")
+        return json(400,{error:"fixed_empty_body_required"});
+      if(typeof env.NVIDIA_API_KEY?.get!=="function")return json(503,{error:"binding_unavailable"});
+      let key;
+      try{key=await env.NVIDIA_API_KEY.get();}catch{return json(503,{error:"secret_unavailable"});}
+      if(typeof key!=="string" || key.length<8)return json(503,{error:"secret_unavailable"});
+      const authFetch=async(endpoint,options)=>{
+        const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
+        try{return await pacedProviderFetch(endpoint,{...options,headers:{
+          "Authorization":"Bearer "+key,"Content-Type":"application/json"
+        },redirect:"manual",signal:controller.signal});}
+        finally{clearTimeout(timer);}
+      };
+      const receipt=await runFixedDraftPilot({providerFetch:authFetch});
+      return json(receipt.status==="completed_not_human_reviewed"?200:503,receipt);
+    }
     // Fixed 24-case, two-model synthetic micro-worker benchmark. Private Service
     // Binding only, disabled by default. No caller-supplied model or prompt.
     if(request.method==="POST" && url.pathname==="/internal/diagnostics/nvidia-micro" && !url.search){
