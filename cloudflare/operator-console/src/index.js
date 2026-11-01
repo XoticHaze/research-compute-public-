@@ -7,6 +7,7 @@ import {
 } from './promotion_review_state.js';
 import { validatePiObservationEnvelope, piOperatorView, piReplayIdentity, verifyPiOutboxSnapshotDigest } from './pi_account_observation.js';
 import { nextPiReplayLedger } from './pi_replay_ledger.js';
+import { validatePiBotLiveEnvelope, piBotLiveOperatorView } from './pi_bot_live_observation.js';
 
 const GITHUB_ISSUER = 'https://token.actions.githubusercontent.com';
 const GITHUB_JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwks';
@@ -761,6 +762,45 @@ export class OperatorState {
       return json({ ok: true, durable_readback_verified: true,
         stored_at_utc: result.record.stored_at_utc, observed_at: envelope.observation.observed_at }, 201);
     }
+    if (request.method === 'POST' && url.pathname === '/pi-bot/store') {
+      let envelope, validated;
+      try {
+        envelope = (await request.json()).envelope;
+        validated = validatePiBotLiveEnvelope(envelope);
+      } catch { return json({ error:'pi_bot_observation_rejected' },400); }
+      const outcome = await this.ctx.storage.transaction(async txn => {
+        const old = await txn.get('pi_bot_live_latest');
+        const ledger = await txn.get('pi_bot_live_ledger') || [];
+        if (!Array.isArray(ledger) || ledger.length > 256) return { reject:'pi_bot_ledger_invalid' };
+        const rid=validated.replayId, commit=validated.resultCommitSha;
+        if (ledger.some(row=>row.request_id===rid || row.commit===commit))
+          return { reject:'pi_bot_observation_replay' };
+        const oldTime = Date.parse(old?.envelope?.receipt?.finished_at || '');
+        if (Number.isFinite(oldTime) && validated.observedAtMs <= oldTime)
+          return { reject:'pi_bot_observation_out_of_order' };
+        if (ledger.length === 256) return { reject:'pi_bot_ledger_capacity_held' };
+        const record = {
+          schema:'mmibkr.pi_bot_live_store.v1',write_id:crypto.randomUUID(),
+          stored_at_utc:new Date().toISOString(), envelope
+        };
+        await txn.put('pi_bot_live_ledger',[...ledger,{request_id:rid,commit}]);
+        await txn.put('pi_bot_live_latest',record);
+        return { record };
+      });
+      if (outcome.reject) return json({error:outcome.reject},409);
+      const readback=await this.ctx.storage.get('pi_bot_live_latest');
+      if (!readback || readback.write_id!==outcome.record.write_id
+          || readback.envelope.result_commit_sha!==validated.resultCommitSha)
+        return json({error:'pi_bot_observation_readback_failed'},502);
+      return json({ok:true,durable_readback_verified:true,
+        observed_at:readback.envelope.receipt.finished_at,
+        stored_at_utc:readback.stored_at_utc},201);
+    }
+    if (request.method === 'GET' && url.pathname === '/pi-bot/latest') {
+      const record=await this.ctx.storage.get('pi_bot_live_latest');
+      return record ? json(record,200) : json({error:'pi_bot_observation_not_available'},404);
+    }
+
     if (request.method === 'GET' && url.pathname === '/pi/latest') {
       const record = await this.ctx.storage.get('pi_account_latest');
       return record ? json(record, 200) : json({ error: 'pi_observation_not_available' }, 404);
@@ -887,6 +927,33 @@ export class OperatorState {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    if (request.method === 'POST' && url.pathname === '/v1/pi-bot-live-status') {
+      // Same approved exact-source OIDC publisher, distinct bot-origin action
+      // and replay scope. Never derive it from the paper/account envelope.
+      try { await verifyPiObservationPublisher(request, env); }
+      catch { return json({error:'unauthorized'},401); }
+      const length=Number(request.headers.get('content-length')||0);
+      if (Number.isFinite(length) && length>8192) return json({error:'pi_bot_payload_too_large'},413);
+      let envelope;
+      try {
+        const raw=await request.text();
+        if (new TextEncoder().encode(raw).length>8192) throw new Error('too_large');
+        envelope=JSON.parse(raw);
+        validatePiBotLiveEnvelope(envelope);
+      } catch { return json({error:'pi_bot_observation_rejected'},400); }
+      const result=await stateStub(env).fetch(new Request('https://operator-state.internal/pi-bot/store',{
+        method:'POST',headers:{'content-type':'application/json'},
+        body:JSON.stringify({envelope}),
+      }));
+      if (!result.ok) return result;
+      const receipt=await result.json();
+      if (receipt.durable_readback_verified!==true)
+        return json({error:'pi_bot_readback_unverified'},502);
+      return json({ok:true,schema:'mmibkr.pi_bot_live_publish_receipt.v1',
+        observed_at:receipt.observed_at,stored_at_utc:receipt.stored_at_utc,
+        durable_readback_verified:true,broker_mutation_authority:false},201);
+    }
 
     if (request.method === 'POST' && url.pathname === '/v1/pi-account-observation') {
       // Machine ingress is deliberately separate from browser Access and paper-only ingestion.
@@ -1140,6 +1207,14 @@ export default {
         }),
       );
       return stored;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/pi-bot-live-status') {
+      // Access-verified human only. No browser-to-Pi/broker requests.
+      const stored=await stateStub(env).fetch(new Request('https://operator-state.internal/pi-bot/latest'));
+      if (!stored.ok) return stored;
+      try { return json(piBotLiveOperatorView(await stored.json()),200); }
+      catch { return json({error:'pi_bot_observation_stale_or_unverified'},503); }
     }
 
     if (request.method === 'GET' && url.pathname === '/api/pi-account-observation') {
