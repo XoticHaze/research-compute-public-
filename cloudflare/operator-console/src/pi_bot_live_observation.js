@@ -47,8 +47,11 @@ export function validatePiBotLiveEnvelope(input, now = Date.now()) {
     const enabled = requiredIfEnabled.every(k=>o[k]===true)
       && Object.values(o.global_live_flags).every(Boolean)
       && Object.values(o.selected_live_policies).every(Boolean);
-    if (enabled!==o.live_switches_enabled
-        || (o.status==='LIVE_SWITCHES_ENABLED')!==enabled) reject();
+    // Root also checks a private owner-mode prerequisite not in this sanitized view.
+    // Only positive root readiness requires all exposed flags; a signed negative
+    // may have every exposed flag true without authorizing any live claim.
+    if ((o.live_switches_enabled && !enabled)
+        || (o.status==='LIVE_SWITCHES_ENABLED')!==o.live_switches_enabled) reject();
     const t=utc(r.observed_at);
     if (!Number.isFinite(t) || t>now+NOW_SKEW_MS || now-t>MAX_AGE_MS) reject();
     return {receipt:null,observation:o,observedAt:r.observed_at,observedAtMs:t,
@@ -85,8 +88,8 @@ export function validatePiBotLiveEnvelope(input, now = Date.now()) {
   const enabled = requiredIfEnabled.every(k=>status[k]===true)
     && Object.values(status.global_live_flags).every(Boolean)
     && Object.values(status.selected_live_policies).every(Boolean);
-  if (enabled !== status.live_switches_enabled
-      || (status.status==='LIVE_SWITCHES_ENABLED')!==enabled) reject();
+  if ((status.live_switches_enabled && !enabled)
+      || (status.status==='LIVE_SWITCHES_ENABLED')!==status.live_switches_enabled) reject();
   const started=utc(receipt.started_at), finished=utc(receipt.finished_at);
   if (!Number.isFinite(started) || !Number.isFinite(finished)
       || started > finished || finished - started > 1200000
