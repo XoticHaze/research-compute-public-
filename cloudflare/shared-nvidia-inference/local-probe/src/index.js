@@ -2,9 +2,11 @@
 // Only its explicit Cloudflare Service Binding can reach the private inference Worker.
 import {sanitizeRolesReceipt} from "./roles_receipt.js";
 import {sanitizeMicroReceipt} from "./micro_receipt.js";
+import {sanitizeDraftReceipt} from "./draft_receipt.js";
 const SOURCE_PATH = "/run-once";
 const ROLES_PATH = "/roles-batch";
 const MICRO_PATH = "/micro-batch";
+const DRAFT_PATH = "/draft-pilot";
 const DESTINATION = "https://cc-shared-nvidia-inference.invalid/internal/diagnostics/nvidia";
 const CLASSIFICATIONS = new Set([
   "unattempted", "secrets_store_binding_missing", "secrets_store_read_unavailable",
@@ -23,12 +25,13 @@ function bool(n) { return typeof n === "boolean" ? n : null; }
 
 export function createCaller() {
   let smokeInvoked = false;
+  let draftInvoked = false;
   const roleBatchesInvoked = new Set();
   const microBatchesInvoked = new Set();
   return {
     async fetch(request, env) {
       const url = new URL(request.url);
-      if (request.method !== "POST" || ![SOURCE_PATH, ROLES_PATH, MICRO_PATH].includes(url.pathname) || url.search ||
+      if (request.method !== "POST" || ![SOURCE_PATH, ROLES_PATH, MICRO_PATH, DRAFT_PATH].includes(url.pathname) || url.search ||
           !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) {
         return reply(404, { classification: "local_route_unavailable" });
       }
@@ -63,22 +66,27 @@ export function createCaller() {
       } else if (request.body !== null && request.headers.get("content-length") !== "0") {
         return reply(400, { classification: "request_body_not_allowed" });
       }
-      if ((micro===null && roleBatch === null && (smokeInvoked || roleBatchesInvoked.size || microBatchesInvoked.size)) ||
-          (micro!==null && (smokeInvoked || roleBatchesInvoked.size ||
+      if ((micro===null && roleBatch === null && (smokeInvoked || draftInvoked || roleBatchesInvoked.size || microBatchesInvoked.size)) ||
+          (url.pathname===DRAFT_PATH && (smokeInvoked || draftInvoked || roleBatchesInvoked.size || microBatchesInvoked.size)) ||
+          (micro!==null && (smokeInvoked || draftInvoked || roleBatchesInvoked.size ||
              microBatchesInvoked.has(micro.model_index+":"+micro.batch) ||
              microBatchesInvoked.size>=5)) ||
-          (roleBatch !== null && (smokeInvoked || microBatchesInvoked.size ||
+          (roleBatch !== null && (smokeInvoked || draftInvoked || microBatchesInvoked.size ||
              roleBatchesInvoked.has(roleBatch) || roleBatchesInvoked.size >= 5)))
         return reply(409, {classification:"caller_batch_limit_or_replay"});
       if (typeof env?.NVIDIA_SERVICE?.fetch !== "function") {
         return reply(503, { classification: "remote_service_binding_missing" });
       }
       // One request per local dev session, even if upstream errors.
-      if(micro!==null)microBatchesInvoked.add(micro.model_index+":"+micro.batch);
+      if(url.pathname===DRAFT_PATH)draftInvoked=true;
+      else if(micro!==null)microBatchesInvoked.add(micro.model_index+":"+micro.batch);
       else if (roleBatch === null) smokeInvoked = true;
       else roleBatchesInvoked.add(roleBatch);
       try {
-        const upstream = await env.NVIDIA_SERVICE.fetch(micro!==null
+        const upstream = await env.NVIDIA_SERVICE.fetch(url.pathname===DRAFT_PATH
+          ? new Request(DESTINATION.replace("/internal/diagnostics/nvidia",
+              "/internal/diagnostics/nvidia-draft-pilot"), {method:"POST"})
+          : micro!==null
           ? new Request(DESTINATION.replace("/internal/diagnostics/nvidia",
               "/internal/diagnostics/nvidia-micro"), {
               method:"POST",headers:{"Content-Type":"application/json"},
@@ -92,6 +100,11 @@ export function createCaller() {
               body:JSON.stringify({batch:roleBatch})
           }));
         const value = await upstream.json();
+        if(url.pathname===DRAFT_PATH){
+          const sanitized=sanitizeDraftReceipt(value);
+          if(!sanitized)return reply(502,{classification:"invalid_fixed_draft_receipt"});
+          return reply(upstream.ok?200:502,sanitized);
+        }
         if(micro!==null){
           const sanitized=sanitizeMicroReceipt(value);
           if(!sanitized||sanitized.model_index!==micro.model_index||
