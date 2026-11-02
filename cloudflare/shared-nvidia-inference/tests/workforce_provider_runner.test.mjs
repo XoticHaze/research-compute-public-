@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {CASES} from "../src/workforce_domain_suite.js";
-import {eligibleWorkforceCatalog,runWorkforceCase} from "../src/workforce_provider_runner.js";
+import {eligibleWorkforceCatalog,runWorkforceCase,discoveryProfile} from "../src/workforce_provider_runner.js";
 const allModels=["nvidia/nv-embed-v1","minimaxai/minimax-m3.1-flash",
  "poolside/laguna-xs-2.1","openai/gpt-oss-20b"];
 const candidates=["minimaxai/minimax-m3.1-flash","openai/gpt-oss-20b","poolside/laguna-xs-2.1"];
@@ -24,7 +24,7 @@ test("all 32 source-grounded challenges can be scored for any catalog-admitted c
    assert.equal(body.messages[0].role,"system");
    assert.equal(body.messages[1].role,"user");
    assert(body.messages[1].content.includes(CASES[i].question));
-   assert.equal(body.max_tokens,8192);
+   assert.equal(body.max_tokens,body.model==="minimaxai/minimax-m3.1-flash"?16384:8192);
    assert.equal(body.temperature,1.0);
    assert.equal(body.tools,undefined);
    return{status:200,async json(){return{
@@ -87,4 +87,22 @@ test("invalid selectors and provider responses never become model errors or leak
  const badCatalog=await runWorkforceCase({modelIndex:0,caseIndex:0,providerFetch:async()=>({status:403})});
  assert.equal(badCatalog.status,"catalog_unavailable");
  assert.equal(badCatalog.completion_status,null);
+});
+
+test("NVIDIA-listed output defaults are per-model first-wave profiles, not user overrides",()=>{
+ assert.deepEqual(discoveryProfile("minimaxai/minimax-m3.1-flash"),
+  {temperature:1.0,top_p:0.95,max_tokens:16384});
+ assert.deepEqual(discoveryProfile("poolside/laguna-xs-2.1"),
+  {temperature:1.0,top_p:0.95,max_tokens:8192});
+ assert.equal(discoveryProfile("openai/gpt-oss-20b").max_tokens,8192);
+});
+test("HTTP 400 profile rejections and upstream 503 are not model accuracy failures",async()=>{
+ const catalog=async()=>({status:200,json:async()=>({data:allModels.map(id=>({id}))})});
+ for(const [code,status] of [[400,"request_profile_rejected"],[503,"provider_upstream_error"]]){
+  const r=await runWorkforceCase({modelIndex:0,caseIndex:0,providerFetch:async url=>
+   url.endsWith("/models")?await catalog():{status:code}});
+  assert.equal(r.status,status);
+  assert.equal(r.first_pass,false);
+  assert.equal(r.fields_correct,0);
+ }
 });
