@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       source_sha:
-        description: Exact accepted private MM-IBKR source SHA containing the Bot Console
-        required: true
+        description: Optional private source SHA; leave blank to use owner-approved protected source pin
+        required: false
         type: string
   # Mainline source changes are review/CI only. Only an explicit release fire
   # marker or owner workflow_dispatch can request an Access-locked deploy.
@@ -114,7 +114,7 @@ jobs:
               requested = str(node.get('source_sha') or '').strip().lower()
           else:
               event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
-              requested = str((event.get('inputs') or {}).get('source_sha') or '').strip().lower()
+              requested = str((event.get('inputs') or {}).get('source_sha') or canonical).strip().lower()
 
           if requested != canonical:
               raise SystemExit('operator-console deployment source must equal canonical accepted SHA')
