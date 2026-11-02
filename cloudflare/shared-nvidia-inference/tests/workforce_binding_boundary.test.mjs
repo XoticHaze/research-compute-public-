@@ -100,3 +100,38 @@ test("old code role is still fixed at five functions, broad trial cannot expand 
  assert.equal(response.status,400);
  assert.equal(calls,0);
 });
+
+test("bounded session accepts independent fixed cases, blocks duplicates and isolates other routes",async()=>{
+ let seen=0;
+ const caller=createCaller();
+ const service={NVIDIA_SERVICE:{fetch:async request=>{
+  seen++;
+  const {model_index,case_index}=await request.json();
+  return new Response(JSON.stringify({...fixture(case_index),model_index}),{status:200});
+ }}};
+ for(let i=0;i<CASES.length;i++)for(let model_index=0;model_index<2;model_index++){
+  const got=await caller.fetch(req(local,{model_index,case_index:i}),service);
+  assert.equal(got.status,200,"case "+i+" model "+model_index);
+ }
+ assert.equal(seen,CASES.length*2);
+ const duplicate=await caller.fetch(req(local,{model_index:0,case_index:0}),service);
+ assert.equal(duplicate.status,409);
+ const overflow=await caller.fetch(req(local,{model_index:2,case_index:0}),service);
+ assert.equal(overflow.status,409);
+ assert.equal(seen,64);
+});
+test("provider hold stops further requests without treating it as model inability",async()=>{
+ let calls=0;
+ const service={NVIDIA_SERVICE:{fetch:async()=>{
+  calls++;
+  return new Response(JSON.stringify({...fixture(),status:"provider_rate_limited",
+    completion_status:429,first_pass:false,format_valid:false,fields_correct:0}),{status:503});
+ }}};
+ const caller=createCaller();
+ const first=await caller.fetch(req(local,selector),service);
+ assert.equal(first.status,502);
+ assert.equal((await first.json()).status,"provider_rate_limited");
+ const second=await caller.fetch(req(local,{model_index:0,case_index:3}),service);
+ assert.equal(second.status,409);
+ assert.equal(calls,1);
+});
