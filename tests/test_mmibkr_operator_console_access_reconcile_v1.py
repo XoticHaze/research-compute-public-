@@ -274,6 +274,8 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
                     (Path(td) / "rendezvous/receipts/mmibkr-operator-console-deploy-r2.json")
                     .read_text(encoding="utf-8")
                 )
+                self.assertIsNone(receipt["source_sha"])
+                self.assertIs(receipt["source_identity_redacted"], True)
                 self.assertIs(receipt["access_reconciliation_step_completed"], configured)
                 self.assertEqual(
                     receipt["access_reconciliation_state"],

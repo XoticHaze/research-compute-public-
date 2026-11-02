@@ -6,7 +6,8 @@
   "private_source_destroy_step_pending": true,
   "schema": "mmibkr.operator_console.deploy_receipt.r2",
   "secret_included": false,
-  "source_sha": "f6f6dcdcbad3df8c5d50cab5ac2652b4781a648d",
+  "source_identity_redacted": true,
+  "source_sha": null,
   "unauthenticated_fail_closed_pass": true,
   "worker": "mmibkr-operator-console",
   "worker_deploy_credential": "legacy_existing"

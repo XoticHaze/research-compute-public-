@@ -123,7 +123,7 @@ jobs:
               raise SystemExit('canonical source SHA invalid')
           with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
               fh.write('REQUEST_SOURCE_SHA=' + canonical + '\n')
-          print('MMIBKR_OPERATOR_CONSOLE_SOURCE=' + canonical)
+          print('MMIBKR_OPERATOR_CONSOLE_SOURCE_PIN_VALIDATED=1')
           PY
 
       - name: Require owner-approved exact operator-console release source
@@ -194,7 +194,7 @@ jobs:
           if not (ui / 'package.json').is_file() or not (ui / 'package-lock.json').is_file():
               raise SystemExit('private ui-react source incomplete')
           print('MMIBKR_OPERATOR_CONSOLE_VAULT_SOURCE=PASS')
-          print('MMIBKR_OPERATOR_CONSOLE_SOURCE_MANIFEST=' + str(node['source_manifest_sha256']))
+          print('MMIBKR_OPERATOR_CONSOLE_SOURCE_MANIFEST_VERIFIED=1')
           PY
 
       - name: Build exact private Bot Console
@@ -1184,7 +1184,8 @@ jobs:
               "access_reconciliation_credential": (
                   "legacy_access_capable_token" if access_configured else "not_exercised"
               ),
-              "source_sha": os.environ.get("REQUEST_SOURCE_SHA", ""),
+              "source_sha": None,
+              "source_identity_redacted": True,
               "control_plane_pass": True,
               "access_reconciliation_step_completed": access_configured,
               "access_reconciliation_state": (
