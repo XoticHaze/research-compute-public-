@@ -54,6 +54,24 @@ test("legacy bounded receipts remain backward compatible and do not invent a rea
  assert.equal(clean.final_content_present,null);
  assert.equal(clean.reasoning_content_present,null);
 });
+test("numeric-only usage does not leak provider text and rejects forged counts",()=>{
+ const candidate=makeReceipt({prompt_tokens:320,completion_tokens:1800,reasoning_tokens:1742,
+  provider_note:"NEVER_EXPOSE_PROMPT",model_answer:"NEVER_EXPOSE_REPLY"});
+ const safe=sanitizeCodeRoleReceipt(candidate);
+ assert.ok(safe);
+ assert.deepEqual([safe.prompt_tokens,safe.completion_tokens,safe.reasoning_tokens],
+  [320,1800,1742]);
+ assert.ok(!JSON.stringify(safe).includes("NEVER_EXPOSE"));
+ const absent=sanitizeCodeRoleReceipt(makeReceipt());
+ assert.equal(absent.prompt_tokens,null);
+ assert.equal(absent.completion_tokens,null);
+ assert.equal(absent.reasoning_tokens,null);
+ for(const field of ["prompt_tokens","completion_tokens","reasoning_tokens"]){
+  for(const bad of [-1,1000001,"4",3.1,{},Infinity]){
+   assert.equal(sanitizeCodeRoleReceipt(makeReceipt({[field]:bad})),null);
+  }
+ }
+});
 test("provider-rate-limit receipt is classified without exposing provider body",()=>{
  const clean=sanitizeCodeRoleReceipt(makeReceipt({
   status:"provider_rate_limited",http_status:429,
