@@ -7,6 +7,17 @@ const ENDPOINT="https://integrate.api.nvidia.com/v1";
 const status=n=>Number.isInteger(n)&&n>=100&&n<=599?n:null;
 const count=n=>Number.isSafeInteger(n)&&n>=0&&n<=1000000?n:null;
 const finishes=new Set(["stop","length","tool_calls","content_filter"]);
+// Use exact published model-specific first-wave sampling profiles where known.
+// MiniMax's NVIDIA public inference example uses 16384; Poolside uses 8192.
+// These are generous DISCOVERY settings, not permanent capability ceilings.
+// Unknown models retain a separately identifiable experimental default.
+export function discoveryProfile(model){
+ if(model==="minimaxai/minimax-m3.1-flash")
+  return{temperature:1.0,top_p:0.95,max_tokens:16384};
+ if(model==="poolside/laguna-xs-2.1")
+  return{temperature:1.0,top_p:0.95,max_tokens:8192};
+ return{temperature:1.0,top_p:0.95,max_tokens:8192};
+}
 export function eligibleWorkforceCatalog(doc){
  const rows=doc?.data;
  if(!Array.isArray(rows)||rows.length>10000)throw Error("invalid_catalog");
@@ -45,12 +56,16 @@ export async function runWorkforceCase({modelIndex,caseIndex,providerFetch,now=(
   out.model=model;
   out.provider_calls++;
   const request={model,messages:messagesForCase(caseIndex),
-    temperature:1.0,top_p:0.95,max_tokens:8192,stream:false};
+    ...discoveryProfile(model),stream:false};
   const response=await providerFetch(ENDPOINT+"/chat/completions",
     {method:"POST",redirect:"manual",body:JSON.stringify(request)});
   out.completion_status=status(response?.status);
   if(out.completion_status===429){out.status="provider_rate_limited";return out;}
-  if(out.completion_status!==200){out.status="model_http_unavailable";return out;}
+  if(out.completion_status!==200){
+   out.status=out.completion_status===400?"request_profile_rejected":
+     [403,404,410].includes(out.completion_status)?"model_http_unavailable":
+     "provider_upstream_error";return out;
+  }
   const result=await response.json();
   const choice=result?.choices?.[0],message=choice?.message;
   out.finish_reason=finishes.has(choice?.finish_reason)?choice.finish_reason:"other";
