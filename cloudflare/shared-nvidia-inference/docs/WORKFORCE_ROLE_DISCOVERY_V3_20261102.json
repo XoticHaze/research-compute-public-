@@ -1,0 +1,405 @@
+{
+  "schema": "commandcenter.nvidia_workforce_role_discovery.v3",
+  "model_id": "poolside/laguna-xs-2.1",
+  "evaluated_source_sha": "d18a85c78e3db84ffde6d51cb3d785971e6f0a38",
+  "grading_level": "fixed_public_synthetic_first_pass_32_case",
+  "review_run_id": "MW-20261102103432290",
+  "production_admitted": false,
+  "private_workload_admitted": false,
+  "active_model_assignments": 0,
+  "total_domains": 16,
+  "total_cases": 32,
+  "objective_cases": 30,
+  "scored_passes": 20,
+  "scored_failures": 10,
+  "writing_cases_pending_human_review": 2,
+  "candidate_read_only_domains": 8,
+  "stronger_fleet_replacement_proven": false,
+  "economic_value_verified": false,
+  "provider_cost_verified": false,
+  "runs": [
+    {
+      "run_id": 41402486463,
+      "job_id": 125137126793,
+      "artifact_id": 13121752154,
+      "artifact_sha256": "7da20cb1c0eadfd963acda80c517bb9061885617c70519384c52fda278f4de80",
+      "source_sha": "d18a85c78e3db84ffde6d51cb3d785971e6f0a38",
+      "model_id": "poolside/laguna-xs-2.1",
+      "cases": 2,
+      "url": "https://github.com/XoticHaze/waterboys-fantasy-compute/actions/runs/41402486463",
+      "conclusion": "success",
+      "diagnostic_restored_disabled": true
+    },
+    {
+      "run_id": 41402613380,
+      "job_id": 125137512630,
+      "artifact_id": 13122086742,
+      "artifact_sha256": "5a8003f845836df5aecfa94595090c497fdf9f85cc580bdcc72c5d7bd8837113",
+      "source_sha": "d18a85c78e3db84ffde6d51cb3d785971e6f0a38",
+      "model_id": "poolside/laguna-xs-2.1",
+      "cases": 8,
+      "url": "https://github.com/XoticHaze/waterboys-fantasy-compute/actions/runs/41402613380",
+      "conclusion": "success",
+      "diagnostic_restored_disabled": true
+    },
+    {
+      "run_id": 41430047718,
+      "job_id": 125226057655,
+      "artifact_id": 13134360545,
+      "artifact_sha256": "0b37f69f54dd6a47b75495796c833d1920f841ad102a7345e1655842b937a424",
+      "source_sha": "d18a85c78e3db84ffde6d51cb3d785971e6f0a38",
+      "model_id": "poolside/laguna-xs-2.1",
+      "cases": 8,
+      "url": "https://github.com/XoticHaze/waterboys-fantasy-compute/actions/runs/41430047718",
+      "conclusion": "success",
+      "diagnostic_restored_disabled": true
+    },
+    {
+      "run_id": 41430231195,
+      "job_id": 125226661807,
+      "artifact_id": 13133757406,
+      "artifact_sha256": "f165c0c62c87647df4bdd0f9b77904f14506becdd31e5ae4a8205cc5ed09005f",
+      "source_sha": "d18a85c78e3db84ffde6d51cb3d785971e6f0a38",
+      "model_id": "poolside/laguna-xs-2.1",
+      "cases": 8,
+      "url": "https://github.com/XoticHaze/waterboys-fantasy-compute/actions/runs/41430231195",
+      "conclusion": "success",
+      "diagnostic_restored_disabled": true
+    },
+    {
+      "run_id": 41430427438,
+      "job_id": 125227319089,
+      "artifact_id": 13132848784,
+      "artifact_sha256": "1311af0c80b2e046ddb16a708676e9bc0b1ae8a758dd87aba8e608487e4d4595",
+      "source_sha": "d18a85c78e3db84ffde6d51cb3d785971e6f0a38",
+      "model_id": "poolside/laguna-xs-2.1",
+      "cases": 6,
+      "url": "https://github.com/XoticHaze/waterboys-fantasy-compute/actions/runs/41430427438",
+      "conclusion": "success",
+      "diagnostic_restored_disabled": true
+    }
+  ],
+  "roles": [
+    {
+      "domain": "news_causal_join",
+      "role_id": "research.news_evidence",
+      "candidate_status": "deterministic_only",
+      "case_indices": [
+        0,
+        1
+      ],
+      "passed": 0,
+      "failed": 2,
+      "human_review_pending": 0,
+      "tested_cases": 2,
+      "p50_latency_ms": 912,
+      "first_pass_status": "DISCOVERY_ONLY_NOT_PRODUCTION_QUALIFIED",
+      "production_admitted": false,
+      "proposed_capability": "none",
+      "evidence_run_ids": [
+        41402486463
+      ]
+    },
+    {
+      "domain": "market_news_relevance",
+      "role_id": "research.market_intelligence",
+      "candidate_status": "candidate_read_only",
+      "case_indices": [
+        2,
+        3
+      ],
+      "passed": 2,
+      "failed": 0,
+      "human_review_pending": 0,
+      "tested_cases": 2,
+      "p50_latency_ms": 1256,
+      "first_pass_status": "DISCOVERY_ONLY_NOT_PRODUCTION_QUALIFIED",
+      "production_admitted": false,
+      "proposed_capability": "read_only_proposal",
+      "evidence_run_ids": [
+        41430047718
+      ]
+    },
+    {
+      "domain": "trader_ops_advice",
+      "role_id": "mm.trader_ops_shadow",
+      "candidate_status": "candidate_read_only",
+      "case_indices": [
+        4,
+        5
+      ],
+      "passed": 2,
+      "failed": 0,
+      "human_review_pending": 0,
+      "tested_cases": 2,
+      "p50_latency_ms": 4154,
+      "first_pass_status": "DISCOVERY_ONLY_NOT_PRODUCTION_QUALIFIED",
+      "production_admitted": false,
+      "proposed_capability": "read_only_proposal",
+      "evidence_run_ids": [
+        41430047718
+      ]
+    },
+    {
+      "domain": "market_data_lineage",
+      "role_id": "mm.data_quality",
+      "candidate_status": "candidate_read_only",
+      "case_indices": [
+        6,
+        7
+      ],
+      "passed": 2,
+      "failed": 0,
+      "human_review_pending": 0,
+      "tested_cases": 2,
+      "p50_latency_ms": 2080,
+      "first_pass_status": "DISCOVERY_ONLY_NOT_PRODUCTION_QUALIFIED",
+      "production_admitted": false,
+      "proposed_capability": "read_only_proposal",
+      "evidence_run_ids": [
+        41430047718
+      ]
+    },
+    {
+      "domain": "portfolio_exposure",
+      "role_id": "mm.portfolio_risk",
+      "candidate_status": "deterministic_only",
+      "case_indices": [
+        8,
+        9
+      ],
+      "passed": 0,
+      "failed": 2,
+      "human_review_pending": 0,
+      "tested_cases": 2,
+      "p50_latency_ms": 3034,
+      "first_pass_status": "DISCOVERY_ONLY_NOT_PRODUCTION_QUALIFIED",
+      "production_admitted": false,
+      "proposed_capability": "none",
+      "evidence_run_ids": [
+        41430047718
+      ]
+    },
+    {
+      "domain": "dashboard_state",
+      "role_id": "mm.dashboard_intelligence",
+      "candidate_status": "gated_explanation_only",
+      "case_indices": [
+        10,
+        11
+      ],
+      "passed": 1,
+      "failed": 1,
+      "human_review_pending": 0,
+      "tested_cases": 2,
+      "p50_latency_ms": 2500,
+      "first_pass_status": "DISCOVERY_ONLY_NOT_PRODUCTION_QUALIFIED",
+      "production_admitted": false,
+      "proposed_capability": "none",
+      "evidence_run_ids": [
+        41430231195
+      ]
+    },
+    {
+      "domain": "worker_receipt_triage",
+      "role_id": "cc.receipt_intelligence",
+      "candidate_status": "candidate_read_only",
+      "case_indices": [
+        12,
+        13
+      ],
+      "passed": 2,
+      "failed": 0,
+      "human_review_pending": 0,
+      "tested_cases": 2,
+      "p50_latency_ms": 1952,
+      "first_pass_status": "DISCOVERY_ONLY_NOT_PRODUCTION_QUALIFIED",
+      "production_admitted": false,
+      "proposed_capability": "read_only_proposal",
+      "evidence_run_ids": [
+        41430231195
+      ]
+    },
+    {
+      "domain": "incident_diagnosis",
+      "role_id": "cc.ops_log_triage",
+      "candidate_status": "candidate_read_only",
+      "case_indices": [
+        14,
+        15
+      ],
+      "passed": 2,
+      "failed": 0,
+      "human_review_pending": 0,
+      "tested_cases": 2,
+      "p50_latency_ms": 2924,
+      "first_pass_status": "DISCOVERY_ONLY_NOT_PRODUCTION_QUALIFIED",
+      "production_admitted": false,
+      "proposed_capability": "read_only_proposal",
+      "evidence_run_ids": [
+        41430231195
+      ]
+    },
+    {
+      "domain": "income_quote_economics",
+      "role_id": "ie.quote_profit_review",
+      "candidate_status": "deterministic_only",
+      "case_indices": [
+        16,
+        17
+      ],
+      "passed": 0,
+      "failed": 2,
+      "human_review_pending": 0,
+      "tested_cases": 2,
+      "p50_latency_ms": 3400,
+      "first_pass_status": "DISCOVERY_ONLY_NOT_PRODUCTION_QUALIFIED",
+      "production_admitted": false,
+      "proposed_capability": "none",
+      "evidence_run_ids": [
+        41430231195
+      ]
+    },
+    {
+      "domain": "commerce_reconciliation",
+      "role_id": "ie.commerce_audit",
+      "candidate_status": "candidate_read_only",
+      "case_indices": [
+        18,
+        19
+      ],
+      "passed": 2,
+      "failed": 0,
+      "human_review_pending": 0,
+      "tested_cases": 2,
+      "p50_latency_ms": 914,
+      "first_pass_status": "DISCOVERY_ONLY_NOT_PRODUCTION_QUALIFIED",
+      "production_admitted": false,
+      "proposed_capability": "read_only_proposal",
+      "evidence_run_ids": [
+        41430427438
+      ]
+    },
+    {
+      "domain": "catalog_import",
+      "role_id": "ie.catalog_research",
+      "candidate_status": "gated_explanation_only",
+      "case_indices": [
+        20,
+        21
+      ],
+      "passed": 1,
+      "failed": 1,
+      "human_review_pending": 0,
+      "tested_cases": 2,
+      "p50_latency_ms": 2916,
+      "first_pass_status": "DISCOVERY_ONLY_NOT_PRODUCTION_QUALIFIED",
+      "production_admitted": false,
+      "proposed_capability": "none",
+      "evidence_run_ids": [
+        41430427438
+      ]
+    },
+    {
+      "domain": "home_voice_intent",
+      "role_id": "homeassistant.voice_shadow",
+      "candidate_status": "candidate_read_only",
+      "case_indices": [
+        22,
+        23
+      ],
+      "passed": 2,
+      "failed": 0,
+      "human_review_pending": 0,
+      "tested_cases": 2,
+      "p50_latency_ms": 2978,
+      "first_pass_status": "DISCOVERY_ONLY_NOT_PRODUCTION_QUALIFIED",
+      "production_admitted": false,
+      "proposed_capability": "read_only_proposal",
+      "evidence_run_ids": [
+        41430427438
+      ]
+    },
+    {
+      "domain": "tool_plan_safety",
+      "role_id": "cc.tool_planning",
+      "candidate_status": "gated_explanation_only",
+      "case_indices": [
+        24,
+        25
+      ],
+      "passed": 1,
+      "failed": 1,
+      "human_review_pending": 0,
+      "tested_cases": 2,
+      "p50_latency_ms": 902,
+      "first_pass_status": "DISCOVERY_ONLY_NOT_PRODUCTION_QUALIFIED",
+      "production_admitted": false,
+      "proposed_capability": "none",
+      "evidence_run_ids": [
+        41402613380
+      ]
+    },
+    {
+      "domain": "research_doc_audit",
+      "role_id": "foundry.document_analysis",
+      "candidate_status": "gated_explanation_only",
+      "case_indices": [
+        26,
+        27
+      ],
+      "passed": 1,
+      "failed": 1,
+      "human_review_pending": 0,
+      "tested_cases": 2,
+      "p50_latency_ms": 2984,
+      "first_pass_status": "DISCOVERY_ONLY_NOT_PRODUCTION_QUALIFIED",
+      "production_admitted": false,
+      "proposed_capability": "none",
+      "evidence_run_ids": [
+        41402613380
+      ]
+    },
+    {
+      "domain": "long_context_reconciliation",
+      "role_id": "shared.document_long_context",
+      "candidate_status": "candidate_read_only",
+      "case_indices": [
+        28,
+        29
+      ],
+      "passed": 2,
+      "failed": 0,
+      "human_review_pending": 0,
+      "tested_cases": 2,
+      "p50_latency_ms": 2922,
+      "first_pass_status": "DISCOVERY_ONLY_NOT_PRODUCTION_QUALIFIED",
+      "production_admitted": false,
+      "proposed_capability": "read_only_proposal",
+      "evidence_run_ids": [
+        41402613380
+      ]
+    },
+    {
+      "domain": "operator_narrative",
+      "role_id": "shared.operator_text",
+      "candidate_status": "human_review_pending",
+      "case_indices": [
+        30,
+        31
+      ],
+      "passed": 0,
+      "failed": 0,
+      "human_review_pending": 2,
+      "tested_cases": 2,
+      "p50_latency_ms": 3568,
+      "first_pass_status": "DISCOVERY_ONLY_NOT_PRODUCTION_QUALIFIED",
+      "production_admitted": false,
+      "proposed_capability": "none",
+      "evidence_run_ids": [
+        41402613380
+      ]
+    }
+  ],
+  "interpretation": "Two fixed fictional examples per role. Discovery evidence only, no user/private input permission or production assignment."
+}
