@@ -37,8 +37,10 @@ export function createCaller() {
   let draftInvoked = false;
   let codeInvoked = false;
   let roleCodeInvoked = false;
-  let discoveryInvoked = false;
-  let workforceInvoked = false;
+  const discoveryInvoked = new Set();
+  let discoveryStopped = false;
+  const workforceInvoked = new Set();
+  let workforceStopped = false;
   const roleBatchesInvoked = new Set();
   const microBatchesInvoked = new Set();
   return {
@@ -134,18 +136,22 @@ export function createCaller() {
       } else if (request.body !== null && request.headers.get("content-length") !== "0") {
         return reply(400, { classification: "request_body_not_allowed" });
       }
-      // New broad workforce studies retain the older single-operation
-      // private diagnostic session boundary, regardless of model/catalog size.
-      if((workforce!==null&&(workforceInvoked||smokeInvoked||draftInvoked||
-           roleCodeInvoked||discoveryInvoked||codeInvoked||
-           roleBatchesInvoked.size||microBatchesInvoked.size))||
-         (workforce===null&&workforceInvoked))
+      // Session cap is replay/budget containment, NOT a lifetime model or task
+      // cap. Future sessions may resume all remaining catalog-indexed cases.
+      const workforceKey=workforce===null?null:workforce.model_index+":"+workforce.case_index;
+      if((workforce!==null&&(workforceStopped||workforceInvoked.size>=64||
+          workforceInvoked.has(workforceKey)||smokeInvoked||draftInvoked||
+          roleCodeInvoked||discoveryInvoked.size||codeInvoked||
+          roleBatchesInvoked.size||microBatchesInvoked.size))||
+         (workforce===null&&workforceInvoked.size>0))
         return reply(409,{classification:"caller_batch_limit_or_replay"});
-      // One full diagnostic per caller invocation. Discovery cannot be
-      // replayed or mixed with legacy model suites in the same local session.
+      // Preserve the other role-discovery experiment's newer 20 distinct
+      // (model,task) session capability without conflating its work identity.
       if((discovery!==null&&(smokeInvoked||draftInvoked||codeInvoked||
-          roleCodeInvoked||discoveryInvoked||roleBatchesInvoked.size||microBatchesInvoked.size))||
-         (discovery===null&&discoveryInvoked))
+          roleCodeInvoked||discoveryStopped||discoveryInvoked.size>=20||
+          discoveryInvoked.has(discovery.model_index+":"+discovery.task_index)||
+          roleBatchesInvoked.size||microBatchesInvoked.size))||
+         (discovery===null&&discoveryInvoked.size>0))
         return reply(409,{classification:"caller_batch_limit_or_replay"});
       if ((roleCode===null && codeIndex===null && micro===null && roleBatch === null && (smokeInvoked || draftInvoked || codeInvoked || roleCodeInvoked || roleBatchesInvoked.size || microBatchesInvoked.size)) ||
           (roleCode!==null&&(smokeInvoked||draftInvoked||codeInvoked||roleCodeInvoked||roleBatchesInvoked.size||microBatchesInvoked.size)) ||
@@ -161,8 +167,8 @@ export function createCaller() {
         return reply(503, { classification: "remote_service_binding_missing" });
       }
       // One request per local dev session, even if upstream errors.
-      if(workforce!==null)workforceInvoked=true;
-      else if(discovery!==null)discoveryInvoked=true;
+      if(workforce!==null)workforceInvoked.add(workforceKey);
+      else if(discovery!==null)discoveryInvoked.add(discovery.model_index+":"+discovery.task_index);
       else if(roleCode!==null)roleCodeInvoked=true;
       else if(codeIndex!==null)codeInvoked=true;
       else if(url.pathname===DRAFT_PATH)draftInvoked=true;
@@ -214,15 +220,26 @@ export function createCaller() {
         if(workforce!==null){
           const safe=sanitizeWorkforceReceipt(value);
           if(!safe||safe.model_index!==workforce.model_index||
-             safe.case_index!==workforce.case_index)
+             safe.case_index!==workforce.case_index){
+            workforceStopped=true;
             return reply(502,{classification:"untrusted_workforce_receipt"});
+          }
+          if(["provider_rate_limited","catalog_unavailable",
+              "transport_or_decoding_failure"].includes(safe.status)||
+             safe.catalog_status===401||safe.completion_status===401)
+            workforceStopped=true;
           return reply(upstream.ok?200:502,safe);
         }
         if(discovery!==null){
           const safe=sanitizeDiscoveryReceipt(value);
           if(!safe||safe.model_index!==discovery.model_index||
-             safe.task_index!==discovery.task_index)
+             safe.task_index!==discovery.task_index){
+            discoveryStopped=true;
             return reply(502,{classification:"untrusted_discovery_receipt"});
+          }
+          if(["provider_rate_limited","provider_pending",
+              "provider_transport_or_decode_failure"].includes(safe.status)||
+             safe.http_status===401)discoveryStopped=true;
           return reply(upstream.ok?200:502,safe);
         }
         if(roleCode!==null){
@@ -282,6 +299,8 @@ export function createCaller() {
         };
         return reply(upstream.ok ? 200 : 502, sanitized);
       } catch {
+        if(workforce!==null)workforceStopped=true;
+        if(discovery!==null)discoveryStopped=true;
         return reply(502, { classification: "service_binding_transport_or_receipt_failure" });
       }
     },
