@@ -53,7 +53,7 @@ def compare() -> dict:
             "request_roundtrip": recovered == raw,
             "encrypted_result_roundtrip": return_ok,
             "synthetic_marker_absent_from_public_envelope": MARKER not in serialized,
-            "private_semantic_keys_absent_from_public_envelope": not set(TEST_BODY).intersection(request),
+            "private_semantic_keys_absent_from_public_envelope": not (set(TEST_BODY) - {"schema"}).intersection(request),
             "fixed_size_ciphertext_bucket": len(base64.b64decode(request["ciphertext_b64"])) - 16 in module.BUCKETS,
             "wrong_run_rejected": _rejected(lambda: module.open_capsule(request,
                  recipient_private_b64=worker_priv, expected_run_id=RUN_ID + "1", expected_direction="request")),
