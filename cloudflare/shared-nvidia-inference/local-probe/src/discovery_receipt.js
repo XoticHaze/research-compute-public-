@@ -6,7 +6,12 @@ const TASKS=[
  ["messy_extraction","structured_extraction"],
  ["bounded_plan","tool_use_planning"],
  ["tradeoff_analysis","uncertainty_aware_analysis"],
- ["operator_explanation","contextual_writing"]
+ ["operator_explanation","contextual_writing"],
+ ["evidence_reconciliation_holdout","cross_source_investigation"],
+ ["messy_extraction_holdout","structured_extraction"],
+ ["bounded_plan_holdout","tool_use_planning"],
+ ["tradeoff_analysis_holdout","uncertainty_aware_analysis"],
+ ["operator_explanation_holdout","contextual_writing"]
 ];
 const STATUSES=new Set(["scored_pass","scored_fail","human_review_required",
  "provider_rate_limited","provider_unavailable","provider_transport_or_decode_failure"]);
@@ -16,7 +21,7 @@ const flag=v=>typeof v==="boolean";
 export function sanitizeDiscoveryReceipt(v){
  if(!v||typeof v!=="object"||Array.isArray(v)||
     v.schema!=="commandcenter.nvidia_discovery_case.v1"||
-    !integer(v.model_index,0,1)||!integer(v.task_index,0,4)||
+    !integer(v.model_index,0,1)||!integer(v.task_index,0,9)||
     v.model!==MODELS[v.model_index]||
     v.task_id!==TASKS[v.task_index][0]||
     v.skill!==TASKS[v.task_index][1]||
@@ -35,7 +40,7 @@ export function sanitizeDiscoveryReceipt(v){
   if(n!==null&&!integer(n,0,1000000))return null;
   totals[field]=n;
  }
- const isWriting=v.task_index===4;
+ const isWriting=v.task_index===4||v.task_index===9;
  if(v.human_review_required!==isWriting||
     (isWriting&&v.passed)||
     (v.status==="scored_pass"&&(!v.passed||!v.format_valid||
