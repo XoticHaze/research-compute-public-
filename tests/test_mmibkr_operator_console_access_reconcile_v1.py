@@ -304,16 +304,23 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         script = textwrap.dedent(
             block.split("          python - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
         )
-        for approved, permitted in (
-            (None, False), ("b" * 40, False), ("A" * 40, False), ("a" * 40, True),
+        for approved, release_approved, permitted in (
+            (None, None, False), ("b" * 40, "a" * 40, False),
+            ("A" * 40, "a" * 40, False), ("a" * 40, None, False),
+            ("a" * 40, "b" * 40, False), ("a" * 40, "A" * 40, False),
+            ("a" * 40, "a" * 40, True),
         ):
-            with self.subTest(approved=approved):
+            with self.subTest(approved=approved, release_approved=release_approved):
                 env = dict(os.environ)
                 env["REQUEST_SOURCE_SHA"] = "a" * 40
                 if approved is None:
                     env.pop("MMIBKR_OPERATOR_CONSOLE_APPROVED_SOURCE_SHA", None)
                 else:
                     env["MMIBKR_OPERATOR_CONSOLE_APPROVED_SOURCE_SHA"] = approved
+                if release_approved is None:
+                    env.pop("MMIBKR_OPERATOR_CONSOLE_RELEASE_APPROVED_SHA", None)
+                else:
+                    env["MMIBKR_OPERATOR_CONSOLE_RELEASE_APPROVED_SHA"] = release_approved
                 result = subprocess.run(
                     [sys.executable, "-c", script],
                     env=env, capture_output=True, text=True, check=False,
@@ -322,6 +329,7 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
                 self.assertNotIn("a" * 40, result.stdout + result.stderr)
                 if permitted:
                     self.assertIn("MMIBKR_OPERATOR_CONSOLE_OWNER_RELEASE_APPROVED=1", result.stdout)
+                    self.assertIn("MMIBKR_OPERATOR_CONSOLE_RELEASE_AUTHORIZED=1", result.stdout)
 
 
     def test_public_ci_omits_access_control_plane_ids(self):
@@ -338,6 +346,10 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertNotIn("'.github/workflows/mmibkr-operator-console-deploy-r1.yml'", push)
         self.assertNotIn("'cloudflare/operator-console/**'", push)
         self.assertIn("MMIBKR_OPERATOR_CONSOLE_OWNER_RELEASE_APPROVAL_MISSING_OR_INVALID=1", text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_RELEASE_AUTHORIZATION_MISSING_OR_INVALID=1", text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_RELEASE_AUTHORIZATION_SOURCE_MISMATCH=1", text)
+        gate = text.split("      - name: Require owner-approved exact operator-console release source", 1)[1].split("      - name: Materialize accepted private source", 1)[0]
+        self.assertNotIn("GITHUB_EVENT_NAME", gate)
 
 
     def test_private_source_identity_not_literal_or_in_pr_contract_env(self):

@@ -136,6 +136,7 @@ jobs:
       - name: Require owner-approved exact operator-console release source
         env:
           MMIBKR_OPERATOR_CONSOLE_APPROVED_SOURCE_SHA: ${{ vars.MMIBKR_OPERATOR_CONSOLE_APPROVED_SOURCE_SHA }}
+          MMIBKR_OPERATOR_CONSOLE_RELEASE_APPROVED_SHA: ${{ vars.MMIBKR_OPERATOR_CONSOLE_RELEASE_APPROVED_SHA }}
         shell: bash
         run: |
           set -euo pipefail
@@ -150,6 +151,12 @@ jobs:
           if approved != expected:
               raise SystemExit('MMIBKR_OPERATOR_CONSOLE_OWNER_RELEASE_SOURCE_MISMATCH=1')
           print('MMIBKR_OPERATOR_CONSOLE_OWNER_RELEASE_APPROVED=1')
+          release_approved = os.environ.get('MMIBKR_OPERATOR_CONSOLE_RELEASE_APPROVED_SHA', '').strip()
+          if not re.fullmatch(r'[0-9a-f]{40}', release_approved):
+              raise SystemExit('MMIBKR_OPERATOR_CONSOLE_RELEASE_AUTHORIZATION_MISSING_OR_INVALID=1')
+          if release_approved != expected:
+              raise SystemExit('MMIBKR_OPERATOR_CONSOLE_RELEASE_AUTHORIZATION_SOURCE_MISMATCH=1')
+          print('MMIBKR_OPERATOR_CONSOLE_RELEASE_AUTHORIZED=1')
           PY
 
       - name: Materialize accepted private source from reusable encrypted vault
