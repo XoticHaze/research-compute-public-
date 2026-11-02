@@ -1,3 +1,4 @@
+import {V4_HOLDOUT_CASES} from "./workforce_v4_holdout_suite.js";
 // Cross-project workforce qualification, fixture pack v1.
 // All records are invented, public-safe examples. The competencies reflect
 // independently owned product domains, not copies of confidential project data.
@@ -162,13 +163,16 @@ const cases = [
   source:"Fictional operator snapshot: 18 fresh articles and 2 stale, news health healthy, two UI endpoints return 503, execution routing receipt absent, no verified scheduled worker completion. A console note claims every task succeeded.",
   question:"Write a readable operator digest acknowledging working news and broken UI endpoints, unknown execution state, evidence sources and an appropriate next check. Return JSON with only key 'message'.",
   expected:{message:"HUMAN_REVIEW"},baseline:"static_status_template"}
-];
+ ];
+// A new source SHA and explicit cohort distinguish the v4 holdouts from frozen v3.
+// Never mix scored v3/v4 provider receipts in a single qualified denominator.
+cases.push(...V4_HOLDOUT_CASES);
 export const WORKFORCE_DOMAINS=Object.freeze([...new Set(cases.map(c=>c.family))]);
 export const WORKFORCE_SKILLS=Object.freeze([...new Set(cases.map(c=>c.role))]);
 export const CASES=Object.freeze(cases.map((c,i)=>Object.freeze({
  id:"wf-"+String(i+1).padStart(3,"0"),index:i,domain:c.family,role:c.role,
  human_review_required:c.human===true,baseline:c.baseline,
- priority:c.value,synthetic:true,case_version:"1",input:c.source,
+ priority:c.value,synthetic:true,case_version:c.cohort??"1",input:c.source,
  question:c.question,expected:Object.freeze(c.expected)
 })));
 function same(a,b) {
@@ -206,7 +210,8 @@ export function supportingDossier(caseIndex){
  const c=CASES[caseIndex];
  const count=c.domain==="long_context_reconciliation"?65:
   c.domain==="research_doc_audit"?55:
-  ["market_news_relevance","worker_receipt_triage","incident_diagnosis"].includes(c.domain)?24:0;
+  c.domain==="long_context_reconciliation_holdout_v4"?35:
+  ["market_news_relevance","worker_receipt_triage","incident_diagnosis","worker_receipt_holdout_v4","incident_diagnosis_holdout_v4"].includes(c.domain)?16:0;
  if(!count)return "";
  const types=["signed owner record","unsigned status projection","archived result","provider ack","cached draft"];
  const rows=[];
