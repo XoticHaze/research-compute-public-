@@ -97,7 +97,7 @@ jobs:
       - name: Execute opaque roundtrip
         run: python scripts/opaque_bidirectional_capsule_smoke_v1.py
       - name: Enforce ciphertext-only public artifact allowlist
-        run: python scripts/opaque_capsule_publication_guard_v1.py opaque-result-envelope.json --direction result
+        run: python -m scripts.opaque_capsule_publication_guard_v1 opaque-result-envelope.json --direction result
       - name: Upload encrypted result envelope only
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
