@@ -7,10 +7,9 @@ function sameRefs(left,right) {
   return left.length===right.length &&
     [...left].sort().every((v,i)=>v===[...right].sort()[i]);
 }
-export function scoreV4Case(index,raw) {
-  if(!Number.isSafeInteger(index)||index<0||index>=V4_HOLDOUT_CASES.length)
+export function scoreV4EvidenceFixture(fixture,index,raw) {
+  if(!Number.isSafeInteger(index)||index<0||index>=60)
     throw Error("invalid_v4_case_index");
-  const fixture=V4_HOLDOUT_CASES[index];
   validateV4FixtureEnvelope(fixture);
   const refSet=new Set(fixture.records.map(x=>x.id));
   const result={
@@ -57,6 +56,11 @@ export function scoreV4Case(index,raw) {
   // fields and never claims a fully accepted task.
   // Rationale facts/quality and useful abstention are NOT auto-graded.
   return result;
+}
+export function scoreV4Case(index,raw) {
+ if(!Number.isSafeInteger(index)||index<0||index>=V4_HOLDOUT_CASES.length)
+  throw Error("invalid_v4_case_index");
+ return scoreV4EvidenceFixture(V4_HOLDOUT_CASES[index],index,raw);
 }
 export function v4CasePrompt(index) {
   if(!Number.isSafeInteger(index)||index<0||index>=V4_HOLDOUT_CASES.length)
