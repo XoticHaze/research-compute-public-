@@ -54,7 +54,10 @@ test("v4 prompt and contract do not import or enumerate oracle labels",()=>{
 test("first pass grades source-bound labels; prose quality stays human review",()=>{
   for(let i=0;i<V4_HOLDOUT_CASES.length;i++){
     const c=V4_HOLDOUT_CASES[i],score=scoreV4Case(i,answer(c));
-    assert.equal(score.objective_label_pass,true);\n    assert.equal(score.first_pass,false);\n    assert.equal(score.human_review_status,"unreviewed");\n    assert.equal(score.full_task_accepted,false);
+    assert.equal(score.objective_label_pass,true);
+    assert.equal(score.first_pass,false);
+    assert.equal(score.human_review_status,"unreviewed");
+    assert.equal(score.full_task_accepted,false);
     assert.equal(score.fields_correct,4);
     assert.equal(score.invalid_ref_count,0);
     assert.equal(score.rationale_review_required,true);
