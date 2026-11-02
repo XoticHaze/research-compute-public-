@@ -28,32 +28,9 @@ jobs:
           key_url='https://reference-release-broker-v1.shared-compute-neutral-authorization.workers.dev/v1/public-key'
           health_body="$RUNNER_TEMP/health.json"
           key_body="$RUNNER_TEMP/key.json"
-          health_status="$(curl --max-time 15 -sS -o "$health_body" -w '%{http_code}' "$health_url" || true)"
-          key_status="$(curl --max-time 15 -sS -o "$key_body" -w '%{http_code}' "$key_url" || true)"
-          python - "$health_body" "$key_body" "$health_status" "$key_status" <<'PY' > "$RUNNER_TEMP/receipt.json"
-          import json,sys,os,re
-          health_path,key_path,health_status,key_status=sys.argv[1:]
-          def load(path):
-              try:
-                  return json.load(open(path,encoding='utf-8'))
-              except Exception:
-                  return {}
-          health=load(health_path)
-          key=load(key_path)
-          key_id=str(key.get('key_id') or '')
-          receipt={
-              'schema':'reference-broker-state-probe.r1',
-              'run_id':os.environ['GITHUB_RUN_ID'],
-              'health_http_status':int(health_status or 0),
-              'health_ok':health.get('ok') is True,
-              'public_key_http_status':int(key_status or 0),
-              'broker_signer_configured':bool(key_status=='200' and re.fullmatch(r'sha256:[0-9a-f]{64}',key_id)),
-              'broker_key_id':key_id if key_status=='200' else None,
-              'mutation_performed':False,
-              'secrets_included':False,
-          }
-          print(json.dumps(receipt,sort_keys=True,separators=(',',':')))
-          PY
+          health_status="$(curl --max-time 15 --max-filesize 4096 -sS -o "$health_body" -w '%{http_code}' "$health_url" || true)"
+          key_status="$(curl --max-time 15 --max-filesize 4096 -sS -o "$key_body" -w '%{http_code}' "$key_url" || true)"
+          python scripts/reference_broker_state_probe_receipt_v1.py "$health_body" "$key_body" "$health_status" "$key_status" > "$RUNNER_TEMP/receipt.json"
           cat "$RUNNER_TEMP/receipt.json"
       - name: Publish sanitized receipt
         env:
