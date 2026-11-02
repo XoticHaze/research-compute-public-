@@ -5,7 +5,8 @@
 import {discoveryProfile,eligibleWorkforceCatalog} from "./workforce_provider_runner.js";
 import {V4_HOLDOUT_CASES} from "./workforce_v4_holdout.js";
 import {v4CasePrompt,scoreV4Case} from "./workforce_v4_grader.js";
-export const V4_REVIEW_MODEL_ALLOWLIST=Object.freeze(["poolside/laguna-xs-2.1","minimaxai/minimax-m3.1-flash"]);\nconst ORIGIN="https://integrate.api.nvidia.com/v1";
+export const V4_REVIEW_MODEL_ALLOWLIST=Object.freeze(["poolside/laguna-xs-2.1","minimaxai/minimax-m3.1-flash"]);
+const ORIGIN="https://integrate.api.nvidia.com/v1";
 const finishes=new Set(["stop","length","tool_calls","content_filter"]);
 const safeStatus=n=>Number.isInteger(n)&&n>=100&&n<=599?n:null;
 const safeTokens=n=>Number.isSafeInteger(n)&&n>=0&&n<=1000000?n:null;
