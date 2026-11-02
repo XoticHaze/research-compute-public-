@@ -16,6 +16,7 @@ const TASKS=[
 const STATUSES=new Set(["scored_pass","scored_fail","human_review_required",
  "provider_rate_limited","provider_unavailable","provider_transport_or_decode_failure"]);
 const FINISH=new Set(["stop","length","tool_calls","content_filter","other","not_recorded"]);
+const FAILURES=new Set(["none","rate_limited","provider_http","response_decode","timeout","transport"]);
 const integer=(v,min,max)=>Number.isSafeInteger(v)&&v>=min&&v<=max;
 const flag=v=>typeof v==="boolean";
 export function sanitizeDiscoveryReceipt(v){
@@ -31,7 +32,7 @@ export function sanitizeDiscoveryReceipt(v){
     !flag(v.format_valid)||!flag(v.passed)||
     !flag(v.human_review_required)||
     !integer(v.checks_total,0,7)||!integer(v.checks_passed,0,v.checks_total)||
-    !FINISH.has(v.finish_reason)||
+    !FINISH.has(v.finish_reason)||!FAILURES.has(v.failure_class)||
     v.raw_output_included!==false||v.private_data_used!==false||
     v.production_authorized!==false)return null;
  const totals={};
@@ -51,6 +52,7 @@ export function sanitizeDiscoveryReceipt(v){
  return{schema:v.schema,model:v.model,model_index:v.model_index,
    task_id:v.task_id,task_index:v.task_index,skill:v.skill,
    status:v.status,http_status:v.http_status,provider_calls:1,
+   failure_class:v.failure_class,
    latency_ms:v.latency_ms,format_valid:v.format_valid,
    checks_passed:v.checks_passed,checks_total:v.checks_total,passed:v.passed,
    human_review_required:isWriting,finish_reason:v.finish_reason,...totals,
