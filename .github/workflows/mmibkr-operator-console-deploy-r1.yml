@@ -3,6 +3,11 @@ name: MM-IBKR Operator Console Deploy R1
 on:
   workflow_dispatch:
     inputs:
+      release_ack:
+        description: Explicit owner release acknowledgement without exposing private source identity
+        required: true
+        default: false
+        type: boolean
       source_sha:
         description: Optional private source SHA; leave blank to use owner-approved protected source pin
         required: false
@@ -114,7 +119,10 @@ jobs:
               requested = str(node.get('source_sha') or '').strip().lower()
           else:
               event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
-              requested = str((event.get('inputs') or {}).get('source_sha') or canonical).strip().lower()
+              inputs = event.get('inputs') or {}
+              if inputs.get('release_ack') not in (True, 'true'):
+                  raise SystemExit('operator-console explicit release acknowledgement missing')
+              requested = str(inputs.get('source_sha') or canonical).strip().lower()
 
           if requested != canonical:
               raise SystemExit('operator-console deployment source must equal canonical accepted SHA')
