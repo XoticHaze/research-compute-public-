@@ -151,3 +151,15 @@ test("provider 429 stops any remaining cases in the same loopback session",async
  assert.equal(second.status,409);
  assert.equal(calls,1);
 });
+
+test("Service Binding transport failure closes discovery session before another case",async()=>{
+ let calls=0;
+ const instance=createCaller();
+ const env={NVIDIA_SERVICE:{fetch:async()=>{calls++;throw Error("private hidden host");}}};
+ const first=await instance.fetch(req(local,{model_index:0,task_index:2}),env);
+ assert.equal(first.status,502);
+ assert(!JSON.stringify(await first.json()).includes("private hidden host"));
+ const next=await instance.fetch(req(local,{model_index:1,task_index:2}),env);
+ assert.equal(next.status,409);
+ assert.equal(calls,1);
+});
