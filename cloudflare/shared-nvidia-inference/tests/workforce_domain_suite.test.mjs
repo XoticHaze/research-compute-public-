@@ -120,7 +120,7 @@ test("model receives explicit role vocabulary and types instead of hidden exact-
    assert(prompt.includes(key+": "),c.id+" "+key);
    if(typeof value==="boolean")assert(prompt.includes(key+": boolean"),c.id);
    if(Array.isArray(value))assert(prompt.includes(key+": array of unique string IDs"),c.id);
-   if(typeof value==="string"&&key!=="message")
+   if(typeof value==="string"&&key!=="message"&&!key.endsWith("_at"))
     assert(prompt.includes(key+": string; allowed values "),c.id);
   }
  }
@@ -134,4 +134,28 @@ test("field-grade contracts accept numeric tolerance and unordered unique ID set
  assert.equal(gradeCase(16,JSON.stringify(round)).passed,true);
  const bad={...round,margin_usd:88.8};
  assert.equal(gradeCase(16,JSON.stringify(bad)).passed,false);
+});
+
+test("news join gold never uses events first observed after cutoff",()=>{
+ const delayed=CASES[0];
+ const available=CASES[1];
+ assert.deepEqual(delayed.expected.eligible,[]);
+ assert.deepEqual([...delayed.expected.rejected].sort(),["P1","P2","P3"]);
+ assert.deepEqual(available.expected.eligible,["S1"]);
+ assert(available.input.includes("fetched 12:01Z"));
+ assert(delayed.input.includes("observed_at 14:10Z"));
+ for(const c of [delayed,available]){
+  const question=messagesForCase(c.index)[1].content;
+  assert(question.includes("BOTH a known publication time and observed/fetched time"));
+  assert(question.includes("no later than the decision cutoff"));
+ }
+ const lookahead={eligible:["P1"],rejected:["P2","P3"],assumed_published:false};
+ assert.equal(gradeCase(0,JSON.stringify(lookahead)).passed,false);
+ assert.equal(gradeCase(0,JSON.stringify(delayed.expected)).passed,true);
+ assert.equal(gradeCase(1,JSON.stringify(available.expected)).passed,true);
+});
+test("missing conflict is an explicitly nullable value, not a hidden enum",()=>{
+ const a=messagesForCase(7)[1].content;
+ assert(a.includes("conflict_at: nullable string or null"));
+ assert(gradeCase(7,JSON.stringify(CASES[7].expected)).passed);
 });
