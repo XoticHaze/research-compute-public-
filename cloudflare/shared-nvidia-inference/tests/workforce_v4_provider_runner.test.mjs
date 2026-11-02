@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import {V4_HOLDOUT_CASES} from "../src/workforce_v4_holdout.js";
 import {runV4SourceOnlyCase as run} from "../src/workforce_v4_provider_runner.js";
 const MODEL="poolside/laguna-xs-2.1";
@@ -71,4 +72,13 @@ test("catalog only, fixed selectors and unexposed routes",async()=>{
   await assert.rejects(run({modelIndex:-1,caseIndex:0,providerFetch:()=>{}}),/invalid_fixed_v4_selector/);
   await assert.rejects(run({modelIndex:0,caseIndex:60,providerFetch:()=>{}}),/invalid_fixed_v4_selector/);
   await assert.rejects(run({modelIndex:0,caseIndex:0,providerFetch:null}),/invalid_fixed_v4_selector/);
+});
+
+test("v4 candidate is not connected to deployed Worker, loopback caller or public ingress",()=>{
+  const worker=fs.readFileSync(new URL("../src/index.js",import.meta.url),"utf8");
+  const caller=fs.readFileSync(new URL("../local-probe/src/index.js",import.meta.url),"utf8");
+  assert(!worker.includes("workforce_v4_provider_runner"));
+  assert(!caller.includes("workforce_v4_provider_runner"));
+  assert(!worker.includes("runV4SourceOnlyCase"));
+  assert(!caller.includes("/v4-case"));
 });
