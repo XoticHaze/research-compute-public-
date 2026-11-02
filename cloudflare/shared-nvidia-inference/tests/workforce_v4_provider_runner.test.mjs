@@ -5,11 +5,11 @@ import {V4_HOLDOUT_CASES} from "../src/workforce_v4_holdout.js";
 import {runV4SourceOnlyCase as run} from "../src/workforce_v4_provider_runner.js";
 const MODEL="poolside/laguna-xs-2.1";
 const response=(status,content)=>({status,json:async()=>content});
-function mock({catalogStatus=200,postStatus=200,toolCall=false,wrong=false}={}){
+function mock({catalogStatus=200,postStatus=200,toolCall=false,wrong=false,catalogModels=[MODEL]}={}){
   const calls=[];
   const providerFetch=async (url,opts)=>{
     calls.push({url,method:opts?.method,body:opts?.body});
-    if(url.endsWith("/models"))return response(catalogStatus,{data:[{id:MODEL}]});
+    if(url.endsWith("/models"))return response(catalogStatus,{data:catalogModels.map(id=>({id}))});
     const c=V4_HOLDOUT_CASES[0],expected=c.expected;
     const body={
       state:wrong?"unverified":expected.state,
@@ -81,4 +81,14 @@ test("v4 candidate is not connected to deployed Worker, loopback caller or publi
   assert(!caller.includes("workforce_v4_provider_runner"));
   assert(!worker.includes("runV4SourceOnlyCase"));
   assert(!caller.includes("/v4-case"));
+});
+
+test("catalog listing alone cannot admit an unreviewed v4 model",async()=>{
+  const x=mock({catalogModels:["openai/gpt-oss-20b"]});
+  const r=await run({modelIndex:0,caseIndex:0,providerFetch:x.providerFetch});
+  assert.equal(r.status,"model_not_admitted_for_v4");
+  assert.equal(r.model,"openai/gpt-oss-20b");
+  assert.equal(r.provider_calls,1);
+  assert.equal(x.calls.length,1);
+  assert.equal(r.production_admitted,false);
 });
