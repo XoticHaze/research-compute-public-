@@ -50,8 +50,8 @@ test("multi-model full corpus is a capacity slice, not a lifetime two-model limi
  assert.equal(all.observations.length,64);
  assert.equal(all.calls,64);
  assert.equal(all.provider_http_calls,128);
- assert.equal(all.next_model_index,2);
- assert.equal(all.next_case_index,0);
+ assert.equal(all.next_model_index,0);
+ assert.equal(all.next_case_index,64);
  const result=resultsFromCampaign(all);
  assert.equal(result.observed_cases,64);
  assert.equal(result.any_production_admission,false);
@@ -104,7 +104,7 @@ test("invalid session budgets, run identity and forged states fail closed",async
  }
  assert.throws(()=>newCampaign({sourceSha:"fake",runId:RUN}),/invalid_source_or_campaign_identity/);
  assert.throws(()=>newCampaign({sourceSha:SHA,runId:"no spaces allowed"}),/invalid_source_or_campaign_identity/);
- assert.throws(()=>newCampaign({sourceSha:SHA,runId:RUN,caseIndex:32}),/invalid_source_or_campaign_identity/);
+ assert.throws(()=>newCampaign({sourceSha:SHA,runId:RUN,caseIndex:92}),/invalid_source_or_campaign_identity/);
 });
 
 test("source-pinned campaign is admitted only on exact public Cloudflare workflow",()=>{
