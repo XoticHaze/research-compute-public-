@@ -86,6 +86,8 @@ assert.equal(rootView.schema,'mmibkr.pi_bot_live_operator_view.v1');
 assert.equal(rootView.source,'authenticated_root_bot_status');
 assert.equal(rootView.live_switches_enabled,true);
 assert.equal(rootView.gateway_network_namespace_matched,true);
+assert.equal(rootView.root_observation_id,rootId);
+assert.equal(JSON.stringify(rootView).includes('pi-node/bot-observations/'),false);
 assert.equal(rootView.broker_submission_verified,false);
 assert.equal(rootView.public_publisher_oidc_verified,true);
 assert.throws(()=>piBotLiveOperatorView(rootStored,now,SOURCE_BINDING,'e'.repeat(40)),/pi_bot_observation_rejected/);
