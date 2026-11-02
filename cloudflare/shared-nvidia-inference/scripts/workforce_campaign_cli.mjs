@@ -53,6 +53,12 @@ function checkState(doc){
   if(row.model!==null&&doc.model_id_by_index[row.model_index]!==row.model)
    throw Error("catalog_index_mapping_changed");
  }
+ // Archived metadata must reconcile to the actual accepted/held attempt count.
+ // Never trust a caller-supplied cost or request count without receipt parity.
+ const attempts=[...doc.observations,...doc.attempt_history];
+ if(doc.calls!==attempts.length||
+    doc.provider_http_calls!==attempts.reduce((n,row)=>n+row.provider_calls,0))
+  throw Error("campaign_call_counters_mismatch");
  return seen;
 }
 export async function runCampaign({state,callCase,limit=64,onCheckpoint=async()=>{}}){

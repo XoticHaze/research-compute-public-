@@ -53,6 +53,13 @@ test("source gold revisions cannot be mixed into one scoreboard",async()=>{
   ...a,run_id:"not-a-verified-github-run"
  }]}),/source_or_execution_identity_mismatch/);
 });
+test("archived campaign call totals must equal accepted plus held receipt totals",async()=>{
+ const a=await run("900001");
+ for(const bad of [{calls:a.calls+1},{provider_http_calls:a.provider_http_calls+1}]){
+  assert.throws(()=>aggregate({sourceSha:SHA,campaigns:[{...a,...bad}]}),
+   /campaign_call_counters_mismatch/);
+ }
+});
 test("catalog index reuse is separated by authenticated model identity",async()=>{
  const a=await run("900001",0,"nvidia/synthetic-model");
  const b=await run("900002",1,"nvidia/another-model");
