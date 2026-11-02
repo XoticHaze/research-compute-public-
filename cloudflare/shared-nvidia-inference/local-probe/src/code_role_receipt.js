@@ -22,6 +22,16 @@ export function sanitizeCodeRoleReceipt(v){
     v.elapsed_ms<0||v.elapsed_ms>120000||
     (v.http_status!==null&&(!Number.isInteger(v.http_status)||
       v.http_status<100||v.http_status>599)))return null;
+ // Diagnostics from the provider are allowlisted *metadata only*. Never
+ // forward reasoning_content, raw final text or arbitrary finish strings.
+ // Older deployed fixture revisions may lack these fields; map to null/unknown.
+ const finish=v.finish_reason??"not_recorded";
+ const allowFinish=new Set(["stop","length","tool_calls","content_filter","other","not_recorded"]);
+ const present=v.final_content_present??null;
+ const reasoning=v.reasoning_content_present??null;
+ if(!allowFinish.has(finish)||
+    (present!==null&&typeof present!=="boolean")||
+    (reasoning!==null&&typeof reasoning!=="boolean"))return null;
  const src=v.source;
  if(v.status==="candidate_unexecuted"&&(
     v.http_status!==200||v.source_valid_shape!==true||
@@ -35,6 +45,8 @@ export function sanitizeCodeRoleReceipt(v){
    model_index:v.model_index,task_id:TASKS[v.task_index][0],
    task_index:v.task_index,status:v.status,provider_calls:1,
    http_status:v.http_status,elapsed_ms:v.elapsed_ms,
+   final_content_present:present,reasoning_content_present:reasoning,
+   finish_reason:finish,
    code:v.status==="candidate_unexecuted"?src:null,
    private_data_exposed:false,model_code_executed:false,
    real_repo_changed:false,synthetic_only:true
