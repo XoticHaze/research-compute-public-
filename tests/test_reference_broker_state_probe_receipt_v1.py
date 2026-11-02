@@ -16,7 +16,7 @@ spec.loader.exec_module(probe)
 
 def synthetic_key() -> dict:
     # Structurally valid uncompressed encoding; the probe is not an EC validator.
-    point = b"\\x04" + bytes(range(1, 65))
+    point = b"\x04" + bytes(range(1, 65))
     return {"public_b64": base64.b64encode(point).decode("ascii"),
             "key_id": "sha256:" + hashlib.sha256(point).hexdigest()}
 
@@ -44,8 +44,8 @@ class BrokerProbeTests(unittest.TestCase):
         for bad in [
             {**valid, "key_id": "sha256:" + "f" * 64},
             {**valid, "public_b64": "%%%"},
-            {**valid, "public_b64": base64.b64encode(b"\\x02" * 33).decode()},
-            {**valid, "public_b64": base64.b64encode(b"\\x04" + bytes(63)).decode()},
+            {**valid, "public_b64": base64.b64encode(b"\x02" * 33).decode()},
+            {**valid, "public_b64": base64.b64encode(b"\x04" + bytes(63)).decode()},
             {"key_id": valid["key_id"]}, {}, [],
         ]:
             with self.subTest(bad=bad):
