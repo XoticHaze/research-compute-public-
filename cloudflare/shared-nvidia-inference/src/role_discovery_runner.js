@@ -15,7 +15,7 @@ export async function runDiscoveryCase({modelIndex,taskIndex,providerFetch,now=(
   model:MODELS[modelIndex],model_index:modelIndex,task_id:task.id,task_index:taskIndex,
   skill:task.skill,status:"not_started",http_status:null,provider_calls:0,
   latency_ms:0,format_valid:false,checks_passed:0,checks_total:0,passed:false,
-  human_review_required:task.id==="operator_explanation",
+  human_review_required:task.id==="operator_explanation"||task.id==="operator_explanation_holdout",
   finish_reason:"not_recorded",prompt_tokens:null,completion_tokens:null,
   reasoning_tokens:null,raw_output_included:false,private_data_used:false,
   production_authorized:false};
