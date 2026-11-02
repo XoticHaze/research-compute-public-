@@ -111,3 +111,27 @@ test("reasoning and document workloads include long conflicting provenance archi
  for(const c of CASES.filter(x=>x.domain==="portfolio_exposure"))
   assert.equal(supportingDossier(c.index),"");
 });
+
+test("model receives explicit role vocabulary and types instead of hidden exact-label tests",()=>{
+ for(const c of CASES){
+  const prompt=messagesForCase(c.index)[1].content;
+  assert(prompt.includes("Output contract:"),c.id);
+  for(const [key,value] of Object.entries(c.expected)){
+   assert(prompt.includes(key+": "),c.id+" "+key);
+   if(typeof value==="boolean")assert(prompt.includes(key+": boolean"),c.id);
+   if(Array.isArray(value))assert(prompt.includes(key+": array of unique string IDs"),c.id);
+   if(typeof value==="string"&&key!=="message")
+    assert(prompt.includes(key+": string; allowed values "),c.id);
+  }
+ }
+});
+test("field-grade contracts accept numeric tolerance and unordered unique ID sets",()=>{
+ const c=CASES[0],rev={...c.expected,rejected:[...c.expected.rejected].reverse()};
+ assert.equal(gradeCase(0,JSON.stringify(rev)).passed,true);
+ assert.equal(gradeCase(0,JSON.stringify({...rev,rejected:["P2","P2"]})).passed,false);
+ const quote=CASES[16],round={...quote.expected,cost_usd:156.20000000000002,
+  margin_usd:83.80000000000001};
+ assert.equal(gradeCase(16,JSON.stringify(round)).passed,true);
+ const bad={...round,margin_usd:88.8};
+ assert.equal(gradeCase(16,JSON.stringify(bad)).passed,false);
+});
