@@ -9,7 +9,7 @@ function req(url,obj){const raw=JSON.stringify(obj);return new Request(url,{meth
  headers:{"content-type":"application/json","content-length":String(raw.length)},body:raw});}
 const safeReceipt={schema:"commandcenter.nvidia_discovery_case.v1",
  model:"poolside/laguna-xs-2.1",model_index:0,task_id:"tradeoff_analysis",task_index:3,
- skill:"uncertainty_aware_analysis",status:"scored_pass",http_status:200,provider_calls:1,
+ skill:"uncertainty_aware_analysis",status:"scored_pass",http_status:200,provider_calls:1,failure_class:"none",
  latency_ms:650,format_valid:true,checks_passed:4,checks_total:4,passed:true,
  human_review_required:false,finish_reason:"stop",
  prompt_tokens:100,completion_tokens:300,reasoning_tokens:25,
@@ -68,6 +68,8 @@ test("cross-skill sanitizer refuses forged identity and authorization fields",()
  assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,raw_output_included:true}),null);
  assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,passed:true,status:"scored_fail"}),null);
  assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,finish_reason:"secret"}),null);
+ assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,failure_class:"timeout"}),null);
+ assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,failure_class:"PRIVATE_ERROR"}),null);
  assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,completion_tokens:100000000}),null);
  assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,reasoning_tokens:"300"}),null);
 });
