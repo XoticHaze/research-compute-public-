@@ -42,6 +42,7 @@ test("two fixed models across five real challenge types, without any executed to
   assert.equal(r.completion_tokens,432);
   assert.equal(r.reasoning_tokens,230);
   assert.equal(r.http_status,200);
+  assert.equal(r.failure_class,"none");
   assert.equal(r.raw_output_included,false);
   assert.equal(r.production_authorized,false);
   assert.equal(r.private_data_used,false);
@@ -58,14 +59,17 @@ test("provider 429 is bounded one call and never misreported as failed model abi
  assert.equal(calls,1);
  assert.equal(r.provider_calls,1);
  assert.equal(r.status,"provider_rate_limited");
+ assert.equal(r.failure_class,"rate_limited");
  assert.equal(r.passed,false);
  assert.equal(r.checks_total,0);
 });
 test("HTTP denials, response errors, and false facts keep distinct failure classifications",async()=>{
  const denied=await runDiscoveryCase({modelIndex:0,taskIndex:0,providerFetch:async()=>({status:403})});
  assert.equal(denied.status,"provider_unavailable");
+ assert.equal(denied.failure_class,"provider_http");
  const malformed=await runDiscoveryCase({modelIndex:0,taskIndex:0,providerFetch:async()=>({status:200,json:async()=>{throw Error("SECRET_SHOULD_NOT_LEAK");}})});
  assert.equal(malformed.status,"provider_transport_or_decode_failure");
+ assert.equal(malformed.failure_class,"response_decode");
  assert(!JSON.stringify(malformed).includes("SECRET"));
  const wrong=await runDiscoveryCase({modelIndex:1,taskIndex:3,providerFetch:async()=>({status:200,json:async()=>({choices:[{finish_reason:"length",message:{content:'{"candidate":"B","reason":"latency","cost_known":true,"production_approved":true}'}}]})})});
  assert.equal(wrong.status,"scored_fail");
@@ -77,4 +81,15 @@ test("caller cannot select arbitrary models or task IDs",async()=>{
  for(const args of [{modelIndex:2,taskIndex:0},{modelIndex:0,taskIndex:10},{modelIndex:"0",taskIndex:0},{modelIndex:0,taskIndex:0,providerFetch:null}]){
   await assert.rejects(()=>runDiscoveryCase({...args,providerFetch:args.providerFetch??null}),/invalid_fixed_discovery_selector/);
  }
+});
+
+test("provider timeout is separately recognized and never becomes a capability fail",async()=>{
+ const timed=await runDiscoveryCase({modelIndex:1,taskIndex:6,providerFetch:async()=>{
+  const e=new Error("PRIVATE_TRANSPORT_DETAILS");e.name="AbortError";throw e;
+ }});
+ assert.equal(timed.status,"provider_transport_or_decode_failure");
+ assert.equal(timed.failure_class,"timeout");
+ assert.equal(timed.checks_total,0);
+ assert.equal(timed.provider_calls,1);
+ assert(!JSON.stringify(timed).includes("PRIVATE_TRANSPORT_DETAILS"));
 });
