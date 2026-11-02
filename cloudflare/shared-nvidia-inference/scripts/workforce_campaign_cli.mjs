@@ -10,9 +10,10 @@ import {evaluateWorkforceReadiness} from "../src/workforce_role_selector.js";
 const URL="http://127.0.0.1:8787/workforce-case";
 const SCHEMA="commandcenter.workforce_campaign_progress.v1";
 const STOP=new Set(["provider_rate_limited","catalog_unavailable",
+ "provider_upstream_error",
  "transport_or_decoding_failure"]);
 const DONE=new Set(["scored_pass","scored_fail","human_review_required",
- "tool_attempt_rejected","model_http_unavailable"]);
+ "tool_attempt_rejected","model_http_unavailable","request_profile_rejected"]);
 const safeInteger=(v)=>Number.isSafeInteger(v)&&v>=0;
 const idKey=(r)=>r.model_index+":"+r.case_index;
 export function newCampaign({sourceSha,runId,modelIndex=0,caseIndex=0}){
@@ -87,7 +88,8 @@ export async function runCampaign({state,callCase,limit=64,onCheckpoint=async()=
    outcome="unclassified_provider_case";
   }
   if(outcome==="session_call_limit_reached"){
-   if(safe.status==="model_http_unavailable"&&[403,404,410].includes(safe.completion_status)){
+   if(["model_http_unavailable","request_profile_rejected"].includes(safe.status)&&
+       [400,403,404,410].includes(safe.completion_status)){
     c=0;m++; // Unsupported/inaccessible model: avoid 31 pointless repetitions.
    }else{
     c++;
@@ -141,7 +143,7 @@ async function main(){
  // Runtime budget affects only this session; no lifetime catalog or task cap.
  const callCase=async selector=>{
   const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),125000);
+  const timeout=setTimeout(()=>controller.abort(),270000);
   try{
    const res=await fetch(URL,{method:"POST",redirect:"manual",
     headers:{"content-type":"application/json"},
