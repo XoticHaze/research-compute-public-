@@ -189,7 +189,12 @@ export default {
       const authFetch=async(endpoint,options)=>{
         const controller=new AbortController();
         const isCatalog=options.method==="GET";
-        const timer=setTimeout(()=>controller.abort(),isCatalog?20000:90000);
+        // One measured slow-model diagnostic, not an unconstrained timeout.
+        // The model identifier is from our authenticated source-owned catalog.
+        const isMiniMax=!isCatalog&&typeof options.body==="string"&&
+          options.body.includes('"model":"minimaxai/minimax-m3.1-flash"');
+        const timer=setTimeout(()=>controller.abort(),
+          isCatalog?20000:isMiniMax?240000:90000);
         try{return await pacedProviderFetch(endpoint,{...options,headers:{
           "Authorization":"Bearer "+key,"Content-Type":"application/json"
         },redirect:"manual",signal:controller.signal});}
