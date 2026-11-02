@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import app from "../src/index.js";
 import {createCaller} from "../local-probe/src/index.js";
 import {sanitizeDiscoveryReceipt} from "../local-probe/src/discovery_receipt.js";
+import {MODELS} from "../src/code_role_suite.js";
+import {TASKS as DISCOVERY} from "../src/role_discovery_high_signal.js";
 const local="http://127.0.0.1:8787/discovery-case";
 const remote="https://cc-shared-nvidia-inference.invalid/internal/diagnostics/nvidia-discovery";
 function req(url,obj){const raw=JSON.stringify(obj);return new Request(url,{method:"POST",
@@ -95,4 +97,69 @@ test("202 pending is sanitizable but cannot be promoted as correct model respons
  assert(safe);
  assert.equal(safe.status,"provider_pending");
  assert.equal(sanitizeDiscoveryReceipt({...pending,passed:true}),null);
+});
+
+test("one authenticated local session runs exactly 20 distinct fixed synthetic cases without replay",async()=>{
+ let calls=0;
+ const instance=createCaller();
+ const env={NVIDIA_SERVICE:{fetch:async request=>{
+   calls++;
+   const selector=await request.json();
+   const task=DISCOVERY[selector.task_index];
+   assert(task);
+   return new Response(JSON.stringify({...safeReceipt,
+     model:MODELS[selector.model_index],model_index:selector.model_index,
+     task_id:task.id,task_index:selector.task_index,skill:task.skill,
+     human_review_required:selector.task_index===4||selector.task_index===9,
+     status:selector.task_index===4||selector.task_index===9?"human_review_required":"scored_fail",
+     passed:false,format_valid:false,checks_total:0,checks_passed:0,
+     final_content_present:false,reasoning_content_present:false
+   }),{status:200});
+ }}};
+ for(let m=0;m<2;m++)for(let t=0;t<10;t++){
+  const response=await instance.fetch(req(local,{model_index:m,task_index:t}),env);
+  assert.equal(response.status,200,"case "+m+":"+t);
+ }
+ assert.equal(calls,20);
+ const repeated=await instance.fetch(req(local,{model_index:0,task_index:0}),env);
+ assert.equal(repeated.status,409);
+ const cross=await instance.fetch(req("http://127.0.0.1:8787/role-code-case",{model_index:0,task_index:0}),env);
+ assert.equal(cross.status,409);
+ assert.equal(calls,20);
+});
+test("provider 429 stops any remaining cases in the same loopback session",async()=>{
+ let calls=0;
+ const instance=createCaller();
+ const env={NVIDIA_SERVICE:{fetch:async request=>{
+   calls++;
+   const input=await request.json();
+   return new Response(JSON.stringify({...safeReceipt,
+     model:MODELS[input.model_index],model_index:input.model_index,
+     task_id:DISCOVERY[input.task_index].id,task_index:input.task_index,
+     skill:DISCOVERY[input.task_index].skill,
+     status:"provider_rate_limited",failure_class:"rate_limited",
+     http_status:429,passed:false,format_valid:false,
+     checks_total:0,checks_passed:0,
+     final_content_present:null,reasoning_content_present:null,
+     finish_reason:"not_recorded",prompt_tokens:null,
+     completion_tokens:null,reasoning_tokens:null
+   }),{status:503});
+ }}};
+ const first=await instance.fetch(req(local,{model_index:0,task_index:0}),env);
+ assert.equal(first.status,502);
+ const second=await instance.fetch(req(local,{model_index:1,task_index:1}),env);
+ assert.equal(second.status,409);
+ assert.equal(calls,1);
+});
+
+test("Service Binding transport failure closes discovery session before another case",async()=>{
+ let calls=0;
+ const instance=createCaller();
+ const env={NVIDIA_SERVICE:{fetch:async()=>{calls++;throw Error("private hidden host");}}};
+ const first=await instance.fetch(req(local,{model_index:0,task_index:2}),env);
+ assert.equal(first.status,502);
+ assert(!JSON.stringify(await first.json()).includes("private hidden host"));
+ const next=await instance.fetch(req(local,{model_index:1,task_index:2}),env);
+ assert.equal(next.status,409);
+ assert.equal(calls,1);
 });
