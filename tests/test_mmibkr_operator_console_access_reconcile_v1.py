@@ -87,14 +87,20 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertIn("promotion_reader_status != 401", text)
         self.assertIn("MMIBKR_OPERATOR_CONSOLE_PROMOTION_READER_UNAUTHENTICATED_DENIED=1", text)
 
-    def test_worker_verifier_secrets_are_bound_after_access_app_exists(self):
+    def test_worker_verifier_secrets_are_bound_in_one_approved_deploy(self):
         text = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("ACCESS_TEAM_DOMAIN", text)
-        self.assertIn("ACCESS_AUD", text)
-        self.assertIn("ACCESS_ALLOWED_EMAILS", text)
-        self.assertIn("wrangler@4.131.2 secret put ACCESS_TEAM_DOMAIN", text)
-        self.assertIn("wrangler@4.131.2 secret put ACCESS_AUD", text)
-        self.assertIn("wrangler@4.131.2 secret put ACCESS_ALLOWED_EMAILS", text)
+        prepare = "Prepare single-version sealed Worker secret bundle"
+        deploy = "Deploy locked operator-console Worker and private static assets"
+        self.assertIn(prepare, text)
+        self.assertLess(text.index("Reconcile exact-email Cloudflare Access application"), text.index(prepare))
+        self.assertLess(text.index(prepare), text.index(deploy))
+        for secret in ("ACCESS_TEAM_DOMAIN", "ACCESS_AUD", "ACCESS_ALLOWED_EMAILS",
+                       "PI_OBSERVATION_PUBLISHER_APPROVED_SHA", "PI_BOT_OPAQUE_SOURCE_BINDING_ID"):
+            self.assertIn(secret, text)
+        self.assertIn("os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600", text)
+        self.assertIn('--secrets-file "$secret_file"', text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_WORKER_DEPLOYED_SINGLE_VERSION=1", text)
+        self.assertNotIn("wrangler@4.131.2 secret put", text)
 
     def test_access_preflight_precedes_worker_deploy(self):
         import os
@@ -128,26 +134,21 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
 
     def test_no_email_allowlist_keeps_worker_locked(self):
         text = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn(
-            "MMIBKR_OPERATOR_CONSOLE_ACCESS_BINDING=LOCKED_EMAIL_ALLOWLIST_MISSING",
-            text,
-        )
-        self.assertIn(
-            "MMIBKR_OPERATOR_CONSOLE_ACCESS_BINDING=LOCKED_UNCONFIGURED",
-            text,
-        )
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_BINDING=LOCKED_EMAIL_ALLOWLIST_MISSING", text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_SINGLE_DEPLOY_ACCESS_MISSING=1", text)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_SINGLE_DEPLOY_BOT_APPROVAL_MISSING=1", text)
 
     def test_access_is_reconciled_before_worker_deploy_and_control_plane_proof(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         preflight = "Preflight Access release credentials before Worker deployment"
         access_step = "Reconcile exact-email Cloudflare Access application"
+        prepare_step = "Prepare single-version sealed Worker secret bundle"
         deploy_step = "Deploy locked operator-console Worker and private static assets"
         control_plane_step = "Prove deployed Worker through Cloudflare control plane"
-        bind_step = "Bind Worker defense-in-depth Access verifier"
         self.assertLess(text.index(preflight), text.index(access_step))
-        self.assertLess(text.index(access_step), text.index(deploy_step))
+        self.assertLess(text.index(access_step), text.index(prepare_step))
+        self.assertLess(text.index(prepare_step), text.index(deploy_step))
         self.assertLess(text.index(deploy_step), text.index(control_plane_step))
-        self.assertLess(text.index(control_plane_step), text.index(bind_step))
         self.assertIn("/workers/scripts/", text)
         self.assertIn("/settings", text)
         self.assertIn("MMIBKR_OPERATOR_CONSOLE_CONTROL_PLANE=READY", text)
@@ -157,10 +158,13 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
 
     def test_missing_access_binding_is_terminal_not_a_successful_deploy(self):
         text = WORKFLOW.read_text(encoding="utf-8")
-        access = text.split("      - name: Reconcile exact-email Cloudflare Access application", 1)[1].split("      - name: Deploy locked operator-console Worker", 1)[0]
-        bind = text.split("      - name: Bind Worker defense-in-depth Access verifier", 1)[1].split("      - name: Prove unauthenticated surface fails closed", 1)[0]
-        self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_BINDING=LOCKED_EMAIL_ALLOWLIST_MISSING'\n            exit 43", access)
-        self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_BINDING=LOCKED_UNCONFIGURED'\n            exit 44", bind)
+        access = text.split("      - name: Reconcile exact-email Cloudflare Access application", 1)[1].split("      - name: Prepare single-version sealed Worker secret bundle", 1)[0]
+        prepare = text.split("      - name: Prepare single-version sealed Worker secret bundle", 1)[1].split("      - name: Deploy locked operator-console Worker", 1)[0]
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_ACCESS_BINDING=LOCKED_EMAIL_ALLOWLIST_MISSING", access)
+        self.assertIn("exit 43", access)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_SINGLE_DEPLOY_ACCESS_MISSING=1", prepare)
+        self.assertIn("MMIBKR_OPERATOR_CONSOLE_SINGLE_DEPLOY_BOT_APPROVAL_MISSING=1", prepare)
+        self.assertIn("os.O_EXCL,0o600", prepare)
 
     def test_public_actions_never_echo_cloudflare_provider_error_bodies(self):
         text = WORKFLOW.read_text(encoding="utf-8")
@@ -355,6 +359,35 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertIn("operator_browser_method_not_supported", worker)
         self.assertLess(worker.index("operator_browser_route_not_supported"), worker.index("return secureAssetResponse(await env.ASSETS.fetch(request));"))
         self.assertIn("request.method !== 'GET' && request.method !== 'HEAD'", worker)
+
+
+    def test_failed_release_rollback_is_pinned_after_real_deploy_and_fail_closed(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        pre = "Capture exact predeployment Worker version for guarded rollback"
+        deploy = "Deploy locked operator-console Worker and private static assets"
+        post = "Capture exact postdeployment Worker version"
+        rollback = "Restore exact previous Worker version after failed release proof"
+        self.assertLess(text.index(pre), text.index(deploy))
+        self.assertLess(text.index(pre), text.index("Reconcile exact-email Cloudflare Access application"))
+        self.assertIn("mmibkr_operator_console_rollback_guard_v1.py verify-before", text)
+        self.assertLess(text.index(deploy), text.index(post))
+        self.assertLess(text.index(post), text.index("Prove deployed Worker through Cloudflare control plane"))
+        self.assertLess(text.index("Publish scoped R2 MM deployment receipt"), text.index(rollback))
+        self.assertLess(text.index(rollback), text.index("Destroy private deployment source"))
+        self.assertIn("if: ${{ failure() }}", text)
+        self.assertIn("mmibkr_operator_console_rollback_guard_v1.py capture-before", text)
+        self.assertIn("mmibkr_operator_console_rollback_guard_v1.py capture-after", text)
+        self.assertIn("mmibkr_operator_console_rollback_guard_v1.py rollback-if-matching", text)
+        guard = (ROOT / "scripts" / "mmibkr_operator_console_rollback_guard_v1.py").read_text(encoding="utf-8")
+        for required in ("deployments?per_page=1", "MMIBKR_WORKER_ROLLBACK_SPLIT_OR_MISSING=1",
+                         "MMIBKR_WORKER_ROLLBACK_CONCURRENT_CHANGE_HELD=1",
+                         "MMIBKR_WORKER_ROLLBACK=HELD_NO_POSTDEPLOY_PIN",
+                         "MMIBKR_WORKER_ROLLBACK_READBACK_FAILED=1",
+                         "os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600"):
+            self.assertIn(required, guard)
+        self.assertIn('"rollback", old,', guard)
+        self.assertIn('"--message", "Restore pinned prior version after failed release proof"', guard)
+
 
 
 if __name__ == "__main__":

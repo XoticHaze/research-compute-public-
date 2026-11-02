@@ -3,6 +3,8 @@ import { validatePiBotLiveEnvelope, piBotLiveOperatorView, verifyPiBotRootDigest
 import { OperatorState } from '../cloudflare/operator-console/src/index.js'
 import { createHash } from 'node:crypto'
 const SOURCE_BINDING = 'fixture-opaque-root-source-0123456789abcdef'
+const PUBLISHER_SHA='f'.repeat(40)
+const provenance={schema:'mmibkr.pi_bot_publisher_provenance.v1',workflow_sha:PUBLISHER_SHA,run_id:'123456',verified_at_utc:'2026-11-01T04:19:34Z'}
 const now=Date.parse('2026-11-01T04:20:00Z')
 const stamp='2026-11-01T04:19:30Z',rid='pi-bot-live-status-202611010419'
 const observation={
@@ -19,10 +21,9 @@ const observation={
 function envelope(){
   return {schema:'mmibkr.pi_bot_live_observation_envelope.v1',node_id:'cc-pi4',
     source_binding_id:SOURCE_BINDING,
-    result_commit_sha:'a'.repeat(40),result_blob_sha:'b'.repeat(40),
+    source_receipt_id:'a'.repeat(64),
     receipt:{schema:'commandcenter.pi.bot_release_result.v1',node_id:'cc-pi4',
-      request_id:rid,action:'pi.bot.live_status',source_sha:'c'.repeat(40),
-      image_digest:'d'.repeat(64),request_sha256:'e'.repeat(64),
+      request_id:rid,action:'pi.bot.live_status',
       status:'passed',message:'LIVE_SWITCHES_ENABLED',
       started_at:'2026-11-01T04:19:10Z',finished_at:stamp,
       broker_mutation_attempted:false,gateway_restart_attempted:false,
@@ -33,17 +34,20 @@ assert.throws(()=>validatePiBotLiveEnvelope(e,now),/pi_bot_observation_rejected/
 assert.throws(()=>validatePiBotLiveEnvelope(e,now,'wrong-'+SOURCE_BINDING),/pi_bot_observation_rejected/)
 assert.equal(validatePiBotLiveEnvelope(e,now,SOURCE_BINDING).replayId,rid)
 const record={schema:'mmibkr.pi_bot_live_store.v1',envelope:e,
-  stored_at_utc:'2026-11-01T04:19:35Z'}
-assert.equal(piBotLiveOperatorView(record,now,SOURCE_BINDING).live_switches_enabled,true)
-assert.equal(piBotLiveOperatorView(record,now,SOURCE_BINDING).permission_mutation_attempted,false)
+  stored_at_utc:'2026-11-01T04:19:35Z',publisher_provenance:provenance}
+assert.equal(piBotLiveOperatorView(record,now,SOURCE_BINDING,PUBLISHER_SHA).live_switches_enabled,true)
+assert.equal(piBotLiveOperatorView(record,now,SOURCE_BINDING,PUBLISHER_SHA).permission_mutation_attempted,false)
 const fail=x=>assert.throws(()=>validatePiBotLiveEnvelope(x,now,SOURCE_BINDING),/pi_bot_observation_rejected/)
 fail({...envelope(),source_binding_id:'wrong-source-binding'})
 fail({...envelope(),source_repo:'fixture/not-an-admitted-field'})
+fail({...envelope(),result_commit_sha:'a'.repeat(40)})
+fail({...envelope(),source_receipt_id:'a'.repeat(40)})
+assert.equal(piBotLiveOperatorView(record,now,SOURCE_BINDING,PUBLISHER_SHA).receipt_sha,'a'.repeat(64))
 fail({...envelope(),receipt:{...e.receipt,action:'pi.bot.no_submit_start'}})
 fail({...envelope(),receipt:{...e.receipt,bot_started:true}})
 fail({...envelope(),receipt:{...e.receipt,live_status:{...observation,broker_submission_verified:true}}})
 fail({...envelope(),receipt:{...e.receipt,live_status:{...observation,live_switches_enabled:false}}})
-assert.throws(()=>piBotLiveOperatorView(record,now+12*60000,SOURCE_BINDING),/pi_bot_observation_rejected/)
+assert.throws(()=>piBotLiveOperatorView(record,now+12*60000,SOURCE_BINDING,PUBLISHER_SHA),/pi_bot_observation_rejected/)
 console.log('Authenticated Pi bot-origin public ingestion contract: PASS')
 
 
@@ -67,7 +71,7 @@ const rootRecord = {
 const rootEnvelope = {
   schema:'mmibkr.pi_bot_live_observation_envelope.v2',node_id:'cc-pi4',
   source_binding_id:SOURCE_BINDING,
-  result_commit_sha:'d'.repeat(40),result_blob_sha:'e'.repeat(40),record:rootRecord,
+  source_receipt_id:'d'.repeat(64),record:rootRecord,
 };
 const validatedRoot=validatePiBotLiveEnvelope(rootEnvelope,now,SOURCE_BINDING);
 assert.equal(validatedRoot.replayId,'root:'+rootId);
@@ -75,13 +79,16 @@ assert.equal(validatedRoot.observedAt,stamp);
 assert.equal(await verifyPiBotRootDigest(rootEnvelope),true);
 const rootStored={
   schema:'mmibkr.pi_bot_live_store.v1',envelope:rootEnvelope,
-  stored_at_utc:'2026-11-01T04:19:35Z',
+  stored_at_utc:'2026-11-01T04:19:35Z',publisher_provenance:provenance,
 };
-const rootView=piBotLiveOperatorView(rootStored,now,SOURCE_BINDING);
+const rootView=piBotLiveOperatorView(rootStored,now,SOURCE_BINDING,PUBLISHER_SHA);
 assert.equal(rootView.schema,'mmibkr.pi_bot_live_operator_view.v1');
 assert.equal(rootView.source,'authenticated_root_bot_status');
 assert.equal(rootView.live_switches_enabled,true);
+assert.equal(rootView.gateway_network_namespace_matched,true);
 assert.equal(rootView.broker_submission_verified,false);
+assert.equal(rootView.public_publisher_oidc_verified,true);
+assert.throws(()=>piBotLiveOperatorView(rootStored,now,SOURCE_BINDING,'e'.repeat(40)),/pi_bot_observation_rejected/);
 const changedDigest=structuredClone(rootEnvelope);
 changedDigest.record.snapshot.selected_live_policies.MNQ=false;
 await assert.rejects(()=>verifyPiBotRootDigest(changedDigest),/pi_bot_observation_rejected/);
@@ -104,7 +111,7 @@ const storage={
   transaction:async fn=>fn({get:async k=>memory.get(k),put:async(k,v)=>{memory.set(k,v)}}),
   get:async k=>memory.get(k)
 };
-const worker=new OperatorState({storage},{PI_BOT_OPAQUE_SOURCE_BINDING_ID:SOURCE_BINDING});
+const worker=new OperatorState({storage},{PI_BOT_OPAQUE_SOURCE_BINDING_ID:SOURCE_BINDING,PI_OBSERVATION_PUBLISHER_APPROVED_SHA:PUBLISHER_SHA});
 const originalNow=Date.now;
 try {
   const firstTime=Date.parse('2026-11-01T00:00:00Z');
@@ -115,13 +122,12 @@ try {
     const incoming=structuredClone(rootEnvelope);
     incoming.record.observed_at=observed;
     incoming.record.observation_id=rid;
-    incoming.result_commit_sha=(i+1).toString(16).padStart(40,'0');
-    incoming.result_blob_sha=(i+501).toString(16).padStart(40,'0');
+    incoming.source_receipt_id=(i+1).toString(16).padStart(64,'0');
     const instant=firstTime+i*120000+30000;
     Date.now=()=>instant;
     const request=()=>new Request('https://operator-state.internal/pi-bot/store',{
       method:'POST',headers:{'content-type':'application/json'},
-      body:JSON.stringify({envelope:incoming})
+      body:JSON.stringify({envelope:incoming,publisher_provenance:{...provenance,verified_at_utc:new Date(instant).toISOString()}})
     });
     const response=await worker.fetch(request());
     assert.equal(response.status,201,'recurring observation '+i+' rejected: '+await response.clone().text());

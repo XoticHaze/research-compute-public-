@@ -715,11 +715,24 @@ export class OperatorState {
     const url = new URL(request.url);
 
     if (request.method === 'POST' && url.pathname === '/pi/store') {
-      let envelope;
-      let sourceEnvelope;
+      let envelope, sourceEnvelope, payload;
       try {
-        sourceEnvelope = (await request.json()).envelope;
-        envelope = validatePiObservationEnvelope(sourceEnvelope);
+        payload = await request.json();
+        sourceEnvelope = payload.envelope;
+        const p = payload.publisher_provenance;
+        const keys = ['schema','workflow_sha','run_id','verified_at_utc'];
+        if (!p || Object.keys(p).length !== keys.length
+            || !keys.every(k => Object.hasOwn(p,k))
+            || p.schema !== 'mmibkr.pi_account_publisher_provenance.v1'
+            || p.workflow_sha !== this.env.PI_OBSERVATION_PUBLISHER_APPROVED_SHA
+            || !/^[a-f0-9]{40}$/.test(String(p.workflow_sha || ''))
+            || !/^[0-9]{4,24}$/.test(String(p.run_id || ''))
+            || !Number.isFinite(Date.parse(p.verified_at_utc))
+            || Date.parse(p.verified_at_utc) > Date.now() + 60000
+            || Date.now() - Date.parse(p.verified_at_utc) > 60000)
+          throw new Error('pi_account_publisher_provenance_rejected');
+        envelope = validatePiObservationEnvelope(sourceEnvelope, Date.now(),
+          this.env.PI_ACCOUNT_OPAQUE_SOURCE_BINDING_ID);
         await verifyPiOutboxSnapshotDigest(sourceEnvelope);
       } catch {
         return json({ error: 'pi_observation_rejected' }, 400);
@@ -743,6 +756,7 @@ export class OperatorState {
         const record = {
           schema: 'mmibkr.pi_account_store.v1', write_id: crypto.randomUUID(),
           stored_at_utc: new Date().toISOString(), envelope: sourceEnvelope,
+          publisher_provenance: payload.publisher_provenance,
         };
         await txn.put('pi_replay_ledger', replayLedger);
         await txn.put('pi_account_latest', record);
@@ -753,19 +767,31 @@ export class OperatorState {
       const observed = await this.ctx.storage.get('pi_account_latest');
       const seen = await this.ctx.storage.get('pi_replay_ledger');
       if (!observed || observed.write_id !== result.record.write_id
-          || observed.envelope?.result_commit_sha !== envelope.result_commit_sha
+          || observed.envelope?.source_receipt_id !== envelope.source_receipt_id
           || !Array.isArray(seen?.entries)
           || !seen.entries.some(row => row.request_id === piReplayIdentity(envelope)
-            && row.result_commit_sha === envelope.result_commit_sha)) {
+            && row.source_receipt_id === envelope.source_receipt_id)) {
         return json({ error: 'pi_observation_readback_failed' }, 502);
       }
       return json({ ok: true, durable_readback_verified: true,
         stored_at_utc: result.record.stored_at_utc, observed_at: envelope.observation.observed_at }, 201);
     }
     if (request.method === 'POST' && url.pathname === '/pi-bot/store') {
-      let envelope, validated;
+      let envelope, validated, provenance;
       try {
-        envelope = (await request.json()).envelope;
+        const payload=await request.json();
+        envelope=payload.envelope;
+        provenance=payload.publisher_provenance;
+        const pk=['schema','workflow_sha','run_id','verified_at_utc'];
+        if (!provenance || Object.keys(provenance).length!==pk.length
+            || !pk.every(k=>Object.prototype.hasOwnProperty.call(provenance,k))
+            || provenance.schema!=='mmibkr.pi_bot_publisher_provenance.v1'
+            || provenance.workflow_sha!==this.env.PI_OBSERVATION_PUBLISHER_APPROVED_SHA
+            || !/^[0-9a-f]{40}$/.test(String(provenance.workflow_sha||''))
+            || !/^[0-9]{4,24}$/.test(String(provenance.run_id||''))
+            || !Number.isFinite(Date.parse(provenance.verified_at_utc))
+            || Date.parse(provenance.verified_at_utc)>Date.now()+60000
+            || Date.now()-Date.parse(provenance.verified_at_utc)>60000) throw new Error('publisher_provenance_rejected');
         validated = validatePiBotLiveEnvelope(envelope, Date.now(), this.env.PI_BOT_OPAQUE_SOURCE_BINDING_ID);
         await verifyPiBotRootDigest(envelope);
       } catch { return json({ error:'pi_bot_observation_rejected' },400); }
@@ -773,18 +799,18 @@ export class OperatorState {
         const old = await txn.get('pi_bot_live_latest');
         const ledger = await txn.get('pi_bot_live_ledger') || [];
         if (!Array.isArray(ledger) || ledger.length > 256) return { reject:'pi_bot_ledger_invalid' };
-        const rid=validated.replayId, commit=validated.resultCommitSha;
+        const rid=validated.replayId, proof=validated.sourceReceiptId;
         // Keep a bounded nonreplay window longer than the 420s signed-input
         // freshness limit. A stale replay is rejected before this transaction,
         // while a healthy 2-minute producer must never fill all 256 slots.
         const minSeen=Date.now()-15*60*1000;
         const liveLedger=ledger.filter(row => {
-          if (!row || typeof row.request_id !== 'string' || typeof row.commit !== 'string'
-              || !/^[a-f0-9]{40}$/.test(row.commit)) return true; // fail-closed legacy entry
+          if (!row || typeof row.request_id !== 'string' || typeof row.source_receipt_id !== 'string'
+              || !/^[a-f0-9]{64}$/.test(row.source_receipt_id)) return true; // fail-closed legacy entry
           if (!Number.isSafeInteger(row.observed_at_ms)) return true; // legacy entry
           return row.observed_at_ms>=minSeen;
         });
-        if (liveLedger.some(row=>row?.request_id===rid || row?.commit===commit))
+        if (liveLedger.some(row=>row?.request_id===rid || row?.source_receipt_id===proof))
           return { reject:'pi_bot_observation_replay' };
         const oldTime = Date.parse(old?.envelope?.receipt?.finished_at
           || old?.envelope?.record?.observed_at || '');
@@ -793,16 +819,16 @@ export class OperatorState {
         if (liveLedger.length >= 256) return { reject:'pi_bot_ledger_capacity_held' };
         const record = {
           schema:'mmibkr.pi_bot_live_store.v1',write_id:crypto.randomUUID(),
-          stored_at_utc:new Date().toISOString(), envelope
+          stored_at_utc:new Date().toISOString(), envelope, publisher_provenance:provenance
         };
-        await txn.put('pi_bot_live_ledger',[...liveLedger,{request_id:rid,commit,observed_at_ms:validated.observedAtMs}]);
+        await txn.put('pi_bot_live_ledger',[...liveLedger,{request_id:rid,source_receipt_id:proof,observed_at_ms:validated.observedAtMs}]);
         await txn.put('pi_bot_live_latest',record);
         return { record };
       });
       if (outcome.reject) return json({error:outcome.reject},409);
       const readback=await this.ctx.storage.get('pi_bot_live_latest');
       if (!readback || readback.write_id!==outcome.record.write_id
-          || readback.envelope.result_commit_sha!==validated.resultCommitSha)
+          || readback.envelope.source_receipt_id!==validated.sourceReceiptId)
         return json({error:'pi_bot_observation_readback_failed'},502);
       return json({ok:true,durable_readback_verified:true,
         observed_at:validated.observedAt,
@@ -943,7 +969,8 @@ export default {
     if (request.method === 'POST' && url.pathname === '/v1/pi-bot-live-status') {
       // Same approved exact-source OIDC publisher, distinct bot-origin action
       // and replay scope. Never derive it from the paper/account envelope.
-      try { await verifyPiObservationPublisher(request, env); }
+      let publisher;
+      try { publisher=await verifyPiObservationPublisher(request, env); }
       catch { return json({error:'unauthorized'},401); }
       const length=Number(request.headers.get('content-length')||0);
       if (Number.isFinite(length) && length>8192) return json({error:'pi_bot_payload_too_large'},413);
@@ -957,7 +984,11 @@ export default {
       } catch { return json({error:'pi_bot_observation_rejected'},400); }
       const result=await stateStub(env).fetch(new Request('https://operator-state.internal/pi-bot/store',{
         method:'POST',headers:{'content-type':'application/json'},
-        body:JSON.stringify({envelope}),
+        body:JSON.stringify({envelope,publisher_provenance:{
+          schema:'mmibkr.pi_bot_publisher_provenance.v1',
+          workflow_sha:env.PI_OBSERVATION_PUBLISHER_APPROVED_SHA,
+          run_id:publisher.run_id,verified_at_utc:new Date().toISOString(),
+        }}),
       }));
       if (!result.ok) return result;
       const receipt=await result.json();
@@ -985,14 +1016,18 @@ export default {
           return json({ error: 'pi_observation_too_large' }, 413);
         }
         incoming = JSON.parse(raw);
-        envelope = validatePiObservationEnvelope(incoming);
+        envelope = validatePiObservationEnvelope(incoming, Date.now(), env.PI_ACCOUNT_OPAQUE_SOURCE_BINDING_ID);
         await verifyPiOutboxSnapshotDigest(incoming);
       } catch {
         return json({ error: 'pi_observation_rejected' }, 400);
       }
       const stored = await stateStub(env).fetch(new Request('https://operator-state.internal/pi/store', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ envelope: incoming, publisher }),
+        body: JSON.stringify({ envelope: incoming, publisher_provenance: {
+          schema: 'mmibkr.pi_account_publisher_provenance.v1',
+          workflow_sha: env.PI_OBSERVATION_PUBLISHER_APPROVED_SHA,
+          run_id: publisher.run_id, verified_at_utc: new Date().toISOString(),
+        } }),
       }));
       if (!stored.ok) return stored;
       const receipt = await stored.json();
@@ -1226,7 +1261,7 @@ export default {
       // Access-verified human only. No browser-to-Pi/broker requests.
       const stored=await stateStub(env).fetch(new Request('https://operator-state.internal/pi-bot/latest'));
       if (!stored.ok) return stored;
-      try { return json(piBotLiveOperatorView(await stored.json(), Date.now(), env.PI_BOT_OPAQUE_SOURCE_BINDING_ID),200); }
+      try { return json(piBotLiveOperatorView(await stored.json(), Date.now(), env.PI_BOT_OPAQUE_SOURCE_BINDING_ID, env.PI_OBSERVATION_PUBLISHER_APPROVED_SHA),200); }
       catch { return json({error:'pi_bot_observation_stale_or_unverified'},503); }
     }
 
@@ -1234,7 +1269,8 @@ export default {
       // Cloudflare Access already authenticated the human above. No browser broker socket.
       const stored = await stateStub(env).fetch(new Request('https://operator-state.internal/pi/latest'));
       if (!stored.ok) return stored;
-      try { return json(piOperatorView(await stored.json()), 200); }
+      try { return json(piOperatorView(await stored.json(), Date.now(),
+        env.PI_ACCOUNT_OPAQUE_SOURCE_BINDING_ID, env.PI_OBSERVATION_PUBLISHER_APPROVED_SHA), 200); }
       catch { return json({ error: 'pi_observation_stale_or_unverified' }, 503); }
     }
 

@@ -6,12 +6,15 @@ to public logs/artifacts. This source alone is NOT publisher or compute admissio
 """
 import base64
 import hashlib
+import hmac
 import json
 import os
 import re
 from datetime import datetime, timezone
 from urllib.parse import quote, urlencode, urlsplit, urlunsplit, parse_qsl
 from urllib.request import Request, build_opener, HTTPRedirectHandler
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+from cryptography.exceptions import InvalidSignature
 
 class RejectRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -120,13 +123,59 @@ def select_record():
     require(-60 <= age <= 420)
     expected = "pibotobs-" + observed.strftime("%Y%m%d%H%M%S") + "-" + digest[:16]
     require(record["observation_id"] == expected and path == prefix + "/" + expected + ".json")
+    # Authenticate the ROOT issuer independently of Git object hashes and OIDC.
+    # The exact same immutable Git tree must contain the detached attestation.
+    att_path = prefix + "/" + expected + ".attestation.json"
+    att_entries = [item for item in tree.get("tree", []) if item.get("type") == "blob"
+                   and item.get("path") == att_path]
+    require(len(att_entries) == 1)
+    att_blob_sha = att_entries[0].get("sha")
+    require(isinstance(att_blob_sha, str) and re.fullmatch(r"[0-9a-f]{40}", att_blob_sha))
+    att_blob = github(root + "/git/blobs/" + att_blob_sha, token)
+    require(att_blob.get("encoding") == "base64")
+    att_raw = base64.b64decode(att_blob["content"], validate=False)
+    require(len(att_raw) <= 2048 and hashlib.sha1(
+        b"blob " + str(len(att_raw)).encode() + bytes([0]) + att_raw).hexdigest() == att_blob_sha)
+    att = json.loads(att_raw)
+    keys = {"schema", "node_id", "observation_id", "observed_at", "record_sha256",
+            "root_source_sha256", "key_id", "signature_b64"}
+    require(isinstance(att, dict) and set(att) == keys)
+    require(att["schema"] == "commandcenter.pi.bot_root_observation_attestation.v1"
+            and att["node_id"] == "cc-pi4" and att["observation_id"] == expected
+            and att["observed_at"] == record["observed_at"])
+    allowed_key_id = os.environ["PI_BOT_ROOT_VERIFY_KEY_ID"]
+    allowed_root_sha = os.environ["PI_BOT_ROOT_SIGNER_SOURCE_SHA256"]
+    require(re.fullmatch(r"[A-Za-z0-9_-]{8,100}", allowed_key_id)
+            and re.fullmatch(r"[0-9a-f]{64}", allowed_root_sha))
+    require(att["key_id"] == allowed_key_id
+            and att["root_source_sha256"] == allowed_root_sha
+            and re.fullmatch(r"[0-9a-f]{64}", str(att["record_sha256"])))
+    record_digest = hashlib.sha256(json.dumps(record, sort_keys=True,
+        separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest()
+    require(att["record_sha256"] == record_digest)
+    unsigned = {k: att[k] for k in keys if k != "signature_b64"}
+    pubkey = base64.b64decode(os.environ["PI_BOT_ROOT_VERIFY_PUBKEY_B64"], validate=True)
+    signature = base64.b64decode(att["signature_b64"], validate=True)
+    require(len(pubkey) == 32 and len(signature) == 64)
+    msg = b"commandcenter.pi.bot_root_observation_attestation.v1" + bytes([0]) + json.dumps(
+        unsigned, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+    try:
+        Ed25519PublicKey.from_public_bytes(pubkey).verify(signature, msg)
+    except (InvalidSignature, ValueError):
+        require(False)
     # Project no private repo/ref/path into the public ingress envelope.
     opaque_binding = os.environ["PI_OUTBOX_OPAQUE_BINDING_ID"]
     require(re.fullmatch(r"[A-Za-z0-9_-]{24,128}", opaque_binding))
+    # HMAC keeps private commit/blob replay identity out of public storage.
+    secret_hex = os.environ["PI_BOT_PRIVATE_RECEIPT_HMAC_KEY_HEX"]
+    require(re.fullmatch(r"[0-9a-f]{64}", secret_hex))
+    proof = hmac.new(bytes.fromhex(secret_hex),
+        b"mmibkr.pi.bot.source-receipt.v1" + bytes([0])
+        + bytes.fromhex(commit_sha) + bytes.fromhex(blob_sha)
+        + bytes.fromhex(record_digest), hashlib.sha256).hexdigest()
     return {
         "schema": ENVELOPE_SCHEMA, "node_id": "cc-pi4",
-        "source_binding_id": opaque_binding,
-        "result_commit_sha": commit_sha, "result_blob_sha": blob_sha,
+        "source_binding_id": opaque_binding, "source_receipt_id": proof,
         "record": record,
     }, record["observed_at"]
 
