@@ -68,7 +68,7 @@ test("catalog only, fixed selectors and unexposed routes",async()=>{
   const notFound=await run({modelIndex:1,caseIndex:0,providerFetch:f.providerFetch});
   assert.equal(notFound.status,"model_index_not_in_authenticated_catalog");
   assert.equal(notFound.provider_calls,1);
-  assert.throws(()=>run({modelIndex:-1,caseIndex:0,providerFetch:()=>{}}),/invalid_fixed_v4_selector/);
-  assert.throws(()=>run({modelIndex:0,caseIndex:60,providerFetch:()=>{}}),/invalid_fixed_v4_selector/);
-  assert.throws(()=>run({modelIndex:0,caseIndex:0,providerFetch:null}),/invalid_fixed_v4_selector/);
+  await assert.rejects(run({modelIndex:-1,caseIndex:0,providerFetch:()=>{}}),/invalid_fixed_v4_selector/);
+  await assert.rejects(run({modelIndex:0,caseIndex:60,providerFetch:()=>{}}),/invalid_fixed_v4_selector/);
+  await assert.rejects(run({modelIndex:0,caseIndex:0,providerFetch:null}),/invalid_fixed_v4_selector/);
 });
