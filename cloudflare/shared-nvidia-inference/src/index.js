@@ -178,7 +178,7 @@ export default {
       if(!selector||typeof selector!=="object"||Array.isArray(selector)||
          Object.keys(selector).sort().join(",")!=="model_index,task_index"||
          !Number.isInteger(selector.model_index)||selector.model_index<0||selector.model_index>1||
-         !Number.isInteger(selector.task_index)||selector.task_index<0||selector.task_index>4)
+         !Number.isInteger(selector.task_index)||selector.task_index<0||selector.task_index>9)
         return json(400,{error:"invalid_fixed_discovery_selector"});
       if(typeof env.NVIDIA_API_KEY?.get!=="function")return json(503,{error:"binding_unavailable"});
       let key;
@@ -208,7 +208,7 @@ export default {
       if(!v||typeof v!=="object"||Array.isArray(v)||
          Object.keys(v).sort().join(",")!=="model_index,task_index"||
          !Number.isInteger(v.model_index)||v.model_index<0||v.model_index>1||
-         !Number.isInteger(v.task_index)||v.task_index<0||v.task_index>4)
+         !Number.isInteger(v.task_index)||v.task_index<0||v.task_index>9)
         return json(400,{error:"invalid_fixed_role_selector"});
       if(typeof env.NVIDIA_API_KEY?.get!=="function")return json(503,{error:"binding_unavailable"});
       let key;
