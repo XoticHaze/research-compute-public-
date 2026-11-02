@@ -6,7 +6,6 @@ on:
       source_sha:
         description: Exact accepted private MM-IBKR source SHA containing the Bot Console
         required: true
-        default: f6f6dcdcbad3df8c5d50cab5ac2652b4781a648d
         type: string
   # Mainline source changes are review/CI only. Only an explicit release fire
   # marker or owner workflow_dispatch can request an Access-locked deploy.
@@ -37,7 +36,6 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  CANONICAL_PRIVATE_SOURCE_SHA: f6f6dcdcbad3df8c5d50cab5ac2652b4781a648d
   OPERATOR_CONSOLE_URL: https://mmibkr-operator-console.slenderiq.workers.dev
 
 jobs:
@@ -85,6 +83,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
+      CANONICAL_PRIVATE_SOURCE_SHA: ${{ vars.MMIBKR_OPERATOR_CONSOLE_APPROVED_SOURCE_SHA }}
       CLOUDFLARE_DEPLOY_TOKEN_R2: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:

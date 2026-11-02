@@ -340,6 +340,17 @@ class OperatorConsoleAccessReconcileTests(unittest.TestCase):
         self.assertIn("MMIBKR_OPERATOR_CONSOLE_OWNER_RELEASE_APPROVAL_MISSING_OR_INVALID=1", text)
 
 
+    def test_private_source_identity_not_literal_or_in_pr_contract_env(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertNotRegex(text, r"(?m)^\s*default:\s*[0-9a-f]{40}\s*$")
+        self.assertNotRegex(text, r"(?m)^\s*CANONICAL_PRIVATE_SOURCE_SHA:\s*[0-9a-f]{40}\s*$")
+        contract_head = text.split("\n  deploy:\n", 1)[0]
+        self.assertNotIn("CANONICAL_PRIVATE_SOURCE_SHA:", contract_head)
+        self.assertIn(
+            "CANONICAL_PRIVATE_SOURCE_SHA: ${{ vars.MMIBKR_OPERATOR_CONSOLE_APPROVED_SOURCE_SHA }}",
+            text,
+        )
+
     def test_selected_pi_backend_preserves_private_source_path_guard(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("expected_root = root / 'extracted' / 'mm-ibkr'", workflow)
