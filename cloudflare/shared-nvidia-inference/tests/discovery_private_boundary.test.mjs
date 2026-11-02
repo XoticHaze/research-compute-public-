@@ -11,7 +11,7 @@ const safeReceipt={schema:"commandcenter.nvidia_discovery_case.v1",
  model:"poolside/laguna-xs-2.1",model_index:0,task_id:"tradeoff_analysis",task_index:3,
  skill:"uncertainty_aware_analysis",status:"scored_pass",http_status:200,provider_calls:1,failure_class:"none",
  latency_ms:650,format_valid:true,checks_passed:4,checks_total:4,passed:true,
- human_review_required:false,finish_reason:"stop",
+ human_review_required:false,finish_reason:"stop",final_content_present:true,reasoning_content_present:false,
  prompt_tokens:100,completion_tokens:300,reasoning_tokens:25,
  raw_output_included:false,private_data_used:false,production_authorized:false};
 test("private Worker rejects disabled diagnostic and arbitrary selectors without provider calls",async()=>{
@@ -72,6 +72,7 @@ test("cross-skill sanitizer refuses forged identity and authorization fields",()
  assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,failure_class:"PRIVATE_ERROR"}),null);
  assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,completion_tokens:100000000}),null);
  assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,reasoning_tokens:"300"}),null);
+ assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,reasoning_content_present:"SECRET"}),null);
 });
 
 test("holdout writing remains human-only while altered facts are independently scored",()=>{
@@ -83,4 +84,15 @@ test("holdout writing remains human-only while altered facts are independently s
  assert.equal(good.passed,false);
  assert.equal(good.human_review_required,true);
  assert.equal(sanitizeDiscoveryReceipt({...writing,passed:true}),null);
+});
+
+test("202 pending is sanitizable but cannot be promoted as correct model response",()=>{
+ const pending={...safeReceipt,status:"provider_pending",http_status:202,
+ failure_class:"pending",passed:false,format_valid:false,checks_total:0,checks_passed:0,
+ final_content_present:null,reasoning_content_present:null,finish_reason:"not_recorded",
+ prompt_tokens:null,completion_tokens:null,reasoning_tokens:null};
+ const safe=sanitizeDiscoveryReceipt(pending);
+ assert(safe);
+ assert.equal(safe.status,"provider_pending");
+ assert.equal(sanitizeDiscoveryReceipt({...pending,passed:true}),null);
 });
