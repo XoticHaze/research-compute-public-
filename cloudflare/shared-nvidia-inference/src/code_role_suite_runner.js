@@ -10,6 +10,7 @@ export async function runCodeRoleCase({modelIndex,taskIndex,providerFetch,now=()
   model:MODELS[modelIndex],model_index:modelIndex,task_id:TASKS[taskIndex].id,
   task_index:taskIndex,status:"not_started",provider_calls:0,http_status:null,
   elapsed_ms:0,source:null,source_valid_shape:false,
+  final_content_present:null,reasoning_content_present:null,finish_reason:"not_recorded",
   synthetic_only:true,private_data_used:false,model_code_executed:false,
   real_repo_changed:false};
  try{
@@ -21,7 +22,13 @@ export async function runCodeRoleCase({modelIndex,taskIndex,providerFetch,now=()
   if(out.http_status===429){out.status="provider_rate_limited";return out;}
   if(out.http_status!==200){out.status="provider_unavailable";return out;}
   const body=await response.json();
-  out.source=sanitizeCandidate(body?.choices?.[0]?.message?.content,taskIndex);
+  const choice=body?.choices?.[0];
+  const message=choice?.message;
+  out.final_content_present=typeof message?.content==="string"&&message.content.trim().length>0;
+  out.reasoning_content_present=typeof message?.reasoning_content==="string"&&message.reasoning_content.trim().length>0;
+  const finish=choice?.finish_reason;
+  out.finish_reason=["stop","length","tool_calls","content_filter"].includes(finish)?finish:"other";
+  out.source=sanitizeCandidate(message?.content,taskIndex);
   out.source_valid_shape=out.source!==null;
   out.status=out.source_valid_shape?"candidate_unexecuted":"format_rejected";
  }catch{out.status="provider_transport_or_decode_failure";}

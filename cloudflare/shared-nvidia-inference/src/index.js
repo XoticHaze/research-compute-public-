@@ -184,7 +184,7 @@ export default {
       try{key=await env.NVIDIA_API_KEY.get();}catch{return json(503,{error:"secret_unavailable"});}
       if(typeof key!=="string"||key.length<8)return json(503,{error:"secret_unavailable"});
       const authFetch=async(endpoint,options)=>{
-        const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),35000);
+        const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),v.model_index===1?75000:35000);
         try{return await pacedProviderFetch(endpoint,{...options,headers:{
           "Authorization":"Bearer "+key,"Content-Type":"application/json"
         },redirect:"manual",signal:controller.signal});}

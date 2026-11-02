@@ -27,7 +27,13 @@ export function validatedTaskIndex(index){
 export function requestFor(modelIndex,taskIndex){
  if(!Number.isInteger(modelIndex)||modelIndex<0||modelIndex>=MODELS.length)throw Error("invalid_synthetic_code_model_index");
  const t=validatedTaskIndex(taskIndex);
- return {model:MODELS[modelIndex],temperature:0,max_tokens:650,stream:false,
+ // MiniMax M3.1's published model card recommends temperature=1/top_p=.95.
+ // Its 650-token ceiling can truncate reasoning before a final JSON answer.
+ // Change ONLY the fixed MiniMax synthetic test, never a public user knob.
+ const opts=modelIndex===1
+   ? {temperature:1.0,top_p:0.95,max_tokens:1800}
+   : {temperature:0,max_tokens:650};
+ return {model:MODELS[modelIndex],...opts,stream:false,
  messages:[
   {role:"system",content:"You are an offline synthetic code repair worker. Return ONLY a JSON object with one key named source holding the complete Python function source. Preserve the exact signature. No comments, prose, markdown, imports, assigned variables, loops, type hints, string literals, tools, dependencies or side effects. Use only if/else, return, integer arithmetic, boolean comparisons, min, max."},
   {role:"user",content:"Fix this single fictional Python function. Original source:\n"+t.broken+"\nRequired behavior:\n"+t.requirements}
