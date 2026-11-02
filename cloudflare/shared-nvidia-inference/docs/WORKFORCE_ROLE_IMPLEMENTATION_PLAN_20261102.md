@@ -92,6 +92,12 @@ Preserve all five source-pinned execution identities and artifact digests; consu
 
 **Own in existing PR #2095 and CommandCenter review chain:** Add sealed v4 changed-fact holdouts for the first 3 roles, expose a versioned, testable `shadow_role_candidate` evidence shape (not production dispatch), and require independent scoreboard/owner evidence before role promotion. A single self-graded AI score or a 2/2 v3 benchmark must never set `production_admitted=true`. Do not spin up a new general workflow or choose another executor if an admitted fixed synthetic path already exists.
 
+## Source integration/release dependency found in this follow-through
+
+**This is not a normal mainline-ready one-PR merge.** Source PR #2095 currently targets `feature/nvidia-shared-inference-private-smoke-20261019`, the still-open shared NVIDIA Worker parent PR #1887, **not `main`**. On the 2026-11-02 readback, that parent branch was **101 commits ahead and 966 commits behind** current public main, so blind merge/rebase can drag unrelated content or create a misleading production status. The established synthetic-only Worker release uses an independent, exact reviewed public-source commit SHA pinned in the owning WaterBoys workflow, together with private Secrets Store/binding parity and an explicit disable-after-diagnostic receipt. Source PR success, feature-branch merge and WaterBoys source pin are three distinct states.
+
+**M1/M2 owner decision before release:** Keep PR #2095 as a source/evidence review; do not auto-merge the parent or repin the Worker based on green CI. Owning release/security must either (a) select a narrowly reviewed exact candidate source SHA through the existing WaterBoys binding-preserving deploy workflow and verify post-deploy `CC_NVIDIA_DIAGNOSTIC_ENABLED=0`, or (b) explicitly disentangle and review the stacked source into a mainline-safe branch/PR first. Neither move can authorize private workloads, command execution, or model promotion. The next v4 holdout source/production version must be separately pinned and logged; do not silently mix v3 scoring and v4 profiles.
+
 ## Current genuine blockers
 
 - No confirmed real user-data A1 capsule / private return admission for general external execution. Public fictional-data testing is separately admitted; do not conflate them.
