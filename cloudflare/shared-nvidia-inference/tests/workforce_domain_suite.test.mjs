@@ -1,17 +1,18 @@
 import test from "node:test";
+import {V4_HOLDOUT_CASES,V4_HOLDOUT_AUDIT} from "../src/workforce_v4_holdout_suite.js";
 import assert from "node:assert/strict";
 import {CASES,WORKFORCE_DOMAINS,WORKFORCE_SKILLS,corpusAudit,messagesForCase,supportingDossier,gradeCase} from "../src/workforce_domain_suite.js";
 
 test("cross-project benchmark is a paired, broad 32-case research/workforce battery",()=>{
  const a=corpusAudit();
- assert.equal(a.cases,32);
- assert.equal(a.domains,16);
+ assert.equal(a.cases,92);
+ assert.equal(a.domains,19);
  assert(a.roles>=13);
  assert.equal(a.paired_domains,true);
  assert.equal(a.human_review_count,2);
  assert.equal(a.real_provider_calls,0);
  assert.equal(a.independent_skill_qualification,false);
- assert.equal(new Set(CASES.map(c=>c.id)).size,32);
+ assert.equal(new Set(CASES.map(c=>c.id)).size,92);
  assert(WORKFORCE_DOMAINS.includes("trader_ops_advice"));
  assert(WORKFORCE_DOMAINS.includes("market_news_relevance"));
  assert(WORKFORCE_DOMAINS.includes("income_quote_economics"));
@@ -42,7 +43,7 @@ test("each ground-truth answer is scoreable without exposing model-generated tex
  }
 });
 test("each counterfactual pair changes expected facts and recycled answers fail",()=>{
- for(const d of WORKFORCE_DOMAINS){
+ for(const d of WORKFORCE_DOMAINS.filter(d=>!d.endsWith("_v4"))){
   const pair=CASES.filter(c=>c.domain===d);
   assert.equal(pair.length,2);
   if(!pair[0].human_review_required)assert.notDeepEqual(pair[0].expected,pair[1].expected,d);
@@ -84,7 +85,7 @@ test("malformed provider replies are rejected with metadata-only safe receipts",
    assert(!JSON.stringify(r).includes("DO_NOT_EXPOSE"));
   }
  }
- for(const bad of [-1,32,1.2,"0",NaN,null]){
+ for(const bad of [-1,92,1.2,"0",NaN,null]){
   assert.throws(()=>messagesForCase(bad),/invalid_fixed_workforce_case/);
   assert.throws(()=>gradeCase(bad,"{}"),/invalid_fixed_workforce_case/);
  }
@@ -158,4 +159,28 @@ test("missing conflict is an explicitly nullable value, not a hidden enum",()=>{
  const a=messagesForCase(7)[1].content;
  assert(a.includes("conflict_at: nullable string or null"));
  assert(gradeCase(7,JSON.stringify(CASES[7].expected)).passed);
+});
+
+test("v4 changed-fact holdouts are separate from frozen v3 and default-denied",()=>{
+ assert.equal(CASES.length,92);
+ assert.equal(V4_HOLDOUT_CASES.length,60);
+ assert.equal(V4_HOLDOUT_AUDIT.size,60);
+ assert.equal(V4_HOLDOUT_AUDIT.production_admitted,false);
+ assert.equal(V4_HOLDOUT_AUDIT.private_input_used,false);
+ for(const [domain,role] of [
+  ["worker_receipt_holdout_v4","cc.receipt_intelligence"],
+  ["incident_diagnosis_holdout_v4","cc.ops_log_triage"],
+  ["long_context_reconciliation_holdout_v4","shared.document_long_context"]]){
+  const rows=CASES.filter(c=>c.domain===domain);
+  assert.equal(rows.length,20);
+  assert.equal(new Set(rows.map(c=>c.input)).size,20);
+  assert(rows.every(c=>c.role===role&&c.case_version==="v4_changed_fact_20261102"&&c.synthetic));
+  for(let i=0;i<20;i+=2){
+    assert.notDeepEqual(rows[i].expected,rows[i+1].expected);
+    assert.equal(gradeCase(rows[i].index,JSON.stringify(rows[i+1].expected)).passed,false);
+    assert.equal(gradeCase(rows[i+1].index,JSON.stringify(rows[i].expected)).passed,false);
+  }
+ }
+ assert(CASES.slice(0,32).every(c=>c.case_version==="1"));
+ assert(CASES.slice(32).every(c=>c.case_version==="v4_changed_fact_20261102"));
 });
