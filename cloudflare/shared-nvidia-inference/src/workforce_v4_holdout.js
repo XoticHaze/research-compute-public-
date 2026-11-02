@@ -84,7 +84,7 @@ for(let i=0;i<20;i++){
   const variant=Math.floor(i/5),mode=i%5,project="PROJECT-"+(190+i*37);
   const source="SHA-"+(1000+i*71),old="SHA-"+(8000+i*61),sibling="OTHER-"+(400+i*19);
   const A="DC"+i+"A",B="DC"+i+"B",C="DC"+i+"C";
-  const owner=row(A,"Independently validated owner-signoff document for "+project+" names candidate "+source+"; scope excludes sibling "+sibling+". Signoff alone is not deployment readback.");
+  const owner=mode===3 ? row(A,"Source proposal for "+project+" names candidate "+source+" but no independently validated owner signoff is recorded for this protected release.") : row(A,"Independently validated owner-signoff document for "+project+" names candidate "+source+"; scope excludes sibling "+sibling+". Signoff alone is not deployment readback.");
   let runtime,summary,state,next,evidence,unknown;
   if(mode===0){
     runtime=row(B,"Independently verified signed runtime readback for "+project+" reports installed revision "+source+" and health=PASS; matches owner signoff.");
