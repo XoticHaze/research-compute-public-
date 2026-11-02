@@ -23,7 +23,15 @@ const candidate='9cc2ab27dac66147e432703eec0281254379b62b';
 const old='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const newer='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const other='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
-const keyId='sha256:'+'8'.repeat(64);
+const liveKeyPair=await webcrypto.subtle.generateKey(
+  {name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);
+const livePoint=Buffer.from(await webcrypto.subtle.exportKey('raw',liveKeyPair.publicKey));
+const keyId='sha256:'+sha(livePoint);
+const keyPublicB64=livePoint.toString('base64');
+const swappedKeyPair=await webcrypto.subtle.generateKey(
+  {name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);
+const swappedPoint=Buffer.from(await webcrypto.subtle.exportKey('raw',swappedKeyPair.publicKey));
+const swappedPublicB64=swappedPoint.toString('base64');
 const baseManifest={
   schema:'reference-release-maintenance-v1',
   issuer:'private-maintenance-authority-v1',
@@ -38,7 +46,7 @@ const baseManifest={
 const account='b33595eb85f346b0d1bf201810b4499a';
 const cf='https://api.cloudflare.com/client/v4/accounts/'+account;
 const target='/workers/scripts/reference-release-broker-v1';
-const origin='https://reference-release-broker-v1.slenderiq.workers.dev';
+const origin='https://reference-release-broker-v1.shared-compute-neutral-authorization.workers.dev';
 
 function fake(overrides={}){
   const state={
@@ -138,7 +146,10 @@ function fake(overrides={}){
     }
     if(u===origin+'/v1/public-key'){
       state.events.push('key_read');
-      return Response.json({key_id:keyId});
+      return Response.json({
+        key_id:state.forgedKeyId?'sha256:'+'f'.repeat(64):keyId,
+        public_b64:state.swappedKeyMaterial?swappedPublicB64:keyPublicB64,
+      });
     }
     throw Error('unexpected_network_target');
   };
@@ -201,6 +212,13 @@ let checks=0;
   const s=await reject('postdeploy_unhealthy_rollback_preseal',{postdeployUnhealthy:true},'postdeploy_health_rejected');
   assert.deepEqual(s.promotions,[newer,old]);
   assert.equal(s.active,old);assert.equal(s.consumes,1);checks++;
+}
+{
+  const s=await reject('postdeploy_substituted_public_point_rollback',
+                       {swappedKeyMaterial:true},'postdeploy_key_mismatch');
+  assert.deepEqual(s.promotions,[newer,old]);
+  assert.equal(s.active,old);
+  assert.equal(s.consumes,1);checks++;
 }
 {
   const s=await reject('failed_promote_without_remote_mutation',{promotionHttpFailure:true,promotionNoMutation:true},'deployment_create_rejected_500');
@@ -331,6 +349,15 @@ const authInput={
   assert.equal(denied,true,'independent authority must check live broker key before signing');
   checks++;
 }
-assert.equal(checks,19);
+{
+  const {env,state}=fake({swappedKeyMaterial:true});
+  let denied=false;
+  try{await actualAuthority.authorize(authInput);}
+  catch(e){denied=e.message==='broker_public_key_mismatch';}
+  assert.equal(denied,true,'authority must deny substituted public point even when key ID label matches');
+  assert.equal(state.events.includes('token_get'),false);
+  assert.equal(state.consumes,0);checks++;
+}
+assert.equal(checks,21);
 console.log('REFERENCE_MAINTAINER_ACTUAL_SOURCE_PREFLIGHT_AND_ROLLBACK_PASS='+checks);
 console.log('REFERENCE_MAINTAINER_PUBLIC_CI_SYNTHETIC_ONLY=1');
