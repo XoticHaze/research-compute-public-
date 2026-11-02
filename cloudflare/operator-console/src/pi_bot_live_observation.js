@@ -119,6 +119,11 @@ export function piBotLiveOperatorView(record, now = Date.now(), sourceBinding = 
     schema: 'mmibkr.pi_bot_live_operator_view.v1', node_id: 'cc-pi4',
     source: 'authenticated_root_bot_status', observed_at: v.observedAt,
     stored_at_utc: record.stored_at_utc, receipt_sha: v.sourceReceiptId,
+    // The immutable root observation ID is safe for cross-UI equality;
+    // never reveal private Git ref/path/commit or the source signing key.
+    root_observation_id: record.envelope?.schema==='mmibkr.pi_bot_live_observation_envelope.v2'
+      ? record.envelope.record.observation_id : null,
+    public_publisher_oidc_verified: true,
     status: o.status, live_switches_enabled: o.live_switches_enabled,
     bot_running: o.bot_running, gateway_running: o.gateway_running,
     gateway_network_namespace_matched: o.gateway_network_namespace_matched,
@@ -127,7 +132,7 @@ export function piBotLiveOperatorView(record, now = Date.now(), sourceBinding = 
     gateway_readonly_api_configuration: o.gateway_readonly_api_configuration,
     broker_submission_verified: false, read_only: true,
     broker_mutation_attempted: false, gateway_mutation_attempted: false,
-    permission_mutation_attempted: false, public_publisher_oidc_verified: true,
+    permission_mutation_attempted: false,
   };
 }
 
