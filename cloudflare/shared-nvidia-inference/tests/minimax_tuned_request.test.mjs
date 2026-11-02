@@ -4,17 +4,17 @@ import {requestFor,TASKS} from "../src/code_role_suite.js";
 import {runCodeRoleCase} from "../src/code_role_suite_runner.js";
 import {sanitizeCodeRoleReceipt} from "../local-probe/src/code_role_receipt.js";
 
-test("only MiniMax fixed coding requests use documented larger output budget and recommended sampling",()=>{
+test("both first-wave model-native discovery profiles retain full answer budget and sampling",()=>{
   for(let i=0;i<TASKS.length;i++){
     const p=requestFor(0,i),m=requestFor(1,i);
     assert.equal(p.model,"poolside/laguna-xs-2.1");
-    assert.equal(p.temperature,0);
-    assert.equal(p.max_tokens,650);
-    assert.equal("top_p" in p,false);
+    assert.equal(p.temperature,1.0);
+    assert.equal(p.max_tokens,8192);
+    assert.equal(p.top_p,0.95);
     assert.equal(m.model,"minimaxai/minimax-m3.1-flash");
     assert.equal(m.temperature,1.0);
     assert.equal(m.top_p,0.95);
-    assert.equal(m.max_tokens,1800);
+    assert.equal(m.max_tokens,8192);
     assert.deepEqual(p.messages,m.messages);
   }
 });
@@ -38,7 +38,7 @@ test("documented tuned parameters preserve strict one-request 429 stop",async()=
   const r=await runCodeRoleCase({modelIndex:1,taskIndex:3,providerFetch:async(_u,o)=>{
     calls++;
     const req=JSON.parse(o.body);
-    assert.equal(req.max_tokens,1800);
+    assert.equal(req.max_tokens,8192);
     return {status:429};
   }});
   assert.equal(calls,1);
