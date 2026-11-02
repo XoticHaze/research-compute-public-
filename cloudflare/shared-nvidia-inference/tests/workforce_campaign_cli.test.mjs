@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {newCampaign,runCampaign,resultsFromCampaign} from "../scripts/workforce_campaign_cli.mjs";
+import {newCampaign,runCampaign,resultsFromCampaign,validatePublicHost} from "../scripts/workforce_campaign_cli.mjs";
 import {CASES} from "../src/workforce_domain_suite.js";
 const SHA="ab".repeat(20),RUN="github-990000";
 const models=["minimaxai/minimax-m3.1-flash","poolside/laguna-xs-2.1"];
@@ -104,4 +104,31 @@ test("invalid session budgets, run identity and forged states fail closed",async
  assert.throws(()=>newCampaign({sourceSha:"fake",runId:RUN}),/invalid_source_or_campaign_identity/);
  assert.throws(()=>newCampaign({sourceSha:SHA,runId:"no spaces allowed"}),/invalid_source_or_campaign_identity/);
  assert.throws(()=>newCampaign({sourceSha:SHA,runId:RUN,caseIndex:32}),/invalid_source_or_campaign_identity/);
+});
+
+test("source-pinned campaign is admitted only on exact public Cloudflare workflow",()=>{
+ const names=["GITHUB_REPOSITORY","GITHUB_WORKFLOW_REF","GITHUB_EVENT_NAME",
+   "WORKFORCE_SOURCE_SHA","GITHUB_RUN_ID"];
+ const prior=Object.fromEntries(names.map(k=>[k,process.env[k]]));
+ try{
+  process.env.GITHUB_REPOSITORY="XoticHaze/waterboys-fantasy-compute";
+  process.env.GITHUB_WORKFLOW_REF="XoticHaze/waterboys-fantasy-compute/.github/workflows/nvidia-workforce-shadow-qualification.yml@refs/heads/main";
+  process.env.GITHUB_EVENT_NAME="push";
+  process.env.WORKFORCE_SOURCE_SHA=SHA;
+  process.env.GITHUB_RUN_ID="41397754463";
+  assert.deepEqual(validatePublicHost(),{sourceSha:SHA,runId:"github-41397754463"});
+  process.env.GITHUB_WORKFLOW_REF="XoticHaze/waterboys-fantasy-compute/.github/workflows/arbitrary.yml@refs/heads/main";
+  assert.throws(()=>validatePublicHost(),/untrusted_execution_host/);
+  process.env.GITHUB_WORKFLOW_REF="XoticHaze/waterboys-fantasy-compute/.github/workflows/nvidia-workforce-shadow-qualification.yml@refs/heads/main";
+  process.env.GITHUB_REPOSITORY="XoticHaze/research-compute-public-";
+  assert.throws(()=>validatePublicHost(),/untrusted_execution_host/);
+  process.env.GITHUB_REPOSITORY="XoticHaze/waterboys-fantasy-compute";
+  process.env.GITHUB_EVENT_NAME="pull_request";
+  assert.throws(()=>validatePublicHost(),/untrusted_execution_host/);
+ }finally{
+  for(const k of names){
+   if(prior[k]===undefined)delete process.env[k];
+   else process.env[k]=prior[k];
+  }
+ }
 });
