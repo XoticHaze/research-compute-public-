@@ -61,7 +61,7 @@ export function createCaller() {
         if(!v||typeof v!=="object"||Array.isArray(v)||
            Object.keys(v).sort().join(",")!=="model_index,task_index"||
            !Number.isInteger(v.model_index)||v.model_index<0||v.model_index>1||
-           !Number.isInteger(v.task_index)||v.task_index<0||v.task_index>4)
+           !Number.isInteger(v.task_index)||v.task_index<0||v.task_index>9)
           return reply(400,{classification:"discovery_selector_rejected"});
         discovery=v;
       }else if(url.pathname===ROLE_CODE_PATH){
@@ -74,7 +74,7 @@ export function createCaller() {
         if(!v||typeof v!=="object"||Array.isArray(v)||
            Object.keys(v).sort().join(",")!=="model_index,task_index"||
            !Number.isInteger(v.model_index)||v.model_index<0||v.model_index>1||
-           !Number.isInteger(v.task_index)||v.task_index<0||v.task_index>4)
+           !Number.isInteger(v.task_index)||v.task_index<0||v.task_index>9)
           return reply(400,{classification:"role_code_selector_rejected"});
         roleCode=v;
       }else if(url.pathname===CODE_PATH){
