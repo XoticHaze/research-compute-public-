@@ -1,3 +1,4 @@
+import {TASKS as DISCOVERY_TASKS} from "../src/role_discovery_high_signal.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {MODELS,TASKS,requestFor,sanitizeCandidate} from "../src/code_role_suite.js";
@@ -86,4 +87,9 @@ test("arbitrary imports, comments, strings, exfil paths and wrong case identity 
  assert(sanitizeCodeRoleReceipt(receipt));
  assert.equal(sanitizeCodeRoleReceipt({...receipt,task_index:2}),null);
  assert.equal(sanitizeCodeRoleReceipt({...receipt,source:base+"import os"}),null);
+});
+
+test("model qualification stays multi-skill instead of coding-only",()=>{
+ assert.equal(DISCOVERY_TASKS.length,5);
+ assert.equal(new Set(DISCOVERY_TASKS.map(x=>x.skill)).size,5);
 });
