@@ -12,7 +12,7 @@ test("authenticated full catalog is deduplicated and includes more than old two-
  for(const rows of [null,{},new Array(10001).fill({id:"nvidia/x"})])
    assert.throws(()=>eligibleWorkforceCatalog({data:rows}),/invalid_catalog/);
 });
-test("all 32 source-grounded challenges can be scored for any catalog-admitted candidate, no answer exported",async()=>{
+test("all source-grounded challenges can be scored for any catalog-admitted candidate, no answer exported",async()=>{
  for(let i=0;i<CASES.length;i++){
   let calls=[];
   const modelIndex=i%3;
@@ -80,7 +80,7 @@ test("invalid selectors and provider responses never become model errors or leak
  for(const value of [undefined,-1,10000,"0",1.5]){
   await assert.rejects(()=>runWorkforceCase({modelIndex:value,caseIndex:0,providerFetch:async()=>{}}),/invalid_fixed_workforce_selector/);
  }
- for(const value of [undefined,-1,32,"0",0.3]){
+ for(const value of [undefined,-1,92,"0",0.3]){
   await assert.rejects(()=>runWorkforceCase({modelIndex:0,caseIndex:value,providerFetch:async()=>{}}),/invalid_fixed_workforce_selector/);
  }
  const err=await runWorkforceCase({modelIndex:0,caseIndex:0,providerFetch:async()=>{throw Error("PRIVATE_CREDENTIAL_NOT_TO_COPY");}});
