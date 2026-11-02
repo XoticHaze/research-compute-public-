@@ -40,6 +40,10 @@ export function sanitizeWorkforceReceipt(v){
    (v.model===null&&v.completion_status!==null))return null;
  const keys=Object.keys(c.expected);
  const fieldChecks=v.field_checks===undefined?null:v.field_checks;
+ // Perfect/graded claims require the complete source-owned scorecard.
+ // A forged 0/0 pass or a missing per-field proof must never cross the binding.
+ if(v.fields_total!==keys.length||
+    (["scored_pass","scored_fail","human_review_required"].includes(v.status)&&fieldChecks===null))return null;
  if(fieldChecks!==null&&(!fieldChecks||typeof fieldChecks!=="object"||
     Array.isArray(fieldChecks)||JSON.stringify(Object.keys(fieldChecks).sort())!==
     JSON.stringify([...keys].sort())||
