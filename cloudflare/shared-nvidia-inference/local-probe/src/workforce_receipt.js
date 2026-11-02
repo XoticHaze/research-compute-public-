@@ -37,6 +37,13 @@ export function sanitizeWorkforceReceipt(v){
    (v.status==="tool_attempt_rejected"&&(!v.tool_calls_proposed||v.first_pass))||
    (v.first_pass&&v.tool_calls_proposed)||
    (v.model===null&&v.completion_status!==null))return null;
+ const keys=Object.keys(c.expected);
+ const fieldChecks=v.field_checks===undefined?null:v.field_checks;
+ if(fieldChecks!==null&&(!fieldChecks||typeof fieldChecks!=="object"||
+    Array.isArray(fieldChecks)||JSON.stringify(Object.keys(fieldChecks).sort())!==
+    JSON.stringify([...keys].sort())||
+    keys.some(k=>typeof fieldChecks[k]!=="boolean")||
+    keys.filter(k=>fieldChecks[k]).length!==v.fields_correct))return null;
  const tokens={};
  for(const field of ["prompt_tokens","completion_tokens","reasoning_tokens"]){
   const n=v[field];
@@ -54,6 +61,7 @@ export function sanitizeWorkforceReceipt(v){
   finish_reason:v.finish_reason,...tokens,
   first_pass:v.first_pass,format_valid:v.format_valid,
   fields_correct:v.fields_correct,fields_total:v.fields_total,
+  field_checks:fieldChecks===null?null:Object.fromEntries(keys.map(k=>[k,fieldChecks[k]])),
   human_review_required:v.human_review_required,
   latency_ms:v.latency_ms,
   tool_calls_proposed:v.tool_calls_proposed,tools_executed:false,
