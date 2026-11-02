@@ -22,6 +22,7 @@ function fixture(index=2){
   reasoning_tokens:200,first_pass:!c.human_review_required,
   format_valid:true,fields_correct:Object.keys(c.expected).length,
   fields_total:Object.keys(c.expected).length,
+  field_checks:Object.fromEntries(Object.keys(c.expected).map(k=>[k,true])),
   human_review_required:c.human_review_required,
   latency_ms:2100,tool_calls_proposed:false,tools_executed:false,
   answer_exported:false,private_input_used:false,production_authorized:false};
@@ -80,7 +81,8 @@ test("sanitizer rejects forged completion, extra identity, protected actions and
  assert.equal(good.answer_exported,false);
  for(const bad of [
   {case_id:"different"},{role:"other"},{model:"../../../fake"},
-  {fields_correct:100},{provider_calls:12},{first_pass:true,status:"scored_fail"},
+  {fields_correct:100},{fields_total:0,fields_correct:0},
+  {field_checks:null},{provider_calls:12},{first_pass:true,status:"scored_fail"},
   {answer_exported:true},{private_input_used:true},{tools_executed:true},
   {production_authorized:true},{finish_reason:"SECRET_OUTPUT"},
   {prompt_tokens:-1},{completion_tokens:"300"},
@@ -125,7 +127,8 @@ test("provider hold stops further requests without treating it as model inabilit
  const service={NVIDIA_SERVICE:{fetch:async()=>{
   calls++;
   return new Response(JSON.stringify({...fixture(),status:"provider_rate_limited",
-    completion_status:429,first_pass:false,format_valid:false,fields_correct:0}),{status:503});
+    completion_status:429,first_pass:false,format_valid:false,fields_correct:0,
+    field_checks:Object.fromEntries(Object.keys(CASES[2].expected).map(k=>[k,false]))}),{status:503});
  }}};
  const caller=createCaller();
  const first=await caller.fetch(req(local,selector),service);
