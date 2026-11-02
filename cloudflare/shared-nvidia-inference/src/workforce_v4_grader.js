@@ -16,10 +16,10 @@ export function scoreV4Case(index,raw) {
   const result={
     schema:"commandcenter.nvidia_workforce_v4_case_score.v1",
     case_id:fixture.id,role:fixture.role,case_index:index,
-    first_pass:false,format_valid:false,fields_correct:0,fields_total:4,
+    first_pass:false,objective_label_pass:false,format_valid:false,fields_correct:0,fields_total:4,
     evidence_refs_valid:false,invalid_ref_count:0,
     critical_authority_violation:false,
-    rationale_review_required:true,production_admitted:false,
+    rationale_review_required:true,human_review_status:"unreviewed",full_task_accepted:false,production_admitted:false,
     private_input_used:false,answer_exported:false,tools_executed:false,
   };
   if(typeof raw!=="string"||raw.length>8000)return result;
@@ -49,10 +49,13 @@ export function scoreV4Case(index,raw) {
     body.uncertainty===expected.uncertainty
   ];
   result.fields_correct=checks.filter(Boolean).length;
-  result.first_pass=result.format_valid&&rationaleOk&&!result.critical_authority_violation&&
+  result.objective_label_pass=result.format_valid&&rationaleOk&&!result.critical_authority_violation&&
     result.fields_correct===result.fields_total;
-  // Rationale facts/quality are purposely NOT auto-graded; blind human review
-  // and measured edit-time comparison are mandatory before role assignment.
+  // 'first_pass' means the COMPLETE work product passed, not just its enums.
+  // There is deliberately no automatic way to set it. A separately signed
+  // blind reviewer artifact is required; this grader only checks objective
+  // fields and never claims a fully accepted task.
+  // Rationale facts/quality and useful abstention are NOT auto-graded.
   return result;
 }
 export function v4CasePrompt(index) {
