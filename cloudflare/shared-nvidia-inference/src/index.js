@@ -6,6 +6,7 @@ import {runMicroWorkerBatch} from "./micro_worker_benchmark.js";
 import {NvidiaProviderPacingQueue} from "./provider_pacing_queue.js";
 import {runFixedDraftPilot} from "./draft_pilot_runner.js";
 import {runFixedCodeRepair} from "./fixed_code_repair_runner.js";
+import {runCodeRoleCase} from "./code_role_suite_runner.js";
 const ORIGIN = "https://integrate.api.nvidia.com";
 const MODEL = "openai/gpt-oss-20b";
 const RUN_PATH = "/internal/diagnostics/nvidia";
@@ -163,6 +164,35 @@ export default {
     const url = new URL(request.url);
     // Existing Service Binding route only; public Worker and previews remain
     // disabled. No caller-authored prompts, tool execution, or target hosts.
+    // Source-owned synthetic model-role work; exact (model,task) selectors.
+    // No caller-supplied input, prompt, endpoint or artifact path.
+    if(request.method==="POST"&&url.pathname==="/internal/diagnostics/nvidia-role-code"&&!url.search){
+      if(env.CC_NVIDIA_DIAGNOSTIC_ENABLED!=="1")return json(503,{error:"diagnostic_not_admitted"});
+      const length=Number(request.headers.get("content-length"));
+      if(!Number.isInteger(length)||length<1||length>65||
+         request.headers.get("content-type")!=="application/json")
+        return json(400,{error:"invalid_fixed_role_selector"});
+      let v;
+      try{v=await request.json();}catch{return json(400,{error:"invalid_fixed_role_selector"});}
+      if(!v||typeof v!=="object"||Array.isArray(v)||
+         Object.keys(v).sort().join(",")!=="model_index,task_index"||
+         !Number.isInteger(v.model_index)||v.model_index<0||v.model_index>1||
+         !Number.isInteger(v.task_index)||v.task_index<0||v.task_index>4)
+        return json(400,{error:"invalid_fixed_role_selector"});
+      if(typeof env.NVIDIA_API_KEY?.get!=="function")return json(503,{error:"binding_unavailable"});
+      let key;
+      try{key=await env.NVIDIA_API_KEY.get();}catch{return json(503,{error:"secret_unavailable"});}
+      if(typeof key!=="string"||key.length<8)return json(503,{error:"secret_unavailable"});
+      const authFetch=async(endpoint,options)=>{
+        const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
+        try{return await pacedProviderFetch(endpoint,{...options,headers:{
+          "Authorization":"Bearer "+key,"Content-Type":"application/json"
+        },redirect:"manual",signal:controller.signal});}
+        finally{clearTimeout(timer);}
+      };
+      const receipt=await runCodeRoleCase({modelIndex:v.model_index,taskIndex:v.task_index,providerFetch:authFetch});
+      return json(receipt.status==="candidate_unexecuted"?200:503,receipt);
+    }
     // A single fixed synthetic Python patch attempt. Restricted source bytes
     // may leave this Worker only to an AST-only validator on synthetic compute.
     // No private input, arbitrary prompt, provider model, or executable code.
