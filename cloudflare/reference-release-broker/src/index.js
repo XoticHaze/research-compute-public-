@@ -275,6 +275,39 @@ export class GrantLedger {
 
   async fetch(request) {
     const url = new URL(request.url);
+    // Internal Durable Object storage primitive ONLY. The public Worker index
+    // has no route to this method. A future independent Ed25519 verifier must
+    // authenticate issuance BEFORE invoking this isolated placement namespace.
+    if (request.method === 'POST' && url.pathname === '/consume-placement') {
+      let body;
+      try {
+        const text = await request.text();
+        if (!text || text.length > 512) throw new Error('invalid_size');
+        body = JSON.parse(text);
+      } catch { return json({ error: 'placement_input_rejected' }, 400); }
+      const required = new Set(['nonce','issuer_id']);
+      if (!body || Array.isArray(body) || typeof body !== 'object'
+          || Object.keys(body).length !== required.size
+          || Object.keys(body).some(key => !required.has(key))
+          || !/^[0-9a-f]{32}$/.test(body.nonce)
+          || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(body.issuer_id)
+          || String(body.issuer_id).includes('..')) {
+        return json({ error: 'placement_input_rejected' }, 400);
+      }
+      const consumed = await this.state.storage.transaction(async (txn) => {
+        // Unique per run through the existing GRANT_LEDGER DO namespace.
+        // Do not reuse the release grant's 'consumed' key.
+        const key = 'placement-consumed';
+        if (await txn.get(key)) return false;
+        await txn.put(key, {
+          nonce: body.nonce, issuer_id: body.issuer_id,
+          consumed_at: Math.floor(Date.now() / 1000),
+        });
+        return true;
+      });
+      return consumed ? json({ ok: true }, 200)
+                      : json({ error: 'placement_nonce_already_consumed' }, 409);
+    }
     if (request.method !== 'POST' || url.pathname !== '/consume') {
       return json({ error: 'not_found' }, 404);
     }
