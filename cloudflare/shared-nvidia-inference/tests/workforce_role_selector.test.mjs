@@ -28,14 +28,14 @@ test("measured economic value can favor shadow helper without granting runtime a
  assert.equal(row.production_admitted,false);
  const key=MODEL+"|"+row.role;
  const benefit=evaluate({receipts:evidence,measurements:{
-  [key]:{baseline_seconds:40,review_seconds:8,rework_seconds:0,provider_cost_usd:null}
+  [key]:{baseline_seconds:40,review_seconds:8,rework_seconds:0,provider_cost_usd:null,method:"observed_comparison",evidence_id:"synthetic-proof-0001"}
  }}).rows[0];
  assert.equal(benefit.recommendation,"promising_shadow_candidate");
  assert(benefit.seconds_saved_per_case>30);
  assert.equal(benefit.production_admitted,false);
  assert.equal(benefit.provider_cost_usd,null);
  const loss=evaluate({receipts:evidence,measurements:{
-  [key]:{baseline_seconds:1,review_seconds:8,rework_seconds:0,provider_cost_usd:null}
+  [key]:{baseline_seconds:1,review_seconds:8,rework_seconds:0,provider_cost_usd:null,method:"observed_comparison",evidence_id:"synthetic-proof-0001"}
  }}).rows[0];
  assert.equal(loss.recommendation,"deterministic_or_fleet_preferred");
  assert(loss.seconds_saved_per_case<0);
@@ -66,6 +66,6 @@ test("no fabricated data, no inferred provider pricing, and stable empty-state o
  assert.equal(empty.any_production_admission,false);
  assert.equal(empty.provider_prices_inferred,false);
  assert.throws(()=>evaluate({receipts:[receipt(0)],measurements:{
-  [MODEL+"|"+CASES[0].role]:{baseline_seconds:"15",review_seconds:0,rework_seconds:0,provider_cost_usd:null}
+  [MODEL+"|"+CASES[0].role]:{baseline_seconds:"15",review_seconds:0,rework_seconds:0,provider_cost_usd:null,method:"observed_comparison",evidence_id:"synthetic-proof-0001"}
  }}),/invalid_or_unmeasured_baseline/);
 });
