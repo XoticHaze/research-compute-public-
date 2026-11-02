@@ -118,9 +118,13 @@ function validatePublicHost(){
  const repo=process.env.GITHUB_REPOSITORY;
  const sha=process.env.WORKFORCE_SOURCE_SHA;
  const run=process.env.GITHUB_RUN_ID;
- if(repo!=="XoticHaze/research-compute-public-"||
+ const approvedWorkflow="XoticHaze/waterboys-fantasy-compute/.github/workflows/nvidia-workforce-shadow-qualification.yml@refs/heads/main";
+ if(repo!=="XoticHaze/waterboys-fantasy-compute"||
+   process.env.GITHUB_WORKFLOW_REF!==approvedWorkflow||
+   process.env.GITHUB_EVENT_NAME!=="push"||
    typeof sha!=="string"||!/^[a-f0-9]{40}$/.test(sha)||
-   typeof run!=="string"||!/^[0-9]{6,20}$/.test(run))throw Error("untrusted_execution_host");
+   typeof run!=="string"||!/^[0-9]{6,20}$/.test(run))
+   throw Error("untrusted_execution_host");
  return{sourceSha:sha,runId:"github-"+run};
 }
 async function main(){
