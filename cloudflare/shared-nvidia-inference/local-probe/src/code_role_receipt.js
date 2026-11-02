@@ -32,6 +32,14 @@ export function sanitizeCodeRoleReceipt(v){
  if(!allowFinish.has(finish)||
     (present!==null&&typeof present!=="boolean")||
     (reasoning!==null&&typeof reasoning!=="boolean"))return null;
+ // Token COUNTS only, bounded and opt-in from the provider usage object.
+ // A null value means not reported; it does not mean zero token usage.
+ const tokens={};
+ for(const name of ["prompt_tokens","completion_tokens","reasoning_tokens"]){
+  const value=v[name]??null;
+  if(value!==null&&(!Number.isSafeInteger(value)||value<0||value>1000000))return null;
+  tokens[name]=value;
+ }
  const src=v.source;
  if(v.status==="candidate_unexecuted"&&(
     v.http_status!==200||v.source_valid_shape!==true||
@@ -46,7 +54,7 @@ export function sanitizeCodeRoleReceipt(v){
    task_index:v.task_index,status:v.status,provider_calls:1,
    http_status:v.http_status,elapsed_ms:v.elapsed_ms,
    final_content_present:present,reasoning_content_present:reasoning,
-   finish_reason:finish,
+   finish_reason:finish,...tokens,
    code:v.status==="candidate_unexecuted"?src:null,
    private_data_exposed:false,model_code_executed:false,
    real_repo_changed:false,synthetic_only:true
