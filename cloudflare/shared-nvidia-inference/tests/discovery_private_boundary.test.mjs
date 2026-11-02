@@ -22,7 +22,7 @@ test("private Worker rejects disabled diagnostic and arbitrary selectors without
  assert.equal(secretReads,0);
  env.CC_NVIDIA_DIAGNOSTIC_ENABLED="1";
  for(const value of [{model_index:2,task_index:3},
-  {model_index:0,task_index:5},
+  {model_index:0,task_index:10},
   {model_index:0,task_index:3,prompt:"untrusted"},
   {model_index:0,task_index:3,url:"https://bad.invalid"}]){
   const r=await app.fetch(req(remote,value),env);
@@ -63,11 +63,22 @@ test("loopback caller preserves exact private destination, rejects injection and
 test("cross-skill sanitizer refuses forged identity and authorization fields",()=>{
  assert.deepEqual(sanitizeDiscoveryReceipt(safeReceipt).status,"scored_pass");
  assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,model:"outside/foreign"}),null);
- assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,task_index:4}),null);
+ assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,task_index:9}),null);
  assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,production_authorized:true}),null);
  assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,raw_output_included:true}),null);
  assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,passed:true,status:"scored_fail"}),null);
  assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,finish_reason:"secret"}),null);
  assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,completion_tokens:100000000}),null);
  assert.equal(sanitizeDiscoveryReceipt({...safeReceipt,reasoning_tokens:"300"}),null);
+});
+
+test("holdout writing remains human-only while altered facts are independently scored",()=>{
+ const writing={...safeReceipt,task_id:"operator_explanation_holdout",task_index:9,
+  skill:"contextual_writing",human_review_required:true,passed:false,
+  status:"human_review_required",checks_total:5,checks_passed:5};
+ const good=sanitizeDiscoveryReceipt(writing);
+ assert(good);
+ assert.equal(good.passed,false);
+ assert.equal(good.human_review_required,true);
+ assert.equal(sanitizeDiscoveryReceipt({...writing,passed:true}),null);
 });
