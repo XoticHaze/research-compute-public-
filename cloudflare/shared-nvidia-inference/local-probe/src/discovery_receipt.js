@@ -41,6 +41,13 @@ export function sanitizeDiscoveryReceipt(v){
   if(n!==null&&!integer(n,0,1000000))return null;
   totals[field]=n;
  }
+ const expectedClass={
+   scored_pass:"none",scored_fail:"none",human_review_required:"none",
+   provider_rate_limited:"rate_limited",provider_unavailable:"provider_http"
+ };
+ if(v.status in expectedClass && v.failure_class!==expectedClass[v.status])return null;
+ if(v.status==="provider_transport_or_decode_failure"&&
+    !["response_decode","timeout","transport"].includes(v.failure_class))return null;
  const isWriting=v.task_index===4||v.task_index===9;
  if(v.human_review_required!==isWriting||
     (isWriting&&v.passed)||
