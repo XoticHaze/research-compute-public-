@@ -57,7 +57,10 @@ test("invalid source, budget, spoofed counter and forged result fail before publ
   ()=>newV4Campaign({sourceSha:SHA,runId:ID,modelIndex:0,caseIndex:n}),/invalid_v4_campaign_origin/);
  assert.throws(()=>checkV4Campaign({...state,production_admitted:true}),/invalid_v4_campaign_state/);
  assert.throws(()=>checkV4Campaign({...state,provider_http_calls:1}),/v4_provider_call_count_mismatch/);
- await assert.rejects(runV4Campaign({state,limit:1,callCase:async()=>({...fixture(0),answer:"PRIVATE"})}),/untrusted_v4_provider_receipt|^$/);
+ const cleaned=await runV4Campaign({state,limit:1,callCase:async()=>({...fixture(0),answer:"PRIVATE"})});
+ assert.equal(cleaned.observations.length,1);
+ assert(!JSON.stringify(cleaned).includes("PRIVATE"));
+ assert.equal(cleaned.production_admitted,false);
 });
 test("host validation rejects every non-admitted repository, ref and event",()=>{
  const keys=["GITHUB_REPOSITORY","GITHUB_WORKFLOW_REF","GITHUB_EVENT_NAME","WORKFORCE_V4_SOURCE_SHA","GITHUB_RUN_ID"];
