@@ -90,6 +90,6 @@ test("arbitrary imports, comments, strings, exfil paths and wrong case identity 
 });
 
 test("model qualification stays multi-skill instead of coding-only",()=>{
- assert.equal(DISCOVERY_TASKS.length,5);
+ assert.equal(DISCOVERY_TASKS.length,10);
  assert.equal(new Set(DISCOVERY_TASKS.map(x=>x.skill)).size,5);
 });
