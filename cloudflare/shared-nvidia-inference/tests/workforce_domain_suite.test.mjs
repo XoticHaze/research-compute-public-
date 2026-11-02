@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {CASES,WORKFORCE_DOMAINS,WORKFORCE_SKILLS,corpusAudit,messagesForCase,gradeCase} from "../src/workforce_domain_suite.js";
+import {CASES,WORKFORCE_DOMAINS,WORKFORCE_SKILLS,corpusAudit,messagesForCase,supportingDossier,gradeCase} from "../src/workforce_domain_suite.js";
 
 test("cross-project benchmark is a paired, broad 32-case research/workforce battery",()=>{
  const a=corpusAudit();
@@ -94,4 +94,20 @@ test("human prose remains explicitly unqualified pending blinded review",()=>{
   assert.equal(gradeCase(c.index,JSON.stringify({message:"This is a sufficiently long sample response with no proof of helpfulness."})).passed,false);
   assert.equal(gradeCase(c.index,JSON.stringify({message:"A"})).fields_correct,0);
  }
+});
+
+test("reasoning and document workloads include long conflicting provenance archives",()=>{
+ const hard=CASES.filter(x=>["research_doc_audit","long_context_reconciliation"].includes(x.domain));
+ assert.equal(hard.length,4);
+ for(const c of hard){
+  const dossier=supportingDossier(c.index);
+  assert(dossier.length>10000,c.id);
+  assert(dossier.includes("[UNTRUSTED-SUMMARY]"));
+  assert(dossier.includes("does not grant status to the target"));
+  assert(!dossier.includes("XoticHaze"));
+  assert(messagesForCase(c.index)[1].content.length>10000);
+  assert.equal(gradeCase(c.index,JSON.stringify(c.expected)).passed,true);
+ }
+ for(const c of CASES.filter(x=>x.domain==="portfolio_exposure"))
+  assert.equal(supportingDossier(c.index),"");
 });
