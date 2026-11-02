@@ -755,7 +755,7 @@ export class OperatorState {
         }
         const record = {
           schema: 'mmibkr.pi_account_store.v1', write_id: crypto.randomUUID(),
-          stored_at_utc: new Date().toISOString(), envelope: sourceEnvelope,
+          stored_at_utc: new Date(Date.now()).toISOString(), envelope: sourceEnvelope,
           publisher_provenance: payload.publisher_provenance,
         };
         await txn.put('pi_replay_ledger', replayLedger);
