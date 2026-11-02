@@ -16,6 +16,10 @@ export function discoveryProfile(model){
   return{temperature:1.0,top_p:0.95,max_tokens:16384};
  if(model==="poolside/laguna-xs-2.1")
   return{temperature:1.0,top_p:0.95,max_tokens:8192};
+ // Fixed low-effort GPT-OSS admission probe; documented NVIDIA limit is 4096.
+ // This changes the candidate source profile, not already-scored v3 runs.
+ if(model==="openai/gpt-oss-20b")
+  return{temperature:1.0,top_p:0.95,max_tokens:4096,reasoning_effort:"low"};
  return{temperature:1.0,top_p:0.95,max_tokens:8192};
 }
 export function eligibleWorkforceCatalog(doc){

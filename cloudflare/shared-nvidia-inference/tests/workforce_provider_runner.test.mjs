@@ -24,7 +24,9 @@ test("all 32 source-grounded challenges can be scored for any catalog-admitted c
    assert.equal(body.messages[0].role,"system");
    assert.equal(body.messages[1].role,"user");
    assert(body.messages[1].content.includes(CASES[i].question));
-   assert.equal(body.max_tokens,body.model==="minimaxai/minimax-m3.1-flash"?16384:8192);
+   assert.equal(body.max_tokens,body.model==="minimaxai/minimax-m3.1-flash"?16384:
+     body.model==="openai/gpt-oss-20b"?4096:8192);
+   assert.equal(body.reasoning_effort,body.model==="openai/gpt-oss-20b"?"low":undefined);
    assert.equal(body.temperature,1.0);
    assert.equal(body.tools,undefined);
    return{status:200,async json(){return{
@@ -94,7 +96,8 @@ test("NVIDIA-listed output defaults are per-model first-wave profiles, not user 
   {temperature:1.0,top_p:0.95,max_tokens:16384});
  assert.deepEqual(discoveryProfile("poolside/laguna-xs-2.1"),
   {temperature:1.0,top_p:0.95,max_tokens:8192});
- assert.equal(discoveryProfile("openai/gpt-oss-20b").max_tokens,8192);
+ assert.deepEqual(discoveryProfile("openai/gpt-oss-20b"),
+  {temperature:1.0,top_p:0.95,max_tokens:4096,reasoning_effort:"low"});
 });
 test("HTTP 400 profile rejections and upstream 503 are not model accuracy failures",async()=>{
  const catalog=async()=>({status:200,json:async()=>({data:allModels.map(id=>({id}))})});
