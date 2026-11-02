@@ -26,6 +26,7 @@ export async function runWorkforceCase({modelIndex,caseIndex,providerFetch,now=(
   eligible_model_count:null,finish_reason:"not_recorded",
   prompt_tokens:null,completion_tokens:null,reasoning_tokens:null,
   first_pass:false,format_valid:false,fields_correct:0,
+  field_checks:Object.fromEntries(Object.keys(c.expected).map(k=>[k,false])),
   fields_total:Object.keys(c.expected).length,
   human_review_required:c.human_review_required,latency_ms:0,
   answer_exported:false,private_input_used:false,
@@ -60,6 +61,7 @@ export async function runWorkforceCase({modelIndex,caseIndex,providerFetch,now=(
   out.tool_calls_proposed=Array.isArray(message?.tool_calls)&&message.tool_calls.length>0;
   const graded=gradeCase(caseIndex,message?.content);
   out.fields_correct=graded.fields_correct;
+  out.field_checks=graded.field_checks;
   out.fields_total=graded.fields_total;
   out.format_valid=graded.format_valid;
   out.first_pass=graded.passed&&!out.tool_calls_proposed;
