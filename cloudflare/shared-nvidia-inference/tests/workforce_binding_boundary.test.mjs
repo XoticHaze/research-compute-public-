@@ -34,7 +34,7 @@ test("diagnostic gate rejects requests before credentials or provider reads",asy
  assert.equal(disabled.status,503);
  assert.equal(keyReads,0);
  env.CC_NVIDIA_DIAGNOSTIC_ENABLED="1";
- for(const bad of [{model_index:0,case_index:32},{model_index:0,case_index:-1},
+ for(const bad of [{model_index:0,case_index:92},{model_index:0,case_index:-1},
   {model_index:10000,case_index:0},{model_index:0,case_index:0,prompt:"private"},
   {model_index:"0",case_index:0} ]){
   const r=await worker.fetch(req(remote,bad),env);
@@ -103,24 +103,25 @@ test("old code role is still fixed at five functions, broad trial cannot expand 
  assert.equal(calls,0);
 });
 
-test("bounded session accepts independent fixed cases, blocks duplicates and isolates other routes",async()=>{
+test("bounded sessions cover all fixed cases without lifting the 64-request per-session gate",async()=>{
  let seen=0;
- const caller=createCaller();
  const service={NVIDIA_SERVICE:{fetch:async request=>{
   seen++;
   const {model_index,case_index}=await request.json();
   return new Response(JSON.stringify({...fixture(case_index),model_index}),{status:200});
  }}};
- for(let i=0;i<CASES.length;i++)for(let model_index=0;model_index<2;model_index++){
-  const got=await caller.fetch(req(local,{model_index,case_index:i}),service);
-  assert.equal(got.status,200,"case "+i+" model "+model_index);
+ for(const start of [0,32,64]){
+  const caller=createCaller();
+  for(let i=start;i<Math.min(start+32,CASES.length);i++)for(let model_index=0;model_index<2;model_index++){
+   const got=await caller.fetch(req(local,{model_index,case_index:i}),service);
+   assert.equal(got.status,200,"case "+i+" model "+model_index);
+  }
+  const duplicate=await caller.fetch(req(local,{model_index:0,case_index:start}),service);
+  assert.equal(duplicate.status,409);
+  const overflow=await caller.fetch(req(local,{model_index:2,case_index:0}),service);
+  assert.equal(overflow.status,409);
  }
  assert.equal(seen,CASES.length*2);
- const duplicate=await caller.fetch(req(local,{model_index:0,case_index:0}),service);
- assert.equal(duplicate.status,409);
- const overflow=await caller.fetch(req(local,{model_index:2,case_index:0}),service);
- assert.equal(overflow.status,409);
- assert.equal(seen,64);
 });
 test("provider hold stops further requests without treating it as model inability",async()=>{
  let calls=0;
