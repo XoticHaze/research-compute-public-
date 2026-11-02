@@ -5,7 +5,7 @@
 import {discoveryProfile,eligibleWorkforceCatalog} from "./workforce_provider_runner.js";
 import {V4_HOLDOUT_CASES} from "./workforce_v4_holdout.js";
 import {v4CasePrompt,scoreV4Case} from "./workforce_v4_grader.js";
-const ORIGIN="https://integrate.api.nvidia.com/v1";
+export const V4_REVIEW_MODEL_ALLOWLIST=Object.freeze(["poolside/laguna-xs-2.1","minimaxai/minimax-m3.1-flash"]);\nconst ORIGIN="https://integrate.api.nvidia.com/v1";
 const finishes=new Set(["stop","length","tool_calls","content_filter"]);
 const safeStatus=n=>Number.isInteger(n)&&n>=100&&n<=599?n:null;
 const safeTokens=n=>Number.isSafeInteger(n)&&n>=0&&n<=1000000?n:null;
@@ -38,6 +38,10 @@ export async function runV4SourceOnlyCase({modelIndex,caseIndex,providerFetch,no
     if(modelIndex>=catalog.length){receipt.status="model_index_not_in_authenticated_catalog";return receipt;}
     const model=catalog[modelIndex];
     receipt.model=model;
+    if(!V4_REVIEW_MODEL_ALLOWLIST.includes(model)){
+      receipt.status="model_not_admitted_for_v4";
+      return receipt;
+    }
     receipt.provider_calls++;
     const completion=await providerFetch(ORIGIN+"/chat/completions",{
       method:"POST",redirect:"manual",
