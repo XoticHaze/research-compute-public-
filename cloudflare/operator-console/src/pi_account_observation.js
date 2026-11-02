@@ -82,13 +82,15 @@ export function validatePiAccountObservation(raw, now = Date.now()) {
   // Return only fields from the fixed Pi reader, never a caller-supplied extension.
   return Object.fromEntries(KEYS.map((k) => [k, raw[k]]));
 }
-export function validatePiObservationEnvelope(input, now = Date.now()) {
-  const typedKeys = ['schema','node_id','command','request_id','result_commit_sha','observation'];
-  const outboxKeys = ['schema','node_id','producer_kind','observation_id',
-    'source_path','result_commit_sha','record'];
+// Private Git source identifiers stay in the independently verified publisher.
+export function validatePiObservationEnvelope(input, now = Date.now(), binding) {
+  const typedKeys = ['schema','node_id','command','request_id','source_binding_id','source_receipt_id','observation'];
+  const outboxKeys = ['schema','node_id','producer_kind','observation_id','source_binding_id','source_receipt_id','record'];
   if (!isObject(input) || input.node_id !== 'cc-pi4'
-      || typeof input.result_commit_sha !== 'string'
-      || !/^[a-f0-9]{40}$/.test(input.result_commit_sha)) {
+      || typeof binding !== 'string' || !/^[A-Za-z0-9_-]{24,128}$/.test(binding)
+      || input.source_binding_id !== binding
+      || typeof input.source_receipt_id !== 'string'
+      || !/^[a-f0-9]{64}$/.test(input.source_receipt_id)) {
     reject('pi_observation_envelope_rejected');
   }
   if (input.schema === PI_ENVELOPE_SCHEMA) {
@@ -99,7 +101,7 @@ export function validatePiObservationEnvelope(input, now = Date.now()) {
     }
     return { schema: PI_ENVELOPE_SCHEMA, node_id: 'cc-pi4',
       command: input.command, request_id: input.request_id,
-      result_commit_sha: input.result_commit_sha,
+      source_binding_id: input.source_binding_id, source_receipt_id: input.source_receipt_id,
       observation: validatePiAccountObservation(input.observation, now) };
   }
   if (input.schema === PI_OUTBOX_ENVELOPE_SCHEMA) {
@@ -113,7 +115,7 @@ export function validatePiObservationEnvelope(input, now = Date.now()) {
         || input.producer_kind !== producer
         || typeof input.observation_id !== 'string'
         || !/^piobs-\d{14}-[a-f0-9]{16}$/.test(input.observation_id)
-        || input.source_path !== `pi-node/observations/${input.observation_id}.json`
+
         || !exactKeys(input.record, recordKeys)
         || input.record.schema !== PI_OUTBOX_RECORD_SCHEMA
         || input.record.node_id !== 'cc-pi4'
@@ -138,7 +140,7 @@ export function validatePiObservationEnvelope(input, now = Date.now()) {
     }
     return { schema: PI_OUTBOX_ENVELOPE_SCHEMA, node_id:'cc-pi4',
       producer_kind:producer, observation_id:input.observation_id,
-      source_path:input.source_path, result_commit_sha:input.result_commit_sha,
+      source_binding_id:input.source_binding_id, source_receipt_id:input.source_receipt_id,
       observation:clean };
   }
   reject('pi_observation_envelope_kind_rejected');
@@ -178,8 +180,21 @@ export async function verifyPiOutboxSnapshotDigest(raw) {
   return true;
 }
 
-export function piOperatorView(record, now = Date.now()) {
-  const input = validatePiObservationEnvelope(record.envelope, now);
+export function piOperatorView(record, now = Date.now(), binding, approvedSha) {
+  const input = validatePiObservationEnvelope(record.envelope, now, binding);
+  const p = record?.publisher_provenance;
+  const keys = ['schema','workflow_sha','run_id','verified_at_utc'];
+  const stored = Date.parse(record?.stored_at_utc || '');
+  const verified = Date.parse(p?.verified_at_utc || '');
+  if (!exactKeys(p, keys)
+      || p.schema !== 'mmibkr.pi_account_publisher_provenance.v1'
+      || typeof approvedSha !== 'string' || !/^[a-f0-9]{40}$/.test(approvedSha)
+      || p.workflow_sha !== approvedSha
+      || !/^[0-9]{4,24}$/.test(String(p.run_id || ''))
+      || !Number.isFinite(stored) || !Number.isFinite(verified)
+      || verified > now + 60000 || Math.abs(stored - verified) > 60000) {
+    reject('pi_account_publisher_provenance_unverified');
+  }
   return { schema: 'mmibkr.pi_account_operator_view.v1', node_id: 'cc-pi4',
     source: input.schema === PI_ENVELOPE_SCHEMA
       ? 'authenticated_typed_pi_result' : 'root_observation_outbox',
@@ -192,7 +207,8 @@ export function piOperatorView(record, now = Date.now()) {
     recent_execution_count: input.observation.expected_account_recent_execution_count,
     symbol_position_counts: input.observation.expected_account_symbol_position_counts,
     symbol_open_order_counts: input.observation.expected_account_symbol_open_order_counts,
-    git_receipt_sha: input.result_commit_sha,
+    receipt_sha: input.source_receipt_id,
+    public_publisher_oidc_verified: true,
     stored_at_utc: record.stored_at_utc,
     broker_mutation_authority: false, strategy_authority: false,
     live_execution_allowed: false, historical_fills_complete: false,

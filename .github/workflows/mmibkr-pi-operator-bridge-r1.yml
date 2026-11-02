@@ -25,6 +25,11 @@ jobs:
       PI_OUTBOX_REPO: ${{ secrets.PI_OUTBOX_REPO }}
       PI_OUTBOX_REF: ${{ secrets.PI_OUTBOX_REF }}
       PI_OUTBOX_PREFIX: ${{ secrets.PI_OUTBOX_PREFIX }}
+      PI_OUTBOX_OPAQUE_BINDING_ID: ${{ secrets.PI_OUTBOX_OPAQUE_BINDING_ID }}
+      PI_BOT_PRIVATE_RECEIPT_HMAC_KEY_HEX: ${{ secrets.PI_BOT_PRIVATE_RECEIPT_HMAC_KEY_HEX }}
+      PI_BOT_ROOT_VERIFY_PUBKEY_B64: ${{ secrets.PI_BOT_ROOT_VERIFY_PUBKEY_B64 }}
+      PI_BOT_ROOT_VERIFY_KEY_ID: ${{ secrets.PI_BOT_ROOT_VERIFY_KEY_ID }}
+      PI_BOT_ROOT_SIGNER_SOURCE_SHA256: ${{ secrets.PI_BOT_ROOT_SIGNER_SOURCE_SHA256 }}
       OPERATOR_CONSOLE_URL: https://mmibkr-operator-console.slenderiq.workers.dev
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -36,4 +41,5 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
+          python -m pip install --disable-pip-version-check cryptography==46.0.1
           python scripts/mmibkr_pi_operator_bridge_v1.py

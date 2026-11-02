@@ -4,6 +4,12 @@ import { OperatorState } from '../cloudflare/operator-console/src/index.js';
 import {validatePiAccountObservation,validatePiObservationEnvelope,piOperatorView,verifyPiOutboxSnapshotDigest} from '../cloudflare/operator-console/src/pi_account_observation.js';
 import {nextPiReplayLedger} from '../cloudflare/operator-console/src/pi_replay_ledger.js';
 const now=Date.parse('2026-10-31T13:00:00.000Z');
+const BINDING='A'.repeat(32), PIN='f'.repeat(40);
+const provenance={schema:'mmibkr.pi_account_publisher_provenance.v1',
+  workflow_sha:PIN,run_id:'12345678',verified_at_utc:'2026-10-31T13:00:00Z'};
+const validateEnvelope=(raw,when=now)=>validatePiObservationEnvelope(raw,when,BINDING);
+const accountView=(record,when=now)=>piOperatorView(
+  {...record,publisher_provenance:record.publisher_provenance||provenance},when,BINDING,PIN);
 function fixture() {
   return {schema:'commandcenter.pi.ibkr_account_readonly_snapshot.v1',node_id:'cc-pi4',
     observed_at:'2026-10-31T12:59:30+00:00',read_only:true,broker_mutation_attempted:false,
@@ -19,12 +25,20 @@ function fixture() {
 }
 function envelope(o=fixture()) {return {schema:'mmibkr.pi_account_observation_envelope.v1',
   node_id:'cc-pi4',command:'pi.ibkr_account_readonly',request_id:'ccpi-read-20261031',
-  result_commit_sha:'a'.repeat(40),observation:o};}
+  source_binding_id:BINDING,source_receipt_id:'a'.repeat(64),observation:o};}
 function rejected(fn) {assert.throws(fn,/pi_/);}
 assert.equal(validatePiAccountObservation(fixture(),now).expected_account_position_count,4);
-assert.equal(validatePiObservationEnvelope(envelope(),now).request_id,'ccpi-read-20261031');
-const view=piOperatorView({envelope:envelope(),stored_at_utc:'2026-10-31T13:00:00Z'},now);
+assert.equal(validateEnvelope(envelope(),now).request_id,'ccpi-read-20261031');
+const view=accountView({envelope:envelope(),stored_at_utc:'2026-10-31T13:00:00Z'},now);
 assert.equal(view.position_count,4);
+assert.equal(view.public_publisher_oidc_verified,true);
+assert.equal(view.receipt_sha,'a'.repeat(64));
+assert.equal(Object.hasOwn(view,'git_receipt_sha'),false);
+rejected(()=>validateEnvelope({...envelope(),result_commit_sha:'a'.repeat(40)},now));
+rejected(()=>validateEnvelope({...envelope(),source_binding_id:'wrong'},now));
+rejected(()=>validateEnvelope({...envelope(),source_receipt_id:'a'.repeat(40)},now));
+rejected(()=>piOperatorView({envelope:envelope(),stored_at_utc:'2026-10-31T13:00:00Z'},now,BINDING,PIN));
+rejected(()=>piOperatorView({envelope:envelope(),stored_at_utc:'2026-10-31T13:00:00Z',publisher_provenance:{...provenance,workflow_sha:'e'.repeat(40)}},now,BINDING,PIN));
 assert.equal(view.broker_mutation_authority,false);
 assert.equal(view.canonical_execution_writer_verified,false);
 for(const [key,value] of [['account','DUXXXXXX'],['token','secret'],['credentials','hidden'],
@@ -45,9 +59,9 @@ rejected(()=>validatePiAccountObservation({...fixture(),unattributed_record_coun
 rejected(()=>validatePiAccountObservation({...fixture(),expected_account_position_count:3,
   expected_account_symbol_position_counts:{AMAT:1,APH:1,MNQ:1,OTHER:0}},now));
 rejected(()=>validatePiAccountObservation({...fixture(),expected_account_position_count:NaN},now));
-rejected(()=>validatePiObservationEnvelope({...envelope(),node_id:'other'},now));
-rejected(()=>validatePiObservationEnvelope({...envelope(),result_commit_sha:'bad'},now));
-rejected(()=>validatePiObservationEnvelope({...envelope(),request_id:'../path'},now));
+rejected(()=>validateEnvelope({...envelope(),node_id:'other'},now));
+rejected(()=>validateEnvelope({...envelope(),source_receipt_id:'bad'},now));
+rejected(()=>validateEnvelope({...envelope(),request_id:'../path'},now));
 const unbound=fixture();
 unbound.status='readback_complete_unbound';unbound.reason='EXPECTED_ACCOUNT_NOT_CONFIGURED';
 unbound.expected_account_matched=null;
@@ -65,18 +79,18 @@ console.log('pi account observation contract: bounded source assertions passed')
 
 // A duplicate request or private Git commit cannot be accepted by the durable
 // state writer merely by changing the caller-supplied observation timestamp.
-const replayFirst={request_id:'ccpi-read-20261031',result_commit_sha:'a'.repeat(40)};
-const replaySecond={request_id:'ccpi-read-20261031-next',result_commit_sha:'b'.repeat(40)};
+const replayFirst={request_id:'ccpi-read-20261031',source_receipt_id:'a'.repeat(64)};
+const replaySecond={request_id:'ccpi-read-20261031-next',source_receipt_id:'b'.repeat(64)};
 const replayNow=1793455200000;
 const replayLedger=nextPiReplayLedger(null,replayFirst,replayNow);
 assert.equal(replayLedger.entries.length,1);
 assert.throws(()=>nextPiReplayLedger(replayLedger,replayFirst,replayNow+1),/pi_replay_detected/);
-assert.throws(()=>nextPiReplayLedger(replayLedger,{...replaySecond,result_commit_sha:replayFirst.result_commit_sha},replayNow+1),/pi_replay_detected/);
+assert.throws(()=>nextPiReplayLedger(replayLedger,{...replaySecond,source_receipt_id:replayFirst.source_receipt_id},replayNow+1),/pi_replay_detected/);
 assert.throws(()=>nextPiReplayLedger(replayLedger,{...replaySecond,request_id:replayFirst.request_id},replayNow+1),/pi_replay_detected/);
 assert.equal(nextPiReplayLedger(replayLedger,replaySecond,replayNow+1).entries.length,2);
 assert.throws(()=>nextPiReplayLedger({schema:'wrong',entries:[]},replayFirst,replayNow),/pi_replay_ledger_invalid/);
-assert.equal(nextPiReplayLedger(null,{request_id:'ccpi:read:20261031',result_commit_sha:'c'.repeat(40)},replayNow).entries.length,1);
-assert.throws(()=>nextPiReplayLedger(null,{request_id:'../path',result_commit_sha:'d'.repeat(40)},replayNow),/pi_replay_identity_invalid/);
+assert.equal(nextPiReplayLedger(null,{request_id:'ccpi:read:20261031',source_receipt_id:'c'.repeat(64)},replayNow).entries.length,1);
+assert.throws(()=>nextPiReplayLedger(null,{request_id:'../path',source_receipt_id:'d'.repeat(64)},replayNow),/pi_replay_identity_invalid/);
 
  
 // A root-approved periodic snapshot is a DISTINCT immutable-outbox producer.
@@ -97,8 +111,8 @@ function outboxEnvelope() {
     node_id: 'cc-pi4',
     producer_kind: 'root_approved_existing_agent_snapshot_reader',
     observation_id: observationId,
-    source_path: 'pi-node/observations/' + observationId + '.json',
-    result_commit_sha: 'e'.repeat(40),
+    source_binding_id:BINDING,
+    source_receipt_id: 'e'.repeat(64),
     record: {
       schema: 'commandcenter.pi.account_observation_outbox.v1',
       node_id: 'cc-pi4',
@@ -113,13 +127,13 @@ function outboxEnvelope() {
   };
 }
 const outbox = outboxEnvelope();
-const normalizedOutbox = validatePiObservationEnvelope(outbox,now);
+const normalizedOutbox = validateEnvelope(outbox,now);
 assert.equal(await verifyPiOutboxSnapshotDigest(outbox),true);
 assert.equal(normalizedOutbox.observation.expected_account_position_count,4);
 assert.equal(normalizedOutbox.observation_id,outbox.observation_id);
 assert.equal(normalizedOutbox.command,undefined);
 assert.equal(normalizedOutbox.request_id,undefined);
-const outboxView=piOperatorView({envelope:outbox,stored_at_utc:'2026-10-31T13:00:00Z'},now);
+const outboxView=accountView({envelope:outbox,stored_at_utc:'2026-10-31T13:00:00Z'},now);
 assert.equal(outboxView.source,'root_observation_outbox');
 assert.equal(outboxView.strategy_authority,false);
 assert.equal(outboxView.live_execution_allowed,false);
@@ -127,22 +141,22 @@ assert.equal(outboxView.canonical_execution_writer_verified,false);
 const outboxReplay=nextPiReplayLedger(null,normalizedOutbox,now);
 assert.equal(outboxReplay.entries[0].request_id,'outbox:'+outbox.observation_id);
 assert.throws(()=>nextPiReplayLedger(outboxReplay,normalizedOutbox,now+1),/pi_replay_detected/);
-assert.throws(()=>nextPiReplayLedger(outboxReplay,validatePiObservationEnvelope({
-  ...outbox, result_commit_sha:'d'.repeat(40)},now),now+1),/pi_replay_detected/);
-rejected(()=>validatePiObservationEnvelope({...outbox,command:'pi.ibkr_account_readonly'},now));
-rejected(()=>validatePiObservationEnvelope({...outbox,request_id:'fake-command'},now));
-rejected(()=>validatePiObservationEnvelope({...outbox,source_path:'pi-node/results/fake.json'},now));
-rejected(()=>validatePiObservationEnvelope({...outbox,
+assert.throws(()=>nextPiReplayLedger(outboxReplay,validateEnvelope({
+  ...outbox, source_receipt_id:'d'.repeat(64)},now),now+1),/pi_replay_detected/);
+rejected(()=>validateEnvelope({...outbox,command:'pi.ibkr_account_readonly'},now));
+rejected(()=>validateEnvelope({...outbox,request_id:'fake-command'},now));
+rejected(()=>validateEnvelope({...outbox,source_path:'pi-node/results/fake.json'},now));
+rejected(()=>validateEnvelope({...outbox,
   observation_id:'piobs-20261031125830-'+outbox.record.snapshot_sha256.slice(0,16),
-  source_path:'pi-node/observations/piobs-20261031125830-'+outbox.record.snapshot_sha256.slice(0,16)+'.json',
+
   record:{...outbox.record,observation_id:'piobs-20261031125830-'+outbox.record.snapshot_sha256.slice(0,16)}},now));
-rejected(()=>validatePiObservationEnvelope({...outbox,producer_kind:'pi.ibkr_account_readonly'},now));
-rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,producer:'unapproved'}},now));
-rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,read_only:false}},now));
-rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,snapshot_sha256:'0'.repeat(64)}},now));
-rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,observed_at:'2026-10-31T12:00:00+00:00'}},now));
-rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,snapshot:{...fixture(),account:'DUXXXX'}}},now));
-rejected(()=>validatePiObservationEnvelope({...outbox,record:{...outbox.record,snapshot:{...fixture(),observed_at:'2026-10-31T12:50:00+00:00'}}},now));
+rejected(()=>validateEnvelope({...outbox,producer_kind:'pi.ibkr_account_readonly'},now));
+rejected(()=>validateEnvelope({...outbox,record:{...outbox.record,producer:'unapproved'}},now));
+rejected(()=>validateEnvelope({...outbox,record:{...outbox.record,read_only:false}},now));
+rejected(()=>validateEnvelope({...outbox,record:{...outbox.record,snapshot_sha256:'0'.repeat(64)}},now));
+rejected(()=>validateEnvelope({...outbox,record:{...outbox.record,observed_at:'2026-10-31T12:00:00+00:00'}},now));
+rejected(()=>validateEnvelope({...outbox,record:{...outbox.record,snapshot:{...fixture(),account:'DUXXXX'}}},now));
+rejected(()=>validateEnvelope({...outbox,record:{...outbox.record,snapshot:{...fixture(),observed_at:'2026-10-31T12:50:00+00:00'}}},now));
 console.log('Pi immutable root-outbox contract: producer separation, replay and fail-close verified');
 
 await assert.rejects(async()=>verifyPiOutboxSnapshotDigest({...outbox,record:{...outbox.record,snapshot:{...fixture(),expected_account_position_count:3}}}),/pi_outbox_snapshot_digest_rejected/);
@@ -160,11 +174,11 @@ const memoryStorage = {
 };
 try {
   Date.now = () => now;
-  const worker = new OperatorState({storage:memoryStorage},{});
+  const worker = new OperatorState({storage:memoryStorage},{PI_ACCOUNT_OPAQUE_SOURCE_BINDING_ID:BINDING,PI_OBSERVATION_PUBLISHER_APPROVED_SHA:PIN});
   const request = () => new Request('https://operator-state.internal/pi/store',{
     method:'POST',
     headers:{'content-type':'application/json'},
-    body:JSON.stringify({envelope:outbox,publisher:{workflow_ref:'not_real_auth'}}),
+    body:JSON.stringify({envelope:outbox,publisher_provenance:provenance}),
   });
   const initial = await worker.fetch(request());
   assert.equal(initial.status,201,JSON.stringify(await initial.clone().json()));
@@ -175,7 +189,7 @@ try {
   const stored = await latest.json();
   assert.equal(stored.envelope.schema,outbox.schema);
   assert.equal(stored.envelope.record.snapshot_sha256,outbox.record.snapshot_sha256);
-  assert.equal(piOperatorView(stored,now).source,'root_observation_outbox');
+  assert.equal(accountView(stored,now).source,'root_observation_outbox');
   const replay = await worker.fetch(request());
   assert.equal(replay.status,409);
   assert.equal((await replay.json()).error,'pi_observation_replay_or_ledger_held');
