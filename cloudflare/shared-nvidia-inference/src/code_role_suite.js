@@ -27,12 +27,15 @@ export function validatedTaskIndex(index){
 export function requestFor(modelIndex,taskIndex){
  if(!Number.isInteger(modelIndex)||modelIndex<0||modelIndex>=MODELS.length)throw Error("invalid_synthetic_code_model_index");
  const t=validatedTaskIndex(taskIndex);
- // MiniMax M3.1's published model card recommends temperature=1/top_p=.95.
- // Its 650-token ceiling can truncate reasoning before a final JSON answer.
- // Change ONLY the fixed MiniMax synthetic test, never a public user knob.
- const opts=modelIndex===1
-   ? {temperature:1.0,top_p:0.95,max_tokens:1800}
-   : {temperature:0,max_tokens:650};
+ // Separate fixed synthetic experiment settings from production admission.
+ // NVIDIA documents Poolside's endpoint default generation allowance as 8192,
+ // temperature=1 and top_p=.95. MiniMax supports up to 65536 generated
+ // tokens; 8192 is an initial DISCOVERY allowance, not a capability ceiling.
+ // Only lower a model's budget in a distinct measured follow-up after
+ // recording finish_reason and token usage. Provider/transport timeouts and
+ // rate limits are separate, independently reported safety constraints.
+ // Never accept caller-supplied model parameters, sources, tools, or budgets.
+ const opts={temperature:1.0,top_p:0.95,max_tokens:8192};
  return {model:MODELS[modelIndex],...opts,stream:false,
  messages:[
   {role:"system",content:"You are an offline synthetic code repair worker. Return ONLY a JSON object with one key named source holding the complete Python function source. Preserve the exact signature. No comments, prose, markdown, imports, assigned variables, loops, type hints, string literals, tools, dependencies or side effects. Use only if/else, return, integer arithmetic, boolean comparisons, min, max."},
