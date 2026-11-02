@@ -14,6 +14,7 @@ export async function runDiscoveryCase({modelIndex,taskIndex,providerFetch,now=(
  const out={schema:"commandcenter.nvidia_discovery_case.v1",
   model:MODELS[modelIndex],model_index:modelIndex,task_id:task.id,task_index:taskIndex,
   skill:task.skill,status:"not_started",http_status:null,provider_calls:0,
+  failure_class:"none",
   latency_ms:0,format_valid:false,checks_passed:0,checks_total:0,passed:false,
   human_review_required:task.id==="operator_explanation"||task.id==="operator_explanation_holdout",
   finish_reason:"not_recorded",prompt_tokens:null,completion_tokens:null,
@@ -25,9 +26,11 @@ export async function runDiscoveryCase({modelIndex,taskIndex,providerFetch,now=(
   out.provider_calls++;
   const response=await providerFetch(API,{method:"POST",redirect:"manual",body:JSON.stringify(request)});
   out.http_status=Number.isInteger(response?.status)&&response.status>=100&&response.status<=599?response.status:null;
-  if(out.http_status===429){out.status="provider_rate_limited";return out;}
-  if(out.http_status!==200){out.status="provider_unavailable";return out;}
-  const document=await response.json();
+  if(out.http_status===429){out.status="provider_rate_limited";out.failure_class="rate_limited";return out;}
+  if(out.http_status!==200){out.status="provider_unavailable";out.failure_class="provider_http";return out;}
+  let document;
+  try{document=await response.json();}
+  catch{out.status="provider_transport_or_decode_failure";out.failure_class="response_decode";return out;}
   const choice=document?.choices?.[0];
   const message=choice?.message;
   const usage=document?.usage;
@@ -42,8 +45,9 @@ export async function runDiscoveryCase({modelIndex,taskIndex,providerFetch,now=(
   out.passed=assessed.passed;
   out.status=assessed.human_review_required?"human_review_required":
    assessed.passed?"scored_pass":"scored_fail";
- }catch{
+ }catch(error){
   out.status="provider_transport_or_decode_failure";
+  out.failure_class=["AbortError","TimeoutError"].includes(error?.name)?"timeout":"transport";
  }finally{
   out.latency_ms=Math.max(0,Math.min(120000,now()-start));
  }
