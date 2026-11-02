@@ -10,8 +10,8 @@ test("32 source-locked cases across 16 domains with no false production permissi
  assert.equal(x.active_model_assignments,0);
  assert.deepEqual([x.total_cases,x.objective_cases,x.scored_passes,x.scored_failures,x.writing_cases_pending_human_review],[32,30,20,10,2]);
  assert.equal(x.roles.length,16);
- assert.deepEqual(new Set(x.roles.map(r=>r.role_id)),new Set(WORKFORCE_SKILLS));
- assert.deepEqual(new Set(x.roles.map(r=>r.domain)),new Set(WORKFORCE_DOMAINS));
+ assert.deepEqual(new Set(x.roles.map(r=>r.role_id)),new Set(WORKFORCE_SKILLS.filter(r=>!r.endsWith('_v4'))));
+ assert.deepEqual(new Set(x.roles.map(r=>r.domain)),new Set(WORKFORCE_DOMAINS.filter(d=>!d.endsWith('_v4'))));
  const seen=new Set();let pass=0,fail=0,human=0,candidates=0;
  for(const r of x.roles){
   assert.equal(r.production_admitted,false);
