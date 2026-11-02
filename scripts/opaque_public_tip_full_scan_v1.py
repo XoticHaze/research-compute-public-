@@ -99,9 +99,10 @@ def _catalog(git_dir:Path):
             continue
         try:
             meta,path = raw.split(b"\t",1)
-            mode,kind,sha,size = meta.split(b" ")
-            if kind != b"blob" or not re.fullmatch(rb"[0-9a-f]{40}",sha):
+            matched = re.fullmatch(rb"[0-7]{6} blob ([0-9a-f]{40}) +([0-9]+)",meta)
+            if not matched:
                 raise AuditRejected("invalid_tree_object")
+            sha,size = matched.groups()
             n=int(size)
             if n<0 or n>MAX_BLOB:
                 raise AuditRejected("blob_size_limit")
