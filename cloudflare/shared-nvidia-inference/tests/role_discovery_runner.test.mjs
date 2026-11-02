@@ -43,6 +43,8 @@ test("two fixed models across five real challenge types, without any executed to
   assert.equal(r.reasoning_tokens,230);
   assert.equal(r.http_status,200);
   assert.equal(r.failure_class,"none");
+  assert.equal(r.final_content_present,true);
+  assert.equal(r.reasoning_content_present,true);
   assert.equal(r.raw_output_included,false);
   assert.equal(r.production_authorized,false);
   assert.equal(r.private_data_used,false);
@@ -92,4 +94,25 @@ test("provider timeout is separately recognized and never becomes a capability f
  assert.equal(timed.checks_total,0);
  assert.equal(timed.provider_calls,1);
  assert(!JSON.stringify(timed).includes("PRIVATE_TRANSPORT_DETAILS"));
+});
+
+test("provider 202 is pending admission, not a failed model skill",async()=>{
+ const r=await runDiscoveryCase({modelIndex:0,taskIndex:0,providerFetch:async()=>({status:202})});
+ assert.equal(r.status,"provider_pending");
+ assert.equal(r.failure_class,"pending");
+ assert.equal(r.checks_total,0);
+ assert.equal(r.provider_calls,1);
+});
+test("reasoning-only exhausted reply keeps safe indicators and never leaks reasoning",async()=>{
+ const r=await runDiscoveryCase({modelIndex:1,taskIndex:7,providerFetch:async()=>({status:200,
+  json:async()=>({choices:[{finish_reason:"length",message:{
+    content:"",reasoning_content:"REASONING_DO_NOT_EXPORT"}}],
+    usage:{completion_tokens:8192}})
+ })});
+ assert.equal(r.status,"scored_fail");
+ assert.equal(r.finish_reason,"length");
+ assert.equal(r.final_content_present,false);
+ assert.equal(r.reasoning_content_present,true);
+ assert.equal(r.completion_tokens,8192);
+ assert(!JSON.stringify(r).includes("REASONING_DO_NOT_EXPORT"));
 });
