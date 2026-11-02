@@ -1,0 +1,53 @@
+{
+  "schema": "commandcenter.nvidia_workforce_v4_candidate_state.v1",
+  "project": "cross_project_nvidia_shadow_workforce",
+  "owner_candidate_pr": "XoticHaze/research-compute-public-#2095",
+  "parent_evidence": "commandcenter.nvidia_workforce_role_discovery.v3",
+  "stage": "M2_PUBLIC_SOURCE_ONLY",
+  "roles": [
+    "cc.receipt_intelligence",
+    "cc.ops_log_triage",
+    "shared.document_long_context"
+  ],
+  "source_visible_first_wave_case_count": 60,
+  "source_visible_distinct_fact_patterns_per_role": 5,
+  "first_wave_is_independent_holdout": false,
+  "first_wave_gold_is_concealed": false,
+  "independently_reviewed_hidden_mechanism_count": 0,
+  "unscored_distinct_mechanism_blueprint_count": 60,
+  "model_provider_v4_attempts": 0,
+  "model_provider_v4_scored_cases": 0,
+  "deterministic_same_task_comparators_observed": 0,
+  "stronger_worker_same_task_comparators_observed": 0,
+  "blind_human_narratives_accepted": 0,
+  "provider_cost_observed": false,
+  "reviewer_time_savings_measured": false,
+  "source_candidate_components": {
+    "fixed_response_contract": "src/workforce_v4_contract.js",
+    "synthetic_case_pack": "src/workforce_v4_holdout.js",
+    "sanitized_scoring": "src/workforce_v4_grader.js",
+    "fixed_unwired_provider_adapter": "src/workforce_v4_provider_runner.js",
+    "deterministic_value_comparator": "src/workforce_v4_value_gate.js",
+    "hidden_mechanism_blueprint": "docs/WORKFORCE_V4_INDEPENDENT_MECHANISMS_20261102.md"
+  },
+  "admission": {
+    "production_admitted": false,
+    "private_workload_admitted": false,
+    "active_model_assignments": 0,
+    "provider_adapter_wired_into_worker": false,
+    "public_route_added": false,
+    "command_authority_added": false,
+    "protected_approval_bypassed": false,
+    "private_github_actions_compute_used": false
+  },
+  "next_owner_acceptance": [
+    "independent oracle and contract review",
+    "genuinely independent hidden mechanisms and blinded gold",
+    "source pinned, authorized bounded provider integration",
+    "source-only offline and provider-run provenance",
+    "deterministic and stronger-worker comparators on identical tasks",
+    "human narrative review and measured net economic benefit",
+    "consumer/security signoff before any private data or role activation"
+  ],
+  "interpretation": "Machine-readable candidate projection only. Public fictional source tests never establish model quality or operational authority."
+}
