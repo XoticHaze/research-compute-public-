@@ -75,15 +75,21 @@ test("catalog only, fixed selectors and unexposed routes",async()=>{
   await assert.rejects(run({modelIndex:0,caseIndex:0,providerFetch:null}),/invalid_fixed_v4_selector/);
 });
 
-test("v4 candidate is not connected to deployed Worker, loopback caller or public ingress",()=>{
-  const worker=fs.readFileSync(new URL("../src/index.js",import.meta.url),"utf8");
-  const caller=fs.readFileSync(new URL("../local-probe/src/index.js",import.meta.url),"utf8");
-  assert(!worker.includes("workforce_v4_provider_runner"));
-  assert(!caller.includes("workforce_v4_provider_runner"));
-  assert(!worker.includes("runV4SourceOnlyCase"));
-  assert(!caller.includes("/v4-case"));
+test("v4 fixed-cohort route is private-only, disabled-by-default and bounded to evidence metadata",()=>{
+ const worker=fs.readFileSync(new URL("../src/index.js",import.meta.url),"utf8");
+ const caller=fs.readFileSync(new URL("../local-probe/src/index.js",import.meta.url),"utf8");
+ const config=JSON.parse(fs.readFileSync(new URL("../wrangler.jsonc",import.meta.url),"utf8"));
+ assert.equal(config.workers_dev,false);
+ assert.equal(config.preview_urls,false);
+ assert.equal(config.vars.CC_NVIDIA_DIAGNOSTIC_ENABLED,"0");
+ assert(worker.includes('url.pathname==="/internal/diagnostics/nvidia-workforce-v4"'));
+ assert(worker.includes('env.CC_NVIDIA_DIAGNOSTIC_ENABLED!=="1"'));
+ assert(caller.includes('const WORKFORCE_V4_PATH = "/workforce-v4-case";'));
+ assert(caller.includes("sanitizeV4MechanismReceipt(value)"));
+ assert(!caller.includes("private_prompt_input"));
+ assert(!config.routes);
+ assert(!config.route);
 });
-
 test("catalog listing alone cannot admit an unreviewed v4 model",async()=>{
   const x=mock({catalogModels:["openai/gpt-oss-20b"]});
   const r=await run({modelIndex:0,caseIndex:0,providerFetch:x.providerFetch});
