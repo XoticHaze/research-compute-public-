@@ -15,7 +15,7 @@ function brokerOrigin(env) {
   if (
     url.protocol !== "https:" || url.port || url.username || url.password
     || url.pathname !== "/" || url.search || url.hash
-    || !/^reference-release-broker-v1\.[a-z0-9-]+\.workers\.dev$/.test(url.hostname)
+    || url.hostname !== 'reference-release-broker-v1.shared-compute-neutral-authorization.workers.dev'
   ) throw new Error("broker_origin_rejected");
   return url.origin;
 }
@@ -44,6 +44,25 @@ async function sha256Hex(value) {
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
   return [...digest].map(b => b.toString(16).padStart(2,"0")).join("");
 }
+// Never accept a label-only broker signer proof during independent maintenance.
+// The complete uncompressed on-curve P-256 public point must produce the pinned
+// key fingerprint. No secret, worker response body, or raw key is logged.
+async function verifiedBrokerKeyId(node) {
+  try {
+    const encoded = node?.public_b64;
+    if (typeof encoded !== 'string' || encoded.length > 128) throw new Error('key_shape');
+    const raw = Uint8Array.from(atob(encoded), c => c.charCodeAt(0));
+    if (raw.length !== 65 || raw[0] !== 4) throw new Error('key_point');
+    if (btoa(String.fromCharCode(...raw)) !== encoded) throw new Error('key_encoding');
+    await crypto.subtle.importKey('raw', raw, {name:'ECDSA', namedCurve:'P-256'}, false, ['verify']);
+    const digest = 'sha256:' + await sha256Hex(raw);
+    if (node.key_id !== digest) throw new Error('key_fingerprint');
+    return digest;
+  } catch {
+    throw new Error('broker_public_key_mismatch');
+  }
+}
+
 async function verifyManifest(env, wrapper) {
   if (!env.MAINTENANCE_AUTHORITY) throw new Error("maintenance_authority_binding_unconfigured");
   const manifest = await env.MAINTENANCE_AUTHORITY.verifyManifest(wrapper);
@@ -128,7 +147,11 @@ async function verifyLive(env, manifest) {
   const health = await fetch(brokerOrigin(env) + "/healthz", {headers:{"cache-control":"no-cache"}});
   if (!health.ok || (await health.json()).ok !== true) throw new Error("postdeploy_health_rejected");
   const key = await fetch(brokerOrigin(env) + "/v1/public-key", {headers:{"cache-control":"no-cache"}});
-  if (!key.ok || (await key.json()).key_id !== manifest.expected_broker_key_id) throw new Error("postdeploy_key_mismatch");
+  if (!key.ok) throw new Error("postdeploy_key_mismatch");
+  let observed;
+  try { observed = await verifiedBrokerKeyId(await key.json()); }
+  catch { throw new Error("postdeploy_key_mismatch"); }
+  if (observed !== manifest.expected_broker_key_id) throw new Error("postdeploy_key_mismatch");
 }
 export class MaintenanceLedger {
   constructor(state) { this.state = state; }
