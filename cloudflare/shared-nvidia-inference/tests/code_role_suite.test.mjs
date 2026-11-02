@@ -10,6 +10,23 @@ const SOLUTIONS=[
  "def allocation_limit(equity, risk_bps, cap_usd, minimum_usd):\n    if equity <= 0 or risk_bps <= 0 or risk_bps > 10000 or cap_usd <= 0 or minimum_usd <= 0 or cap_usd < minimum_usd:\n        return None\n    if min(cap_usd, (equity * risk_bps) // 10000) < minimum_usd:\n        return None\n    return min(cap_usd, (equity * risk_bps) // 10000)\n",
  "def staleness_status(now_ms, last_ms, warn_ms, expire_ms):\n    if now_ms < 0 or last_ms < 0 or now_ms < last_ms or warn_ms <= 0 or expire_ms <= warn_ms:\n        return -1\n    if now_ms - last_ms >= expire_ms:\n        return 2\n    if now_ms - last_ms >= warn_ms:\n        return 1\n    return 0\n",
 ];
+test("documented model-native discovery profiles do not silently truncate reasoning",()=>{
+ for(let i=0;i<MODELS.length;i++){
+  const q=requestFor(i,2);
+  assert.equal(q.model,MODELS[i]);
+  assert.equal(q.temperature,1.0);
+  assert.equal(q.top_p,0.95);
+  assert.equal(q.max_tokens,8192);
+  assert.equal(q.stream,false);
+  assert.equal(q.messages.length,2);
+  assert.equal(q.tools,undefined);
+  assert.equal(q.chat_template_kwargs,undefined);
+ }
+ // This allowance is an experimental first-wave value for MiniMax, not
+ // NVIDIA's maximum (65536), and cannot be overridden by input selection.
+ for(let i=0;i<TASKS.length;i++)
+  assert.equal(requestFor(1,i).max_tokens,8192);
+});
 test("five materially distinct fixed synthetic coding tasks each have exact model and function boundary",()=>{
  assert.equal(TASKS.length,5);
  assert.equal(new Set(TASKS.map(x=>x.id)).size,5);
