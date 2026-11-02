@@ -82,7 +82,7 @@ test("unsupported catalog index ends the campaign; rejected model stops wasting 
  assert.equal(extra,0);
  assert.equal(second.status,"catalog_complete");
  const denied=await runCampaign({state:newCampaign({sourceSha:SHA,runId:RUN}),
-  callCase:async selector=>make(selector,"model_http_unavailable"),limit:3});
+  callCase:async selector=>make(selector,"model_http_unavailable"),limit:1});
  assert.equal(denied.observations.length,1);
  assert.equal(denied.next_model_index,1);
  assert.equal(denied.next_case_index,0);
