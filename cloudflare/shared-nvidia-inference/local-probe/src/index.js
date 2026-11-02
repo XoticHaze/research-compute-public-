@@ -34,7 +34,8 @@ export function createCaller() {
   let draftInvoked = false;
   let codeInvoked = false;
   let roleCodeInvoked = false;
-  let discoveryInvoked = false;
+  const discoveryInvoked = new Set();
+  let discoveryStopped = false;
   const roleBatchesInvoked = new Set();
   const microBatchesInvoked = new Set();
   return {
@@ -116,11 +117,14 @@ export function createCaller() {
       } else if (request.body !== null && request.headers.get("content-length") !== "0") {
         return reply(400, { classification: "request_body_not_allowed" });
       }
-      // One full diagnostic per caller invocation. Discovery cannot be
-      // replayed or mixed with legacy model suites in the same local session.
+      // Up to twenty DISTINCT fixed (model,task) cases in a single ephemeral
+      // loopback session, instead of twenty Wrangler restarts. Never replay,
+      // exceed the matrix, mix legacy routes, or continue after provider hold.
       if((discovery!==null&&(smokeInvoked||draftInvoked||codeInvoked||
-          roleCodeInvoked||discoveryInvoked||roleBatchesInvoked.size||microBatchesInvoked.size))||
-         (discovery===null&&discoveryInvoked))
+          roleCodeInvoked||discoveryStopped||discoveryInvoked.size>=20||
+          discoveryInvoked.has(discovery.model_index+":"+discovery.task_index)||
+          roleBatchesInvoked.size||microBatchesInvoked.size))||
+         (discovery===null&&discoveryInvoked.size>0))
         return reply(409,{classification:"caller_batch_limit_or_replay"});
       if ((roleCode===null && codeIndex===null && micro===null && roleBatch === null && (smokeInvoked || draftInvoked || codeInvoked || roleCodeInvoked || roleBatchesInvoked.size || microBatchesInvoked.size)) ||
           (roleCode!==null&&(smokeInvoked||draftInvoked||codeInvoked||roleCodeInvoked||roleBatchesInvoked.size||microBatchesInvoked.size)) ||
@@ -136,7 +140,7 @@ export function createCaller() {
         return reply(503, { classification: "remote_service_binding_missing" });
       }
       // One request per local dev session, even if upstream errors.
-      if(discovery!==null)discoveryInvoked=true;
+      if(discovery!==null)discoveryInvoked.add(discovery.model_index+":"+discovery.task_index);
       else if(roleCode!==null)roleCodeInvoked=true;
       else if(codeIndex!==null)codeInvoked=true;
       else if(url.pathname===DRAFT_PATH)draftInvoked=true;
@@ -182,8 +186,12 @@ export function createCaller() {
         if(discovery!==null){
           const safe=sanitizeDiscoveryReceipt(value);
           if(!safe||safe.model_index!==discovery.model_index||
-             safe.task_index!==discovery.task_index)
+             safe.task_index!==discovery.task_index){
+            discoveryStopped=true;
             return reply(502,{classification:"untrusted_discovery_receipt"});
+          }
+          if(["provider_rate_limited","provider_pending","provider_transport_or_decode_failure"].includes(safe.status))
+            discoveryStopped=true;
           return reply(upstream.ok?200:502,safe);
         }
         if(roleCode!==null){
