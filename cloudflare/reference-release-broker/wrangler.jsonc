@@ -22,8 +22,8 @@
     }
   },
   "vars": {
-    "ALLOWED_JOB_WORKFLOW_REF": "XoticHaze/research-compute-public-/.github/workflows/secure-compute-harness-v1.yml@477b76085c06f77fee72b57771225a66545aa43f",
-    "ALLOWED_JOB_WORKFLOW_SHA": "477b76085c06f77fee72b57771225a66545aa43f",
+    "ALLOWED_JOB_WORKFLOW_REF": "XoticHaze/research-compute-public-/.github/workflows/secure-compute-harness-v1.yml@e8a4574e6c8c7f65e40bb662192b9adb2d8adfdf",
+    "ALLOWED_JOB_WORKFLOW_SHA": "e8a4574e6c8c7f65e40bb662192b9adb2d8adfdf",
     "MAX_ADMISSION_SECONDS": "300",
     "MAX_INTENT_SECONDS": "259200"
   }
