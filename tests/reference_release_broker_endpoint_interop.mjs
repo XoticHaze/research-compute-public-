@@ -160,7 +160,10 @@ console.log('BROKER_STANDARD_PRIVATE_JWK_SIGNER_IMPORT_PROBE_PASS=1');
 // This tests only storage atomicity, not trusted issuer admission or signer seal.
 {
   const fresh = createEnv();
-  const grant = new GrantLedger({storage:{
+  const nonce='a'.repeat(32);
+  const grant = new GrantLedger({
+    id:{name:'placement:' + nonce},
+    storage:{
     transaction: async callback => callback({
       get: async key => fresh.store.get(key),
       put: async (key,value) => fresh.store.set(key,value),
@@ -171,7 +174,6 @@ console.log('BROKER_STANDARD_PRIVATE_JWK_SIGNER_IMPORT_PROBE_PASS=1');
       method:'POST', headers:{'content-type':'application/json'},
       body:JSON.stringify({nonce,issuer_id:issuer}),
     });
-  const nonce='a'.repeat(32);
   const first=await grant.fetch(request(nonce));
   assert.equal(first.status,200,'synthetic placement nonce first claim accepted');
   assert.deepEqual(await first.json(),{ok:true});
@@ -184,6 +186,17 @@ console.log('BROKER_STANDARD_PRIVATE_JWK_SIGNER_IMPORT_PROBE_PASS=1');
     'cross-issuer nonce replay must reject within same nonce Durable Object');
   const invalid=await grant.fetch(request('not-32-hex'));
   assert.equal(invalid.status,400,'invalid nonce must fail closed');
+  const incorrectName=await grant.fetch(request('b'.repeat(32)));
+  assert.equal(incorrectName.status,400,
+    'nonce cannot claim any different Durable Object instance');
+  const unnamed=new GrantLedger({id:{},storage:{
+    transaction: async callback => callback({
+      get: async key => fresh.store.get(key),
+      put: async (key,value) => fresh.store.set(key,value),
+    }),
+  }});
+  assert.equal((await unnamed.fetch(request('c'.repeat(32)))).status,400,
+    'idFromString/newUniqueId without verified name must fail closed');
   assert.equal((await grant.fetch(new Request('https://grant-ledger/consume-placement'))).status,404,
     'read-only endpoint must not be publicly implied');
   const release=await grant.fetch(new Request('https://grant-ledger/consume', {

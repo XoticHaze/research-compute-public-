@@ -294,9 +294,16 @@ export class GrantLedger {
           || String(body.issuer_id).includes('..')) {
         return json({ error: 'placement_input_rejected' }, 400);
       }
+      // Bind the opaque nonce to the actual Durable Object name. An internal
+      // caller must resolve idFromName('placement:' + nonce). A caller-supplied
+      // request body cannot choose another object and reset replay protection.
+      // Cloudflare exposes the original name via state.id.name; undefined
+      // (newUniqueId/idFromString) is deliberately rejected.
+      if (this.state.id?.name !== 'placement:' + body.nonce) {
+        return json({ error: 'placement_nonce_object_mismatch' }, 400);
+      }
       const consumed = await this.state.storage.transaction(async (txn) => {
-        // Unique per run through the existing GRANT_LEDGER DO namespace.
-        // Do not reuse the release grant's 'consumed' key.
+        // Keep the placement key separate from the broker release grant.
         const key = 'placement-consumed';
         if (await txn.get(key)) return false;
         await txn.put(key, {
