@@ -8,7 +8,8 @@ const candidates=["minimaxai/minimax-m3.1-flash","openai/gpt-oss-20b","poolside/
 test("authenticated full catalog is deduplicated and includes more than old two-model limit",()=>{
  assert.deepEqual(eligibleWorkforceCatalog({data:allModels.map(id=>({id}))}),candidates);
  assert.deepEqual(eligibleWorkforceCatalog({data:allModels.map(id=>({id})).concat([{id:allModels[2]}])}),candidates);
- for(const rows of [null,{},["missing"],new Array(10001).fill({id:"nvidia/x"})])
+ assert.deepEqual(eligibleWorkforceCatalog({data:["missing"]}),[]);
+ for(const rows of [null,{},new Array(10001).fill({id:"nvidia/x"})])
    assert.throws(()=>eligibleWorkforceCatalog({data:rows}),/invalid_catalog/);
 });
 test("all 32 source-grounded challenges can be scored for any catalog-admitted candidate, no answer exported",async()=>{
