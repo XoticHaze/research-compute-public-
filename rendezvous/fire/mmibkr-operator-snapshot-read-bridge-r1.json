@@ -1,1 +1,6 @@
-{"schema":"mmibkr.operator_snapshot_read_bridge_request.v1","request_id":"xoti667ownershipdiag20260923T1331","recipient_b64":"5iUQoMmc9uPHQWAodaILYI7zguH9tNGK943J90iRGw4=","recipient_key_id":"sha256:93433aaad7834f71a6cf5189569e1ce419aca38a77ce22b1534c3f43476bd916"}
+{
+  "schema": "mmibkr.operator_snapshot_read_bridge_request.v1",
+  "request_id": "mw95017_snapshot_20261102T095403",
+  "recipient_b64": "ZKoBOEuUoMnG1om6C0ftWA4IDpImKqSli+YxmIwPkQk=",
+  "recipient_key_id": "sha256:00dbd0e872003276add3794eeb77e0f491f80c7b6f3b89d0c6e8f5a960d1be2f"
+}
