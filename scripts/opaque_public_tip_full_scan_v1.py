@@ -71,8 +71,19 @@ def classify(path: str, blob: bytes) -> dict[str,int]:
         out["json_non_object"] += 1
         return dict(out)
     out["json_object"] += 1
-    if any(isinstance(k,str) and k.lower() in FORBIDDEN for k in node):
+    outer_keys = {k.lower() for k in node if isinstance(k,str)}
+    if outer_keys & FORBIDDEN:
         out["forbidden_outer_keys"] += 1
+    # These are record counts by generic FIELD NAMES only. Never print values.
+    categories = {
+        "protocol_label_fields": {"authority","harness"},
+        "source_locator_fields": {"source_repo","source_ref","source_root","source_path","private_source","private_repository","private_endpoint"},
+        "private_digest_fields": {"plaintext_sha256","plaintext_digest","source_sha256","payload_sha256","private_digest"},
+        "potential_secret_name_fields": {"github_token","api_key","private_key","access_token"},
+    }
+    for category, names in categories.items():
+        if outer_keys & names:
+            out[category] += 1
     nested = _nested_key_flags(list(node.values()))
     if nested is None:
         out["nested_scan_incomplete"] += 1
