@@ -20,6 +20,16 @@ class FullTipAuditTests(unittest.TestCase):
         self.assertEqual(n.get("forbidden_outer_keys"),1)
         self.assertEqual(n.get("forbidden_nested_keys"),1)
         self.assertNotIn("CANARY",json.dumps(n))
+    def test_aggregate_field_categories_do_not_publish_values(self):
+        example={"authority":"NOT_PUBLIC_CONTENT", "source_ref":"PINNED_BUT_PRIVATE",
+                 "plaintext_sha256":"EXAMPLE_SECRET_DIGEST", "api_key":"SECRET_KEY_CANARY"}
+        report=classify("example.json",json.dumps(example).encode())
+        for name in ("protocol_label_fields","source_locator_fields","private_digest_fields",
+                     "potential_secret_name_fields"):
+            self.assertEqual(report[name],1)
+        self.assertNotIn("PRIVATE",json.dumps(report))
+        self.assertNotIn("CANARY",json.dumps(report))
+
     def test_bad_json_and_binary_not_certified(self):
         self.assertEqual(classify("a.json",b"{no"),{"json_extension":1,"json_parse_or_duplicate_failure":1})
         self.assertEqual(classify("a.bin",b"DATA"),{"non_json_extension":1})
