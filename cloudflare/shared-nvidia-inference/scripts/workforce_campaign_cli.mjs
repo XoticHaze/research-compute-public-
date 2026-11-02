@@ -114,7 +114,7 @@ export function resultsFromCampaign(state){
  const accepted=state.observations.filter(v=>v.model!==null);
  return evaluateWorkforceReadiness({receipts:accepted});
 }
-function validatePublicHost(){
+export function validatePublicHost(){
  const repo=process.env.GITHUB_REPOSITORY;
  const sha=process.env.WORKFORCE_SOURCE_SHA;
  const run=process.env.GITHUB_RUN_ID;
