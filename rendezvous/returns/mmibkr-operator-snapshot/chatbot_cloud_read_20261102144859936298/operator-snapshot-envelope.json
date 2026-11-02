@@ -1,0 +1,39 @@
+{
+  "broker_mutation_authority": false,
+  "chunks": [
+    {
+      "chars": 8000,
+      "local_name": "operator-snapshot-000.txt",
+      "path": "rendezvous/returns/mmibkr-operator-snapshot/chatbot_cloud_read_20261102144859936298/operator-snapshot-000.txt",
+      "sha256": "789d95bb2e4cf671639284cd04d7b31b0b81f4ce37a452b6c923e3b58548a913"
+    },
+    {
+      "chars": 8000,
+      "local_name": "operator-snapshot-001.txt",
+      "path": "rendezvous/returns/mmibkr-operator-snapshot/chatbot_cloud_read_20261102144859936298/operator-snapshot-001.txt",
+      "sha256": "fc56d99d132eb51a50a4abeb5dd96dbf8477018852d0db1a3cac32ced5fe3412"
+    },
+    {
+      "chars": 8000,
+      "local_name": "operator-snapshot-002.txt",
+      "path": "rendezvous/returns/mmibkr-operator-snapshot/chatbot_cloud_read_20261102144859936298/operator-snapshot-002.txt",
+      "sha256": "c67af9b543afdbf0062ce64fd6b642f8c2aa0832c59dee82ffad333cb95ddc3d"
+    },
+    {
+      "chars": 588,
+      "local_name": "operator-snapshot-003.txt",
+      "path": "rendezvous/returns/mmibkr-operator-snapshot/chatbot_cloud_read_20261102144859936298/operator-snapshot-003.txt",
+      "sha256": "a6df4b2f9d269c5d4700f4cb7be3f26549970d0bd23f5ebb269d2b684686fc7d"
+    }
+  ],
+  "ciphertext_sha256": "54ba096a138deeec97b23129bdff35090388d75c99c039a6fbe85374649e9aa2",
+  "generated_at_utc": "2026-11-02T14:50:06.807517Z",
+  "live_execution_allowed": false,
+  "nonce_b64": "RN6j20ZhN4q5u9Is",
+  "plaintext_published": false,
+  "plaintext_sha256": "c0b2f3db54ffd64fc7d146485640ae55f597901f7c1db5227263bc33cd30a5cc",
+  "recipient_key_id": "sha256:348813cf97e64447c5027a5e21dcc8fb5c4c62db71a3eb035b8fce48c7a372d0",
+  "request_id": "chatbot_cloud_read_20261102144859936298",
+  "schema": "mmibkr.operator_snapshot_encrypted_return_x25519.v1",
+  "sender_public_b64": "9kcLbm1fBvCgTDCFBWIwDD0I/dYhggOn+C+N8DYBjQM="
+}
