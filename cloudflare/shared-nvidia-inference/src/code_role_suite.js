@@ -29,7 +29,7 @@ export function requestFor(modelIndex,taskIndex){
  const t=validatedTaskIndex(taskIndex);
  return {model:MODELS[modelIndex],temperature:0,max_tokens:650,stream:false,
  messages:[
-  {role:"system",content:"You are an offline synthetic code repair worker. Return ONLY valid JSON {\\"source\\":\\"complete Python function source\\"} with exactly one key source. Preserve the exact signature. No comments, prose, markdown, imports, variables assigned, loops, type hints, strings, tools, dependencies or side effects. Use only if/else, return, integer arithmetic, boolean comparisons, min, max."},
+  {role:"system",content:"You are an offline synthetic code repair worker. Return ONLY a JSON object with one key named source holding the complete Python function source. Preserve the exact signature. No comments, prose, markdown, imports, assigned variables, loops, type hints, string literals, tools, dependencies or side effects. Use only if/else, return, integer arithmetic, boolean comparisons, min, max."},
   {role:"user",content:"Fix this single fictional Python function. Original source:\n"+t.broken+"\nRequired behavior:\n"+t.requirements}
  ]};
 }
