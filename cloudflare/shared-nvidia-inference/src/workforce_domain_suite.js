@@ -239,6 +239,7 @@ export function gradeCase(caseIndex,raw){
  const r={schema:"commandcenter.model_workforce_case_score.v1",case_id:c.id,
   case_index:caseIndex,domain:c.domain,role:c.role,baseline:c.baseline,
   priority:c.priority,format_valid:false,fields_correct:0,
+  field_checks:Object.fromEntries(Object.keys(c.expected).map(k=>[k,false])),
   fields_total:Object.keys(c.expected).length,passed:false,
   human_review_required:c.human_review_required,answer_exported:false,
   production_authorized:false};
@@ -248,10 +249,12 @@ export function gradeCase(caseIndex,raw){
  r.format_valid=same(Object.keys(d).sort(),Object.keys(c.expected).sort());
  if(c.human_review_required){
   // Human-review outcome deliberately cannot be inferred from keyword count.
-  r.fields_correct=typeof d.message==="string"&&d.message.length>=40&&d.message.length<=1500?1:0;
+  r.field_checks.message=typeof d.message==="string"&&d.message.length>=40&&d.message.length<=1500;
+  r.fields_correct=r.field_checks.message?1:0;
   r.passed=false;
  }else{
-  r.fields_correct=Object.keys(c.expected).filter(k=>same(d[k],c.expected[k])).length;
+  r.field_checks=Object.fromEntries(Object.keys(c.expected).map(k=>[k,same(d[k],c.expected[k])]));
+  r.fields_correct=Object.values(r.field_checks).filter(Boolean).length;
   r.passed=r.format_valid&&r.fields_correct===r.fields_total;
  }
  return r;
