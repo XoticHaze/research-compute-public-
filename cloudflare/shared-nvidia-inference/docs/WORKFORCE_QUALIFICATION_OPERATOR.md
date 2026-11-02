@@ -40,3 +40,24 @@ Earlier catalog/synthetic sweeps compared elementary math/logic/JSON/tool-callin
 ## Admission and current state
 
 Source-only PR. Private GitHub Actions compute is prohibited. Public synthetic/offline tests on the existing research repository are permitted. The deployed production Worker source and diagnostic admission have not been changed in this PR. Do not run new provider workload by assuming the source branch is already deployed. No token or model must be copied into public code or workflow artifacts.
+
+
+## Cross-run evidence assembly (offline and non-promoting)
+
+One synthetic workflow dispatch evaluates at most eight fixed cases, and a process-local checkpoint cannot claim results from another workflow. To compare independent public workflow receipts, download each completed `nvidia-workforce-shadow-receipts` artifact **from its observed run/job**; extract only its `campaign_progress.json` in a trusted analyst context; verify actual GitHub run, event, job, completed status, artifact ID, immutable source and returned model ID before aggregation. A numeric `github-<run>` field is a self-reported identity, **not cryptographic proof of GitHub execution**.
+
+Use the source-owned, metadata-only aggregation command from the exact candidate revision:
+
+```sh
+node scripts/workforce_aggregate_results.mjs --source <exact-source-SHA-40-hex> case1/campaign_progress.json case2/campaign_progress.json
+```
+
+It applies the same strict sanitizer as the local caller, rejects mixed oracle source SHA, duplicate run IDs and duplicate model+case observations, and uses the authenticated model name rather than an unstable numerical catalog position for identity. It reports per-role objective scores, provider holds, p50/p95 inference latency and missing human/financial measurement without promoting anything. It will intentionally reject older v1/v2 records if mixed with v3; historical scores must remain separately versioned.
+
+A fully trustworthy comparison needs **both** the source-owned offline validation and independent owning public workflow/job/artifact readback. Merely updating a trigger text file, merging a PR, having a successful mock provider test, or seeing a `github-`-shaped string is insufficient to claim a new provider result. Do not infer provider availability from a catalog ID alone.
+
+## Blind human review is an unimplemented private acceptance route
+
+The public campaign artifacts contain only field-level booleans and metadata, **never model prose**. That is the intended privacy boundary, but it means they cannot support blind review of subjective drafts or real private-document analysis. `human_review_required` currently denotes a pending review, not a satisfactory writing result. Do not treat a schema-valid message as human quality or report labor savings from synthetic templates.
+
+Before qualifying writing/summarization workers, the owning private reviewer must implement an authenticated, read-only **private-only** output viewing/review route with exact case/source/model/run identity, bounded redaction and retention, independent human correctness/safety rubric, double-blind alternatives, and immutable reviewer receipt. Do not pipe raw responses through public GitHub Actions artifacts or introduce a public Worker endpoint. The current synthetic workflow and diagnostic binding remain unchanged until separate authorization and exact binding admission. Subjective review results and actual analyst edit time must be consumed as separately sourced inputs, never inferred from a template or a model self-score.
