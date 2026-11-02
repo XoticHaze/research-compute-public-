@@ -190,7 +190,7 @@ export function createCaller() {
             discoveryStopped=true;
             return reply(502,{classification:"untrusted_discovery_receipt"});
           }
-          if(["provider_rate_limited","provider_pending","provider_transport_or_decode_failure"].includes(safe.status))
+          if(["provider_rate_limited","provider_pending","provider_transport_or_decode_failure"].includes(safe.status)||safe.http_status===401)
             discoveryStopped=true;
           return reply(upstream.ok?200:502,safe);
         }
@@ -251,6 +251,7 @@ export function createCaller() {
         };
         return reply(upstream.ok ? 200 : 502, sanitized);
       } catch {
+        if(discovery!==null)discoveryStopped=true;
         return reply(502, { classification: "service_binding_transport_or_receipt_failure" });
       }
     },
