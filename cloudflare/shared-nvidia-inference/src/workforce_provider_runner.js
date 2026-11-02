@@ -29,7 +29,7 @@ export async function runWorkforceCase({modelIndex,caseIndex,providerFetch,now=(
   fields_total:Object.keys(c.expected).length,
   human_review_required:c.human_review_required,latency_ms:0,
   answer_exported:false,private_input_used:false,
-  production_authorized:false,tools_called:false};
+  production_authorized:false,tool_calls_proposed:false,tools_executed:false};
  try{
   out.provider_calls++;
   const raw=await providerFetch(ENDPOINT+"/models",{method:"GET",redirect:"manual"});
@@ -57,13 +57,13 @@ export async function runWorkforceCase({modelIndex,caseIndex,providerFetch,now=(
   out.completion_tokens=count(result?.usage?.completion_tokens);
   out.reasoning_tokens=count(result?.usage?.completion_tokens_details?.reasoning_tokens);
   // A model-proposed tool invocation is never executed or silently accepted.
-  out.tools_called=Array.isArray(message?.tool_calls)&&message.tool_calls.length>0;
+  out.tool_calls_proposed=Array.isArray(message?.tool_calls)&&message.tool_calls.length>0;
   const graded=gradeCase(caseIndex,message?.content);
   out.fields_correct=graded.fields_correct;
   out.fields_total=graded.fields_total;
   out.format_valid=graded.format_valid;
-  out.first_pass=graded.passed&&!out.tools_called;
-  out.status=out.tools_called?"tool_attempt_rejected":
+  out.first_pass=graded.passed&&!out.tool_calls_proposed;
+  out.status=out.tool_calls_proposed?"tool_attempt_rejected":
     out.human_review_required?"human_review_required":
     graded.passed?"scored_pass":"scored_fail";
  }catch{
