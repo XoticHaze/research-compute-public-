@@ -24,8 +24,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          health_url='https://reference-release-broker-v1.slenderiq.workers.dev/healthz'
-          key_url='https://reference-release-broker-v1.slenderiq.workers.dev/v1/public-key'
+          health_url='https://reference-release-broker-v1.shared-compute-neutral-authorization.workers.dev/healthz'
+          key_url='https://reference-release-broker-v1.shared-compute-neutral-authorization.workers.dev/v1/public-key'
           health_body="$RUNNER_TEMP/health.json"
           key_body="$RUNNER_TEMP/key.json"
           health_status="$(curl --max-time 15 -sS -o "$health_body" -w '%{http_code}' "$health_url" || true)"
