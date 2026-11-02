@@ -6,6 +6,7 @@ import {CASES} from "../../src/workforce_domain_suite.js";
 import {modelId} from "../../src/benchmark_fixtures.js";
 const statuses=new Set(["not_started","provider_rate_limited","catalog_unavailable",
  "model_index_not_in_authenticated_catalog","model_http_unavailable",
+ "request_profile_rejected","provider_upstream_error",
  "scored_pass","scored_fail","human_review_required","tool_attempt_rejected",
  "transport_or_decoding_failure"]);
 const finish=new Set(["not_recorded","stop","length","tool_calls","content_filter","other"]);
