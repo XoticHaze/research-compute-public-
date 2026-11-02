@@ -15,7 +15,7 @@ function brokerOrigin(env) {
   if (
     url.protocol !== "https:" || url.port || url.username || url.password
     || url.pathname !== "/" || url.search || url.hash
-    || !url.hostname !== 'reference-release-broker-v1.shared-compute-neutral-authorization.workers.dev'
+    || url.hostname !== 'reference-release-broker-v1.shared-compute-neutral-authorization.workers.dev'
   ) throw new Error("broker_origin_rejected");
   return url.origin;
 }
