@@ -27,7 +27,9 @@ function validReceipt(v){
 const validMeasure=(v)=>v&&Number.isFinite(v.baseline_seconds)&&v.baseline_seconds>=0&&
  Number.isFinite(v.review_seconds)&&v.review_seconds>=0&&
  Number.isFinite(v.rework_seconds)&&v.rework_seconds>=0&&
- (v.provider_cost_usd===null||(Number.isFinite(v.provider_cost_usd)&&v.provider_cost_usd>=0));
+ (v.provider_cost_usd===null||(Number.isFinite(v.provider_cost_usd)&&v.provider_cost_usd>=0))&&
+ v.method==="observed_comparison"&&typeof v.evidence_id==="string"&&
+ /^[A-Za-z0-9_.:-]{8,120}$/.test(v.evidence_id);
 export function evaluateWorkforceReadiness({receipts,measurements={}}){
  if(!Array.isArray(receipts)||!measurements||typeof measurements!=="object"||Array.isArray(measurements))
   throw Error("invalid_workforce_evidence");
@@ -55,19 +57,20 @@ export function evaluateWorkforceReadiness({receipts,measurements={}}){
   const costKnown=items.every(v=>v.completion_tokens!==null&&v.prompt_tokens!==null);
   const measurement=measurements[key]??null;
   if(measurement!==null&&!validMeasure(measurement))throw Error("invalid_or_unmeasured_baseline");
-  const netSaved=measurement===null?null:
-   measurement.baseline_seconds-(percentile(latency,.5)??0)/1000-
+  const measuredMedian=percentile(latency,.5);
+  const netSaved=measurement===null||measuredMedian===null?null:
+   measurement.baseline_seconds-measuredMedian/1000-
     measurement.review_seconds-measurement.rework_seconds;
-  const effect=(measurement===null?"UNMEASURED":
+  const effect=(netSaved===null?"UNMEASURED":
     netSaved>0?"POSITIVE_TIME_SAVED":"NO_TIME_SAVINGS");
   const anyCriticalSafety=items.some(v=>v.status==="tool_attempt_rejected");
   // This stage never promotes a provider: exact role SLAs, multiple independent
   // trials, real document reviews, provider price and consumer acceptance are
   // separate observed gates. Avoid treating 2/2 as general intelligence.
   const recommendation=anyCriticalSafety?"reject_protected_tool_work":
+    unavailable.length?"investigate_provider_reliability":
     human.length?"needs_blind_human_review":
     !coverage_complete?"insufficient_domain_coverage":
-    unavailable.length?"investigate_provider_reliability":
     successes.length!==evaluated.length?"bounded_helper_with_verifier":
     measurement===null?"compare_against_baseline":
     effect==="NO_TIME_SAVINGS"?"deterministic_or_fleet_preferred":
@@ -82,6 +85,9 @@ export function evaluateWorkforceReadiness({receipts,measurements={}}){
    prompt_and_completion_counts_available:costKnown,
    provider_cost_usd:measurement?.provider_cost_usd??null,
    seconds_saved_per_case:netSaved,measured_value:effect,
+   economic_value_net_of_provider_cost:measurement?.provider_cost_usd===null||
+      measurement===null?"UNKNOWN":
+      "PROVIDER_COST_MEASURED_REQUIRES_CONSUMER_CONVERSION",
    recommendation,production_admitted:false,
    required_next_evidence:measurement===null?"measured_baseline_and_review_effort":
      human.length?"blind_human_quality_review":
