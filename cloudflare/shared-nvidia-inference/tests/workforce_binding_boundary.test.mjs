@@ -135,3 +135,16 @@ test("provider hold stops further requests without treating it as model inabilit
  assert.equal(second.status,409);
  assert.equal(calls,1);
 });
+
+test("only independent source-keyed field checks cross the private boundary",()=>{
+ const src=fixture(2);
+ const keys=Object.keys(CASES[2].expected);
+ const checks=Object.fromEntries(keys.map(k=>[k,true]));
+ const accepted=sanitizeWorkforceReceipt({...src,field_checks:checks});
+ assert(accepted);
+ assert.deepEqual(accepted.field_checks,checks);
+ assert.equal(accepted.answer_exported,false);
+ assert.equal(sanitizeWorkforceReceipt({...src,field_checks:{...checks,private_text:true}}),null);
+ assert.equal(sanitizeWorkforceReceipt({...src,field_checks:{...checks,[keys[0]]:"PRIVATE_ANSWER"}}),null);
+ assert.equal(sanitizeWorkforceReceipt({...src,field_checks:{...checks,[keys[0]]:false}}),null);
+});
