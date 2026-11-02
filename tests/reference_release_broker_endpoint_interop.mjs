@@ -155,6 +155,48 @@ const importedSigner = await importBrokerSigner(JSON.stringify(privateJwk));
 assert.equal(importedSigner.keyId,brokerId);
 console.log('BROKER_STANDARD_PRIVATE_JWK_SIGNER_IMPORT_PROBE_PASS=1');
 
+// Independent PLACED nonce storage reuses the existing Durable Object class,
+// but is domain-separated from broker release grants and NOT externally routed.
+// This tests only storage atomicity, not trusted issuer admission or signer seal.
+{
+  const fresh = createEnv();
+  const grant = new GrantLedger({storage:{
+    transaction: async callback => callback({
+      get: async key => fresh.store.get(key),
+      put: async (key,value) => fresh.store.set(key,value),
+    }),
+  }});
+  const request = (nonce,issuer='synthetic-placement-issuer') =>
+    new Request('https://grant-ledger/consume-placement', {
+      method:'POST', headers:{'content-type':'application/json'},
+      body:JSON.stringify({nonce,issuer_id:issuer}),
+    });
+  const nonce='a'.repeat(32);
+  const first=await grant.fetch(request(nonce));
+  assert.equal(first.status,200,'synthetic placement nonce first claim accepted');
+  assert.deepEqual(await first.json(),{ok:true});
+  assert.equal(fresh.store.get('placement-consumed').nonce,nonce);
+  assert.equal(fresh.store.has('consumed'),false,
+    'PLACED nonce must not spend a broker release grant');
+  const again=await grant.fetch(request(nonce));
+  assert.equal(again.status,409,'PLACED nonce replay must reject');
+  assert.equal((await grant.fetch(request(nonce,'another-placement-issuer'))).status,409,
+    'cross-issuer nonce replay must reject within same nonce Durable Object');
+  const invalid=await grant.fetch(request('not-32-hex'));
+  assert.equal(invalid.status,400,'invalid nonce must fail closed');
+  assert.equal((await grant.fetch(new Request('https://grant-ledger/consume-placement'))).status,404,
+    'read-only endpoint must not be publicly implied');
+  const release=await grant.fetch(new Request('https://grant-ledger/consume', {
+    method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({grant_id:'synthetic_grant_12345678',
+      admission_not_after:now+300}),
+  }));
+  assert.equal(release.status,200,'existing broker grant must remain independent');
+  assert.equal(fresh.store.has('consumed'),true);
+  assert.equal(fresh.store.has('placement-consumed'),true);
+  console.log('BROKER_EXISTING_DO_PLACEMENT_NONCE_STORAGE_SYNTHETIC_PASS=1');
+}
+
 const positive=await makeCall(env);
 assert.equal(positive.status,200,'signed-release endpoint expected 200, ledger size='+store.size);
 const doc=await positive.json();
