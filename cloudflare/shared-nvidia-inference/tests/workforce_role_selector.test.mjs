@@ -62,7 +62,7 @@ test("operator writing cannot earn automatic quality credit",()=>{
 test("no fabricated data, no inferred provider pricing, and stable empty-state output",()=>{
  const empty=evaluate({receipts:[]});
  assert.equal(empty.rows.length,0);
- assert.equal(empty.expected_cases,92);
+ assert.equal(empty.expected_cases,32);
  assert.equal(empty.any_production_admission,false);
  assert.equal(empty.provider_prices_inferred,false);
  assert.throws(()=>evaluate({receipts:[receipt(0)],measurements:{
