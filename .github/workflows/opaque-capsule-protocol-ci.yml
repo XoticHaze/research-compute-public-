@@ -9,6 +9,8 @@ on:
       - 'scripts/opaque_bidirectional_capsule_smoke_v1.py'
       - 'tests/test_opaque_bidirectional_capsule_v1.py'
       - 'tests/test_opaque_bidirectional_capsule_p256_aesgcm_v1.py'
+      - 'scripts/opaque_capsule_exposure_compare_v1.py'
+      - 'tests/test_opaque_capsule_exposure_compare_v1.py'
       - 'scripts/commandcenter_ephemeral_exchange_cleanup_v1.py'
       - 'tests/test_commandcenter_ephemeral_exchange_cleanup_v1.py'
       - 'scripts/public_compute_memory_scratch_v1.py'
@@ -31,6 +33,8 @@ on:
       - 'scripts/opaque_bidirectional_capsule_smoke_v1.py'
       - 'tests/test_opaque_bidirectional_capsule_v1.py'
       - 'tests/test_opaque_bidirectional_capsule_p256_aesgcm_v1.py'
+      - 'scripts/opaque_capsule_exposure_compare_v1.py'
+      - 'tests/test_opaque_capsule_exposure_compare_v1.py'
       - 'scripts/commandcenter_ephemeral_exchange_cleanup_v1.py'
       - 'tests/test_commandcenter_ephemeral_exchange_cleanup_v1.py'
       - 'scripts/public_compute_memory_scratch_v1.py'
@@ -66,7 +70,7 @@ jobs:
           python -m py_compile             scripts/opaque_bidirectional_capsule_v1.py             scripts/opaque_bidirectional_capsule_p256_aesgcm_v1.py             scripts/opaque_bidirectional_capsule_smoke_v1.py             scripts/commandcenter_ephemeral_exchange_cleanup_v1.py
       - name: Test
         run: |
-          python -m unittest -q             tests.test_opaque_bidirectional_capsule_v1             tests.test_opaque_bidirectional_capsule_p256_aesgcm_v1             tests.test_commandcenter_ephemeral_exchange_cleanup_v1
+          python -m unittest -q             tests.test_opaque_bidirectional_capsule_v1             tests.test_opaque_bidirectional_capsule_p256_aesgcm_v1             tests.test_opaque_capsule_exposure_compare_v1             tests.test_commandcenter_ephemeral_exchange_cleanup_v1
       - name: Verify guest memory-backed private scratch preflight and cleanup
         run: |
           set -euo pipefail
