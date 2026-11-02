@@ -9,6 +9,7 @@ import {runFixedCodeRepair} from "./fixed_code_repair_runner.js";
 import {runCodeRoleCase} from "./code_role_suite_runner.js";
 import {runDiscoveryCase} from "./role_discovery_runner.js";
 import {runWorkforceCase} from "./workforce_provider_runner.js";
+import {CASES} from "./workforce_domain_suite.js";
 const ORIGIN = "https://integrate.api.nvidia.com";
 const MODEL = "openai/gpt-oss-20b";
 const RUN_PATH = "/internal/diagnostics/nvidia";
@@ -180,7 +181,7 @@ export default {
       if(!selector||typeof selector!=="object"||Array.isArray(selector)||
          Object.keys(selector).sort().join(",")!=="case_index,model_index"||
          !Number.isInteger(selector.model_index)||selector.model_index<0||selector.model_index>=10000||
-         !Number.isInteger(selector.case_index)||selector.case_index<0||selector.case_index>=32)
+         !Number.isInteger(selector.case_index)||selector.case_index<0||selector.case_index>=CASES.length)
         return json(400,{error:"workforce_selector_invalid"});
       if(typeof env.NVIDIA_API_KEY?.get!=="function")return json(503,{error:"binding_unavailable"});
       let key;
