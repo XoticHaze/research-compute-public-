@@ -8,6 +8,7 @@ import {runFixedDraftPilot} from "./draft_pilot_runner.js";
 import {runFixedCodeRepair} from "./fixed_code_repair_runner.js";
 import {runCodeRoleCase} from "./code_role_suite_runner.js";
 import {runDiscoveryCase} from "./role_discovery_runner.js";
+import {runWorkforceCase} from "./workforce_provider_runner.js";
 const ORIGIN = "https://integrate.api.nvidia.com";
 const MODEL = "openai/gpt-oss-20b";
 const RUN_PATH = "/internal/diagnostics/nvidia";
@@ -165,6 +166,39 @@ export default {
     const url = new URL(request.url);
     // Existing Service Binding route only; public Worker and previews remain
     // disabled. No caller-authored prompts, tool execution, or target hosts.
+    // Multi-domain workforce RESEARCH, through the same existing private
+    // Service Binding. Source-owned fictional corpus and catalog-indexed model;
+    // no prompt/model/URL, tools or protected operations supplied by caller.
+    if(request.method==="POST"&&url.pathname==="/internal/diagnostics/nvidia-workforce"&&!url.search){
+      if(env.CC_NVIDIA_DIAGNOSTIC_ENABLED!=="1")return json(503,{error:"diagnostic_not_admitted"});
+      const n=Number(request.headers.get("content-length"));
+      if(!Number.isInteger(n)||n<1||n>75||
+         request.headers.get("content-type")!=="application/json")
+        return json(400,{error:"workforce_selector_invalid"});
+      let selector;
+      try{selector=await request.json();}catch{return json(400,{error:"workforce_selector_invalid"});}
+      if(!selector||typeof selector!=="object"||Array.isArray(selector)||
+         Object.keys(selector).sort().join(",")!=="case_index,model_index"||
+         !Number.isInteger(selector.model_index)||selector.model_index<0||selector.model_index>=10000||
+         !Number.isInteger(selector.case_index)||selector.case_index<0||selector.case_index>=32)
+        return json(400,{error:"workforce_selector_invalid"});
+      if(typeof env.NVIDIA_API_KEY?.get!=="function")return json(503,{error:"binding_unavailable"});
+      let key;
+      try{key=await env.NVIDIA_API_KEY.get();}catch{return json(503,{error:"secret_unavailable"});}
+      if(typeof key!=="string"||key.length<8)return json(503,{error:"secret_unavailable"});
+      const authFetch=async(endpoint,options)=>{
+        const controller=new AbortController();
+        const isCatalog=options.method==="GET";
+        const timer=setTimeout(()=>controller.abort(),isCatalog?20000:90000);
+        try{return await pacedProviderFetch(endpoint,{...options,headers:{
+          "Authorization":"Bearer "+key,"Content-Type":"application/json"
+        },redirect:"manual",signal:controller.signal});}
+        finally{clearTimeout(timer);}
+      };
+      const receipt=await runWorkforceCase({modelIndex:selector.model_index,
+        caseIndex:selector.case_index,providerFetch:authFetch});
+      return json(["scored_pass","scored_fail","human_review_required"].includes(receipt.status)?200:503,receipt);
+    }
     // Fixed five-skill discovery research behind the EXISTING private Service
     // Binding. No public address, arbitrary prompt/model or production actions.
     if(request.method==="POST"&&url.pathname==="/internal/diagnostics/nvidia-discovery"&&!url.search){
