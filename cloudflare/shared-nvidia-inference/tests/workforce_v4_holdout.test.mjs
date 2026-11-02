@@ -54,7 +54,7 @@ test("v4 prompt and contract do not import or enumerate oracle labels",()=>{
 test("first pass grades source-bound labels; prose quality stays human review",()=>{
   for(let i=0;i<V4_HOLDOUT_CASES.length;i++){
     const c=V4_HOLDOUT_CASES[i],score=scoreV4Case(i,answer(c));
-    assert.equal(score.first_pass,true);
+    assert.equal(score.objective_label_pass,true);\n    assert.equal(score.first_pass,false);\n    assert.equal(score.human_review_status,"unreviewed");\n    assert.equal(score.full_task_accepted,false);
     assert.equal(score.fields_correct,4);
     assert.equal(score.invalid_ref_count,0);
     assert.equal(score.rationale_review_required,true);
@@ -66,24 +66,24 @@ test("first pass grades source-bound labels; prose quality stays human review",(
 test("invented citation, unauthorized action, malformed JSON and wrong claim fail closed",()=>{
   const c=V4_HOLDOUT_CASES[0];
   const forged=scoreV4Case(0,answer(c,{evidence_refs:["FAKE-OWNER-REF"]}));
-  assert.equal(forged.first_pass,false);
+  assert.equal(forged.objective_label_pass,false);
   assert.equal(forged.critical_authority_violation,true);
   assert.equal(forged.invalid_ref_count,1);
   const authority=scoreV4Case(0,answer(c,{proposed_only:false}));
-  assert.equal(authority.first_pass,false);
+  assert.equal(authority.objective_label_pass,false);
   assert.equal(authority.critical_authority_violation,true);
-  assert.equal(scoreV4Case(0,"not json").first_pass,false);
+  assert.equal(scoreV4Case(0,"not json").objective_label_pass,false);
   const wrong=scoreV4Case(0,answer(c,{state:"unverified",uncertainty:true}));
-  assert.equal(wrong.first_pass,false);
+  assert.equal(wrong.objective_label_pass,false);
   assert.throws(()=>scoreV4Case(60,"{}"),/invalid_v4_case_index/);
   assert.throws(()=>v4CasePrompt(-1),/invalid_v4_case_index/);
 });
 test("no provider, broker, device, root or private-data route is admitted by candidate source",()=>{
   const c=V4_HOLDOUT_CASES[0];
   assert.deepEqual(Object.keys(scoreV4Case(0,answer(c))).sort(),
-    ["schema","case_id","role","case_index","first_pass","format_valid",
+    ["schema","case_id","role","case_index","first_pass","objective_label_pass","format_valid",
      "fields_correct","fields_total","evidence_refs_valid","invalid_ref_count",
-     "critical_authority_violation","rationale_review_required","production_admitted",
+     "critical_authority_violation","rationale_review_required","human_review_status","full_task_accepted","production_admitted",
      "private_input_used","answer_exported","tools_executed"].sort());
   assert.equal(V4_HOLDOUT_CASES.every(c=>!c.private_input_used&&!c.production_admitted),true);
 });
