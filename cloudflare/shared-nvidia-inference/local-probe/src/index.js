@@ -6,6 +6,8 @@ import {sanitizeDraftReceipt} from "./draft_receipt.js";
 import {sanitizeCodeReceipt} from "./code_receipt.js";
 import {sanitizeCodeRoleReceipt} from "./code_role_receipt.js";
 import {sanitizeDiscoveryReceipt} from "./discovery_receipt.js";
+import {sanitizeWorkforceReceipt} from "./workforce_receipt.js";
+import {CASES} from "../../src/workforce_domain_suite.js";
 const SOURCE_PATH = "/run-once";
 const ROLES_PATH = "/roles-batch";
 const MICRO_PATH = "/micro-batch";
@@ -13,6 +15,7 @@ const DRAFT_PATH = "/draft-pilot";
 const CODE_PATH = "/code-repair";
 const ROLE_CODE_PATH = "/role-code-case";
 const DISCOVERY_PATH = "/discovery-case";
+const WORKFORCE_PATH = "/workforce-case";
 const DESTINATION = "https://cc-shared-nvidia-inference.invalid/internal/diagnostics/nvidia";
 const CLASSIFICATIONS = new Set([
   "unattempted", "secrets_store_binding_missing", "secrets_store_read_unavailable",
@@ -35,12 +38,13 @@ export function createCaller() {
   let codeInvoked = false;
   let roleCodeInvoked = false;
   let discoveryInvoked = false;
+  let workforceInvoked = false;
   const roleBatchesInvoked = new Set();
   const microBatchesInvoked = new Set();
   return {
     async fetch(request, env) {
       const url = new URL(request.url);
-      if (request.method !== "POST" || ![SOURCE_PATH, ROLES_PATH, MICRO_PATH, DRAFT_PATH, CODE_PATH, ROLE_CODE_PATH, DISCOVERY_PATH].includes(url.pathname) || url.search ||
+      if (request.method !== "POST" || ![SOURCE_PATH, ROLES_PATH, MICRO_PATH, DRAFT_PATH, CODE_PATH, ROLE_CODE_PATH, DISCOVERY_PATH, WORKFORCE_PATH].includes(url.pathname) || url.search ||
           !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) {
         return reply(404, { classification: "local_route_unavailable" });
       }
@@ -51,7 +55,21 @@ export function createCaller() {
       let codeIndex = null;
       let roleCode = null;
       let discovery = null;
-      if(url.pathname===DISCOVERY_PATH){
+      let workforce = null;
+      if(url.pathname===WORKFORCE_PATH){
+        const n=Number(request.headers.get("content-length"));
+        if(!Number.isInteger(n)||n<1||n>75||
+           request.headers.get("content-type")!=="application/json")
+          return reply(400,{classification:"workforce_selector_rejected"});
+        let v;
+        try{v=await request.json();}catch{return reply(400,{classification:"workforce_selector_rejected"});}
+        if(!v||typeof v!=="object"||Array.isArray(v)||
+           Object.keys(v).sort().join(",")!=="case_index,model_index"||
+           !Number.isInteger(v.model_index)||v.model_index<0||v.model_index>=10000||
+           !Number.isInteger(v.case_index)||v.case_index<0||v.case_index>=CASES.length)
+          return reply(400,{classification:"workforce_selector_rejected"});
+        workforce=v;
+      }else if(url.pathname===DISCOVERY_PATH){
         const n=Number(request.headers.get("content-length"));
         if(!Number.isInteger(n)||n<1||n>65||
            request.headers.get("content-type")!=="application/json")
@@ -74,7 +92,7 @@ export function createCaller() {
         if(!v||typeof v!=="object"||Array.isArray(v)||
            Object.keys(v).sort().join(",")!=="model_index,task_index"||
            !Number.isInteger(v.model_index)||v.model_index<0||v.model_index>1||
-           !Number.isInteger(v.task_index)||v.task_index<0||v.task_index>9)
+           !Number.isInteger(v.task_index)||v.task_index<0||v.task_index>4)
           return reply(400,{classification:"role_code_selector_rejected"});
         roleCode=v;
       }else if(url.pathname===CODE_PATH){
@@ -116,6 +134,13 @@ export function createCaller() {
       } else if (request.body !== null && request.headers.get("content-length") !== "0") {
         return reply(400, { classification: "request_body_not_allowed" });
       }
+      // New broad workforce studies retain the older single-operation
+      // private diagnostic session boundary, regardless of model/catalog size.
+      if((workforce!==null&&(workforceInvoked||smokeInvoked||draftInvoked||
+           roleCodeInvoked||discoveryInvoked||codeInvoked||
+           roleBatchesInvoked.size||microBatchesInvoked.size))||
+         (workforce===null&&workforceInvoked))
+        return reply(409,{classification:"caller_batch_limit_or_replay"});
       // One full diagnostic per caller invocation. Discovery cannot be
       // replayed or mixed with legacy model suites in the same local session.
       if((discovery!==null&&(smokeInvoked||draftInvoked||codeInvoked||
@@ -136,7 +161,8 @@ export function createCaller() {
         return reply(503, { classification: "remote_service_binding_missing" });
       }
       // One request per local dev session, even if upstream errors.
-      if(discovery!==null)discoveryInvoked=true;
+      if(workforce!==null)workforceInvoked=true;
+      else if(discovery!==null)discoveryInvoked=true;
       else if(roleCode!==null)roleCodeInvoked=true;
       else if(codeIndex!==null)codeInvoked=true;
       else if(url.pathname===DRAFT_PATH)draftInvoked=true;
@@ -144,7 +170,13 @@ export function createCaller() {
       else if (roleBatch === null) smokeInvoked = true;
       else roleBatchesInvoked.add(roleBatch);
       try {
-        const upstream = await env.NVIDIA_SERVICE.fetch(discovery!==null
+        const upstream = await env.NVIDIA_SERVICE.fetch(workforce!==null
+          ? new Request(DESTINATION.replace("/internal/diagnostics/nvidia",
+                 "/internal/diagnostics/nvidia-workforce"),{
+              method:"POST",headers:{"Content-Type":"application/json"},
+              body:JSON.stringify(workforce)
+            })
+          : discovery!==null
           ? new Request(DESTINATION.replace("/internal/diagnostics/nvidia",
                  "/internal/diagnostics/nvidia-discovery"),{
               method:"POST",headers:{"Content-Type":"application/json"},
@@ -179,6 +211,13 @@ export function createCaller() {
               body:JSON.stringify({batch:roleBatch})
           }));
         const value = await upstream.json();
+        if(workforce!==null){
+          const safe=sanitizeWorkforceReceipt(value);
+          if(!safe||safe.model_index!==workforce.model_index||
+             safe.case_index!==workforce.case_index)
+            return reply(502,{classification:"untrusted_workforce_receipt"});
+          return reply(upstream.ok?200:502,safe);
+        }
         if(discovery!==null){
           const safe=sanitizeDiscoveryReceipt(value);
           if(!safe||safe.model_index!==discovery.model_index||
