@@ -50,6 +50,16 @@ export function sanitizeDiscoveryReceipt(v){
  if(v.status in expectedClass && v.failure_class!==expectedClass[v.status])return null;
  if(v.status==="provider_transport_or_decode_failure"&&
     !["response_decode","timeout","transport"].includes(v.failure_class))return null;
+ // A provider-level admission/transport event cannot be forged into a
+ // scored success by carrying leftover fields from another completion.
+ const nonScored=new Set(["provider_rate_limited","provider_pending","provider_unavailable","provider_transport_or_decode_failure"]);
+ if(nonScored.has(v.status)&&
+   (v.passed||v.format_valid||v.checks_total!==0||v.checks_passed!==0||
+    v.final_content_present!==null||v.reasoning_content_present!==null))return null;
+ if(v.status==="provider_rate_limited"&&v.http_status!==429)return null;
+ if(v.status==="provider_pending"&&v.http_status!==202)return null;
+ if(v.status==="provider_unavailable"&&[null,200,202,429].includes(v.http_status))return null;
+ if(["scored_pass","scored_fail","human_review_required"].includes(v.status)&&v.http_status!==200)return null;
  const isWriting=v.task_index===4||v.task_index===9;
  if(v.human_review_required!==isWriting||
     (isWriting&&v.passed)||
