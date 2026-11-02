@@ -23,19 +23,26 @@ export function newCampaign({sourceSha,runId,modelIndex=0,caseIndex=0}){
   throw Error("invalid_source_or_campaign_identity");
  return{schema:SCHEMA,source_sha:sourceSha,run_id:runId,
   next_model_index:modelIndex,next_case_index:caseIndex,
-  model_id_by_index:{},observations:[],calls:0,
+  model_id_by_index:{},observations:[],attempt_history:[],calls:0,provider_http_calls:0,
   status:"prepared_not_executed",raw_responses_stored:false,
   provider_key_stored:false,private_input_stored:false,
   production_admitted:false};
 }
 function checkState(doc){
  if(!doc||doc.schema!==SCHEMA||!/^[a-f0-9]{40}$/.test(doc.source_sha)||
-    !Array.isArray(doc.observations)||!safeInteger(doc.calls)||
+    !Array.isArray(doc.observations)||!Array.isArray(doc.attempt_history)||
+    !safeInteger(doc.calls)||!safeInteger(doc.provider_http_calls)||
     !safeInteger(doc.next_model_index)||!safeInteger(doc.next_case_index)||
     doc.raw_responses_stored!==false||doc.provider_key_stored!==false||
     doc.private_input_stored!==false||doc.production_admitted!==false||
     !doc.model_id_by_index||typeof doc.model_id_by_index!=="object")throw Error("invalid_campaign_checkpoint");
  const seen=new Set();
+ for(const row of doc.attempt_history){
+  const safe=sanitizeWorkforceReceipt(row);
+  if(!safe||JSON.stringify(safe)!==JSON.stringify(row)||
+     !STOP.has(row.status)&&row.catalog_status!==401&&row.completion_status!==401)
+   throw Error("unsafe_held_attempt");
+ }
  for(const row of doc.observations){
   const safe=sanitizeWorkforceReceipt(row);
   if(!safe||JSON.stringify(safe)!==JSON.stringify(row))throw Error("unsafe_campaign_observation");
@@ -51,9 +58,12 @@ export async function runCampaign({state,callCase,limit=64,onCheckpoint=async()=
  if(typeof callCase!=="function"||typeof onCheckpoint!=="function"||
    !safeInteger(limit)||limit<1||limit>64)throw Error("invalid_bounded_campaign");
  const seen=checkState(state);
+ if(state.status==="catalog_complete")return state;
  const observations=state.observations.slice();
+ const attempt_history=state.attempt_history.slice();
  const mapping={...state.model_id_by_index};
- let m=state.next_model_index,c=state.next_case_index,calls=state.calls,made=0;
+ let m=state.next_model_index,c=state.next_case_index,calls=state.calls,
+    providerCalls=state.provider_http_calls,made=0;
  let outcome="session_call_limit_reached";
  while(made<limit&&m<10000){
   const supplied=await callCase({model_index:m,case_index:c});
@@ -65,7 +75,10 @@ export async function runCampaign({state,callCase,limit=64,onCheckpoint=async()=
   if(safe.model!==null)mapping[m]=safe.model;
   const pair=idKey(safe);
   if(seen.has(pair))throw Error("resume_attempt_replay");
-  seen.add(pair);observations.push(safe);made++;calls++;
+  const hold=STOP.has(safe.status)||safe.catalog_status===401||safe.completion_status===401;
+  if(hold)attempt_history.push(safe);
+  else {seen.add(pair);observations.push(safe);}
+  made++;calls++;providerCalls+=safe.provider_calls;
   if(safe.status==="model_index_not_in_authenticated_catalog"){
    outcome="catalog_complete";
   }else if(STOP.has(safe.status)||safe.catalog_status===401||safe.completion_status===401){
@@ -74,19 +87,23 @@ export async function runCampaign({state,callCase,limit=64,onCheckpoint=async()=
    outcome="unclassified_provider_case";
   }
   if(outcome==="session_call_limit_reached"){
-   c++;
-   if(c>=CASES.length){c=0;m++;}
+   if(safe.status==="model_http_unavailable"&&[403,404,410].includes(safe.completion_status)){
+    c=0;m++; // Unsupported/inaccessible model: avoid 31 pointless repetitions.
+   }else{
+    c++;
+    if(c>=CASES.length){c=0;m++;}
+   }
   }
   // Save after every trusted outcome, never only at the end.
   const next={...state,next_model_index:m,next_case_index:c,
    model_id_by_index:{...mapping},observations:observations.slice(),
-   calls,status:outcome,raw_responses_stored:false,provider_key_stored:false,
+   attempt_history:attempt_history.slice(),calls,provider_http_calls:providerCalls,status:outcome,raw_responses_stored:false,provider_key_stored:false,
    private_input_stored:false,production_admitted:false};
   await onCheckpoint(next);
   if(outcome!=="session_call_limit_reached")return next;
  }
  return{...state,next_model_index:m,next_case_index:c,model_id_by_index:mapping,
-  observations,calls,status:outcome,raw_responses_stored:false,
+  observations,attempt_history,calls,provider_http_calls:providerCalls,status:outcome,raw_responses_stored:false,
   provider_key_stored:false,private_input_stored:false,
   production_admitted:false};
 }
@@ -99,7 +116,7 @@ export function resultsFromCampaign(state){
 }
 function validatePublicHost(){
  const repo=process.env.GITHUB_REPOSITORY;
- const sha=process.env.GITHUB_SHA;
+ const sha=process.env.WORKFORCE_SOURCE_SHA;
  const run=process.env.GITHUB_RUN_ID;
  if(repo!=="XoticHaze/research-compute-public-"||
    typeof sha!=="string"||!/^[a-f0-9]{40}$/.test(sha)||
@@ -111,7 +128,10 @@ async function main(){
  const root=path.join(process.cwd(),"artifacts","nvidia-workforce-qualification");
  fs.mkdirSync(root,{recursive:true});
  const file=path.join(root,"campaign_progress.json");
- let state=fs.existsSync(file)?JSON.parse(fs.readFileSync(file,"utf8")):newCampaign(info);
+ let state=fs.existsSync(file)?JSON.parse(fs.readFileSync(file,"utf8")):newCampaign({
+  ...info,modelIndex:Number(process.env.WORKFORCE_MODEL_INDEX_START??"0"),
+  caseIndex:Number(process.env.WORKFORCE_CASE_INDEX_START??"0")
+ });
  if(state.source_sha!==info.sourceSha)throw Error("source_revision_changed_do_not_mix");
  const limit=Number(process.env.WORKFORCE_CASES_THIS_PASS??"64");
  // Runtime budget affects only this session; no lifetime catalog or task cap.
@@ -141,6 +161,8 @@ async function main(){
  console.log("WORKFORCE_CAMPAIGN_STATUS="+result.status);
  console.log("WORKFORCE_SESSION_OBSERVATIONS="+(result.observations.length-state.observations.length));
  console.log("WORKFORCE_TOTAL_OBSERVATIONS="+result.observations.length);
+ console.log("WORKFORCE_PROVIDER_HTTP_CALLS="+result.provider_http_calls);
+ console.log("WORKFORCE_HELD_ATTEMPTS="+result.attempt_history.length);
  console.log("WORKFORCE_MODEL_INDEX_NEXT="+result.next_model_index);
  console.log("WORKFORCE_CASE_INDEX_NEXT="+result.next_case_index);
  console.log("WORKFORCE_PRIVATE_DATA_EXPORTED=false");
