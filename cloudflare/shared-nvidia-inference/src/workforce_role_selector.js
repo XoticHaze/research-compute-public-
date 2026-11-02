@@ -5,7 +5,8 @@
 import {CASES,WORKFORCE_SKILLS} from "./workforce_domain_suite.js";
 const statuses=new Set(["scored_pass","scored_fail","human_review_required",
  "provider_rate_limited","catalog_unavailable","model_http_unavailable",
- "model_index_not_in_authenticated_catalog","tool_attempt_rejected",
+ "model_index_not_in_authenticated_catalog","request_profile_rejected",
+ "provider_upstream_error","tool_attempt_rejected",
  "transport_or_decoding_failure"]);
 function percentile(values,q){
  if(!values.length)return null;
