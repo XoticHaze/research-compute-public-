@@ -23,6 +23,7 @@ const make=({model_index,case_index},status)=>{
   format_valid:!absent&&!failed&&!rate,
   fields_correct:absent||failed||rate?0:Object.keys(c.expected).length,
   fields_total:Object.keys(c.expected).length,
+  field_checks:Object.fromEntries(Object.keys(c.expected).map(k=>[k,!absent&&!failed&&!rate])),
   human_review_required:human,latency_ms:1600,
   tool_calls_proposed:false,tools_executed:false,
   answer_exported:false,private_input_used:false,production_authorized:false};
