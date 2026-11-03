@@ -103,31 +103,60 @@ async function fetchCandidate(manifest) {
   }
   return contents;
 }
-async function uploadVersion(env, token, manifest, contents) {
+// Script upload endpoints accept only version_id='latest' for inherited bindings.
+// A reviewed release MUST inherit from the exact 100%-deployed version, NOT a
+// possibly newer unpublished upload. Use the documented Workers version API.
+async function brokerWorkerIdentity(env, token) {
+  const response = await cfFetch(env, token, "/workers/workers/" + TARGET_WORKER);
+  const node = await response.json().catch(()=>({}));
+  const worker = node?.result;
+  if (!response.ok || node?.success !== true
+      || worker?.name !== TARGET_WORKER
+      || !/^[0-9a-f]{32}$/.test(String(worker?.id || ""))) {
+    throw new Error("broker_worker_identity_unverified");
+  }
+  return worker.id;
+}
+function utf8Base64(value) {
+  const raw = new TextEncoder().encode(value);
+  let text = "";
+  for (let i=0; i<raw.length; i+=0x8000) {
+    text += String.fromCharCode(...raw.subarray(i,i+0x8000));
+  }
+  return btoa(text);
+}
+async function uploadVersion(env, token, manifest, contents, workerId) {
+  if (!/^[0-9a-f]{32}$/.test(String(workerId || ""))) {
+    throw new Error("broker_worker_identity_unverified");
+  }
   const metadata = {
     main_module:"index.js",
     compatibility_date:"2026-09-25",
     annotations:{
       "workers/message":"reference broker maintenance " + manifest.maintenance_id,
-      "workers/commit_sha":manifest.candidate_source_sha,
-      "workers/repository_url":"https://github.com/" + SOURCE_REPOSITORY,
+      "workers/tag":manifest.candidate_source_sha,
     },
     bindings:[
       "BROKER_SIGNING_PRIVATE_JWK","AUTHORITY_PUBLIC_B64","GRANT_LEDGER",
       "ALLOWED_JOB_WORKFLOW_REF","ALLOWED_JOB_WORKFLOW_SHA",
       "MAX_ADMISSION_SECONDS","MAX_INTENT_SECONDS"
-    ].map(name => ({type:"inherit", name, version_id:manifest.expected_current_version})),
-    exports:{GrantLedger:{type:"durable-object", storage:"sqlite", state:"created"}}
+    ].map(name => ({type:"inherit",name,version_id:manifest.expected_current_version})),
+    modules:SOURCE_FILES.map(name=>({
+      name,content_type:"application/javascript+module",
+      content_base64:utf8Base64(contents[name]),
+    })),
+    exports:{GrantLedger:{type:"durable-object",storage:"sqlite",state:"created"}}
   };
-  const form = new FormData();
-  form.set("metadata", new Blob([JSON.stringify(metadata)], {type:"application/json"}));
-  for (const name of SOURCE_FILES) form.set(name, new Blob([contents[name]], {type:"application/javascript+module"}), name);
+  // deploy=false is explicit: uploading source never promotes it. The separately
+  // signed exact-version deployment below remains the only promotion point.
   const response = await cfFetch(
-    env, token, "/workers/scripts/" + TARGET_WORKER + "/versions?bindings_inherit=strict",
-    {method:"POST", body:form}
+    env, token, "/workers/workers/" + workerId + "/versions?deploy=false",
+    {method:"POST",body:JSON.stringify(metadata)}
   );
   const body = await response.json().catch(()=>({}));
-  if (!response.ok || body?.success !== true || !body?.result?.id) throw new Error("version_upload_rejected_" + response.status);
+  if (!response.ok || body?.success !== true || !/^[0-9a-f-]{8,64}$/.test(String(body?.result?.id || ""))) {
+    throw new Error("version_upload_rejected_" + response.status);
+  }
   if (body.result.exports_reconciliation?.deleted?.length) throw new Error("version_export_delete_rejected");
   return String(body.result.id);
 }
@@ -186,6 +215,7 @@ async function maintainManifest(wrapper, env) {
   if (!token) throw new Error("broker_editor_token_unavailable");
   const current = await activeVersion(env, token);
   if (current !== manifest.expected_current_version) throw new Error("current_version_mismatch");
+  const workerId = await brokerWorkerIdentity(env, token);
   const contents = await fetchCandidate(manifest);
 
   // The only authoritative mutation boundary begins here. Consume the
@@ -206,7 +236,7 @@ async function maintainManifest(wrapper, env) {
     if (await activeVersion(env, token) !== current) {
       throw new Error("preupload_version_mismatch");
     }
-    newVersion = await uploadVersion(env, token, manifest, contents);
+    newVersion = await uploadVersion(env, token, manifest, contents, workerId);
     if (await activeVersion(env, token) !== current) {
       throw new Error("prepromotion_version_mismatch");
     }
