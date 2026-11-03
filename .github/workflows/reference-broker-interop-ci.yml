@@ -27,6 +27,7 @@ on:
       - 'tests/reference_operator_helper_roundtrip.py'
       - 'tests/reference_legacy_broker_keygen_retired.mjs'
       - 'scripts/operator/reference_broker_keygen.mjs'
+      - 'scripts/operator/bootstrap_reference_release_broker.ps1'
       - '.github/workflows/reference-broker-interop-ci.yml'
   pull_request:
     paths:
@@ -44,6 +45,7 @@ on:
       - 'tests/reference_operator_helper_roundtrip.py'
       - 'tests/reference_legacy_broker_keygen_retired.mjs'
       - 'scripts/operator/reference_broker_keygen.mjs'
+      - 'scripts/operator/bootstrap_reference_release_broker.ps1'
       - '.github/workflows/reference-broker-interop-ci.yml'
   workflow_dispatch:
 
