@@ -381,6 +381,6 @@ const authInput={
   assert.equal(state.events.includes('token_get'),false);
   assert.equal(state.consumes,0);checks++;
 }
-assert.equal(checks,21);
+assert.equal(checks,23);
 console.log('REFERENCE_MAINTAINER_ACTUAL_SOURCE_PREFLIGHT_AND_ROLLBACK_PASS='+checks);
 console.log('REFERENCE_MAINTAINER_PUBLIC_CI_SYNTHETIC_ONLY=1');
