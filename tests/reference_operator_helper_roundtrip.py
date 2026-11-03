@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import base64
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -58,6 +60,62 @@ def main() -> int:
                 bootstrap["intent"]["payload_b64"].encode("ascii"), validate=True
             ).decode("utf-8")
         )
+        # A local reviewed policy pin, not a retired historical constant,
+        # must determine the exact future private grant measurement.
+        cfg = json.loads(
+            (ROOT / "cloudflare/reference-release-broker/wrangler.jsonc")
+            .read_text(encoding="utf-8")
+        )["vars"]
+        if payload["harness_sha"] != cfg["ALLOWED_JOB_WORKFLOW_SHA"]:
+            raise RuntimeError("prepared_intent_not_bound_to_local_approved_harness")
+        if cfg["ALLOWED_JOB_WORKFLOW_REF"] != (
+            "XoticHaze/research-compute-public-/.github/workflows/"
+            "secure-compute-harness-v1.yml@" + payload["harness_sha"]
+        ):
+            raise RuntimeError("local_harness_policy_ref_mismatch")
+
+        # Test a future independently approved exact pin without changing
+        # production/source policy or generating any deployable credentials.
+        with tempfile.TemporaryDirectory() as scratch_dir:
+            scratch = Path(scratch_dir)
+            staged_helper = scratch / "scripts/operator/reference_release_prepare_intent.mjs"
+            staged_helper.parent.mkdir(parents=True)
+            shutil.copyfile(ROOT / "scripts/operator/reference_release_prepare_intent.mjs", staged_helper)
+            staged_cfg = scratch / "cloudflare/reference-release-broker/wrangler.jsonc"
+            staged_cfg.parent.mkdir(parents=True)
+            next_sha = "e8a4574e6c8c7f65e40bb662192b9adb2d8adfdf"
+            prefix = "XoticHaze/research-compute-public-/.github/workflows/secure-compute-harness-v1.yml@"
+            staged_cfg.write_text(json.dumps({"vars": {
+                "ALLOWED_JOB_WORKFLOW_SHA": next_sha,
+                "ALLOWED_JOB_WORKFLOW_REF": prefix + next_sha
+            }}), encoding="utf-8")
+            next_intent_path = scratch / "next-intent.json"
+            subprocess.run(
+                ["node", str(staged_helper), str(out / "authority-private.pkcs8.b64"),
+                 broker_key_id, str(next_intent_path), "28800"],
+                cwd=ROOT, check=True, capture_output=True, text=True,
+            )
+            next_intent = json.loads(next_intent_path.read_text(encoding="utf-8"))
+            next_payload = json.loads(base64.b64decode(
+                next_intent["intent"]["payload_b64"], validate=True
+            ))
+            if next_payload["harness_sha"] != next_sha:
+                raise RuntimeError("future_harness_rotation_not_reflected")
+            # A non-coherent policy fails before reading private key or
+            # producing an intent; no unsigned/unpinned fallback.
+            staged_cfg.write_text(json.dumps({"vars": {
+                "ALLOWED_JOB_WORKFLOW_SHA": next_sha,
+                "ALLOWED_JOB_WORKFLOW_REF": prefix + "0" * 40
+            }}), encoding="utf-8")
+            rejected = scratch / "rejected-intent.json"
+            bad = subprocess.run(
+                ["node", str(staged_helper), str(out / "authority-private.pkcs8.b64"),
+                 broker_key_id, str(rejected), "28800"],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            if bad.returncode == 0 or rejected.exists() or "source_harness_policy_pin_mismatch" not in bad.stderr:
+                raise RuntimeError("mismatched_source_harness_policy_not_rejected")
+
         expected = ExpectedIntent(
             grant_id=payload["grant_id"],
             caller_policy_sha256=payload["caller_policy_sha256"],
