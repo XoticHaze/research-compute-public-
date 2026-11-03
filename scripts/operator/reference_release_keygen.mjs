@@ -53,13 +53,13 @@ const writeNew = (filename, value) => fs.writeFileSync(
 const broker = await makePair();
 const authority = await makePair();
 
-writeNew('broker-private.jwk'), JSON.stringify(broker.privateJwk) + '\n');
-writeNew('broker-public.b64'), broker.publicB64 + '\n');
-writeNew('broker-key-id.txt'), broker.keyId + '\n');
+writeNew('broker-private.jwk', JSON.stringify(broker.privateJwk) + '\n');
+writeNew('broker-public.b64', broker.publicB64 + '\n');
+writeNew('broker-key-id.txt', broker.keyId + '\n');
 
-writeNew('authority-private.pkcs8.b64'), authority.privatePkcs8B64 + '\n');
-writeNew('authority-public.b64'), authority.publicB64 + '\n');
-writeNew('authority-key-id.txt'), authority.keyId + '\n');
+writeNew('authority-private.pkcs8.b64', authority.privatePkcs8B64 + '\n');
+writeNew('authority-public.b64', authority.publicB64 + '\n');
+writeNew('authority-key-id.txt', authority.keyId + '\n');
 
 console.log('REFERENCE_KEYGEN_PASS=1');
 console.log('BROKER_KEY_ID=' + broker.keyId);
