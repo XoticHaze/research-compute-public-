@@ -215,6 +215,52 @@ jobs:
           fi
           echo 'MMIBKR_OPERATOR_CONSOLE_BUILD=PASS'
 
+      # The selected UI can contain a signed Pi bot status card. Its owner
+      # pin and private source binding MUST pass BEFORE Access reconciliation
+      # or Wrangler deploy, not only at later secret-put steps.
+      - name: Preflight bot-source permissions BEFORE Cloudflare mutations
+        shell: bash
+        env:
+          MMIBKR_PI_BOT_PUBLISHER_APPROVED_SHA: ${{ vars.MMIBKR_PI_BOT_PUBLISHER_APPROVED_SHA }}
+          MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING: ${{ secrets.MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY_PI_PREFLIGHT'
+          import json, os, re
+          from pathlib import Path
+          ui = Path(os.environ['RUNNER_TEMP']) / 'mmibkr-operator-console-source' / 'extracted' / 'mm-ibkr' / 'ui-react'
+          has_card = (ui / 'src' / 'components' / 'PiBotLiveStatusCard.jsx').is_file()
+          approved = os.environ.get('MMIBKR_PI_BOT_PUBLISHER_APPROVED_SHA', '').strip()
+          source = os.environ.get('MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING', '').strip()
+          if has_card and not approved:
+              raise SystemExit('MMIBKR_PI_BOT_PREDEPLOY_OWNER_PIN_MISSING=1')
+          if has_card and not source:
+              raise SystemExit('MMIBKR_PI_BOT_PREDEPLOY_PRIVATE_BINDING_MISSING=1')
+          if approved and not re.fullmatch(r'[0-9a-f]{40}', approved):
+              raise SystemExit('MMIBKR_PI_BOT_PREDEPLOY_OWNER_PIN_INVALID=1')
+          if source:
+              if len(source) < 24 or len(source) > 1024 or any(c in source for c in '\r\n\0'):
+                  raise SystemExit('MMIBKR_PI_BOT_PREDEPLOY_PRIVATE_BINDING_INVALID=1')
+              try:
+                  node = json.loads(source)
+              except (TypeError, ValueError):
+                  raise SystemExit('MMIBKR_PI_BOT_PREDEPLOY_PRIVATE_BINDING_INVALID=1') from None
+              required = {'repository','ref','root_observation_prefix','typed_result_prefix'}
+              if not isinstance(node,dict) or set(node)!=required:
+                  raise SystemExit('MMIBKR_PI_BOT_PREDEPLOY_PRIVATE_BINDING_INVALID=1')
+              if not isinstance(node['repository'],str) or not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', node['repository']):
+                  raise SystemExit('MMIBKR_PI_BOT_PREDEPLOY_PRIVATE_BINDING_INVALID=1')
+              if not isinstance(node['ref'],str) or not re.fullmatch(r'[A-Za-z0-9._/-]{1,120}', node['ref']):
+                  raise SystemExit('MMIBKR_PI_BOT_PREDEPLOY_PRIVATE_BINDING_INVALID=1')
+              for key in ('root_observation_prefix','typed_result_prefix'):
+                  p = node[key]
+                  if not isinstance(p,str) or len(p)>160 or not re.fullmatch(r'[A-Za-z0-9._/-]+/',p) or p.startswith('/') or '..' in p or '//' in p:
+                      raise SystemExit('MMIBKR_PI_BOT_PREDEPLOY_PRIVATE_BINDING_INVALID=1')
+          print('MMIBKR_PI_BOT_PREDEPLOY_IDENTITY_GATE=PASS')
+          print('MMIBKR_PI_BOT_PREDEPLOY_CARD_PRESENT=' + ('1' if has_card else '0'))
+          print('MMIBKR_PI_BOT_PREDEPLOY_CLOUDFLARE_MUTATIONS=0')
+          PY_PI_PREFLIGHT
+
       - name: Require Cloudflare deploy credential
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
