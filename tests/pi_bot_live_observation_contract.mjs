@@ -91,6 +91,28 @@ assert.equal(JSON.stringify(rootView).includes('pi-node/bot-observations/'),fals
 assert.equal(rootView.broker_submission_verified,false);
 assert.equal(rootView.public_publisher_oidc_verified,true);
 assert.throws(()=>piBotLiveOperatorView(rootStored,now,SOURCE_BINDING,'e'.repeat(40)),/pi_bot_observation_rejected/);
+// Root may deliberately withhold readiness for a private owner-mode gate,
+// even when every exposed live-policy flag is true. That signed negative must
+// remain displayable, without relabeling it positive or forging broker proof.
+const ownerHeld=structuredClone(rootEnvelope);
+ownerHeld.record.snapshot.status='LIVE_NOT_CONFIRMED';
+ownerHeld.record.snapshot.live_switches_enabled=false;
+const heldDigest=createHash('sha256').update(canonical(ownerHeld.record.snapshot),'utf8').digest('hex');
+ownerHeld.record.snapshot_sha256=heldDigest;
+ownerHeld.record.observation_id='pibotobs-20261101041930-'+heldDigest.slice(0,16);
+assert.equal(await verifyPiBotRootDigest(ownerHeld),true);
+assert.equal(validatePiBotLiveEnvelope(ownerHeld,now,SOURCE_BINDING).observation.status,'LIVE_NOT_CONFIRMED');
+const heldStored={...rootStored,envelope:ownerHeld};
+const heldView=piBotLiveOperatorView(heldStored,now,SOURCE_BINDING,PUBLISHER_SHA);
+assert.equal(heldView.root_observation_id,ownerHeld.record.observation_id);
+assert.equal(heldView.live_switches_enabled,false);
+assert.equal(heldView.status,'LIVE_NOT_CONFIRMED');
+assert.equal(heldView.broker_submission_verified,false);
+// Exposed prerequisite failure must NEVER pass as positive readiness.
+const impossiblePositive=structuredClone(rootEnvelope);
+impossiblePositive.record.snapshot.gateway_network_namespace_matched=false;
+assert.throws(()=>validatePiBotLiveEnvelope(impossiblePositive,now,SOURCE_BINDING),/pi_bot_observation_rejected/);
+console.log('Pi BOT negative owner-mode and impossible-positive regressions: PASS');
 const changedDigest=structuredClone(rootEnvelope);
 changedDigest.record.snapshot.selected_live_policies.MNQ=false;
 await assert.rejects(()=>verifyPiBotRootDigest(changedDigest),/pi_bot_observation_rejected/);
