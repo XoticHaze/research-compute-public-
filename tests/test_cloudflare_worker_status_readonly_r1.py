@@ -97,6 +97,21 @@ class CloudflareReadOnlyContract(unittest.TestCase):
         self.assertFalse(success)
         self.assertEqual(receipt["result"]["status"], "EXISTING_READ_CREDENTIAL_UNAVAILABLE")
 
+    def test_github_run_identity_is_bounded_and_source_verified(self):
+        good = {"CF_ACCOUNT_ID": ACCOUNT, "CF_READ_TOKEN": TOKEN,
+                "GITHUB_RUN_ID": "41595163775", "GITHUB_SHA": "A" * 40}
+        with patch.object(module, "urlopen", return_value=FakeResponse({"success": True, "result": {"bindings": []}})):
+            receipt, ok = module.execute(REQUEST, good)
+        self.assertTrue(ok)
+        self.assertEqual(receipt["github_run_id"], "41595163775")
+        self.assertEqual(receipt["workflow_head_sha"], "a" * 40)
+        bad = dict(good, GITHUB_RUN_ID="../../bad", GITHUB_SHA="not-a-sha")
+        with patch.object(module, "urlopen", return_value=FakeResponse({"success": True, "result": {"bindings": []}})):
+            receipt, ok = module.execute(REQUEST, bad)
+        self.assertTrue(ok)
+        self.assertIsNone(receipt["github_run_id"])
+        self.assertIsNone(receipt["workflow_head_sha"])
+
     def test_empty_deployments_not_source_attested(self):
         doc = {"success": True, "result": {"deployments": []}}
         with patch.object(module, "urlopen", return_value=FakeResponse(doc)):
