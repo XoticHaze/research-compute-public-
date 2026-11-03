@@ -1,0 +1,96 @@
+{
+  "candidate": {
+    "p36_activation_delay_trading_days": 1,
+    "p36_qqq_6m_return": 0.036285322179460566,
+    "p36_relative_6m_soxx_minus_qqq": -0.013308662730146636,
+    "p36_selected": "QQQ",
+    "p36_soxx_6m_return": 0.02297665944931393,
+    "p64_crossasset_selected": [
+      "DBC",
+      "SPY"
+    ],
+    "p64_industry_selected": [
+      "IGV",
+      "XOP",
+      "XBI"
+    ],
+    "weights": {
+      "DBC": 0.125,
+      "IGV": 0.08333333333333333,
+      "QQQ": 0.5,
+      "SPY": 0.125,
+      "XBI": 0.08333333333333333,
+      "XOP": 0.08333333333333333
+    }
+  },
+  "contract_sha256": "97a9e8dc1bb5403ab32defaf3496cc52025b199868b7768a276d90886f5b787d",
+  "controls": {
+    "matched_weights": {
+      "DBC": 0.05,
+      "GLD": 0.05,
+      "IGV": 0.025,
+      "IHI": 0.025,
+      "ITA": 0.025,
+      "IYT": 0.025,
+      "KRE": 0.025,
+      "QQQ": 0.3,
+      "SOXX": 0.275,
+      "SPY": 0.05,
+      "TLT": 0.05,
+      "XBI": 0.025,
+      "XHB": 0.025,
+      "XOP": 0.025,
+      "XRT": 0.025
+    },
+    "opportunity_control": {
+      "QQQ": 1.0
+    }
+  },
+  "economics": {
+    "cadence": "monthly",
+    "component_cost_bps": 50,
+    "matched_control": "same fixed P82 blend of P64 static-universe matched control and P36 static SOXX/QQQ matched control",
+    "no_parameter_or_weight_tuning": true,
+    "opportunity_control": "QQQ"
+  },
+  "forward_month": "2026-11",
+  "frozen_source_semantics": {
+    "base_blob": "90b8d7140b432e32298e499f62c732dd037bc5ce",
+    "p47_blob": "1601e444d053f1bc3590f8c1ed3ebdeca8b97819",
+    "p57_blob": "7235ba5ee13c597bbe282d0a4c543c008fe8e900",
+    "p66_blob": "b157ba70abea7a550dfecc8c6736a5a4843d66d6",
+    "p82_blob": "2fba9a96137fa4f2d58c2734d73d206d39c8be93",
+    "source_ref": "d7360d155be7c212c8d6648b0dbb8711ff6cfe06"
+  },
+  "maturity": {
+    "outcome_not_used": true,
+    "score_after_forward_month_closes": true
+  },
+  "parent": "P82",
+  "protected_boundaries": {
+    "allocation_authority": false,
+    "broker_submission": false,
+    "live_trading_changed": false,
+    "portfolio_ranking": false,
+    "runtime_authority_changed": false,
+    "strategy_spec_changed": false
+  },
+  "schema": "research.p82_forward_observer.v1",
+  "selection_month": "2026-10-31",
+  "source": {
+    "crossasset_panel_sha256": "a4b4b0637a65c0f1031ba661f748fb8ee59c3caab7b5c67f39c2e7c543e3a35f",
+    "industry_panel_sha256": "ec196512b9d84fd0c949c0db5ca0662cec8e290bdf3a5899cedcc8826b666495",
+    "p36_panel_sha256": "6395bd1a3d937050acbab7f62f0e19b03e85ba9a09d87c8e0393755e6af11b99",
+    "provider": "Yahoo Finance via yfinance; research-only"
+  },
+  "source_execution": {
+    "artifact_digest": "sha256:08d43952cd7d43cee4ded42922c280427c792c847fd52d44633e583ca4164712",
+    "artifact_id": 10096319276,
+    "head_sha": "d7360d155be7c212c8d6648b0dbb8711ff6cfe06",
+    "job_id": 102403972407,
+    "repo": "XoticHaze/research-compute-public-",
+    "run_id": 34332450096,
+    "workflow": ".github/workflows/p82-component-contribution-r2.yml"
+  },
+  "source_result_event": "20260909T090330Z__p82_component_contribution_consequence"
+}

@@ -1,0 +1,27 @@
+{
+  "candidate_return_net_50bps": -0.13036647503888849,
+  "components": {
+    "p36_candidate_return_net_50bps": -0.21786419161859283,
+    "p36_matched_return": -0.1474951256297682,
+    "p36_selected": "SOXX",
+    "p36_turnover": 1.0,
+    "p64_candidate_return_net_50bps": -0.042868758459184135,
+    "p64_cross_turnover": 0.5,
+    "p64_industry_turnover": 0.5,
+    "p64_matched_return": 0.0065601894394343215
+  },
+  "matched_return": -0.07046746809516694,
+  "p36_shifted_end": "2026-11-02",
+  "p36_shifted_start": "2026-10-01",
+  "provenance": {
+    "cost_bps": 50,
+    "current_contract_sha256": "97a9e8dc1bb5403ab32defaf3496cc52025b199868b7768a276d90886f5b787d",
+    "next_contract_sha256": "97a9e8dc1bb5403ab32defaf3496cc52025b199868b7768a276d90886f5b787d",
+    "outcome_was_not_available_to_prediction": true,
+    "source_result_event": "20260909T090330Z__p82_component_contribution_consequence"
+  },
+  "qqq_return": -0.08212605964094355,
+  "realized_through_selection_month": "2026-10-31",
+  "schema": "research.p82_forward_score.v1",
+  "selection_month": "2026-09-30"
+}
