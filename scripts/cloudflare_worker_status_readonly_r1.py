@@ -165,6 +165,12 @@ def execute(request: dict, env: dict) -> tuple[dict, bool]:
         "secret_values_emitted": False,
         "result": {},
     }
+    # The GitHub run/artifact provides independent provenance; record its
+    # exact source identity only when it satisfies the bounded public shape.
+    run_id = str(env.get("GITHUB_RUN_ID") or "")
+    head_sha = str(env.get("GITHUB_SHA") or "")
+    receipt["github_run_id"] = run_id if re.fullmatch(r"[1-9][0-9]{0,19}", run_id) else None
+    receipt["workflow_head_sha"] = head_sha.lower() if SHA40.fullmatch(head_sha) else None
     account = env.get("CF_ACCOUNT_ID", "").strip()
     token = env.get("CF_READ_TOKEN", "").strip()
     if not HEX32.fullmatch(account) or not token:
