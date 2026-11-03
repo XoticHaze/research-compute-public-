@@ -24,6 +24,7 @@ on:
       - 'tests/test_mmibkr_operator_console_worker_v1.py'
       - 'tests/test_mmibkr_operator_console_access_reconcile_v1.py'
       - 'tests/test_mmibkr_operator_console_deploy_token_route_v1.py'
+      - 'tests/test_mmibkr_operator_console_pi_predeploy_gate_r1.py'
       - 'scripts/mmibkr_operator_console_deploy_token_route_v1.py'
       - 'tests/test_fleet_source_vault_contract_v1.py'
 
@@ -68,6 +69,7 @@ jobs:
             tests.test_mmibkr_operator_console_worker_v1 \
             tests.test_mmibkr_operator_console_access_reconcile_v1 \
             tests.test_mmibkr_operator_console_deploy_token_route_v1 \
+            tests.test_mmibkr_operator_console_pi_predeploy_gate_r1 \
             tests.test_fleet_source_vault_contract_v1
           mkdir -p cloudflare/operator-console/dist
           printf '%s\n' '<!doctype html><title>MM-IBKR locked operator console</title>' > cloudflare/operator-console/dist/index.html
