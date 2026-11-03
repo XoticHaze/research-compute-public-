@@ -9,6 +9,8 @@ on:
       - 'cloudflare/reference-release-broker/src/ticket.js'
       - 'cloudflare/reference-release-broker/src/intent.js'
       - 'cloudflare/reference-release-broker/wrangler.jsonc'
+      - 'scripts/reference_broker_state_probe_receipt_v1.py'
+      - 'tests/test_reference_broker_state_probe_receipt_v1.py'
   workflow_dispatch:
 
 permissions:
@@ -20,6 +22,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Validate non-secret broker observation classifications
+        run: python tests/test_reference_broker_state_probe_receipt_v1.py
       - name: Probe live broker state
         shell: bash
         run: |
