@@ -11,6 +11,7 @@ export async function runCodeRoleCase({modelIndex,taskIndex,providerFetch,now=()
   task_index:taskIndex,status:"not_started",provider_calls:0,http_status:null,
   elapsed_ms:0,source:null,source_valid_shape:false,
   final_content_present:null,reasoning_content_present:null,finish_reason:"not_recorded",
+  prompt_tokens:null,completion_tokens:null,reasoning_tokens:null,
   synthetic_only:true,private_data_used:false,model_code_executed:false,
   real_repo_changed:false};
  try{
@@ -28,6 +29,13 @@ export async function runCodeRoleCase({modelIndex,taskIndex,providerFetch,now=()
   out.reasoning_content_present=typeof message?.reasoning_content==="string"&&message.reasoning_content.trim().length>0;
   const finish=choice?.finish_reason;
   out.finish_reason=["stop","length","tool_calls","content_filter"].includes(finish)?finish:"other";
+  // Numeric-only usage metadata is helpful when testing a small output cap.
+  // Do not include raw request/response, message content or reasoning text.
+  const usage=body?.usage;
+  const boundedTokens=v=>Number.isSafeInteger(v)&&v>=0&&v<=1000000?v:null;
+  out.prompt_tokens=boundedTokens(usage?.prompt_tokens);
+  out.completion_tokens=boundedTokens(usage?.completion_tokens);
+  out.reasoning_tokens=boundedTokens(usage?.completion_tokens_details?.reasoning_tokens);
   out.source=sanitizeCandidate(message?.content,taskIndex);
   out.source_valid_shape=out.source!==null;
   out.status=out.source_valid_shape?"candidate_unexecuted":"format_rejected";
