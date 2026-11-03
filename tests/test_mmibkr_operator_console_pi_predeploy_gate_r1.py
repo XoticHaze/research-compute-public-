@@ -81,7 +81,9 @@ class CloudflareReleasePreflight(unittest.TestCase):
                     )
                     combined = result.stdout + result.stderr
                     self.assertEqual(result.returncode == 0, should_pass)
-                    self.assertIn("MMIBKR_PI_BOT_PREDEPLOY_" + label, combined)
+                    marker = ("MMIBKR_PI_BOT_PREDEPLOY_IDENTITY_GATE=PASS" if should_pass
+                              else "MMIBKR_PI_BOT_PREDEPLOY_" + label)
+                    self.assertIn(marker, combined)
                     self.assertNotIn("observations/", combined)
                     self.assertNotIn("../bad/", combined)
 
