@@ -5,6 +5,22 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const root = path.resolve(import.meta.dirname, '..');
+const retiredPowerShell = fs.readFileSync(
+  path.join(root, 'scripts/operator/bootstrap_reference_release_broker.ps1'),
+  'utf8'
+);
+const activeStatements = retiredPowerShell.split(/\r?\n/)
+  .map(line => line.trim())
+  .filter(line => line.length && !line.startsWith('#'));
+// This retired shell entrypoint must not gain any executable pre-throw
+// deployment, keygen, network or secret mutation statements in a future edit.
+assert.deepEqual(activeStatements, [
+  'param([string]$KeyDir = "")',
+  '$ErrorActionPreference = "Stop"',
+  'throw "RETIRED_UNSAFE_BOOTSTRAP: no key generation or Cloudflare action. Read the neutral initial-seal handoff and obtain independent administrator approval."'
+]);
+console.log('REFERENCE_LEGACY_POWERSHELL_BOOTSTRAP_RETIRED_PASS=1');
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'legacy-broker-keygen-retired-'));
 try {
   const marker = path.join(tmp, 'existing-key-sentinel');
