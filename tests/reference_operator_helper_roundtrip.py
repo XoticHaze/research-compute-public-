@@ -78,6 +78,41 @@ def main() -> int:
             raise RuntimeError("broker_private_missing")
         if not (out / "authority-private.pkcs8.b64").exists():
             raise RuntimeError("authority_private_missing")
+        # The first seal's keys must never be replaced on a mistaken rerun.
+        broker_before = (out / "broker-private.jwk").read_bytes()
+        authority_before = (out / "authority-private.pkcs8.b64").read_bytes()
+        retry = subprocess.run(
+            ["node", str(ROOT / "scripts/operator/reference_release_keygen.mjs"), str(out)],
+            cwd=ROOT, capture_output=True, text=True,
+        )
+        if retry.returncode == 0 or "key_output_directory_not_empty" not in retry.stderr:
+            raise RuntimeError("signer_identity_rerun_not_rejected")
+        if (out / "broker-private.jwk").read_bytes() != broker_before:
+            raise RuntimeError("broker_key_overwritten_on_rerun")
+        if (out / "authority-private.pkcs8.b64").read_bytes() != authority_before:
+            raise RuntimeError("authority_key_overwritten_on_rerun")
+        if any(p.stat().st_mode & 0o077 for p in out.iterdir()):
+            raise RuntimeError("key_file_permissions_not_private")
+        if out.stat().st_mode & 0o077:
+            raise RuntimeError("key_directory_permissions_not_private")
+        with tempfile.TemporaryDirectory() as dirty_root:
+            dirty = Path(dirty_root)
+            (dirty / "sentinel").write_text("must-not-be-replaced", encoding="utf-8")
+            denied = subprocess.run(
+                ["node", str(ROOT / "scripts/operator/reference_release_keygen.mjs"), str(dirty)],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            if denied.returncode == 0 or (dirty / "sentinel").read_text() != "must-not-be-replaced":
+                raise RuntimeError("preexisting_output_not_protected")
+        with tempfile.TemporaryDirectory() as permissive_root:
+            permissive = Path(permissive_root)
+            permissive.chmod(0o755)
+            denied = subprocess.run(
+                ["node", str(ROOT / "scripts/operator/reference_release_keygen.mjs"), str(permissive)],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            if denied.returncode == 0 or any(permissive.iterdir()):
+                raise RuntimeError("permissive_output_dir_not_rejected")
 
     print("REFERENCE_OPERATOR_HELPER_ROUNDTRIP_PASS=1")
     return 0
