@@ -32,23 +32,23 @@ function envelope(){
 const e=envelope()
 assert.throws(()=>validatePiBotLiveEnvelope(e,now),/pi_bot_observation_rejected/)
 assert.throws(()=>validatePiBotLiveEnvelope(e,now,'wrong-'+SOURCE_BINDING),/pi_bot_observation_rejected/)
-assert.equal(validatePiBotLiveEnvelope(e,now,SOURCE_BINDING).replayId,rid)
+assert.throws(()=>validatePiBotLiveEnvelope(e,now,SOURCE_BINDING),/pi_bot_observation_rejected/)
 const record={schema:'mmibkr.pi_bot_live_store.v1',envelope:e,
   stored_at_utc:'2026-11-01T04:19:35Z',publisher_provenance:provenance}
-assert.equal(piBotLiveOperatorView(record,now,SOURCE_BINDING,PUBLISHER_SHA).live_switches_enabled,true)
-assert.equal(piBotLiveOperatorView(record,now,SOURCE_BINDING,PUBLISHER_SHA).permission_mutation_attempted,false)
+assert.throws(()=>piBotLiveOperatorView(record,now,SOURCE_BINDING,PUBLISHER_SHA),/pi_bot_observation_rejected/)
 const fail=x=>assert.throws(()=>validatePiBotLiveEnvelope(x,now,SOURCE_BINDING),/pi_bot_observation_rejected/)
 fail({...envelope(),source_binding_id:'wrong-source-binding'})
 fail({...envelope(),source_repo:'fixture/not-an-admitted-field'})
 fail({...envelope(),result_commit_sha:'a'.repeat(40)})
 fail({...envelope(),source_receipt_id:'a'.repeat(40)})
-assert.equal(piBotLiveOperatorView(record,now,SOURCE_BINDING,PUBLISHER_SHA).receipt_sha,'a'.repeat(64))
+assert.throws(()=>piBotLiveOperatorView(record,now,SOURCE_BINDING,PUBLISHER_SHA),/pi_bot_observation_rejected/)
 fail({...envelope(),receipt:{...e.receipt,action:'pi.bot.no_submit_start'}})
 fail({...envelope(),receipt:{...e.receipt,bot_started:true}})
 fail({...envelope(),receipt:{...e.receipt,live_status:{...observation,broker_submission_verified:true}}})
 fail({...envelope(),receipt:{...e.receipt,live_status:{...observation,live_switches_enabled:false}}})
 assert.throws(()=>piBotLiveOperatorView(record,now+12*60000,SOURCE_BINDING,PUBLISHER_SHA),/pi_bot_observation_rejected/)
-console.log('Authenticated Pi bot-origin public ingestion contract: PASS')
+await assert.rejects(()=>verifyPiBotRootDigest(e),/pi_bot_observation_rejected/)
+console.log('Typed-v1 is not detached root-signed: rejection contract PASS')
 
 
 // Recurring root-approved immutable observation, independently versioned

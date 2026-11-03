@@ -28,6 +28,9 @@ function sourceMatches(input, sourceBinding) {
     && input?.source_binding_id === sourceBinding;
 }
 export function validatePiBotLiveEnvelope(input, now = Date.now(), sourceBinding = null) {
+  // Public BOT origin requires the detached root-signed v2 producer.
+  // A typed-v1 command result is not a root attestation, even with valid OIDC.
+  if (input?.schema !== 'mmibkr.pi_bot_live_observation_envelope.v2') reject();
   if (input?.schema === 'mmibkr.pi_bot_live_observation_envelope.v2') {
     if (!keys(input,rootEnvelopeKeys) || input.node_id!=='cc-pi4'
         || !sourceMatches(input, sourceBinding)
@@ -102,7 +105,8 @@ export function validatePiBotLiveEnvelope(input, now = Date.now(), sourceBinding
     sourceReceiptId: input.source_receipt_id };
 }
 export function piBotLiveOperatorView(record, now = Date.now(), sourceBinding = null, approvedPublisherSha = null) {
-  if (!record || record.schema !== 'mmibkr.pi_bot_live_store.v1') reject();
+  if (!record || record.schema !== 'mmibkr.pi_bot_live_store.v1'
+      || record.envelope?.schema !== 'mmibkr.pi_bot_live_observation_envelope.v2') reject();
   const p=record.publisher_provenance;
   const pk=new Set(['schema','workflow_sha','run_id','verified_at_utc']);
   if (!keys(p,pk) || p.schema!=='mmibkr.pi_bot_publisher_provenance.v1'
@@ -143,7 +147,7 @@ function canonical(value) {
   return JSON.stringify(value);
 }
 export async function verifyPiBotRootDigest(envelope) {
-  if (envelope?.schema!=='mmibkr.pi_bot_live_observation_envelope.v2') return true;
+  if (envelope?.schema!=='mmibkr.pi_bot_live_observation_envelope.v2') reject();
   const record=envelope.record;
   if (!record || !record.snapshot || !hex64(record.snapshot_sha256)) reject();
   const bytes=new TextEncoder().encode(canonical(record.snapshot));
