@@ -47,8 +47,12 @@ def receipt_from_observation(health: object, key: object, health_status: int,
     key_ok = fingerprint is not None
     if health_ok and key_ok:
         readiness = "HEALTH_AND_KEY_MATCH_NOT_SIGNED_ADMISSION"
-    elif health_ok != key_ok:
-        readiness = "INCONSISTENT_READINESS_CHECK_LIVE_SOURCE"
+    elif health_ok:
+        # An older preseal deployment, two active versions, or key export
+        # failure can all produce this; HTTP doesn't attest source identity.
+        readiness = "HEALTH_ONLY_KEY_UNVERIFIED_SOURCE_UNKNOWN"
+    elif key_ok:
+        readiness = "KEY_ONLY_HEALTH_UNVERIFIED_SOURCE_UNKNOWN"
     else:
         readiness = "NOT_READY"
     return {
@@ -59,6 +63,8 @@ def receipt_from_observation(health: object, key: object, health_status: int,
         "public_key_http_status": key_status,
         "broker_signer_configured": key_ok,
         "broker_key_id": fingerprint,
+        "deployed_source_identity_verified": False,
+        "independent_signing_admission_verified": False,
         "readiness_observation": readiness,
         "mutation_performed": False,
         "secrets_included": False,
