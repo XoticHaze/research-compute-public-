@@ -70,6 +70,37 @@ class BrokerProbeTests(unittest.TestCase):
                 self.assertFalse(node["deployed_source_identity_verified"])
                 self.assertFalse(node["independent_signing_admission_verified"])
 
+    def test_rerun_provenance_changes_without_broker_admission(self):
+        first = probe.receipt_from_observation(
+            {"ok": True}, {"error": "unavailable"}, 200, 503, "41584517862",
+            run_attempt="1", observed_at_utc="2026-11-03T07:20:00.000Z"
+        )
+        rerun = probe.receipt_from_observation(
+            {"ok": True}, {"error": "unavailable"}, 200, 503, "41584517862",
+            run_attempt="2", observed_at_utc="2026-11-03T09:13:02.482Z"
+        )
+        self.assertEqual(first["run_id"], rerun["run_id"])
+        self.assertNotEqual(first["run_attempt"], rerun["run_attempt"])
+        self.assertNotEqual(first["observed_at_utc"], rerun["observed_at_utc"])
+        self.assertNotEqual(first, rerun)
+        self.assertEqual(rerun["run_attempt"], 2)
+        self.assertFalse(rerun["broker_signer_configured"])
+        self.assertFalse(rerun["deployed_source_identity_verified"])
+        self.assertFalse(rerun["independent_signing_admission_verified"])
+        self.assertFalse(rerun["mutation_performed"])
+        self.assertFalse(rerun["secrets_included"])
+
+    def test_invalid_rerun_identifiers_are_not_passed_through(self):
+        for bad in ("", "0", "01", "secret", "1;secret", "9" * 50):
+            with self.subTest(bad=bad):
+                receipt = probe.receipt_from_observation(
+                    {"ok": True}, {}, 200, 503, "123",
+                    run_attempt=bad, observed_at_utc=None
+                )
+                self.assertIsNone(receipt["run_attempt"])
+                self.assertIsNone(receipt["observed_at_utc"])
+                self.assertNotIn("raw_run_attempt", receipt)
+
     def test_bad_and_oversized_json_is_sanitized(self):
         with tempfile.TemporaryDirectory() as directory:
             p = Path(directory) / "body"
