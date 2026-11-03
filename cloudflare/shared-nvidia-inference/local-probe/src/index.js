@@ -6,6 +6,10 @@ import {sanitizeDraftReceipt} from "./draft_receipt.js";
 import {sanitizeCodeReceipt} from "./code_receipt.js";
 import {sanitizeCodeRoleReceipt} from "./code_role_receipt.js";
 import {sanitizeDiscoveryReceipt} from "./discovery_receipt.js";
+import {sanitizeWorkforceReceipt} from "./workforce_receipt.js";
+import {sanitizeV4MechanismReceipt} from "./workforce_v4_receipt.js";
+import {V4_MECHANISM_HOLDOUTS} from "../../src/workforce_v4_mechanism_holdout.js";
+import {CASES} from "../../src/workforce_domain_suite.js";
 const SOURCE_PATH = "/run-once";
 const ROLES_PATH = "/roles-batch";
 const MICRO_PATH = "/micro-batch";
@@ -13,6 +17,8 @@ const DRAFT_PATH = "/draft-pilot";
 const CODE_PATH = "/code-repair";
 const ROLE_CODE_PATH = "/role-code-case";
 const DISCOVERY_PATH = "/discovery-case";
+const WORKFORCE_PATH = "/workforce-case";
+const WORKFORCE_V4_PATH = "/workforce-v4-case";
 const DESTINATION = "https://cc-shared-nvidia-inference.invalid/internal/diagnostics/nvidia";
 const CLASSIFICATIONS = new Set([
   "unattempted", "secrets_store_binding_missing", "secrets_store_read_unavailable",
@@ -36,12 +42,15 @@ export function createCaller() {
   let roleCodeInvoked = false;
   const discoveryInvoked = new Set();
   let discoveryStopped = false;
+  const workforceInvoked = new Set();
+  let workforceStopped = false;
+  let admittedWorkforceKind = null;
   const roleBatchesInvoked = new Set();
   const microBatchesInvoked = new Set();
   return {
     async fetch(request, env) {
       const url = new URL(request.url);
-      if (request.method !== "POST" || ![SOURCE_PATH, ROLES_PATH, MICRO_PATH, DRAFT_PATH, CODE_PATH, ROLE_CODE_PATH, DISCOVERY_PATH].includes(url.pathname) || url.search ||
+      if (request.method !== "POST" || ![SOURCE_PATH, ROLES_PATH, MICRO_PATH, DRAFT_PATH, CODE_PATH, ROLE_CODE_PATH, DISCOVERY_PATH, WORKFORCE_PATH, WORKFORCE_V4_PATH].includes(url.pathname) || url.search ||
           !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) {
         return reply(404, { classification: "local_route_unavailable" });
       }
@@ -52,7 +61,22 @@ export function createCaller() {
       let codeIndex = null;
       let roleCode = null;
       let discovery = null;
-      if(url.pathname===DISCOVERY_PATH){
+      let workforce = null;
+      if(url.pathname===WORKFORCE_PATH||url.pathname===WORKFORCE_V4_PATH){
+        const n=Number(request.headers.get("content-length"));
+        if(!Number.isInteger(n)||n<1||n>75||
+           request.headers.get("content-type")!=="application/json")
+          return reply(400,{classification:"workforce_selector_rejected"});
+        let v;
+        try{v=await request.json();}catch{return reply(400,{classification:"workforce_selector_rejected"});}
+        if(!v||typeof v!=="object"||Array.isArray(v)||
+           Object.keys(v).sort().join(",")!=="case_index,model_index"||
+           !Number.isInteger(v.model_index)||v.model_index<0||v.model_index>=10000||
+           !Number.isInteger(v.case_index)||v.case_index<0||
+           v.case_index>=(url.pathname===WORKFORCE_V4_PATH?V4_MECHANISM_HOLDOUTS.length:CASES.length))
+          return reply(400,{classification:"workforce_selector_rejected"});
+        workforce=v;
+      }else if(url.pathname===DISCOVERY_PATH){
         const n=Number(request.headers.get("content-length"));
         if(!Number.isInteger(n)||n<1||n>65||
            request.headers.get("content-type")!=="application/json")
@@ -75,7 +99,7 @@ export function createCaller() {
         if(!v||typeof v!=="object"||Array.isArray(v)||
            Object.keys(v).sort().join(",")!=="model_index,task_index"||
            !Number.isInteger(v.model_index)||v.model_index<0||v.model_index>1||
-           !Number.isInteger(v.task_index)||v.task_index<0||v.task_index>9)
+           !Number.isInteger(v.task_index)||v.task_index<0||v.task_index>4)
           return reply(400,{classification:"role_code_selector_rejected"});
         roleCode=v;
       }else if(url.pathname===CODE_PATH){
@@ -117,9 +141,20 @@ export function createCaller() {
       } else if (request.body !== null && request.headers.get("content-length") !== "0") {
         return reply(400, { classification: "request_body_not_allowed" });
       }
-      // Up to twenty DISTINCT fixed (model,task) cases in a single ephemeral
-      // loopback session, instead of twenty Wrangler restarts. Never replay,
-      // exceed the matrix, mix legacy routes, or continue after provider hold.
+      // Session cap is replay/budget containment, NOT a lifetime model or task
+      // cap. Future sessions may resume all remaining catalog-indexed cases.
+      const workforceKey=workforce===null?null:workforce.model_index+":"+workforce.case_index;
+      const workforceKind=url.pathname===WORKFORCE_V4_PATH?"v4":"v3";
+      if((workforce!==null&&(workforceStopped||
+           (admittedWorkforceKind!==null&&admittedWorkforceKind!==workforceKind)||
+           workforceInvoked.size>=64||
+          workforceInvoked.has(workforceKey)||smokeInvoked||draftInvoked||
+          roleCodeInvoked||discoveryInvoked.size||codeInvoked||
+          roleBatchesInvoked.size||microBatchesInvoked.size))||
+         (workforce===null&&workforceInvoked.size>0))
+        return reply(409,{classification:"caller_batch_limit_or_replay"});
+      // Preserve the other role-discovery experiment's newer 20 distinct
+      // (model,task) session capability without conflating its work identity.
       if((discovery!==null&&(smokeInvoked||draftInvoked||codeInvoked||
           roleCodeInvoked||discoveryStopped||discoveryInvoked.size>=20||
           discoveryInvoked.has(discovery.model_index+":"+discovery.task_index)||
@@ -140,7 +175,8 @@ export function createCaller() {
         return reply(503, { classification: "remote_service_binding_missing" });
       }
       // One request per local dev session, even if upstream errors.
-      if(discovery!==null)discoveryInvoked.add(discovery.model_index+":"+discovery.task_index);
+      if(workforce!==null){workforceInvoked.add(workforceKey);admittedWorkforceKind=workforceKind;}
+      else if(discovery!==null)discoveryInvoked.add(discovery.model_index+":"+discovery.task_index);
       else if(roleCode!==null)roleCodeInvoked=true;
       else if(codeIndex!==null)codeInvoked=true;
       else if(url.pathname===DRAFT_PATH)draftInvoked=true;
@@ -148,7 +184,13 @@ export function createCaller() {
       else if (roleBatch === null) smokeInvoked = true;
       else roleBatchesInvoked.add(roleBatch);
       try {
-        const upstream = await env.NVIDIA_SERVICE.fetch(discovery!==null
+        const upstream = await env.NVIDIA_SERVICE.fetch(workforce!==null
+          ? new Request(DESTINATION.replace("/internal/diagnostics/nvidia",
+                 (url.pathname===WORKFORCE_V4_PATH?"/internal/diagnostics/nvidia-workforce-v4":"/internal/diagnostics/nvidia-workforce")),{
+              method:"POST",headers:{"Content-Type":"application/json"},
+              body:JSON.stringify(workforce)
+            })
+          : discovery!==null
           ? new Request(DESTINATION.replace("/internal/diagnostics/nvidia",
                  "/internal/diagnostics/nvidia-discovery"),{
               method:"POST",headers:{"Content-Type":"application/json"},
@@ -183,6 +225,19 @@ export function createCaller() {
               body:JSON.stringify({batch:roleBatch})
           }));
         const value = await upstream.json();
+        if(workforce!==null){
+          const safe=url.pathname===WORKFORCE_V4_PATH?sanitizeV4MechanismReceipt(value):sanitizeWorkforceReceipt(value);
+          if(!safe||safe.model_index!==workforce.model_index||
+             safe.case_index!==workforce.case_index){
+            workforceStopped=true;
+            return reply(502,{classification:"untrusted_workforce_receipt"});
+          }
+          if(["provider_rate_limited","catalog_unavailable",
+              "transport_or_decoding_failure"].includes(safe.status)||
+             safe.catalog_status===401||safe.completion_status===401)
+            workforceStopped=true;
+          return reply(upstream.ok?200:502,safe);
+        }
         if(discovery!==null){
           const safe=sanitizeDiscoveryReceipt(value);
           if(!safe||safe.model_index!==discovery.model_index||
@@ -190,8 +245,9 @@ export function createCaller() {
             discoveryStopped=true;
             return reply(502,{classification:"untrusted_discovery_receipt"});
           }
-          if(["provider_rate_limited","provider_pending","provider_transport_or_decode_failure"].includes(safe.status)||safe.http_status===401)
-            discoveryStopped=true;
+          if(["provider_rate_limited","provider_pending",
+              "provider_transport_or_decode_failure"].includes(safe.status)||
+             safe.http_status===401)discoveryStopped=true;
           return reply(upstream.ok?200:502,safe);
         }
         if(roleCode!==null){
@@ -251,6 +307,7 @@ export function createCaller() {
         };
         return reply(upstream.ok ? 200 : 502, sanitized);
       } catch {
+        if(workforce!==null)workforceStopped=true;
         if(discovery!==null)discoveryStopped=true;
         return reply(502, { classification: "service_binding_transport_or_receipt_failure" });
       }
