@@ -14,6 +14,8 @@ on:
       - 'scripts/reference_release_intent_v1.py'
       - 'tests/reference_release_broker_policy.mjs'
       - 'tests/reference_release_broker_endpoint_interop.mjs'
+      - 'tests/reference_placement_claim_attestation.mjs'
+      - 'tests/fixtures/placement_claim_signed_python.v1.json'
       - 'tests/reference_release_ticket_interop.py'
       - 'tests/reference_release_grant_interop_prepare.py'
       - 'tests/reference_release_grant_interop.mjs'
@@ -32,6 +34,8 @@ on:
       - 'tests/reference_release_maintainer_runtime_interop.mjs'
       - 'tests/reference_release_broker_policy.mjs'
       - 'tests/reference_release_broker_endpoint_interop.mjs'
+      - 'tests/reference_placement_claim_attestation.mjs'
+      - 'tests/fixtures/placement_claim_signed_python.v1.json'
       - 'tests/reference_release_ticket_interop.py'
       - 'scripts/reference_release_ticket_v1.py'
       - '.github/workflows/reference-broker-interop-ci.yml'
@@ -60,6 +64,8 @@ jobs:
         run: node tests/reference_release_broker_policy.mjs
       - name: Prove actual broker endpoint with synthetic signed OIDC, authority intent and Durable Object replay
         run: node tests/reference_release_broker_endpoint_interop.mjs
+      - name: Verify independent Ed25519 PLACED envelope and one-use neutral ledger bridge
+        run: node tests/reference_placement_claim_attestation.mjs
       - name: Prove actual neutral maintainer preflight, source integrity and remote-commit rollback behavior
         run: node tests/reference_release_maintainer_runtime_interop.mjs
       - name: Prepare private-authority signed grant
@@ -81,6 +87,7 @@ jobs:
           node --check cloudflare/reference-release-broker/src/index.js
           node --check cloudflare/reference-release-broker/src/intent.js
           node --check cloudflare/reference-release-broker/src/ticket.js
+          node --check cloudflare/reference-release-broker/src/placement.js
           node tests/reference_release_broker_package.mjs
           npx --yes wrangler@4.135.0 deploy --dry-run             --config cloudflare/reference-release-broker/wrangler.jsonc             --outdir "$RUNNER_TEMP/reference-release-broker-dry-run"
       - name: Ensure proof files contain no private signing key
