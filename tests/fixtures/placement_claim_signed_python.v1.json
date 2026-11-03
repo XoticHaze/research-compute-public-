@@ -1,0 +1,16 @@
+{
+  "claim": {
+    "payload_b64": "Q09NTUFORENFTlRFUi1QTEFDRU1FTlQtSVNTVUFOQ0UtVjEKeyJjb21wdXRlX2lkIjoicHVibGljX3Jlc2VhcmNoX2NvbXB1dGVfY3VycmVudCIsImV4ZWN1dG9yIjp7ImtpbmQiOiJnaXRodWJfYWN0aW9uc19nZW5lcmljIiwicmVwb3NpdG9yeSI6IlhvdGljSGF6ZS9yZXNlYXJjaC1jb21wdXRlLXB1YmxpYy0ifSwiaXNzdWVyX3Byb29mIjp7ImV4cGlyZXNfYXRfdXRjIjoiMjAyNi0xMS0wM1QwNTowMTo0MFoiLCJpc3N1ZWRfYXRfdXRjIjoiMjAyNi0xMS0wM1QwNDo1OTo0MFoiLCJpc3N1ZXJfaWQiOiJuZXV0cmFsLmlzc3Vlci52MSIsIm5vbmNlIjoiZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGQiLCJyZWdpc3RyeV9zaGEyNTYiOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwicm91dGVfc2hhMjU2IjoiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYiJ9LCJqb2JfaWQiOiJqb2ItMDAxIiwiam9iX3NoYTI1NiI6ImNjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2MiLCJsYW5lIjoicmVmZXJlbmNlIiwibG9hZF9yYXRpbyI6MC4yNSwic2NoZW1hIjoiY29tbWFuZGNlbnRlci5qb2Jfc3VibWlzc2lvbl9yZWNlaXB0LnYxIiwic3RhdGUiOiJQTEFDRUQiLCJ0cnVzdF9tb2RlIjoicHVibGljX2VuY3J5cHRlZCIsIndvcmtsb2FkIjoic3ludGhldGljIn0=",
+    "signature_b64": "lGNm/gu8QeqPWSTA6Re+775TLIijS9RsvvxlMQTjHMZBjVu7eRDc53EE2hW1/BMtMT1xEoSUHjJMqxxzWUwHDQ=="
+  },
+  "now_seconds": 1793682000,
+  "policy": {
+    "compute_id": "public_research_compute_current",
+    "issuer_id": "neutral.issuer.v1",
+    "issuer_public_b64": "qcfgLMQ73KUqMjQ1BSg/bSu+42lRA68FXZq4SYJRe3w=",
+    "registry_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "route_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "purpose": "public_synthetic_only_no_real_issuer_or_protected_registry",
+  "schema": "reference.synthetic_python_ed25519_placed_claim.v1"
+}
