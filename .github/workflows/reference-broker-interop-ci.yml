@@ -38,6 +38,8 @@ on:
       - 'tests/fixtures/placement_claim_signed_python.v1.json'
       - 'tests/reference_release_ticket_interop.py'
       - 'scripts/reference_release_ticket_v1.py'
+      - 'scripts/operator/reference_release_keygen.mjs'
+      - 'tests/reference_operator_helper_roundtrip.py'
       - '.github/workflows/reference-broker-interop-ci.yml'
   workflow_dispatch:
 
