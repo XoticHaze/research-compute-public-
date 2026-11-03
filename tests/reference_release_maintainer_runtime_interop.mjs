@@ -46,6 +46,9 @@ const baseManifest={
 const account='b33595eb85f346b0d1bf201810b4499a';
 const cf='https://api.cloudflare.com/client/v4/accounts/'+account;
 const target='/workers/scripts/reference-release-broker-v1';
+const workerId='0123456789abcdef0123456789abcdef';
+const betaWorker='/workers/workers/reference-release-broker-v1';
+const betaVersions='/workers/workers/'+workerId+'/versions?deploy=false';
 const origin='https://reference-release-broker-v1.shared-compute-neutral-authorization.workers.dev';
 
 function fake(overrides={}){
@@ -90,6 +93,13 @@ function fake(overrides={}){
       assert.ok(u.includes('/'+candidate+'/'),'candidate must be SHA pinned');
       return new Response(state.badSource&&name==='ticket.js'?'wrong source':bodies[name],{status:200});
     }
+    if(u===cf+betaWorker&&method==='GET'){
+      state.events.push('worker_identity_read');
+      return Response.json({success:true,result:{
+        id:state.mismatchedWorkerId?'not-a-worker-id':workerId,
+        name:state.mismatchedWorkerName?'unrelated-worker':"reference-release-broker-v1",
+      }});
+    }
     if(u===cf+target+'/deployments'&&method==='GET'){
       state.events.push('active_read');
       state.activeReads=(state.activeReads||0)+1;
@@ -101,11 +111,11 @@ function fake(overrides={}){
         {versions:[{version_id:state.active,percentage:100}]}
       ]}});
     }
-    if(u===cf+target+'/versions?bindings_inherit=strict'&&method==='POST'){
+    if(u===cf+betaVersions&&method==='POST'){
       state.events.push('upload');
       state.uploads++;
-      assert.equal(init.body instanceof FormData,true);
-      const metadata=JSON.parse(await init.body.get('metadata').text());
+      assert.equal(typeof init.body,'string','beta Worker API requires JSON modules');
+      const metadata=JSON.parse(init.body);
       assert.equal(metadata.main_module,'index.js');
       assert.equal(metadata.bindings.length,7);
       assert.deepEqual(metadata.bindings.map(x=>x.name).sort(),[
@@ -113,9 +123,12 @@ function fake(overrides={}){
         'ALLOWED_JOB_WORKFLOW_REF','ALLOWED_JOB_WORKFLOW_SHA',
         'MAX_ADMISSION_SECONDS','MAX_INTENT_SECONDS'].sort());
       assert.ok(metadata.bindings.every(x=>x.type==='inherit'&&x.version_id===old));
-      assert.equal(metadata.annotations['workers/commit_sha'],candidate);
-      for(const name of sourceFiles){
-        assert.equal(await init.body.get(name).text(),bodies[name]);
+      assert.equal(metadata.annotations['workers/tag'],candidate);
+      assert.equal(metadata.annotations['workers/commit_sha'],undefined);
+      assert.deepEqual(metadata.modules.map(x=>x.name),sourceFiles);
+      for(const mod of metadata.modules){
+        assert.equal(mod.content_type,'application/javascript+module');
+        assert.equal(Buffer.from(mod.content_base64,'base64').toString('utf8'),bodies[mod.name]);
       }
       return state.uploadFailure?
         Response.json({success:false},{status:403}):
@@ -178,6 +191,7 @@ let checks=0;
   assert.equal(state.uploads,1);
   assert.equal(state.active,newer);
   assert.deepEqual(state.promotions,[newer]);
+  assert.ok(state.events.indexOf('worker_identity_read')<state.events.indexOf('consume'));
   assert.ok(state.events.indexOf('candidate_read')<state.events.indexOf('consume'));
   assert.ok(state.events.indexOf('token_get')<state.events.indexOf('consume'));
   assert.ok(state.events.indexOf('active_read')<state.events.indexOf('consume'));
@@ -190,6 +204,15 @@ let checks=0;
 {
   const s=await reject('stale_version',{active:other},'current_version_mismatch');
   assert.equal(s.consumes,0);assert.equal(s.uploads,0);checks++;
+}
+for(const scenario of [
+  {label:'wrong_broker_name',opts:{mismatchedWorkerName:true}},
+  {label:'invalid_worker_id',opts:{mismatchedWorkerId:true}},
+]){
+  const s=await reject(scenario.label,scenario.opts,'broker_worker_identity_unverified');
+  assert.equal(s.consumes,0);
+  assert.equal(s.uploads,0);
+  checks++;
 }
 {
   const s=await reject('incorrect_candidate_hash',{badSource:true},'candidate_file_hash_rejected_ticket.js');
@@ -358,6 +381,6 @@ const authInput={
   assert.equal(state.events.includes('token_get'),false);
   assert.equal(state.consumes,0);checks++;
 }
-assert.equal(checks,21);
+assert.equal(checks,23);
 console.log('REFERENCE_MAINTAINER_ACTUAL_SOURCE_PREFLIGHT_AND_ROLLBACK_PASS='+checks);
 console.log('REFERENCE_MAINTAINER_PUBLIC_CI_SYNTHETIC_ONLY=1');
