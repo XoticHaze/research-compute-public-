@@ -14,7 +14,7 @@ const code=source.replace('import { WorkerEntrypoint } from "cloudflare:workers"
 const module=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
 const {maintainManifest}=module;
 const brokerSource='cloudflare/reference-release-broker/src/';
-const sourceFiles=['index.js','intent.js','ticket.js'];
+const sourceFiles=['index.js','intent.js','ticket.js','placement.js'];
 const bodies=Object.fromEntries(sourceFiles.map(x=>[x,
   fs.readFileSync(brokerSource+x,'utf8')]));
 const hashes=Object.fromEntries(sourceFiles.map(x=>[x,sha(bodies[x])]));
