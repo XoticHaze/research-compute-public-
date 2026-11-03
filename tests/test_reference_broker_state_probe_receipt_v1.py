@@ -60,6 +60,16 @@ class BrokerProbeTests(unittest.TestCase):
         self.assertTrue(r["broker_signer_configured"])
         self.assertEqual(r["readiness_observation"], "KEY_ONLY_HEALTH_UNVERIFIED_SOURCE_UNKNOWN")
 
+    def test_http_alone_never_attests_source_or_admission(self):
+        key = synthetic_key()
+        for h_status, k_status in ((200, 200), (200, 503), (503, 200), (503, 503)):
+            with self.subTest(health=h_status, key=k_status):
+                node = probe.receipt_from_observation(
+                    {"ok": True}, key, h_status, k_status, "123"
+                )
+                self.assertFalse(node["deployed_source_identity_verified"])
+                self.assertFalse(node["independent_signing_admission_verified"])
+
     def test_bad_and_oversized_json_is_sanitized(self):
         with tempfile.TemporaryDirectory() as directory:
             p = Path(directory) / "body"
