@@ -1,0 +1,86 @@
+name: CommandCenter Cloudflare Worker Read-Only R1
+
+# This workflow is account-bound to existing SlenderIQ credentials and never
+# deploys, mutates Worker settings, or touches the separate neutral account.
+# The push trigger reads ONE exact typed request from the fixed fire mailbox.
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Fixed read-only Cloudflare operation
+        type: choice
+        required: true
+        options:
+          - cloudflare.worker_status
+          - cloudflare.release_status
+      worker:
+        description: Allowed SlenderIQ Worker (not neutral compute)
+        type: choice
+        required: true
+        options:
+          - mmibkr-operator-console
+          - fleet-authority
+      request_id:
+        description: Unique alphanumeric request identifier (max 80)
+        type: string
+        required: true
+  push:
+    branches: [main]
+    paths:
+      - 'rendezvous/fire/cloudflare-worker-readonly-r1.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cc-cloudflare-worker-readonly-r1
+  cancel-in-progress: false
+
+jobs:
+  observe-worker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_READ_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Validate bounded public-source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests -p 'test_cloudflare_worker_status_readonly_r1.py' -v
+
+      - name: Perform exactly one authorized GET-only operation
+        shell: bash
+        env:
+          TYPED_OPERATION: ${{ inputs.operation }}
+          TYPED_WORKER: ${{ inputs.worker }}
+          TYPED_REQUEST_ID: ${{ inputs.request_id }}
+        run: |
+          set -euo pipefail
+          receipt="$RUNNER_TEMP/cloudflare-worker-readonly-receipt.json"
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            python3 scripts/cloudflare_worker_status_readonly_r1.py \
+              --request-file rendezvous/fire/cloudflare-worker-readonly-r1.json \
+              --receipt-file "$receipt"
+          elif [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            python3 scripts/cloudflare_worker_status_readonly_r1.py \
+              --operation "$TYPED_OPERATION" \
+              --worker "$TYPED_WORKER" \
+              --request-id "$TYPED_REQUEST_ID" \
+              --receipt-file "$receipt"
+          else
+            echo 'CLOUDFLARE_READONLY_EVENT_REJECTED=1'
+            exit 2
+          fi
+
+      - name: Publish sanitized bounded receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cloudflare-worker-readonly-${{ github.run_id }}
+          path: ${{ runner.temp }}/cloudflare-worker-readonly-receipt.json
+          if-no-files-found: warn
+          retention-days: 7
