@@ -36,13 +36,13 @@ Use a **fresh request ID** for each desired read. This is a GET-only, idempotent
 
 ## Result and consumption
 
-The workflow executes eight bounded local-source regression cases, uses existing SlenderIQ repository secrets, then performs one fixed GET and emits a sanitized JSON artifact named cloudflare-worker-readonly-<github.run_id>. GitHub artifact retention is 7 days: it is **not a perpetual durable CommandCenter receipt**. The owning CommandCenter consumer must read the exact GitHub run/artifact identity, verify the expected schema/target/operation and persist the final result in its already authorized durable GitHub receipt channel before claiming end-to-end control.
+The workflow executes nine bounded local-source regression cases, uses existing SlenderIQ repository secrets, then performs one fixed GET and emits a sanitized JSON artifact named cloudflare-worker-readonly-<github.run_id>. GitHub artifact retention is 7 days: it is **not a perpetual durable CommandCenter receipt**. The owning CommandCenter consumer must read the exact GitHub run/artifact identity, verify the expected schema/target/operation and persist the final result in its already authorized durable GitHub receipt channel before claiming end-to-end control.
 
 A Cloudflare deployment version-set fingerprint attests only to the Cloudflare API observation. It does **not** prove a particular private MM-IBKR source SHA, owner approval, full-app /markets backend, authenticated desktop/mobile render, or live trading. The V4 release must independently pass its own exact-SHA, Source Vault, browser, Access and negative-access gates.
 
 ## Safety and recovery
 
-- On missing credentials, denied scope, unknown target, malformed result, non-100% summed deployment weights, absent deployment, network failure or oversized body: fail closed. Do not invent a healthy Worker state.
+- On redirects (no token forwarding), missing credentials, denied scope, unknown target, malformed result, non-100% summed deployment weights, absent deployment, network failure or oversized body: fail closed. Do not invent a healthy Worker state.
 - Do not log the account ID, API token, raw Cloudflare response, unknown binding name, binding value, script source, deployment author or annotations.
 - No request JSON can supply an account, arbitrary HTTP path/method, new Worker or deploy action.
 - Never substitute this SlenderIQ route for an administrator of the isolated neutral compute account.
@@ -50,4 +50,4 @@ A Cloudflare deployment version-set fingerprint attests only to the Cloudflare A
 
 ### Closeout acceptance
 
-Owner-reviewed source and 8/8 source tests; first authenticated read with exact GitHub workflow run and sanitized artifact; CommandCenter consumer persists a same-request durable receipt; negative target and denied-token behavior remain fail-closed. Until all four are proven, classify **CAPABILITY_STAGED_NOT_LIVE**.
+Owner-reviewed source and 9/9 source tests; first authenticated read with exact GitHub workflow run and sanitized artifact; CommandCenter consumer persists a same-request durable receipt; negative target and denied-token behavior remain fail-closed. Until all four are proven, classify **CAPABILITY_STAGED_NOT_LIVE**.
