@@ -11,7 +11,9 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import sys
+from datetime import datetime, timezone
 
 SCHEMA = "reference-broker-state-probe.r1"
 MAX_RESPONSE_BYTES = 4096
@@ -40,7 +42,11 @@ def _public_key_fingerprint(value: object) -> str | None:
 
 
 def receipt_from_observation(health: object, key: object, health_status: int,
-                             key_status: int, run_id: str) -> dict:
+                             key_status: int, run_id: str,
+                             *, run_attempt: str = "", observed_at_utc: str | None = None) -> dict:
+    # A GitHub job rerun keeps its run_id. Track the exact attempt and time,
+    # rather than silently treating identical latest receipt bytes as fresh.
+    attempt = int(run_attempt) if re.fullmatch(r"[1-9][0-9]{0,5}", run_attempt) else None
     health_ok = (health_status == 200 and isinstance(health, dict)
                  and health.get("ok") is True)
     fingerprint = _public_key_fingerprint(key) if key_status == 200 else None
@@ -58,6 +64,8 @@ def receipt_from_observation(health: object, key: object, health_status: int,
     return {
         "schema": SCHEMA,
         "run_id": run_id,
+        "run_attempt": attempt,
+        "observed_at_utc": observed_at_utc,
         "health_http_status": health_status,
         "health_ok": health_ok,
         "public_key_http_status": key_status,
@@ -92,7 +100,9 @@ def main() -> None:
 
     receipt = receipt_from_observation(_read_json(health_path), _read_json(key_path),
                                        status(h_status), status(k_status),
-                                       os.environ.get("GITHUB_RUN_ID", ""))
+                                       os.environ.get("GITHUB_RUN_ID", ""),
+                                       run_attempt=os.environ.get("GITHUB_RUN_ATTEMPT", ""),
+                                       observed_at_utc=datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"))
     print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
 
 
