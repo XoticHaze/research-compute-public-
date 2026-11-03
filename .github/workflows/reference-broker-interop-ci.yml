@@ -25,6 +25,8 @@ on:
       - 'scripts/operator/reference_release_keygen.mjs'
       - 'scripts/operator/reference_release_prepare_intent.mjs'
       - 'tests/reference_operator_helper_roundtrip.py'
+      - 'tests/reference_legacy_broker_keygen_retired.mjs'
+      - 'scripts/operator/reference_broker_keygen.mjs'
       - '.github/workflows/reference-broker-interop-ci.yml'
   pull_request:
     paths:
@@ -40,6 +42,8 @@ on:
       - 'scripts/reference_release_ticket_v1.py'
       - 'scripts/operator/reference_release_keygen.mjs'
       - 'tests/reference_operator_helper_roundtrip.py'
+      - 'tests/reference_legacy_broker_keygen_retired.mjs'
+      - 'scripts/operator/reference_broker_keygen.mjs'
       - '.github/workflows/reference-broker-interop-ci.yml'
   workflow_dispatch:
 
@@ -84,6 +88,8 @@ jobs:
         run: python tests/reference_live_release_contract.py
       - name: Prove local operator key and intent helpers
         run: python tests/reference_operator_helper_roundtrip.py
+      - name: Prove retired legacy keygen cannot overwrite identities
+        run: node tests/reference_legacy_broker_keygen_retired.mjs
       - name: Validate broker package and dry-run build
         run: |
           node --check cloudflare/reference-release-broker/src/index.js
