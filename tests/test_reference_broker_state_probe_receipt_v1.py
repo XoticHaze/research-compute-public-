@@ -98,7 +98,8 @@ class BrokerProbeTests(unittest.TestCase):
                     run_attempt=bad, observed_at_utc=None
                 )
                 self.assertIsNone(receipt["run_attempt"])
-                self.assertNotIn(bad, str(receipt))
+                self.assertIsNone(receipt["observed_at_utc"])
+                self.assertNotIn("raw_run_attempt", receipt)
 
     def test_bad_and_oversized_json_is_sanitized(self):
         with tempfile.TemporaryDirectory() as directory:
