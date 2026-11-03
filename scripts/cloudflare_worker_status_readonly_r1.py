@@ -13,7 +13,7 @@ import os
 import re
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request, HTTPRedirectHandler, build_opener
 
 SCHEMA = "commandcenter.cloudflare_worker_readonly_receipt.r1"
 REQUEST_SCHEMA = "commandcenter.cloudflare_worker_readonly_request.r1"
@@ -43,6 +43,19 @@ def validate_request(obj: dict) -> tuple[str, str, str]:
     if operation not in OPERATIONS or worker not in WORKERS:
         raise ValueError("TARGET_OR_OPERATION_REJECTED")
     return request_id, operation, worker
+
+
+
+class _RejectRedirect(HTTPRedirectHandler):
+    """Forbid all redirect destinations; urllib otherwise forwards bearer auth."""
+
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        raise ValueError("CLOUDFLARE_REDIRECT_REJECTED")
+
+
+def urlopen(request, timeout=20):
+    return build_opener(_RejectRedirect()).open(request, timeout=timeout)
+
 
 
 def api_get(account: str, token: str, path: str) -> dict:
