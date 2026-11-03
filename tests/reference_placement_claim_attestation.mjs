@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { verifySignedPlacementClaim, consumeSignedPlacementOnce } from '../cloudflare/reference-release-broker/src/placement.js';
+import { GrantLedger } from '../cloudflare/reference-release-broker/src/index.js';
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
 const python = JSON.parse(readFileSync(new URL('./fixtures/placement_claim_signed_python.v1.json',import.meta.url),'utf8'));
 const pythonProof=await verifySignedPlacementClaim(python.claim,python.policy,python.now_seconds);
@@ -76,4 +77,54 @@ assert.equal(calls,2);
 await assert.rejects(()=>consumeSignedPlacementOnce({...ok,signature_b64:'@@@@'},policy,ledger,now),/PLACEMENT_ISSUER_ATTESTATION_REJECTED/);
 assert.equal(calls,2,'invalid signature must never reach DO');
 await assert.rejects(()=>consumeSignedPlacementOnce(ok,policy,{idFromName:()=>({}),get:()=>({fetch:()=>{throw new Error('DO timeout')}})},now),/PLACEMENT_ISSUER_ATTESTATION_REJECTED/);
-console.log(JSON.stringify({test:'signed-placement-verifier-and-internal-once-claim',positive:3,negative:rejects+3,status:'PASS'}));
+// Cross the next source-only integration boundary: exercise the ACTUAL
+// existing Cloudflare GrantLedger.fetch implementation, not merely our mock.
+// This is an in-memory synthetic DO; it does not attest deployed Cloudflare.
+const actorStores=new Map();
+function actualGrantLedgerFor(name) {
+  if(!actorStores.has(name)){
+    const stored=new Map();
+    const actor=new GrantLedger({id:{name},storage:{transaction:async work=>work({
+      get:async key=>stored.get(key),
+      put:async (key,value)=>{stored.set(key,value);},
+    })}});
+    actorStores.set(name,actor);
+  }
+  return actorStores.get(name);
+}
+let actualCalls=0;
+const actualBinding={
+  idFromName:name=>({name}),
+  get:id=>({fetch:async (uri,options)=>{
+    actualCalls++;
+    return actualGrantLedgerFor(id.name).fetch(new Request(uri,options));
+  }}),
+};
+const actualResult=await consumeSignedPlacementOnce(
+  python.claim,python.policy,actualBinding,python.now_seconds);
+assert.equal(actualResult.nonce_consumed,true);
+assert.equal(actualResult.external_launch_authorized,false);
+assert.equal(actualResult.broker_mutation_authorized,false);
+assert.equal(actualCalls,1);
+await assert.rejects(()=>consumeSignedPlacementOnce(
+  python.claim,python.policy,actualBinding,python.now_seconds),
+  /PLACEMENT_ISSUER_ATTESTATION_REJECTED/);
+assert.equal(actualCalls,2,'signed replay must be checked by real GrantLedger');
+const mismatchedBinding={
+  idFromName:name=>({name:'wrong:'+name}),
+  get:id=>({fetch:async (uri,options)=>{
+    actualCalls++;return actualGrantLedgerFor(id.name).fetch(new Request(uri,options));
+  }}),
+};
+await assert.rejects(()=>consumeSignedPlacementOnce(
+  python.claim,python.policy,mismatchedBinding,python.now_seconds),
+  /PLACEMENT_ISSUER_ATTESTATION_REJECTED/);
+assert.equal(actualCalls,3,'actual DO must reject mismatched instance name');
+await assert.rejects(()=>consumeSignedPlacementOnce(
+  {...python.claim,signature_b64:'!!!!'},python.policy,actualBinding,python.now_seconds),
+  /PLACEMENT_ISSUER_ATTESTATION_REJECTED/);
+assert.equal(actualCalls,3,'invalid signature cannot reach DO');
+console.log(JSON.stringify({
+  test:'signed-placement-real-grantledger-interop',
+  positive:4,negative:rejects+6,status:'PASS',
+}));
