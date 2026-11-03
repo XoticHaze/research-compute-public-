@@ -81,6 +81,15 @@ class CloudflareReadOnlyContract(unittest.TestCase):
         self.assertEqual(receipt["result"]["status"], "CLOUDFLARE_SCOPE_DENIED")
         self.assertNotIn("sensitive", json.dumps(receipt))
 
+    def test_redirect_rejection_prevents_bearer_forwarding(self):
+        request = module.Request("https://api.cloudflare.com/client/v4/accounts/x",
+                                 headers={"Authorization": "Bearer " + TOKEN}, method="GET")
+        with self.assertRaisesRegex(ValueError, "CLOUDFLARE_REDIRECT_REJECTED"):
+            module._RejectRedirect().redirect_request(
+                request, None, 302, "Found", {},
+                "https://untrusted.example/steal-token"
+            )
+
     def test_missing_credentials_fail_closed(self):
         with patch.object(module, "urlopen") as open_fn:
             receipt, success = module.execute(REQUEST, {})
