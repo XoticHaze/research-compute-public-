@@ -1000,7 +1000,7 @@
       }
     ]
   },
-  "observed_at": "2026-11-04T07:56:40.866752+00:00",
+  "observed_at": "2026-11-04T09:33:12.150866+00:00",
   "operator_note": "Research shadow only. Always display diversification deltas together with capital opportunity cost versus the unchanged incumbent. No allocation, runtime, broker, or live-trading authority.",
   "parent": "SENIOR_CLO_CARRY_ALPHA / P249+P266",
   "schema": "research.forward_senior_clo_current_core_shadow_r1",
