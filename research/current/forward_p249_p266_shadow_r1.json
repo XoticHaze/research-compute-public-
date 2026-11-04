@@ -65,30 +65,30 @@
     "implicit_target_reset_turnover_audit": {
       "arms": {
         "p249_core": {
-          "intramonth_one_way_turnover": 0.18705587360626008,
-          "intramonth_reset_count": 35,
+          "intramonth_one_way_turnover": 0.1928182957046017,
+          "intramonth_reset_count": 36,
           "month_boundary_count": 2,
           "month_boundary_one_way_turnover": 0.3901645977452008
         },
         "p249_plus_p266": {
-          "intramonth_one_way_turnover": 0.20394091566405545,
-          "intramonth_reset_count": 35,
+          "intramonth_one_way_turnover": 0.21103709457345016,
+          "intramonth_reset_count": 36,
           "month_boundary_count": 2,
           "month_boundary_one_way_turnover": 0.3735466295791803
         }
       },
       "not_actual_trades_or_funded_monthly_hold": true,
       "not_fee_adjusted_or_alpha_credit": true,
-      "scored_sessions": 38,
+      "scored_sessions": 39,
       "source": "exact_already_scored_daily_returns_and_frozen_month_targets",
       "status": "DIAGNOSTIC_ONLY_UNCHARGED_IMPLICIT_RESETS",
-      "transitions": 37
+      "transitions": 38
     },
-    "latest_close": "2026-11-02",
+    "latest_close": "2026-11-03",
     "monthly_hold_drift_diagnostic": {
       "arms": {
         "p249_core": {
-          "cumulative_return": -0.06948855194714532,
+          "cumulative_return": -0.06897326959279315,
           "daily_nav": [
             {
               "date": "2026-09-10",
@@ -317,16 +317,22 @@
               "holding_month": "2026-11",
               "monthly_rebalance": true,
               "nav": 0.9305114480528547
+            },
+            {
+              "date": "2026-11-03",
+              "holding_month": "2026-11",
+              "monthly_rebalance": false,
+              "nav": 0.9310267304072068
             }
           ],
           "legacy_monthly_fee_nav_total": 0.005896306141970054,
           "max_drawdown": -0.10156483948915507,
           "monthly_rebalances_including_initial": 3,
           "realized_month_boundary_one_way_turnover_including_initial": 1.411209329253326,
-          "terminal_nav": 0.9305114480528547
+          "terminal_nav": 0.9310267304072068
         },
         "p249_plus_p266": {
-          "cumulative_return": -0.06377077463466874,
+          "cumulative_return": -0.06004074575398821,
           "daily_nav": [
             {
               "date": "2026-09-10",
@@ -555,22 +561,28 @@
               "holding_month": "2026-11",
               "monthly_rebalance": true,
               "nav": 0.9362292253653313
+            },
+            {
+              "date": "2026-11-03",
+              "holding_month": "2026-11",
+              "monthly_rebalance": false,
+              "nav": 0.9399592542460118
             }
           ],
           "legacy_monthly_fee_nav_total": 0.006111215768993362,
           "max_drawdown": -0.09221628411140481,
           "monthly_rebalances_including_initial": 3,
           "realized_month_boundary_one_way_turnover_including_initial": 1.384623698972824,
-          "terminal_nav": 0.9362292253653313
+          "terminal_nav": 0.9399592542460118
         }
       },
       "legacy_month_costs_preserved_not_actual_drift_turnover_pricing": true,
-      "matched_relative_wealth_bp": 61.44768368450792,
-      "monthly_drift_minus_constant_target_relative_bp": 4.732235323141598,
+      "matched_relative_wealth_bp": 95.9427215897235,
+      "monthly_drift_minus_constant_target_relative_bp": 4.77629339322494,
       "no_new_original_issuer_or_execution_provenance": true,
       "not_broker_or_alpha_credit": true,
-      "original_constant_target_relative_wealth_bp": 56.71544836136633,
-      "scored_sessions": 38,
+      "original_constant_target_relative_wealth_bp": 91.16642819649856,
+      "scored_sessions": 39,
       "source": "exact_existing_yfinance_adjusted_close_scored_returns_and_frozen_month_targets",
       "status": "SAME_SOURCE_MONTHLY_HOLD_DRIFT_DIAGNOSTIC"
     },
@@ -972,67 +984,77 @@
         "p249_plus_p266_gross": -0.017664772915471708,
         "p249_plus_p266_net": -0.01943560624880504,
         "satellite_increment_net": -0.0048150558635153915
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-11-03",
+        "holding_month": "2026-11",
+        "p249_core_gross": 0.0005897693417681285,
+        "p249_core_net": 0.0005897693417681285,
+        "p249_plus_p266_gross": 0.0040174588437564525,
+        "p249_plus_p266_net": 0.0040174588437564525,
+        "satellite_increment_net": 0.003427689501988324
       }
     ],
     "p249_core_net": {
-      "annualized_vol": 0.2259328950807329,
-      "cumulative_return": -0.07093811268432382,
-      "days": 38,
+      "annualized_vol": 0.2230254584266308,
+      "cumulative_return": -0.07039018046657985,
+      "days": 39,
       "max_drawdown": -0.10323786318139982,
-      "sharpe_rf0": -2.046662538600878
+      "sharpe_rf0": -2.0030939652111823
     },
     "p249_plus_p266_net": {
-      "annualized_vol": 0.21993734145262078,
-      "cumulative_return": -0.0656688965348673,
-      "days": 38,
+      "annualized_vol": 0.2175088375557228,
+      "cumulative_return": -0.06191525978025458,
+      "days": 39,
       "max_drawdown": -0.09432597352822714,
-      "sharpe_rf0": -1.9384489249593604
+      "sharpe_rf0": -1.790486386285151
     },
-    "satellite_increment_cumulative": 0.005381760775009958
+    "satellite_increment_cumulative": 0.008827897281908914
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-11-03T09:46:51.355981+00:00",
+  "observed_at": "2026-11-04T02:59:32.057148+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_health": {
     "all_expected_exchange_sessions_present": true,
     "all_symbols_share_latest_date": true,
     "common_session_lags_source_max": false,
-    "completed_session_request_date": "2026-11-02",
+    "completed_session_request_date": "2026-11-03",
     "exchange_calendar": "NYSE:pandas_market_calendars==5.5.0:exchange_calendars==4.13.2",
-    "expected_completed_exchange_sessions": 38,
+    "expected_completed_exchange_sessions": 39,
     "in_progress_session_excluded": true,
     "lagging_symbols_vs_source_max": [],
     "latest_by_symbol": {
-      "AVDV": "2026-11-02",
-      "AVUV": "2026-11-02",
-      "DBC": "2026-11-02",
-      "GLD": "2026-11-02",
-      "IGV": "2026-11-02",
-      "IHI": "2026-11-02",
-      "ITA": "2026-11-02",
-      "IYT": "2026-11-02",
-      "KRE": "2026-11-02",
-      "QQQ": "2026-11-02",
-      "SOXX": "2026-11-02",
-      "SPY": "2026-11-02",
-      "TLT": "2026-11-02",
-      "XAR": "2026-11-02",
-      "XBI": "2026-11-02",
-      "XHB": "2026-11-02",
-      "XME": "2026-11-02",
-      "XOP": "2026-11-02",
-      "XPH": "2026-11-02",
-      "XRT": "2026-11-02",
-      "XSD": "2026-11-02",
-      "XSW": "2026-11-02",
-      "XTN": "2026-11-02"
+      "AVDV": "2026-11-03",
+      "AVUV": "2026-11-03",
+      "DBC": "2026-11-03",
+      "GLD": "2026-11-03",
+      "IGV": "2026-11-03",
+      "IHI": "2026-11-03",
+      "ITA": "2026-11-03",
+      "IYT": "2026-11-03",
+      "KRE": "2026-11-03",
+      "QQQ": "2026-11-03",
+      "SOXX": "2026-11-03",
+      "SPY": "2026-11-03",
+      "TLT": "2026-11-03",
+      "XAR": "2026-11-03",
+      "XBI": "2026-11-03",
+      "XHB": "2026-11-03",
+      "XME": "2026-11-03",
+      "XOP": "2026-11-03",
+      "XPH": "2026-11-03",
+      "XRT": "2026-11-03",
+      "XSD": "2026-11-03",
+      "XSW": "2026-11-03",
+      "XTN": "2026-11-03"
     },
-    "latest_scored_common_session": "2026-11-02",
-    "observed_completed_exchange_sessions": 38,
+    "latest_scored_common_session": "2026-11-03",
+    "observed_completed_exchange_sessions": 39,
     "provider": "yfinance_adjusted_close",
-    "source_max_date": "2026-11-02",
+    "source_max_date": "2026-11-03",
     "unresolved_forward_gap": null
   },
   "source_pins": {
