@@ -689,6 +689,7 @@ def build(root: Path) -> dict[str, Any]:
         "program_continuity": {
             "SEMICONDUCTOR_FORWARD": semiconductor_continuity,
         },
+        "model_competition": _model_competition(lanes, ledger, semiconductor_continuity),
         "market_decision_context": actionable_context,
         "decision_chain": _decision_chain(lanes),
         "freshness": freshness,
@@ -716,6 +717,132 @@ def build(root: Path) -> dict[str, Any]:
             "overlapping_forward_cohort_sessions_are_not_additive": True,
             "broker_or_live_authority": False,
         },
+    }
+
+
+
+def _model_competition(
+    lanes: list[dict[str, Any]],
+    ledger: dict[str, Any] | None,
+    continuity: dict[str, Any],
+) -> dict[str, Any]:
+    """Read-only model competition: cohort credit is identity-bound, not a session counter.
+
+    A resolved observation, model improvement, signed qualification, governed
+    promotion and broker permission are separate events. No cross-market
+    numerical rank exists without matched horizon, costs and capital.
+    """
+    by_program = {str(row.get("program_id")): row for row in lanes}
+    cohort_rows = [] if ledger is None else list(ledger.get("cohorts") or [])
+    groups = {
+        "SEMICONDUCTOR_SHARED_RIDGE": ("learned_opportunity_model", "semiconductor_fixed20_13name_stock_net_vs_smh_and_ew13"),
+        "HOMEBUILDERS": ("adaptive_duration_policy", "homebuilders_adaptive_horizon_vs_itb"),
+        "GENERALIZED_LARGECAP_RIDGE": ("learned_model_transport", "largecap_directional_transport_no_funded_book"),
+    }
+
+    def metric(value: Any) -> float | None:
+        if isinstance(value, bool) or not isinstance(value, (float, int)):
+            return None
+        return float(value) if math.isfinite(float(value)) else None
+
+    rows: list[dict[str, Any]] = []
+    for program, (model_role, comparison_group) in groups.items():
+        lane = by_program.get(program) or {}
+        cohorts = [row for row in cohort_rows if row.get("program_id") == program]
+        ids = [str(row.get("cohort_id") or "") for row in cohorts]
+        if len(ids) != len(set(ids)) or any(not x for x in ids):
+            raise ValueError("duplicate or missing native cohort identity " + program)
+        resolved = [row for row in cohorts if row.get("status") == "RESOLVED"]
+        open_rows = [row for row in cohorts if row.get("status") in {
+            "REGISTERED", "AWAITING_ENTRY_SESSION", "OPEN", "PARTIALLY_RESOLVED",
+        }]
+        summary = {} if ledger is None else (ledger.get("summary") or {}).get(program) or {}
+        count_consistent = (
+            ledger is not None
+            and int(summary.get("registered_cohorts", len(cohorts))) == len(cohorts)
+            and int(summary.get("resolved_cohorts", len(resolved))) == len(resolved)
+            and int(summary.get("open_cohorts", len(open_rows))) == len(open_rows)
+        ) if program in ("SEMICONDUCTOR_SHARED_RIDGE", "HOMEBUILDERS") else None
+        no_native_cohort = program == "GENERALIZED_LARGECAP_RIDGE"
+        data = (lane.get("prospective_evidence") or {})
+        resolution = data.get("current_resolution") or {}
+        matched = resolution.get("matched_after_cost") or {}
+        summary_econ = resolution.get("summary") or {}
+        diagnostics = lane.get("scorecard") or {}
+        if program == "SEMICONDUCTOR_SHARED_RIDGE":
+            economics = {
+                "sleeve_net_bps": metric(resolution.get("ticker_book_net_return_bps")),
+                "matched_smh_net_excess_bps": metric(matched.get("ticker_minus_smh_net_bps")),
+                "matched_equal13_net_excess_bps": metric(matched.get("ticker_minus_equal_weight_13_net_bps")),
+                "matched_qqq_excess_bps_reported": metric(resolution.get("ticker_book_excess_vs_qqq_bps")),
+                "portfolio_nav_fraction": 0.05,
+            }
+            evidence_stage = "FIRST_H20_RESOLVED_OWNER_MONITORED_REVIEW_REQUIRED" if resolved and count_consistent else "AWAITING_OR_INCONSISTENT_NATIVE_COHORT"
+        elif program == "HOMEBUILDERS":
+            economics = {
+                "mean_net_bps": metric(summary_econ.get("mean_net_return_bps")),
+                "mean_excess_vs_itb_bps": metric(summary_econ.get("mean_excess_vs_itb_bps")),
+                "mean_excess_vs_qqq_bps": metric(summary_econ.get("mean_excess_vs_qqq_bps")),
+                "resolved_symbol_observations": summary_econ.get("resolved_observations"),
+            }
+            evidence_stage = "RESOLVED_ADAPTIVE_DURATION_DIAGNOSTIC" if resolved and count_consistent else "AWAITING_OR_INCONSISTENT_NATIVE_COHORT"
+        else:
+            economics = {
+                "observed_sessions": diagnostics.get("forward_sessions_completed"),
+                "directional_hit_rate": metric(diagnostics.get("directional_sign_hit_rate_current")),
+                "mean_excess_vs_spy_bps": metric(diagnostics.get("mean_directional_excess_vs_spy_bps_current")),
+                "mean_excess_vs_qqq_bps": metric(diagnostics.get("mean_directional_excess_vs_qqq_bps_current")),
+            }
+            evidence_stage = "RETROSPECTIVE_TRANSPORT_ONLY_NO_CREDITED_H20"
+        first_count = bool(resolved) and count_consistent is True
+        rows.append({
+            "program_id": program,
+            "role": model_role,
+            "comparison_group": comparison_group,
+            "position_in_comparable_group": None,
+            "ranking_basis": "GROUP_ONLY_MATCHED_AFTER_COST_NO_GLOBAL_NUMERIC_RANK",
+            "source_lane_present": bool(lane),
+            "native_cohort_credit_applicable": not no_native_cohort,
+            "native_registered_cohorts": len(cohorts) if not no_native_cohort else 0,
+            "native_resolved_cohorts": len(resolved) if not no_native_cohort else 0,
+            "native_open_cohorts": len(open_rows) if not no_native_cohort else 0,
+            "native_cohort_summary_consistent": count_consistent,
+            "first_cohort_count_checkpoint_met": first_count,
+            "second_native_cohort_status": (
+                "NOT_REGISTERED" if len(cohorts) < 2 else
+                "RESOLVED" if len(resolved) >= 2 else "REGISTERED_NOT_YET_RESOLVED"
+            ) if not no_native_cohort and count_consistent is True else "NOT_ESTABLISHED",
+            "full_scientific_confidence_target": 20 if program == "SEMICONDUCTOR_SHARED_RIDGE" else None,
+            "full_scientific_confidence_met": (
+                len(resolved) >= 20 and count_consistent is True
+            ) if program == "SEMICONDUCTOR_SHARED_RIDGE" else None,
+            "evidence_stage": evidence_stage,
+            "matched_economics": economics,
+            "monitored_live_eligibility": "OWNER_ADJUDICATION_AND_SIGNED_EVIDENCE_REQUIRED",
+            "monitored_live_authorized": False,
+            "broker_submit_authority": False,
+            "latest_native_signal_date": lane.get("signal_date"),
+            "cohort_ids": ids,
+        })
+    return {
+        "schema": "research.forward_model_competition_r1",
+        "data_cutoff": None if ledger is None else ledger.get("market_data_asof"),
+        "native_ledger_available": ledger is not None,
+        "scope": "PUBLIC_NATIVE_MODELS_ONLY_NOT_COMPLETE_FOUNDRY_LEARNED_MODEL_BENCH",
+        "model_rows": rows,
+        "comparison_policy": {
+            "global_return_rank_allowed": False,
+            "rule": "Rank only like-for-like after-cost prospective books with matched benchmark, horizon, funding, period, and independent cohort identity.",
+            "one_resolved_cohort": "COUNT_CHECKPOINT_NOT_AUTOMATIC_ECONOMIC_PASS_OR_LIVE_PERMISSION",
+            "twenty_independent_resolved": "STRONGER_FULL_SCIENTIFIC_CONFIDENCE_FOR_SHARED_RIDGE_NOT_EARLY_GATE",
+            "research_vs_forward": "Private Foundry survivor inventory needs a separate admitted source-bound consumer; do not infer absent models were rejected.",
+            "predecessor_no_double_count": bool(continuity.get("overlapping_sessions_are_not_additive", True)),
+        },
+        "source_warnings": [
+            "Public native producer retains only existing frozen model adapters; historical model results may not be in this feed.",
+            "Predecessor P438 and large-cap directional sessions are not additional Shared Ridge H20 cohorts.",
+            "No signed model issuer, Arena decision, broker fill, or live permission is conferred by these rankings.",
+        ],
     }
 
 
@@ -872,6 +999,31 @@ def self_test() -> None:
         assert continuity["current_cohort"]["signal_date"] == "2026-09-10"
         assert continuity["overlapping_sessions_are_not_additive"] is True
         assert out["coverage"]["predecessor_forward_identities"]["P438_SEMICONDUCTOR_FORWARD_MTD_R1"] is True
+        competition = out["model_competition"]
+        assert competition["scope"] == "PUBLIC_NATIVE_MODELS_ONLY_NOT_COMPLETE_FOUNDRY_LEARNED_MODEL_BENCH"
+        assert len(competition["model_rows"]) == 3
+        rows = {r["program_id"]: r for r in competition["model_rows"]}
+        assert rows["SEMICONDUCTOR_SHARED_RIDGE"]["native_open_cohorts"] == 1
+        assert rows["SEMICONDUCTOR_SHARED_RIDGE"]["first_cohort_count_checkpoint_met"] is False
+        assert rows["SEMICONDUCTOR_SHARED_RIDGE"]["second_native_cohort_status"] == "NOT_REGISTERED"
+        assert rows["SEMICONDUCTOR_SHARED_RIDGE"]["monitored_live_authorized"] is False
+        assert rows["HOMEBUILDERS"]["native_registered_cohorts"] == 1
+        assert rows["GENERALIZED_LARGECAP_RIDGE"]["native_cohort_credit_applicable"] is False
+        assert all(r["position_in_comparable_group"] is None for r in rows.values())
+        assert competition["comparison_policy"]["global_return_rank_allowed"] is False
+        resolved_fixture = dict(json.loads((root / "forward_prospective_cohort_ledger_r1.json").read_text()))
+        resolved_fixture["cohorts"][1]["status"] = "RESOLVED"
+        resolved_fixture["summary"]["SEMICONDUCTOR_SHARED_RIDGE"].update({"resolved_cohorts": 1, "open_cohorts": 0})
+        fake = _model_competition(out["lanes"], resolved_fixture, out["program_continuity"]["SEMICONDUCTOR_FORWARD"])
+        first = next(r for r in fake["model_rows"] if r["program_id"] == "SEMICONDUCTOR_SHARED_RIDGE")
+        assert first["first_cohort_count_checkpoint_met"] is True
+        assert first["full_scientific_confidence_met"] is False
+        assert first["second_native_cohort_status"] == "NOT_REGISTERED"
+        assert first["monitored_live_authorized"] is False
+        resolved_fixture["summary"]["SEMICONDUCTOR_SHARED_RIDGE"]["resolved_cohorts"] = 2
+        mismatched = _model_competition(out["lanes"], resolved_fixture, {})
+        assert next(r for r in mismatched["model_rows"] if r["program_id"] == "SEMICONDUCTOR_SHARED_RIDGE")["first_cohort_count_checkpoint_met"] is False
+
         frozen = {
             "cohort_id": "SEMICONDUCTOR_SHARED_RIDGE:2026-09-11:fixed20",
             "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
