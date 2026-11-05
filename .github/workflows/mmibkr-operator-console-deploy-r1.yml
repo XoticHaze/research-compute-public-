@@ -59,6 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           node --check cloudflare/operator-console/src/index.js
+          node tests/ai_lab_sandbox_contract.mjs
           node tests/operator_console_runtime_union_freshness_contract.mjs
           node tests/pi_account_observation_contract.mjs
           node tests/pi_bot_live_observation_contract.mjs
