@@ -584,10 +584,10 @@ jobs:
           rm -rf "$input_dir"
           mkdir -p "$input_dir"
 
-          if docker run --rm -i \
+          if reuse_rows="$(docker run --rm -i \
             -v "$RUNNER_TEMP/mmibkr-data:/app/data:ro" \
             "mmibkr-cloud:${GITHUB_RUN_ID}" \
-            python - <<'PY'
+            python - 2>/dev/null <<'PY'
           import json
           from pathlib import Path
 
@@ -595,6 +595,12 @@ jobs:
           if not path.is_file():
               raise SystemExit(1)
           node = json.loads(path.read_text(encoding='utf-8'))
+          ingest_path = Path('/app/data/strategy_runtime/selected_runtime_initial_backfill_v1/latest.json')
+          if not ingest_path.is_file():
+              raise SystemExit(1)
+          ingest = json.loads(ingest_path.read_text(encoding='utf-8'))
+          symbols = ingest.get('symbols') if isinstance(ingest.get('symbols'), dict) else {}
+          artifact = ingest.get('artifact') if isinstance(ingest.get('artifact'), dict) else {}
           rows = node.get('runtimes') if isinstance(node.get('runtimes'), dict) else {}
           ok = (
               node.get('schema') == 'mmibkr.selected_runtime_signal_history_contracts.v1'
@@ -603,10 +609,43 @@ jobs:
               and int(node.get('runtime_count') or 0) == 3
               and len(rows) == 3
               and all(isinstance(row, dict) and row.get('warmup_ready') is True for row in rows.values())
+              and ingest.get('schema') == 'mmibkr.selected_runtime_initial_backfill_ingest.v1'
+              and ingest.get('ok') is True and ingest.get('all_warmups_ready') is True
+              and str(artifact.get('public_run_id') or '') == '40665095081'
+              and set(symbols) == {'AMAT', 'APH', 'MNQ'}
+              and all(isinstance(symbols[symbol], dict) and
+                      isinstance(symbols[symbol].get('warmup'), dict) and
+                      symbols[symbol]['warmup'].get('ready') is True
+                      for symbol in ('AMAT', 'APH', 'MNQ'))
+              and symbols['MNQ']['warmup'].get('continuity_covered') is True
+              and ingest.get('broker_action') is False
+              and ingest.get('runtime_execution_contract_mutated') is False
+              and ingest.get('live_execution_allowed') is False
           )
-          raise SystemExit(0 if ok else 1)
+          if not ok:
+              raise SystemExit(1)
+          counts = {
+              'AMAT_TARGET_ROWS': symbols['AMAT'].get('target_rows'),
+              'APH_TARGET_ROWS': symbols['APH'].get('target_rows'),
+              'MNQ_SOURCE_ROWS': symbols['MNQ'].get('source_rows'),
+              'MNQ_TARGET_ROWS': symbols['MNQ'].get('target_rows'),
+          }
+          for key, value in counts.items():
+              if type(value) is not int or value < (4800 if key == 'MNQ_SOURCE_ROWS' else 400):
+                  raise SystemExit(1)
+              print(f'{key}={value}')
           PY
-          then
+          )"; then
+            while IFS='=' read -r key value; do
+              [[ "$value" =~ ^[0-9]+$ ]] || exit 1
+              case "$key" in
+                AMAT_TARGET_ROWS) echo "amat_target_rows=$value" >> "$GITHUB_OUTPUT" ;;
+                APH_TARGET_ROWS) echo "aph_target_rows=$value" >> "$GITHUB_OUTPUT" ;;
+                MNQ_SOURCE_ROWS) echo "mnq_source_rows=$value" >> "$GITHUB_OUTPUT" ;;
+                MNQ_TARGET_ROWS) echo "mnq_target_rows=$value" >> "$GITHUB_OUTPUT" ;;
+                *) exit 1 ;;
+              esac
+            done <<< "$reuse_rows"
             echo 'performed=false' >> "$GITHUB_OUTPUT"
             echo 'ready=true' >> "$GITHUB_OUTPUT"
             echo "public_run_id=$INITIAL_BACKFILL_RUN_ID" >> "$GITHUB_OUTPUT"
