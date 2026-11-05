@@ -531,6 +531,52 @@ def _native_lane(x: dict[str, Any], prospective: dict[str, Any] | None = None) -
     }
 
 
+def _ridge_persistence_lane(payload: dict[str, Any]) -> dict[str, Any]:
+    """Read-only projection of a different prospective frozen-weight durability test.
+
+    It does not repeat or increment the original Ridge cohort, earn a new model
+    prediction, or change the deterministic allocator's inputs.
+    """
+    if payload.get("schema") != "research.ridge_frozen_weight_persistence_forward_r1":
+        raise RuntimeError("RIDGE_PERSISTENCE_SCHEMA_INVALID")
+    if payload.get("program_id") != "RIDGE_FROZEN_WEIGHT_PERSISTENCE_DIAGNOSTIC":
+        raise RuntimeError("RIDGE_PERSISTENCE_IDENTITY_INVALID")
+    bounds = payload.get("boundaries") or {}
+    for field in ("new_model_prediction", "original_shared_ridge_h20_cohort", "signed_model_promotion",
+                  "allocation_authority", "broker_action", "live_trading_change", "paper_broker_fill"):
+        if bounds.get(field) is not False:
+            raise RuntimeError("RIDGE_PERSISTENCE_BOUNDARY_INVALID")
+    if bounds.get("research_only") is not True:
+        raise RuntimeError("RIDGE_PERSISTENCE_RESEARCH_ONLY_REQUIRED")
+    forward = payload.get("forward") or {}
+    status = str(forward.get("status") or "")
+    if status not in {"AWAITING_ENTRY_FINALITY", "OPEN", "RESOLVED"}:
+        raise RuntimeError("RIDGE_PERSISTENCE_FORWARD_STATUS_INVALID")
+    metrics = None if status == "AWAITING_ENTRY_FINALITY" else {
+        key: forward.get(key) for key in (
+            "book_nav", "smh_nav", "equal13_nav", "book_return_bps",
+            "book_minus_smh_matched_net_bps", "book_minus_equal13_matched_net_bps",
+            "elapsed_post_entry_sessions", "remaining_sessions",
+        )
+    }
+    return {
+        "program_id": "RIDGE_FROZEN_WEIGHT_PERSISTENCE_DIAGNOSTIC",
+        "kind": "frozen_september_weights_reentered_at_new_november_entry_close",
+        "validation_grade": "FROZEN_WEIGHT_PERSISTENCE_OBSERVER_ONLY",
+        "evidence_grade": "PROSPECTIVE_DIAGNOSTIC_" + status,
+        "source_model": payload.get("source_model"),
+        "source_signal_date": payload.get("source_signal_date"),
+        "freeze_source_commit_sha": payload.get("freeze_source_commit_sha"),
+        "freeze_observed_at_utc": payload.get("freeze_observed_at_utc"),
+        "original_adapter_git_blob": payload.get("original_adapter_git_blob"),
+        "timing": forward,
+        "scorecard": metrics,
+        "paper_action": {"status": "NO_ACTION_OBSERVER_ONLY"},
+        "boundaries": bounds,
+        "decision_use": "Compare frozen historical weight persistence with matched SMH/equal13; never classify as a new fitted Ridge prediction or broker fill.",
+    }
+
+
 def _decision_chain(lanes: list[dict[str, Any]]) -> dict[str, Any]:
     by_id = {str(x.get("program_id")): x for x in lanes}
     p46 = by_id.get("P46", {})
@@ -619,6 +665,10 @@ def build(root: Path) -> dict[str, Any]:
                 "decision_use": "Adapter contract exists; current sanitized native result has not been supplied to this report run.",
             })
 
+    ridge_persistence = _load(root, "ridge_frozen_weight_persistence_forward_r1.json")
+    if ridge_persistence is not None:
+        lanes.append(_ridge_persistence_lane(ridge_persistence))
+
     semi_lane = next((row for row in lanes if row.get("program_id") == "SEMICONDUCTOR_SHARED_RIDGE"), None)
     semi_prospective = (
         semi_lane.get("prospective_evidence", {})
@@ -696,6 +746,7 @@ def build(root: Path) -> dict[str, Any]:
             "scored_now": [x.get("program_id") for x in lanes if x.get("signal")],
             "adapter_contracts_ready": list(EXPECTED_PRIVATE_ADAPTERS),
             "native_result_gaps": missing,
+            "ridge_persistence_diagnostic": "NOT_SUPPLIED" if ridge_persistence is None else ridge_persistence.get("forward", {}).get("status"),
             "prospective_ledger": {
                 "present": ledger is not None,
                 "market_data_asof": None if ledger is None else ledger.get("market_data_asof"),
@@ -778,6 +829,23 @@ def self_test() -> None:
                 "SEMICONDUCTOR_SHARED_RIDGE": {"registered_cohorts": 1, "resolved_cohorts": 0, "open_cohorts": 1, "late_registration_rejections": 0, "minimum_resolved_for_promotion": 20, "mean_ticker_book_excess_vs_smh_bps": None},
             },
         }))
+        (root / "ridge_frozen_weight_persistence_forward_r1.json").write_text(json.dumps({
+            "schema": "research.ridge_frozen_weight_persistence_forward_r1",
+            "program_id": "RIDGE_FROZEN_WEIGHT_PERSISTENCE_DIAGNOSTIC",
+            "source_model": "SEMICONDUCTOR_SHARED_RIDGE",
+            "source_signal_date": "2026-09-11",
+            "freeze_source_commit_sha": "b" * 40,
+            "freeze_observed_at_utc": "2026-11-05T10:38:44Z",
+            "original_adapter_git_blob": "a" * 40,
+            "forward": {"status": "AWAITING_ENTRY_FINALITY", "entry_date": "2026-11-06",
+                        "elapsed_post_entry_sessions": 0, "promotion_authority": False},
+            "boundaries": {
+                "research_only": True, "new_model_prediction": False,
+                "original_shared_ridge_h20_cohort": False, "signed_model_promotion": False,
+                "allocation_authority": False, "broker_action": False,
+                "live_trading_change": False, "paper_broker_fill": False,
+            },
+        }))
         (root / "p438_semiconductor_forward_mtd_r1.json").write_text(json.dumps({
             "schema": "research.p438_semiconductor_forward_mtd_r1.v1",
             "workload_id": "P438_SEMICONDUCTOR_FORWARD_MTD_R1",
@@ -848,6 +916,24 @@ def self_test() -> None:
         assert stats["vs_incumbent"] == {"observed_sessions": 2, "positive_sessions": 1, "hit_rate": 0.5}
         assert stats["vs_matched_cash_control"] == {"observed_sessions": 2, "positive_sessions": 2, "hit_rate": 1.0}
         assert out["coverage"]["native_result_gaps"] == []
+        assert out["coverage"]["ridge_persistence_diagnostic"] == "AWAITING_ENTRY_FINALITY"
+        persistence_lane = next(row for row in out["lanes"] if row["program_id"] == "RIDGE_FROZEN_WEIGHT_PERSISTENCE_DIAGNOSTIC")
+        assert persistence_lane["scorecard"] is None
+        assert persistence_lane["paper_action"]["status"] == "NO_ACTION_OBSERVER_ONLY"
+        assert persistence_lane["boundaries"]["broker_action"] is False
+        assert persistence_lane["evidence_grade"] == "PROSPECTIVE_DIAGNOSTIC_AWAITING_ENTRY_FINALITY"
+        invalid_persistence = {
+            "schema": "research.ridge_frozen_weight_persistence_forward_r1",
+            "program_id": "RIDGE_FROZEN_WEIGHT_PERSISTENCE_DIAGNOSTIC",
+            "forward": {"status": "OPEN"},
+            "boundaries": dict(persistence_lane["boundaries"], broker_action=True),
+        }
+        try:
+            _ridge_persistence_lane(invalid_persistence)
+        except RuntimeError as exc:
+            assert str(exc) == "RIDGE_PERSISTENCE_BOUNDARY_INVALID"
+        else:
+            raise AssertionError("research observer may not inherit broker authority")
         assert out["decision_chain"]["sectors"]["homebuilders"]["horizons"] == {"CCS": 5}
         native_by_id = {x["program_id"]: x for x in out["lanes"]}
         assert native_by_id["HOMEBUILDERS"]["evidence_grade"] == "PROSPECTIVE_OPEN"
