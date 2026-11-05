@@ -17,14 +17,14 @@
   "evaluation_date": "2026-10-12",
   "execution_delay_sessions": 1,
   "first_registered_at": "2026-09-18T05:03:20.113496+00:00",
-  "generated_at": "2026-11-04T09:33:40.803756+00:00",
+  "generated_at": "2026-11-05T03:28:17.842329+00:00",
   "holding_horizon_sessions": 20,
   "interpretation": {
     "current_mark_before_horizon_is_not_terminal_accuracy": false,
     "negative_signal_is_scored_as_directional_prediction_not_short_position": true,
     "prediction_magnitude_calibration_blocked_without_frozen_transaction_cost_contract": true
   },
-  "market_data_asof": "2026-11-03",
+  "market_data_asof": "2026-11-04",
   "observations": [
     {
       "direction": "POSITIVE",
@@ -113,18 +113,18 @@
     "common_session_lags_source_max": false,
     "lagging_symbols_vs_source_max": [],
     "latest_by_symbol": {
-      "CAT": "2026-11-03",
-      "COST": "2026-11-03",
-      "JPM": "2026-11-03",
-      "MSFT": "2026-11-03",
-      "QQQ": "2026-11-03",
-      "SPY": "2026-11-03",
-      "UNH": "2026-11-03",
-      "XOM": "2026-11-03"
+      "CAT": "2026-11-04",
+      "COST": "2026-11-04",
+      "JPM": "2026-11-04",
+      "MSFT": "2026-11-04",
+      "QQQ": "2026-11-04",
+      "SPY": "2026-11-04",
+      "UNH": "2026-11-04",
+      "XOM": "2026-11-04"
     },
-    "latest_common_session": "2026-11-03",
+    "latest_common_session": "2026-11-04",
     "provider": "yfinance_adjusted_close",
-    "source_max_date": "2026-11-03"
+    "source_max_date": "2026-11-04"
   },
   "state": "RESOLVED",
   "summary": {
