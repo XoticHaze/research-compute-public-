@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 SCHEMA = "research.ridge_frozen_weight_persistence_forward_r1"
 CONTRACT_SCHEMA = "research.ridge_weight_persistence_freeze.v1"
-SOURCE_ADAPTER = Path("research/current/native_adapters/semiconductor_shared_ridge.json")
+SOURCE_ADAPTER = Path("research/contracts/ridge_weight_persistence_source_adapter_20260911.v1.json")
 SOURCE_ADAPTER_BLOB = "05238d7c359ea59495100711f37d6f88cc095816"
 CONTRACT_PATH = Path("research/contracts/ridge_weight_persistence_20261105.v1.json")
 ENTRY_DATE = date(2026, 11, 6)
