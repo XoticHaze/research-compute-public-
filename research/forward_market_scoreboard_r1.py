@@ -494,9 +494,40 @@ def _native_lane(x: dict[str, Any], prospective: dict[str, Any] | None = None) -
     validation = x.get("validation") or {}
     action = x.get("paper_action") or {}
     action_status = str(action.get("status") or "NATIVE_SIGNAL")
+    # A legacy adapter can continue to say PAPER_COHORT_READY long after its
+    # frozen cohort has exited. Never reuse its original signal as a new entry.
+    prospective = prospective or {"ledger_status": "NOT_SUPPLIED", "program_id": program_id}
+    cohort_status = str(prospective.get("current_cohort_status") or "")
+    signal_date = str(x.get("signal_date") or "")
+    admitted_signal_date = str(prospective.get("current_signal_date") or "")
+    source_asof = str(prospective.get("market_data_asof") or "")
+    matched_fresh_entry = (
+        program_id == "SEMICONDUCTOR_SHARED_RIDGE"
+        and prospective.get("ledger_status") == "PRESENT"
+        and prospective.get("current_cohort_id")
+        and signal_date
+        and signal_date == admitted_signal_date
+        and cohort_status in {"REGISTERED", "AWAITING_ENTRY_SESSION"}
+        and int(prospective.get("open_cohorts", 0) or 0) >= 1
+        and int(prospective.get("late_registration_rejections", 0) or 0) == 0
+        and (not source_asof or source_asof <= signal_date)
+        and validation.get("state") == "PROSPECTIVE_ELIGIBLE"
+    )
+    entry_eligible = bool(matched_fresh_entry)
+    effective_action = dict(action)
     if program_id == "SEMICONDUCTOR_SHARED_RIDGE":
-        state = str(validation.get("state") or "")
-        grade = "PROSPECTIVE_SIGNAL_READY" if state == "PROSPECTIVE_ELIGIBLE" else "DESCRIPTIVE_PRESTART"
+        if entry_eligible:
+            grade = "PROSPECTIVE_SIGNAL_READY"
+        elif cohort_status == "RESOLVED":
+            grade = "RESOLVED_COHORT_OBSERVER_ONLY"
+        else:
+            grade = "NEW_COHORT_ENTRY_NOT_VERIFIED"
+        if not entry_eligible:
+            effective_action["status"] = "NO_NEW_COHORT_ENTRY"
+            for book_name in ("industry_book", "ticker_book"):
+                book = effective_action.get(book_name)
+                if isinstance(book, dict):
+                    effective_action[book_name] = dict(book, status="OBSERVATION_ONLY_NO_NEW_ENTRY")
         action_text = (
             f"Daily +1/fixed20 cohort. Positive breadth {float((x.get('signal') or {}).get('positive_breadth', 0)):.1%}; "
             f"paper action status {action_status}."
@@ -517,7 +548,10 @@ def _native_lane(x: dict[str, Any], prospective: dict[str, Any] | None = None) -
         "signal_date": x.get("signal_date"),
         "signal": x.get("signal", {}),
         "timing": x.get("timing", {}),
-        "paper_action": action,
+        "paper_action": effective_action,
+        "source_paper_action_status": action_status,
+        "entry_eligible": entry_eligible,
+        "entry_admission": {"cohort_id": prospective.get("current_cohort_id"), "cohort_status": cohort_status, "signal_identity_matches": signal_date == admitted_signal_date, "new_entry_verified": entry_eligible, "broker_or_live_authority": False},
         "action_text": action_text,
         "benchmarks": x.get("benchmarks", []),
         "scorecard": x.get("scorecard"),
@@ -894,7 +928,7 @@ def self_test() -> None:
             (root / f"forward_program_adapter_{i}.json").write_text(json.dumps(payload))
         (root / "forward_prospective_cohort_ledger_r1.json").write_text(json.dumps({
             "schema": LEDGER_SCHEMA,
-            "market_data_asof": "2026-09-13",
+            "market_data_asof": "2026-09-10",
             "freshness": {"freshness_gap_visible": False, "lagging_symbols_by_program": {}},
             "cohorts": [
                 {"cohort_id": "HOMEBUILDERS:2026-09-10:test", "program_id": "HOMEBUILDERS", "signal_date": "2026-09-10", "first_registered_at": "2026-09-11T00:00:00+00:00", "status": "OPEN", "resolution": {"entry_date": "2026-09-11", "sessions_completed": 1}},
@@ -980,6 +1014,7 @@ def self_test() -> None:
         assert native_by_id["HOMEBUILDERS"]["evidence_grade"] == "PROSPECTIVE_OPEN"
         assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["evidence_grade"] == "PROSPECTIVE_AWAITING_ENTRY_SESSION"
         assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["validation_grade"] == "PROSPECTIVE_SIGNAL_READY"
+        assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["entry_eligible"] is True
         assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["forward_science_stages"]["resolved_cohort_count"] == 0
         one = _separate_forward_science_stages({"resolved_cohorts": 1, "minimum_resolved_for_promotion": 20})
         assert one["forward_sanity_stage"] == "RESOLVED_COHORT_OBSERVED_ISSUER_ENVELOPE_PENDING"
@@ -1060,6 +1095,22 @@ def self_test() -> None:
         assert chain["realized_excess"]["semiconductor_mean_ticker_book_excess_vs_smh_net_bps"] == -8.3719
         assert chain["realized_excess"]["semiconductor_mean_ticker_book_excess_vs_equal_weight_13_net_bps"] == -125.2211
         assert json.dumps(frozen, sort_keys=True) == original_frozen
+        # A RESOLVED historical cohort must not generate a fresh paper ADD,
+        # even when its adapter still contains PAPER_COHORT_READY and a positive score.
+        resolved_lane = _native_lane(semi, state)
+        assert resolved_lane["validation_grade"] == "RESOLVED_COHORT_OBSERVER_ONLY"
+        assert resolved_lane["entry_eligible"] is False
+        assert resolved_lane["paper_action"]["status"] == "NO_NEW_COHORT_ENTRY"
+        assert resolved_lane["source_paper_action_status"] == "PAPER_COHORT_READY"
+        assert _decision_chain([resolved_lane])["sectors"]["semiconductor"]["action"] == "NO_NEW_COHORT_ENTRY"
+        # An unrelated/new native signal is not admitted by the old cohort ledger.
+        mismatched_lane = _native_lane(dict(semi, signal_date="2026-09-12"), state)
+        assert mismatched_lane["entry_eligible"] is False
+        assert mismatched_lane["validation_grade"] == "RESOLVED_COHORT_OBSERVER_ONLY"
+        # Missing ledger is never entry approval, regardless of adapter validation.
+        missing_lane = _native_lane(semi)
+        assert missing_lane["entry_eligible"] is False
+        assert missing_lane["paper_action"]["status"] == "NO_NEW_COHORT_ENTRY"
         del ledger["matched_after_cost_projections"]
         absent = _prospective_state(ledger, "SEMICONDUCTOR_SHARED_RIDGE")
         assert absent["matched_cost_projection_status"] == "MATCHED_COST_PROJECTION_INCOMPLETE"

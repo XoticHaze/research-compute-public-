@@ -166,7 +166,15 @@ def build(scoreboard: dict[str, Any], prior: dict[str, Any] | None = None) -> di
     semi_signal = semi.get("signal") or {}
     semi_grade = str(semi.get("validation_grade") or "")
     breadth = semi_signal.get("positive_breadth")
-    semi_ready = semi_grade == "PROSPECTIVE_SIGNAL_READY" and isinstance(breadth, (int, float))
+    # The adapter's historical PROSPECTIVE_ELIGIBLE flag is never enough.
+    # Entry must also have a current, exact-cohort ledger admission.
+    semi_ready = (
+        semi_grade == "PROSPECTIVE_SIGNAL_READY"
+        and semi.get("entry_eligible") is True
+        and isinstance(breadth, (int, float))
+        and not isinstance(breadth, bool)
+        and math.isfinite(float(breadth))
+    )
     if semi_ready:
         raw = min(NEW_COHORT_CAP * max(0.0, min(1.0, float(breadth))), NON_CORE_FAMILY_CAP)
         existing_sector = _sector_exposure(final)["semiconductor"]
@@ -198,11 +206,49 @@ def build(scoreboard: dict[str, Any], prior: dict[str, Any] | None = None) -> di
             "admitted_overlay": round(size, 10),
         })
     else:
-        sleeve_actions.append({
-            "sleeve": "SEMICONDUCTOR_SHARED_RIDGE_INDUSTRY_BOOK",
-            "action": "WAIT",
-            "reason": "no current prospectively eligible native semiconductor result",
-        })
+        # An old RESOLVED cohort must not be replayed as ADD. Equally, lack of
+        # a new entry is not an instruction to liquidate the previous explicit
+        # paper target. Hold only the previously proven SMH allocation.
+        prior_smh = 0.0
+        if prior is not None:
+            if prior.get("schema") != SCHEMA or prior.get("policy_id") != POLICY_ID:
+                raise RuntimeError("SEMICONDUCTOR_HOLD_PRIOR_IDENTITY_INVALID")
+            prior_boundaries = prior.get("boundaries") or {}
+            if (prior_boundaries.get("broker_action") is not False
+                    or prior_boundaries.get("live_trading_change") is not False):
+                raise RuntimeError("SEMICONDUCTOR_HOLD_PRIOR_AUTHORITY_INVALID")
+            old_targets = _prior_targets(prior)
+            if (any(not math.isfinite(v) or v < 0 for v in old_targets.values())
+                    or abs(sum(old_targets.values()) - 1.0) > 1e-8):
+                raise RuntimeError("SEMICONDUCTOR_HOLD_PRIOR_WEIGHTS_INVALID")
+            prior_smh = old_targets.get("SMH", 0.0)
+        if prior_smh > EPS:
+            if prior_smh > NEW_COHORT_CAP + EPS or prior_smh > TACTICAL_BUDGET + EPS:
+                raise RuntimeError("SEMICONDUCTOR_HOLD_PRIOR_CAP_INVALID")
+            if _sector_exposure(final)["semiconductor"] + prior_smh > SECTOR_CAP + EPS:
+                raise RuntimeError("SEMICONDUCTOR_HOLD_PRIOR_SECTOR_CAP_VIOLATION")
+            final["SMH"] = final.get("SMH", 0.0) + prior_smh
+            tactical_used += prior_smh
+            sleeve_actions.append({
+                "sleeve": "SEMICONDUCTOR_SHARED_RIDGE_INDUSTRY_BOOK",
+                "action": "HOLD_PRIOR",
+                "instrument": "SMH",
+                "target_weight": round(prior_smh, 10),
+                "new_action_authorized": False,
+                "reason": "no newly admitted cohort; preserve prior paper target without new entry or forced exit",
+            })
+            constraints.append({
+                "rule": "semiconductor_cohort_entry_continuity",
+                "result": "hold_preexisting_paper_target_no_new_entry",
+                "prior_smh_weight": round(prior_smh, 10),
+            })
+        else:
+            sleeve_actions.append({
+                "sleeve": "SEMICONDUCTOR_SHARED_RIDGE_INDUSTRY_BOOK",
+                "action": "WAIT",
+                "new_action_authorized": False,
+                "reason": "no new exact-cohort prospective entry admission",
+            })
 
     # Homebuilders is an observation/adaptive-duration child, not a sizing book.
     # Admitted symbols remain useful decision evidence, but must not be converted
@@ -347,6 +393,7 @@ def _self_test() -> None:
             {
                 "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
                 "validation_grade": "PROSPECTIVE_SIGNAL_READY",
+                "entry_eligible": True,
                 "signal": {"positive_breadth": 1.0},
             },
             {
@@ -392,6 +439,27 @@ def _self_test() -> None:
     assert abs(y["final_target_weights"]["CASH"] - 0.20) < 1e-8
     assert y["tactical_used"] == 0.0
 
+    # A previously resolved native cohort cannot replay its old ADD signal
+    # or silently force an EXIT of the existing paper-only SMH target.
+    resolved = json.loads(json.dumps(scoreboard))
+    semi = next(row for row in resolved["lanes"] if row["program_id"] == "SEMICONDUCTOR_SHARED_RIDGE")
+    semi["validation_grade"] = "RESOLVED_COHORT_OBSERVER_ONLY"
+    semi["entry_eligible"] = False
+    semi["paper_action"] = {"status": "NO_NEW_COHORT_ENTRY"}
+    held_semi = build(resolved, prior=x)
+    assert held_semi["final_target_weights"] == x["final_target_weights"]
+    assert held_semi["cash_weight"] == x["cash_weight"]
+    assert held_semi["tactical_used"] == x["tactical_used"]
+    assert all(row["action"] not in {"ADD", "EXIT", "REDUCE"} for row in held_semi["position_actions_vs_prior_allocator_target"])
+    prior_sleeve = next(row for row in held_semi["sleeve_actions"] if row["sleeve"] == "SEMICONDUCTOR_SHARED_RIDGE_INDUSTRY_BOOK")
+    assert prior_sleeve["action"] == "HOLD_PRIOR" and prior_sleeve["new_action_authorized"] is False
+    # A legacy ready label alone, without entry_eligible, must also fail closed.
+    legacy = json.loads(json.dumps(scoreboard))
+    legacy_semi = next(row for row in legacy["lanes"] if row["program_id"] == "SEMICONDUCTOR_SHARED_RIDGE")
+    legacy_semi.pop("entry_eligible")
+    legacy_result = build(legacy)
+    assert legacy_result["tactical_used"] == 0.0
+    assert legacy_result["final_target_weights"].get("SMH", 0.0) == 0.0
     # A held-close source gap cannot turn partial P249 economics into a fresh
     # rebalance or default an unfinished research book into cash.
     gap = json.loads(json.dumps(scoreboard))
