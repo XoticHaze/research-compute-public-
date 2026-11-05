@@ -7,10 +7,12 @@ import hashlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tarfile
 import tempfile
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -40,7 +42,7 @@ class _PublicSafeArgumentParser(argparse.ArgumentParser):
 HARNESS_SPECS: dict[str, dict[str, Any]] = {
     "semiconductor_shared_ridge_three_book_v1": {
         "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
-        "source_ref": "e73ec9b15180e208de541ce5d5304888e5550433",
+        "source_ref": "142783730a9e048c3c5ac543b362f07aa4944a18",
         "files": {
             "research/semiconductor_external_forward_standalone_20260910.py",
             "research/semiconductor_three_book_forward_contract_20260910.json",
@@ -135,10 +137,17 @@ def _derive(shared: bytes, aad: bytes, info: bytes) -> bytes:
 
 
 def _decrypt_input(envelope: dict, private_raw: bytes, run_id: str, harness: str) -> bytes:
+    if harness == "semiconductor_shared_ridge_three_book_v1":
+        if type(run_id) not in (str, int) or not re.fullmatch(r"[1-9][0-9]{0,19}", str(run_id)):
+            raise RuntimeError("public run identity invalid")
+    # The frozen semiconductor capsule uses the digestless public field set.
+    # Other harnesses retain their existing strict legacy contract.
     required = {
         "schema", "run_id", "authority", "harness", "recipient_key_id",
-        "sender_public_b64", "nonce_b64", "ciphertext_b64", "plaintext_sha256",
+        "sender_public_b64", "nonce_b64", "ciphertext_b64",
     }
+    if harness != "semiconductor_shared_ridge_three_book_v1":
+        required.add("plaintext_sha256")
     if set(envelope) != required:
         raise RuntimeError("input envelope field-set mismatch")
     if envelope["schema"] != SCHEMA or str(envelope["run_id"]) != str(run_id):
@@ -157,8 +166,10 @@ def _decrypt_input(envelope: dict, private_raw: bytes, run_id: str, harness: str
     aad = _aad(SCHEMA, run_id, harness, expected_id)
     shared = private.exchange(x25519.X25519PublicKey.from_public_bytes(sender_raw))
     plaintext = ChaCha20Poly1305(_derive(shared, aad, INFO)).decrypt(nonce, _b64d(envelope["ciphertext_b64"]), aad)
-    if len(plaintext) > MAX_PLAINTEXT_BYTES or _sha(plaintext) != envelope["plaintext_sha256"]:
-        raise RuntimeError("input plaintext size/digest mismatch")
+    if len(plaintext) > MAX_PLAINTEXT_BYTES:
+        raise RuntimeError("input plaintext size bound")
+    if harness != "semiconductor_shared_ridge_three_book_v1" and _sha(plaintext) != envelope["plaintext_sha256"]:
+        raise RuntimeError("input plaintext digest mismatch")
     return plaintext
 
 
@@ -230,6 +241,18 @@ def _run(cmd: list[str], root: Path, timeout: int = 1200) -> None:
         raise RuntimeError(f"private native harness failed rc={run.returncode}")
 
 
+def _canonical_generation_date(value: object) -> str:
+    """A private native date must not become a public-runner output path."""
+    if type(value) is not str or re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value) is None:
+        raise RuntimeError("native generation date invalid")
+    try:
+        if date.fromisoformat(value).isoformat() != value:
+            raise ValueError("noncanonical date")
+    except ValueError as exc:
+        raise RuntimeError("native generation date invalid") from exc
+    return value
+
+
 def _execute(root: Path, harness: str, adapter_script: Path) -> tuple[Path, Path | None, Path]:
     spec = HARNESS_SPECS[harness]
     adapter = root / "artifacts" / f"forward_program_adapter_{spec['program_id'].lower()}.json"
@@ -239,10 +262,11 @@ def _execute(root: Path, harness: str, adapter_script: Path) -> tuple[Path, Path
         native.parent.mkdir(parents=True, exist_ok=True)
         _run([sys.executable, "-m", "research.semiconductor_external_forward_standalone_20260910", "--output", str(native.relative_to(root))], root)
         prediction = json.loads(native.read_text(encoding="utf-8"))
-        generation = str(prediction["generation_bar_date"])
+        generation = _canonical_generation_date(prediction.get("generation_bar_date"))
         contract = json.loads((root / "research/semiconductor_three_book_forward_contract_20260910.json").read_text(encoding="utf-8"))
+        prospective_start = _canonical_generation_date(contract.get("prospective_start_signal_date"))
         book: Path | None = None
-        if generation >= str(contract["prospective_start_signal_date"]):
+        if date.fromisoformat(generation) >= date.fromisoformat(prospective_start):
             book = root / "research/results/semiconductor_three_book_forward" / f"{generation}.json"
             book.parent.mkdir(parents=True, exist_ok=True)
             _run([
@@ -307,7 +331,7 @@ def _encrypt_return(payload: bytes, manifest: dict, run_id: str, harness: str) -
     shared = sender.exchange(x25519.X25519PublicKey.from_public_bytes(recipient_raw))
     nonce = os.urandom(12)
     ciphertext = ChaCha20Poly1305(_derive(shared, aad, RETURN_INFO)).encrypt(nonce, payload, aad)
-    return {
+    envelope = {
         "schema": RETURN_SCHEMA,
         "run_id": str(run_id),
         "authority": "research_only",
@@ -316,8 +340,11 @@ def _encrypt_return(payload: bytes, manifest: dict, run_id: str, harness: str) -
         "sender_public_b64": base64.b64encode(sender_public).decode("ascii"),
         "nonce_b64": base64.b64encode(nonce).decode("ascii"),
         "ciphertext_b64": base64.b64encode(ciphertext).decode("ascii"),
-        "plaintext_sha256": _sha(payload),
     }
+    # AEAD authenticates the private result without a public plaintext hash.
+    if harness != "semiconductor_shared_ridge_three_book_v1":
+        envelope["plaintext_sha256"] = _sha(payload)
+    return envelope
 
 
 def consume(
@@ -372,6 +399,16 @@ def self_test() -> None:
     assert HARNESS_SPECS["homebuilders_adaptive_duration_v1"]["source_ref"] == "b2f933b57efbbf4297620492aa415d0fcd2f613c"
     assert "research/run_homebuilders_adaptive_duration_forward_20260905.py" in HARNESS_SPECS["homebuilders_adaptive_duration_v1"]["files"]
     assert HARNESS_SPECS["generalized_largecap_ridge_v1"]["program_id"] == "GENERALIZED_LARGECAP_RIDGE"
+    # Reject malformed native dates before they can become relative paths or
+    # lexicographically bypass the frozen prospective-start boundary.
+    assert _canonical_generation_date("2026-10-29") == "2026-10-29"
+    for invalid in ("../../private", "2026-02-30", "2026-9-1"):
+        try:
+            _canonical_generation_date(invalid)
+        except RuntimeError as exc:
+            assert str(exc) == "native generation date invalid"
+        else:
+            raise AssertionError("unsafe native generation date accepted")
     # Synthetic-only, no private model bytes. Verify exact existing tar producer shape.
     spec = HARNESS_SPECS["semiconductor_shared_ridge_three_book_v1"]
     fake = {name: b"synthetic-source" for name in spec["files"]}
@@ -435,6 +472,61 @@ def self_test() -> None:
     )
     assert check.returncode == 1 and not check.stderr
     assert "PRIVATE_SENTINEL" not in check.stdout and '"status": "REJECTED"' in check.stdout
+    # Synthetic-only two-sided field-set and AEAD integrity checks.
+    key = x25519.X25519PrivateKey.generate()
+    public_raw = key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    manifest = {
+        "return_recipient_b64": base64.b64encode(public_raw).decode("ascii"),
+        "return_recipient_key_id": _key_id(public_raw),
+    }
+    new_return = _encrypt_return(b"PRIVATE_SENTINEL", manifest, "123", "semiconductor_shared_ridge_three_book_v1")
+    assert set(new_return) == {
+        "schema", "run_id", "authority", "harness", "recipient_key_id",
+        "sender_public_b64", "nonce_b64", "ciphertext_b64",
+    }
+    legacy_return = _encrypt_return(b"synthetic", manifest, "123", "homebuilders_adaptive_duration_v1")
+    assert legacy_return["plaintext_sha256"] == _sha(b"synthetic")
+    sender = x25519.X25519PrivateKey.generate()
+    sender_raw = sender.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    recipient_id = _key_id(public_raw)
+    aad = _aad(SCHEMA, "123", "semiconductor_shared_ridge_three_book_v1", recipient_id)
+    nonce = os.urandom(12)
+    payload = b"synthetic"
+    ciphertext = ChaCha20Poly1305(_derive(
+        sender.exchange(x25519.X25519PublicKey.from_public_bytes(public_raw)),
+        aad, INFO,
+    )).encrypt(nonce, payload, aad)
+    incoming = {
+        "schema": SCHEMA, "run_id": "123", "authority": "research_only",
+        "harness": "semiconductor_shared_ridge_three_book_v1",
+        "recipient_key_id": recipient_id,
+        "sender_public_b64": base64.b64encode(sender_raw).decode("ascii"),
+        "nonce_b64": base64.b64encode(nonce).decode("ascii"),
+        "ciphertext_b64": base64.b64encode(ciphertext).decode("ascii"),
+    }
+    private_raw = key.private_bytes(
+        serialization.Encoding.Raw, serialization.PrivateFormat.Raw,
+        serialization.NoEncryption(),
+    )
+    assert _decrypt_input(incoming, private_raw, "123", "semiconductor_shared_ridge_three_book_v1") == payload
+    try:
+        _decrypt_input(incoming, private_raw, "PRIVATE_SENTINEL_DO_NOT_LOG",
+                       "semiconductor_shared_ridge_three_book_v1")
+    except RuntimeError as exc:
+        assert str(exc) == "public run identity invalid"
+    else:
+        raise AssertionError("caller-authored public run identity admitted")
+    try:
+        _decrypt_input({**incoming, "plaintext_sha256": _sha(payload)}, private_raw,
+                       "123", "semiconductor_shared_ridge_three_book_v1")
+    except RuntimeError as exc:
+        assert str(exc) == "input envelope field-set mismatch"
+    else:
+        raise AssertionError("public plaintext digest admitted")
     print("FORWARD_NATIVE_PUBLIC_EGRESS_TAR_BOUNDS_SELF_TEST=PASS")
     print("FORWARD_NATIVE_EPHEMERAL_CONSUMER_SELF_TEST=PASS")
 
