@@ -32,7 +32,8 @@ on:
       - 'research/forward_native_program_adapter_r1.py'
 
 permissions:
-  contents: write
+  # Untrusted PR source self-tests never need a write-capable token.
+  contents: read
 
 concurrency:
   group: forward-native-rendezvous-${{ github.ref }}-${{ github.event_name }}
@@ -45,10 +46,14 @@ env:
 
 jobs:
   self-test:
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
       - run: python -m pip install --disable-pip-version-check cryptography
@@ -58,6 +63,10 @@ jobs:
 
   consume:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # Only this rendezvous job publishes recipient/return objects.
+    # The decrypted native source step never receives GH_TOKEN explicitly.
+    permissions:
+      contents: write
     needs: self-test
     strategy:
       fail-fast: false
@@ -82,6 +91,8 @@ jobs:
           fi
       - uses: actions/checkout@v4
         if: steps.filter.outputs.run == 'true'
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         if: steps.filter.outputs.run == 'true'
         with: {python-version: '3.11'}
