@@ -1,0 +1,78 @@
+{
+  "schema": "mmibkr.free_paper_gateway_handoff_evidence.v1",
+  "lane": "MM-IBKR",
+  "fleet_role_assumed": false,
+  "github_clock_in_utc": "2026-10-13T10:44:42Z",
+  "observed_utc": "2026-10-13T11:09:52Z",
+  "elapsed_seconds_to_observation": 1510,
+  "cloudflare_paid_containers_used": false,
+  "source_repo": "XoticHaze/research-compute-public-",
+  "synthetic": {
+    "draft_pr": 1862,
+    "proof_push_run_id": 38386066177,
+    "proof_pr_run_id": 38386107432,
+    "latest_canonical_b1_image_ci_run_id": 38387829817,
+    "cases_passed": 15,
+    "independent_runner_handoff": true,
+    "checkpoint_digest_validated": true,
+    "broker_login_attempted": false,
+    "credentials_in_artifact": false,
+    "execution_owner_promoted": false,
+    "result": "PASS_SYNTHETIC_ONLY"
+  },
+  "paper_real": [
+    {
+      "run_id": 38386762807,
+      "result": "PASS",
+      "warm_seed_restored": true,
+      "account_api_authenticated": true,
+      "no_mobile_challenge": true,
+      "no_operator_action": true,
+      "read_only_api": true,
+      "clean_stop": true,
+      "encrypted_artifact_persisted": true
+    },
+    {
+      "run_id": 38387209651,
+      "result": "PASS",
+      "warm_seed_restored": true,
+      "account_api_authenticated": true,
+      "no_mobile_challenge": true,
+      "no_operator_action": true,
+      "read_only_api": true,
+      "clean_stop": true,
+      "encrypted_artifact_persisted": true,
+      "emitted_artifact_id": 11807467257
+    },
+    {
+      "run_id": 38387938608,
+      "result": "PASS",
+      "warm_seed_restored": true,
+      "source_run_id": 38387209651,
+      "source_artifact_id": 11807467257,
+      "source_branch": "ibkr-b1-authority-v1",
+      "account_api_authenticated": true,
+      "no_mobile_challenge": true,
+      "no_operator_action": true,
+      "read_only_api": true,
+      "clean_stop": true,
+      "encrypted_artifact_persisted": true
+    }
+  ],
+  "broker_gateway_overlaps_attempted": 0,
+  "paper_order_mutations_attempted": 0,
+  "live_order_mutations_attempted": 0,
+  "real_five_hour_strategy_to_gateway_cutover_proven": false,
+  "real_live_execution_owner_handoff_proven": false,
+  "weekly_2fa_reset_reuse_proven": false,
+  "github_actions_production_hosting_allowed_proven": false,
+  "warm_state_encryption_audited_for_offline_dictionary_resistance": false,
+  "remaining": [
+    "explicit_expected_predecessor_scheduler_binding",
+    "canonical_5h_strategy_owner_and_broker_open_order_reconciliation",
+    "weekly_reset_2fa_probe",
+    "harden_password_derived_public_warm_ciphertext_key_wrapping",
+    "review_github_actions_production_usage_and_resource_limits"
+  ],
+  "note": "Sanitized source/receipt only; no account values, tokens, credentials, Jts bytes, positions or order details."
+}
