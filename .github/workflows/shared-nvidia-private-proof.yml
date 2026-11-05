@@ -1,0 +1,24 @@
+name: Private Shared NVIDIA Smoke Contract
+
+on:
+  pull_request:
+    paths:
+      - 'cloudflare/shared-nvidia-inference/**'
+      - '.github/workflows/shared-nvidia-private-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: No secrets, no network, fixed offline tests
+        working-directory: cloudflare/shared-nvidia-inference
+        run: npm test
