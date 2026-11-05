@@ -65,7 +65,7 @@
     "XOP": 0.1,
     "XSD": 0.0666666667
   },
-  "generated_at": "2026-11-05T11:26:34.325750+00:00",
+  "generated_at": "2026-11-05T11:32:12.688776+00:00",
   "learned_allocator_role": "shadow_challenger_must_beat_this_baseline_after_costs_and_opportunity_cost",
   "policy_id": "CC770_DETERMINISTIC_ALLOCATOR_V0",
   "position_actions_vs_prior_allocator_target": [
@@ -160,8 +160,8 @@
       "action": "HOLD",
       "observation_lineage": {
         "market_data_asof": "2026-11-04",
-        "prospective_ledger_generated_at": "2026-11-05T11:26:29.134801+00:00",
-        "prospective_ledger_sha256": "4927a07eec791e3f0d8066c31e790d4874f357b2b14b8b890b4563b8e0a3b1dc"
+        "prospective_ledger_generated_at": "2026-11-05T11:32:10.040463+00:00",
+        "prospective_ledger_sha256": "796c58c70111c7750c98765601b6d86276ba285c55fcb93789319ef9ab593c78"
       },
       "observation_status": "ACTIVE",
       "reason": "frozen strategic core; daily score refresh is not a rebalance signal",
@@ -177,8 +177,8 @@
         "cohort_id": "SEMICONDUCTOR_SHARED_RIDGE:2026-09-11:aed8eb43d888d3c4",
         "cohort_status": "RESOLVED",
         "market_data_asof": "2026-11-04",
-        "prospective_ledger_generated_at": "2026-11-05T11:26:29.134801+00:00",
-        "prospective_ledger_sha256": "4927a07eec791e3f0d8066c31e790d4874f357b2b14b8b890b4563b8e0a3b1dc",
+        "prospective_ledger_generated_at": "2026-11-05T11:32:10.040463+00:00",
+        "prospective_ledger_sha256": "796c58c70111c7750c98765601b6d86276ba285c55fcb93789319ef9ab593c78",
         "signal_date": "2026-09-11",
         "source_adapter_sha256": "aed8eb43d888d3c4d39c4db940c89e5d2247204567d4a0fcf129e9551f04e333",
         "source_ref": "e73ec9b15180e208de541ce5d5304888e5550433"
@@ -204,8 +204,8 @@
         "cohort_id": "HOMEBUILDERS:2026-09-11:00435d369ddcc3a3",
         "cohort_status": "RESOLVED",
         "market_data_asof": "2026-11-04",
-        "prospective_ledger_generated_at": "2026-11-05T11:26:29.134801+00:00",
-        "prospective_ledger_sha256": "4927a07eec791e3f0d8066c31e790d4874f357b2b14b8b890b4563b8e0a3b1dc",
+        "prospective_ledger_generated_at": "2026-11-05T11:32:10.040463+00:00",
+        "prospective_ledger_sha256": "796c58c70111c7750c98765601b6d86276ba285c55fcb93789319ef9ab593c78",
         "signal_date": "2026-09-11",
         "source_adapter_sha256": "00435d369ddcc3a3d8adbedb91a9662f047b292ff64fe6af6901bfd112466a59",
         "source_ref": "100e356239b2399c054c1a41a18e4e9a5d07d33a"
@@ -227,11 +227,11 @@
       "action": "NO_ACTION",
       "observation_lineage": {
         "largecap_market_data_asof": "2026-11-04",
-        "largecap_observation_generated_at": "2026-11-05T11:26:29.584405+00:00",
-        "largecap_observation_sha256": "3978c89797af3a3af7d0a87b0a7412f5fad8d27133a20175147543f827044846",
+        "largecap_observation_generated_at": "2026-11-05T11:32:10.613671+00:00",
+        "largecap_observation_sha256": "b7f6d347e3641bf392b3cf5361a7d30d84f032127d02b7aef283a4a9ea6cc1f1",
         "market_data_asof": "2026-11-04",
-        "prospective_ledger_generated_at": "2026-11-05T11:26:29.134801+00:00",
-        "prospective_ledger_sha256": "4927a07eec791e3f0d8066c31e790d4874f357b2b14b8b890b4563b8e0a3b1dc"
+        "prospective_ledger_generated_at": "2026-11-05T11:32:10.040463+00:00",
+        "prospective_ledger_sha256": "796c58c70111c7750c98765601b6d86276ba285c55fcb93789319ef9ab593c78"
       },
       "observation_status": "ACTIVE",
       "positive_corroboration": [
@@ -250,8 +250,8 @@
       "action": "NO_ACTION",
       "observation_lineage": {
         "market_data_asof": "2026-11-04",
-        "prospective_ledger_generated_at": "2026-11-05T11:26:29.134801+00:00",
-        "prospective_ledger_sha256": "4927a07eec791e3f0d8066c31e790d4874f357b2b14b8b890b4563b8e0a3b1dc"
+        "prospective_ledger_generated_at": "2026-11-05T11:32:10.040463+00:00",
+        "prospective_ledger_sha256": "796c58c70111c7750c98765601b6d86276ba285c55fcb93789319ef9ab593c78"
       },
       "observation_status": "CONTEXT_ONLY",
       "reason": "context-only while prospective scientific forward credit remains shakedown",
@@ -263,8 +263,8 @@
       "action": "NO_ACTION",
       "observation_lineage": {
         "market_data_asof": "2026-11-04",
-        "prospective_ledger_generated_at": "2026-11-05T11:26:29.134801+00:00",
-        "prospective_ledger_sha256": "4927a07eec791e3f0d8066c31e790d4874f357b2b14b8b890b4563b8e0a3b1dc"
+        "prospective_ledger_generated_at": "2026-11-05T11:32:10.040463+00:00",
+        "prospective_ledger_sha256": "796c58c70111c7750c98765601b6d86276ba285c55fcb93789319ef9ab593c78"
       },
       "observation_status": "ACTIVE",
       "reason": "challenger has not earned substitution authority versus incumbent and BIL control",
@@ -276,8 +276,8 @@
       "action": "NO_ACTION",
       "observation_lineage": {
         "market_data_asof": "2026-11-04",
-        "prospective_ledger_generated_at": "2026-11-05T11:26:29.134801+00:00",
-        "prospective_ledger_sha256": "4927a07eec791e3f0d8066c31e790d4874f357b2b14b8b890b4563b8e0a3b1dc"
+        "prospective_ledger_generated_at": "2026-11-05T11:32:10.040463+00:00",
+        "prospective_ledger_sha256": "796c58c70111c7750c98765601b6d86276ba285c55fcb93789319ef9ab593c78"
       },
       "observation_status": "ACTIVE",
       "reason": "challenger has not earned substitution authority versus incumbent and BIL control",
@@ -286,16 +286,16 @@
       "target_weight": 0.0
     }
   ],
-  "source_scoreboard_generated_at": "2026-11-05T11:26:29.235560+00:00",
+  "source_scoreboard_generated_at": "2026-11-05T11:32:10.157621+00:00",
   "source_scoreboard_lineage": {
     "prospective_ledger": {
       "cohort_count": 2,
-      "generated_at": "2026-11-05T11:26:29.134801+00:00",
+      "generated_at": "2026-11-05T11:32:10.040463+00:00",
       "market_data_asof": "2026-11-04",
       "schema": "research.forward_prospective_cohort_ledger_r1",
-      "sha256": "4927a07eec791e3f0d8066c31e790d4874f357b2b14b8b890b4563b8e0a3b1dc"
+      "sha256": "796c58c70111c7750c98765601b6d86276ba285c55fcb93789319ef9ab593c78"
     },
-    "scoreboard_generated_at": "2026-11-05T11:26:29.235560+00:00"
+    "scoreboard_generated_at": "2026-11-05T11:32:10.157621+00:00"
   },
   "source_scoreboard_schema": "research.forward_market_scoreboard_r1",
   "tactical_used": 0.05,
