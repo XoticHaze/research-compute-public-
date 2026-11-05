@@ -43,7 +43,7 @@ BOUNDARIES = {
 
 def _read_frozen_weights(adapter_path: Path = SOURCE_ADAPTER) -> dict[str, float]:
     raw = adapter_path.read_bytes()
-    blob = hashlib.sha1(b"blob " + str(len(raw)).encode("ascii") + b"\\0" + raw).hexdigest()
+    blob = hashlib.sha1(b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw).hexdigest()
     if blob != SOURCE_ADAPTER_BLOB:
         raise RuntimeError("FROZEN_ADAPTER_BLOB_CHANGED")
     adapter = json.loads(raw)
@@ -249,7 +249,7 @@ def main() -> None:
     result = build()
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(result, sort_keys=True, indent=2) + "\\n", encoding="utf-8")
+    out.write_text(json.dumps(result, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     print("RIDGE_PERSISTENCE", result["forward"]["status"],
           result["forward"].get("latest_completed_session", "AWAITING"))
 
