@@ -346,6 +346,29 @@ def enrich_scoreboard(
     })
     lane["scorecard"] = scorecard
 
+    # The canonical scoreboard builds its competition view before this later
+    # observation-only enrichment. Refresh ONLY the matching transport row;
+    # this is not a native H20 cohort and cannot inherit model promotion.
+    competition = scoreboard.get("model_competition") or {}
+    for model_row in competition.get("model_rows") or []:
+        if model_row.get("program_id") != PROGRAM_ID:
+            continue
+        def safe_metric(value: Any) -> float | None:
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                return None
+            return float(value) if math.isfinite(float(value)) else None
+        model_row["matched_economics"] = {
+            "observed_sessions": scorecard.get("forward_sessions_completed"),
+            "directional_hit_rate": safe_metric(scorecard.get("directional_sign_hit_rate_current")),
+            "mean_excess_vs_spy_bps": safe_metric(scorecard.get("mean_directional_excess_vs_spy_bps_current")),
+            "mean_excess_vs_qqq_bps": safe_metric(scorecard.get("mean_directional_excess_vs_qqq_bps_current")),
+        }
+        model_row["transport_observation_state"] = observation.get("state")
+        model_row["native_cohort_credit_applicable"] = False
+        model_row["first_cohort_count_checkpoint_met"] = False
+        model_row["monitored_live_authorized"] = False
+        model_row["broker_submit_authority"] = False
+
     scoreboard.setdefault("coverage", {})["largecap_transport_observer"] = {
         "present": True,
         "state": observation.get("state"),
@@ -438,6 +461,22 @@ def self_test() -> None:
     assert lane["observation_status"] == "ACTIVE"
     assert lane["scorecard"]["terminal_accuracy_available"] is False
     assert lane["observation_lineage"]["largecap_observation_sha256"] == "test-largecap-sha"
+    score_with_competition = {
+        "schema": SCOREBOARD_SCHEMA, "lanes": [{"program_id": PROGRAM_ID}],
+        "coverage": {}, "decision_chain": {},
+        "model_competition": {"model_rows": [{
+            "program_id": PROGRAM_ID,
+            "matched_economics": {"observed_sessions": None},
+            "native_cohort_credit_applicable": False,
+        }]},
+    }
+    enrich_scoreboard(score_with_competition, out)
+    entry = score_with_competition["model_competition"]["model_rows"][0]
+    assert entry["matched_economics"]["observed_sessions"] == out["sessions_completed"]
+    assert entry["matched_economics"]["directional_hit_rate"] == 1.0
+    assert entry["native_cohort_credit_applicable"] is False
+    assert entry["monitored_live_authorized"] is False
+
     print("FORWARD_LARGECAP_TRANSPORT_OBSERVER_SELF_TEST=PASS")
 
 
