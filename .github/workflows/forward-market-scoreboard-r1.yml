@@ -3,8 +3,10 @@ name: Forward Market Scoreboard R1
 on:
   workflow_dispatch:
   schedule:
-    - cron: '15 23 * * 1-5'
-    # Retry after the US close so a provider-late first pass cannot strand Friday
+    # Run after the ledger's 18:30 America/New_York completed-bar cutoff.
+    # 23:45 UTC is after that cutoff in both EST and EDT.
+    - cron: '45 23 * * 1-5'
+    # Retry later so a provider-late first pass cannot strand Friday
     # (or another weekday) until the next scheduled market day.
     - cron: '30 2 * * 2-6'
   push:
@@ -15,6 +17,7 @@ on:
       - 'research/forward_market_scoreboard_r1.py'
       - 'research/ridge_frozen_weight_persistence_forward_r1.py'
       - 'research/contracts/ridge_weight_persistence_20261105.v1.json'
+      - 'research/contracts/ridge_weight_persistence_source_adapter_20260911.v1.json'
       - 'research/p160_frozen_oct2026_forward_nav_consumer_r1.py'
       - 'tests/test_p160_frozen_oct2026_forward_nav_consumer_r1.py'
       - 'research/forward_deterministic_allocator_r1.py'
@@ -40,6 +43,7 @@ on:
       - 'research/forward_market_scoreboard_r1.py'
       - 'research/ridge_frozen_weight_persistence_forward_r1.py'
       - 'research/contracts/ridge_weight_persistence_20261105.v1.json'
+      - 'research/contracts/ridge_weight_persistence_source_adapter_20260911.v1.json'
       - 'research/p160_frozen_oct2026_forward_nav_consumer_r1.py'
       - 'tests/test_p160_frozen_oct2026_forward_nav_consumer_r1.py'
       - 'research/forward_deterministic_allocator_r1.py'
