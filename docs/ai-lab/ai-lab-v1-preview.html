@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark"><title>AI Lab V1 | Design target preview</title>
+<style>
+:root{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e7edf7;background:#0a101b;font-synthesis:none}
+*{box-sizing:border-box}body{margin:0;min-height:100vh}button,textarea{font:inherit}button{cursor:pointer}button:focus-visible,textarea:focus-visible{outline:2px solid #70bbff;outline-offset:2px}
+.app{display:grid;grid-template-columns:246px minmax(430px,1fr) 292px;min-height:100vh;max-height:100vh;overflow:hidden}
+.side{background:#0c1421;border-right:1px solid #223047;padding:22px 15px;display:flex;flex-direction:column;gap:22px}
+.identity{display:flex;align-items:center;gap:10px;padding:4px 9px}.brandmark{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;color:#091322;font-weight:900;background:linear-gradient(130deg,#9bddff,#6be6c4)}.brandname{font-weight:800;font-size:15px;letter-spacing:.1px}.brandname span{display:block;color:#8ca0bc;font-size:10px;letter-spacing:1.4px;font-weight:600;margin-top:3px}
+.new-btn{padding:12px 13px;border:1px solid #384962;border-radius:11px;background:#182638;color:#e7f4ff;text-align:left;font-size:13px;font-weight:650;display:flex;align-items:center;gap:10px}.new-btn:hover{border-color:#80baff}
+.nav-label{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#73869f;font-weight:700;padding:0 12px;margin:3px 0 11px}
+.nav{display:flex;flex-direction:column;gap:4px}.nav button{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:none;border-radius:9px;padding:11px 12px;background:transparent;color:#92a6bf;font-size:13px}.nav button:hover,.nav button.active{background:#1d3047;color:#e7f4ff}.nav button.active{box-shadow:inset 3px 0 #7fc3fd}.nav .ico{width:19px;text-align:center;font-size:16px;opacity:.9}.tag{margin-left:auto;color:#9ab4ca;background:#192538;border:1px solid #2a3d54;padding:2px 6px;border-radius:6px;font-size:10px}
+.side-bottom{margin-top:auto;border-top:1px solid #223047;padding:15px 9px 0;display:flex;align-items:center;gap:10px;font-size:12px;color:#a1b1c8}.avatar{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;color:#e0f9ff;border:1px solid #567e9d;background:#1f4356;font-weight:750}
+.main{display:flex;flex-direction:column;min-height:0;min-width:0;background:radial-gradient(ellipse 80% 40% at 50% 5%,#12243a 0%,#0d1625 65%,#0b1421 100%)}
+.topbar{padding:18px 33px;height:72px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #26354a}.crumb{color:#9dafc6;font-size:12px}.crumb strong{color:#e4eaf3;font-weight:650}.preview{border:1px solid #5b4b2c;border-radius:40px;background:#2d2518;color:#f0cf8c;padding:7px 11px;font-size:11px;font-weight:650}.topright{display:flex;align-items:center;gap:10px}
+.content{width:100%;max-width:865px;margin:auto;padding:30px 38px 14px;display:flex;flex-direction:column;min-height:0;flex:1}
+.eyebrow{font-size:11px;letter-spacing:1.4px;color:#7caccb;text-transform:uppercase;font-weight:700;margin:3px 0 8px}
+h1{font-size:31px;letter-spacing:-1.1px;font-weight:730;margin:0;line-height:1.2}.sub{margin:11px 0 23px;color:#92a8c1;font-size:13px;line-height:1.6}
+.quick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;margin-bottom:18px}.quick button{border:1px solid #293c50;background:#141f30;border-radius:12px;padding:13px 14px;text-align:left;color:#cfe0ee}.quick button:hover{background:#1e3047;border-color:#4387b6}.quick b{display:block;font-size:12px;font-weight:650;margin-bottom:7px}.quick span{font-size:11px;color:#8da5bf}
+.chat{background:#0d1726;border:1px solid #293a4d;border-radius:15px;overflow:auto;min-height:215px;flex:1;padding:19px 20px;margin-bottom:15px}
+.chat-title{font-size:10px;letter-spacing:1px;color:#7e93ad;text-transform:uppercase;margin:0 0 20px}.msg{display:flex;gap:12px;margin-bottom:20px;max-width:94%}.msg.user{margin-left:12%;justify-content:flex-end}.face{flex-shrink:0;display:grid;place-items:center;height:27px;width:27px;border-radius:8px;background:#20465b;color:#92eff0;font-size:14px;font-weight:700}.bubble{font-size:12.5px;line-height:1.7;color:#d4e2f1}.user .bubble{background:#1c344f;border:1px solid #2b4b6c;padding:11px 15px;border-radius:12px 12px 3px 12px}.bubble strong{color:#f0f6ff}.badge-demo{font-size:10px;color:#d9c69a;padding:3px 7px;background:#2d2518;border:1px solid #635338;border-radius:5px;margin-bottom:6px;display:inline-block}
+.action-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.chip{border:1px solid #31516b;border-radius:8px;padding:7px 10px;color:#b9dffc;font-size:11px;background:#172b3e}
+.composer{background:#172335;border:1px solid #354a60;border-radius:13px;padding:13px 15px 10px;box-shadow:0 10px 32px #0002}.composer textarea{display:block;width:100%;resize:none;background:none;border:0;color:#e7eef7;outline:0;font-size:13px;line-height:1.5;min-height:49px}.composer textarea::placeholder{color:#7e94af}.compose-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid #2a3c50;padding-top:9px}.hint{color:#8297b0;font-size:11px}.send{border:0;border-radius:8px;background:#91d4fd;color:#0a1b2b;padding:8px 13px;font-size:12px;font-weight:800}.send:hover{background:#b8e5ff}.foot{color:#647a95;text-align:center;font-size:10px;margin:12px 0 2px}
+.rail{background:#0e1725;border-left:1px solid #26364a;display:flex;flex-direction:column;gap:16px;padding:24px 18px;overflow:auto}.rail-heading{font-size:11px;letter-spacing:1.3px;text-transform:uppercase;font-weight:800;color:#849cb6;margin:4px 5px 0}.panel{border:1px solid #2b3e52;background:#121f30;border-radius:13px;padding:17px}.panel h3{font-size:13px;font-weight:750;margin:0 0 15px}.row{display:flex;justify-content:space-between;align-items:center;gap:9px;margin:11px 0;font-size:11px}.row .key{color:#879fb9}.row .value{font-weight:650;color:#d8e7f5;text-align:right}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#d99b6c;margin-right:5px}.divider{border-top:1px solid #293b4c;margin:14px 0}.em{color:#e8be8a}.notice{background:#162b35;border:1px solid #28565f;border-radius:11px;padding:13px 14px;font-size:11px;color:#b2d3da;line-height:1.7}.notice b{color:#d9f5f4}.small{font-size:11px;color:#869bb3;line-height:1.65}
+#toast{position:fixed;bottom:25px;left:50%;transform:translateX(-50%);border:1px solid #40658a;border-radius:10px;background:#162c43;color:#dbedff;padding:13px 17px;box-shadow:0 12px 45px #0008;max-width:90vw;font-size:12px;display:none;z-index:5}
+@media(max-width:1160px){.app{grid-template-columns:205px minmax(410px,1fr)}.rail{display:none}.side{padding:18px 10px}.content{padding:24px 25px 14px}}
+@media(max-width:700px){.app{display:flex;max-height:none;min-height:100vh;flex-direction:column}.side{padding:12px 15px;flex-direction:row;gap:10px;align-items:center;border-bottom:1px solid #26364a}.side .nav,.side .nav-label,.side-bottom{display:none}.side .identity{padding:2px}.new-btn{margin-left:auto;padding:9px 11px}.main{min-height:calc(100vh - 64px)}.topbar{height:56px;padding:12px 20px}.content{padding:22px 17px 16px}.quick{grid-template-columns:1fr;gap:8px}.quick button{padding:10px 13px}.quick span{display:none}h1{font-size:26px}.chat{min-height:260px}.msg.user{margin-left:0}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="side">
+  <div class="identity"><span class="brandmark">X</span><span class="brandname">XoticHaze <span>OPERATOR CONSOLE</span></span></div>
+  <button class="new-btn" id="new"><span>＋</span> New conversation</button>
+  <div><p class="nav-label">Workspace</p><nav class="nav" aria-label="AI Lab sections">
+    <button class="active" data-view="chat"><span class="ico">◈</span> Chat <span class="tag">V1</span></button>
+    <button data-view="tasks"><span class="ico">☷</span> Tasks</button>
+    <button data-view="memory"><span class="ico">◇</span> Memory</button>
+    <button data-view="experiments"><span class="ico">⚗</span> Experiments</button>
+    <button data-view="schedules"><span class="ico">◷</span> Schedules</button>
+    <button data-view="runs"><span class="ico">▤</span> Runs & receipts</button>
+  </nav></div>
+  <div><p class="nav-label">Recent conversations</p><nav class="nav"><button data-view="chat"><span class="ico">○</span> Weekly priorities</button><button data-view="chat"><span class="ico">○</span> Home energy ideas</button></nav></div>
+  <div class="side-bottom"><span class="avatar">U</span><span>Private AI Lab<br><span style="color:#7089a5">Cloudflare Access · target</span></span></div>
+</aside>
+<section class="main">
+  <header class="topbar"><div class="crumb">Operator Console <span style="color:#54708b"> / </span> <strong>AI Lab</strong></div><div class="topright"><span class="preview">DESIGN PREVIEW · NOT LIVE</span></div></header>
+  <main class="content" id="content">
+    <div class="eyebrow" id="eyebrow">Your personal agent workspace</div>
+    <h1 id="headline">Less juggling. More getting things done.</h1>
+    <p class="sub" id="description">A conversation-first place to organize what matters, remember the context, and turn ideas into finished work.</p>
+    <div class="quick" id="suggestions">
+      <button data-prompt="Help me prioritize what I should actually finish this week."><b>☰ &nbsp; Make a weekly plan</b><span>Turn loose ideas into next steps</span></button>
+      <button data-prompt="Review my home automation ideas and identify the highest-value improvement."><b>⌂ &nbsp; Think through my home</b><span>Investigate, organize, follow up</span></button>
+      <button data-prompt="Collect my unfinished ideas and group them into themes."><b>✦ &nbsp; Organize my ideas</b><span>Pick up where we left off</span></button>
+    </div>
+    <section class="chat" id="conversation">
+      <p class="chat-title">Illustrative conversation, not model output</p>
+      <div class="msg user"><div class="bubble">I have too many ideas going at once. Can you help me find the three things worth finishing this week?</div></div>
+      <div class="msg">
+        <span class="face">✦</span>
+        <div class="bubble"><span class="badge-demo">SAMPLE ANSWER</span><br><strong>Here's how I'd simplify the week.</strong><br>
+          Rather than start another project, I'd group the open ideas into three tracks: one practical home improvement, one personal admin task, and one experiment worth validating.
+          <div class="action-row"><span class="chip">☰ &nbsp; Review plan</span><span class="chip">◇ &nbsp; Save decision</span><span class="chip">◷ &nbsp; Schedule follow-up</span></div>
+        </div>
+      </div>
+    </section>
+    <div class="composer"><textarea id="prompt" aria-label="Message your assistant" placeholder="Ask, plan, research, or pick up an unfinished idea…"></textarea><div class="compose-actions"><span class="hint">Model connection pending · preview cannot send requests</span><button class="send" id="send">Send →</button></div></div>
+    <p class="foot">Concept target V1. All example conversation, memory and task content is fictional. No production API or compute is connected.</p>
+  </main>
+</section>
+<aside class="rail">
+  <p class="rail-heading">Assistant status</p>
+  <section class="panel">
+    <h3>✦ &nbsp; Nemotron 3 Ultra</h3>
+    <div class="row"><span class="key">Role</span><span class="value">Primary candidate</span></div>
+    <div class="row"><span class="key">Inference</span><span class="value em"><span class="dot"></span> Not connected</span></div>
+    <div class="row"><span class="key">Conversation history</span><span class="value">Target: durable</span></div>
+    <div class="row"><span class="key">Scheduled jobs</span><span class="value">Not admitted</span></div>
+    <div class="divider"></div>
+    <p class="small" style="margin-bottom:0">No household, trading, broker or unrestricted GitHub execution authority.</p>
+  </section>
+  <p class="rail-heading">This week's focus</p>
+  <section class="panel">
+    <div class="row"><span class="key">01</span><span class="value" style="flex:1;text-align:left">Finish one home improvement</span></div>
+    <div class="row"><span class="key">02</span><span class="value" style="flex:1;text-align:left">Clear overdue personal admin</span></div>
+    <div class="row"><span class="key">03</span><span class="value" style="flex:1;text-align:left">Choose one useful AI experiment</span></div>
+    <p class="small" style="margin-bottom:0">Illustrative task list only.</p>
+  </section>
+  <p class="rail-heading">Trust boundaries</p>
+  <div class="notice"><b>Private by design</b><br>Cloudflare Access verifies the operator. Model calls, encrypted compute, memory, tools and device actions each have their own admission requirements.</div>
+</aside>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script>
+(function(){
+const toast=document.getElementById('toast');let timer;
+function notice(text){toast.textContent=text;toast.style.display='block';clearTimeout(timer);timer=setTimeout(()=>toast.style.display='none',4200)}
+const sections={
+chat:['Your personal agent workspace','Less juggling. More getting things done.','A conversation-first place to organize what matters, remember the context, and turn ideas into finished work.'],
+tasks:['Organize and finish','Your next actions, not another endless backlog.','Review tasks created from conversations, mark decisions, and keep your focus clear.'],
+memory:['Context that sticks','Remember what matters.','Search saved decisions and preferences. Real memory requires private storage and model admission.'],
+experiments:['Siloed research','Explore models without risking production.','Compare bounded NVIDIA workloads, inputs, receipts, and outcomes.'],
+schedules:['Recurring help','Useful follow-ups, on a schedule.','Review and approve the jobs that should run again.'],
+runs:['Evidence you can inspect','Every job gets a real receipt.','See execution identity, timestamps, source, outcome, and honest failures.']};
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{
+ const key=b.dataset.view, s=sections[key];
+ document.querySelectorAll('[data-view]').forEach(n=>n.classList.toggle('active',n===b));
+ document.getElementById('eyebrow').textContent=s[0];
+ document.getElementById('headline').textContent=s[1];
+ document.getElementById('description').textContent=s[2];
+ if(key!=='chat')notice('Preview only: '+key+' will use real stored data after implementation.');
+}));
+document.querySelectorAll('[data-prompt]').forEach(b=>b.addEventListener('click',()=>{
+ document.getElementById('prompt').value=b.dataset.prompt;document.getElementById('prompt').focus();
+}));
+document.getElementById('send').addEventListener('click',()=>notice('Design preview only. No model endpoint or job is connected.'));
+document.getElementById('new').addEventListener('click',()=>{document.getElementById('prompt').value='';notice('Preview only. A new conversation will create durable history in the live product.');});
+})();
+</script>
+</body></html>

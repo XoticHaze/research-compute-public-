@@ -1,3 +1,4 @@
+import { aiLabAsset, aiLabStub, labStateFetch, validateLabNote } from './ai_lab_sandbox.js';
 import {
   machinePromotionProjection,
   readPromotionState,
@@ -713,6 +714,7 @@ export class OperatorState {
 
   async fetch(request) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith('/lab/')) return labStateFetch(request, this.ctx.storage);
 
     if (request.method === 'POST' && url.pathname === '/pi/store') {
       let envelope;
@@ -1169,6 +1171,54 @@ export default {
       accessIdentity = await verifyAccess(request, env);
     } catch {
       return json({ error: 'access_denied' }, 403);
+    }
+
+    // AI Lab is opt-in, Access-verified, and completely separate from Pi,
+    // market, broker and OIDC machine ingress. No inference or tools in M0.
+    if (url.pathname === '/ai-lab' || url.pathname === '/ai-lab/client.js'
+        || url.pathname.startsWith('/api/ai-lab/')) {
+      if (env.AI_LAB_EXPERIMENTAL !== '1') {
+        return json({ error: 'ai_lab_not_admitted' }, 404);
+      }
+      if (url.pathname === '/ai-lab' || url.pathname === '/ai-lab/client.js') {
+        if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+        return aiLabAsset(url.pathname);
+      }
+      const state = await aiLabStub(env, accessIdentity);
+      if (request.method === 'GET' && url.pathname === '/api/ai-lab/session') {
+        return state.fetch(new Request('https://operator-state.internal/lab/latest'));
+      }
+      if (request.method === 'POST' && url.pathname === '/api/ai-lab/note') {
+        if (!operatorDecisionRequestIsSameOrigin(request)) {
+          return json({ error: 'ai_lab_origin_rejected' }, 403);
+        }
+        const len = Number(request.headers.get('content-length') || 0);
+        if (!Number.isFinite(len) || len > 4096) {
+          return json({ error: 'ai_lab_body_too_large' }, 413);
+        }
+        let note;
+        try {
+          const raw = await request.text();
+          if (new TextEncoder().encode(raw).length > 4096) {
+            return json({ error: 'ai_lab_body_too_large' }, 413);
+          }
+          note = validateLabNote(JSON.parse(raw));
+        } catch { return json({ error: 'ai_lab_note_invalid' }, 400); }
+        return state.fetch(new Request('https://operator-state.internal/lab/append', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ schema: 'operator.ai_lab.session.v1',
+            id: note.id, text: note.text }),
+        }));
+      }
+      if (request.method === 'DELETE' && url.pathname === '/api/ai-lab/session') {
+        if (!operatorDecisionRequestIsSameOrigin(request)) {
+          return json({ error: 'ai_lab_origin_rejected' }, 403);
+        }
+        return state.fetch(new Request('https://operator-state.internal/lab/clear', {
+          method: 'DELETE',
+        }));
+      }
+      return json({ error: 'ai_lab_route_not_supported' }, 404);
     }
 
     // This dedicated Access-locked host is the operator console, not the
