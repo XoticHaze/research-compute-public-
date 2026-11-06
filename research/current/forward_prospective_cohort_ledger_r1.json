@@ -449,11 +449,176 @@
         "NVDA": 510.51047822741975
       },
       "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
-      "resolution": null,
+      "resolution": {
+        "common_market_latest_date": "2026-11-05",
+        "current_mark_metrics": {
+          "calibration_intercept_bps": -25.0,
+          "calibration_interpretation": "partial-horizon diagnostic only; terminal fixed20 calibration remains authoritative",
+          "calibration_slope": 0.0,
+          "count": 11,
+          "equal_weight_universe_return_bps": 0.0,
+          "mark_date": "2026-11-05",
+          "nonterminal": true,
+          "prediction_mae_bps": 591.7333,
+          "qqq_return_bps": 0.0,
+          "rank_ic_spearman": null,
+          "smh_return_bps": 0.0,
+          "ticker_book_excess_vs_equal_weight_universe_bps": -25.0,
+          "ticker_book_matched_excess_vs_smh_bps": -25.0,
+          "ticker_book_net_if_flattened_now_bps": -25.0,
+          "ticker_book_opportunity_excess_vs_qqq_bps": -25.0,
+          "ticker_positive_hit_rate": 0.0
+        },
+        "current_ticker_marks": {
+          "ADI": {
+            "gross_return_bps": 0.0,
+            "net_if_flattened_now_bps": -25.0,
+            "partial_prediction_error_bps_nonterminal": -124.3522,
+            "predicted_fixed20_net_value_bps": 99.35219819891923,
+            "sign_hit_current": false
+          },
+          "AMAT": {
+            "gross_return_bps": 0.0,
+            "net_if_flattened_now_bps": -25.0,
+            "partial_prediction_error_bps_nonterminal": -763.1737,
+            "predicted_fixed20_net_value_bps": 738.1737197908213,
+            "sign_hit_current": false
+          },
+          "AMD": {
+            "gross_return_bps": 0.0,
+            "net_if_flattened_now_bps": -25.0,
+            "partial_prediction_error_bps_nonterminal": -711.628,
+            "predicted_fixed20_net_value_bps": 686.6280351421574,
+            "sign_hit_current": false
+          },
+          "APH": {
+            "gross_return_bps": 0.0,
+            "net_if_flattened_now_bps": -25.0,
+            "partial_prediction_error_bps_nonterminal": -400.877,
+            "predicted_fixed20_net_value_bps": 375.8769857332355,
+            "sign_hit_current": false
+          },
+          "AVGO": {
+            "gross_return_bps": 0.0,
+            "net_if_flattened_now_bps": -25.0,
+            "partial_prediction_error_bps_nonterminal": -432.811,
+            "predicted_fixed20_net_value_bps": 407.8110424084801,
+            "sign_hit_current": false
+          },
+          "KLAC": {
+            "gross_return_bps": 0.0,
+            "net_if_flattened_now_bps": -25.0,
+            "partial_prediction_error_bps_nonterminal": -620.367,
+            "predicted_fixed20_net_value_bps": 595.3670179310341,
+            "sign_hit_current": false
+          },
+          "LRCX": {
+            "gross_return_bps": 0.0,
+            "net_if_flattened_now_bps": -25.0,
+            "partial_prediction_error_bps_nonterminal": -837.7465,
+            "predicted_fixed20_net_value_bps": 812.7465183445803,
+            "sign_hit_current": false
+          },
+          "MCHP": {
+            "gross_return_bps": 0.0,
+            "net_if_flattened_now_bps": -25.0,
+            "partial_prediction_error_bps_nonterminal": -214.7459,
+            "predicted_fixed20_net_value_bps": 189.74590844796003,
+            "sign_hit_current": false
+          },
+          "MRVL": {
+            "gross_return_bps": 0.0,
+            "net_if_flattened_now_bps": -25.0,
+            "partial_prediction_error_bps_nonterminal": -1061.2973,
+            "predicted_fixed20_net_value_bps": 1036.2973448781213,
+            "sign_hit_current": false
+          },
+          "MU": {
+            "gross_return_bps": 0.0,
+            "net_if_flattened_now_bps": -25.0,
+            "partial_prediction_error_bps_nonterminal": -806.5566,
+            "predicted_fixed20_net_value_bps": 781.5566254972882,
+            "sign_hit_current": false
+          },
+          "NVDA": {
+            "gross_return_bps": 0.0,
+            "net_if_flattened_now_bps": -25.0,
+            "partial_prediction_error_bps_nonterminal": -535.5105,
+            "predicted_fixed20_net_value_bps": 510.51047822741975,
+            "sign_hit_current": false
+          }
+        },
+        "entry_date": "2026-11-05",
+        "expression_variant_marks": {
+          "equal_weight": {
+            "excess_vs_equal_weight_universe_bps": -25.0,
+            "excess_vs_equal_weight_universe_net_bps": 0.0,
+            "excess_vs_qqq_bps": -25.0,
+            "excess_vs_smh_bps": -25.0,
+            "excess_vs_smh_net_bps": -15.0,
+            "scientific_forward_credit": true,
+            "ticker_book_gross_return_bps": 0.0,
+            "ticker_book_net_return_bps": -25.0
+          },
+          "incumbent_frozen_book": {
+            "excess_vs_equal_weight_universe_bps": -25.0,
+            "excess_vs_equal_weight_universe_net_bps": 0.0,
+            "excess_vs_qqq_bps": -25.0,
+            "excess_vs_smh_bps": -25.0,
+            "excess_vs_smh_net_bps": -15.0,
+            "scientific_forward_credit": true,
+            "ticker_book_gross_return_bps": 0.0,
+            "ticker_book_net_return_bps": -25.0
+          },
+          "linear_prediction_rank": {
+            "excess_vs_equal_weight_universe_bps": -25.0,
+            "excess_vs_equal_weight_universe_net_bps": 0.0,
+            "excess_vs_qqq_bps": -25.0,
+            "excess_vs_smh_bps": -25.0,
+            "excess_vs_smh_net_bps": -15.0,
+            "scientific_forward_credit": true,
+            "ticker_book_gross_return_bps": 0.0,
+            "ticker_book_net_return_bps": -25.0
+          },
+          "rank_x_inverse_vol": {
+            "excess_vs_equal_weight_universe_bps": -25.0,
+            "excess_vs_equal_weight_universe_net_bps": 0.0,
+            "excess_vs_qqq_bps": -25.0,
+            "excess_vs_smh_bps": -25.0,
+            "excess_vs_smh_net_bps": -15.0,
+            "scientific_forward_credit": true,
+            "ticker_book_gross_return_bps": 0.0,
+            "ticker_book_net_return_bps": -25.0
+          }
+        },
+        "horizon_sessions": 20,
+        "sessions_completed": 0
+      },
       "signal_date": "2026-11-04",
       "source_adapter_sha256": "9add926e28bc6e464adda111d91b4e2e1c986f614b79c53b3cbf69f1a82f9f85",
+      "source_health": {
+        "all_symbols_share_latest_date": true,
+        "lagging_symbols_vs_source_max": [],
+        "latest_by_symbol": {
+          "ADI": "2026-11-05",
+          "AMAT": "2026-11-05",
+          "AMD": "2026-11-05",
+          "APH": "2026-11-05",
+          "AVGO": "2026-11-05",
+          "KLAC": "2026-11-05",
+          "LRCX": "2026-11-05",
+          "MCHP": "2026-11-05",
+          "MRVL": "2026-11-05",
+          "MU": "2026-11-05",
+          "NVDA": "2026-11-05",
+          "QQQ": "2026-11-05",
+          "SMH": "2026-11-05"
+        },
+        "provider": "yfinance_adjusted_close",
+        "source_max_date": "2026-11-05"
+      },
       "source_ref": "e73ec9b15180e208de541ce5d5304888e5550433",
-      "status": "AWAITING_ENTRY_SESSION",
+      "status": "OPEN",
       "stock_round_trip_cost_bps": 25.0,
       "symbols": [
         "AMAT",
@@ -489,8 +654,8 @@
     "freshness_gap_visible": false,
     "in_progress_session_excluded": true,
     "lagging_symbols_by_program": {},
-    "observed_common_asof": "2026-11-04",
-    "requested_asof": "2026-11-04",
+    "observed_common_asof": "2026-11-05",
+    "requested_asof": "2026-11-05",
     "source_health_by_program": {
       "HOMEBUILDERS": {
         "all_symbols_share_latest_date": true,
@@ -510,29 +675,27 @@
         "all_symbols_share_latest_date": true,
         "lagging_symbols_vs_source_max": [],
         "latest_by_symbol": {
-          "ADI": "2026-10-12",
-          "AMAT": "2026-10-12",
-          "AMD": "2026-10-12",
-          "APH": "2026-10-12",
-          "AVGO": "2026-10-12",
-          "KLAC": "2026-10-12",
-          "LRCX": "2026-10-12",
-          "MCHP": "2026-10-12",
-          "MRVL": "2026-10-12",
-          "MU": "2026-10-12",
-          "NVDA": "2026-10-12",
-          "NXPI": "2026-10-12",
-          "QQQ": "2026-10-12",
-          "SMH": "2026-10-12",
-          "TXN": "2026-10-12"
+          "ADI": "2026-11-05",
+          "AMAT": "2026-11-05",
+          "AMD": "2026-11-05",
+          "APH": "2026-11-05",
+          "AVGO": "2026-11-05",
+          "KLAC": "2026-11-05",
+          "LRCX": "2026-11-05",
+          "MCHP": "2026-11-05",
+          "MRVL": "2026-11-05",
+          "MU": "2026-11-05",
+          "NVDA": "2026-11-05",
+          "QQQ": "2026-11-05",
+          "SMH": "2026-11-05"
         },
         "provider": "yfinance_adjusted_close",
-        "source_max_date": "2026-10-12"
+        "source_max_date": "2026-11-05"
       }
     }
   },
-  "generated_at": "2026-11-05T11:52:14.007563+00:00",
-  "market_data_asof": "2026-11-04",
+  "generated_at": "2026-11-06T03:41:23.416282+00:00",
+  "market_data_asof": "2026-11-05",
   "matched_after_cost_projections": {
     "SEMICONDUCTOR_SHARED_RIDGE:2026-09-11:aed8eb43d888d3c4": {
       "alpha_or_promotion_authority": false,
@@ -547,7 +710,7 @@
       "ticker_minus_smh_net_bps": -8.3719
     }
   },
-  "requested_market_data_asof": "2026-11-04",
+  "requested_market_data_asof": "2026-11-05",
   "schema": "research.forward_prospective_cohort_ledger_r1",
   "summary": {
     "HOMEBUILDERS": {
