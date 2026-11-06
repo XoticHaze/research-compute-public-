@@ -359,10 +359,15 @@ def build(manifest: dict[str, Any], adapter_root: Path, prior_ledger: dict[str, 
         raise ValueError("market calendar contains no session on or before asof")
     last_observed_session = max(day for day in calendar if day <= asof)
     prices = _validate_price_tape(price_tape, asof) if price_tape is not None else None
+    if prior_ledger is not None and prior_ledger.get("schema") != "research.forward_prospective_cohort_ledger_r1":
+        raise ValueError("canonical prospective cohort ledger schema mismatch")
     existing = {}
     for cohort in (prior_ledger or {}).get("cohorts", []):
         program, signal_day = cohort.get("program_id"), cohort.get("signal_date")
         if program in models and signal_day:
+            if (models[program].get("source_ref") is not None
+                    and cohort.get("source_ref") != models[program]["source_ref"]):
+                raise ValueError(f"canonical prior model source_ref mismatched: {program}")
             key = (program, _date(signal_day))
             if key in existing:
                 raise ValueError(f"duplicate previously admitted ledger cohort {key}")
@@ -397,9 +402,17 @@ def build(manifest: dict[str, Any], adapter_root: Path, prior_ledger: dict[str, 
             if archived:
                 decision, selected, reason = _qualify(archived["adapter"], model)
             elif prior:
-                decision = "PRIOR_ADMITTED_COHORT"
-                selected = sorted(prior.get("symbols") or [])
-                reason = "already admitted canonical cohort; original signal adapter not in dated store"
+                if prior.get("status") == "LATE_REGISTRATION_REJECTED":
+                    decision = "REJECTED_PROSPECTIVE"
+                    reason = "owning canonical ledger rejected late first-seen admission"
+                else:
+                    decision = "PRIOR_ADMITTED_COHORT"
+                    selected = sorted(prior.get("symbols") or [])
+                    reason = "already admitted canonical cohort; original signal adapter not in dated store"
+            if archived and prior and prior.get("source_adapter_sha256") != archived["adapter_sha256"]:
+                decision = "LINEAGE_CONFLICT_NO_CREDIT"
+                selected = []
+                reason = "dated adapter sha256 differs from immutable canonical admitted cohort"
             idx = positions[day]
             entry_idx = idx + model["execution_delay_sessions"]
             if entry_idx < len(calendar):
@@ -441,7 +454,7 @@ def build(manifest: dict[str, Any], adapter_root: Path, prior_ledger: dict[str, 
                 "frozen_model_ref": model["frozen_model_ref"],
                 "evidence_class": evidence,
                 "scientific_forward_credit_granted_by_this_tool": False,
-                "paper_trade_executed": False,
+                "broker_fill_verified_by_this_tool": False,
                 "source_receipt": archived["provenance"] if archived else None,
                 "canonical_cohort_id": prior.get("cohort_id") if prior else None,
             }
@@ -463,6 +476,8 @@ def build(manifest: dict[str, Any], adapter_root: Path, prior_ledger: dict[str, 
             "recorded_no_entry": counts["NO_ENTRY"],
             "observation_only": counts["OBSERVATION_ONLY"],
             "admission_incomplete": counts["ADMISSION_INCOMPLETE"],
+            "lineage_conflict": counts["LINEAGE_CONFLICT_NO_CREDIT"],
+            "rejected_prospective": counts["REJECTED_PROSPECTIVE"],
         }
     return {
         "schema": SCHEMA,
