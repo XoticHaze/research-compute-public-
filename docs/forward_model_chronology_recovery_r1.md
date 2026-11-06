@@ -79,3 +79,32 @@ python -m unittest discover -s tests -p 'test_forward_decision_continuity_r1.py'
 ```
 
 Agent-local regression check: 9 tests passed on this draft. This does not claim GitHub Actions, provider, or native first-seen execution acceptance.
+
+## Bounded encrypted replay implementation (Manual Worker MW-20261106052526684)
+
+The same frozen source closure and run-bound X25519/ChaCha20Poly1305 transport remain in use. **No second compute service or scientific model is introduced.** The new public `scripts/forward_native_bounded_replay_r1.py` runs the pinned standalone observer with its **original `--asof YYYY-MM-DD`** CLI for each request date; its monthly 21-session purge, seven-name training family, excluded targets, 13 predictions, fixed D+1/H20 economics and frozen three-book constructor are checked before encryption of the response. No present-day retraining target is substituted.
+
+On the Foundry private source branch `assistant/shared-ridge-bounded-replay-mw-20261106052526684`, the **existing** `scripts/package_forward_native_ephemeral_v1.py` accepts an optional `--replay-request` JSON, bound to the same original source closure; the **existing** `scripts/consume_forward_native_ephemeral_return_v1.py` delegates only historical batches to a new immutable historical return-staging helper. No `latest.json`, original cohort ledger, or broker paper fill is written by this path. Private branch is intentionally **not a PR** because private workflows include broad PR triggers, while private Actions compute is prohibited.
+
+The encrypted replay request is an exact-field JSON object:
+
+```json
+{
+  "schema": "foundry.forward_native_bounded_replay_request.v1",
+  "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+  "source_ref": "e73ec9b15180e208de541ce5d5304888e5550433",
+  "evidence_class": "HISTORICAL_REPLAY_NO_PROSPECTIVE_CREDIT",
+  "decision_dates": ["2026-09-14", "2026-09-15", "2026-09-16", "2026-09-17"]
+}
+```
+
+These four dates are the **first bounded recovery trial**, not proven qualifying trading signals. The owner must independently verify original time-stamped receipts before deciding which dates require model reconstruction. One replay request permits **1 to 4 unique ascending completed market dates**, never a current partial bar. Any source session misalignment, unexpected model fit month/purge, positive-mask divergence, incomplete frozen exposure/SMH breadth, or broker-enabled option artifact fails closed. Returned native results, frozen books and sanitized per-date adapters travel only in the encrypted response; the existing optional *public single-adapter* export is explicitly forbidden for a replay batch.
+
+### Verification and next admission
+
+- **Agent-local synthetic replay contract**: original pinned model entry point invoked with 1 to 4 dates, monthly source identity checks, unique dates, fail-closed safety tests.
+- **Private synthetic return-admission**: per-date content hashes, same run-bound source identity, immutable `historical_replay/<YYYY-MM-DD>.json` and `<YYYY-MM-DD>.provenance.json`, conflict rejection, no original/latest overwrite.
+- **Synthetic integration**: new dated historical adapters flow into the R1 continuity consumer with an owned-format synthetic price tape; matched-net SMH and equal-weight economics remain explicitly historical and cannot self-grant forward credit.
+- **Still required to prove actual recovery**: independently admitted trusted issuer/recipient/transport for the **existing public encrypted workflow**; a **native execution record** with frozen source SHA and real period-correct data; returned per-date model/paper-book hashes; verified currency/provider source-vintage and adjustment data; exact matched after-cost results and downstream authorized historical ledger consumption. Neither a local synthetic fixture nor this PR counts as a real model run.
+
+Operational sequence after the owner approves the protected transport: authenticate first-seen original receipts; use the existing authorized private publisher and encrypted public recipient, never private Actions; publish a 4-date bounded native result; decrypt and record historical-only per-date receipts; load complete owned adjusted closes into `forward_decision_continuity_r1.py`; verify predictions, paper qualification and matched costs; then traverse subsequent missing decision dates oldest-first. Repair the daily producer independently so new first-seen signals continue in parallel. Non-daily models retain their own frozen evaluation cadences and qualification dates.
