@@ -64,10 +64,13 @@ def main() -> int:
     expected_url = (
         "https://"
         + str(cfg["name"])
-        + ".slenderiq.workers.dev/v1/release"
+        + ".shared-compute-neutral-authorization.workers.dev/v1/release"
     )
     if f'BROKER_URL = "{expected_url}"' not in harness:
         raise RuntimeError("harness_broker_url_mismatch")
+
+    if "slenderiq.workers.dev" in harness:
+        raise RuntimeError("legacy_broker_origin_rejected")
 
     caller = CALLER_WORKFLOW.read_text(encoding="utf-8")
     expected_uses = (
