@@ -108,6 +108,41 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(r['evidence_class'],'LATE_ORIGINAL_RECEIPT_NO_PROSPECTIVE_CREDIT')
         self.assertFalse(r['scientific_forward_credit_granted_by_this_tool'])
 
+    def test_after_cost_h20_resolver_and_matched_benchmarks(self):
+        self.manifest['models'][0]['stock_round_trip_cost_bps']=25
+        self.manifest['models'][0]['sector_round_trip_cost_bps']=10
+        self.write('2026-10-12', {'AMAT':100,'NVDA':-20}, {'AMAT':.05})
+        tape={
+            'schema':c.PRICE_SCHEMA,
+            'adjustment':'ADJUSTED_CLOSE',
+            'source_ref':'owned:adjusted-close-fixture',
+            'market_data_asof':'2026-10-15',
+            'prices': {
+                '2026-10-13': {'AMAT':100,'NVDA':100,'SMH':100},
+                '2026-10-15': {'AMAT':110,'NVDA':98,'SMH':104},
+            }
+        }
+        mark=c.build(self.manifest,self.adapters.parent,price_tape=tape)['decisions'][0]['economic_simulation']
+        self.assertEqual(mark['state'],'RESOLVED_HISTORICAL_SIMULATION')
+        self.assertEqual(mark['model_book_net_if_flattened_bps'],975)
+        self.assertEqual(mark['matched_smh_net_bps'],390)
+        self.assertEqual(mark['model_minus_matched_smh_net_bps'],585)
+        self.assertEqual(mark['matched_equal_weight_universe_net_bps'],375)
+        self.assertEqual(mark['model_minus_matched_equal_weight_net_bps'],600)
+        self.assertFalse(mark['first_seen_prospective_credit'])
+
+    def test_price_tape_future_bar_and_missing_cost_fail_closed(self):
+        self.write('2026-10-12', {'AMAT':100}, {'AMAT':.05})
+        tape={ 'schema':c.PRICE_SCHEMA,'adjustment':'ADJUSTED_CLOSE',
+               'source_ref':'owned:test', 'market_data_asof':'2026-10-15',
+               'prices': {'2026-10-13':{'AMAT':100,'SMH':100},
+                          '2026-10-15':{'AMAT':110,'SMH':103}}}
+        mark=c.build(self.manifest,self.adapters.parent,price_tape=tape)['decisions'][0]['economic_simulation']
+        self.assertEqual(mark['state'],'MISSING_FROZEN_COST_CONTRACT')
+        tape['prices']['2026-10-16']={'AMAT':400,'SMH':400}
+        with self.assertRaisesRegex(ValueError,'future session'):
+            c.build(self.manifest,self.adapters.parent,price_tape=tape)
+
     def test_hash_mismatch_fails(self):
         self.write('2026-10-12', {'AMAT': 10}, {'AMAT': .05},
                    {'evidence_class':'REPLAYED_ASOF','replayed_at':'2026-11-05T23:00:00Z'})
