@@ -67,6 +67,8 @@ n=json.loads(Path(a.prediction).read_text());d=n['generation_bar_date'];pos=[x['
 b={'schema':'foundry.research.semiconductor_three_book_forward_snapshot.v1','signal_date':d,'authority':'research_only_no_broker_no_promotion',
  'execution':{'delay_sessions':1,'hold_sessions':20,'max_concurrent_cohorts':20},
  'ticker_book':{'status':'PAPER_COHORT_READY','cohort_target_weights_nav':{s:0.05/len(pos) for s in pos}},
+ 'industry_book':{'status':'PAPER_COHORT_READY','instrument':'SMH','cohort_target_weight_nav':0.05*len(pos)/len(n['observations'])},
+ 'options_book':{'status':'FAIL_CLOSED','trade_authorized':False},
  'boundaries':{'broker_orders':False,'live_trading_authority':False,'promotion_authority':False,'historical_rule_tuning':False}}
 Path(a.output).parent.mkdir(parents=True,exist_ok=True);Path(a.output).write_text(json.dumps(b))
 ''')
@@ -153,6 +155,24 @@ Path(a.output).parent.mkdir(parents=True,exist_ok=True);Path(a.output).write_tex
         p=self.adapter
         p.write_text(p.read_text().replace("'predicted_fixed20_net_value_bps':pred", "'predicted_fixed20_net_value_bps':{k:v+5 for k,v in pred.items()}"))
         with self.assertRaisesRegex(RuntimeError,'changed frozen'):
+            r.execute_bounded(self.root,self.adapter,request(['2026-10-12']),now_utc=TEST_NOW)
+
+    def test_reject_frozen_book_missing_positive_weight(self):
+        p=self.root/'research/semiconductor_three_book_forward_20260910.py'
+        p.write_text(p.read_text().replace("{s:0.05/len(pos) for s in pos}", "{pos[0]:0.05}"))
+        with self.assertRaisesRegex(RuntimeError,'positive selection'):
+            r.execute_bounded(self.root,self.adapter,request(['2026-10-12']),now_utc=TEST_NOW)
+
+    def test_reject_option_trade_enabled(self):
+        p=self.root/'research/semiconductor_three_book_forward_20260910.py'
+        p.write_text(p.read_text().replace("'trade_authorized':False", "'trade_authorized':True"))
+        with self.assertRaisesRegex(RuntimeError,'option authority'):
+            r.execute_bounded(self.root,self.adapter,request(['2026-10-12']),now_utc=TEST_NOW)
+
+    def test_reject_breadth_sector_weight_drift(self):
+        p=self.root/'research/semiconductor_three_book_forward_20260910.py'
+        p.write_text(p.read_text().replace("0.05*len(pos)/len(n['observations'])", "0.001"))
+        with self.assertRaisesRegex(RuntimeError,'breadth-to-sector'):
             r.execute_bounded(self.root,self.adapter,request(['2026-10-12']),now_utc=TEST_NOW)
 
     def test_no_private_source_in_public_stdout(self):
