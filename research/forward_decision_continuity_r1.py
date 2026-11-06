@@ -73,8 +73,16 @@ def _validate_models(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
             raise ValueError("invalid program_id")
         if program in models:
             raise ValueError("duplicate program_id")
-        if model.get("cadence") != "DAILY_CLOSE":
-            raise ValueError(f"unsupported cadence for {program}; use a distinct model-specific calendar")
+        cadence = model.get("cadence")
+        if cadence not in ("DAILY_CLOSE", "FROZEN_DATED_DECISIONS"):
+            raise ValueError(f"unknown frozen cadence for {program}")
+        if cadence == "FROZEN_DATED_DECISIONS":
+            decisions = model.get("frozen_decision_dates")
+            if not isinstance(decisions, list) or not decisions:
+                raise ValueError(f"missing frozen decision dates for {program}")
+            verified = [_date(day) for day in decisions]
+            if verified != sorted(set(verified)):
+                raise ValueError(f"frozen decision dates not distinct/ascending for {program}")
         if not isinstance(model.get("frozen_model_ref"), str) or not model["frozen_model_ref"]:
             raise ValueError("frozen model identity required")
         _date(model.get("first_eligible_decision_date"))
@@ -238,6 +246,51 @@ def _costed_mark(
         return {"state": "AWAITING_ENTRY_SESSION"}
     if model.get("qualifier") == "OBSERVATION_ONLY":
         return {"state": "OBSERVATION_ONLY_NOT_FUNDED"}
+    if model.get("qualifier") == "HOMEBUILDERS_ADMITTED":
+        if adapter is None:
+            return {"state":"MISSING_ORIGINAL_HOMEBUILDER_DURATION_ADAPTER"}
+        cost=model.get("stock_round_trip_cost_bps")
+        control_cost=model.get("sector_round_trip_cost_bps")
+        if (type(cost) not in (int,float) or type(control_cost) not in (int,float)
+                or not all(math.isfinite(float(x)) and x >= 0 for x in (cost,control_cost))):
+            return {"state":"MISSING_FROZEN_COST_CONTRACT"}
+        horizons = (adapter.get("signal") or {}).get("duration_horizon_sessions_by_symbol") or {}
+        admitted = (adapter.get("signal") or {}).get("admitted_symbols") or []
+        if not admitted or any(type(horizons.get(x)) is not int for x in admitted):
+            return {"state":"MISSING_FROZEN_DURATION_BY_SYMBOL"}
+        # The exact calendar is owner supplied, not inferred from data overlap.
+        # This input must have been fixed before reading each day's outcomes.
+        session_dates = model.get("_exchange_calendar")
+        if not session_dates:
+            return {"state":"OFFICIAL_CALENDAR_NOT_ATTACHED"}
+        try:
+            entry_pos=session_dates.index(entry)
+        except ValueError:
+            return {"state":"ENTRY_NOT_ON_OFFICIAL_CALENDAR"}
+        symbol_rows=[]
+        for symbol in admitted:
+            h=horizons[symbol]
+            end_i=entry_pos+h
+            terminal=session_dates[end_i] if end_i < len(session_dates) else None
+            mark=min(terminal or last_observed,last_observed)
+            if entry not in prices or mark not in prices or any(s not in prices[entry] or s not in prices[mark] for s in (symbol,"ITB")):
+                return {"state":"MISSING_SYMBOL_OR_ITB_PRICE", "symbol":symbol,"entry_date":entry,"mark_date":mark}
+            gross=(prices[mark][symbol]/prices[entry][symbol]-1)*1e4
+            control=(prices[mark]["ITB"]/prices[entry]["ITB"]-1)*1e4
+            symbol_rows.append({"symbol":symbol,"horizon_sessions":h,
+                "terminal_date":terminal,"mark_date":mark,
+                "resolved":bool(terminal and terminal<=last_observed),
+                "stock_net_if_flattened_bps":round(gross-cost,4),
+                "itb_matched_net_bps":round(control-control_cost,4),
+                "excess_vs_itb_matched_net_bps":round((gross-cost)-(control-control_cost),4)})
+        resolved=sum(bool(row["resolved"]) for row in symbol_rows)
+        mean=lambda field:round(sum(float(row[field]) for row in symbol_rows)/len(symbol_rows),4)
+        return {"state":"RESOLVED_HISTORICAL_SIMULATION" if resolved==len(symbol_rows) else "PARTIALLY_RESOLVED_HISTORICAL_SIMULATION" if resolved else "OPEN_HISTORICAL_SIMULATION",
+            "observations":symbol_rows,
+            "mean_stock_net_if_flattened_bps":mean("stock_net_if_flattened_bps"),
+            "mean_itb_matched_net_bps":mean("itb_matched_net_bps"),
+            "mean_excess_vs_itb_matched_net_bps":mean("excess_vs_itb_matched_net_bps"),
+            "research_simulation_only":True,"first_seen_prospective_credit":False,"broker_fill_claim":False}
     if model.get("qualifier") != "SEMICONDUCTOR_POSITIVE_VALUE":
         return {"state": "MODEL_SPECIFIC_ECONOMIC_CONSUMER_REQUIRED"}
     cost = model.get("stock_round_trip_cost_bps")
@@ -324,7 +377,13 @@ def build(manifest: dict[str, Any], adapter_root: Path, prior_ledger: dict[str, 
             last = asof
         if first not in positions:
             raise ValueError(f"first eligible {first} is not in supplied exchange calendar for {program}")
-        eligible = [d for d in calendar if first <= d <= last]
+        if model["cadence"] == "FROZEN_DATED_DECISIONS":
+            decisions = set(model["frozen_decision_dates"])
+            if not decisions.issubset(positions):
+                raise ValueError(f"frozen decision date absent from exchange calendar for {program}")
+            eligible = [d for d in calendar if first <= d <= last and d in decisions]
+        else:
+            eligible = [d for d in calendar if first <= d <= last]
         if not eligible:
             raise ValueError(f"no eligible exchange sessions for {program}")
         counts: Counter[str] = Counter()
@@ -358,6 +417,18 @@ def build(manifest: dict[str, Any], adapter_root: Path, prior_ledger: dict[str, 
             # verifier must approve a dated receipt before retrospective credit.
             if prior is not None and prior.get("status") == "LATE_REGISTRATION_REJECTED":
                 evidence = "CANONICAL_REJECTED_NO_PROSPECTIVE_CREDIT"
+            symbol_horizon_ends = None
+            if (decision == "QUALIFY" and model["qualifier"] == "HOMEBUILDERS_ADMITTED"
+                    and archived is not None and entry is not None):
+                horizons = (archived["adapter"].get("signal") or {}).get("duration_horizon_sessions_by_symbol") or {}
+                symbol_horizon_ends = {}
+                for symbol in selected:
+                    terminal_i = entry_idx + horizons[symbol]
+                    symbol_horizon_ends[symbol] = calendar[terminal_i] if terminal_i < len(calendar) else None
+                if symbol_horizon_ends and all(x is not None for x in symbol_horizon_ends.values()):
+                    exit_day = max(symbol_horizon_ends.values())
+                else:
+                    exit_day = None
             row = {
                 "program_id": program, "signal_date": day,
                 "decision": decision, "decision_reason": reason,
@@ -365,6 +436,7 @@ def build(manifest: dict[str, Any], adapter_root: Path, prior_ledger: dict[str, 
                 "entry_date": entry if decision in ("QUALIFY", "PRIOR_ADMITTED_COHORT") else None,
                 "horizon_end_date": exit_day if decision in ("QUALIFY", "PRIOR_ADMITTED_COHORT") else None,
                 "holding_sessions_elapsed_asof": elapsed if decision in ("QUALIFY", "PRIOR_ADMITTED_COHORT") else None,
+                "symbol_horizon_end_dates": symbol_horizon_ends,
                 "source_adapter_sha256": archived["adapter_sha256"] if archived else prior.get("source_adapter_sha256") if prior else None,
                 "frozen_model_ref": model["frozen_model_ref"],
                 "evidence_class": evidence,
@@ -374,8 +446,9 @@ def build(manifest: dict[str, Any], adapter_root: Path, prior_ledger: dict[str, 
                 "canonical_cohort_id": prior.get("cohort_id") if prior else None,
             }
             if decision in ("QUALIFY", "PRIOR_ADMITTED_COHORT"):
+                runtime_model={**model,"_exchange_calendar":calendar}
                 row["economic_simulation"] = _costed_mark(
-                    model, archived["adapter"] if archived else None, prior, entry,
+                    runtime_model, archived["adapter"] if archived else None, prior, entry,
                     exit_day, last_observed_session, prices)
             rows.append(row)
             counts[decision] += 1
