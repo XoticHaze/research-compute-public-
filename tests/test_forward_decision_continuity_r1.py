@@ -86,8 +86,31 @@ class RecoveryTests(unittest.TestCase):
         self.assertFalse(d[0]['scientific_forward_credit_granted_by_this_tool'])
         self.assertEqual(d[2]['decision'], 'NO_ENTRY')
 
+    def test_canonical_prior_schema_and_rejected_entry_fails_closed(self):
+        rejected={'schema':'research.forward_prospective_cohort_ledger_r1','cohorts':[
+          {'program_id':'SEMICONDUCTOR_SHARED_RIDGE','signal_date':'2026-10-12',
+           'source_adapter_sha256':'sha256:source','cohort_id':'reject',
+           'status':'LATE_REGISTRATION_REJECTED','symbols':['AMAT']}]}
+        x=self.build(rejected)['decisions'][0]
+        self.assertEqual(x['decision'],'REJECTED_PROSPECTIVE')
+        self.assertIsNone(x['entry_date'])
+        self.assertEqual(x['evidence_class'],'CANONICAL_REJECTED_NO_PROSPECTIVE_CREDIT')
+        with self.assertRaisesRegex(ValueError,'schema mismatch'):
+            self.build({'cohorts':rejected['cohorts']})
+
+    def test_recovered_dated_adapter_mismatch_to_canonical_fails_closed(self):
+        self.write('2026-10-12', {'AMAT':10}, {'AMAT':.05})
+        prior={'schema':'research.forward_prospective_cohort_ledger_r1','cohorts':[
+          {'program_id':'SEMICONDUCTOR_SHARED_RIDGE','signal_date':'2026-10-12',
+           'source_adapter_sha256':'bad-prior-hash','cohort_id':'original',
+           'status':'RESOLVED','symbols':['AMAT']}]}
+        x=self.build(prior)['decisions'][0]
+        self.assertEqual(x['decision'],'LINEAGE_CONFLICT_NO_CREDIT')
+        self.assertEqual(x['canonical_cohort_id'],'original')
+        self.assertIsNone(x['entry_date'])
+
     def test_prior_cohort_preserved_without_adapter(self):
-        prior = {'cohorts':[{'program_id':'SEMICONDUCTOR_SHARED_RIDGE', 'signal_date':'2026-10-12',
+        prior = {'schema':'research.forward_prospective_cohort_ledger_r1','cohorts':[{'program_id':'SEMICONDUCTOR_SHARED_RIDGE', 'signal_date':'2026-10-12',
                              'source_adapter_sha256':'abc', 'cohort_id':'existing', 'status':'RESOLVED',
                              'symbols':['AMAT']}]}
         d=self.build(prior)['decisions'][0]
