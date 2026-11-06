@@ -1,5 +1,6 @@
 """No fabricated prospective credit, no silent date gaps, no future-data signal selection."""
 import importlib.util
+from datetime import date, timedelta
 import json
 import pathlib
 import tempfile
@@ -107,6 +108,62 @@ class RecoveryTests(unittest.TestCase):
         r=self.build()['decisions'][0]
         self.assertEqual(r['evidence_class'],'LATE_ORIGINAL_RECEIPT_NO_PROSPECTIVE_CREDIT')
         self.assertFalse(r['scientific_forward_credit_granted_by_this_tool'])
+
+    def test_frozen_non_daily_decision_calendar(self):
+        self.manifest['models'][0]['cadence']='FROZEN_DATED_DECISIONS'
+        self.manifest['models'][0]['frozen_decision_dates']=['2026-10-12','2026-10-15']
+        r=self.build()
+        self.assertEqual(r['summary']['SEMICONDUCTOR_SHARED_RIDGE']['expected_decisions'],2)
+        self.assertEqual([d['signal_date'] for d in r['decisions']],['2026-10-12','2026-10-15'])
+        self.manifest['models'][0]['frozen_decision_dates']=['2026-10-15','2026-10-12']
+        with self.assertRaisesRegex(ValueError,'distinct/ascending'):
+            self.build()
+
+    def test_homebuilders_frozen_individual_horizons_and_costs(self):
+        start=date(2026,1,2)
+        sessions=[]
+        for i in range(98):
+            day=start+timedelta(days=i)
+            if day.weekday()<5:
+                sessions.append(day.isoformat())
+        self.manifest={
+            'schema':c.MANIFEST_SCHEMA,
+            'asof':sessions[-1],
+            'market_sessions':sessions,
+            'models':[{
+                'program_id':'HOMEBUILDERS','frozen_model_ref':'foundry:homebuilder-duration',
+                'first_eligible_decision_date':sessions[0],
+                'cadence':'FROZEN_DATED_DECISIONS',
+                'frozen_decision_dates':[sessions[0]],
+                'execution_delay_sessions':1,'holding_horizon_sessions':60,
+                'qualifier':'HOMEBUILDERS_ADMITTED',
+                'stock_round_trip_cost_bps':25,'sector_round_trip_cost_bps':10,
+            }]
+        }
+        hb=self.root/'adapters'/'HOMEBUILDERS';hb.mkdir(parents=True)
+        signal={
+            'schema':c.ADAPTER_SCHEMA,'program_id':'HOMEBUILDERS','signal_date':sessions[0],
+            'signal':{'admitted_symbols':['CCS','MHO'],
+                      'duration_horizon_sessions_by_symbol':{'CCS':5,'MHO':60}},
+            'boundaries':{k:False for k in ('broker_action','live_trading_change','promotion_authority','runtime_mutation')},
+        }
+        (hb/(sessions[0]+'.json')).write_text(json.dumps(signal))
+        prices={sessions[1]:{'CCS':100,'MHO':100,'ITB':100},
+                sessions[6]:{'CCS':110,'MHO':110,'ITB':104},
+                sessions[61]:{'CCS':111,'MHO':120,'ITB':105}}
+        tape={'schema':c.PRICE_SCHEMA,'adjustment':'ADJUSTED_CLOSE',
+              'source_ref':'owned:homebuilders-test','market_data_asof':sessions[-1],
+              'prices':prices}
+        report=c.build(self.manifest,self.adapters.parent,price_tape=tape)
+        row=report['decisions'][0]
+        self.assertEqual(row['decision'],'QUALIFY')
+        self.assertEqual(row['symbol_horizon_end_dates']['CCS'],sessions[6])
+        self.assertEqual(row['symbol_horizon_end_dates']['MHO'],sessions[61])
+        value=row['economic_simulation']
+        self.assertEqual(value['state'],'RESOLVED_HISTORICAL_SIMULATION')
+        self.assertEqual(len(value['observations']),2)
+        self.assertEqual(value['observations'][0]['excess_vs_itb_matched_net_bps'],585)
+        self.assertEqual(value['observations'][1]['excess_vs_itb_matched_net_bps'],1485)
 
     def test_after_cost_h20_resolver_and_matched_benchmarks(self):
         self.manifest['models'][0]['stock_round_trip_cost_bps']=25
