@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import subprocess
 import sys
@@ -112,7 +113,7 @@ def _validate_native(native: dict[str, Any], expected: str) -> None:
         raise RuntimeError("unsafe native authority")
 
 
-def _validate_book(book: dict[str, Any], expected: str, contract: dict[str, Any]) -> None:
+def _validate_book(book: dict[str, Any], native: dict[str, Any], expected: str, contract: dict[str, Any]) -> None:
     if (book.get("schema") != "foundry.research.semiconductor_three_book_forward_snapshot.v1"
             or book.get("signal_date") != expected or book.get("authority") != "research_only_no_broker_no_promotion"):
         raise RuntimeError("frozen three-book identity mismatch")
@@ -125,6 +126,27 @@ def _validate_book(book: dict[str, Any], expected: str, contract: dict[str, Any]
             raise RuntimeError("frozen paper book escalated authority")
     if contract.get("source_prediction_schema") != "foundry.research.semiconductor_external_forward.v1":
         raise RuntimeError("frozen contract source identity changed")
+    rows = native["observations"]
+    positive = {row["symbol"] for row in rows if row["positive_value_opportunity"] is True}
+    book_ticker = book.get("ticker_book") or {}
+    weights = book_ticker.get("cohort_target_weights_nav")
+    if (book_ticker.get("status") != "PAPER_COHORT_READY" or not isinstance(weights, dict)
+            or set(weights) != positive):
+        raise RuntimeError("frozen book positive selection mismatch")
+    if any(type(w) not in (float,int) or not math.isfinite(float(w)) or w <= 0 or w > 0.010000001
+           for w in weights.values()):
+        raise RuntimeError("frozen ticker cap invalid")
+    if sum(float(w) for w in weights.values()) > 0.050000001:
+        raise RuntimeError("frozen cohort gross exposure invalid")
+    industry = book.get("industry_book") or {}
+    expected_industry_nav = 0.05 * len(positive) / len(rows)
+    if (industry.get("status") != "PAPER_COHORT_READY"
+            or industry.get("instrument") != "SMH"
+            or not math.isclose(float(industry.get("cohort_target_weight_nav", -1)), expected_industry_nav, abs_tol=1e-9)):
+        raise RuntimeError("frozen breadth-to-sector book invalid")
+    options = book.get("options_book") or {}
+    if options.get("status") != "FAIL_CLOSED" or options.get("trade_authorized") is not False:
+        raise RuntimeError("frozen option authority invalid")
 
 
 def _validate_adapter(adapter: dict[str, Any], native: dict[str, Any], expected: str) -> None:
@@ -135,6 +157,9 @@ def _validate_adapter(adapter: dict[str, Any], native: dict[str, Any], expected:
     native_vals = {row["symbol"]: float(row["predicted_fixed20_net_value_bps"]) for row in native["observations"]}
     if set(vals) != set(native_vals) or any(abs(float(vals[k])-native_vals[k]) > 1e-8 for k in native_vals):
         raise RuntimeError("adapter changed frozen model predictions")
+    positives={row['symbol'] for row in native['observations'] if row['positive_value_opportunity'] is True}
+    if set((adapter.get('signal') or {}).get('positive_symbols') or []) != positives:
+        raise RuntimeError("adapter changed frozen positive selection")
     bounds = adapter.get("boundaries") or {}
     if any(bounds.get(name) is not False for name in ("broker_action", "live_trading_change", "promotion_authority", "runtime_mutation")):
         raise RuntimeError("unsafe dated adapter")
@@ -168,7 +193,7 @@ def execute_bounded(root: Path, adapter_script: Path, request: dict[str, Any], *
         _validate_native(native, day)
         _execute_fixed([sys.executable, "-m", "research.semiconductor_three_book_forward_20260910", "--prediction", str(native_path.relative_to(root)), "--contract", str(contract_path.relative_to(root)), "--output", str(book_path.relative_to(root))], root)
         book = _read(book_path)
-        _validate_book(book, day, contract)
+        _validate_book(book, native, day, contract)
         _execute_fixed([sys.executable, str(adapter_script), "--program", PROGRAM, "--input", str(native_path), "--book", str(book_path), "--output", str(adapter_path)], root)
         adapter = _read(adapter_path)
         _validate_adapter(adapter, native, day)
