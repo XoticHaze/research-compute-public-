@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA = "research.forward_decision_continuity_r1"
+PRICE_SCHEMA = "research.forward_price_tape_r1"
 MANIFEST_SCHEMA = "research.forward_decision_continuity_manifest_r1"
 ADAPTER_SCHEMA = "foundry.forward_program_adapter.v1"
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -188,7 +189,115 @@ def _evidence(prov: dict[str, Any] | None, entry_date: str | None) -> str:
     return "ORIGINAL_RECEIPT_NEEDS_ISSUER_VERIFICATION"
 
 
-def build(manifest: dict[str, Any], adapter_root: Path, prior_ledger: dict[str, Any] | None = None) -> dict[str, Any]:
+def _validate_price_tape(tape: dict[str, Any], asof: str) -> dict[str, dict[str, float]]:
+    """Only consume already-owned point-in-time adjusted closing prices.
+
+    This is not a downloader. Tape source/adjustment must be named in the
+    input and the record must exclude future market dates.
+    """
+    if tape.get("schema") != PRICE_SCHEMA:
+        raise ValueError("price tape schema mismatch")
+    if tape.get("adjustment") != "ADJUSTED_CLOSE":
+        raise ValueError("price tape must explicitly use adjusted close")
+    if not isinstance(tape.get("source_ref"), str) or not tape["source_ref"]:
+        raise ValueError("price tape requires verified source reference")
+    if _date(tape.get("market_data_asof")) > asof:
+        raise ValueError("price tape market data cutoff exceeds audit asof")
+    prices = tape.get("prices")
+    if not isinstance(prices, dict) or not prices:
+        raise ValueError("nonempty dated price tape required")
+    checked = {}
+    for day, symbols in prices.items():
+        _date(day)
+        if day > asof:
+            raise ValueError("price tape contains future session")
+        if not isinstance(symbols, dict):
+            raise ValueError("price tape session must map symbols to closes")
+        checked[day] = {}
+        for symbol, value in symbols.items():
+            if not isinstance(symbol, str) or not symbol or type(value) not in (int,float) or not math.isfinite(float(value)) or value <= 0:
+                raise ValueError("invalid adjusted close")
+            checked[day][symbol] = float(value)
+    return checked
+
+
+def _costed_mark(
+    model: dict[str, Any], adapter: dict[str, Any] | None,
+    prior: dict[str, Any] | None, entry: str | None,
+    horizon_end: str | None, last_observed: str,
+    prices: dict[str, dict[str, float]] | None,
+) -> dict[str, Any]:
+    """Return an economic *simulation* of the exact frozen D+1/Hn book.
+
+    A calendar date cannot substitute for an observed price. No trade is
+    reported without the frozen weights, entry/mark closes, and cost contract.
+    """
+    if prices is None:
+        return {"state": "NO_PRICE_TAPE_NOT_SCORED"}
+    if entry is None or entry > last_observed:
+        return {"state": "AWAITING_ENTRY_SESSION"}
+    if model.get("qualifier") == "OBSERVATION_ONLY":
+        return {"state": "OBSERVATION_ONLY_NOT_FUNDED"}
+    if model.get("qualifier") != "SEMICONDUCTOR_POSITIVE_VALUE":
+        return {"state": "MODEL_SPECIFIC_ECONOMIC_CONSUMER_REQUIRED"}
+    cost = model.get("stock_round_trip_cost_bps")
+    sector_cost = model.get("sector_round_trip_cost_bps")
+    if (type(cost) not in (int,float) or type(sector_cost) not in (int,float)
+            or not all(math.isfinite(float(v)) and v >= 0 for v in (cost, sector_cost))):
+        return {"state": "MISSING_FROZEN_COST_CONTRACT"}
+    source_book = ((adapter or {}).get("paper_action") or {}).get("ticker_book") or {}
+    weights = source_book.get("cohort_target_weights_nav") or ((prior or {}).get("ticker_book_weights_within_cohort") or {})
+    if not isinstance(weights, dict) or not weights:
+        return {"state": "MISSING_FROZEN_BOOK_WEIGHTS"}
+    if any(type(v) not in (float,int) or not math.isfinite(float(v)) or v <= 0 for v in weights.values()):
+        raise ValueError("nonpositive frozen cohort weights")
+    denom = sum(float(v) for v in weights.values())
+    weight_map = {k:float(v)/denom for k,v in weights.items()}
+    mark = min(horizon_end or last_observed,last_observed)
+    if entry not in prices or mark not in prices:
+        return {"state": "MISSING_PRICE_DATE", "missing_dates": [d for d in (entry,mark) if d not in prices]}
+    required = list(weight_map)+["SMH"]
+    missing = sorted(set(s for s in required if s not in prices[entry] or s not in prices[mark]))
+    if missing:
+        return {"state": "MISSING_ADJUSTED_CLOSE", "missing_symbols":missing}
+    basket_gross_bps = sum(w*(prices[mark][s]/prices[entry][s]-1.0)*1e4 for s,w in weight_map.items())
+    sector_gross_bps = (prices[mark]["SMH"]/prices[entry]["SMH"]-1.0)*1e4
+    book_net = basket_gross_bps-float(cost)
+    sector_net = sector_gross_bps-float(sector_cost)
+    out = {
+        "state":"RESOLVED_HISTORICAL_SIMULATION" if horizon_end and horizon_end <= last_observed else "OPEN_HISTORICAL_SIMULATION",
+        "entry_close_date":entry,
+        "mark_close_date":mark,
+        "terminal_horizon_date":horizon_end,
+        "model_book_gross_bps":round(basket_gross_bps,4),
+        "model_book_net_if_flattened_bps":round(book_net,4),
+        "matched_smh_net_bps":round(sector_net,4),
+        "model_minus_matched_smh_net_bps":round(book_net-sector_net,4),
+        "stock_round_trip_cost_bps":float(cost),
+        "smh_round_trip_cost_bps":float(sector_cost),
+        "research_simulation_only":True,
+        "first_seen_prospective_credit":False,
+        "broker_fill_claim":False,
+    }
+    # Equal-weight 13 is only testable from the complete, frozen prediction
+    # universe. If original prediction is absent, do not invent its membership.
+    universe = ((adapter or {}).get("signal") or {}).get("predicted_fixed20_net_value_bps") or {}
+    if universe:
+        missing_universe=sorted(s for s in universe if s not in prices[entry] or s not in prices[mark])
+        if missing_universe:
+            out["equal_weight_universe_state"]="MISSING_UNIVERSE_PRICE";
+            out["missing_universe_symbols"]=missing_universe
+        else:
+            ew_gross=sum((prices[mark][s]/prices[entry][s]-1.0)*1e4 for s in universe)/len(universe)
+            ew_net=ew_gross-float(cost)
+            out["matched_equal_weight_universe_net_bps"]=round(ew_net,4)
+            out["model_minus_matched_equal_weight_net_bps"]=round(book_net-ew_net,4)
+    else:
+        out["equal_weight_universe_state"]="ORIGINAL_PREDICTION_UNIVERSE_NOT_PRESENT"
+    return out
+
+
+def build(manifest: dict[str, Any], adapter_root: Path, prior_ledger: dict[str, Any] | None = None, price_tape: dict[str, Any] | None = None) -> dict[str, Any]:
     models = _validate_models(manifest)
     calendar = [_date(x) for x in manifest["market_sessions"]]
     positions = _session_index(calendar)
@@ -196,6 +305,7 @@ def build(manifest: dict[str, Any], adapter_root: Path, prior_ledger: dict[str, 
     if not any(day <= asof for day in calendar):
         raise ValueError("market calendar contains no session on or before asof")
     last_observed_session = max(day for day in calendar if day <= asof)
+    prices = _validate_price_tape(price_tape, asof) if price_tape is not None else None
     existing = {}
     for cohort in (prior_ledger or {}).get("cohorts", []):
         program, signal_day = cohort.get("program_id"), cohort.get("signal_date")
@@ -263,6 +373,10 @@ def build(manifest: dict[str, Any], adapter_root: Path, prior_ledger: dict[str, 
                 "source_receipt": archived["provenance"] if archived else None,
                 "canonical_cohort_id": prior.get("cohort_id") if prior else None,
             }
+            if decision in ("QUALIFY", "PRIOR_ADMITTED_COHORT"):
+                row["economic_simulation"] = _costed_mark(
+                    model, archived["adapter"] if archived else None, prior, entry,
+                    exit_day, last_observed_session, prices)
             rows.append(row)
             counts[decision] += 1
         summaries[program] = {
@@ -284,6 +398,7 @@ def build(manifest: dict[str, Any], adapter_root: Path, prior_ledger: dict[str, 
         "manifest_sha256": hashlib.sha256(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
         "summary": summaries,
         "decisions": rows,
+        "price_tape_source_ref": price_tape.get("source_ref") if price_tape else None,
         "boundaries": {
             "no_generated_prediction_from_future_outcomes": True,
             "no_prospective_credit_from_replay": True,
@@ -298,9 +413,10 @@ def main() -> None:
     p.add_argument("--manifest", type=Path, required=True, help="Frozen owner-confirmed model eligibility and official calendar")
     p.add_argument("--dated-adapters", type=Path, required=True, help="<program>/<YYYY-MM-DD>.json and .provenance.json")
     p.add_argument("--prior-ledger", type=Path, help="Existing immutable prospective ledger, not writable")
+    p.add_argument("--price-tape", type=Path, help="Immutable own-source adjusted price JSON; optional economic simulation")
     p.add_argument("--out", type=Path, required=True)
     args = p.parse_args()
-    result = build(_load(args.manifest), args.dated_adapters, _load(args.prior_ledger) if args.prior_ledger else None)
+    result = build(_load(args.manifest), args.dated_adapters, _load(args.prior_ledger) if args.prior_ledger else None, _load(args.price_tape) if args.price_tape else None)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
     print(json.dumps({"summary": result["summary"], "output": str(args.out)}, sort_keys=True))
