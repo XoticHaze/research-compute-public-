@@ -132,6 +132,30 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(r['evidence_class'],'LATE_ORIGINAL_RECEIPT_NO_PROSPECTIVE_CREDIT')
         self.assertFalse(r['scientific_forward_credit_granted_by_this_tool'])
 
+    def test_overlapping_daily_cohorts_do_not_wait_for_prior_horizon(self):
+        self.write('2026-10-12', {'AMAT':50}, {'AMAT':.05})
+        self.write('2026-10-13', {'AMAT':45}, {'AMAT':.05})
+        result=self.build()
+        first, second=result['decisions'][:2]
+        self.assertEqual(first['decision'],'QUALIFY')
+        self.assertEqual(second['decision'],'QUALIFY')
+        self.assertEqual(first['entry_date'],'2026-10-13')
+        self.assertEqual(second['entry_date'],'2026-10-14')
+        self.assertEqual(first['holding_sessions_elapsed_asof'],2)
+        self.assertEqual(second['holding_sessions_elapsed_asof'],1)
+        self.assertEqual(second['horizon_end_date'],'2026-10-16')
+
+    def test_input_canonical_ledger_unchanged(self):
+        prior={'schema':'research.forward_prospective_cohort_ledger_r1','cohorts':[
+          {'program_id':'SEMICONDUCTOR_SHARED_RIDGE','signal_date':'2026-10-12',
+           'source_adapter_sha256':'original','cohort_id':'locked','status':'RESOLVED',
+           'symbols':['AMAT'],'ticker_book_weights_within_cohort':{'AMAT':1.0}}]}
+        before=json.dumps(prior,sort_keys=True)
+        report=self.build(prior)
+        self.assertEqual(json.dumps(prior,sort_keys=True),before)
+        self.assertEqual(report['decisions'][0]['canonical_cohort_id'],'locked')
+        self.assertFalse(report['decisions'][0]['scientific_forward_credit_granted_by_this_tool'])
+
     def test_frozen_non_daily_decision_calendar(self):
         self.manifest['models'][0]['cadence']='FROZEN_DATED_DECISIONS'
         self.manifest['models'][0]['frozen_decision_dates']=['2026-10-12','2026-10-15']
