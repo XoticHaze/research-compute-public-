@@ -5,6 +5,8 @@ import json
 import pathlib
 import tempfile
 import unittest
+import subprocess
+import sys
 
 MOD_PATH = pathlib.Path(__file__).resolve().parents[1] / 'research' / 'forward_decision_continuity_r1.py'
 spec = importlib.util.spec_from_file_location('continuity', MOD_PATH)
@@ -274,6 +276,22 @@ class RecoveryTests(unittest.TestCase):
         path.write_text(json.dumps(d))
         with self.assertRaisesRegex(ValueError,'unsafe adapter boundary'):
             self.build()
+
+    def test_cli_writes_gap_summary_without_mutating_inputs(self):
+        self.write('2026-10-12', {'AMAT':40,'NVDA':-5}, {'AMAT':.05})
+        manifest_file=self.root/'manifest.json'
+        manifest_file.write_text(json.dumps(self.manifest))
+        before=(self.adapters/'2026-10-12.json').read_bytes()
+        output=self.root/'recovered/audit.json'
+        proc=subprocess.run([sys.executable,str(MOD_PATH),'--manifest',str(manifest_file),
+                             '--dated-adapters',str(self.adapters.parent),'--out',str(output)],
+                             capture_output=True,text=True,check=True)
+        self.assertIn('SEMICONDUCTOR_SHARED_RIDGE',proc.stdout)
+        report=json.loads(output.read_text())
+        self.assertEqual(report['summary']['SEMICONDUCTOR_SHARED_RIDGE']['expected_decisions'],4)
+        self.assertEqual(report['summary']['SEMICONDUCTOR_SHARED_RIDGE']['missing_predictions'],3)
+        self.assertFalse(report['decisions'][0]['scientific_forward_credit_granted_by_this_tool'])
+        self.assertEqual(before,(self.adapters/'2026-10-12.json').read_bytes())
 
 if __name__ == '__main__':
     unittest.main()
