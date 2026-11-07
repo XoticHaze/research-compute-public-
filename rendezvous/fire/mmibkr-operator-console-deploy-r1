@@ -5,7 +5,7 @@
   "access_required": true,
   "public_fallback_allowed": false,
   "live_execution_allowed": false,
-  "reason": "owner_approved_f6f6_and_new_workers_subdomain_token_route_on_main; fail_closed_if_both_denied",
-  "requested_by": "MW-20261029024437942",
-  "request_id": "mw-20261029024437942-ui-owner-approved-token-preflight"
+  "reason": "operator_authorized_20261107_pi_owner_phone_ui_inert_signer_deploy_existing_access_console_only__no_signer_activation_or_root_grant",
+  "requested_by": "operator_20261107",
+  "request_id": "ccpi-owner-ui-deploy-20261107195016952"
 }
