@@ -5,7 +5,7 @@ const EXPECTED_NEUTRAL_ACCOUNT_ID = "b33595eb85f346b0d1bf201810b4499a";
 // credential. A broker-only Editor token or stale original-account binding
 // must never switch this maintainer to another account by config accident.
 const SOURCE_REPOSITORY = "XoticHaze/research-compute-public-";
-const SOURCE_FILES = ["index.js", "intent.js", "ticket.js", "placement.js"];
+const SOURCE_FILES = ["index.js", "intent.js", "ticket.js", "placement.js", "signer_vault.js"];
 const SOURCE_PREFIX = "cloudflare/reference-release-broker/src/";
 
 function brokerOrigin(env) {
@@ -125,7 +125,69 @@ function utf8Base64(value) {
   }
   return btoa(text);
 }
-async function uploadVersion(env, token, manifest, contents, workerId) {
+// Maintenance may inherit ONLY exact, independently attested bindings from
+// the currently 100%-deployed broker version. Do not drop the new signer DO,
+// silently revert to legacy JWK, or carry an initial-issue approval forever.
+async function approvedBrokerBindings(env, token, workerId, current) {
+  const response = await cfFetch(env, token,
+    "/workers/workers/" + workerId + "/versions/" + current);
+  const body = await response.json().catch(()=>({}));
+  const info = body?.result;
+  if (!response.ok || body?.success !== true || info?.id !== current) {
+    throw new Error("active_broker_version_readback_rejected");
+  }
+  const rows = Array.isArray(info.bindings) ? info.bindings : info.resources?.bindings;
+  if (!Array.isArray(rows)) throw new Error("active_broker_bindings_unavailable");
+  const map = new Map();
+  for (const row of rows) {
+    if (!row || typeof row.name !== "string" || map.has(row.name)) {
+      throw new Error("active_broker_bindings_invalid");
+    }
+    map.set(row.name, row);
+  }
+  const required = [
+    "AUTHORITY_PUBLIC_B64", "GRANT_LEDGER", "ALLOWED_JOB_WORKFLOW_REF",
+    "ALLOWED_JOB_WORKFLOW_SHA", "MAX_ADMISSION_SECONDS",
+    "MAX_INTENT_SECONDS",
+  ];
+  for (const name of required) {
+    if (!map.has(name)) throw new Error("active_broker_required_binding_missing");
+  }
+  if (map.get("GRANT_LEDGER")?.class_name !== "GrantLedger") {
+    throw new Error("grant_ledger_identity_unverified");
+  }
+  // Only one release-signing mode. A changed source cannot activate signer
+  // vault on a version that was previously JWK-based or vice versa.
+  const vault = map.has("BROKER_SIGNER_VAULT");
+  const legacy = map.has("BROKER_SIGNING_PRIVATE_JWK");
+  if (vault === legacy) throw new Error("active_broker_signer_ambiguous");
+  // First-issue approval is never included in the inherited allowlist.
+  // Thus the first authorized post-seal maintenance automatically retires
+  // the approval without requiring a redundant manual deploy ceremony.
+  if (vault) {
+    if (map.get("BROKER_SIGNER_VAULT")?.class_name !== "BrokerSignerVault"
+        || map.get("BROKER_SIGNER_MODE")?.text !== "vault-v1") {
+      throw new Error("vault_binding_identity_unverified");
+    }
+    required.push("BROKER_SIGNER_VAULT", "BROKER_SIGNER_MODE");
+  } else {
+    required.push("BROKER_SIGNING_PRIVATE_JWK");
+    if (map.has("BROKER_SIGNER_MODE")) {
+      if (map.get("BROKER_SIGNER_MODE")?.text !== "legacy-jwk-v1") {
+        throw new Error("legacy_signer_mode_mismatch");
+      }
+      required.push("BROKER_SIGNER_MODE");
+    }
+  }
+  return {
+    vault,
+    inherited:required.map(name => ({
+      type:"inherit", name, version_id:current,
+    })),
+  };
+}
+
+async function uploadVersion(env, token, manifest, contents, workerId, bindingPlan) {
   if (!/^[0-9a-f]{32}$/.test(String(workerId || ""))) {
     throw new Error("broker_worker_identity_unverified");
   }
@@ -136,16 +198,17 @@ async function uploadVersion(env, token, manifest, contents, workerId) {
       "workers/message":"reference broker maintenance " + manifest.maintenance_id,
       "workers/tag":manifest.candidate_source_sha,
     },
-    bindings:[
-      "BROKER_SIGNING_PRIVATE_JWK","AUTHORITY_PUBLIC_B64","GRANT_LEDGER",
-      "ALLOWED_JOB_WORKFLOW_REF","ALLOWED_JOB_WORKFLOW_SHA",
-      "MAX_ADMISSION_SECONDS","MAX_INTENT_SECONDS"
-    ].map(name => ({type:"inherit",name,version_id:manifest.expected_current_version})),
+    bindings:bindingPlan.inherited,
     modules:SOURCE_FILES.map(name=>({
       name,content_type:"application/javascript+module",
       content_base64:utf8Base64(contents[name]),
     })),
-    exports:{GrantLedger:{type:"durable-object",storage:"sqlite",state:"created"}}
+    exports:{
+      GrantLedger:{type:"durable-object",storage:"sqlite",state:"created"},
+      ...(bindingPlan.vault ? {BrokerSignerVault:{
+        type:"durable-object",storage:"sqlite",state:"created",
+      }} : {}),
+    }
   };
   // deploy=false is explicit: uploading source never promotes it. The separately
   // signed exact-version deployment below remains the only promotion point.
@@ -216,6 +279,7 @@ async function maintainManifest(wrapper, env) {
   const current = await activeVersion(env, token);
   if (current !== manifest.expected_current_version) throw new Error("current_version_mismatch");
   const workerId = await brokerWorkerIdentity(env, token);
+  const bindingPlan = await approvedBrokerBindings(env, token, workerId, current);
   const contents = await fetchCandidate(manifest);
 
   // The only authoritative mutation boundary begins here. Consume the
@@ -236,7 +300,7 @@ async function maintainManifest(wrapper, env) {
     if (await activeVersion(env, token) !== current) {
       throw new Error("preupload_version_mismatch");
     }
-    newVersion = await uploadVersion(env, token, manifest, contents, workerId);
+    newVersion = await uploadVersion(env, token, manifest, contents, workerId, bindingPlan);
     if (await activeVersion(env, token) !== current) {
       throw new Error("prepromotion_version_mismatch");
     }

@@ -2,7 +2,7 @@ import { WorkerEntrypoint } from "cloudflare:workers";
 const TARGET_WORKER = "reference-release-broker-v1";
 const SOURCE_REPOSITORY = "XoticHaze/research-compute-public-";
 const SOURCE_PREFIX = "cloudflare/reference-release-broker/src/";
-const SOURCE_FILES = ["index.js", "intent.js", "ticket.js", "placement.js"];
+const SOURCE_FILES = ["index.js", "intent.js", "ticket.js", "placement.js", "signer_vault.js"];
 const SCHEMA = "reference-release-maintenance-v1";
 const ISSUER = "private-maintenance-authority-v1";
 const SIGNATURE_FORMAT = "ecdsa-p256-sha256-p1363";
