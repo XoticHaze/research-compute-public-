@@ -369,3 +369,48 @@ export async function publishPiOwnerGrant(env, kind, approval, request, signedGr
     recovered_exact_same_id: Boolean(oldRequestExact || oldGrantExact),
     root_receipt_verified:false, protected_mutation_claimed:false};
 }
+
+export async function readPiOwnerRootReceipt(env, requestId) {
+  if (typeof requestId !== 'string' || !REQ.test(requestId)) {
+    throw new Error('pi_owner_result_request_id_invalid');
+  }
+  const token = String(env.PI_OWNER_QUEUE_GITHUB_TOKEN || '');
+  if (token.length < 20) throw new Error('pi_owner_queue_credential_missing');
+  const resultPath = 'pi-node/bot-release-results/' + requestId + '.json';
+  const url = 'https://api.github.com/repos/' + QUEUE_REPO + '/contents/'
+    + resultPath + '?ref=pi-node-outbox';
+  const response = await fetch(url, {
+    headers: {'authorization':'Bearer ' + token, 'accept':'application/vnd.github+json',
+      'x-github-api-version':'2022-11-28'}, redirect:'manual',
+  });
+  if (response.status === 404) {
+    return {schema:'commandcenter.pi.owner_root_result_projection.v1',
+      request_id:requestId, status:'PENDING', root_receipt_verified:false};
+  }
+  if (!response.ok) throw new Error('pi_owner_root_outbox_unavailable');
+  const doc = await response.json();
+  if (!SHA40.test(doc?.sha || '') || doc.encoding !== 'base64'
+      || typeof doc.content !== 'string' || doc.size > 8192) {
+    throw new Error('pi_owner_root_receipt_file_invalid');
+  }
+  const raw = new TextDecoder().decode(unb64(doc.content.replace(/\s/g, '')));
+  if (te.encode(raw).length > 8192) throw new Error('pi_owner_root_receipt_oversize');
+  const receipt = JSON.parse(raw);
+  if (receipt?.schema !== 'commandcenter.pi.bot_release_result.v1'
+      || receipt.request_id !== requestId
+      || receipt.node_id !== 'cc-pi4'
+      || !['passed','failed','indeterminate'].includes(receipt.status)) {
+    throw new Error('pi_owner_root_receipt_identity_invalid');
+  }
+  const status = receipt.status;
+  return {
+    schema:'commandcenter.pi.owner_root_result_projection.v1',
+    request_id:requestId,
+    action:typeof receipt.action === 'string' ? receipt.action : null,
+    status, root_receipt_verified:true,
+    source_sha:typeof receipt.source_sha === 'string' ? receipt.source_sha : null,
+    finished_at:typeof receipt.finished_at === 'string' ? receipt.finished_at : null,
+    // Git source readback is not an independent attest of active Docker state.
+    production_readback_verified:false,
+  };
+}
