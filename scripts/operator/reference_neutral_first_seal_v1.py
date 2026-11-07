@@ -168,8 +168,22 @@ def preflight(executable: str, expected_active: str) -> tuple[str, dict]:
     require(active == expected_active, 'ACTIVE_VERSION_RACED_OR_CHANGED')
     bindings = live_bindings(executable, active)
     ledger = bindings.get('GRANT_LEDGER')
-    require(isinstance(ledger, dict) and ledger.get('class_name') == 'GrantLedger',
-            'EXISTING_GRANT_LEDGER_UNATTESTED')
+    require(isinstance(ledger, dict) and ledger.get('class_name') == 'GrantLedger'
+            and isinstance(ledger.get('namespace_id'), str)
+            and len(ledger['namespace_id']) >= 8,
+            'EXISTING_GRANT_LEDGER_NAMESPACE_ID_UNATTESTED')
+    # The production source must not silently replace the active immutable
+    # OIDC harness or the current admission/expiry ceilings.
+    pinned = {'ALLOWED_JOB_WORKFLOW_SHA': WORKFLOW_SHA,
+              'ALLOWED_JOB_WORKFLOW_REF':
+              'XoticHaze/research-compute-public-/.github/workflows/secure-compute-harness-v1.yml@'+WORKFLOW_SHA,
+              'MAX_ADMISSION_SECONDS': '300',
+              'MAX_INTENT_SECONDS': '259200'}
+    for name, expected_value in pinned.items():
+        binding = bindings.get(name)
+        require(isinstance(binding, dict)
+                and str(binding.get('text') or binding.get('value') or '') == expected_value,
+                'LIVE_HARNESS_OR_POLICY_BINDING_UNATTESTED')
     require(not any(name in bindings for name in
                 ('BROKER_SIGNING_PRIVATE_JWK', 'BROKER_FIRST_SEAL_APPROVAL_ID',
                  'AUTHORITY_PUBLIC_B64', 'BROKER_SIGNER_VAULT')),
@@ -249,7 +263,12 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix='cc809-neutral-first-seal-') as temp:
         root = Path(temp)
         root.chmod(0o700)
-        shutil.copytree(SOURCE / 'src', root / 'src', symlinks=False)
+        (root / 'src').mkdir(mode=0o700)
+        for rel in EXPECTED_FILES:
+            if rel.startswith('src/'):
+                shutil.copy2(SOURCE / rel, root / rel)
+        # The candidate bundle includes only the reviewed five source files.
+        # A new or unpinned source path never becomes deployable by os.walk.
         config['vars']['BROKER_SIGNER_MODE'] = 'vault-v1'
         config_file = root / 'wrangler.jsonc'
         config_file.write_text(json.dumps(config, indent=2) + '\n')
