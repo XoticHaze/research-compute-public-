@@ -50,7 +50,7 @@
       "ref": "fe674e9b9cff72e9cf758c8bc6548124c6f8cf53"
     }
   },
-  "generated_at": "2026-11-07T03:14:12.728459+00:00",
+  "generated_at": "2026-11-07T11:39:58.809785+00:00",
   "latest_common_market_date": "2026-11-06",
   "market_data_asof": "2026-11-06",
   "market_sessions_observed_including_entry": 40,
@@ -92,7 +92,7 @@
     }
   },
   "source": {
-    "panel_sha256": "c7c6b3c3ce15d286b243e2cf6cb71d10a713a67339bef2cf59d911d03352e450",
+    "panel_sha256": "8a71f74f0c0858d9d73307529b691d884ffb6a9270937bc4aed7f5311d8cf19e",
     "provider": "Yahoo Finance via yfinance; research-only public data",
     "symbols": [
       "HEFA",
