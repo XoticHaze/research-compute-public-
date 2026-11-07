@@ -14,7 +14,7 @@ const code=source.replace('import { WorkerEntrypoint } from "cloudflare:workers"
 const module=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
 const {maintainManifest}=module;
 const brokerSource='cloudflare/reference-release-broker/src/';
-const sourceFiles=['index.js','intent.js','ticket.js','placement.js'];
+const sourceFiles=['index.js','intent.js','ticket.js','placement.js','signer_vault.js'];
 const bodies=Object.fromEntries(sourceFiles.map(x=>[x,
   fs.readFileSync(brokerSource+x,'utf8')]));
 const hashes=Object.fromEntries(sourceFiles.map(x=>[x,sha(bodies[x])]));
@@ -49,6 +49,7 @@ const target='/workers/scripts/reference-release-broker-v1';
 const workerId='0123456789abcdef0123456789abcdef';
 const betaWorker='/workers/workers/reference-release-broker-v1';
 const betaVersions='/workers/workers/'+workerId+'/versions?deploy=false';
+const deployedVersion='/workers/workers/'+workerId+'/versions/'+old;
 const origin='https://reference-release-broker-v1.shared-compute-neutral-authorization.workers.dev';
 
 function fake(overrides={}){
@@ -111,17 +112,52 @@ function fake(overrides={}){
         {versions:[{version_id:state.active,percentage:100}]}
       ]}});
     }
+    if(u===cf+deployedVersion&&method==='GET'){
+      state.events.push('active_binding_read');
+      const base=[
+        {name:'AUTHORITY_PUBLIC_B64',type:'secret_text'},
+        {name:'GRANT_LEDGER',type:'durable_object_namespace',class_name:state.badLedger?'WrongLedger':'GrantLedger'},
+        {name:'ALLOWED_JOB_WORKFLOW_REF',type:'plain_text'},
+        {name:'ALLOWED_JOB_WORKFLOW_SHA',type:'plain_text'},
+        {name:'MAX_ADMISSION_SECONDS',type:'plain_text'},
+        {name:'MAX_INTENT_SECONDS',type:'plain_text'},
+      ];
+      if(state.missingLedger) {
+        base.splice(base.findIndex(x=>x.name==='GRANT_LEDGER'),1);
+      }
+      if(state.vaultMode) {
+        base.push({name:'BROKER_SIGNER_VAULT',type:'durable_object_namespace',
+          class_name:state.badVault?'OtherVault':'BrokerSignerVault'});
+        base.push({name:'BROKER_SIGNER_MODE',type:'plain_text',text:'vault-v1'});
+        if(state.bothSigners)base.push({name:'BROKER_SIGNING_PRIVATE_JWK',type:'secret_text'});
+        if(state.initialApprovalPresent) {
+          base.push({name:'BROKER_FIRST_SEAL_APPROVAL_ID',type:'secret_text'});
+          base.push({name:'BROKER_FIRST_SEAL_APPROVAL_NOT_AFTER',type:'secret_text'});
+        }
+      } else {
+        base.push({name:'BROKER_SIGNING_PRIVATE_JWK',type:'secret_text'});
+      }
+      return Response.json({success:true,result:{id:old,bindings:base}});
+    }
     if(u===cf+betaVersions&&method==='POST'){
       state.events.push('upload');
       state.uploads++;
       assert.equal(typeof init.body,'string','beta Worker API requires JSON modules');
       const metadata=JSON.parse(init.body);
       assert.equal(metadata.main_module,'index.js');
-      assert.equal(metadata.bindings.length,7);
-      assert.deepEqual(metadata.bindings.map(x=>x.name).sort(),[
+      const expected=state.vaultMode?[
+        'BROKER_SIGNER_VAULT','BROKER_SIGNER_MODE','AUTHORITY_PUBLIC_B64','GRANT_LEDGER',
+        'ALLOWED_JOB_WORKFLOW_REF','ALLOWED_JOB_WORKFLOW_SHA',
+        'MAX_ADMISSION_SECONDS','MAX_INTENT_SECONDS'
+      ]:[
         'BROKER_SIGNING_PRIVATE_JWK','AUTHORITY_PUBLIC_B64','GRANT_LEDGER',
         'ALLOWED_JOB_WORKFLOW_REF','ALLOWED_JOB_WORKFLOW_SHA',
-        'MAX_ADMISSION_SECONDS','MAX_INTENT_SECONDS'].sort());
+        'MAX_ADMISSION_SECONDS','MAX_INTENT_SECONDS'
+      ];
+      assert.equal(metadata.bindings.length,expected.length);
+      assert.deepEqual(metadata.bindings.map(x=>x.name).sort(),expected.sort());
+      assert.equal(!!metadata.exports.BrokerSignerVault,!!state.vaultMode);
+      assert.ok(!metadata.bindings.some(x=>x.name.startsWith('BROKER_FIRST_SEAL_APPROVAL')));
       assert.ok(metadata.bindings.every(x=>x.type==='inherit'&&x.version_id===old));
       assert.equal(metadata.annotations['workers/tag'],candidate);
       assert.equal(metadata.annotations['workers/commit_sha'],undefined);
@@ -168,6 +204,15 @@ function fake(overrides={}){
   };
   return {env,state};
 }
+// Owner-authorized vault maintenance keeps the DO and automatically retires
+// first-issue approval instead of requiring an extra manual release.
+{
+  const {env,state}=fake({vaultMode:true,initialApprovalPresent:true});
+  const result=await maintainManifest(structuredClone(baseManifest),env);
+  assert.equal(result.status,200);
+  assert.equal(state.uploads,1);
+  assert.equal(state.active,newer);
+}
 async function reject(label,opts,expected){
   const {env,state}=fake(opts);
   let code='';
@@ -175,6 +220,22 @@ async function reject(label,opts,expected){
   catch(e){code=String(e.message);}
   assert.equal(code,expected,label);
   return state;
+}
+// Missing/changed signer or GrantLedger bindings must stop BEFORE spending
+// the independent signed maintenance manifest.
+for(const [label,opts,expected] of [
+  ['vault_class_swapped',{vaultMode:true,badVault:true},'vault_binding_identity_unverified'],
+  ['both_signers',{vaultMode:true,bothSigners:true},'active_broker_signer_ambiguous'],
+  ['grant_ledger_missing',{missingLedger:true},'active_broker_required_binding_missing'],
+  ['grant_ledger_class_swapped',{badLedger:true},'grant_ledger_identity_unverified'],
+]){
+  const {env,state}=fake(opts);
+  let failure;
+  try {await maintainManifest(structuredClone(baseManifest),env);}
+  catch(e){failure=e.message;}
+  assert.equal(failure,expected,label);
+  assert.equal(state.consumes,0);
+  assert.equal(state.uploads,0);
 }
 let checks=0;
 {
