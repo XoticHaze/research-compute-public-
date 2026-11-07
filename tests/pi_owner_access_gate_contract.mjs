@@ -5,6 +5,7 @@ for (const path of [
   '/operator/pi-owner-approval',
   '/operator/pi-owner-approval.js',
   '/api/pi-owner/status',
+  '/api/pi-owner/receipt?request_id=synthetic-123',
 ]) {
   const response = await worker.fetch(new Request(url+path), {});
   assert.equal(response.status,403,path+' must require Cloudflare Access identity');
