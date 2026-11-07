@@ -50,8 +50,7 @@ if (!index.includes('export { BrokerSignerVault } from') ||
   throw new Error('cloudflare_signer_vault_first_issue_source_contract_missing');
 }
 if (!maintainer.includes('approvedBrokerBindings(') ||
-    !maintainer.includes('first_issue_approval_not_retired') &&
-    !maintainer.includes('initial-issue approval is never included')) {
+    !maintainer.includes('First-issue approval is never included')) {
   throw new Error('signer_mode_and_approval_lifecycle_not_enforced');
 }
 if (!wrangler.includes('"workers_dev": true')) throw new Error('neutral_workers_dev_endpoint_required');
