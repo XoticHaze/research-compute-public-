@@ -2,5 +2,7 @@
   "schema": "fleet_authority.opaque_source_readback_request.v1",
   "action": "read_deployed_script_marker_only",
   "contains_private_source_reference": false,
-  "mutation_authorized": false
+  "mutation_authorized": false,
+  "probe_sequence": 2,
+  "probe_type": "unauthenticated_candidate_oidc_edge_only"
 }
