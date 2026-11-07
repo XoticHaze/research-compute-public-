@@ -13,7 +13,7 @@ const html = [
   '<label for="request">Fresh exact Pi typed request JSON</label><textarea id="request" spellcheck="false"></textarea>',
   '<label for="approval">Matching unsigned owner approval JSON</label><textarea id="approval" spellcheck="false"></textarea>',
   '<p><input type="checkbox" id="approved">I reviewed and approve these exact identities and LIVE preservation where applicable</p>',
-  '<button id="authorize">Sign and dispatch once</button><p><small>Signed or dispatched does not mean Pi accepted the release. Confirm the same ID in the Pi root outbox.</small></p><pre id="result">No request submitted</pre></section>',
+  '<button id="authorize">Sign and dispatch once</button><p><small>Signed or dispatched does not mean Pi accepted the release. Confirm the same ID in the Pi root outbox.</small></p><label for="root-id">Exact Pi request ID</label><input id="root-id" spellcheck="false"><button id="check-root">Check same-ID Pi root receipt</button><pre id="result">No request submitted</pre></section>',
   '<script src="/operator/pi-owner-approval.js" defer></script></body></html>'
 ].join('\n');
 export function piOwnerApprovalPage() {
@@ -35,7 +35,8 @@ const client = [
   '$("copy-fingerprint").onclick=()=>run(async()=>{if(!status.public_key_sha256)throw Error("Key not issued");await navigator.clipboard.writeText(status.public_key_sha256);show("result","Key SHA-256 copied")});',
   '$("initialize").onclick=()=>run(async()=>{const r=await api("initialize",{activation_code:$("activation").value});show("result",{created:r.one_time_created,public_key_sha256:r.public_key_sha256,pi_root_enrolled:false});await refresh()});',
   '$("enroll").onclick=()=>run(async()=>{if(!$("enrolled").checked)throw Error("Independent enrollment confirmation required");const r=await api("enroll",{activation_code:$("activation").value,pi_enrolled_public_key_sha256:$("fingerprint").value.trim(),confirm_independently_enrolled_on_pi:true});show("result",r);await refresh()});',
-  '$("authorize").onclick=()=>run(async()=>{if(!$("approved").checked)throw Error("Explicit release approval required");const r=await api("approve",{kind:$("kind").value,request:JSON.parse($("request").value),approval:JSON.parse($("approval").value),approve_exact_release:true});show("result",r);$("approved").checked=false});',
+  '$("authorize").onclick=()=>run(async()=>{if(!$("approved").checked)throw Error("Explicit release approval required");const req=JSON.parse($("request").value);const r=await api("approve",{kind:$("kind").value,request:req,approval:JSON.parse($("approval").value),approve_exact_release:true});show("result",r);$("root-id").value=req.request_id;$("approved").checked=false});',
+  '$("check-root").onclick=()=>run(async()=>{const id=$("root-id").value.trim();if(!id)throw Error("Enter exact Pi request ID");const r=await api("receipt?request_id="+encodeURIComponent(id));show("result",r)});',
   'run(refresh);'
 ].join('\n');
 export function piOwnerApprovalClientJs() {
