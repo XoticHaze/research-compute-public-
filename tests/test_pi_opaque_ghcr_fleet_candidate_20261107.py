@@ -1,4 +1,5 @@
 """Real JS negative tests for private candidate resolver; no real private source identifiers."""
+import re
 import subprocess
 import textwrap
 import unittest
@@ -28,6 +29,10 @@ class OpaquePiCandidateTests(unittest.TestCase):
         self.assertIn("PI_GHCR_OPAQUE_PUBLISH_IDENTITY", module)
         self.assertIn("mmibkr-ghcr-opaque-publish-r1.yml@refs/heads/main", module)
         self.assertNotIn("PRIVATE_SOURCE_TOKEN: ", source + module)
+        # Guard the new public helper and its own tests against accidentally
+        # adding a literal private commit fingerprint to public Git again.
+        new_files = module + Path(__file__).read_text(encoding="utf-8")
+        self.assertIsNone(re.search(r"(?<![a-f0-9])[a-f0-9]{40}(?![a-f0-9])", new_files))
 
     def test_private_resolver_mock_and_rejection_matrix(self):
         js = textwrap.dedent(r"""
