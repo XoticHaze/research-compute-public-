@@ -55,7 +55,7 @@ def initialize(root: Path = ROOT) -> str:
     # Fixed local custody. No caller-provided path, GitHub directory or shell.
     expected = Path.home() / '.local/share/commandcenter/private-grant-authority-v1'
     require(root == expected, 'PRIVATE_CUSTODY_PATH_NOT_ADMITTED')
-    for parent in (root.parent.parent, root.parent):
+    for parent in (root.parents[2], root.parents[1], root.parent):
         if parent.exists():
             require(not parent.is_symlink() and parent.is_dir()
                     and parent.stat().st_uid == os.getuid()
@@ -113,7 +113,9 @@ def status(root: Path = ROOT) -> str:
             result = db.execute("SELECT name FROM sqlite_master "
                                 "WHERE type='table' AND name='intent_claim'").fetchall()
             require(len(result) == 1, 'PRIVATE_AUTHORITY_ATOMIC_JOURNAL_MISSING')
-    except (ValueError, sqlite3.Error):
+    except Held:
+        raise
+    except Exception:
         raise Held('PRIVATE_AUTHORITY_CONTENT_UNVERIFIED') from None
     return key_id
 
