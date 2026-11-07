@@ -6,6 +6,8 @@ on:
     paths:
       - 'scripts/opaque_bidirectional_capsule_v1.py'
       - 'scripts/opaque_bidirectional_capsule_p256_aesgcm_v1.py'
+      - 'scripts/reference_private_a1_terminal_v1.py'
+      - 'tests/test_reference_private_a1_terminal_v1.py'
       - 'scripts/opaque_bidirectional_capsule_smoke_v1.py'
       - 'tests/test_opaque_bidirectional_capsule_v1.py'
       - 'tests/test_opaque_bidirectional_capsule_p256_aesgcm_v1.py'
@@ -37,6 +39,8 @@ on:
     paths:
       - 'scripts/opaque_bidirectional_capsule_v1.py'
       - 'scripts/opaque_bidirectional_capsule_p256_aesgcm_v1.py'
+      - 'scripts/reference_private_a1_terminal_v1.py'
+      - 'tests/test_reference_private_a1_terminal_v1.py'
       - 'scripts/opaque_bidirectional_capsule_smoke_v1.py'
       - 'tests/test_opaque_bidirectional_capsule_v1.py'
       - 'tests/test_opaque_bidirectional_capsule_p256_aesgcm_v1.py'
@@ -87,6 +91,8 @@ jobs:
       - name: Test
         run: |
           python -m unittest -q             tests.test_opaque_bidirectional_capsule_v1             tests.test_opaque_bidirectional_capsule_p256_aesgcm_v1             tests.test_opaque_capsule_exposure_compare_v1             tests.test_opaque_capsule_publication_guard_v1             tests.test_opaque_public_tip_full_scan_v1             tests.test_commandcenter_ephemeral_exchange_cleanup_v1
+      - name: Verify private authenticated A1 terminal consumer with real P256/AESGCM
+        run: PYTHONDONTWRITEBYTECODE=1 python -B -m unittest -v tests.test_reference_private_a1_terminal_v1
       - name: Verify guest memory-backed private scratch preflight and cleanup
         run: |
           set -euo pipefail
