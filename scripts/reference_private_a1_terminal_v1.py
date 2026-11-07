@@ -42,6 +42,13 @@ class PrivateA1ResultRejected(ValueError):
     """Never embed private inputs, paths, exception messages or ciphertext."""
 
 
+class _PrivateSafeArgumentParser(argparse.ArgumentParser):
+    """Never echo private filenames or unrecognized input on CLI failure."""
+
+    def error(self, _message: str) -> None:
+        raise PrivateA1ResultRejected("PRIVATE_A1_ARGS_REJECTED")
+
+
 def _reject() -> None:
     raise PrivateA1ResultRejected("PRIVATE_A1_RESULT_REJECTED")
 
@@ -154,7 +161,7 @@ def write_private_receipt(receipt: dict[str, Any], path: Path) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(add_help=False)
+    parser = _PrivateSafeArgumentParser(add_help=False)
     parser.add_argument("--envelope", type=Path, required=True)
     parser.add_argument("--request-payload", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
