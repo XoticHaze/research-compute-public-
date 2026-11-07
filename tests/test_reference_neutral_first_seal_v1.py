@@ -86,8 +86,7 @@ class FirstSealContractTests(unittest.TestCase):
             {'GRANT_LEDGER': {'class_name':'GrantLedger', 'namespace_id':'original'},
              'ALLOWED_JOB_WORKFLOW_SHA': {'text':'0'*40}},
         ):
-            with patch.object(deploy, 'deployment_status', return_value=active), \\
-                 patch.object(deploy, 'live_bindings', return_value=binding_set):
+            with patch.object(deploy, 'deployment_status', return_value=active), patch.object(deploy, 'live_bindings', return_value=binding_set):
                 with self.assertRaises(deploy.Held):
                     deploy.preflight('wrangler', active)
 
