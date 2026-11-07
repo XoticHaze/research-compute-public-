@@ -1196,10 +1196,25 @@ export class SourceExchange {
       const streamId = String(body?.stream_id || '');
       const expectedArchiveBytes = Number(body?.expected_archive_bytes || 0);
       const runtimeIdentity = this._producerIdentity(request);
+      // This second gate is enforced inside the Durable Object. It must
+      // independently pin the new publisher to the same private candidate.
+      let opaqueApprovedExactSource = false;
+      if (
+        matchesIdentity(runtimeIdentity, PI_GHCR_OPAQUE_PUBLISH_IDENTITY)
+        && runtimeIdentity.event_name === 'push'
+      ) {
+        try {
+          const candidate = await resolvePiImageCandidate(this.env);
+          opaqueApprovedExactSource = candidate.source_sha === sourceSha;
+        } catch {
+          opaqueApprovedExactSource = false;
+        }
+      }
       if (
         body?.schema !== FLEET_PRIVATE_SOURCE_STREAM_SCHEMA
         || !/^\d{4,24}$/.test(runId)
-        || !isPrivateSourceStreamApproved(sourceSha, runtimeIdentity)
+        || !(isPrivateSourceStreamApproved(sourceSha, runtimeIdentity)
+             || opaqueApprovedExactSource)
         || !/^[0-9a-f-]{36}$/.test(streamId)
         || !Number.isInteger(expectedArchiveBytes)
         || expectedArchiveBytes < 0
