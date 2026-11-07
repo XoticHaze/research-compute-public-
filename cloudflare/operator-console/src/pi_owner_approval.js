@@ -347,15 +347,25 @@ export async function publishPiOwnerGrant(env, kind, approval, request, signedGr
   const requestOld = await githubFile(token, REQUEST_PATH);
   const grantPath = APPROVAL_PATHS[kind];
   const grantOld = await githubFile(token, grantPath);
-  if (!queueSlotFree(requestOld, request.request_id, Date.now())
-      || !queueSlotFree(grantOld, request.request_id, Date.now())) {
-    throw new Error('pi_owner_private_queue_occupied');
+  const oldGrantExact = grantOld?.text === canonicalPiJson(signedGrant);
+  const oldRequestExact = requestOld?.text === canonicalPiJson(request);
+  // An interrupted approval-first write may be resumed only with byte-for-byte
+  // identical content. Changed requests under an existing ID always fail.
+  if ((!oldRequestExact && !queueSlotFree(requestOld, request.request_id, Date.now()))
+      || (!oldGrantExact && !queueSlotFree(grantOld, request.request_id, Date.now()))) {
+    throw new Error('pi_owner_private_queue_occupied_or_replay');
   }
-  const grantBlob = await githubPut(token, grantPath, signedGrant, grantOld);
+  if (oldRequestExact && !oldGrantExact) {
+    throw new Error('pi_owner_request_exists_without_matching_grant');
+  }
+  const grantBlob = oldGrantExact ? grantOld.sha
+    : await githubPut(token, grantPath, signedGrant, grantOld);
   // Approval first; the Pi never sees a mutating request without its exact grant.
-  const requestBlob = await githubPut(token, REQUEST_PATH, request, requestOld);
+  const requestBlob = oldRequestExact ? requestOld.sha
+    : await githubPut(token, REQUEST_PATH, request, requestOld);
   return {schema:'commandcenter.pi.owner_grant_dispatched.v1',
     request_id:request.request_id, kind, branch:QUEUE_REF,
     signed_grant_blob_sha:grantBlob, request_blob_sha:requestBlob,
+    recovered_exact_same_id: Boolean(oldRequestExact || oldGrantExact),
     root_receipt_verified:false, protected_mutation_claimed:false};
 }
