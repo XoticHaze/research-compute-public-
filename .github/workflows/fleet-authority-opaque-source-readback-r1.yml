@@ -55,6 +55,24 @@ jobs:
               print('FLEET_OPAQUE_SOURCE_READBACK=DEPLOYED_MARKER_MISSING')
               raise SystemExit(75)
           print('FLEET_OPAQUE_SOURCE_READBACK=CURRENT_OPAQUE_MARKER_PASS')
+          # Probe the fixed endpoint without any token or private source. New
+          # Fleet handler returns 401 at OIDC verification; 403 means this
+          # request never reached that exact admission stage.
+          req = urllib.request.Request(
+              'https://fleet-authority.slenderiq.workers.dev/v1/source-vault/pi-image-candidate',
+              data=b'{}', method='POST',
+              headers={'Content-Type': 'application/json',
+                       'User-Agent': 'fleet-opaque-unauthorized-probe-r1'})
+          try:
+              with urllib.request.urlopen(req, timeout=20):
+                  print('FLEET_OPAQUE_OIDC_EDGE=UNEXPECTED_ACCEPT')
+                  raise SystemExit(76)
+          except urllib.error.HTTPError as exc:
+              if exc.code != 401:
+                  print('FLEET_OPAQUE_OIDC_EDGE=HTTP_' + str(
+                      exc.code if exc.code in {403,404,429,500,502,503} else 'OTHER'))
+                  raise SystemExit(77)
+          print('FLEET_OPAQUE_OIDC_EDGE=EXPECTED_401')
           print('FLEET_CLOUDFLARE_MUTATION=NONE')
           PY
 
