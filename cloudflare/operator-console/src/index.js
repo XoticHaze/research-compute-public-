@@ -1,5 +1,5 @@
 import { piOwnerApprovalPage, piOwnerApprovalClientJs } from './pi_owner_approval_ui.js';
-import { PiOwnerApprovalState, publishPiOwnerGrant } from './pi_owner_approval.js';
+import { PiOwnerApprovalState, publishPiOwnerGrant, readPiOwnerRootReceipt } from './pi_owner_approval.js';
 export { PiOwnerApprovalState } from './pi_owner_approval.js';
 
 import {
@@ -1207,6 +1207,16 @@ export default {
       });
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/pi-owner/receipt') {
+      try {
+        const result = await readPiOwnerRootReceipt(
+          env, url.searchParams.get('request_id'),
+        );
+        return json(result, result.status === 'PENDING' ? 202 : 200);
+      } catch {
+        return json({error:'pi_owner_root_outbox_read_unavailable'},503);
+      }
+    }
     if (request.method === 'GET' && url.pathname === '/api/pi-owner/status') {
       try {
         return await piOwnerStub(env).fetch(new Request('https://pi-owner.internal/status'));
