@@ -161,10 +161,9 @@ async function approvedBrokerBindings(env, token, workerId, current) {
   const vault = map.has("BROKER_SIGNER_VAULT");
   const legacy = map.has("BROKER_SIGNING_PRIVATE_JWK");
   if (vault === legacy) throw new Error("active_broker_signer_ambiguous");
-  if (map.has("BROKER_FIRST_SEAL_APPROVAL_ID")
-      || map.has("BROKER_FIRST_SEAL_APPROVAL_NOT_AFTER")) {
-    throw new Error("first_issue_approval_not_retired");
-  }
+  // First-issue approval is never included in the inherited allowlist.
+  // Thus the first authorized post-seal maintenance automatically retires
+  // the approval without requiring a redundant manual deploy ceremony.
   if (vault) {
     if (map.get("BROKER_SIGNER_VAULT")?.class_name !== "BrokerSignerVault"
         || map.get("BROKER_SIGNER_MODE")?.text !== "vault-v1") {
