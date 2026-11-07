@@ -81,7 +81,7 @@ jobs:
       - name: Prove actual neutral maintainer preflight, source integrity and remote-commit rollback behavior
         run: node tests/reference_release_maintainer_runtime_interop.mjs
       - name: Verify private one-shot LIVE broker intent issuer using independent P256 signer and journal
-        run: PYTHONDONTWRITEBYTECODE=1 python -B -m unittest -v tests.test_reference_private_grant_authority_adapter_v1
+        run: PYTHONDONTWRITEBYTECODE=1 python -B -m unittest -v tests.test_reference_private_intent_authority_adapter_v1
       - name: Prepare private-authority signed grant
         run: python tests/reference_release_grant_interop_prepare.py
       - name: Prove WebCrypto verifies private-authority grant
