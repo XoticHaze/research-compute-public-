@@ -61,7 +61,13 @@ class FirstSealContractTests(unittest.TestCase):
         active = 'd0a7a738-739d-4570-84f5-549c711e58c3'
         base = {'GRANT_LEDGER': {'name': 'GRANT_LEDGER',
                                  'class_name': 'GrantLedger',
-                                 'namespace_id': 'original'}}
+                                 'namespace_id': 'original'},
+                'ALLOWED_JOB_WORKFLOW_SHA': {'text': deploy.WORKFLOW_SHA},
+                'ALLOWED_JOB_WORKFLOW_REF': {
+                    'text': 'XoticHaze/research-compute-public-/.github/workflows/secure-compute-harness-v1.yml@'
+                            + deploy.WORKFLOW_SHA},
+                'MAX_ADMISSION_SECONDS': {'text': '300'},
+                'MAX_INTENT_SECONDS': {'text': '259200'}}
         with patch.object(deploy, 'deployment_status', return_value=active), \
              patch.object(deploy, 'live_bindings', return_value=base):
             self.assertEqual(deploy.preflight('wrangler', active)[1], base['GRANT_LEDGER'])
@@ -71,6 +77,18 @@ class FirstSealContractTests(unittest.TestCase):
                  patch.object(deploy, 'live_bindings',
                               return_value=dict(base, **{name: {'name': name}})):
                 with self.assertRaisesRegex(deploy.Held, 'POSSIBLE_PRIOR_SIGNER_OR_SEAL'):
+                    deploy.preflight('wrangler', active)
+
+    def test_wrong_grant_ledger_namespace_or_live_workflow_pin_cannot_deploy(self):
+        active = 'd0a7a738-739d-4570-84f5-549c711e58c3'
+        for binding_set in (
+            {'GRANT_LEDGER': {'class_name':'GrantLedger'}},
+            {'GRANT_LEDGER': {'class_name':'GrantLedger', 'namespace_id':'original'},
+             'ALLOWED_JOB_WORKFLOW_SHA': {'text':'0'*40}},
+        ):
+            with patch.object(deploy, 'deployment_status', return_value=active), \\
+                 patch.object(deploy, 'live_bindings', return_value=binding_set):
+                with self.assertRaises(deploy.Held):
                     deploy.preflight('wrangler', active)
 
     def test_unapproved_stage_and_rollback_shortcuts_absent(self):
