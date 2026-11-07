@@ -30,7 +30,15 @@ const post = (path, body) => new Request('https://signer-vault'+path, {
 });
 function freshVault() {
   const backing = storage();
-  return {vault:new BrokerSignerVault({storage:backing}), backing};
+  const durableObject = new BrokerSignerVault({storage:backing});
+  // Cloudflare DurableObjectStub.fetch normalizes a URL string to Request;
+  // our direct in-memory mock must do the same before invoking the class.
+  const vault = {
+    fetch(input, init) {
+      return durableObject.fetch(typeof input === 'string' ? new Request(input, init) : input);
+    },
+  };
+  return {vault, backing};
 }
 async function create(vault) {
   return vault.fetch(post('/initial-seal',{approval_id:approved,not_after:now()+3600}));
