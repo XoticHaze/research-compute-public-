@@ -54,6 +54,9 @@ jobs:
           if b'mmibkr.pi_ghcr_opaque_candidate.v1' not in script:
               print('FLEET_OPAQUE_SOURCE_READBACK=DEPLOYED_MARKER_MISSING')
               raise SystemExit(75)
+          if b'opaqueApprovedExactSource' not in script:
+              print('FLEET_OPAQUE_SOURCE_READBACK=INNER_GRANT_MARKER_MISSING')
+              raise SystemExit(78)
           print('FLEET_OPAQUE_SOURCE_READBACK=CURRENT_OPAQUE_MARKER_PASS')
           # Probe the fixed endpoint without any token or private source. New
           # Fleet handler returns 401 at OIDC verification; 403 means this
