@@ -5,7 +5,7 @@ const EXPECTED_NEUTRAL_ACCOUNT_ID = "b33595eb85f346b0d1bf201810b4499a";
 // credential. A broker-only Editor token or stale original-account binding
 // must never switch this maintainer to another account by config accident.
 const SOURCE_REPOSITORY = "XoticHaze/research-compute-public-";
-const SOURCE_FILES = ["index.js", "intent.js", "ticket.js", "placement.js"];
+const SOURCE_FILES = ["index.js", "intent.js", "ticket.js", "placement.js", "signer_vault.js"];
 const SOURCE_PREFIX = "cloudflare/reference-release-broker/src/";
 
 function brokerOrigin(env) {
