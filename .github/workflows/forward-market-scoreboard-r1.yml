@@ -3,8 +3,10 @@ name: Forward Market Scoreboard R1
 on:
   workflow_dispatch:
   schedule:
-    - cron: '15 23 * * 1-5'
-    # Retry after the US close so a provider-late first pass cannot strand Friday
+    # Run after the ledger's 18:30 America/New_York completed-bar cutoff.
+    # 23:45 UTC is after that cutoff in both EST and EDT.
+    - cron: '45 23 * * 1-5'
+    # Retry later so a provider-late first pass cannot strand Friday
     # (or another weekday) until the next scheduled market day.
     - cron: '30 2 * * 2-6'
   push:
@@ -13,6 +15,9 @@ on:
       - 'assistant/**'
     paths:
       - 'research/forward_market_scoreboard_r1.py'
+      - 'research/ridge_frozen_weight_persistence_forward_r1.py'
+      - 'research/contracts/ridge_weight_persistence_20261105.v1.json'
+      - 'research/contracts/ridge_weight_persistence_source_adapter_20260911.v1.json'
       - 'research/p160_frozen_oct2026_forward_nav_consumer_r1.py'
       - 'tests/test_p160_frozen_oct2026_forward_nav_consumer_r1.py'
       - 'research/forward_deterministic_allocator_r1.py'
@@ -36,6 +41,9 @@ on:
     branches: [main]
     paths:
       - 'research/forward_market_scoreboard_r1.py'
+      - 'research/ridge_frozen_weight_persistence_forward_r1.py'
+      - 'research/contracts/ridge_weight_persistence_20261105.v1.json'
+      - 'research/contracts/ridge_weight_persistence_source_adapter_20260911.v1.json'
       - 'research/p160_frozen_oct2026_forward_nav_consumer_r1.py'
       - 'tests/test_p160_frozen_oct2026_forward_nav_consumer_r1.py'
       - 'research/forward_deterministic_allocator_r1.py'
@@ -78,6 +86,7 @@ jobs:
         with: {python-version: '3.11'}
       - run: python research/forward_native_program_adapter_r1.py --self-test
       - run: python research/forward_market_scoreboard_r1.py --self-test
+      - run: python research/ridge_frozen_weight_persistence_forward_r1.py --self-test
       - run: python research/forward_challenger_scoreboard_enrichment_r1.py --self-test
       - run: python research/forward_deterministic_allocator_r1.py --self-test
       - run: python research/forward_scoreboard_lineage_r1.py --self-test
@@ -87,6 +96,23 @@ jobs:
       - run: python research/forward_largecap_transport_observer_r1.py --self-test
       - run: python research/forward_bundle_publish_guard_r1.py --self-test
       - run: python research/forward_scoreboard_history_r1.py --self-test
+
+  ridge-persistence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: python -m pip install --disable-pip-version-check pandas==2.3.2 yfinance==0.2.65 pandas_market_calendars==5.5.0 exchange_calendars==4.13.2
+      - run: python research/ridge_frozen_weight_persistence_forward_r1.py --self-test
+      - run: python -m research.ridge_frozen_weight_persistence_forward_r1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forward-score-input-ridge-persistence
+          path: artifacts/ridge_frozen_weight_persistence_forward_r1.json
+          if-no-files-found: error
+          retention-days: 90
 
   p46:
     runs-on: ubuntu-24.04
@@ -169,7 +195,7 @@ jobs:
           retention-days: 90
 
   report:
-    needs: [self-test, p46, p438-semiconductor, p249-p266, p558, senior-clo]
+    needs: [self-test, ridge-persistence, p46, p438-semiconductor, p249-p266, p558, senior-clo]
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:

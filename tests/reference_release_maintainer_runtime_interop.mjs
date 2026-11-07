@@ -14,7 +14,7 @@ const code=source.replace('import { WorkerEntrypoint } from "cloudflare:workers"
 const module=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
 const {maintainManifest}=module;
 const brokerSource='cloudflare/reference-release-broker/src/';
-const sourceFiles=['index.js','intent.js','ticket.js'];
+const sourceFiles=['index.js','intent.js','ticket.js','placement.js','signer_vault.js'];
 const bodies=Object.fromEntries(sourceFiles.map(x=>[x,
   fs.readFileSync(brokerSource+x,'utf8')]));
 const hashes=Object.fromEntries(sourceFiles.map(x=>[x,sha(bodies[x])]));
@@ -23,7 +23,15 @@ const candidate='9cc2ab27dac66147e432703eec0281254379b62b';
 const old='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const newer='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const other='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
-const keyId='sha256:'+'8'.repeat(64);
+const liveKeyPair=await webcrypto.subtle.generateKey(
+  {name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);
+const livePoint=Buffer.from(await webcrypto.subtle.exportKey('raw',liveKeyPair.publicKey));
+const keyId='sha256:'+sha(livePoint);
+const keyPublicB64=livePoint.toString('base64');
+const swappedKeyPair=await webcrypto.subtle.generateKey(
+  {name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);
+const swappedPoint=Buffer.from(await webcrypto.subtle.exportKey('raw',swappedKeyPair.publicKey));
+const swappedPublicB64=swappedPoint.toString('base64');
 const baseManifest={
   schema:'reference-release-maintenance-v1',
   issuer:'private-maintenance-authority-v1',
@@ -38,7 +46,11 @@ const baseManifest={
 const account='b33595eb85f346b0d1bf201810b4499a';
 const cf='https://api.cloudflare.com/client/v4/accounts/'+account;
 const target='/workers/scripts/reference-release-broker-v1';
-const origin='https://reference-release-broker-v1.slenderiq.workers.dev';
+const workerId='0123456789abcdef0123456789abcdef';
+const betaWorker='/workers/workers/reference-release-broker-v1';
+const betaVersions='/workers/workers/'+workerId+'/versions?deploy=false';
+const deployedVersion='/workers/workers/'+workerId+'/versions/'+old;
+const origin='https://reference-release-broker-v1.shared-compute-neutral-authorization.workers.dev';
 
 function fake(overrides={}){
   const state={
@@ -82,6 +94,13 @@ function fake(overrides={}){
       assert.ok(u.includes('/'+candidate+'/'),'candidate must be SHA pinned');
       return new Response(state.badSource&&name==='ticket.js'?'wrong source':bodies[name],{status:200});
     }
+    if(u===cf+betaWorker&&method==='GET'){
+      state.events.push('worker_identity_read');
+      return Response.json({success:true,result:{
+        id:state.mismatchedWorkerId?'not-a-worker-id':workerId,
+        name:state.mismatchedWorkerName?'unrelated-worker':"reference-release-broker-v1",
+      }});
+    }
     if(u===cf+target+'/deployments'&&method==='GET'){
       state.events.push('active_read');
       state.activeReads=(state.activeReads||0)+1;
@@ -93,21 +112,59 @@ function fake(overrides={}){
         {versions:[{version_id:state.active,percentage:100}]}
       ]}});
     }
-    if(u===cf+target+'/versions?bindings_inherit=strict'&&method==='POST'){
+    if(u===cf+deployedVersion&&method==='GET'){
+      state.events.push('active_binding_read');
+      const base=[
+        {name:'AUTHORITY_PUBLIC_B64',type:'secret_text'},
+        {name:'GRANT_LEDGER',type:'durable_object_namespace',class_name:state.badLedger?'WrongLedger':'GrantLedger'},
+        {name:'ALLOWED_JOB_WORKFLOW_REF',type:'plain_text'},
+        {name:'ALLOWED_JOB_WORKFLOW_SHA',type:'plain_text'},
+        {name:'MAX_ADMISSION_SECONDS',type:'plain_text'},
+        {name:'MAX_INTENT_SECONDS',type:'plain_text'},
+      ];
+      if(state.missingLedger) {
+        base.splice(base.findIndex(x=>x.name==='GRANT_LEDGER'),1);
+      }
+      if(state.vaultMode) {
+        base.push({name:'BROKER_SIGNER_VAULT',type:'durable_object_namespace',
+          class_name:state.badVault?'OtherVault':'BrokerSignerVault'});
+        base.push({name:'BROKER_SIGNER_MODE',type:'plain_text',text:'vault-v1'});
+        if(state.bothSigners)base.push({name:'BROKER_SIGNING_PRIVATE_JWK',type:'secret_text'});
+        if(state.initialApprovalPresent) {
+          base.push({name:'BROKER_FIRST_SEAL_APPROVAL_ID',type:'secret_text'});
+          base.push({name:'BROKER_FIRST_SEAL_APPROVAL_NOT_AFTER',type:'secret_text'});
+        }
+      } else {
+        base.push({name:'BROKER_SIGNING_PRIVATE_JWK',type:'secret_text'});
+      }
+      return Response.json({success:true,result:{id:old,bindings:base}});
+    }
+    if(u===cf+betaVersions&&method==='POST'){
       state.events.push('upload');
       state.uploads++;
-      assert.equal(init.body instanceof FormData,true);
-      const metadata=JSON.parse(await init.body.get('metadata').text());
+      assert.equal(typeof init.body,'string','beta Worker API requires JSON modules');
+      const metadata=JSON.parse(init.body);
       assert.equal(metadata.main_module,'index.js');
-      assert.equal(metadata.bindings.length,7);
-      assert.deepEqual(metadata.bindings.map(x=>x.name).sort(),[
+      const expected=state.vaultMode?[
+        'BROKER_SIGNER_VAULT','BROKER_SIGNER_MODE','AUTHORITY_PUBLIC_B64','GRANT_LEDGER',
+        'ALLOWED_JOB_WORKFLOW_REF','ALLOWED_JOB_WORKFLOW_SHA',
+        'MAX_ADMISSION_SECONDS','MAX_INTENT_SECONDS'
+      ]:[
         'BROKER_SIGNING_PRIVATE_JWK','AUTHORITY_PUBLIC_B64','GRANT_LEDGER',
         'ALLOWED_JOB_WORKFLOW_REF','ALLOWED_JOB_WORKFLOW_SHA',
-        'MAX_ADMISSION_SECONDS','MAX_INTENT_SECONDS'].sort());
+        'MAX_ADMISSION_SECONDS','MAX_INTENT_SECONDS'
+      ];
+      assert.equal(metadata.bindings.length,expected.length);
+      assert.deepEqual(metadata.bindings.map(x=>x.name).sort(),expected.sort());
+      assert.equal(!!metadata.exports.BrokerSignerVault,!!state.vaultMode);
+      assert.ok(!metadata.bindings.some(x=>x.name.startsWith('BROKER_FIRST_SEAL_APPROVAL')));
       assert.ok(metadata.bindings.every(x=>x.type==='inherit'&&x.version_id===old));
-      assert.equal(metadata.annotations['workers/commit_sha'],candidate);
-      for(const name of sourceFiles){
-        assert.equal(await init.body.get(name).text(),bodies[name]);
+      assert.equal(metadata.annotations['workers/tag'],candidate);
+      assert.equal(metadata.annotations['workers/commit_sha'],undefined);
+      assert.deepEqual(metadata.modules.map(x=>x.name),sourceFiles);
+      for(const mod of metadata.modules){
+        assert.equal(mod.content_type,'application/javascript+module');
+        assert.equal(Buffer.from(mod.content_base64,'base64').toString('utf8'),bodies[mod.name]);
       }
       return state.uploadFailure?
         Response.json({success:false},{status:403}):
@@ -138,11 +195,23 @@ function fake(overrides={}){
     }
     if(u===origin+'/v1/public-key'){
       state.events.push('key_read');
-      return Response.json({key_id:keyId});
+      return Response.json({
+        key_id:state.forgedKeyId?'sha256:'+'f'.repeat(64):keyId,
+        public_b64:state.swappedKeyMaterial?swappedPublicB64:keyPublicB64,
+      });
     }
     throw Error('unexpected_network_target');
   };
   return {env,state};
+}
+// Owner-authorized vault maintenance keeps the DO and automatically retires
+// first-issue approval instead of requiring an extra manual release.
+{
+  const {env,state}=fake({vaultMode:true,initialApprovalPresent:true});
+  const result=await maintainManifest(structuredClone(baseManifest),env);
+  assert.equal(result.status,200);
+  assert.equal(state.uploads,1);
+  assert.equal(state.active,newer);
 }
 async function reject(label,opts,expected){
   const {env,state}=fake(opts);
@@ -151,6 +220,22 @@ async function reject(label,opts,expected){
   catch(e){code=String(e.message);}
   assert.equal(code,expected,label);
   return state;
+}
+// Missing/changed signer or GrantLedger bindings must stop BEFORE spending
+// the independent signed maintenance manifest.
+for(const [label,opts,expected] of [
+  ['vault_class_swapped',{vaultMode:true,badVault:true},'vault_binding_identity_unverified'],
+  ['both_signers',{vaultMode:true,bothSigners:true},'active_broker_signer_ambiguous'],
+  ['grant_ledger_missing',{missingLedger:true},'active_broker_required_binding_missing'],
+  ['grant_ledger_class_swapped',{badLedger:true},'grant_ledger_identity_unverified'],
+]){
+  const {env,state}=fake(opts);
+  let failure;
+  try {await maintainManifest(structuredClone(baseManifest),env);}
+  catch(e){failure=e.message;}
+  assert.equal(failure,expected,label);
+  assert.equal(state.consumes,0);
+  assert.equal(state.uploads,0);
 }
 let checks=0;
 {
@@ -167,6 +252,7 @@ let checks=0;
   assert.equal(state.uploads,1);
   assert.equal(state.active,newer);
   assert.deepEqual(state.promotions,[newer]);
+  assert.ok(state.events.indexOf('worker_identity_read')<state.events.indexOf('consume'));
   assert.ok(state.events.indexOf('candidate_read')<state.events.indexOf('consume'));
   assert.ok(state.events.indexOf('token_get')<state.events.indexOf('consume'));
   assert.ok(state.events.indexOf('active_read')<state.events.indexOf('consume'));
@@ -179,6 +265,15 @@ let checks=0;
 {
   const s=await reject('stale_version',{active:other},'current_version_mismatch');
   assert.equal(s.consumes,0);assert.equal(s.uploads,0);checks++;
+}
+for(const scenario of [
+  {label:'wrong_broker_name',opts:{mismatchedWorkerName:true}},
+  {label:'invalid_worker_id',opts:{mismatchedWorkerId:true}},
+]){
+  const s=await reject(scenario.label,scenario.opts,'broker_worker_identity_unverified');
+  assert.equal(s.consumes,0);
+  assert.equal(s.uploads,0);
+  checks++;
 }
 {
   const s=await reject('incorrect_candidate_hash',{badSource:true},'candidate_file_hash_rejected_ticket.js');
@@ -201,6 +296,13 @@ let checks=0;
   const s=await reject('postdeploy_unhealthy_rollback_preseal',{postdeployUnhealthy:true},'postdeploy_health_rejected');
   assert.deepEqual(s.promotions,[newer,old]);
   assert.equal(s.active,old);assert.equal(s.consumes,1);checks++;
+}
+{
+  const s=await reject('postdeploy_substituted_public_point_rollback',
+                       {swappedKeyMaterial:true},'postdeploy_key_mismatch');
+  assert.deepEqual(s.promotions,[newer,old]);
+  assert.equal(s.active,old);
+  assert.equal(s.consumes,1);checks++;
 }
 {
   const s=await reject('failed_promote_without_remote_mutation',{promotionHttpFailure:true,promotionNoMutation:true},'deployment_create_rejected_500');
@@ -331,6 +433,15 @@ const authInput={
   assert.equal(denied,true,'independent authority must check live broker key before signing');
   checks++;
 }
-assert.equal(checks,19);
+{
+  const {env,state}=fake({swappedKeyMaterial:true});
+  let denied=false;
+  try{await actualAuthority.authorize(authInput);}
+  catch(e){denied=e.message==='broker_public_key_mismatch';}
+  assert.equal(denied,true,'authority must deny substituted public point even when key ID label matches');
+  assert.equal(state.events.includes('token_get'),false);
+  assert.equal(state.consumes,0);checks++;
+}
+assert.equal(checks,23);
 console.log('REFERENCE_MAINTAINER_ACTUAL_SOURCE_PREFLIGHT_AND_ROLLBACK_PASS='+checks);
 console.log('REFERENCE_MAINTAINER_PUBLIC_CI_SYNTHETIC_ONLY=1');

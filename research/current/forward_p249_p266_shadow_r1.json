@@ -19,26 +19,27 @@
     "p249_core": "fixed equal-third small-value/P64/P36 primitive stack",
     "p266_satellite": "fixed 12-1 top-3 industry momentum"
   },
-  "current_holding_month": "2026-10",
+  "current_holding_month": "2026-11",
   "current_state": {
     "p249_core": {
       "AVDV": 0.16666666666666666,
       "AVUV": 0.16666666666666666,
       "DBC": 0.08333333333333333,
       "IGV": 0.05555555555555555,
-      "QQQ": 0.08333333333333333,
-      "SOXX": 0.38888888888888884,
-      "XBI": 0.05555555555555555
+      "QQQ": 0.3333333333333333,
+      "SPY": 0.08333333333333333,
+      "XBI": 0.05555555555555555,
+      "XOP": 0.05555555555555555
     },
     "p249_plus_p266": {
       "AVDV": 0.125,
       "AVUV": 0.125,
       "DBC": 0.0625,
       "IGV": 0.041666666666666664,
-      "QQQ": 0.0625,
-      "SOXX": 0.2916666666666667,
+      "QQQ": 0.25,
+      "SPY": 0.0625,
       "XBI": 0.125,
-      "XOP": 0.08333333333333333,
+      "XOP": 0.125,
       "XSD": 0.08333333333333333
     },
     "p266": {
@@ -47,14 +48,14 @@
       "XSD": 0.3333333333333333
     },
     "p36": {
-      "SOXX": 1.0
+      "QQQ": 1.0
     },
     "p64": {
       "DBC": 0.25,
       "IGV": 0.16666666666666666,
-      "QQQ": 0.25,
-      "SOXX": 0.16666666666666666,
-      "XBI": 0.16666666666666666
+      "SPY": 0.25,
+      "XBI": 0.16666666666666666,
+      "XOP": 0.16666666666666666
     }
   },
   "decision_at": "2026-09-10T07:25:00+00:00",
@@ -64,476 +65,560 @@
     "implicit_target_reset_turnover_audit": {
       "arms": {
         "p249_core": {
-          "intramonth_one_way_turnover": 0.17656850301500965,
-          "intramonth_reset_count": 33,
-          "month_boundary_count": 1,
-          "month_boundary_one_way_turnover": 0.0018674474041006466
+          "intramonth_one_way_turnover": 0.21272727580721068,
+          "intramonth_reset_count": 39,
+          "month_boundary_count": 2,
+          "month_boundary_one_way_turnover": 0.3901645888836787
         },
         "p249_plus_p266": {
-          "intramonth_one_way_turnover": 0.19466126532437927,
-          "intramonth_reset_count": 33,
-          "month_boundary_count": 1,
-          "month_boundary_one_way_turnover": 0.08447999792544161
+          "intramonth_one_way_turnover": 0.24004149667416896,
+          "intramonth_reset_count": 39,
+          "month_boundary_count": 2,
+          "month_boundary_one_way_turnover": 0.3735466223383599
         }
       },
       "not_actual_trades_or_funded_monthly_hold": true,
       "not_fee_adjusted_or_alpha_credit": true,
-      "scored_sessions": 35,
+      "scored_sessions": 42,
       "source": "exact_already_scored_daily_returns_and_frozen_month_targets",
       "status": "DIAGNOSTIC_ONLY_UNCHARGED_IMPLICIT_RESETS",
-      "transitions": 34
+      "transitions": 41
     },
-    "latest_close": "2026-10-28",
+    "latest_close": "2026-11-06",
     "monthly_hold_drift_diagnostic": {
       "arms": {
         "p249_core": {
-          "cumulative_return": -0.010242945092607592,
+          "cumulative_return": -0.10071814636479237,
           "daily_nav": [
             {
               "date": "2026-09-10",
               "holding_month": "2026-09",
               "monthly_rebalance": true,
-              "nav": 0.9831942104598542
+              "nav": 0.9831941992984761
             },
             {
               "date": "2026-09-11",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 0.9918772816083223
+              "nav": 0.9918772704465781
             },
             {
               "date": "2026-09-14",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 0.9706530710597274
+              "nav": 0.9706530598988783
             },
             {
               "date": "2026-09-15",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 0.9706044069586844
+              "nav": 0.9706044180376537
             },
             {
               "date": "2026-09-16",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 0.9697788340960598
+              "nav": 0.9697788340551556
             },
             {
               "date": "2026-09-17",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 0.9866240084364223
+              "nav": 0.9866240417545324
             },
             {
               "date": "2026-09-18",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 0.9942946338725743
+              "nav": 0.9942946338306362
             },
             {
               "date": "2026-09-21",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 1.0169997919435225
+              "nav": 1.0169997807807187
             },
             {
               "date": "2026-09-22",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 1.0297437782719079
+              "nav": 1.0297437559886582
             },
             {
               "date": "2026-09-23",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 1.018710414990562
+              "nav": 1.0187104371874105
             },
             {
               "date": "2026-09-24",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 1.0189436222748303
+              "nav": 1.0189436222318529
             },
             {
               "date": "2026-09-25",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 1.023353914680182
+              "nav": 1.0233539035171102
             },
             {
               "date": "2026-09-28",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 1.010665410841164
+              "nav": 1.0106654107985353
             },
             {
               "date": "2026-09-29",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 1.012620429933028
+              "nav": 1.012620429890317
             },
             {
               "date": "2026-09-30",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 1.0141847474718555
+              "nav": 1.0141847251892622
             },
             {
               "date": "2026-10-01",
               "holding_month": "2026-10",
               "monthly_rebalance": true,
-              "nav": 1.0205634239994401
+              "nav": 1.020563412446352
             },
             {
               "date": "2026-10-02",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 1.0325990639807403
+              "nav": 1.0325990526311184
             },
             {
               "date": "2026-10-05",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 1.0357023956228197
+              "nav": 1.035702373644319
             },
             {
               "date": "2026-10-06",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 1.0355090713838888
+              "nav": 1.0355090705742054
             },
             {
               "date": "2026-10-07",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 1.02559650841357
+              "nav": 1.025596496991481
             },
             {
               "date": "2026-10-08",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 1.012371770671256
+              "nav": 1.012371737645576
             },
             {
               "date": "2026-10-09",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 1.0139965472587682
+              "nav": 1.013996514052963
             },
             {
               "date": "2026-10-12",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 1.0023657319646815
+              "nav": 1.0023657513898194
             },
             {
               "date": "2026-10-13",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 1.0018260275565622
+              "nav": 1.001826015207993
             },
             {
               "date": "2026-10-14",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9769122019246749
+              "nav": 0.9769122103790546
             },
             {
               "date": "2026-10-15",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9774585417197568
+              "nav": 0.97745853940341
             },
             {
               "date": "2026-10-16",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9572486441384858
+              "nav": 0.9572486308891613
             },
             {
               "date": "2026-10-19",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9648305700525438
+              "nav": 0.9648305675379272
             },
             {
               "date": "2026-10-20",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.967710425745822
+              "nav": 0.967710412513062
             },
             {
               "date": "2026-10-21",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9767189805255534
+              "nav": 0.9767189780635314
             },
             {
               "date": "2026-10-22",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9485400467306431
+              "nav": 0.9485400541806003
             },
             {
               "date": "2026-10-23",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.950647373344365
+              "nav": 0.950647349091249
             },
             {
               "date": "2026-10-26",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9630537052800471
+              "nav": 0.9630537024285117
             },
             {
               "date": "2026-10-27",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9809182405388797
+              "nav": 0.9809182380106533
             },
             {
               "date": "2026-10-28",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9897570549073924
+              "nav": 0.9897570420065596
+            },
+            {
+              "date": "2026-10-29",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.983261541521207
+            },
+            {
+              "date": "2026-10-30",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.9443178816429365
+            },
+            {
+              "date": "2026-11-02",
+              "holding_month": "2026-11",
+              "monthly_rebalance": true,
+              "nav": 0.9305114344746459
+            },
+            {
+              "date": "2026-11-03",
+              "holding_month": "2026-11",
+              "monthly_rebalance": false,
+              "nav": 0.9310267168214789
+            },
+            {
+              "date": "2026-11-04",
+              "holding_month": "2026-11",
+              "monthly_rebalance": false,
+              "nav": 0.9359052548735113
+            },
+            {
+              "date": "2026-11-05",
+              "holding_month": "2026-11",
+              "monthly_rebalance": false,
+              "nav": 0.8954943332207441
+            },
+            {
+              "date": "2026-11-06",
+              "holding_month": "2026-11",
+              "monthly_rebalance": false,
+              "nav": 0.8992818536352076
             }
           ],
-          "legacy_monthly_fee_nav_total": 0.0036666666666666653,
-          "max_drawdown": -0.08415771679253636,
-          "monthly_rebalances_including_initial": 2,
-          "realized_month_boundary_one_way_turnover_including_initial": 1.0225239905610803,
-          "terminal_nav": 0.9897570549073924
+          "legacy_monthly_fee_nav_total": 0.00589630610943471,
+          "max_drawdown": -0.13537483739679546,
+          "monthly_rebalances_including_initial": 3,
+          "realized_month_boundary_one_way_turnover_including_initial": 1.411209320008397,
+          "terminal_nav": 0.8992818536352076
         },
         "p249_plus_p266": {
-          "cumulative_return": -0.006169010548396914,
+          "cumulative_return": -0.09936600493968761,
           "daily_nav": [
             {
               "date": "2026-09-10",
               "holding_month": "2026-09",
               "monthly_rebalance": true,
-              "nav": 0.9823614010104881
+              "nav": 0.9823613926394544
             },
             {
               "date": "2026-09-11",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 0.990478441793945
+              "nav": 0.9904784334226309
             },
             {
               "date": "2026-09-14",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 0.9705791855559317
+              "nav": 0.9705791771853051
             },
             {
               "date": "2026-09-15",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 0.9683375994894441
+              "nav": 0.968337607793068
             },
             {
               "date": "2026-09-16",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 0.9676811984024138
+              "nav": 0.9676811983689739
             },
             {
               "date": "2026-09-17",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 0.9868397708246467
+              "nav": 0.9868397958018043
             },
             {
               "date": "2026-09-18",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 0.9920616936477621
+              "nav": 0.9920616936134798
             },
             {
               "date": "2026-09-21",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 1.0136454542753592
+              "nav": 1.0136454459032445
             },
             {
               "date": "2026-09-22",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 1.0282618555619807
+              "nav": 1.0282618388522742
             },
             {
               "date": "2026-09-23",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 1.012287118716406
+              "nav": 1.0122871353555976
             },
             {
               "date": "2026-09-24",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 1.0129843043301987
+              "nav": 1.0129843042951934
             },
             {
               "date": "2026-09-25",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 1.0177401579721383
+              "nav": 1.017740149599882
             },
             {
               "date": "2026-09-28",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 1.0078188868153921
+              "nav": 1.0078188867805653
             },
             {
               "date": "2026-09-29",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 1.0088206664299448
+              "nav": 1.0088206663950832
             },
             {
               "date": "2026-09-30",
               "holding_month": "2026-09",
               "monthly_rebalance": false,
-              "nav": 1.0090770416967236
+              "nav": 1.0090770249876804
             },
             {
               "date": "2026-10-01",
               "holding_month": "2026-10",
               "monthly_rebalance": true,
-              "nav": 1.0150678412789902
+              "nav": 1.015067832581928
             },
             {
               "date": "2026-10-02",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 1.0273484044659553
+              "nav": 1.0273483959145964
             },
             {
               "date": "2026-10-05",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 1.0313351175823768
+              "nav": 1.0313351010876473
             },
             {
               "date": "2026-10-06",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 1.0298012948995645
+              "nav": 1.0298012942171735
             },
             {
               "date": "2026-10-07",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 1.0203536759569594
+              "nav": 1.0203536673525861
             },
             {
               "date": "2026-10-08",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 1.009242929236866
+              "nav": 1.0092429044852862
             },
             {
               "date": "2026-10-09",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 1.0118799960504417
+              "nav": 1.0118799711474733
             },
             {
               "date": "2026-10-12",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 1.0002620022153046
+              "nav": 1.0002620165722156
             },
             {
               "date": "2026-10-13",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 1.0000961171740974
+              "nav": 1.0000961078244615
             },
             {
               "date": "2026-10-14",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9762706836231212
+              "nav": 0.9762706897768348
             },
             {
               "date": "2026-10-15",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9768635357189364
+              "nav": 0.9768635338377546
             },
             {
               "date": "2026-10-16",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9582073839646738
+              "nav": 0.9582073739060849
             },
             {
               "date": "2026-10-19",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9666279683371068
+              "nav": 0.9666279662705347
             },
             {
               "date": "2026-10-20",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9721952116679894
+              "nav": 0.9721952015616341
             },
             {
               "date": "2026-10-21",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9797310486012024
+              "nav": 0.9797310465517662
             },
             {
               "date": "2026-10-22",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9523956137429365
+              "nav": 0.9523956190777245
             },
             {
               "date": "2026-10-23",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9553659533676556
+              "nav": 0.955365935040043
             },
             {
               "date": "2026-10-26",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.968090282580465
+              "nav": 0.9680902802092511
             },
             {
               "date": "2026-10-27",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.984920656722218
+              "nav": 0.9849206546063024
             },
             {
               "date": "2026-10-28",
               "holding_month": "2026-10",
               "monthly_rebalance": false,
-              "nav": 0.9938309894516031
+              "nav": 0.9938309795959566
+            },
+            {
+              "date": "2026-10-29",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.9876353169147574
+            },
+            {
+              "date": "2026-10-30",
+              "holding_month": "2026-10",
+              "monthly_rebalance": false,
+              "nav": 0.9547860608934469
+            },
+            {
+              "date": "2026-11-02",
+              "holding_month": "2026-11",
+              "monthly_rebalance": true,
+              "nav": 0.9362292149620743
+            },
+            {
+              "date": "2026-11-03",
+              "holding_month": "2026-11",
+              "monthly_rebalance": false,
+              "nav": 0.9399592438013074
+            },
+            {
+              "date": "2026-11-04",
+              "holding_month": "2026-11",
+              "monthly_rebalance": false,
+              "nav": 0.9388236815450831
+            },
+            {
+              "date": "2026-11-05",
+              "holding_month": "2026-11",
+              "monthly_rebalance": false,
+              "nav": 0.8919522387633312
+            },
+            {
+              "date": "2026-11-06",
+              "holding_month": "2026-11",
+              "monthly_rebalance": false,
+              "nav": 0.9006339950603124
             }
           ],
-          "legacy_monthly_fee_nav_total": 0.004420448767373635,
-          "max_drawdown": -0.0765410800947881,
-          "monthly_rebalances_including_initial": 2,
-          "realized_month_boundary_one_way_turnover_including_initial": 1.1005965690167108,
-          "terminal_nav": 0.9938309894516031
+          "legacy_monthly_fee_nav_total": 0.006111215743243678,
+          "max_drawdown": -0.13514798650537807,
+          "monthly_rebalances_including_initial": 3,
+          "realized_month_boundary_one_way_turnover_including_initial": 1.384623693317824,
+          "terminal_nav": 0.9006339950603124
         }
       },
       "legacy_month_costs_preserved_not_actual_drift_turnover_pricing": true,
-      "matched_relative_wealth_bp": 41.16095484251847,
-      "monthly_drift_minus_constant_target_relative_bp": 0.8573106215248316,
+      "matched_relative_wealth_bp": 15.035791277662192,
+      "monthly_drift_minus_constant_target_relative_bp": 3.3536023943159243,
       "no_new_original_issuer_or_execution_provenance": true,
       "not_broker_or_alpha_credit": true,
-      "original_constant_target_relative_wealth_bp": 40.30364422099364,
-      "scored_sessions": 35,
+      "original_constant_target_relative_wealth_bp": 11.682188883346267,
+      "scored_sessions": 42,
       "source": "exact_existing_yfinance_adjusted_close_scored_returns_and_frozen_month_targets",
       "status": "SAME_SOURCE_MONTHLY_HOLD_DRIFT_DIAGNOSTIC"
     },
@@ -548,131 +633,131 @@
         },
         "date": "2026-09-10",
         "holding_month": "2026-09",
-        "p249_core_gross": -0.013139122873479032,
-        "p249_core_net": -0.016805789540145697,
-        "p249_plus_p266_gross": -0.013638598989512002,
-        "p249_plus_p266_net": -0.017638598989512002,
-        "satellite_increment_net": -0.0008328094493663049
+        "p249_core_gross": -0.013139134034857156,
+        "p249_core_net": -0.01680580070152382,
+        "p249_plus_p266_gross": -0.013638607360545594,
+        "p249_plus_p266_net": -0.017638607360545594,
+        "satellite_increment_net": -0.0008328066590217731
       },
       {
         "cost_detail": null,
         "date": "2026-09-11",
         "holding_month": "2026-09",
-        "p249_core_gross": 0.008961655447031213,
-        "p249_core_net": 0.008961655447031213,
-        "p249_plus_p266_gross": 0.00834468624912423,
-        "p249_plus_p266_net": 0.00834468624912423,
-        "satellite_increment_net": -0.0006169691979069827
+        "p249_core_gross": 0.008961655660829626,
+        "p249_core_net": 0.008961655660829626,
+        "p249_plus_p266_gross": 0.008344686409473038,
+        "p249_plus_p266_net": 0.008344686409473038,
+        "satellite_increment_net": -0.0006169692513565885
       },
       {
         "cost_detail": null,
         "date": "2026-09-14",
         "holding_month": "2026-09",
-        "p249_core_gross": -0.021491794584335155,
-        "p249_core_net": -0.021491794584335155,
-        "p249_plus_p266_gross": -0.019992031259032997,
-        "p249_plus_p266_net": -0.019992031259032997,
-        "satellite_increment_net": 0.001499763325302158
+        "p249_core_gross": -0.02149179521851242,
+        "p249_core_net": -0.02149179521851242,
+        "p249_plus_p266_gross": -0.019992031734665947,
+        "p249_plus_p266_net": -0.019992031734665947,
+        "satellite_increment_net": 0.0014997634838464745
       },
       {
         "cost_detail": null,
         "date": "2026-09-15",
         "holding_month": "2026-09",
-        "p249_core_gross": 3.4179920206921254e-05,
-        "p249_core_net": 3.4179920206921254e-05,
-        "p249_plus_p266_gross": -0.0021937032822346896,
-        "p249_plus_p266_net": -0.0021937032822346896,
-        "satellite_increment_net": -0.0022278832024416107
+        "p249_core_gross": 3.42038384015562e-05,
+        "p249_core_net": 3.42038384015562e-05,
+        "p249_plus_p266_gross": -0.002193685343588714,
+        "p249_plus_p266_net": -0.002193685343588714,
+        "satellite_increment_net": -0.00222788918199027
       },
       {
         "cost_detail": null,
         "date": "2026-09-16",
         "holding_month": "2026-09",
-        "p249_core_gross": -0.000633299934962405,
-        "p249_core_net": -0.000633299934962405,
-        "p249_plus_p266_gross": -0.0005134962790918441,
-        "p249_plus_p266_net": -0.0005134962790918441,
-        "satellite_increment_net": 0.0001198036558705608
+        "p249_core_gross": -0.0006333119068118178,
+        "p249_core_net": -0.0006333119068118178,
+        "p249_plus_p266_gross": -0.000513505257978904,
+        "p249_plus_p266_net": -0.000513505257978904,
+        "satellite_increment_net": 0.0001198066488329138
       },
       {
         "cost_detail": null,
         "date": "2026-09-17",
         "holding_month": "2026-09",
-        "p249_core_gross": 0.01772202957838022,
-        "p249_core_net": 0.01772202957838022,
-        "p249_plus_p266_gross": 0.020070734442519198,
-        "p249_plus_p266_net": 0.020070734442519198,
-        "satellite_increment_net": 0.002348704864138979
+        "p249_core_gross": 0.01772206503613558,
+        "p249_core_net": 0.01772206503613558,
+        "p249_plus_p266_gross": 0.02007076103583572,
+        "p249_plus_p266_net": 0.02007076103583572,
+        "satellite_increment_net": 0.00234869599970014
       },
       {
         "cost_detail": null,
         "date": "2026-09-18",
         "holding_month": "2026-09",
-        "p249_core_gross": 0.0079595230924051,
-        "p249_core_net": 0.0079595230924051,
-        "p249_plus_p266_gross": 0.00540111796509527,
-        "p249_plus_p266_net": 0.00540111796509527,
-        "satellite_increment_net": -0.002558405127309831
+        "p249_core_gross": 0.007959487875673138,
+        "p249_core_net": 0.007959487875673138,
+        "p249_plus_p266_gross": 0.005401091552546297,
+        "p249_plus_p266_net": 0.005401091552546297,
+        "satellite_increment_net": -0.0025583963231268405
       },
       {
         "cost_detail": null,
         "date": "2026-09-21",
         "holding_month": "2026-09",
-        "p249_core_gross": 0.022687629153665154,
-        "p249_core_net": 0.022687629153665154,
-        "p249_plus_p266_gross": 0.021568900186899376,
-        "p249_plus_p266_net": 0.021568900186899376,
-        "satellite_increment_net": -0.001118728966765778
+        "p249_core_gross": 0.02268761802196865,
+        "p249_core_net": 0.02268761802196865,
+        "p249_plus_p266_gross": 0.021568891838126998,
+        "p249_plus_p266_net": 0.021568891838126998,
+        "satellite_increment_net": -0.0011187261838416507
       },
       {
         "cost_detail": null,
         "date": "2026-09-22",
         "holding_month": "2026-09",
-        "p249_core_gross": 0.01230552124892162,
-        "p249_core_net": 0.01230552124892162,
-        "p249_plus_p266_gross": 0.01427243914684027,
-        "p249_plus_p266_net": 0.01427243914684027,
-        "satellite_increment_net": 0.001966917897918651
+        "p249_core_gross": 0.012305510894950973,
+        "p249_core_net": 0.012305510894950973,
+        "p249_plus_p266_gross": 0.014272431381362288,
+        "p249_plus_p266_net": 0.014272431381362288,
+        "satellite_increment_net": 0.0019669204864113145
       },
       {
         "cost_detail": null,
         "date": "2026-09-23",
         "holding_month": "2026-09",
-        "p249_core_gross": -0.010678847080443518,
-        "p249_core_net": -0.010678847080443518,
-        "p249_plus_p266_gross": -0.015625540875324494,
-        "p249_plus_p266_net": -0.015625540875324494,
-        "satellite_increment_net": -0.0049466937948809755
+        "p249_core_gross": -0.010678805896026444,
+        "p249_core_net": -0.010678805896026444,
+        "p249_plus_p266_gross": -0.015625509987011687,
+        "p249_plus_p266_net": -0.015625509987011687,
+        "satellite_increment_net": -0.004946704090985243
       },
       {
         "cost_detail": null,
         "date": "2026-09-24",
         "holding_month": "2026-09",
-        "p249_core_gross": 0.0002461846286500529,
-        "p249_core_net": 0.0002461846286500529,
-        "p249_plus_p266_gross": 0.0007380254498449148,
-        "p249_plus_p266_net": 0.0007380254498449148,
-        "satellite_increment_net": 0.0004918408211948619
+        "p249_core_gross": 0.00024616363718744764,
+        "p249_core_net": 0.00024616363718744764,
+        "p249_plus_p266_gross": 0.0007380097062479609,
+        "p249_plus_p266_net": 0.0007380097062479609,
+        "satellite_increment_net": 0.0004918460690605133
       },
       {
         "cost_detail": null,
         "date": "2026-09-25",
         "holding_month": "2026-09",
-        "p249_core_gross": 0.004185776809123933,
-        "p249_core_net": 0.004185776809123933,
-        "p249_plus_p266_gross": 0.004426945262331626,
-        "p249_plus_p266_net": 0.004426945262331626,
-        "satellite_increment_net": 0.00024116845320769267
+        "p249_core_gross": 0.004185766326368331,
+        "p249_core_net": 0.004185766326368331,
+        "p249_plus_p266_gross": 0.004426937400264923,
+        "p249_plus_p266_net": 0.004426937400264923,
+        "satellite_increment_net": 0.00024117107389659206
       },
       {
         "cost_detail": null,
         "date": "2026-09-28",
         "holding_month": "2026-09",
-        "p249_core_gross": -0.01210148074760509,
-        "p249_core_net": -0.01210148074760509,
-        "p249_plus_p266_gross": -0.009232298458269917,
-        "p249_plus_p266_net": -0.009232298458269917,
-        "satellite_increment_net": 0.0028691822893351735
+        "p249_core_gross": -0.012101470600974776,
+        "p249_core_net": -0.012101470600974776,
+        "p249_plus_p266_gross": -0.009232290848297181,
+        "p249_plus_p266_net": -0.009232290848297181,
+        "satellite_increment_net": 0.002869179752677595
       },
       {
         "cost_detail": null,
@@ -688,11 +773,11 @@
         "cost_detail": null,
         "date": "2026-09-30",
         "holding_month": "2026-09",
-        "p249_core_gross": 0.0014503266645840745,
-        "p249_core_net": 0.0014503266645840745,
-        "p249_plus_p266_gross": 0.00011595225942244913,
-        "p249_plus_p266_net": 0.00011595225942244913,
-        "satellite_increment_net": -0.0013343744051616253
+        "p249_core_gross": 0.0014503057496908622,
+        "p249_core_net": 0.0014503057496908622,
+        "p249_plus_p266_gross": 0.00011593657325253992,
+        "p249_plus_p266_net": 0.00011593657325253992,
+        "satellite_increment_net": -0.0013343691764383222
       },
       {
         "cost_detail": {
@@ -704,181 +789,181 @@
         },
         "date": "2026-10-01",
         "holding_month": "2026-10",
-        "p249_core_gross": 0.006289462096018963,
-        "p249_core_net": 0.006289462096018963,
-        "p249_plus_p266_gross": 0.006353576669289656,
-        "p249_plus_p266_net": 0.00593691000262299,
-        "satellite_increment_net": -0.00035255209339597315
+        "p249_core_gross": 0.006289472813643232,
+        "p249_core_net": 0.006289472813643232,
+        "p249_plus_p266_gross": 0.0063535847075078585,
+        "p249_plus_p266_net": 0.005936918040841192,
+        "satellite_increment_net": -0.00035255477280203996
       },
       {
         "cost_detail": null,
         "date": "2026-10-02",
         "holding_month": "2026-10",
-        "p249_core_gross": 0.011759328736334633,
-        "p249_core_net": 0.011759328736334633,
-        "p249_plus_p266_gross": 0.012049450171407504,
-        "p249_plus_p266_net": 0.012049450171407504,
-        "satellite_increment_net": 0.0002901214350728709
+        "p249_core_gross": 0.011759328960897866,
+        "p249_core_net": 0.011759328960897866,
+        "p249_plus_p266_gross": 0.01204945033982993,
+        "p249_plus_p266_net": 0.01204945033982993,
+        "satellite_increment_net": 0.00029012137893206363
       },
       {
         "cost_detail": null,
         "date": "2026-10-05",
         "holding_month": "2026-10",
-        "p249_core_gross": 0.0030207245822395333,
-        "p249_core_net": 0.0030207245822395333,
-        "p249_plus_p266_gross": 0.003927574591473642,
-        "p249_plus_p266_net": 0.003927574591473642,
-        "satellite_increment_net": 0.000906850009234109
+        "p249_core_gross": 0.003020714516308161,
+        "p249_core_net": 0.003020714516308161,
+        "p249_plus_p266_gross": 0.003927567042025112,
+        "p249_plus_p266_net": 0.003927567042025112,
+        "satellite_increment_net": 0.0009068525257169514
       },
       {
         "cost_detail": null,
         "date": "2026-10-06",
         "holding_month": "2026-10",
-        "p249_core_gross": -0.00022980715226286448,
-        "p249_core_net": -0.00022980715226286448,
-        "p249_plus_p266_gross": -0.001636188220638028,
-        "p249_plus_p266_net": -0.001636188220638028,
-        "satellite_increment_net": -0.0014063810683751636
+        "p249_core_gross": -0.0002297870224268997,
+        "p249_core_net": -0.0002297870224268997,
+        "p249_plus_p266_gross": -0.0016361731232610545,
+        "p249_plus_p266_net": -0.0016361731232610545,
+        "satellite_increment_net": -0.0014063861008341547
       },
       {
         "cost_detail": null,
         "date": "2026-10-07",
         "holding_month": "2026-10",
-        "p249_core_gross": -0.009544873020214974,
-        "p249_core_net": -0.009544873020214974,
-        "p249_plus_p266_gross": -0.009124207881404162,
-        "p249_plus_p266_net": -0.009124207881404162,
-        "satellite_increment_net": 0.0004206651388108124
+        "p249_core_gross": -0.009544883087181474,
+        "p249_core_net": -0.009544883087181474,
+        "p249_plus_p266_gross": -0.009124215431629038,
+        "p249_plus_p266_net": -0.009124215431629038,
+        "satellite_increment_net": 0.00042066765555243656
       },
       {
         "cost_detail": null,
         "date": "2026-10-08",
         "holding_month": "2026-10",
-        "p249_core_gross": -0.01272848971770921,
-        "p249_core_net": -0.01272848971770921,
-        "p249_plus_p266_gross": -0.010813280182284338,
-        "p249_plus_p266_net": -0.010813280182284338,
-        "satellite_increment_net": 0.0019152095354248722
+        "p249_core_gross": -0.012728510422031672,
+        "p249_core_net": -0.012728510422031672,
+        "p249_plus_p266_gross": -0.010813295710526184,
+        "p249_plus_p266_net": -0.010813295710526184,
+        "satellite_increment_net": 0.0019152147115054884
       },
       {
         "cost_detail": null,
         "date": "2026-10-09",
         "holding_month": "2026-10",
-        "p249_core_gross": 0.0016456601678916446,
-        "p249_core_net": 0.0016456601678916446,
-        "p249_plus_p266_gross": 0.0028470825080610567,
-        "p249_plus_p266_net": 0.0028470825080610567,
-        "satellite_increment_net": 0.0012014223401694121
+        "p249_core_gross": 0.0016456599501956661,
+        "p249_core_net": 0.0016456599501956661,
+        "p249_plus_p266_gross": 0.002847082344789073,
+        "p249_plus_p266_net": 0.002847082344789073,
+        "satellite_increment_net": 0.001201422394593407
       },
       {
         "cost_detail": null,
         "date": "2026-10-12",
         "holding_month": "2026-10",
-        "p249_core_gross": -0.011635952898058044,
-        "p249_core_net": -0.011635952898058044,
-        "p249_plus_p266_gross": -0.011767338660763568,
-        "p249_plus_p266_net": -0.011767338660763568,
-        "satellite_increment_net": -0.00013138576270552323
+        "p249_core_gross": -0.011635900687047925,
+        "p249_core_net": -0.011635900687047925,
+        "p249_plus_p266_gross": -0.011767299502505978,
+        "p249_plus_p266_net": -0.011767299502505978,
+        "satellite_increment_net": -0.0001313988154580531
       },
       {
         "cost_detail": null,
         "date": "2026-10-13",
         "holding_month": "2026-10",
-        "p249_core_gross": -0.0006370610246280255,
-        "p249_core_net": -0.0006370610246280255,
-        "p249_plus_p266_gross": -0.0005379917569234634,
-        "p249_plus_p266_net": -0.0005379917569234634,
-        "satellite_increment_net": 9.90692677045621e-05
+        "p249_core_gross": -0.0006370936597174836,
+        "p249_core_net": -0.0006370936597174836,
+        "p249_plus_p266_gross": -0.0005380162332405567,
+        "p249_plus_p266_net": -0.0005380162332405567,
+        "satellite_increment_net": 9.907742647692684e-05
       },
       {
         "cost_detail": null,
         "date": "2026-10-14",
         "holding_month": "2026-10",
-        "p249_core_gross": -0.02520089806436577,
-        "p249_core_net": -0.02520089806436577,
-        "p249_plus_p266_gross": -0.02417019454173515,
-        "p249_plus_p266_net": -0.02417019454173515,
-        "satellite_increment_net": 0.0010307035226306202
+        "p249_core_gross": -0.025200876735319025,
+        "p249_core_net": -0.025200876735319025,
+        "p249_plus_p266_gross": -0.024170178544950092,
+        "p249_plus_p266_net": -0.024170178544950092,
+        "satellite_increment_net": 0.0010306981903689325
       },
       {
         "cost_detail": null,
         "date": "2026-10-15",
         "holding_month": "2026-10",
-        "p249_core_gross": 0.0002802394266047427,
-        "p249_core_net": 0.0002802394266047427,
-        "p249_plus_p266_gross": 0.0006369051517569287,
-        "p249_plus_p266_net": 0.0006369051517569287,
-        "satellite_increment_net": 0.00035666572515218606
+        "p249_core_gross": 0.0002802281059666057,
+        "p249_core_net": 0.0002802281059666057,
+        "p249_plus_p266_gross": 0.000636896661278326,
+        "p249_plus_p266_net": 0.000636896661278326,
+        "satellite_increment_net": 0.0003566685553117203
       },
       {
         "cost_detail": null,
         "date": "2026-10-16",
         "holding_month": "2026-10",
-        "p249_core_gross": -0.02151913018434634,
-        "p249_core_net": -0.02151913018434634,
-        "p249_plus_p266_gross": -0.02036009569224715,
-        "p249_plus_p266_net": -0.02036009569224715,
-        "satellite_increment_net": 0.001159034492099191
+        "p249_core_gross": -0.021519141713116474,
+        "p249_core_net": -0.021519141713116474,
+        "p249_plus_p266_gross": -0.020360104338824746,
+        "p249_plus_p266_net": -0.020360104338824746,
+        "satellite_increment_net": 0.0011590373742917277
       },
       {
         "cost_detail": null,
         "date": "2026-10-19",
         "holding_month": "2026-10",
-        "p249_core_gross": 0.008547378588122313,
-        "p249_core_net": 0.008547378588122313,
-        "p249_plus_p266_gross": 0.009558737501655652,
-        "p249_plus_p266_net": 0.009558737501655652,
-        "satellite_increment_net": 0.0010113589135333396
+        "p249_core_gross": 0.008547390823237246,
+        "p249_core_net": 0.008547390823237246,
+        "p249_plus_p266_gross": 0.009558746677991854,
+        "p249_plus_p266_net": 0.009558746677991854,
+        "satellite_increment_net": 0.0010113558547546076
       },
       {
         "cost_detail": null,
         "date": "2026-10-20",
         "holding_month": "2026-10",
-        "p249_core_gross": 0.002779941327611045,
-        "p249_core_net": 0.002779941327611045,
-        "p249_plus_p266_gross": 0.005671308379276734,
-        "p249_plus_p266_net": 0.005671308379276734,
-        "satellite_increment_net": 0.0028913670516656892
+        "p249_core_gross": 0.002779929505297953,
+        "p249_core_net": 0.002779929505297953,
+        "p249_plus_p266_gross": 0.0056712995125419155,
+        "p249_plus_p266_net": 0.0056712995125419155,
+        "satellite_increment_net": 0.0028913700072439623
       },
       {
         "cost_detail": null,
         "date": "2026-10-21",
         "holding_month": "2026-10",
-        "p249_core_gross": 0.009885365054557522,
-        "p249_core_net": 0.009885365054557522,
-        "p249_plus_p266_gross": 0.008452636348588918,
-        "p249_plus_p266_net": 0.008452636348588918,
-        "satellite_increment_net": -0.0014327287059686042
+        "p249_core_gross": 0.009885377167923436,
+        "p249_core_net": 0.009885377167923436,
+        "p249_plus_p266_gross": 0.008452645433613354,
+        "p249_plus_p266_net": 0.008452645433613354,
+        "satellite_increment_net": -0.0014327317343100828
       },
       {
         "cost_detail": null,
         "date": "2026-10-22",
         "holding_month": "2026-10",
-        "p249_core_gross": -0.03064576408167223,
-        "p249_core_net": -0.03064576408167223,
-        "p249_plus_p266_gross": -0.029630166857393392,
-        "p249_plus_p266_net": -0.029630166857393392,
-        "satellite_increment_net": 0.0010155972242788386
+        "p249_core_gross": -0.030645752454637014,
+        "p249_core_net": -0.030645752454637014,
+        "p249_plus_p266_gross": -0.029630158137116978,
+        "p249_plus_p266_net": -0.029630158137116978,
+        "satellite_increment_net": 0.0010155943175200362
       },
       {
         "cost_detail": null,
         "date": "2026-10-23",
         "holding_month": "2026-10",
-        "p249_core_gross": 0.0022710761945286353,
-        "p249_core_net": 0.0022710761945286353,
-        "p249_plus_p266_gross": 0.002889958696342167,
-        "p249_plus_p266_net": 0.002889958696342167,
-        "satellite_increment_net": 0.0006188825018135316
+        "p249_core_gross": 0.00227103870534262,
+        "p249_core_net": 0.00227103870534262,
+        "p249_plus_p266_gross": 0.0028899305794526558,
+        "p249_plus_p266_net": 0.0028899305794526558,
+        "satellite_increment_net": 0.0006188918741100355
       },
       {
         "cost_detail": null,
         "date": "2026-10-26",
         "holding_month": "2026-10",
-        "p249_core_gross": 0.014107650952684993,
-        "p249_core_net": 0.014107650952684993,
-        "p249_plus_p266_gross": 0.014131445940072736,
-        "p249_plus_p266_net": 0.014131445940072736,
-        "satellite_increment_net": 2.379498738774334e-05
+        "p249_core_gross": 0.014107676478020949,
+        "p249_core_net": 0.014107676478020949,
+        "p249_plus_p266_gross": 0.014131465084074703,
+        "p249_plus_p266_net": 0.014131465084074703,
+        "satellite_increment_net": 2.3788606053754338e-05
       },
       {
         "cost_detail": null,
@@ -894,72 +979,148 @@
         "cost_detail": null,
         "date": "2026-10-28",
         "holding_month": "2026-10",
-        "p249_core_gross": 0.009571817759882082,
-        "p249_core_net": 0.009571817759882082,
-        "p249_plus_p266_gross": 0.009551273697287092,
-        "p249_plus_p266_net": 0.009551273697287092,
-        "satellite_increment_net": -2.0544062594990767e-05
+        "p249_core_gross": 0.009571806148772736,
+        "p249_core_net": 0.009571806148772736,
+        "p249_plus_p266_gross": 0.009551264988955083,
+        "p249_plus_p266_net": 0.009551264988955083,
+        "satellite_increment_net": -2.0541159817652824e-05
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-10-29",
+        "holding_month": "2026-10",
+        "p249_core_gross": -0.00690120830862331,
+        "p249_core_net": -0.00690120830862331,
+        "p249_plus_p266_gross": -0.006562924109612381,
+        "p249_plus_p266_net": -0.006562924109612381,
+        "satellite_increment_net": 0.0003382841990109287
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-10-30",
+        "holding_month": "2026-10",
+        "p249_core_gross": -0.041544657501837126,
+        "p249_core_net": -0.041544657501837126,
+        "p249_plus_p266_gross": -0.03559230180553775,
+        "p249_plus_p266_net": -0.03559230180553775,
+        "satellite_increment_net": 0.005952355696299379
+      },
+      {
+        "cost_detail": {
+          "p249_core_cost_bp": 23.61111111111111,
+          "p249_plus_p266_cost_bp": 17.708333333333332,
+          "p266_one_way_turnover": 0.0,
+          "p36_one_way_turnover": 1.0,
+          "p64_one_way_turnover": 0.41666666666666663
+        },
+        "date": "2026-11-02",
+        "holding_month": "2026-11",
+        "p249_core_gross": -0.012259439274178538,
+        "p249_core_net": -0.014620550385289649,
+        "p249_plus_p266_gross": -0.017664772915471708,
+        "p249_plus_p266_net": -0.01943560624880504,
+        "satellite_increment_net": -0.0048150558635153915
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-11-03",
+        "holding_month": "2026-11",
+        "p249_core_gross": 0.0005897693417681285,
+        "p249_core_net": 0.0005897693417681285,
+        "p249_plus_p266_gross": 0.0040174588437564525,
+        "p249_plus_p266_net": 0.0040174588437564525,
+        "satellite_increment_net": 0.003427689501988324
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-11-04",
+        "holding_month": "2026-11",
+        "p249_core_gross": 0.004929802388409688,
+        "p249_core_net": 0.004929802388409688,
+        "p249_plus_p266_gross": -0.0016676262169865548,
+        "p249_plus_p266_net": -0.0016676262169865548,
+        "satellite_increment_net": -0.0065974286053962425
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-11-05",
+        "holding_month": "2026-11",
+        "p249_core_gross": -0.04280004682622493,
+        "p249_core_net": -0.04280004682622493,
+        "p249_plus_p266_gross": -0.049476173975810965,
+        "p249_plus_p266_net": -0.049476173975810965,
+        "satellite_increment_net": -0.006676127149586035
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-11-06",
+        "holding_month": "2026-11",
+        "p249_core_gross": 0.004340391884872877,
+        "p249_core_net": 0.004340391884872877,
+        "p249_plus_p266_gross": 0.010059241134919308,
+        "p249_plus_p266_net": 0.010059241134919308,
+        "satellite_increment_net": 0.005718849250046431
       }
     ],
     "p249_core_net": {
-      "annualized_vol": 0.20434994172393803,
-      "cumulative_return": -0.009449075552156794,
-      "days": 35,
-      "max_drawdown": -0.08636743840744499,
-      "sharpe_rf0": -0.23472087955775484
+      "annualized_vol": 0.2384028215687934,
+      "cumulative_return": -0.10190966867604245,
+      "days": 42,
+      "max_drawdown": -0.13687892836756044,
+      "sharpe_rf0": -2.5839042948137423
     },
     "p249_plus_p266_net": {
-      "annualized_vol": 0.20232870321293908,
-      "cumulative_return": -0.005456794347984628,
-      "days": 35,
-      "max_drawdown": -0.07882097257433085,
-      "sharpe_rf0": -0.09601458596058152
+      "annualized_vol": 0.24207873220417067,
+      "cumulative_return": -0.10086050258755919,
+      "days": 42,
+      "max_drawdown": -0.13711813332812495,
+      "sharpe_rf0": -2.512143070477482
     },
-    "satellite_increment_cumulative": 0.0039287763865003544
+    "satellite_increment_cumulative": 0.0011746103744814107
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-10-29T08:42:15.396647+00:00",
+  "observed_at": "2026-11-07T11:40:35.771462+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_health": {
     "all_expected_exchange_sessions_present": true,
     "all_symbols_share_latest_date": true,
     "common_session_lags_source_max": false,
-    "completed_session_request_date": "2026-10-28",
+    "completed_session_request_date": "2026-11-06",
     "exchange_calendar": "NYSE:pandas_market_calendars==5.5.0:exchange_calendars==4.13.2",
-    "expected_completed_exchange_sessions": 35,
+    "expected_completed_exchange_sessions": 42,
     "in_progress_session_excluded": true,
     "lagging_symbols_vs_source_max": [],
     "latest_by_symbol": {
-      "AVDV": "2026-10-28",
-      "AVUV": "2026-10-28",
-      "DBC": "2026-10-28",
-      "GLD": "2026-10-28",
-      "IGV": "2026-10-28",
-      "IHI": "2026-10-28",
-      "ITA": "2026-10-28",
-      "IYT": "2026-10-28",
-      "KRE": "2026-10-28",
-      "QQQ": "2026-10-28",
-      "SOXX": "2026-10-28",
-      "SPY": "2026-10-28",
-      "TLT": "2026-10-28",
-      "XAR": "2026-10-28",
-      "XBI": "2026-10-28",
-      "XHB": "2026-10-28",
-      "XME": "2026-10-28",
-      "XOP": "2026-10-28",
-      "XPH": "2026-10-28",
-      "XRT": "2026-10-28",
-      "XSD": "2026-10-28",
-      "XSW": "2026-10-28",
-      "XTN": "2026-10-28"
+      "AVDV": "2026-11-06",
+      "AVUV": "2026-11-06",
+      "DBC": "2026-11-06",
+      "GLD": "2026-11-06",
+      "IGV": "2026-11-06",
+      "IHI": "2026-11-06",
+      "ITA": "2026-11-06",
+      "IYT": "2026-11-06",
+      "KRE": "2026-11-06",
+      "QQQ": "2026-11-06",
+      "SOXX": "2026-11-06",
+      "SPY": "2026-11-06",
+      "TLT": "2026-11-06",
+      "XAR": "2026-11-06",
+      "XBI": "2026-11-06",
+      "XHB": "2026-11-06",
+      "XME": "2026-11-06",
+      "XOP": "2026-11-06",
+      "XPH": "2026-11-06",
+      "XRT": "2026-11-06",
+      "XSD": "2026-11-06",
+      "XSW": "2026-11-06",
+      "XTN": "2026-11-06"
     },
-    "latest_scored_common_session": "2026-10-28",
-    "observed_completed_exchange_sessions": 35,
+    "latest_scored_common_session": "2026-11-06",
+    "observed_completed_exchange_sessions": 42,
     "provider": "yfinance_adjusted_close",
-    "source_max_date": "2026-10-28",
+    "source_max_date": "2026-11-06",
     "unresolved_forward_gap": null
   },
   "source_pins": {
