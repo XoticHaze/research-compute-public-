@@ -1,3 +1,8 @@
+import {
+  PI_GHCR_OPAQUE_PUBLISH_IDENTITY,
+  resolvePiImageCandidate,
+} from './pi_opaque_ghcr.js';
+
 const GITHUB_ISSUER = 'https://token.actions.githubusercontent.com';
 const GITHUB_JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwks';
 const EXPECTED_AUDIENCE = 'mmibkr-fleet-authority';
@@ -504,6 +509,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     const matchedUiBuild = matchesIdentity(claims, UI_BUILD_VALIDATION_IDENTITY);
     const matchedLiveBotSourceUnwrap = matchesIdentity(claims, LIVE_BOT_SOURCE_UNWRAP_IDENTITY);
     const matchedBootstrap = matchesIdentity(claims, SOURCE_VAULT_BOOTSTRAP_IDENTITY);
+    const matchedPiOpaquePublisher = matchesIdentity(claims, PI_GHCR_OPAQUE_PUBLISH_IDENTITY);
     const matchedOperatorDeploy = matchesIdentity(claims, OPERATOR_CONSOLE_DEPLOY_IDENTITY);
     const matchedCloudCanaryDeploy = matchesIdentity(claims, CLOUD_CANARY_DEPLOY_IDENTITY);
     const matchedMissedTradeAudit = matchesIdentity(claims, MISSED_TRADE_AUDIT_IDENTITY);
@@ -540,6 +546,11 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
       /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname)
       || pathname === '/v1/source-vault/private-archive/attest'
     );
+    const piOpaquePublisherPathAllowed = (
+      claims.event_name === 'push'
+      && (pathname === '/v1/source-vault/pi-image-candidate'
+          || privateArchivePathAllowed)
+    );
     const operatorDeployPathAllowed = pathname === '/v1/source-vault/unwrap';
     const cloudCanaryUnwrapPathAllowed = (
       pathname === '/v1/source-vault/unwrap'
@@ -557,6 +568,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
         matchedRuntime
         || (matchedUiBuild && privateArchivePathAllowed)
         || (matchedBootstrap && privateArchivePathAllowed)
+        || (matchedPiOpaquePublisher && piOpaquePublisherPathAllowed)
         || (matchedOperatorDeploy && operatorDeployPathAllowed)
         || (matchedCloudCanaryDeploy && cloudCanaryUnwrapPathAllowed)
         || (matchedLiveBotSourceUnwrap && liveBotSourceUnwrapPathAllowed)
@@ -624,7 +636,8 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
 
 function roleForRequest(method, pathname) {
   if (
-    (method === 'POST' && pathname === '/v1/source-vault/unwrap')
+    (method === 'POST' && pathname === '/v1/source-vault/pi-image-candidate')
+    || (method === 'POST' && pathname === '/v1/source-vault/unwrap')
     || (method === 'GET' && /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname))
     || (method === 'POST' && pathname === '/v1/source-vault/private-archive/attest')
     ||
@@ -700,11 +713,44 @@ export async function handleSourceExchange(request, env) {
   headers.set('x-mmibkr-oidc-run-id', identity.run_id);
   headers.set('x-mmibkr-oidc-run-attempt', identity.run_attempt);
 
+  if (request.method === 'POST' && url.pathname === '/v1/source-vault/pi-image-candidate') {
+    try {
+      const approved = await resolvePiImageCandidate(env);
+      return new Response(JSON.stringify({
+        schema: 'mmibkr.pi_ghcr_opaque_candidate.v1',
+        source_sha: approved.source_sha,
+        native_brokerless_suites: approved.native_brokerless_suites,
+        publication_only: true,
+        broker_authorized: false,
+      }), {
+        status: 200,
+        headers: {
+          'content-type': 'application/json',
+          'cache-control': 'private, no-store',
+          'x-content-type-options': 'nosniff',
+        },
+      });
+    } catch {
+      return json({ error: 'private_pi_candidate_unavailable' }, 503);
+    }
+  }
+
   const privateArchiveMatch = url.pathname.match(/^\/v1\/source-vault\/private-archive\/([0-9a-f]{40})$/);
   if (request.method === 'GET' && privateArchiveMatch) {
     const sourceSha = privateArchiveMatch[1];
     if (!isPrivateSourceStreamApproved(sourceSha, identity)) {
-      return json({ error: 'private_source_sha_not_approved' }, 403);
+      if (!matchesIdentity(identity, PI_GHCR_OPAQUE_PUBLISH_IDENTITY)
+          || identity.event_name !== 'push') {
+        return json({ error: 'private_source_sha_not_approved' }, 403);
+      }
+      try {
+        const approved = await resolvePiImageCandidate(env);
+        if (approved.source_sha !== sourceSha) {
+          return json({ error: 'private_source_sha_not_approved' }, 403);
+        }
+      } catch {
+        return json({ error: 'private_pi_candidate_unavailable' }, 503);
+      }
     }
     const sourceToken = String(env.MMIBKR_PRIVATE_SOURCE_TOKEN || '');
     if (!sourceToken || sourceToken.length > 512 || /[\r\n\0]/.test(sourceToken)) {
