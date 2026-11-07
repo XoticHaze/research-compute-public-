@@ -9,9 +9,13 @@ on:
       - 'cloudflare/reference-maintenance-authority/src/index.js'
       - 'tests/reference_release_maintainer_runtime_interop.mjs'
       - 'scripts/reference_release_grant_v1.py'
+      - 'scripts/reference_private_grant_authority_adapter_v1.py'
+      - 'tests/test_reference_private_grant_authority_adapter_v1.py'
       - 'tests/reference_release_intent_interop.mjs'
       - 'tests/reference_release_intent_interop_prepare.py'
       - 'scripts/reference_release_intent_v1.py'
+      - 'scripts/reference_private_grant_authority_adapter_v1.py'
+      - 'tests/test_reference_private_grant_authority_adapter_v1.py'
       - 'tests/reference_release_broker_policy.mjs'
       - 'tests/reference_release_broker_endpoint_interop.mjs'
       - 'tests/reference_placement_claim_attestation.mjs'
@@ -76,6 +80,8 @@ jobs:
         run: node tests/reference_placement_claim_attestation.mjs
       - name: Prove actual neutral maintainer preflight, source integrity and remote-commit rollback behavior
         run: node tests/reference_release_maintainer_runtime_interop.mjs
+      - name: Verify private one-shot grant bridge reuses P256 signer and independent journal
+        run: PYTHONDONTWRITEBYTECODE=1 python -B -m unittest -v tests.test_reference_private_grant_authority_adapter_v1
       - name: Prepare private-authority signed grant
         run: python tests/reference_release_grant_interop_prepare.py
       - name: Prove WebCrypto verifies private-authority grant
