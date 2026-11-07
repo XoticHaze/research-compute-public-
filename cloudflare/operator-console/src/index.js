@@ -1,3 +1,6 @@
+import { PiOwnerApprovalState, publishPiOwnerGrant } from './pi_owner_approval.js';
+export { PiOwnerApprovalState } from './pi_owner_approval.js';
+
 import {
   machinePromotionProjection,
   readPromotionState,
@@ -688,6 +691,11 @@ function stateStub(env) {
   return env.OPERATOR_STATE.get(id);
 }
 
+function piOwnerStub(env) {
+  if (!env.PI_OWNER_APPROVER) throw new Error('pi_owner_approver_binding_missing');
+  return env.PI_OWNER_APPROVER.get(env.PI_OWNER_APPROVER.idFromName('cc-pi4-owner-v1'));
+}
+
 function secureAssetResponse(response) {
   const headers = new Headers(response.headers);
   headers.set('cache-control', 'private, no-store');
@@ -1189,6 +1197,58 @@ export default {
         static_assets_configured: Boolean(env.ASSETS),
         live_execution_allowed: false,
       });
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/pi-owner/status') {
+      try {
+        return await piOwnerStub(env).fetch(new Request('https://pi-owner.internal/status'));
+      } catch {
+        return json({error:'pi_owner_status_unavailable'},503);
+      }
+    }
+
+    if (request.method === 'POST' && (
+      url.pathname === '/api/pi-owner/initialize'
+      || url.pathname === '/api/pi-owner/enroll'
+      || url.pathname === '/api/pi-owner/approve'
+    )) {
+      if (!operatorDecisionRequestIsSameOrigin(request)) {
+        return json({error:'pi_owner_origin_rejected'},403);
+      }
+      let input;
+      try {
+        const raw = await request.text();
+        if (new TextEncoder().encode(raw).length > 8192) return json({error:'pi_owner_payload_too_large'},413);
+        input = JSON.parse(raw);
+      } catch {
+        return json({error:'pi_owner_payload_rejected'},400);
+      }
+      const kind = url.pathname.endsWith('/initialize') ? 'initialize'
+        : url.pathname.endsWith('/enroll') ? 'enroll' : 'sign';
+      let response;
+      try {
+        response = await piOwnerStub(env).fetch(new Request(
+          'https://pi-owner.internal/' + kind,
+          {method:'POST',headers:{'content-type':'application/json'},
+           body:JSON.stringify({...input, operator:accessIdentity})},
+        ));
+      } catch {
+        return json({error:'pi_owner_issuer_unavailable'},503);
+      }
+      if (!response.ok || kind !== 'sign') return response;
+      const signed = await response.json();
+      try {
+        const queueReceipt = await publishPiOwnerGrant(
+          env, input.kind, input.approval, input.request, signed.signed_grant,
+        );
+        return json({ok:true, ...queueReceipt, signer_key_sha256:signed.key_sha256,
+          signing_grant_durable:true, pi_root_execution_verified:false},202);
+      } catch (error) {
+        return json({error:'pi_owner_signed_not_dispatched',
+          reason:String(error?.message || 'queue_unavailable'),
+          request_id:signed.request_id, approval_recorded:true,
+          root_execution_verified:false},503);
+      }
     }
 
     if (request.method === 'GET' && url.pathname === '/api/promotion-review') {
