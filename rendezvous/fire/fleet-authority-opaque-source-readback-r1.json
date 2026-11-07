@@ -3,6 +3,6 @@
   "action": "read_deployed_script_marker_only",
   "contains_private_source_reference": false,
   "mutation_authorized": false,
-  "probe_sequence": 2,
-  "probe_type": "unauthenticated_candidate_oidc_edge_only"
+  "probe_sequence": 3,
+  "probe_type": "verify_current_deployed_exact_private_source_inner_grant_marker"
 }
