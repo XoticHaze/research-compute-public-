@@ -62,6 +62,10 @@ jobs:
           node tests/operator_console_runtime_union_freshness_contract.mjs
           node tests/pi_account_observation_contract.mjs
           node tests/pi_bot_live_observation_contract.mjs
+          node --check cloudflare/operator-console/src/pi_owner_approval.js
+          node --check cloudflare/operator-console/src/pi_owner_approval_ui.js
+          node tests/pi_owner_approval_contract.mjs
+          node tests/pi_owner_access_gate_contract.mjs
           node --check cloudflare/operator-console/src/promotion_review_state.js
           node tests/promotion_review_state_contract.mjs
           python -m unittest -v \
