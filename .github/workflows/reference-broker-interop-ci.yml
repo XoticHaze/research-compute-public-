@@ -27,6 +27,8 @@ on:
       - 'tests/reference_live_release_contract.py'
       - 'scripts/reference_release_ticket_v1.py'
       - 'scripts/operator/reference_release_keygen.mjs'
+      - 'scripts/operator/reference_private_grant_custody_v1.py'
+      - 'tests/test_reference_private_grant_custody_v1.py'
       - 'scripts/operator/reference_neutral_first_seal_v1.py'
       - 'tests/test_reference_neutral_first_seal_v1.py'
       - 'scripts/operator/reference_release_prepare_intent.mjs'
@@ -48,6 +50,8 @@ on:
       - 'tests/reference_release_ticket_interop.py'
       - 'scripts/reference_release_ticket_v1.py'
       - 'scripts/operator/reference_release_keygen.mjs'
+      - 'scripts/operator/reference_private_grant_custody_v1.py'
+      - 'tests/test_reference_private_grant_custody_v1.py'
       - 'scripts/operator/reference_neutral_first_seal_v1.py'
       - 'tests/test_reference_neutral_first_seal_v1.py'
       - 'tests/reference_operator_helper_roundtrip.py'
@@ -88,6 +92,8 @@ jobs:
         run: node tests/reference_release_maintainer_runtime_interop.mjs
       - name: Verify private one-shot LIVE broker intent issuer using independent P256 signer and journal
         run: PYTHONDONTWRITEBYTECODE=1 python -B -m unittest -v tests.test_reference_private_intent_authority_adapter_v1
+      - name: Verify one-time independent private grant signer installation and SQLite atomic replay
+        run: PYTHONDONTWRITEBYTECODE=1 python -B -m unittest -v tests.test_reference_private_grant_custody_v1
       - name: Prepare private-authority signed grant
         run: python tests/reference_release_grant_interop_prepare.py
       - name: Prove WebCrypto verifies private-authority grant
