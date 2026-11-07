@@ -1,3 +1,4 @@
+import { piOwnerApprovalPage, piOwnerApprovalClientJs } from './pi_owner_approval_ui.js';
 import { PiOwnerApprovalState, publishPiOwnerGrant } from './pi_owner_approval.js';
 export { PiOwnerApprovalState } from './pi_owner_approval.js';
 
@@ -1177,6 +1178,13 @@ export default {
       accessIdentity = await verifyAccess(request, env);
     } catch {
       return json({ error: 'access_denied' }, 403);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/operator/pi-owner-approval') {
+      return piOwnerApprovalPage();
+    }
+    if (request.method === 'GET' && url.pathname === '/operator/pi-owner-approval.js') {
+      return piOwnerApprovalClientJs();
     }
 
     // This dedicated Access-locked host is the operator console, not the
