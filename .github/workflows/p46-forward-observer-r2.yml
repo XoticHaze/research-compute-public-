@@ -32,7 +32,9 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install focused dependencies
-        run: python -m pip install --disable-pip-version-check numpy pandas yfinance
+        run: python -m pip install --disable-pip-version-check numpy pandas yfinance exchange_calendars==4.13.2
+      - name: Validate complete prior official month before P46 forward observation
+        run: python -m unittest discover -s tests -p 'test_p46_prior_month_official_calendar_20261029.py' -v
       - name: Validate normalized IBKR-shaped contract and observe frozen P46
         run: python -m research.p46_forward_observer_r2
       - uses: actions/upload-artifact@v4
