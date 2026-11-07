@@ -74,7 +74,7 @@
           "intramonth_one_way_turnover": 0.24004149667416896,
           "intramonth_reset_count": 39,
           "month_boundary_count": 2,
-          "month_boundary_one_way_turnover": 0.37354662233835995
+          "month_boundary_one_way_turnover": 0.3735466223383599
         }
       },
       "not_actual_trades_or_funded_monthly_hold": true,
@@ -346,7 +346,7 @@
           "legacy_monthly_fee_nav_total": 0.00589630610943471,
           "max_drawdown": -0.13537483739679546,
           "monthly_rebalances_including_initial": 3,
-          "realized_month_boundary_one_way_turnover_including_initial": 1.4112093200083973,
+          "realized_month_boundary_one_way_turnover_including_initial": 1.411209320008397,
           "terminal_nav": 0.8992818536352076
         },
         "p249_plus_p266": {
@@ -1080,7 +1080,7 @@
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-11-07T08:59:22.665444+00:00",
+  "observed_at": "2026-11-07T11:40:35.771462+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_health": {
