@@ -5,6 +5,7 @@ for (const path of [
   '/operator/pi-owner-approval',
   '/operator/pi-owner-approval.js',
   '/api/pi-owner/status',
+  '/api/pi-owner/device-status',
   '/api/pi-owner/receipt?request_id=synthetic-123',
 ]) {
   const response = await worker.fetch(new Request(url+path), {});
@@ -13,6 +14,7 @@ for (const path of [
 }
 for (const path of [
   '/api/pi-owner/initialize','/api/pi-owner/enroll','/api/pi-owner/approve',
+  '/api/pi-owner/dispatch-signed',
 ]) {
   const response = await worker.fetch(new Request(url+path,{
     method:'POST',headers:{'content-type':'application/json','origin':url},

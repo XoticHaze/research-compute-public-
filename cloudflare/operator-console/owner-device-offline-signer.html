@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; img-src 'none'; object-src 'none'; base-uri 'none'">
+<title>CommandCenter owner-device offline signer</title>
+<style>
+body{background:#101924;color:#f4f6fb;font:16px system-ui;margin:0 auto;max-width:50rem;padding:1.25rem}
+section{background:#213044;padding:1rem;margin:1rem 0;border-radius:12px}
+p{line-height:1.5} label{display:block;margin:1rem 0 .35rem}
+textarea,input,select{box-sizing:border-box;width:100%;padding:.7rem;border:1px solid #879aad;border-radius:5px;background:#0b1521;color:white}
+textarea{min-height:7rem;font:12px ui-monospace,monospace}
+button{padding:.75rem 1rem;margin:.5rem .4rem 0 0;background:#a2cfff;border:0;border-radius:5px;color:#081627;font-weight:700}
+pre{white-space:pre-wrap;word-break:break-word;background:#07111b;padding:.75rem;border-radius:6px}
+.warning{border-left:4px solid #f9a826;padding-left:1rem}small{color:#c4cede}input[type=checkbox]{width:auto}
+</style></head>
+<body><h1>Pi owner: offline Ed25519 signer</h1>
+<p class="warning">Owner-held key. This single file must be opened from a locally saved, reviewed copy. It makes <strong>no network requests</strong>. Never paste your passphrase or encrypted key backup into the Cloudflare console, GitHub, or chat. Cloudflare is only a transport for the signed result.</p>
+<section><h2>1. Create once, then keep the encrypted backup</h2>
+<p>Generate the owner key on a trusted device. Save the encrypted backup privately, verify it can be unlocked, and enroll only the public PEM via an independently trusted cc-pi4 root-owner path. Creating a new key does not grant root approval.</p>
+<label for="password">Strong backup passphrase (at least 20 characters)</label><input id="password" type="password" autocomplete="off">
+<button id="generate" type="button">Create encrypted key backup</button>
+<label for="backup">Use an existing encrypted backup for later approvals</label><input id="backup" type="file" accept=".json,application/json">
+<button id="unlock" type="button">Unlock existing backup</button>
+<p id="key-state">No key loaded</p>
+<label for="pem">Public key PEM (enroll on Pi once)</label><textarea id="pem" readonly></textarea>
+<label for="fingerprint">SPKI SHA-256 fingerprint (verify on Pi)</label><input id="fingerprint" readonly>
+<small>No plaintext private key is saved or displayed. The downloaded backup is AES-256-GCM encrypted, with PBKDF2-HMAC-SHA256 key derivation.</small>
+</section>
+<section><h2>2. Review and sign one exact request</h2>
+<p>Paste the exact current request and independently reviewed unsigned approval from the Access-protected operator interface. A matching signature binds all approval fields to the Pi's root-verification domain.</p>
+<label for="kind">Operation</label><select id="kind"><option value="replace">pi.bot.replace_existing</option><option value="bootstrap">pi.bot.owner_bootstrap</option></select>
+<label for="request">Exact fresh Pi request JSON</label><textarea id="request"></textarea>
+<label for="approval">Matching unsigned owner approval JSON</label><textarea id="approval"></textarea>
+<button id="review" type="button">Validate and show exact summary</button>
+<pre id="summary">No request reviewed</pre>
+<label><input type="checkbox" id="confirmed"> I independently reviewed the exact image, previous source, account/lease evidence where applicable, operation and expiry. Preserve existing LIVE authority, do not authorize new trades.</label>
+<button id="sign" type="button">Sign reviewed request once</button>
+<label for="signed">Signed grant JSON (copy only this to the Access console)</label><textarea id="signed" readonly></textarea>
+<button id="copy" type="button">Copy signed grant</button>
+</section><pre id="result">Offline signer loaded</pre>
+<script>
+'use strict';
+const $=x=>document.getElementById(x), enc=new TextEncoder(), dec=new TextDecoder();
+const domains={bootstrap:'commandcenter.pi.bot_owner_bootstrap_approval.v1\u0000',replace:'commandcenter.pi.bot_replace_approval.v1\u0000'};
+const keyId='ccpi-owner-bootstrap-ed25519-v1';
+let signingKey=null, publicSpki=null, currentReview=null;
+function fail(e){$('result').textContent='Rejected: '+(e?.message||String(e));}
+function put(message){$('result').textContent=message;}
+function b64(u){let s='';for(const b of new Uint8Array(u))s+=String.fromCharCode(b);return btoa(s);}
+function unb64(s){return Uint8Array.from(atob(s),x=>x.charCodeAt(0));}
+function hex(u){return [...new Uint8Array(u)].map(x=>x.toString(16).padStart(2,'0')).join('');}
+function canonical(v){
+ if(Array.isArray(v))return v.map(stable);
+ return JSON.stringify(stable(v))+'\n';
+}
+function stable(v){
+ if(Array.isArray(v))return v.map(stable);
+ if(v&&typeof v==='object')return Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])]));
+ if(typeof v==='string'){if(!/^[\x20-\x7e]*$/.test(v))throw Error('Non-ASCII or control character in approval');return v;}
+ if(typeof v==='boolean'||v===null||Number.isSafeInteger(v))return v;
+ throw Error('Invalid JSON approval value');
+}
+function strictFields(v,fields){
+ if(!v||Array.isArray(v)||typeof v!=='object'||Object.keys(v).length!==fields.length||!fields.every(k=>Object.hasOwn(v,k)))throw Error('Exact approval fields required');
+}
+const bootFields='schema node_id request_id request_sha256 source_sha image_ref expires_at snapshot_sha256 expected_account_sha256 canonical_start_receipt_sha256 writer_lease_receipt_sha256 review_epoch_utc no_pi_live_orders_before_epoch_verified exclusive_writer_lease_reviewed selected_strategy_pins_sha256 approve_new_pi_owned_zero_only'.split(' ');
+const replaceFields='schema request_id source_sha image_ref expected_active_source_sha expected_active_image_ref artifact_manifest_blob_sha client_id inspect_client_id expected_release runtime_mode acknowledge_existing_live_mode_preserved expires_at'.split(' ');
+function bytes(s){return enc.encode(s);}
+async function hash(s){return hex(await crypto.subtle.digest('SHA-256',s));}
+function expiry(s){const t=Date.parse(s);if(!Number.isFinite(t))throw Error('Invalid UTC expiry');return t;}
+function same(a,b){if(a!==b)throw Error('Exact request/approval identity mismatch');}
+async function validate(kind,req,a){
+ if(!Object.hasOwn(domains,kind))throw Error('Invalid operation');
+ strictFields(a,kind==='bootstrap'?bootFields:replaceFields);
+ same(a.schema,kind==='bootstrap'?'commandcenter.pi.bot_owner_bootstrap_approval.v1':'commandcenter.pi.bot_replace_approval.v1');
+ same(req.action,kind==='bootstrap'?'pi.bot.owner_bootstrap':'pi.bot.replace_existing');
+ same(req.node_id,'cc-pi4');same(req.request_id,a.request_id);
+ same(req.source_sha,a.source_sha);same(req.image_ref,a.image_ref);same(req.expires_at,a.expires_at);
+ const now=Date.now(),created=expiry(req.created_at),until=expiry(req.expires_at);
+ if(created>now+120000||created>=until||until<=now||until-created>3600000||until>now+(kind==='bootstrap'?180000:600000))throw Error('Request expired or outside bounded freshness window');
+ if(!/^[A-Za-z0-9._:-]{6,100}$/.test(req.request_id)||!/@sha256:[0-9a-f]{64}$/.test(req.image_ref)||!/^r[0-9a-f]{12}$/.test(req.expected_release))throw Error('Request identity not pinned');
+ if(kind==='bootstrap'){
+  same(a.request_sha256,await hash(bytes(canonical(req))));
+  same(a.node_id,'cc-pi4');
+  if(!a.no_pi_live_orders_before_epoch_verified||!a.exclusive_writer_lease_reviewed||!a.approve_new_pi_owned_zero_only)throw Error('Independent owner epoch evidence not acknowledged');
+  if(now-expiry(a.review_epoch_utc)>180000||expiry(a.review_epoch_utc)>now)throw Error('Owner epoch evidence stale');
+ }else{
+  same(req.source_repo,'XoticHaze/mm-IBKR');same(req.runtime_mode,'PRESERVE_EXISTING_LIVE');
+  for(const key of ['expected_active_source_sha','expected_active_image_ref','artifact_manifest_blob_sha','client_id','inspect_client_id','expected_release','runtime_mode'])same(req[key],a[key]);
+  if(a.acknowledge_existing_live_mode_preserved!==true)throw Error('LIVE preservation approval required');
+ }
+ const data=canonical(a);
+ if(bytes(data).length>3500||/\b(?:password|private_key|account_number|broker_net_qty)\b/i.test(data))throw Error('Unsafe sensitive approval field');
+ return {kind,request_id:req.request_id,source_sha:req.source_sha,image_ref:req.image_ref,previous_image:req.expected_active_image_ref||null,previous_source:req.expected_active_source_sha||null,expires_at:req.expires_at,approval_sha256:await hash(bytes(data))};
+}
+async function showPublic(spki){
+ publicSpki=new Uint8Array(spki);
+ const pub=b64(spki),pem='-----BEGIN PUBLIC KEY-----\n'+(pub.match(/.{1,64}/g)||[]).join('\n')+'\n-----END PUBLIC KEY-----\n';
+ $('pem').value=pem;$('fingerprint').value=await hash(spki);
+ $('key-state').textContent='Owner signing key unlocked locally. Public SHA-256: '+$('fingerprint').value;
+}
+async function derive(pass,salt){
+ if(pass.length<20||pass.length>256)throw Error('Use a passphrase at least 20 characters long');
+ const base=await crypto.subtle.importKey('raw',bytes(pass),'PBKDF2',false,['deriveKey']);
+ return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:600000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+function save(name,txt){
+ const blob=new Blob([txt],{type:'application/json'});
+ const href=URL.createObjectURL(blob),link=document.createElement('a');
+ link.href=href;link.download=name;link.textContent='Save encrypted backup file';
+ document.body.append(link);link.click();
+ setTimeout(()=>URL.revokeObjectURL(href),30000);
+}
+$('generate').onclick=async()=>{
+ try{
+  if(signingKey)throw Error('Key already loaded. Never rotate before independent Pi re-enrollment.');
+  if(!crypto?.subtle)throw Error('WebCrypto unavailable in this local browser; open offline HTML in modern Safari/Chrome.');
+  const pass=$('password').value;
+  const pair=await crypto.subtle.generateKey('Ed25519',true,['sign','verify']);
+  const pkcs8=new Uint8Array(await crypto.subtle.exportKey('pkcs8',pair.privateKey));
+  const spki=new Uint8Array(await crypto.subtle.exportKey('spki',pair.publicKey));
+  const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const aes=await derive(pass,salt);
+  const ciphertext=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},aes,pkcs8));
+  const backup={schema:'commandcenter.pi.owner_device_encrypted_backup.v1',algorithm:'Ed25519',key_id:keyId,kdf:'PBKDF2-HMAC-SHA256',iterations:600000,cipher:'AES-256-GCM',salt_b64:b64(salt),iv_b64:b64(iv),ciphertext_b64:b64(ciphertext),public_spki_b64:b64(spki)};
+  signingKey=pair.privateKey;await showPublic(spki);
+  const text=JSON.stringify(backup,null,2)+'\n';
+  save('ccpi-owner-ed25519-encrypted-backup.json',text);
+  put('Encrypted backup created. SAVE IT securely. Then test unlock from that backup before enrolling the public PEM on Pi.');
+ }catch(e){fail(e);}
+};
+$('unlock').onclick=async()=>{
+ try{
+  const file=$('backup').files[0];if(!file||file.size>4000)throw Error('Select the saved encrypted backup JSON (max 4 KB)');
+  const doc=JSON.parse(await file.text());
+  if(doc.schema!=='commandcenter.pi.owner_device_encrypted_backup.v1'||doc.algorithm!=='Ed25519'||doc.key_id!==keyId||doc.kdf!=='PBKDF2-HMAC-SHA256'||doc.iterations!==600000||doc.cipher!=='AES-256-GCM')throw Error('Backup contract invalid');
+  const salt=unb64(doc.salt_b64),iv=unb64(doc.iv_b64),spki=unb64(doc.public_spki_b64);
+  if(salt.length!==16||iv.length!==12||spki.length>120)throw Error('Backup parameters invalid');
+  const aes=await derive($('password').value,salt);
+  const pkcs8=await crypto.subtle.decrypt({name:'AES-GCM',iv},aes,unb64(doc.ciphertext_b64));
+  const privateKey=await crypto.subtle.importKey('pkcs8',pkcs8,'Ed25519',false,['sign']);
+  const publicKey=await crypto.subtle.importKey('spki',spki,'Ed25519',false,['verify']);
+  const challenge=bytes('ccpi-local-restore-self-check');
+  const sig=await crypto.subtle.sign('Ed25519',privateKey,challenge);
+  if(!await crypto.subtle.verify('Ed25519',publicKey,sig,challenge))throw Error('Encrypted backup and public key do not match');
+  signingKey=privateKey;await showPublic(spki);put('Backup recovered successfully. No request signed or sent.');
+ }catch(e){fail(e);}
+};
+$('review').onclick=async()=>{
+ try{
+  const req=JSON.parse($('request').value),approval=JSON.parse($('approval').value),kind=$('kind').value;
+  currentReview=await validate(kind,req,approval);
+  $('summary').textContent=JSON.stringify(currentReview,null,2);
+  $('confirmed').checked=false;$('signed').value='';
+  put('Exact request validated. Independently review the above identities and fresh root-private proofs before signing.');
+ }catch(e){currentReview=null;fail(e);}
+};
+$('sign').onclick=async()=>{
+ try{
+  if(!signingKey)throw Error('Unlock owner key first');
+  if(!currentReview||!$('confirmed').checked)throw Error('Independently review this request and check explicit approval');
+  const req=JSON.parse($('request').value),a=JSON.parse($('approval').value),kind=$('kind').value;
+  const again=await validate(kind,req,a);
+  if(JSON.stringify(again)!==JSON.stringify(currentReview))throw Error('Request changed after review');
+  const signature=await crypto.subtle.sign('Ed25519',signingKey,bytes(domains[kind]+canonical(a)));
+  $('signed').value=JSON.stringify({...a,key_id:keyId,signature_b64:b64(signature)},null,2);
+  $('confirmed').checked=false;currentReview=null;
+  put('Detached Ed25519 grant signed locally. ONLY the signed grant JSON should be copied to the Access transport. Pi root must verify before execution.');
+ }catch(e){fail(e);}
+};
+$('copy').onclick=async()=>{
+ try{if(!$('signed').value)throw Error('No signed grant');await navigator.clipboard.writeText($('signed').value);put('Signed grant copied; no key/passphrase leaves device.');}
+ catch(e){$('signed').focus();$('signed').select();put('Select/copy the signed grant manually.');}
+};
+</script></body></html>
