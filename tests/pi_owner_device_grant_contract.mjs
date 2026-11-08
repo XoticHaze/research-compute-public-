@@ -99,7 +99,7 @@ await assert.rejects(()=>verifyPiOwnerDeviceGrant(env,op,'root_release',
   {...releaseGrant,expires_at:iso(now-2000)}),
   /pi_owner_root_release_not_fresh/);
 await assert.rejects(()=>verifyPiOwnerDeviceGrant(env,op,'replace',
-  request,approval,releaseGrant),/pi_owner_signed_grant_unsigned_payload_drift/);
+  request,approval,releaseGrant),/pi_owner_signed_grant_shape_invalid/);
 
 const external=readFileSync('cloudflare/operator-console/owner-device-offline-signer.html','utf8');
 assert.match(external,/connect-src 'none'/);
