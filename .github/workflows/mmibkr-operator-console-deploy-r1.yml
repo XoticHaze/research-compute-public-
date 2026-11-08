@@ -23,6 +23,7 @@ on:
       - 'cloudflare/operator-console/**'
       - 'tests/test_mmibkr_operator_console_worker_v1.py'
       - 'tests/pi_owner_device_grant_contract.mjs'
+      - 'tests/pi_owner_root_release_transport_contract.mjs'
       - 'tests/test_mmibkr_operator_console_access_reconcile_v1.py'
       - 'tests/test_mmibkr_operator_console_deploy_token_route_v1.py'
       - 'scripts/mmibkr_operator_console_deploy_token_route_v1.py'
@@ -67,6 +68,7 @@ jobs:
           node --check cloudflare/operator-console/src/pi_owner_approval_ui.js
           node --check cloudflare/operator-console/src/pi_owner_device_grant.js
           node tests/pi_owner_device_grant_contract.mjs
+          node tests/pi_owner_root_release_transport_contract.mjs
           node tests/pi_owner_approval_contract.mjs
           node tests/pi_owner_access_gate_contract.mjs
           node --check cloudflare/operator-console/src/promotion_review_state.js
