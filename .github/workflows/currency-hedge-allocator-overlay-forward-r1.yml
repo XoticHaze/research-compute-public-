@@ -99,7 +99,26 @@ jobs:
           git fetch origin main
           git checkout -B currency-hedge-allocator-overlay-publish origin/main
           mkdir -p research/current
-          cp "$src" research/current/currency_hedge_allocator_overlay_forward_r1.json
+          # A refreshed observation timestamp alone is not a changed market/economic publication.
+          # Preserve meaningful asof, source, grade, price and scorecard changes.
+          current=research/current/currency_hedge_allocator_overlay_forward_r1.json
+          if test -f "$current"; then
+            if python - "$src" "$current" <<'PY'
+          import json, sys
+          from pathlib import Path
+          incoming=json.loads(Path(sys.argv[1]).read_text())
+          previous=json.loads(Path(sys.argv[2]).read_text())
+          for snapshot in (incoming, previous):
+              snapshot.pop('generated_at', None)
+          raise SystemExit(0 if incoming == previous else 1)
+          PY
+            then
+              echo 'CURRENT_CURRENCY_HEDGE_ALLOCATOR_OVERLAY_SEMANTIC_UNCHANGED=true'
+              echo 'changed=false' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          cp "$src" "$current"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add research/current/currency_hedge_allocator_overlay_forward_r1.json
