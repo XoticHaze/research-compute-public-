@@ -64,6 +64,7 @@ jobs:
         continue-on-error: true
         env:
           CLOUDFLARE_API_TOKEN: ${{ env.CLOUDFLARE_DEPLOY_TOKEN_R2 }}
+          CLOUDFLARE_R2_SCOPE_PROFILE: fleet_transition
         shell: bash
         run: |
           python scripts/cloudflare_r2_scope_preflight.py
