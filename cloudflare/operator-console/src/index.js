@@ -1,5 +1,5 @@
 import { piOwnerApprovalPage, piOwnerApprovalClientJs } from './pi_owner_approval_ui.js';
-import { PiOwnerApprovalState, publishPiOwnerGrant, readPiOwnerRootReceipt } from './pi_owner_approval.js';
+import { PiOwnerApprovalState, publishPiOwnerGrant, readPiOwnerRootReceipt, publishPiRootReleaseGrant, readPiRootReleaseReceipt } from './pi_owner_approval.js';
 import { verifyPiOwnerDeviceGrant } from './pi_owner_device_grant.js';
 export { PiOwnerApprovalState } from './pi_owner_approval.js';
 
@@ -1243,8 +1243,10 @@ export default {
           reason:String(error?.message || 'invalid_approval')},403);
       }
       try {
-        const receipt=await publishPiOwnerGrant(
-          env,input.kind,input.approval,input.request,input.signed_grant);
+        const receipt=input.kind==='root_release'
+          ? await publishPiRootReleaseGrant(env,input.request,input.signed_grant)
+          : await publishPiOwnerGrant(
+            env,input.kind,input.approval,input.request,input.signed_grant);
         return json({...receipt,ok:true,signer_key_sha256:verified.key_sha256,
           independent_device_signature_verified:true,
           pi_root_execution_verified:false},202);
@@ -1257,9 +1259,11 @@ export default {
     }
     if (request.method === 'GET' && url.pathname === '/api/pi-owner/receipt') {
       try {
-        const result = await readPiOwnerRootReceipt(
-          env, url.searchParams.get('request_id'),
-        );
+        const result = url.searchParams.get('kind')==='root_release'
+          ? await readPiRootReleaseReceipt(env,url.searchParams.get('request_id'))
+          : await readPiOwnerRootReceipt(
+            env, url.searchParams.get('request_id'),
+          );
         return json(result, result.status === 'PENDING' ? 202 : 200);
       } catch {
         return json({error:'pi_owner_root_outbox_read_unavailable'},503);

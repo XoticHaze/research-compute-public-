@@ -60,6 +60,47 @@ await rejects('pi_owner_signed_grant_unsigned_payload_drift',env,op,request,appr
 await rejects('pi_owner_signed_grant_shape_invalid',env,op,request,approval,{...signed,extra:true});
 await rejects('pi_owner_device_signature_rejected',env,op,request,approval,{...signed,signature_b64:'A'.repeat(86)+'=='});
 await rejects('pi_owner_request_not_fresh',env,op,{...request,expires_at:iso(now-2000)},{...approval,expires_at:iso(now-2000)},{...signed,expires_at:iso(now-2000)});
+// A new root-agent update uses the same owner key but a DISTINCT domain,
+// exact source/predecessor/expiry, and no blanket pi.release.apply permission.
+const releaseReq={
+  schema:'commandcenter.pi.release_request.v1',
+  node_id:'cc-pi4',request_id:'independent-root-test-12345',
+  action:'pi.release.apply',source_repo:'XoticHaze/CommandCenter',
+  source_sha:a,expected_release:'r'+'b'.repeat(12),
+  created_at:iso(now-1000),expires_at:iso(now+230000)
+};
+const releaseApproval={
+  schema:'commandcenter.pi.release_request_approval.v1',
+  request_id:releaseReq.request_id,source_sha:releaseReq.source_sha,
+  expected_release:releaseReq.expected_release,expires_at:releaseReq.expires_at
+};
+const rootDomain='commandcenter.pi.release_request_approval.v1\0';
+const releaseSig=await crypto.subtle.sign('Ed25519',keys.privateKey,
+  encode.encode(rootDomain+canonicalPiJson(releaseApproval)));
+const releaseGrant={...releaseApproval,
+  key_id:'ccpi-owner-bootstrap-ed25519-v1',
+  signature_b64:Buffer.from(releaseSig).toString('base64')};
+const verifiedRelease=await verifyPiOwnerDeviceGrant(env,op,'root_release',
+  releaseReq,releaseApproval,releaseGrant);
+assert.equal(verifiedRelease.independent_device_signature_verified,true);
+assert.equal(verifiedRelease.request_id,releaseReq.request_id);
+await assert.rejects(()=>verifyPiOwnerDeviceGrant(env,op,'root_release',
+  {...releaseReq,source_repo:'XoticHaze/other'},
+  releaseApproval,releaseGrant),/pi_owner_root_release_identity_mismatch/);
+await assert.rejects(()=>verifyPiOwnerDeviceGrant(env,op,'root_release',
+  releaseReq,{...releaseApproval,source_sha:c},releaseGrant),
+  /pi_owner_root_release_identity_mismatch/);
+await assert.rejects(()=>verifyPiOwnerDeviceGrant(env,op,'root_release',
+  releaseReq,releaseApproval,{...signed}),
+  /pi_owner_signed_grant_shape_invalid/);
+await assert.rejects(()=>verifyPiOwnerDeviceGrant(env,op,'root_release',
+  {...releaseReq,expires_at:iso(now-2000)},
+  {...releaseApproval,expires_at:iso(now-2000)},
+  {...releaseGrant,expires_at:iso(now-2000)}),
+  /pi_owner_root_release_not_fresh/);
+await assert.rejects(()=>verifyPiOwnerDeviceGrant(env,op,'replace',
+  request,approval,releaseGrant),/pi_owner_signed_grant_shape_invalid/);
+
 const external=readFileSync('cloudflare/operator-console/owner-device-offline-signer.html','utf8');
 assert.match(external,/connect-src 'none'/);
 assert.match(external,/owner_device_encrypted_backup\.v1/);

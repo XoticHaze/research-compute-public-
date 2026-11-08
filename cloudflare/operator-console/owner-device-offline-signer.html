@@ -27,7 +27,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:#07111b;padding:.75rem
 </section>
 <section><h2>2. Review and sign one exact request</h2>
 <p>Paste the exact current request and independently reviewed unsigned approval from the Access-protected operator interface. A matching signature binds all approval fields to the Pi's root-verification domain.</p>
-<label for="kind">Operation</label><select id="kind"><option value="replace">pi.bot.replace_existing</option><option value="bootstrap">pi.bot.owner_bootstrap</option></select>
+<label for="kind">Operation</label><select id="kind"><option value="replace">pi.bot.replace_existing</option><option value="bootstrap">pi.bot.owner_bootstrap</option><option value="root_release">pi.release.apply (root-agent upgrade)</option></select>
 <label for="request">Exact fresh Pi request JSON</label><textarea id="request"></textarea>
 <label for="approval">Matching unsigned owner approval JSON</label><textarea id="approval"></textarea>
 <button id="review" type="button">Validate and show exact summary</button>
@@ -40,7 +40,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:#07111b;padding:.75rem
 <script>
 'use strict';
 const $=x=>document.getElementById(x), enc=new TextEncoder(), dec=new TextDecoder();
-const domains={bootstrap:'commandcenter.pi.bot_owner_bootstrap_approval.v1\u0000',replace:'commandcenter.pi.bot_replace_approval.v1\u0000'};
+const domains={bootstrap:'commandcenter.pi.bot_owner_bootstrap_approval.v1\u0000',replace:'commandcenter.pi.bot_replace_approval.v1\u0000',root_release:'commandcenter.pi.release_request_approval.v1\u0000'};
 const keyId='ccpi-owner-bootstrap-ed25519-v1';
 let signingKey=null, publicSpki=null, currentReview=null;
 function fail(e){$('result').textContent='Rejected: '+(e?.message||String(e));}
@@ -64,12 +64,30 @@ function strictFields(v,fields){
 }
 const bootFields='schema node_id request_id request_sha256 source_sha image_ref expires_at snapshot_sha256 expected_account_sha256 canonical_start_receipt_sha256 writer_lease_receipt_sha256 review_epoch_utc no_pi_live_orders_before_epoch_verified exclusive_writer_lease_reviewed selected_strategy_pins_sha256 approve_new_pi_owned_zero_only'.split(' ');
 const replaceFields='schema request_id source_sha image_ref expected_active_source_sha expected_active_image_ref artifact_manifest_blob_sha client_id inspect_client_id expected_release runtime_mode acknowledge_existing_live_mode_preserved expires_at'.split(' ');
+const rootRequestFields='schema node_id request_id action source_repo source_sha expected_release created_at expires_at'.split(' ');
+const rootApprovalFields='schema request_id source_sha expected_release expires_at'.split(' ');
 function bytes(s){return enc.encode(s);}
 async function hash(s){return hex(await crypto.subtle.digest('SHA-256',s));}
 function expiry(s){const t=Date.parse(s);if(!Number.isFinite(t))throw Error('Invalid UTC expiry');return t;}
 function same(a,b){if(a!==b)throw Error('Exact request/approval identity mismatch');}
 async function validate(kind,req,a){
  if(!Object.hasOwn(domains,kind))throw Error('Invalid operation');
+ if(kind==='root_release'){
+  strictFields(req,rootRequestFields);strictFields(a,rootApprovalFields);
+  same(req.schema,'commandcenter.pi.release_request.v1');
+  same(a.schema,'commandcenter.pi.release_request_approval.v1');
+  same(req.node_id,'cc-pi4');same(req.action,'pi.release.apply');
+  same(req.source_repo,'XoticHaze/CommandCenter');
+  same(req.request_id,a.request_id);same(req.source_sha,a.source_sha);
+  same(req.expected_release,a.expected_release);same(req.expires_at,a.expires_at);
+  if(!/^[0-9a-f]{40}$/.test(req.source_sha)||!/^r[0-9a-f]{12}$/.test(req.expected_release)
+    || !/^[A-Za-z0-9._:-]{6,100}$/.test(req.request_id))throw Error('Unpinned root upgrade');
+  const now=Date.now(),created=expiry(req.created_at),until=expiry(req.expires_at);
+  if(created>now+120000||until<=now||until<=created||until-created>3600000||until>now+600000)throw Error('Root upgrade approval not fresh');
+  return {kind,request_id:req.request_id,source_sha:req.source_sha,
+   expected_release:req.expected_release,expires_at:req.expires_at,
+   approval_sha256:await hash(bytes(canonical(a)))};
+ }
  strictFields(a,kind==='bootstrap'?bootFields:replaceFields);
  same(a.schema,kind==='bootstrap'?'commandcenter.pi.bot_owner_bootstrap_approval.v1':'commandcenter.pi.bot_replace_approval.v1');
  same(req.action,kind==='bootstrap'?'pi.bot.owner_bootstrap':'pi.bot.replace_existing');

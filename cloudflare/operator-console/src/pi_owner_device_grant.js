@@ -7,6 +7,7 @@ const KEY_ID = 'ccpi-owner-bootstrap-ed25519-v1';
 const DOMAINS = {
   bootstrap: 'commandcenter.pi.bot_owner_bootstrap_approval.v1\0',
   replace: 'commandcenter.pi.bot_replace_approval.v1\0',
+  root_release: 'commandcenter.pi.release_request_approval.v1\0',
 };
 const encoder = new TextEncoder();
 const SHA64 = /^[0-9a-f]{64}$/;
@@ -34,6 +35,43 @@ function decodeSpki(pem) {
   return result;
 }
 
+// Root-agent releases are distinct from BOT replacement; exact separate
+// domain, independently pinned CommandCenter source and predecessor only.
+export function validatePiRootReleaseApproval(request, approval, now=Date.now()) {
+  const reqKeys=['schema','node_id','request_id','action','source_repo',
+    'source_sha','expected_release','created_at','expires_at'];
+  const grantKeys=['schema','request_id','source_sha','expected_release','expires_at'];
+  const exact=(obj,keys)=>obj && typeof obj==='object' && !Array.isArray(obj)
+    && Object.keys(obj).length===keys.length && keys.every(k=>Object.hasOwn(obj,k));
+  if (!exact(request,reqKeys) || !exact(approval,grantKeys)
+      || request.schema!=='commandcenter.pi.release_request.v1'
+      || approval.schema!=='commandcenter.pi.release_request_approval.v1'
+      || request.node_id!=='cc-pi4' || request.action!=='pi.release.apply'
+      || request.source_repo!=='XoticHaze/CommandCenter'
+      || !/^[A-Za-z0-9._:-]{6,100}$/.test(request.request_id)
+      || !/^[0-9a-f]{40}$/.test(request.source_sha)
+      || !/^r[0-9a-f]{12}$/.test(request.expected_release)
+      || approval.request_id!==request.request_id
+      || approval.source_sha!==request.source_sha
+      || approval.expected_release!==request.expected_release
+      || approval.expires_at!==request.expires_at) {
+    throw new Error('pi_owner_root_release_identity_mismatch');
+  }
+  const created=Date.parse(request.created_at),expiry=Date.parse(request.expires_at);
+  if (!Number.isFinite(created)||!Number.isFinite(expiry)
+      || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|\+00:00)$/.test(request.created_at)
+      || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|\+00:00)$/.test(request.expires_at)
+      || created>now+120000 || expiry<=now || expiry<=created
+      || expiry-created>3600000 || expiry>now+600000) {
+    throw new Error('pi_owner_root_release_not_fresh');
+  }
+  const raw=canonicalPiJson(approval);
+  if (encoder.encode(raw).length>600 || /\b(?:password|private_key|account_number|broker_net_qty)\b/i.test(raw)) {
+    throw new Error('pi_owner_root_release_grant_oversize');
+  }
+  return {request_id:request.request_id};
+}
+
 export async function verifyPiOwnerDeviceGrant(env, operator, kind, request, approval, signed) {
   const owner = String(operator?.email || '').trim().toLowerCase();
   const allowed = String(env.PI_OWNER_SIGNER_ALLOWED_EMAILS || '').split(',')
@@ -54,7 +92,8 @@ export async function verifyPiOwnerDeviceGrant(env, operator, kind, request, app
     throw new Error('pi_owner_root_public_key_fingerprint_mismatch');
   }
 
-  await validatePiOwnerApproval(kind, approval, request);
+  if (kind === 'root_release') validatePiRootReleaseApproval(request, approval);
+  else await validatePiOwnerApproval(kind, approval, request);
   if (signed === null || typeof signed !== 'object' || Array.isArray(signed)
       || signed.key_id !== KEY_ID || typeof signed.signature_b64 !== 'string'
       || !B64SIG.test(signed.signature_b64)
