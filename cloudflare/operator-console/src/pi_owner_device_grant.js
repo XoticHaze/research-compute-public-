@@ -10,7 +10,7 @@ const DOMAINS = {
 };
 const encoder = new TextEncoder();
 const SHA64 = /^[0-9a-f]{64}$/;
-const B64SIG = /^(?:[A-Za-z0-9+/]{4}){21}==$/; // 64 Ed25519 bytes => 88 chars
+const B64SIG = /^(?:[A-Za-z0-9+/]{4}){21}[A-Za-z0-9+/]{2}==$/; // 64 bytes => 88 chars
 
 function eq(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
