@@ -494,9 +494,40 @@ def _native_lane(x: dict[str, Any], prospective: dict[str, Any] | None = None) -
     validation = x.get("validation") or {}
     action = x.get("paper_action") or {}
     action_status = str(action.get("status") or "NATIVE_SIGNAL")
+    # A legacy adapter can continue to say PAPER_COHORT_READY long after its
+    # frozen cohort has exited. Never reuse its original signal as a new entry.
+    prospective = prospective or {"ledger_status": "NOT_SUPPLIED", "program_id": program_id}
+    cohort_status = str(prospective.get("current_cohort_status") or "")
+    signal_date = str(x.get("signal_date") or "")
+    admitted_signal_date = str(prospective.get("current_signal_date") or "")
+    source_asof = str(prospective.get("market_data_asof") or "")
+    matched_fresh_entry = (
+        program_id == "SEMICONDUCTOR_SHARED_RIDGE"
+        and prospective.get("ledger_status") == "PRESENT"
+        and prospective.get("current_cohort_id")
+        and signal_date
+        and signal_date == admitted_signal_date
+        and cohort_status in {"REGISTERED", "AWAITING_ENTRY_SESSION"}
+        and int(prospective.get("open_cohorts", 0) or 0) >= 1
+        and int(prospective.get("late_registration_rejections", 0) or 0) == 0
+        and (not source_asof or source_asof <= signal_date)
+        and validation.get("state") == "PROSPECTIVE_ELIGIBLE"
+    )
+    entry_eligible = bool(matched_fresh_entry)
+    effective_action = dict(action)
     if program_id == "SEMICONDUCTOR_SHARED_RIDGE":
-        state = str(validation.get("state") or "")
-        grade = "PROSPECTIVE_SIGNAL_READY" if state == "PROSPECTIVE_ELIGIBLE" else "DESCRIPTIVE_PRESTART"
+        if entry_eligible:
+            grade = "PROSPECTIVE_SIGNAL_READY"
+        elif cohort_status == "RESOLVED":
+            grade = "RESOLVED_COHORT_OBSERVER_ONLY"
+        else:
+            grade = "NEW_COHORT_ENTRY_NOT_VERIFIED"
+        if not entry_eligible:
+            effective_action["status"] = "NO_NEW_COHORT_ENTRY"
+            for book_name in ("industry_book", "ticker_book"):
+                book = effective_action.get(book_name)
+                if isinstance(book, dict):
+                    effective_action[book_name] = dict(book, status="OBSERVATION_ONLY_NO_NEW_ENTRY")
         action_text = (
             f"Daily +1/fixed20 cohort. Positive breadth {float((x.get('signal') or {}).get('positive_breadth', 0)):.1%}; "
             f"paper action status {action_status}."
@@ -517,7 +548,10 @@ def _native_lane(x: dict[str, Any], prospective: dict[str, Any] | None = None) -
         "signal_date": x.get("signal_date"),
         "signal": x.get("signal", {}),
         "timing": x.get("timing", {}),
-        "paper_action": action,
+        "paper_action": effective_action,
+        "source_paper_action_status": action_status,
+        "entry_eligible": entry_eligible,
+        "entry_admission": {"cohort_id": prospective.get("current_cohort_id"), "cohort_status": cohort_status, "signal_identity_matches": signal_date == admitted_signal_date, "new_entry_verified": entry_eligible, "broker_or_live_authority": False},
         "action_text": action_text,
         "benchmarks": x.get("benchmarks", []),
         "scorecard": x.get("scorecard"),
@@ -528,6 +562,52 @@ def _native_lane(x: dict[str, Any], prospective: dict[str, Any] | None = None) -
         "forward_science_stages": _separate_forward_science_stages(prospective or {}),
         "decision_use": x.get("decision_use"),
         "boundaries": x.get("boundaries", {}),
+    }
+
+
+def _ridge_persistence_lane(payload: dict[str, Any]) -> dict[str, Any]:
+    """Read-only projection of a different prospective frozen-weight durability test.
+
+    It does not repeat or increment the original Ridge cohort, earn a new model
+    prediction, or change the deterministic allocator's inputs.
+    """
+    if payload.get("schema") != "research.ridge_frozen_weight_persistence_forward_r1":
+        raise RuntimeError("RIDGE_PERSISTENCE_SCHEMA_INVALID")
+    if payload.get("program_id") != "RIDGE_FROZEN_WEIGHT_PERSISTENCE_DIAGNOSTIC":
+        raise RuntimeError("RIDGE_PERSISTENCE_IDENTITY_INVALID")
+    bounds = payload.get("boundaries") or {}
+    for field in ("new_model_prediction", "original_shared_ridge_h20_cohort", "signed_model_promotion",
+                  "allocation_authority", "broker_action", "live_trading_change", "paper_broker_fill"):
+        if bounds.get(field) is not False:
+            raise RuntimeError("RIDGE_PERSISTENCE_BOUNDARY_INVALID")
+    if bounds.get("research_only") is not True:
+        raise RuntimeError("RIDGE_PERSISTENCE_RESEARCH_ONLY_REQUIRED")
+    forward = payload.get("forward") or {}
+    status = str(forward.get("status") or "")
+    if status not in {"AWAITING_ENTRY_FINALITY", "OPEN", "RESOLVED"}:
+        raise RuntimeError("RIDGE_PERSISTENCE_FORWARD_STATUS_INVALID")
+    metrics = None if status == "AWAITING_ENTRY_FINALITY" else {
+        key: forward.get(key) for key in (
+            "book_nav", "smh_nav", "equal13_nav", "book_return_bps",
+            "book_minus_smh_matched_net_bps", "book_minus_equal13_matched_net_bps",
+            "elapsed_post_entry_sessions", "remaining_sessions",
+        )
+    }
+    return {
+        "program_id": "RIDGE_FROZEN_WEIGHT_PERSISTENCE_DIAGNOSTIC",
+        "kind": "frozen_september_weights_reentered_at_new_november_entry_close",
+        "validation_grade": "FROZEN_WEIGHT_PERSISTENCE_OBSERVER_ONLY",
+        "evidence_grade": "PROSPECTIVE_DIAGNOSTIC_" + status,
+        "source_model": payload.get("source_model"),
+        "source_signal_date": payload.get("source_signal_date"),
+        "freeze_source_commit_sha": payload.get("freeze_source_commit_sha"),
+        "freeze_observed_at_utc": payload.get("freeze_observed_at_utc"),
+        "original_adapter_git_blob": payload.get("original_adapter_git_blob"),
+        "timing": forward,
+        "scorecard": metrics,
+        "paper_action": {"status": "NO_ACTION_OBSERVER_ONLY"},
+        "boundaries": bounds,
+        "decision_use": "Compare frozen historical weight persistence with matched SMH/equal13; never classify as a new fitted Ridge prediction or broker fill.",
     }
 
 
@@ -619,6 +699,10 @@ def build(root: Path) -> dict[str, Any]:
                 "decision_use": "Adapter contract exists; current sanitized native result has not been supplied to this report run.",
             })
 
+    ridge_persistence = _load(root, "ridge_frozen_weight_persistence_forward_r1.json")
+    if ridge_persistence is not None:
+        lanes.append(_ridge_persistence_lane(ridge_persistence))
+
     semi_lane = next((row for row in lanes if row.get("program_id") == "SEMICONDUCTOR_SHARED_RIDGE"), None)
     semi_prospective = (
         semi_lane.get("prospective_evidence", {})
@@ -689,6 +773,7 @@ def build(root: Path) -> dict[str, Any]:
         "program_continuity": {
             "SEMICONDUCTOR_FORWARD": semiconductor_continuity,
         },
+        "model_competition": _model_competition(lanes, ledger, semiconductor_continuity),
         "market_decision_context": actionable_context,
         "decision_chain": _decision_chain(lanes),
         "freshness": freshness,
@@ -696,6 +781,7 @@ def build(root: Path) -> dict[str, Any]:
             "scored_now": [x.get("program_id") for x in lanes if x.get("signal")],
             "adapter_contracts_ready": list(EXPECTED_PRIVATE_ADAPTERS),
             "native_result_gaps": missing,
+            "ridge_persistence_diagnostic": "NOT_SUPPLIED" if ridge_persistence is None else ridge_persistence.get("forward", {}).get("status"),
             "prospective_ledger": {
                 "present": ledger is not None,
                 "market_data_asof": None if ledger is None else ledger.get("market_data_asof"),
@@ -716,6 +802,132 @@ def build(root: Path) -> dict[str, Any]:
             "overlapping_forward_cohort_sessions_are_not_additive": True,
             "broker_or_live_authority": False,
         },
+    }
+
+
+
+def _model_competition(
+    lanes: list[dict[str, Any]],
+    ledger: dict[str, Any] | None,
+    continuity: dict[str, Any],
+) -> dict[str, Any]:
+    """Read-only model competition: cohort credit is identity-bound, not a session counter.
+
+    A resolved observation, model improvement, signed qualification, governed
+    promotion and broker permission are separate events. No cross-market
+    numerical rank exists without matched horizon, costs and capital.
+    """
+    by_program = {str(row.get("program_id")): row for row in lanes}
+    cohort_rows = [] if ledger is None else list(ledger.get("cohorts") or [])
+    groups = {
+        "SEMICONDUCTOR_SHARED_RIDGE": ("learned_opportunity_model", "semiconductor_fixed20_13name_stock_net_vs_smh_and_ew13"),
+        "HOMEBUILDERS": ("adaptive_duration_policy", "homebuilders_adaptive_horizon_vs_itb"),
+        "GENERALIZED_LARGECAP_RIDGE": ("learned_model_transport", "largecap_directional_transport_no_funded_book"),
+    }
+
+    def metric(value: Any) -> float | None:
+        if isinstance(value, bool) or not isinstance(value, (float, int)):
+            return None
+        return float(value) if math.isfinite(float(value)) else None
+
+    rows: list[dict[str, Any]] = []
+    for program, (model_role, comparison_group) in groups.items():
+        lane = by_program.get(program) or {}
+        cohorts = [row for row in cohort_rows if row.get("program_id") == program]
+        ids = [str(row.get("cohort_id") or "") for row in cohorts]
+        if len(ids) != len(set(ids)) or any(not x for x in ids):
+            raise ValueError("duplicate or missing native cohort identity " + program)
+        resolved = [row for row in cohorts if row.get("status") == "RESOLVED"]
+        open_rows = [row for row in cohorts if row.get("status") in {
+            "REGISTERED", "AWAITING_ENTRY_SESSION", "OPEN", "PARTIALLY_RESOLVED",
+        }]
+        summary = {} if ledger is None else (ledger.get("summary") or {}).get(program) or {}
+        count_consistent = (
+            ledger is not None
+            and int(summary.get("registered_cohorts", len(cohorts))) == len(cohorts)
+            and int(summary.get("resolved_cohorts", len(resolved))) == len(resolved)
+            and int(summary.get("open_cohorts", len(open_rows))) == len(open_rows)
+        ) if program in ("SEMICONDUCTOR_SHARED_RIDGE", "HOMEBUILDERS") else None
+        no_native_cohort = program == "GENERALIZED_LARGECAP_RIDGE"
+        data = (lane.get("prospective_evidence") or {})
+        resolution = data.get("current_resolution") or {}
+        matched = resolution.get("matched_after_cost") or {}
+        summary_econ = resolution.get("summary") or {}
+        diagnostics = lane.get("scorecard") or {}
+        if program == "SEMICONDUCTOR_SHARED_RIDGE":
+            economics = {
+                "sleeve_net_bps": metric(resolution.get("ticker_book_net_return_bps")),
+                "matched_smh_net_excess_bps": metric(matched.get("ticker_minus_smh_net_bps")),
+                "matched_equal13_net_excess_bps": metric(matched.get("ticker_minus_equal_weight_13_net_bps")),
+                "matched_qqq_excess_bps_reported": metric(resolution.get("ticker_book_excess_vs_qqq_bps")),
+                "portfolio_nav_fraction": 0.05,
+            }
+            evidence_stage = "FIRST_H20_RESOLVED_OWNER_MONITORED_REVIEW_REQUIRED" if resolved and count_consistent else "AWAITING_OR_INCONSISTENT_NATIVE_COHORT"
+        elif program == "HOMEBUILDERS":
+            economics = {
+                "mean_net_bps": metric(summary_econ.get("mean_net_return_bps")),
+                "mean_excess_vs_itb_bps": metric(summary_econ.get("mean_excess_vs_itb_bps")),
+                "mean_excess_vs_qqq_bps": metric(summary_econ.get("mean_excess_vs_qqq_bps")),
+                "resolved_symbol_observations": summary_econ.get("resolved_observations"),
+            }
+            evidence_stage = "RESOLVED_ADAPTIVE_DURATION_DIAGNOSTIC" if resolved and count_consistent else "AWAITING_OR_INCONSISTENT_NATIVE_COHORT"
+        else:
+            economics = {
+                "observed_sessions": diagnostics.get("forward_sessions_completed"),
+                "directional_hit_rate": metric(diagnostics.get("directional_sign_hit_rate_current")),
+                "mean_excess_vs_spy_bps": metric(diagnostics.get("mean_directional_excess_vs_spy_bps_current")),
+                "mean_excess_vs_qqq_bps": metric(diagnostics.get("mean_directional_excess_vs_qqq_bps_current")),
+            }
+            evidence_stage = "RETROSPECTIVE_TRANSPORT_ONLY_NO_CREDITED_H20"
+        first_count = bool(resolved) and count_consistent is True
+        rows.append({
+            "program_id": program,
+            "role": model_role,
+            "comparison_group": comparison_group,
+            "position_in_comparable_group": None,
+            "ranking_basis": "GROUP_ONLY_MATCHED_AFTER_COST_NO_GLOBAL_NUMERIC_RANK",
+            "source_lane_present": bool(lane),
+            "native_cohort_credit_applicable": not no_native_cohort,
+            "native_registered_cohorts": len(cohorts) if not no_native_cohort else 0,
+            "native_resolved_cohorts": len(resolved) if not no_native_cohort else 0,
+            "native_open_cohorts": len(open_rows) if not no_native_cohort else 0,
+            "native_cohort_summary_consistent": count_consistent,
+            "first_cohort_count_checkpoint_met": first_count,
+            "second_native_cohort_status": (
+                "NOT_REGISTERED" if len(cohorts) < 2 else
+                "RESOLVED" if len(resolved) >= 2 else "REGISTERED_NOT_YET_RESOLVED"
+            ) if not no_native_cohort and count_consistent is True else "NOT_ESTABLISHED",
+            "full_scientific_confidence_target": 20 if program == "SEMICONDUCTOR_SHARED_RIDGE" else None,
+            "full_scientific_confidence_met": (
+                len(resolved) >= 20 and count_consistent is True
+            ) if program == "SEMICONDUCTOR_SHARED_RIDGE" else None,
+            "evidence_stage": evidence_stage,
+            "matched_economics": economics,
+            "monitored_live_eligibility": "OWNER_ADJUDICATION_AND_SIGNED_EVIDENCE_REQUIRED",
+            "monitored_live_authorized": False,
+            "broker_submit_authority": False,
+            "latest_native_signal_date": lane.get("signal_date"),
+            "cohort_ids": ids,
+        })
+    return {
+        "schema": "research.forward_model_competition_r1",
+        "data_cutoff": None if ledger is None else ledger.get("market_data_asof"),
+        "native_ledger_available": ledger is not None,
+        "scope": "PUBLIC_NATIVE_MODELS_ONLY_NOT_COMPLETE_FOUNDRY_LEARNED_MODEL_BENCH",
+        "model_rows": rows,
+        "comparison_policy": {
+            "global_return_rank_allowed": False,
+            "rule": "Rank only like-for-like after-cost prospective books with matched benchmark, horizon, funding, period, and independent cohort identity.",
+            "one_resolved_cohort": "COUNT_CHECKPOINT_NOT_AUTOMATIC_ECONOMIC_PASS_OR_LIVE_PERMISSION",
+            "twenty_independent_resolved": "STRONGER_FULL_SCIENTIFIC_CONFIDENCE_FOR_SHARED_RIDGE_NOT_EARLY_GATE",
+            "research_vs_forward": "Private Foundry survivor inventory needs a separate admitted source-bound consumer; do not infer absent models were rejected.",
+            "predecessor_no_double_count": bool(continuity.get("overlapping_sessions_are_not_additive", True)),
+        },
+        "source_warnings": [
+            "Public native producer retains only existing frozen model adapters; historical model results may not be in this feed.",
+            "Predecessor P438 and large-cap directional sessions are not additional Shared Ridge H20 cohorts.",
+            "No signed model issuer, Arena decision, broker fill, or live permission is conferred by these rankings.",
+        ],
     }
 
 
@@ -767,7 +979,7 @@ def self_test() -> None:
             (root / f"forward_program_adapter_{i}.json").write_text(json.dumps(payload))
         (root / "forward_prospective_cohort_ledger_r1.json").write_text(json.dumps({
             "schema": LEDGER_SCHEMA,
-            "market_data_asof": "2026-09-13",
+            "market_data_asof": "2026-09-10",
             "freshness": {"freshness_gap_visible": False, "lagging_symbols_by_program": {}},
             "cohorts": [
                 {"cohort_id": "HOMEBUILDERS:2026-09-10:test", "program_id": "HOMEBUILDERS", "signal_date": "2026-09-10", "first_registered_at": "2026-09-11T00:00:00+00:00", "status": "OPEN", "resolution": {"entry_date": "2026-09-11", "sessions_completed": 1}},
@@ -776,6 +988,23 @@ def self_test() -> None:
             "summary": {
                 "HOMEBUILDERS": {"registered_cohorts": 1, "resolved_cohorts": 0, "open_cohorts": 1, "late_registration_rejections": 0, "minimum_resolved_for_promotion": None, "resolved_observations": 0, "mean_excess_vs_itb_bps": None},
                 "SEMICONDUCTOR_SHARED_RIDGE": {"registered_cohorts": 1, "resolved_cohorts": 0, "open_cohorts": 1, "late_registration_rejections": 0, "minimum_resolved_for_promotion": 20, "mean_ticker_book_excess_vs_smh_bps": None},
+            },
+        }))
+        (root / "ridge_frozen_weight_persistence_forward_r1.json").write_text(json.dumps({
+            "schema": "research.ridge_frozen_weight_persistence_forward_r1",
+            "program_id": "RIDGE_FROZEN_WEIGHT_PERSISTENCE_DIAGNOSTIC",
+            "source_model": "SEMICONDUCTOR_SHARED_RIDGE",
+            "source_signal_date": "2026-09-11",
+            "freeze_source_commit_sha": "b" * 40,
+            "freeze_observed_at_utc": "2026-11-05T10:38:44Z",
+            "original_adapter_git_blob": "a" * 40,
+            "forward": {"status": "AWAITING_ENTRY_FINALITY", "entry_date": "2026-11-06",
+                        "elapsed_post_entry_sessions": 0, "promotion_authority": False},
+            "boundaries": {
+                "research_only": True, "new_model_prediction": False,
+                "original_shared_ridge_h20_cohort": False, "signed_model_promotion": False,
+                "allocation_authority": False, "broker_action": False,
+                "live_trading_change": False, "paper_broker_fill": False,
             },
         }))
         (root / "p438_semiconductor_forward_mtd_r1.json").write_text(json.dumps({
@@ -848,11 +1077,30 @@ def self_test() -> None:
         assert stats["vs_incumbent"] == {"observed_sessions": 2, "positive_sessions": 1, "hit_rate": 0.5}
         assert stats["vs_matched_cash_control"] == {"observed_sessions": 2, "positive_sessions": 2, "hit_rate": 1.0}
         assert out["coverage"]["native_result_gaps"] == []
+        assert out["coverage"]["ridge_persistence_diagnostic"] == "AWAITING_ENTRY_FINALITY"
+        persistence_lane = next(row for row in out["lanes"] if row["program_id"] == "RIDGE_FROZEN_WEIGHT_PERSISTENCE_DIAGNOSTIC")
+        assert persistence_lane["scorecard"] is None
+        assert persistence_lane["paper_action"]["status"] == "NO_ACTION_OBSERVER_ONLY"
+        assert persistence_lane["boundaries"]["broker_action"] is False
+        assert persistence_lane["evidence_grade"] == "PROSPECTIVE_DIAGNOSTIC_AWAITING_ENTRY_FINALITY"
+        invalid_persistence = {
+            "schema": "research.ridge_frozen_weight_persistence_forward_r1",
+            "program_id": "RIDGE_FROZEN_WEIGHT_PERSISTENCE_DIAGNOSTIC",
+            "forward": {"status": "OPEN"},
+            "boundaries": dict(persistence_lane["boundaries"], broker_action=True),
+        }
+        try:
+            _ridge_persistence_lane(invalid_persistence)
+        except RuntimeError as exc:
+            assert str(exc) == "RIDGE_PERSISTENCE_BOUNDARY_INVALID"
+        else:
+            raise AssertionError("research observer may not inherit broker authority")
         assert out["decision_chain"]["sectors"]["homebuilders"]["horizons"] == {"CCS": 5}
         native_by_id = {x["program_id"]: x for x in out["lanes"]}
         assert native_by_id["HOMEBUILDERS"]["evidence_grade"] == "PROSPECTIVE_OPEN"
         assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["evidence_grade"] == "PROSPECTIVE_AWAITING_ENTRY_SESSION"
         assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["validation_grade"] == "PROSPECTIVE_SIGNAL_READY"
+        assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["entry_eligible"] is True
         assert native_by_id["SEMICONDUCTOR_SHARED_RIDGE"]["forward_science_stages"]["resolved_cohort_count"] == 0
         one = _separate_forward_science_stages({"resolved_cohorts": 1, "minimum_resolved_for_promotion": 20})
         assert one["forward_sanity_stage"] == "RESOLVED_COHORT_OBSERVED_ISSUER_ENVELOPE_PENDING"
@@ -872,6 +1120,31 @@ def self_test() -> None:
         assert continuity["current_cohort"]["signal_date"] == "2026-09-10"
         assert continuity["overlapping_sessions_are_not_additive"] is True
         assert out["coverage"]["predecessor_forward_identities"]["P438_SEMICONDUCTOR_FORWARD_MTD_R1"] is True
+        competition = out["model_competition"]
+        assert competition["scope"] == "PUBLIC_NATIVE_MODELS_ONLY_NOT_COMPLETE_FOUNDRY_LEARNED_MODEL_BENCH"
+        assert len(competition["model_rows"]) == 3
+        rows = {r["program_id"]: r for r in competition["model_rows"]}
+        assert rows["SEMICONDUCTOR_SHARED_RIDGE"]["native_open_cohorts"] == 1
+        assert rows["SEMICONDUCTOR_SHARED_RIDGE"]["first_cohort_count_checkpoint_met"] is False
+        assert rows["SEMICONDUCTOR_SHARED_RIDGE"]["second_native_cohort_status"] == "NOT_REGISTERED"
+        assert rows["SEMICONDUCTOR_SHARED_RIDGE"]["monitored_live_authorized"] is False
+        assert rows["HOMEBUILDERS"]["native_registered_cohorts"] == 1
+        assert rows["GENERALIZED_LARGECAP_RIDGE"]["native_cohort_credit_applicable"] is False
+        assert all(r["position_in_comparable_group"] is None for r in rows.values())
+        assert competition["comparison_policy"]["global_return_rank_allowed"] is False
+        resolved_fixture = dict(json.loads((root / "forward_prospective_cohort_ledger_r1.json").read_text()))
+        resolved_fixture["cohorts"][1]["status"] = "RESOLVED"
+        resolved_fixture["summary"]["SEMICONDUCTOR_SHARED_RIDGE"].update({"resolved_cohorts": 1, "open_cohorts": 0})
+        fake = _model_competition(out["lanes"], resolved_fixture, out["program_continuity"]["SEMICONDUCTOR_FORWARD"])
+        first = next(r for r in fake["model_rows"] if r["program_id"] == "SEMICONDUCTOR_SHARED_RIDGE")
+        assert first["first_cohort_count_checkpoint_met"] is True
+        assert first["full_scientific_confidence_met"] is False
+        assert first["second_native_cohort_status"] == "NOT_REGISTERED"
+        assert first["monitored_live_authorized"] is False
+        resolved_fixture["summary"]["SEMICONDUCTOR_SHARED_RIDGE"]["resolved_cohorts"] = 2
+        mismatched = _model_competition(out["lanes"], resolved_fixture, {})
+        assert next(r for r in mismatched["model_rows"] if r["program_id"] == "SEMICONDUCTOR_SHARED_RIDGE")["first_cohort_count_checkpoint_met"] is False
+
         frozen = {
             "cohort_id": "SEMICONDUCTOR_SHARED_RIDGE:2026-09-11:fixed20",
             "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
@@ -908,6 +1181,22 @@ def self_test() -> None:
         assert chain["realized_excess"]["semiconductor_mean_ticker_book_excess_vs_smh_net_bps"] == -8.3719
         assert chain["realized_excess"]["semiconductor_mean_ticker_book_excess_vs_equal_weight_13_net_bps"] == -125.2211
         assert json.dumps(frozen, sort_keys=True) == original_frozen
+        # A RESOLVED historical cohort must not generate a fresh paper ADD,
+        # even when its adapter still contains PAPER_COHORT_READY and a positive score.
+        resolved_lane = _native_lane(semi, state)
+        assert resolved_lane["validation_grade"] == "RESOLVED_COHORT_OBSERVER_ONLY"
+        assert resolved_lane["entry_eligible"] is False
+        assert resolved_lane["paper_action"]["status"] == "NO_NEW_COHORT_ENTRY"
+        assert resolved_lane["source_paper_action_status"] == "PAPER_COHORT_READY"
+        assert _decision_chain([resolved_lane])["sectors"]["semiconductor"]["action"] == "NO_NEW_COHORT_ENTRY"
+        # An unrelated/new native signal is not admitted by the old cohort ledger.
+        mismatched_lane = _native_lane(dict(semi, signal_date="2026-09-12"), state)
+        assert mismatched_lane["entry_eligible"] is False
+        assert mismatched_lane["validation_grade"] == "RESOLVED_COHORT_OBSERVER_ONLY"
+        # Missing ledger is never entry approval, regardless of adapter validation.
+        missing_lane = _native_lane(semi)
+        assert missing_lane["entry_eligible"] is False
+        assert missing_lane["paper_action"]["status"] == "NO_NEW_COHORT_ENTRY"
         del ledger["matched_after_cost_projections"]
         absent = _prospective_state(ledger, "SEMICONDUCTOR_SHARED_RIDGE")
         assert absent["matched_cost_projection_status"] == "MATCHED_COST_PROJECTION_INCOMPLETE"

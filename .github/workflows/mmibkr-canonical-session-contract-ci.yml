@@ -13,6 +13,7 @@ on:
       - 'tests/test_mmibkr_canonical_claim_lease_v1.py'
       - 'tests/test_mmibkr_canonical_session_runner_v1.py'
       - 'tests/test_mmibkr_canonical_session_push_fire_workflow_v1.py'
+      - 'tests/test_canonical_session_historical_ref_dispatch_hold_20261027.py'
       - 'tests/test_mmibkr_publishable_job_receipts_v1.py'
       - 'tests/test_mnq_exact_corpus_producer_v1.py'
       - 'docs/MMIBKR_CANONICAL_SESSION_RUNTIME_V1.md'
@@ -52,6 +53,7 @@ jobs:
             tests.test_mmibkr_canonical_claim_lease_v1 \
             tests.test_mmibkr_canonical_session_runner_v1 \
             tests.test_mmibkr_canonical_session_push_fire_workflow_v1 \
+            tests.test_canonical_session_historical_ref_dispatch_hold_20261027 \
             tests.test_mmibkr_publishable_job_receipts_v1 \
             tests.test_release_workflow_private_stderr_noninterference_20261010 \
             tests.test_release_workflow_public_terminal_digest_ids_20261010 \

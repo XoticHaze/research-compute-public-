@@ -91,7 +91,7 @@ def _kind(path: str) -> str:
     return "other"
 
 
-def _nested_forbidden(value: dict) -> bool | None:
+def _nested_forbidden(value: dict | list) -> bool | None:
     """Detect nested prohibited field names without retaining or emitting values.
 
     None means the bounded traversal was incomplete, never "clean".
@@ -123,6 +123,9 @@ def _sample(entry: dict, raw: bytes) -> tuple[str, bool, bool | None]:
             value = json.loads(raw)
         except (UnicodeError, ValueError):
             return "json_parse_failed", False, False
+        if isinstance(value, list):
+            # Root JSON arrays can contain forbidden nested object keys too.
+            return "json_non_object", False, _nested_forbidden(value)
         if not isinstance(value, dict):
             return "json_non_object", False, False
         outer = any(isinstance(key, str) and key.casefold() in FORBIDDEN_OUTER

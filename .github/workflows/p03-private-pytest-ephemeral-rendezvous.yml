@@ -15,6 +15,11 @@ env:
 
 jobs:
   consume:
+    # Fail closed: a run-bound encrypted envelope does not authenticate its sender.
+    # Capsule source/test digests and mm_head_sha are caller-authored; executing
+    # extracted Python requires an independently trusted source/issuer binding.
+    # Reuse the existing approved capsule/return transport; do not execute here.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:

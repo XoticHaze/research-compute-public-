@@ -1,12 +1,6 @@
 name: MNQ Exact Corpus Producer R1
 
 on:
-  workflow_dispatch:
-    inputs:
-      run_id:
-        description: Public canonical-session GitHub run id with a fresh MNQ recipient
-        required: true
-        type: string
   push:
     branches:
       - main
@@ -22,6 +16,9 @@ concurrency:
 
 jobs:
   produce:
+    # No direct pre-admission multi-year corpus rebuild from caller-authored run_id.
+    # Re-enable only after independent source-member/recipient/issuer admission.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:

@@ -1,1 +1,6 @@
-{"schema":"mmibkr.operator_snapshot_read_bridge_request.v1","request_id":"xoti667ownershipdiag20260923T1331","recipient_b64":"5iUQoMmc9uPHQWAodaILYI7zguH9tNGK943J90iRGw4=","recipient_key_id":"sha256:93433aaad7834f71a6cf5189569e1ce419aca38a77ce22b1534c3f43476bd916"}
+{
+  "schema": "mmibkr.operator_snapshot_read_bridge_request.v1",
+  "request_id": "chatbot_cloud_read_20261102144859936298",
+  "recipient_b64": "ZHuiWJDZFzrlMmTLIEspcHFOpQsyGgq5Ym8XwhJe9jA=",
+  "recipient_key_id": "sha256:348813cf97e64447c5027a5e21dcc8fb5c4c62db71a3eb035b8fce48c7a372d0"
+}

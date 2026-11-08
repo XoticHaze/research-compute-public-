@@ -13,7 +13,11 @@ permissions:
 
 jobs:
   dispatch:
-    if: ${{ contains(github.event.head_commit.message, '[ibkr-login]') || contains(github.event.head_commit.message, '[ibkr-live-readonly]') }}
+    # Legacy push commit messages are caller-authored, not independently
+    # authenticated operator intent for any IBKR Gateway identity.
+    # Keep this historical dispatcher inert; attended operator workflow_dispatch
+    # remains the only route to request a broker login.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

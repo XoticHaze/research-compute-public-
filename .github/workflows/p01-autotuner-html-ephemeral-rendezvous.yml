@@ -15,6 +15,11 @@ env:
 
 jobs:
   consume:
+    # Fail closed: encrypted capsules have a caller-supplied sender key and
+    # self-declared source hashes; the consumer executes capsule-provided Node.
+    # Require independently authenticated producer and pinned executable bytes
+    # before this historical operator-review transport can run again.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:

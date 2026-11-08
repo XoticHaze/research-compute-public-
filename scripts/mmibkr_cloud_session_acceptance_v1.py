@@ -8,8 +8,8 @@ LEGACY_SCHEMA = "mmibkr.selected_runtime_cloud_session_receipt.v1"
 SCHEMA = "mmibkr.selected_runtime_cloud_session_receipt.v2"
 CANONICAL_PRIVATE_SHA = "d81df85788ebb6be6d4d69b9b9a537be96f16507"
 EXPECTED_RUNTIME_COUNT = 3
-EXPECTED_INITIAL_BACKFILL_RUN_ID = "35407829303"
-EXPECTED_INITIAL_BACKFILL_ARTIFACT = "ibkr-cloudflare-readonly-b1-35407829303"
+EXPECTED_INITIAL_BACKFILL_RUN_ID = "40665095081"
+EXPECTED_INITIAL_BACKFILL_ARTIFACT = "ibkr-cloudflare-readonly-b1-40665095081"
 CHECKPOINT_CACHE_PREFIX = "mmibkr-selected-runtime-cloud-checkpoint-v1-"
 
 

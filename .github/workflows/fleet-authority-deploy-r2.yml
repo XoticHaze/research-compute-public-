@@ -13,6 +13,7 @@ on:
     paths:
       - 'cloudflare/fleet-authority/src/source_exchange.js'
       - 'tests/test_cloudflare_live_canary_vault_oidc_r1.py'
+      - 'tests/test_pi_opaque_ghcr_fleet_candidate_20261107.py'
       - 'tests/test_fleet_authority_r2_deploy_receipt_v1.py'
       - 'scripts/fleet_authority_r2_deploy_receipt_v1.py'
       - '.github/workflows/fleet-authority-deploy-r2.yml'
@@ -34,7 +35,8 @@ jobs:
         run: |
           set -euo pipefail
           node --check cloudflare/fleet-authority/src/source_exchange.js
-          python -m unittest -v tests.test_cloudflare_live_canary_vault_oidc_r1 tests.test_fleet_authority_r2_deploy_receipt_v1
+          node --check cloudflare/fleet-authority/src/pi_opaque_ghcr.js
+          python -m unittest -v tests.test_cloudflare_live_canary_vault_oidc_r1 tests.test_fleet_authority_r2_deploy_receipt_v1 tests.test_pi_opaque_ghcr_fleet_candidate_20261107
           echo 'MMIBKR_CLOUD_CANARY_VAULT_OIDC_EXACT_SOURCE_SCOPE=PASS'
 
   r2_scope_audit:

@@ -8,6 +8,8 @@ on:
       - 'cloudflare/operator-console/**'
       - 'tests/test_mmibkr_operator_console_worker_v1.py'
       - 'tests/operator_console_runtime_union_freshness_contract.mjs'
+      - 'tests/pi_owner_approval_contract.mjs'
+      - 'tests/pi_owner_access_gate_contract.mjs'
       - 'tests/test_mmibkr_operator_console_publisher_v1.py'
       - '.github/workflows/mmibkr-selected-runtime-cloud-r1.yml'
       - '.github/workflows/mmibkr-operator-console-contract-ci.yml'
@@ -39,6 +41,12 @@ jobs:
         run: |
           set -euo pipefail
           node tests/operator_console_runtime_union_freshness_contract.mjs
+          # Public-only, source-safe bot-origin v1/v2 contract validation.
+          node tests/pi_bot_live_observation_contract.mjs
+          node --check cloudflare/operator-console/src/pi_owner_approval.js
+          node --check cloudflare/operator-console/src/pi_owner_approval_ui.js
+          node tests/pi_owner_approval_contract.mjs
+          node tests/pi_owner_access_gate_contract.mjs
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:

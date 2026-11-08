@@ -90,6 +90,19 @@ class PublicExchangeInventoryTests(unittest.TestCase):
         self.assertEqual(result["samples"]["forbidden_nested_metadata"], 0)
         self.assertFalse(result["storage_privacy_certified"])
 
+    def test_root_json_array_nested_forbidden_metadata(self):
+        # Root lists were previously classified as non-object without walking
+        # nested dict keys; never emit the synthetic private marker.
+        fixture = tree(("rendezvous/returns/root-list.json", SHA, 150))
+        content = json.dumps([{"wrapper": [{"PLAINTEXT_SHA256": PRIVATE_MARKER}]}]).encode()
+        result = audit.audit_tree(fixture, fetch_blob=lambda sha: content)
+        self.assertEqual(result["samples"]["json_non_object"], 1)
+        self.assertEqual(result["samples"]["forbidden_outer_metadata"], 0)
+        self.assertEqual(result["samples"]["forbidden_nested_metadata"], 1)
+        self.assertEqual(result["samples"]["nested_scan_incomplete"], 0)
+        self.assertNotIn(PRIVATE_MARKER, json.dumps(result))
+        self.assertFalse(result["storage_privacy_certified"])
+
     def test_truncation_and_missing_tree_fail_closed(self):
         for broken in (None, {}, {"sha": TREE, "truncated": True, "tree": []},
                        {"sha": "invalid", "truncated": False, "tree": []},

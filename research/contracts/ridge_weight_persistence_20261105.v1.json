@@ -1,0 +1,28 @@
+{
+  "schema": "research.ridge_weight_persistence_freeze.v1",
+  "purpose": "Prospective source-only fixed-weight durability test, not a new Shared Ridge prediction, independently signed scientific cohort, allocation or broker paper trade",
+  "freeze_source_commit_sha": "417a1931fb5f156d300769de8184adeb1047b07f",
+  "freeze_observed_at_utc": "2026-11-05T10:38:44Z",
+  "original_adapter_git_blob": "05238d7c359ea59495100711f37d6f88cc095816",
+  "original_signal_date": "2026-09-11",
+  "entry_date": "2026-11-06",
+  "entry_basis": "November 6 adjusted CLOSE, no auction fill claim",
+  "hold_sessions": 20,
+  "member_universe": 13,
+  "stock_round_trip_cost_bps": 25,
+  "smh_round_trip_cost_bps": 10,
+  "model_prediction_retrained": false,
+  "scientific_promotion_authority": false,
+  "benchmarks": [
+    "SMH",
+    "equal_weight_13",
+    "cash"
+  ],
+  "status": "PRE_OUTCOME_FROZEN",
+  "output_constraints": [
+    "No retrospective alteration of entry, exit, members, weights, costs or primary control",
+    "Do not count the September cohort again",
+    "Do not substitute new model signals for frozen September weights",
+    "No issuer-admitted total-return, real broker fills or live authority"
+  ]
+}

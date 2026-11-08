@@ -6,7 +6,7 @@ on:
       source_sha:
         description: Exact accepted private MM-IBKR source SHA containing the Bot Console
         required: true
-        default: 9e37f7fd58826579281e5d321b20a688d4114d01
+        default: f6f6dcdcbad3df8c5d50cab5ac2652b4781a648d
         type: string
   # Mainline source changes are review/CI only. Only an explicit release fire
   # marker or owner workflow_dispatch can request an Access-locked deploy.
@@ -23,6 +23,8 @@ on:
       - 'cloudflare/operator-console/**'
       - 'tests/test_mmibkr_operator_console_worker_v1.py'
       - 'tests/test_mmibkr_operator_console_access_reconcile_v1.py'
+      - 'tests/test_mmibkr_operator_console_deploy_token_route_v1.py'
+      - 'scripts/mmibkr_operator_console_deploy_token_route_v1.py'
       - 'tests/test_fleet_source_vault_contract_v1.py'
 
 permissions:
@@ -35,7 +37,7 @@ concurrency:
 
 env:
   FLEET_AUTHORITY_BASE: https://fleet-authority.slenderiq.workers.dev
-  CANONICAL_PRIVATE_SOURCE_SHA: 9e37f7fd58826579281e5d321b20a688d4114d01
+  CANONICAL_PRIVATE_SOURCE_SHA: f6f6dcdcbad3df8c5d50cab5ac2652b4781a648d
   OPERATOR_CONSOLE_URL: https://mmibkr-operator-console.slenderiq.workers.dev
 
 jobs:
@@ -58,11 +60,18 @@ jobs:
           set -euo pipefail
           node --check cloudflare/operator-console/src/index.js
           node tests/operator_console_runtime_union_freshness_contract.mjs
+          node tests/pi_account_observation_contract.mjs
+          node tests/pi_bot_live_observation_contract.mjs
+          node --check cloudflare/operator-console/src/pi_owner_approval.js
+          node --check cloudflare/operator-console/src/pi_owner_approval_ui.js
+          node tests/pi_owner_approval_contract.mjs
+          node tests/pi_owner_access_gate_contract.mjs
           node --check cloudflare/operator-console/src/promotion_review_state.js
           node tests/promotion_review_state_contract.mjs
           python -m unittest -v \
             tests.test_mmibkr_operator_console_worker_v1 \
             tests.test_mmibkr_operator_console_access_reconcile_v1 \
+            tests.test_mmibkr_operator_console_deploy_token_route_v1 \
             tests.test_fleet_source_vault_contract_v1
           mkdir -p cloudflare/operator-console/dist
           printf '%s\n' '<!doctype html><title>MM-IBKR locked operator console</title>' > cloudflare/operator-console/dist/index.html
@@ -177,12 +186,17 @@ jobs:
           if node.get('live_execution_allowed') is not False:
               raise SystemExit('live execution authority unexpectedly enabled')
           source_root = Path(node['source_root'])
+          expected_root = root / 'extracted' / 'mm-ibkr'
           ui = source_root / 'ui-react'
+          # Never build a caller-selected or symlink-aliased private source tree.
+          # The encrypted consumer already materialized to this exact run-local root.
+          if (source_root != expected_root or
+                  any(p.is_symlink() for p in (root, root / 'extracted', source_root, ui))):
+              raise SystemExit('operator-console private source root untrusted')
+          if any((ui / name).is_symlink() for name in ('package.json', 'package-lock.json')):
+              raise SystemExit('operator-console private package alias untrusted')
           if not (ui / 'package.json').is_file() or not (ui / 'package-lock.json').is_file():
               raise SystemExit('private ui-react source incomplete')
-          with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
-              fh.write('PRIVATE_SOURCE_ROOT=' + str(source_root) + '\n')
-              fh.write('PRIVATE_UI_ROOT=' + str(ui) + '\n')
           print('MMIBKR_OPERATOR_CONSOLE_VAULT_SOURCE=PASS')
           print('MMIBKR_OPERATOR_CONSOLE_SOURCE_MANIFEST=' + str(node['source_manifest_sha256']))
           PY
@@ -191,7 +205,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cd "$PRIVATE_UI_ROOT"
+          cd "$RUNNER_TEMP/mmibkr-operator-console-source/extracted/mm-ibkr/ui-react"
           npm ci --ignore-scripts --no-audit --no-fund
           npm run verify:bot-console
           npm run build
@@ -232,6 +246,18 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/cloudflare_r2_scope_preflight.py
+
+      # Wrangler queries the ACCOUNT workers/subdomain endpoint after it
+      # uploads assets; a Worker-scoped editor token can fail there with 10000.
+      # Reuse the existing credentials if either proves exact required reads;
+      # otherwise fail BEFORE changing the served Worker, without secrets/logs.
+      - name: Select existing token with Workers subdomain deployment access
+        id: deploy_auth
+        env:
+          CLOUDFLARE_DEPLOY_TOKEN_R2: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 }}
+          CLOUDFLARE_LEGACY_WORKERS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python -m scripts.mmibkr_operator_console_deploy_token_route_v1
 
       - name: Preflight Access release credentials before Worker deployment
         env:
@@ -304,6 +330,10 @@ jobs:
           publisher_app_name = 'MM-IBKR Operator Snapshot Publisher'
           publisher_policy_name = 'MM-IBKR operator snapshot OIDC ingress'
           publisher_domain = hostname + '/v1/operator-snapshot'
+          pi_publisher_app_name = 'MM-IBKR Pi Account Observation Publisher'
+          pi_publisher_domain = hostname + '/v1/pi-account-observation'
+          pi_bot_publisher_app_name = 'MM-IBKR Pi Bot Live Status Publisher'
+          pi_bot_publisher_domain = hostname + '/v1/pi-bot-live-status'
           promotion_publisher_app_name = 'MM-IBKR Promotion Candidate Publisher'
           promotion_publisher_domain = hostname + '/v1/promotion-candidates'
           reader_app_name = 'MM-IBKR Operator Snapshot Reader'
@@ -554,6 +584,81 @@ jobs:
           if not publisher_app_id:
               raise SystemExit('Cloudflare publisher path app id missing')
 
+          # The Pi machine ingress is a distinct path-scoped Access application.
+          # Access bypass is only transport to the Worker; its exact GitHub-OIDC
+          # workflow-ref check still denies all callers until the independently
+          # admitted Pi bridge exists. Never expand the human or paper API routes.
+          existing_pi_publisher_app = next(
+              (
+                  row for row in apps
+                  if isinstance(row, dict)
+                  and (
+                      row.get('name') == pi_publisher_app_name
+                      or row.get('domain') == pi_publisher_domain
+                  )
+              ),
+              None,
+          )
+          pi_publisher_app_body = {
+              'name': pi_publisher_app_name,
+              'domain': pi_publisher_domain,
+              'type': 'self_hosted',
+              'session_duration': '24h',
+              'app_launcher_visible': False,
+              'policies': [{
+                  'id': publisher_policy_id,
+                  'account_id': account,
+                  'precedence': 1,
+              }],
+          }
+          if existing_pi_publisher_app:
+              pi_publisher_app_id = str(existing_pi_publisher_app.get('id') or '')
+              pi_publisher_app = api(
+                  'PUT',
+                  f'/accounts/{account}/access/apps/{pi_publisher_app_id}',
+                  pi_publisher_app_body,
+              )
+          else:
+              pi_publisher_app = api(
+                  'POST',
+                  f'/accounts/{account}/access/apps',
+                  pi_publisher_app_body,
+              )
+          pi_publisher_app_id = str((pi_publisher_app or {}).get('id') or '')
+          if not pi_publisher_app_id:
+              raise SystemExit('Cloudflare Pi publisher path app id missing')
+
+          # Bot-origin ingress is distinct from account-wide and paper snapshots.
+          # Path-scoped Access bypass reaches only the exact Worker OIDC gate;
+          # it does not admit a publisher or grant browser/broker authority.
+          existing_pi_bot_publisher_app = next(
+              (row for row in apps if isinstance(row, dict) and (
+                  row.get('name') == pi_bot_publisher_app_name
+                  or row.get('domain') == pi_bot_publisher_domain)), None)
+          pi_bot_publisher_app_body = {
+              'name': pi_bot_publisher_app_name,
+              'domain': pi_bot_publisher_domain,
+              'type': 'self_hosted',
+              'session_duration': '24h',
+              'app_launcher_visible': False,
+              'policies': [{
+                  'id': publisher_policy_id,
+                  'account_id': account,
+                  'precedence': 1,
+              }],
+          }
+          if existing_pi_bot_publisher_app:
+              pi_bot_publisher_app = api(
+                  'PUT', f'/accounts/{account}/access/apps/'
+                  + str(existing_pi_bot_publisher_app.get('id') or ''),
+                  pi_bot_publisher_app_body)
+          else:
+              pi_bot_publisher_app = api(
+                  'POST', f'/accounts/{account}/access/apps',
+                  pi_bot_publisher_app_body)
+          if not str((pi_bot_publisher_app or {}).get('id') or ''):
+              raise SystemExit('Cloudflare Pi bot publisher path app id missing')
+
           existing_reader_app = next(
               (
                   row for row in apps
@@ -682,6 +787,10 @@ jobs:
           print('MMIBKR_OPERATOR_CONSOLE_ACCESS_EMAIL_COUNT=' + str(len(emails)))
           print('MMIBKR_OPERATOR_CONSOLE_PUBLISHER_INGRESS=OIDC_WORKER_GATED')
           print('MMIBKR_OPERATOR_CONSOLE_PUBLISHER_PATH=/v1/operator-snapshot')
+          print('MMIBKR_OPERATOR_CONSOLE_PI_PUBLISHER_INGRESS=OIDC_WORKER_GATED_NOT_ADMITTED')
+          print('MMIBKR_OPERATOR_CONSOLE_PI_PUBLISHER_PATH=/v1/pi-account-observation')
+          print('MMIBKR_OPERATOR_CONSOLE_PI_BOT_PUBLISHER_INGRESS=OIDC_WORKER_GATED_NOT_ADMITTED')
+          print('MMIBKR_OPERATOR_CONSOLE_PI_BOT_PUBLISHER_PATH=/v1/pi-bot-live-status')
           print('MMIBKR_OPERATOR_CONSOLE_PROMOTION_PUBLISHER_INGRESS=OIDC_WORKER_GATED')
           print('MMIBKR_OPERATOR_CONSOLE_PROMOTION_PUBLISHER_PATH=/v1/promotion-candidates')
           print('MMIBKR_OPERATOR_CONSOLE_READER_INGRESS=OIDC_WORKER_GATED')
@@ -692,7 +801,7 @@ jobs:
 
       - name: Deploy locked operator-console Worker and private static assets
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ steps.deploy_auth.outputs.route == 'scoped_r2' && secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         shell: bash
         run: |
@@ -703,7 +812,7 @@ jobs:
 
       - name: Prove deployed Worker through Cloudflare control plane
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ steps.deploy_auth.outputs.route == 'scoped_r2' && secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         shell: bash
         run: |
@@ -753,7 +862,7 @@ jobs:
 
       - name: Bind Worker defense-in-depth Access verifier
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ steps.deploy_auth.outputs.route == 'scoped_r2' && secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           ACCESS_ALLOWED_EMAILS: ${{ secrets.MMIBKR_ACCESS_ALLOWED_EMAILS }}
         shell: bash
@@ -767,6 +876,73 @@ jobs:
           printf '%s' "$MMIBKR_ACCESS_AUD" | npx --yes wrangler@4.131.2 secret put ACCESS_AUD --config cloudflare/operator-console/wrangler.jsonc >/dev/null
           printf '%s' "$ACCESS_ALLOWED_EMAILS" | npx --yes wrangler@4.131.2 secret put ACCESS_ALLOWED_EMAILS --config cloudflare/operator-console/wrangler.jsonc >/dev/null
           echo 'MMIBKR_OPERATOR_CONSOLE_ACCESS_BINDING=CONFIGURED'
+
+      # The root bot publisher is distinct from paper snapshots. Only a
+      # separately approved public workflow SHA may obtain this runtime binding.
+      # Never substitute a Cloudflare deploy token or an arbitrary ref for OIDC.
+      - name: Bind owner-approved Pi bot OIDC publisher identity
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ steps.deploy_auth.outputs.route == 'scoped_r2' && secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MMIBKR_PI_BOT_PUBLISHER_APPROVED_SHA: ${{ vars.MMIBKR_PI_BOT_PUBLISHER_APPROVED_SHA }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          approved="${MMIBKR_PI_BOT_PUBLISHER_APPROVED_SHA:-}"
+          if [ -f "$RUNNER_TEMP/mmibkr-operator-console-source/extracted/mm-ibkr/ui-react/src/components/PiBotLiveStatusCard.jsx" ] && [ -z "$approved" ]; then
+            echo 'MMIBKR_PI_BOT_OIDC_PUBLISHER_OWNER_APPROVAL_MISSING=1'
+            exit 47
+          fi
+          if [ -z "$approved" ]; then
+            echo 'MMIBKR_PI_BOT_OIDC_PUBLISHER=NOT_ADMITTED'
+            exit 0
+          fi
+          if [[ ! "$approved" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'MMIBKR_PI_BOT_OIDC_PUBLISHER_OWNER_PIN_INVALID=1'
+            exit 47
+          fi
+          printf '%s' "$approved" | npx --yes wrangler@4.131.2 secret put PI_OBSERVATION_PUBLISHER_APPROVED_SHA --config cloudflare/operator-console/wrangler.jsonc >/dev/null
+          echo 'MMIBKR_PI_BOT_OIDC_PUBLISHER_OWNER_PIN_BOUND=1'
+
+      # Bind owner-owned source identity under a Worker secret, never public
+      # JavaScript source or a public Actions variable. This is NOT a token.
+      - name: Bind protected Pi bot origin source identity
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ steps.deploy_auth.outputs.route == 'scoped_r2' && secrets.CLOUDFLARE_DEPLOY_TOKEN_R2 || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING: ${{ secrets.MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_binding="${MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING:-}"
+          if [ -f "$RUNNER_TEMP/mmibkr-operator-console-source/extracted/mm-ibkr/ui-react/src/components/PiBotLiveStatusCard.jsx" ] && [ -z "$source_binding" ]; then
+            echo 'MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING_MISSING=1'
+            exit 48
+          fi
+          if [ -z "$source_binding" ]; then
+            echo 'MMIBKR_PI_BOT_PRIVATE_SOURCE=NOT_ADMITTED'
+            exit 0
+          fi
+          python - <<'PY_PI_SOURCE'
+          import json, os, re
+          raw = os.environ['MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING']
+          if len(raw)>1024 or len(raw)<24 or any(c in raw for c in '\r\n\0'):
+              raise SystemExit('MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING_INVALID=1')
+          try:
+              node=json.loads(raw)
+          except (TypeError, ValueError):
+              raise SystemExit('MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING_INVALID=1') from None
+          required={'repository','ref','root_observation_prefix','typed_result_prefix'}
+          if not isinstance(node,dict) or set(node)!=required or not isinstance(node['repository'],str) or not isinstance(node['ref'],str) or not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+',node['repository']) or not re.fullmatch(r'[A-Za-z0-9._/-]{1,120}',node['ref']):
+              raise SystemExit('MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING_INVALID=1')
+          for k in ('root_observation_prefix','typed_result_prefix'):
+              p=node[k]
+              if not isinstance(p,str) or len(p)>160 or not re.fullmatch(r'[A-Za-z0-9._/-]+/',p) or p.startswith('/') or '..' in p or '//' in p:
+                  raise SystemExit('MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING_INVALID=1')
+          print('MMIBKR_PI_BOT_PRIVATE_SOURCE_BINDING_VALID=1')
+          PY_PI_SOURCE
+          printf '%s' "$source_binding" | npx --yes wrangler@4.131.2 secret put PI_BOT_PRIVATE_SOURCE_BINDING --config cloudflare/operator-console/wrangler.jsonc >/dev/null
+          echo 'MMIBKR_PI_BOT_PRIVATE_SOURCE_BOUND=1'
 
       - name: Prove unauthenticated surface fails closed
         shell: bash
@@ -810,7 +986,7 @@ jobs:
               )
 
           browser_paths = ('/', '/bot-console', '/operator/forward-execution', '/operator/promotion-review')
-          for path in (*browser_paths, '/api/operator-snapshot', '/healthz'):
+          for path in (*browser_paths, '/api/operator-snapshot', '/api/pi-bot-live-status', '/api/pi-account-observation', '/healthz'):
               req = Request(
                   base + path,
                   headers={
@@ -871,6 +1047,49 @@ jobs:
               raise SystemExit(
                   'unauthenticated publisher path did not reach Worker OIDC gate: '
                   + str(publisher_status)
+              )
+
+          # A path-scoped Access bypass must reach the *Worker* OIDC gate.
+          # A Cloudflare 403 here means the new Pi path was not reconciled.
+          pi_publisher_req = Request(
+              base + '/v1/pi-account-observation',
+              data=b'{}',
+              method='POST',
+              headers={
+                  'Content-Type':'application/json',
+                  'Accept':'application/json',
+                  'User-Agent':'mmibkr-pi-publisher-deny-proof',
+              },
+          )
+          try:
+              with opener.open(pi_publisher_req, timeout=10) as response:
+                  pi_publisher_status = int(response.status)
+          except HTTPError as exc:
+              pi_publisher_status = int(exc.code)
+          if pi_publisher_status != 401:
+              raise SystemExit(
+                  'unauthenticated Pi publisher path did not reach Worker OIDC gate: '
+                  + str(pi_publisher_status)
+              )
+
+          # A public caller must reach the *bot-origin* Worker OIDC gate, never
+          # the human Access app, and must be rejected without a pinned issuer.
+          pi_bot_publisher_req = Request(
+              base + '/v1/pi-bot-live-status',
+              data=b'{}', method='POST',
+              headers={'Content-Type':'application/json',
+                       'Accept':'application/json',
+                       'User-Agent':'mmibkr-pi-bot-publisher-deny-proof'},
+          )
+          try:
+              with opener.open(pi_bot_publisher_req, timeout=10) as response:
+                  pi_bot_publisher_status = int(response.status)
+          except HTTPError as exc:
+              pi_bot_publisher_status = int(exc.code)
+          if pi_bot_publisher_status != 401:
+              raise SystemExit(
+                  'unauthenticated Pi bot publisher path did not reach Worker OIDC gate: '
+                  + str(pi_bot_publisher_status)
               )
 
           reader_req = Request(
@@ -945,6 +1164,8 @@ jobs:
 
       - name: Publish scoped R2 MM deployment receipt
         if: ${{ success() }}
+        env:
+          MMIBKR_WORKER_DEPLOY_CREDENTIAL_ROUTE: ${{ steps.deploy_auth.outputs.route }}
         shell: bash
         run: |
           set -euo pipefail
@@ -958,10 +1179,8 @@ jobs:
           node = {
               "schema": "mmibkr.operator_console.deploy_receipt.r2",
               "worker": "mmibkr-operator-console",
-              "worker_deploy_credential": (
-                  "scoped_r2"
-                  if os.environ.get("CLOUDFLARE_DEPLOY_TOKEN_R2")
-                  else "legacy_fallback"
+              "worker_deploy_credential": os.environ.get(
+                  "MMIBKR_WORKER_DEPLOY_CREDENTIAL_ROUTE", "not_proven"
               ),
               "access_reconciliation_credential": (
                   "legacy_access_capable_token" if access_configured else "not_exercised"

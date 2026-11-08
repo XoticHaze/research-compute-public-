@@ -47,6 +47,48 @@ class CloudCheckpointCacheHandoffTests(unittest.TestCase):
         self.assertIn("MMIBKR_CHECKPOINT_CACHE_SAVED=0", text)
         self.assertIn("steps.checkpoint_saved.outputs.saved", text)
 
+    def test_failed_owner_still_saves_and_verifies_sanitized_checkpoint(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        start = text.index("- name: Build sanitized successor checkpoint")
+        end = text.index("- name: Enforce successful selected-runtime cloud session")
+        section = text[start:end]
+        # A failed owner in the same GitHub job must not implicitly skip
+        # the already-built sanitized recovery checkpoint cache save.
+        self.assertIn("if: ${{ always() }}", section)
+        self.assertEqual(
+            section.count("if: ${{ always() && steps.checkpoint.outputs.ready == 'true' }}"),
+            4,
+        )
+        self.assertLess(
+            section.index("- name: Save sanitized successor checkpoint cache"),
+            section.index("- name: Remove local checkpoint before cache round-trip proof"),
+        )
+        self.assertLess(
+            section.index("- name: Remove local checkpoint before cache round-trip proof"),
+            section.index("- name: Restore just-saved checkpoint cache for round-trip proof"),
+        )
+        self.assertIn("MMIBKR_CHECKPOINT_CACHE_SAVED=1", section)
+        self.assertIn("MMIBKR_CHECKPOINT_CACHE_SAVED=0", section)
+        self.assertIn("fail-on-cache-miss: true", section)
+        self.assertIn("EXPECTED_CHECKPOINT_SHA256", section)
+
+    def test_failed_session_checkpoint_never_grants_successor_owner_dispatch(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn(
+            "if: ${{ success() && env.SELF_HANDOFF == 'true' }}",
+            text,
+        )
+        self.assertIn("- name: Enforce successful selected-runtime cloud session", text)
+        self.assertIn("- name: Enforce sanitized v2 cloud-session receipt acceptance", text)
+        self.assertLess(
+            text.index("- name: Confirm sanitized successor checkpoint cache saved"),
+            text.index("- name: Enforce successful selected-runtime cloud session"),
+        )
+        self.assertLess(
+            text.index("- name: Enforce sanitized v2 cloud-session receipt acceptance"),
+            text.index("- name: Queue successor bounded session"),
+        )
+
     def test_explicit_predecessor_restore_is_exact_and_fail_closed(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("expected_checkpoint_cache_key", text)

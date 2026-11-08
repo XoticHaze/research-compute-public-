@@ -10,11 +10,20 @@
       {
         "name": "OPERATOR_STATE",
         "class_name": "OperatorState"
+      },
+      {
+        "name": "PI_OWNER_APPROVER",
+        "class_name": "PiOwnerApprovalState"
       }
     ]
   },
   "exports": {
     "OperatorState": {
+      "type": "durable-object",
+      "state": "created",
+      "storage": "sqlite"
+    },
+    "PiOwnerApprovalState": {
       "type": "durable-object",
       "state": "created",
       "storage": "sqlite"

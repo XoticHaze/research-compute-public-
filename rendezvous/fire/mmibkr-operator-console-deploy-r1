@@ -1,11 +1,11 @@
 {
   "schema": "mmibkr-operator-console-deploy-fire-v1",
-  "source_sha": "9e37f7fd58826579281e5d321b20a688d4114d01",
+  "source_sha": "f6f6dcdcbad3df8c5d50cab5ac2652b4781a648d",
   "mode": "locked_private",
   "access_required": true,
   "public_fallback_allowed": false,
   "live_execution_allowed": false,
-  "reason": "user-authorized-free-only-access-locked-operator-console-release",
-  "requested_by": "user-requested-manual-ui-release-20261027",
-  "request_id": "20261027T0843Z-ui-first-verified-native-9e37"
+  "reason": "operator_authorized_20261107_pi_owner_phone_ui_inert_signer_deploy_existing_access_console_only__no_signer_activation_or_root_grant",
+  "requested_by": "operator_20261107",
+  "request_id": "ccpi-owner-ui-deploy-20261107195016952"
 }

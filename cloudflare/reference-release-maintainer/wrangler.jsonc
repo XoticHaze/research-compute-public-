@@ -15,7 +15,7 @@
     {
       "binding": "BROKER_EDITOR_TOKEN",
       "store_id": "3bdb660e7b8d4de6a1688f922f3991f7",
-      "secret_name": "REFERENCE_RELEASE_BROKER_EDITOR_TOKEN"
+      "secret_name": "BROKER_EDITOR_TOKEN"
     }
   ],
   "services": [

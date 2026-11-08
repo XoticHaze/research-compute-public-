@@ -22,7 +22,7 @@ from scripts.opaque_bidirectional_capsule_p256_aesgcm_v1 import (
 
 REQUEST_SCHEMA = "reference-private-request-v1"
 RESULT_SCHEMA = "reference-private-result-v1"
-BROKER_URL = "https://reference-release-broker-v1.slenderiq.workers.dev/v1/release"
+BROKER_URL = "https://reference-release-broker-v1.shared-compute-neutral-authorization.workers.dev/v1/release"
 AUDIENCE = "secure-compute-reference-v1"
 
 def _github_token() -> str:

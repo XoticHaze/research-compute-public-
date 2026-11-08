@@ -1,0 +1,13 @@
+{
+  "access_reconciliation_credential": "legacy_access_capable_token",
+  "access_reconciliation_state": "configured",
+  "access_reconciliation_step_completed": true,
+  "control_plane_pass": true,
+  "private_source_destroy_step_pending": true,
+  "schema": "mmibkr.operator_console.deploy_receipt.r2",
+  "secret_included": false,
+  "source_sha": "f6f6dcdcbad3df8c5d50cab5ac2652b4781a648d",
+  "unauthenticated_fail_closed_pass": true,
+  "worker": "mmibkr-operator-console",
+  "worker_deploy_credential": "legacy_existing"
+}

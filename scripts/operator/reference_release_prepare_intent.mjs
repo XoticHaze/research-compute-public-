@@ -42,6 +42,22 @@ const callerPolicySha256 = await sha256Hex(
   new TextEncoder().encode(canonical(callerPolicy))
 );
 
+// The private grant's measurement must match the reviewed local broker
+// policy. Hardcoding a historical workflow commit silently breaks a later
+// independently approved harness rotation. This is source policy only;
+// the operator must still compare it with the ACTUAL live broker bindings.
+const policy = JSON.parse(fs.readFileSync(
+  new URL('../../cloudflare/reference-release-broker/wrangler.jsonc', import.meta.url),
+  'utf8',
+));
+const allowedHarnessSha = String(policy?.vars?.ALLOWED_JOB_WORKFLOW_SHA || '');
+const allowedHarnessRef = String(policy?.vars?.ALLOWED_JOB_WORKFLOW_REF || '');
+const expectedRefPrefix = 'XoticHaze/research-compute-public-/.github/workflows/secure-compute-harness-v1.yml@';
+if (!/^[0-9a-f]{40}$/.test(allowedHarnessSha)
+    || allowedHarnessRef !== expectedRefPrefix + allowedHarnessSha) {
+  throw new Error('source_harness_policy_pin_mismatch');
+}
+
 const now = Math.floor(Date.now() / 1000);
 const node = {
   schema: 'reference-release-intent-v1',
@@ -49,7 +65,7 @@ const node = {
   audience: 'independent-release-broker-v1',
   grant_id: 'g_' + randomBytes(24).toString('hex'),
   caller_policy_sha256: callerPolicySha256,
-  harness_sha: '477b76085c06f77fee72b57771225a66545aa43f',
+  harness_sha: allowedHarnessSha,
   broker_key_id: brokerKeyId,
   not_before: now - 30,
   intent_not_after: now + intentSeconds,
@@ -87,5 +103,6 @@ const bootstrap = {
 };
 fs.writeFileSync(outputPath, JSON.stringify(bootstrap, null, 2) + '\n', { mode: 0o600 });
 console.log('REFERENCE_INTENT_PREPARE_PASS=1');
+console.log('HARNESS_SHA=' + allowedHarnessSha);
 console.log('GRANT_ID=' + node.grant_id);
 console.log('INTENT_NOT_AFTER=' + node.intent_not_after);

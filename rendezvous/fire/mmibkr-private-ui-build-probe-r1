@@ -1,13 +1,13 @@
 {
   "schema": "mmibkr.private_ui_build_probe_fire.v1",
-  "source_ref": "9e37f7fd58826579281e5d321b20a688d4114d01",
+  "source_ref": "42811ea3e855f09a5caef3b8f58402b40f491f1a",
   "acceptance_file": "ui-react/src/pages/BotConsolePage.acceptance.test.mjs",
   "compute_requirements": {
     "trust_mode": "public_encrypted"
   },
-  "requested_by": "user-approved-operator-console-release-20261027",
-  "purpose": "Encrypted full Node BotConsole acceptance and Vite build of exact frozen, merged-console 9e37 source, no Cloudflare deploy/broker/live",
-  "request_nonce": "manual-operator-console-9e37-native-build-20261027-r1",
+  "requested_by": "continue-release-selected975-42811-native-vite-ui-20261028",
+  "purpose": "Exact selected #975 42811 full private Vite build and existing Bot Console read-only native acceptance after four Product children; existing GitHub OIDC/Fleet encrypted source route only, no Access deploy, broker/Gateway/order/flatten/live, P01 original/holdout, protected main or paid Cloudflare.",
+  "request_nonce": "continue-release-selected-42811-bot-console-native-20261028-r1",
   "authority": {
     "research_only": true,
     "broker": false,

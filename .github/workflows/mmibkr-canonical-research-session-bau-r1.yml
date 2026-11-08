@@ -7,7 +7,9 @@ on:
       - main
     paths:
       - 'rendezvous/fire/mmibkr-canonical-research-session-bau-r1.json'
-  workflow_dispatch:
+  # No workflow_dispatch: historical branch refs retain pre-hold reversible
+  # zlib/base64 session inputs and lack the current first-step denial.
+  # Re-admit only after independently authenticated two-sided private transport.
 
 permissions:
   actions: write

@@ -40,7 +40,7 @@ jobs:
           x=json.load(open('artifacts/currency_hedge_allocator_overlay_forward_r1.json'))
           assert x['schema']=='research.currency_hedge_allocator_overlay_forward_r1'
           assert x['registered_at_date']=='2026-09-13'
-          assert x['scientific_forward_credit'] is True
+          assert x['scientific_forward_credit'] is False
           assert x['boundaries']['allocation_authority'] is False
           assert x['boundaries']['runtime_authority'] is False
           assert x['boundaries']['broker_action'] is False
@@ -72,7 +72,7 @@ jobs:
     needs: observe
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    permissions: {contents: write}
+    permissions: {contents: write, actions: write}
     steps:
       - uses: actions/checkout@v4
         with: {fetch-depth: 0}
@@ -80,7 +80,8 @@ jobs:
         with:
           name: currency-hedge-allocator-overlay-forward-r1
           path: /tmp/currency-hedge-allocator-overlay
-      - name: Publish current prospective challenger
+      - id: publish_current
+        name: Publish current prospective challenger
         run: |
           set -euo pipefail
           src=/tmp/currency-hedge-allocator-overlay/currency_hedge_allocator_overlay_forward_r1.json
@@ -88,6 +89,7 @@ jobs:
           python - "$src" <<'PY'
           import json,sys
           x=json.load(open(sys.argv[1]))
+          assert x['scientific_forward_credit'] is False
           assert x['boundaries']['allocation_authority'] is False
           assert x['boundaries']['broker_action'] is False
           assert x['contract']['funding_source']=='CASH_ONLY'
@@ -103,7 +105,14 @@ jobs:
           git add research/current/currency_hedge_allocator_overlay_forward_r1.json
           if git diff --cached --quiet; then
             echo 'CURRENT_CURRENCY_HEDGE_ALLOCATOR_OVERLAY_UNCHANGED=true'
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git commit -m 'Forward: publish current currency-hedge allocator challenger'
           git push origin HEAD:main
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+      - name: Dispatch existing forward scoreboard only after changed overlay publish
+        if: steps.publish_current.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run forward-market-scoreboard-r1.yml --ref main

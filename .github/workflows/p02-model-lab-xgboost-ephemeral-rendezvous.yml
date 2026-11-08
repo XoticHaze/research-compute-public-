@@ -15,6 +15,11 @@ env:
 
 jobs:
   consume:
+    # Fail closed: encrypted envelope sender is not independently authenticated;
+    # private Python source hashes are caller-declared in the capsule manifest.
+    # A commit string is not pinned executable bytes. Do not run extracted code
+    # until the trusted producer, source digest and private return are admitted.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:

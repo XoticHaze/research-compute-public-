@@ -273,7 +273,7 @@ def build(asof: date) -> dict[str, Any]:
         return {
             **base,
             "state": "AWAITING_ENTRY_SESSION",
-            "scientific_forward_credit": True,
+            "scientific_forward_credit": False,
             "entry_date": None,
             "latest_common_market_date": None,
             "forward_sessions": 0,
@@ -299,7 +299,7 @@ def build(asof: date) -> dict[str, Any]:
     return {
         **base,
         "state": "PROSPECTIVE_OPEN",
-        "scientific_forward_credit": True,
+        "scientific_forward_credit": False,
         "entry_date": entry.date().isoformat(),
         "latest_common_market_date": latest.date().isoformat(),
         "forward_sessions": len(usable),
