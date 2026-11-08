@@ -1,7 +1,7 @@
 // Cloudflare Access-locked operator transport UI. The only signing key is
 // held on a separately downloaded/offline owner device; this Worker never
 // creates, imports, stores, or uses that private key.
-const source = 'https://github.com/XoticHaze/research-compute-public-/blob/7227e440ddc6d2d4d900bae04d1953e117a34a20/cloudflare/operator-console/owner-device-offline-signer.html';
+const source = 'https://github.com/XoticHaze/research-compute-public-/blob/e2fa785d33c1185289f7e360d7bddb3d3b7d9e5d/cloudflare/operator-console/owner-device-offline-signer.html';
 const html = [
   '<!doctype html><html lang="en"><head><meta charset="utf-8">',
   '<meta name="viewport" content="width=device-width,initial-scale=1">',
@@ -11,7 +11,7 @@ const html = [
   '<section><h2>Transport readiness</h2><button id="refresh">Refresh</button><pre id="status">Loading</pre><p>The public Ed25519 key must be enrolled exactly once by the independent Pi root owner before a signed release. Neither a public Git commit nor an Access login authorizes this.</p></section>',
   '<section><h2>Owner-device signer</h2><p>Use an immutable, reviewed copy of the <a rel="noopener noreferrer" target="_blank" href="'+source+'">standalone offline signer</a> on your phone. Download it once to the device, keep it offline, verify the encrypted-backup recovery, and never paste its private key or passphrase here.</p><p>After independent root public-key enrollment, paste an exact fresh request and unsigned matching approval below, sign them locally, and return only the signed grant JSON.</p></section>',
   '<section><h2>Dispatch one exact owner-signed grant</h2>',
-  '<label for="kind">Operation</label><select id="kind"><option value="replace">pi.bot.replace_existing</option><option value="bootstrap">pi.bot.owner_bootstrap</option></select>',
+  '<label for="kind">Operation</label><select id="kind"><option value="replace">pi.bot.replace_existing</option><option value="bootstrap">pi.bot.owner_bootstrap</option><option value="root_release">pi.release.apply (root-agent upgrade)</option></select>',
   '<label for="request">Exact fresh Pi typed request JSON</label><textarea id="request" spellcheck="false"></textarea>',
   '<label for="approval">Matching unsigned owner approval JSON</label><textarea id="approval" spellcheck="false"></textarea>',
   '<label for="grant">Detached grant JSON signed OFFLINE on owner device</label><textarea id="grant" spellcheck="false"></textarea>',
@@ -36,7 +36,7 @@ const client=[
   'async function refresh(){const s=await api("device-status");$("status").textContent=JSON.stringify(s,null,2)}',
   '$("refresh").onclick=()=>run(refresh);',
   '$("dispatch").onclick=()=>run(async()=>{if(!$("approved").checked)throw Error("Explicit owner approval required");const req=JSON.parse($("request").value);const result=await api("dispatch-signed",{kind:$("kind").value,request:req,approval:JSON.parse($("approval").value),signed_grant:JSON.parse($("grant").value),approve_exact_release:true});show(result);$("root-id").value=req.request_id;$("approved").checked=false});',
-  '$("check-root").onclick=()=>run(async()=>{const id=$("root-id").value.trim();if(!id)throw Error("Exact request ID required");show(await api("receipt?request_id="+encodeURIComponent(id)))});',
+  '$("check-root").onclick=()=>run(async()=>{const id=$("root-id").value.trim();if(!id)throw Error("Exact request ID required");show(await api("receipt?kind="+encodeURIComponent($("kind").value)+"&request_id="+encodeURIComponent(id)))});',
   'run(refresh);',
 ].join('\n');
 export function piOwnerApprovalClientJs(){
