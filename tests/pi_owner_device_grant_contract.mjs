@@ -92,7 +92,7 @@ await assert.rejects(()=>verifyPiOwnerDeviceGrant(env,op,'root_release',
   /pi_owner_root_release_identity_mismatch/);
 await assert.rejects(()=>verifyPiOwnerDeviceGrant(env,op,'root_release',
   releaseReq,releaseApproval,{...signed}),
-  /pi_owner_signed_grant_unsigned_payload_drift/);
+  /pi_owner_signed_grant_shape_invalid/);
 await assert.rejects(()=>verifyPiOwnerDeviceGrant(env,op,'root_release',
   {...releaseReq,expires_at:iso(now-2000)},
   {...releaseApproval,expires_at:iso(now-2000)},
