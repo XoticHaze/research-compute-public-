@@ -5,7 +5,7 @@
   "access_required": true,
   "public_fallback_allowed": false,
   "live_execution_allowed": false,
-  "reason": "operator_authorized_20261107_pi_owner_phone_ui_inert_signer_deploy_existing_access_console_only__no_signer_activation_or_root_grant",
+  "reason": "operator_authorized_reusable_pi_owner_device_signer_transport_only__legacy_worker_private_issuer_retired__no_pi_mutation",
   "requested_by": "operator_20261107",
-  "request_id": "ccpi-owner-ui-deploy-20261107195016952"
+  "request_id": "ccpi-device-signer-access-only-20261108041531658"
 }
