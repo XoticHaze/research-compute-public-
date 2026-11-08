@@ -1,5 +1,6 @@
 import { piOwnerApprovalPage, piOwnerApprovalClientJs } from './pi_owner_approval_ui.js';
 import { PiOwnerApprovalState, publishPiOwnerGrant, readPiOwnerRootReceipt } from './pi_owner_approval.js';
+import { verifyPiOwnerDeviceGrant } from './pi_owner_device_grant.js';
 export { PiOwnerApprovalState } from './pi_owner_approval.js';
 
 import {
@@ -1207,6 +1208,53 @@ export default {
       });
     }
 
+    // Independent on-device Ed25519 signature. The GitHub-deployable Worker
+    // never creates, imports or persists the operator's private signing key.
+    if (request.method === 'GET' && url.pathname === '/api/pi-owner/device-status') {
+      return json({schema:'commandcenter.pi.device_signing_transport.v1',
+        device_signer_required:true, worker_signing_retired:true,
+        owner_public_key_configured:Boolean(env.PI_OWNER_ROOT_PUBLIC_KEY_PEM
+          && env.PI_OWNER_ENROLLED_PUB_SHA256),
+        private_queue_transport_configured:Boolean(env.PI_OWNER_QUEUE_GITHUB_TOKEN),
+        legacy_worker_signer_disabled:env.PI_OWNER_SIGNER_ENABLED !== '1',
+      },200);
+    }
+    if (request.method === 'POST' && url.pathname === '/api/pi-owner/dispatch-signed') {
+      if (!operatorDecisionRequestIsSameOrigin(request)) {
+        return json({error:'pi_owner_origin_rejected'},403);
+      }
+      let input;
+      try {
+        const raw=await request.text();
+        if (new TextEncoder().encode(raw).length>10000) return json({error:'pi_owner_payload_too_large'},413);
+        input=JSON.parse(raw);
+        if (!input || typeof input !== 'object' || input.approve_exact_release !== true) {
+          return json({error:'pi_owner_explicit_review_required'},403);
+        }
+      } catch {
+        return json({error:'pi_owner_payload_rejected'},400);
+      }
+      let verified;
+      try {
+        verified=await verifyPiOwnerDeviceGrant(env, accessIdentity,
+          input.kind,input.request,input.approval,input.signed_grant);
+      } catch (error) {
+        return json({error:'pi_owner_independent_signature_rejected',
+          reason:String(error?.message || 'invalid_approval')},403);
+      }
+      try {
+        const receipt=await publishPiOwnerGrant(
+          env,input.kind,input.approval,input.request,input.signed_grant);
+        return json({...receipt,ok:true,signer_key_sha256:verified.key_sha256,
+          independent_device_signature_verified:true,
+          pi_root_execution_verified:false},202);
+      } catch(error) {
+        return json({error:'pi_owner_signed_grant_transport_failed',
+          reason:String(error?.message || 'queue_unavailable'),
+          request_id:verified.request_id,signature_verified:true,
+          pi_root_execution_verified:false},503);
+      }
+    }
     if (request.method === 'GET' && url.pathname === '/api/pi-owner/receipt') {
       try {
         const result = await readPiOwnerRootReceipt(
@@ -1230,43 +1278,8 @@ export default {
       || url.pathname === '/api/pi-owner/enroll'
       || url.pathname === '/api/pi-owner/approve'
     )) {
-      if (!operatorDecisionRequestIsSameOrigin(request)) {
-        return json({error:'pi_owner_origin_rejected'},403);
-      }
-      let input;
-      try {
-        const raw = await request.text();
-        if (new TextEncoder().encode(raw).length > 8192) return json({error:'pi_owner_payload_too_large'},413);
-        input = JSON.parse(raw);
-      } catch {
-        return json({error:'pi_owner_payload_rejected'},400);
-      }
-      const kind = url.pathname.endsWith('/initialize') ? 'initialize'
-        : url.pathname.endsWith('/enroll') ? 'enroll' : 'sign';
-      let response;
-      try {
-        response = await piOwnerStub(env).fetch(new Request(
-          'https://pi-owner.internal/' + kind,
-          {method:'POST',headers:{'content-type':'application/json'},
-           body:JSON.stringify({...input, operator:accessIdentity})},
-        ));
-      } catch {
-        return json({error:'pi_owner_issuer_unavailable'},503);
-      }
-      if (!response.ok || kind !== 'sign') return response;
-      const signed = await response.json();
-      try {
-        const queueReceipt = await publishPiOwnerGrant(
-          env, input.kind, input.approval, input.request, signed.signed_grant,
-        );
-        return json({ok:true, ...queueReceipt, signer_key_sha256:signed.key_sha256,
-          signing_grant_durable:true, pi_root_execution_verified:false},202);
-      } catch (error) {
-        return json({error:'pi_owner_signed_not_dispatched',
-          reason:String(error?.message || 'queue_unavailable'),
-          request_id:signed.request_id, approval_recorded:true,
-          root_execution_verified:false},503);
-      }
+      return json({error:'pi_owner_cloud_private_key_issuer_retired',
+        next:'sign_locally_then_dispatch_signed_grant'},410);
     }
 
     if (request.method === 'GET' && url.pathname === '/api/promotion-review') {
