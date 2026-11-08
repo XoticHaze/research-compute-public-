@@ -414,3 +414,76 @@ export async function readPiOwnerRootReceipt(env, requestId) {
     production_readback_verified:false,
   };
 }
+
+
+// Root-agent one-shot updates use a distinct fixed inbox + Ed25519 domain.
+// The caller must verify the owner's *device-held* detached signature before
+// reaching this transport. The existing Pi root worker re-verifies independently.
+export async function publishPiRootReleaseGrant(env, request, signedGrant) {
+  const token=String(env.PI_OWNER_QUEUE_GITHUB_TOKEN||'');
+  if(token.length<20)throw new Error('pi_owner_queue_credential_missing');
+  const requestPath='pi-node/release-request.json';
+  const grantPath='pi-node/release-signed-approval.json';
+  const priorReq=await githubFile(token,requestPath);
+  const priorGrant=await githubFile(token,grantPath);
+  if(!REQ.test(request.request_id)||signedGrant.request_id!==request.request_id){
+    throw new Error('pi_owner_release_identity_invalid');
+  }
+  const oldGrantExact=priorGrant?.text===canonicalPiJson(signedGrant);
+  const oldRequestExact=priorReq?.text===canonicalPiJson(request);
+  if ((!oldRequestExact && !queueSlotFree(priorReq,request.request_id,Date.now()))
+      ||(!oldGrantExact && !queueSlotFree(priorGrant,request.request_id,Date.now()))) {
+    throw new Error('pi_owner_root_release_queue_occupied_or_replay');
+  }
+  if (oldRequestExact && !oldGrantExact) {
+    throw new Error('pi_owner_root_request_exists_without_matching_grant');
+  }
+  const grantSha=oldGrantExact?priorGrant.sha
+    :await githubPut(token,grantPath,signedGrant,priorGrant);
+  const requestSha=oldRequestExact?priorReq.sha
+    :await githubPut(token,requestPath,request,priorReq);
+  return {schema:'commandcenter.pi.root_device_grant_dispatched.v1',
+    action:'pi.release.apply',request_id:request.request_id,
+    branch:QUEUE_REF,signed_grant_blob_sha:grantSha,request_blob_sha:requestSha,
+    recovered_exact_same_id:Boolean(oldRequestExact||oldGrantExact),
+    root_receipt_verified:false,protected_mutation_claimed:false};
+}
+
+export async function readPiRootReleaseReceipt(env,requestId) {
+  if(typeof requestId!=='string'||!REQ.test(requestId)){
+    throw new Error('pi_owner_release_receipt_request_invalid');
+  }
+  const token=String(env.PI_OWNER_QUEUE_GITHUB_TOKEN||'');
+  if(token.length<20)throw new Error('pi_owner_queue_credential_missing');
+  const path='pi-node/release-results/'+requestId+'.json';
+  const url='https://api.github.com/repos/'+QUEUE_REPO+'/contents/'
+    +path+'?ref=pi-node-outbox';
+  const response=await fetch(url,{
+    headers:{'authorization':'Bearer '+token,'accept':'application/vnd.github+json',
+      'x-github-api-version':'2022-11-28'},redirect:'manual',
+  });
+  if(response.status===404)return{
+    schema:'commandcenter.pi.root_release_result_projection.v1',
+    request_id:requestId,status:'PENDING',root_receipt_verified:false};
+  if(!response.ok)throw new Error('pi_owner_root_release_receipt_unavailable');
+  const file=await response.json();
+  if(!SHA40.test(file?.sha||'')||file.encoding!=='base64'
+      ||typeof file.content!=='string'||file.size>8192){
+    throw new Error('pi_owner_root_release_receipt_invalid');
+  }
+  const raw=new TextDecoder().decode(unb64(file.content.replace(/\s/g,'')));
+  if(te.encode(raw).length>8192)throw new Error('pi_owner_root_release_receipt_oversize');
+  const receipt=JSON.parse(raw);
+  if(receipt.schema!=='commandcenter.pi.release_result.v1'
+      ||receipt.node_id!=='cc-pi4'||receipt.request_id!==requestId
+      ||receipt.action!=='pi.release.apply'
+      ||!['passed','failed','indeterminate'].includes(receipt.status)){
+    throw new Error('pi_owner_root_release_receipt_identity_invalid');
+  }
+  return {schema:'commandcenter.pi.root_release_result_projection.v1',
+    request_id:requestId,action:receipt.action,status:receipt.status,
+    source_sha:typeof receipt.source_sha==='string'?receipt.source_sha:null,
+    predecessor:typeof receipt.predecessor==='string'?receipt.predecessor:null,
+    finished_at:typeof receipt.finished_at==='string'?receipt.finished_at:null,
+    root_receipt_verified:true,active_generation_readback_verified:false};
+}
