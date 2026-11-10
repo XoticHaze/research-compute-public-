@@ -450,102 +450,102 @@
       },
       "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
       "resolution": {
-        "common_market_latest_date": "2026-11-06",
+        "common_market_latest_date": "2026-11-09",
         "current_mark_metrics": {
-          "calibration_intercept_bps": -409.6232,
+          "calibration_intercept_bps": 108.4711,
           "calibration_interpretation": "partial-horizon diagnostic only; terminal fixed20 calibration remains authoritative",
-          "calibration_slope": 1.309838,
+          "calibration_slope": 1.853013,
           "count": 11,
-          "equal_weight_universe_return_bps": 357.7054,
-          "mark_date": "2026-11-06",
+          "equal_weight_universe_return_bps": 1183.635,
+          "mark_date": "2026-11-09",
           "nonterminal": true,
-          "prediction_mae_bps": 316.2567,
-          "qqq_return_bps": 139.8654,
-          "rank_ic_spearman": 0.772727,
-          "smh_return_bps": 362.4948,
-          "ticker_book_excess_vs_equal_weight_universe_bps": -102.2749,
-          "ticker_book_matched_excess_vs_smh_bps": -107.0644,
-          "ticker_book_net_if_flattened_now_bps": 255.4304,
-          "ticker_book_opportunity_excess_vs_qqq_bps": 115.5651,
-          "ticker_positive_hit_rate": 0.909091
+          "prediction_mae_bps": 851.5703,
+          "qqq_return_bps": 499.1884,
+          "rank_ic_spearman": 0.636364,
+          "smh_return_bps": 886.2482,
+          "ticker_book_excess_vs_equal_weight_universe_bps": -198.0313,
+          "ticker_book_matched_excess_vs_smh_bps": 99.3555,
+          "ticker_book_net_if_flattened_now_bps": 985.6037,
+          "ticker_book_opportunity_excess_vs_qqq_bps": 486.4153,
+          "ticker_positive_hit_rate": 0.818182
         },
         "current_ticker_marks": {
           "ADI": {
-            "gross_return_bps": 70.6348,
-            "net_if_flattened_now_bps": 45.6348,
-            "partial_prediction_error_bps_nonterminal": -53.7174,
+            "gross_return_bps": 932.1069,
+            "net_if_flattened_now_bps": 907.1069,
+            "partial_prediction_error_bps_nonterminal": 807.7548,
             "predicted_fixed20_net_value_bps": 99.35219819891923,
             "sign_hit_current": true
           },
           "AMAT": {
-            "gross_return_bps": 421.9264,
-            "net_if_flattened_now_bps": 396.9264,
-            "partial_prediction_error_bps_nonterminal": -341.2473,
+            "gross_return_bps": 1606.8908,
+            "net_if_flattened_now_bps": 1581.8908,
+            "partial_prediction_error_bps_nonterminal": 843.717,
             "predicted_fixed20_net_value_bps": 738.1737197908213,
             "sign_hit_current": true
           },
           "AMD": {
-            "gross_return_bps": 1103.8579,
-            "net_if_flattened_now_bps": 1078.8579,
-            "partial_prediction_error_bps_nonterminal": 392.2299,
+            "gross_return_bps": 2576.1621,
+            "net_if_flattened_now_bps": 2551.1621,
+            "partial_prediction_error_bps_nonterminal": 1864.534,
             "predicted_fixed20_net_value_bps": 686.6280351421574,
             "sign_hit_current": true
           },
           "APH": {
-            "gross_return_bps": 411.7807,
-            "net_if_flattened_now_bps": 386.7807,
-            "partial_prediction_error_bps_nonterminal": 10.9037,
+            "gross_return_bps": 1266.0525,
+            "net_if_flattened_now_bps": 1241.0525,
+            "partial_prediction_error_bps_nonterminal": 865.1755,
             "predicted_fixed20_net_value_bps": 375.8769857332355,
             "sign_hit_current": true
           },
           "AVGO": {
-            "gross_return_bps": 74.092,
-            "net_if_flattened_now_bps": 49.092,
-            "partial_prediction_error_bps_nonterminal": -358.7191,
+            "gross_return_bps": 958.7354,
+            "net_if_flattened_now_bps": 933.7354,
+            "partial_prediction_error_bps_nonterminal": 525.9243,
             "predicted_fixed20_net_value_bps": 407.8110424084801,
             "sign_hit_current": true
           },
           "KLAC": {
-            "gross_return_bps": 669.4917,
-            "net_if_flattened_now_bps": 644.4917,
-            "partial_prediction_error_bps_nonterminal": 49.1247,
+            "gross_return_bps": 1662.5579,
+            "net_if_flattened_now_bps": 1637.5579,
+            "partial_prediction_error_bps_nonterminal": 1042.1909,
             "predicted_fixed20_net_value_bps": 595.3670179310341,
             "sign_hit_current": true
           },
           "LRCX": {
-            "gross_return_bps": 822.8945,
-            "net_if_flattened_now_bps": 797.8945,
-            "partial_prediction_error_bps_nonterminal": -14.852,
+            "gross_return_bps": 1949.7841,
+            "net_if_flattened_now_bps": 1924.7841,
+            "partial_prediction_error_bps_nonterminal": 1112.0376,
             "predicted_fixed20_net_value_bps": 812.7465183445803,
             "sign_hit_current": true
           },
           "MCHP": {
-            "gross_return_bps": -1002.3131,
-            "net_if_flattened_now_bps": -1027.3131,
-            "partial_prediction_error_bps_nonterminal": -1217.059,
+            "gross_return_bps": -516.5765,
+            "net_if_flattened_now_bps": -541.5765,
+            "partial_prediction_error_bps_nonterminal": -731.3224,
             "predicted_fixed20_net_value_bps": 189.74590844796003,
             "sign_hit_current": false
           },
           "MRVL": {
-            "gross_return_bps": 572.8187,
-            "net_if_flattened_now_bps": 547.8187,
-            "partial_prediction_error_bps_nonterminal": -488.4786,
+            "gross_return_bps": 1576.1889,
+            "net_if_flattened_now_bps": 1551.1889,
+            "partial_prediction_error_bps_nonterminal": 514.8915,
             "predicted_fixed20_net_value_bps": 1036.2973448781213,
             "sign_hit_current": true
           },
           "MU": {
-            "gross_return_bps": 512.0429,
-            "net_if_flattened_now_bps": 487.0429,
-            "partial_prediction_error_bps_nonterminal": -294.5137,
+            "gross_return_bps": 1169.4268,
+            "net_if_flattened_now_bps": 1144.4268,
+            "partial_prediction_error_bps_nonterminal": 362.8702,
             "predicted_fixed20_net_value_bps": 781.5566254972882,
             "sign_hit_current": true
           },
           "NVDA": {
-            "gross_return_bps": 277.5327,
-            "net_if_flattened_now_bps": 252.5327,
-            "partial_prediction_error_bps_nonterminal": -257.9778,
+            "gross_return_bps": -161.344,
+            "net_if_flattened_now_bps": -186.344,
+            "partial_prediction_error_bps_nonterminal": -696.8545,
             "predicted_fixed20_net_value_bps": 510.51047822741975,
-            "sign_hit_current": true
+            "sign_hit_current": false
           }
         },
         "entry_date": "2026-11-05",
@@ -553,46 +553,46 @@
           "equal_weight": {
             "excess_vs_equal_weight_universe_bps": -25.0,
             "excess_vs_equal_weight_universe_net_bps": 0.0,
-            "excess_vs_qqq_bps": 192.84,
-            "excess_vs_smh_bps": -29.7894,
-            "excess_vs_smh_net_bps": -19.7894,
+            "excess_vs_qqq_bps": 659.4465,
+            "excess_vs_smh_bps": 272.3868,
+            "excess_vs_smh_net_bps": 282.3868,
             "scientific_forward_credit": true,
-            "ticker_book_gross_return_bps": 357.7054,
-            "ticker_book_net_return_bps": 332.7054
+            "ticker_book_gross_return_bps": 1183.635,
+            "ticker_book_net_return_bps": 1158.635
           },
           "incumbent_frozen_book": {
-            "excess_vs_equal_weight_universe_bps": -102.2749,
-            "excess_vs_equal_weight_universe_net_bps": -77.2749,
-            "excess_vs_qqq_bps": 115.5651,
-            "excess_vs_smh_bps": -107.0644,
-            "excess_vs_smh_net_bps": -97.0644,
+            "excess_vs_equal_weight_universe_bps": -198.0313,
+            "excess_vs_equal_weight_universe_net_bps": -173.0313,
+            "excess_vs_qqq_bps": 486.4153,
+            "excess_vs_smh_bps": 99.3555,
+            "excess_vs_smh_net_bps": 109.3555,
             "scientific_forward_credit": true,
-            "ticker_book_gross_return_bps": 280.4304,
-            "ticker_book_net_return_bps": 255.4304
+            "ticker_book_gross_return_bps": 1010.6037,
+            "ticker_book_net_return_bps": 985.6037
           },
           "linear_prediction_rank": {
-            "excess_vs_equal_weight_universe_bps": 151.2808,
-            "excess_vs_equal_weight_universe_net_bps": 176.2808,
-            "excess_vs_qqq_bps": 369.1208,
-            "excess_vs_smh_bps": 146.4913,
-            "excess_vs_smh_net_bps": 156.4913,
+            "excess_vs_equal_weight_universe_bps": 229.9969,
+            "excess_vs_equal_weight_universe_net_bps": 254.9969,
+            "excess_vs_qqq_bps": 914.4434,
+            "excess_vs_smh_bps": 527.3836,
+            "excess_vs_smh_net_bps": 537.3836,
             "scientific_forward_credit": true,
-            "ticker_book_gross_return_bps": 533.9861,
-            "ticker_book_net_return_bps": 508.9861
+            "ticker_book_gross_return_bps": 1438.6318,
+            "ticker_book_net_return_bps": 1413.6318
           },
           "rank_x_inverse_vol": {
-            "excess_vs_equal_weight_universe_bps": 93.6971,
-            "excess_vs_equal_weight_universe_net_bps": 118.6971,
-            "excess_vs_qqq_bps": 311.5371,
-            "excess_vs_smh_bps": 88.9076,
-            "excess_vs_smh_net_bps": 98.9076,
+            "excess_vs_equal_weight_universe_bps": 76.8965,
+            "excess_vs_equal_weight_universe_net_bps": 101.8965,
+            "excess_vs_qqq_bps": 761.3431,
+            "excess_vs_smh_bps": 374.2833,
+            "excess_vs_smh_net_bps": 384.2833,
             "scientific_forward_credit": true,
-            "ticker_book_gross_return_bps": 476.4024,
-            "ticker_book_net_return_bps": 451.4024
+            "ticker_book_gross_return_bps": 1285.5315,
+            "ticker_book_net_return_bps": 1260.5315
           }
         },
         "horizon_sessions": 20,
-        "sessions_completed": 1
+        "sessions_completed": 2
       },
       "signal_date": "2026-11-04",
       "source_adapter_sha256": "9add926e28bc6e464adda111d91b4e2e1c986f614b79c53b3cbf69f1a82f9f85",
@@ -600,22 +600,22 @@
         "all_symbols_share_latest_date": true,
         "lagging_symbols_vs_source_max": [],
         "latest_by_symbol": {
-          "ADI": "2026-11-06",
-          "AMAT": "2026-11-06",
-          "AMD": "2026-11-06",
-          "APH": "2026-11-06",
-          "AVGO": "2026-11-06",
-          "KLAC": "2026-11-06",
-          "LRCX": "2026-11-06",
-          "MCHP": "2026-11-06",
-          "MRVL": "2026-11-06",
-          "MU": "2026-11-06",
-          "NVDA": "2026-11-06",
-          "QQQ": "2026-11-06",
-          "SMH": "2026-11-06"
+          "ADI": "2026-11-09",
+          "AMAT": "2026-11-09",
+          "AMD": "2026-11-09",
+          "APH": "2026-11-09",
+          "AVGO": "2026-11-09",
+          "KLAC": "2026-11-09",
+          "LRCX": "2026-11-09",
+          "MCHP": "2026-11-09",
+          "MRVL": "2026-11-09",
+          "MU": "2026-11-09",
+          "NVDA": "2026-11-09",
+          "QQQ": "2026-11-09",
+          "SMH": "2026-11-09"
         },
         "provider": "yfinance_adjusted_close",
-        "source_max_date": "2026-11-06"
+        "source_max_date": "2026-11-09"
       },
       "source_ref": "e73ec9b15180e208de541ce5d5304888e5550433",
       "status": "OPEN",
@@ -654,8 +654,8 @@
     "freshness_gap_visible": false,
     "in_progress_session_excluded": true,
     "lagging_symbols_by_program": {},
-    "observed_common_asof": "2026-11-06",
-    "requested_asof": "2026-11-06",
+    "observed_common_asof": "2026-11-09",
+    "requested_asof": "2026-11-09",
     "source_health_by_program": {
       "HOMEBUILDERS": {
         "all_symbols_share_latest_date": true,
@@ -675,27 +675,27 @@
         "all_symbols_share_latest_date": true,
         "lagging_symbols_vs_source_max": [],
         "latest_by_symbol": {
-          "ADI": "2026-11-06",
-          "AMAT": "2026-11-06",
-          "AMD": "2026-11-06",
-          "APH": "2026-11-06",
-          "AVGO": "2026-11-06",
-          "KLAC": "2026-11-06",
-          "LRCX": "2026-11-06",
-          "MCHP": "2026-11-06",
-          "MRVL": "2026-11-06",
-          "MU": "2026-11-06",
-          "NVDA": "2026-11-06",
-          "QQQ": "2026-11-06",
-          "SMH": "2026-11-06"
+          "ADI": "2026-11-09",
+          "AMAT": "2026-11-09",
+          "AMD": "2026-11-09",
+          "APH": "2026-11-09",
+          "AVGO": "2026-11-09",
+          "KLAC": "2026-11-09",
+          "LRCX": "2026-11-09",
+          "MCHP": "2026-11-09",
+          "MRVL": "2026-11-09",
+          "MU": "2026-11-09",
+          "NVDA": "2026-11-09",
+          "QQQ": "2026-11-09",
+          "SMH": "2026-11-09"
         },
         "provider": "yfinance_adjusted_close",
-        "source_max_date": "2026-11-06"
+        "source_max_date": "2026-11-09"
       }
     }
   },
-  "generated_at": "2026-11-07T12:35:31.714719+00:00",
-  "market_data_asof": "2026-11-06",
+  "generated_at": "2026-11-10T04:48:38.063103+00:00",
+  "market_data_asof": "2026-11-09",
   "matched_after_cost_projections": {
     "SEMICONDUCTOR_SHARED_RIDGE:2026-09-11:aed8eb43d888d3c4": {
       "alpha_or_promotion_authority": false,
@@ -710,7 +710,7 @@
       "ticker_minus_smh_net_bps": -8.3719
     }
   },
-  "requested_market_data_asof": "2026-11-06",
+  "requested_market_data_asof": "2026-11-09",
   "schema": "research.forward_prospective_cohort_ledger_r1",
   "summary": {
     "HOMEBUILDERS": {
