@@ -85,7 +85,9 @@ function rows(section, kind) {
   for (const row of section.rows) {
     if (!exact(row, fields) || typeof row.symbol !== 'string'
         || !/^[A-Za-z0-9._/-]{1,28}$/.test(row.symbol)
-        || !['BOT_OWNED', 'EXTERNAL', 'UNVERIFIED'].includes(row.ownership)) {
+        // This account-only collector has no independently reconciled bot-vs-
+        // external holding ownership proof. Even real rows must stay UNKNOWN.
+        || row.ownership !== 'UNVERIFIED') {
       fail('pi_financial_row_identity');
     }
     for (const [name, value] of Object.entries(row)) {
@@ -115,9 +117,14 @@ function financeShape(input, expectedHash, nowMs) {
       || snapshot.broker_mutation_authority !== false
       || !exact(snapshot.account, MONEY_NAMES)) fail('pi_financial_snapshot_invalid');
   for (const key of MONEY_NAMES) money(snapshot.account[key]);
+  // A signed root cycle with NO actually denominated money is still a valid
+  // count-only observation, NOT a live-financial success for the operator.
+  if (!MONEY_NAMES.some(key => snapshot.account[key].status === 'OBSERVED')) {
+    fail('pi_financial_no_observed_money');
+  }
   rows(snapshot.positions, 'positions'); rows(snapshot.open_orders, 'open_orders');
   if (!exact(snapshot.bot, ['ownership_state', 'runtimes'])
-      || !['BOT_OWNED', 'EXTERNAL', 'UNVERIFIED'].includes(snapshot.bot.ownership_state)
+      || snapshot.bot.ownership_state !== 'UNVERIFIED'
       || !Array.isArray(snapshot.bot.runtimes) || snapshot.bot.runtimes.length) {
     fail('pi_financial_bot_authority');
   }
