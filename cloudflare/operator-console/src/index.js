@@ -755,6 +755,8 @@ export class OperatorState {
     }
     if (request.method === 'GET' && url.pathname === '/pi-finance/latest') {
       try {
+        if (this.env.PI_LIVE_FINANCE_ORIGIN_ADMITTED !== '1')
+          throw new Error('pi_financial_not_admitted');
         const payload = await readPrivateFinancial(this.ctx.storage, this.env);
         return json(payload, 200);
       } catch {
@@ -1456,6 +1458,14 @@ export default {
       '/operator/forward-execution',
       '/operator/promotion-review',
     ]);
+    // Full V4 route publication is a separate protected release from the
+    // existing dedicated Bot Console. A real exact-build/served acceptance
+    // must set this owner-managed gate; a generic SPA fallback never grants it.
+    if (env.MMIBKR_FULL_V4_ROUTES_ADMITTED === '1') {
+      for (const route of ['/markets', '/portfolio', '/portfolio/positions']) {
+        dedicatedBrowserRoutes.add(route);
+      }
+    }
     const staticAssetPath = url.pathname.startsWith('/assets/')
       || /\.(?:ico|svg|png|webp|jpe?g|gif|webmanifest|txt|js|css|woff2?|ttf)$/.test(url.pathname);
     if (!dedicatedBrowserRoutes.has(url.pathname) && !staticAssetPath) {
