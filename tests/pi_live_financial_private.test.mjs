@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 import { FINANCE_DOMAIN, FINANCE_SCHEMA, ACCOUNT_SCHEMA,
   canonicalPrivateJson, verifyPrivateFinancial,
-  storePrivateFinancial, readPrivateFinancial } from '../src/pi_live_financial_private.js';
+  storePrivateFinancial, readPrivateFinancial } from '../cloudflare/operator-console/src/pi_live_financial_private.js';
 
 globalThis.crypto ||= webcrypto;
 const now = Date.parse('2026-11-13T23:15:00Z');
@@ -129,7 +129,7 @@ test('Python signed envelope canonical JSON shape has sorted ASCII keys',()=>{
   assert.throws(()=>canonicalPrivateJson({a:Infinity}),/shape_invalid/);
 });
 
-import { requireFinancePublisherAdmission, requireFinanceServiceClaims } from '../src/pi_live_financial_private.js';
+import { requireFinancePublisherAdmission, requireFinanceServiceClaims } from '../cloudflare/operator-console/src/pi_live_financial_private.js';
 
 test('finance route defaults off even if HMAC trust exists',()=>{
   assert.throws(()=>requireFinancePublisherAdmission(env),/not_admitted/);
