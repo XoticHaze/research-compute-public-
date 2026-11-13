@@ -153,3 +153,26 @@ test('only the cryptographically verified pinned service Access principal can pu
     assert.throws(()=>requireFinanceServiceClaims({...signed,...patch},config,expectedIssuer),/principal_rejected/);
   }
 });
+
+test('a count-only / BASE-only cycle with no denominated money cannot claim live finance',async()=>{
+  const doc=await fixture();
+  doc.snapshot.account.net_liquidation={value:null,currency:null,status:'UNVERIFIED'};
+  const signed=await sign(doc);
+  await assert.rejects(verifyPrivateFinancial(signed,env,now),/no_observed_money/);
+});
+
+test('account rows cannot claim strategy or external ownership without ledger reconciliation',async()=>{
+  const row={symbol:'AMAT',local_symbol:'AMAT',security_type:'STK',contract_id:123,
+    quantity:'1',avg_cost:'200.00',market_value:'210.00',unrealized_pnl:'10.00',
+    currency:'USD',ownership:'UNVERIFIED'};
+  const doc=await fixture();
+  doc.snapshot.positions={status:'OBSERVED',count:1,rows:[row]};
+  assert.doesNotReject(verifyPrivateFinancial(await sign(doc),env,now));
+  for(const ownership of ['BOT_OWNED','EXTERNAL']) {
+    doc.snapshot.positions.rows[0].ownership=ownership;
+    await assert.rejects(verifyPrivateFinancial(await sign(doc),env,now),/row_identity/);
+  }
+  doc.snapshot.positions.rows[0].ownership='UNVERIFIED';
+  doc.snapshot.bot.ownership_state='BOT_OWNED';
+  await assert.rejects(verifyPrivateFinancial(await sign(doc),env,now),/bot_authority/);
+});
