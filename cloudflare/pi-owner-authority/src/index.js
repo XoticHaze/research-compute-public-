@@ -1,4 +1,4 @@
-// Original-account Cloudflare-admin ONLY Pi root authorization service.
+// Independently administered neutral-account Cloudflare ONLY Pi root authorization service.
 // This script MUST NOT be deployed by GitHub-controlled Worker credentials.
 // No private key is accepted from a request, repository, or caller.
 import {
