@@ -47,3 +47,29 @@ Native local `node --test` of the module: 12/12 cases passed with synthetic HMAC
 Rollback: unset the two flags first (all machine POST requests denied), then revert the Worker release source using the existing approved rollback path. The last stored DO snapshot cannot be read by an unauthorized browser; it expires at 420 seconds for an authorized operator even if no new data arrives. Never clear a replay ledger to make stale broker balances appear fresh.
 
 Status: `SOURCE_BRANCH_REVIEW_ONLY`, `NO_SERVICE_AUTH_POLICY_ADMITTED`, `NO_ROOT_FINANCIAL_COLLECTOR_INSTALLED`, `NO_PRODUCTION_MACHINE_DELIVERY`, `NO_SERVED_MONEY_READBACK`. No root/broker mutations in this source change.
+
+## Exact Cloudflare Access Service Auth admission (owner-managed)
+
+The existing `mmibkr-operator-console.slenderiq.workers.dev` human application is NOT a machine identity. Cloudflare's official Access application-path contract says a **more-specific URL path policy takes precedence**, without inheriting the broader site's human allow policy:
+https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/
+and Cloudflare documents path-specific Worker Access protection here:
+https://developers.cloudflare.com/workers/configuration/cloudflare-access/
+
+For this branch, the owner must **independently inspect current original-account Access application state** before creating/changing anything. The intended narrow machine policy is a self-hosted Access application scoped to the **exact URL path** `/v1/pi-live-financial` on the *existing* Worker hostname, with `Service Auth` decision allowing **one** dedicated service token. The broad operator human Access application/email policy must stay intact for `/bot-console`, `/api/operator/live-account` and the existing operator pages. Do not use an Access `Bypass` policy, a wildcard that authorizes unrelated routes, or a shared browser-user credential. Protect every alternate Worker hostname/preview/reachable route with the owning Access policies, because the Worker checks signed principal claims independently but an unprotected alternate route would be an unwanted second ingress.
+
+Cloudflare official service token contract:
+https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/
+The root courier uses **exactly** `CF-Access-Client-Id` and `CF-Access-Client-Secret`; fresh service secret formatting may start with `cfast_` and must be read from protected root-only files, never logged, emailed or committed. Prefer enabling `Strict service token authentication` (Cloudflare's documented `401/403` on rejected tokens rather than login redirects), with the current account's existing policy/app compatibility reviewed first. The courier independently refuses HTTP redirects regardless.
+
+The Worker verifies a signed `Cf-Access-Jwt-Assertion` using the CURRENT original team JWKS, distinct machine application `aud`, `type=app`, `common_name` exactly matching the enrolled service Client ID, empty `sub`, and no human email; it also validates the Pi HMAC and exact production account hash. Cloudflare documents these service-token JWT fields here:
+https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/application-token/
+
+Require these verified **private runtime bindings**, not repository literals:
+
+- Worker `PI_LIVE_FINANCE_HMAC_KEY`, `PI_LIVE_EXPECTED_ACCOUNT_SHA256`, `PI_LIVE_FINANCE_ACCESS_AUD`, `PI_LIVE_FINANCE_SERVICE_CLIENT_ID`, plus existing `ACCESS_TEAM_DOMAIN` human Access bindings. Independently validate actual Access issuer/audience and no public errors containing secrets.
+- Pi root `/etc/commandcenter-pi/pi-live-financial-hmac-key` (HMAC hex), `/etc/commandcenter-pi/pi-live-financial-access-client-id`, `/etc/commandcenter-pi/pi-live-financial-access-client-secret`, `/etc/commandcenter-pi/pi-live-financial-delivery-approval.json`, and existing protected expected-account seal; all protected files root-only `0600` and separately owner-reviewed.
+- Keep `PI_LIVE_FINANCE_INGEST_ENABLED`, `PI_LIVE_FINANCE_ORIGIN_ADMITTED`, and `MMIBKR_FULL_V4_ROUTES_ADMITTED` **unset/off** until their respective protected admission receipts exist.
+
+**Attended acceptance order:** read current Access application/policy via scoped administrator first; admit exact machine service-token/path rule; install and inspect the independently approved root collector/projector/courier source; deploy the reviewed exact Worker+selected V4 assets using existing allowed public-encrypted release; verify unauthorized POST is 403 and unauthorized human GET denied, then a genuine signed Pi cycle produces a status-only 202 acknowledgement and an authorized same-origin GET with observed financial values, no HMAC/account ID leakage, and a 503 after 420 seconds without new data. Record exact deployment version and browser result. An ordinary GitHub PR cannot prove any of these steps.
+
+**Precaution:** the existing Worker-host Access configuration and an independently approved service-token issuer must be verified as actually present, not inferred from source. This is SOURCE_ONLY until root/Access/deploy receipts independently establish it.
