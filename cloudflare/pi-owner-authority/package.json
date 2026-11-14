@@ -1,0 +1,13 @@
+{
+  "name": "ccpi-neutral-owner-firstseal-release",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "One-time inert neutral Cloudflare owner signer deployment; disconnect GitHub Builds before any key issuance",
+  "scripts": {
+    "deploy": "npx --yes wrangler@4.131.2 deploy --config wrangler.jsonc"
+  },
+  "devDependencies": {
+    "wrangler": "4.131.2"
+  }
+}
