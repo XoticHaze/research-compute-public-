@@ -6,9 +6,11 @@ on:
       - main
     paths:
       - 'cloudflare/operator-console/**'
+      - 'cloudflare/pi-owner-authority/**'
       - 'tests/test_mmibkr_operator_console_worker_v1.py'
       - 'tests/operator_console_runtime_union_freshness_contract.mjs'
       - 'tests/pi_owner_approval_contract.mjs'
+      - 'tests/pi_owner_cloudflare_primary_authority_contract.mjs'
       - 'tests/pi_owner_device_grant_contract.mjs'
       - 'tests/pi_owner_root_release_transport_contract.mjs'
       - 'tests/pi_owner_access_gate_contract.mjs'
@@ -51,6 +53,8 @@ jobs:
           node tests/pi_owner_device_grant_contract.mjs
           node tests/pi_owner_root_release_transport_contract.mjs
           node tests/pi_owner_approval_contract.mjs
+          node --check cloudflare/pi-owner-authority/src/index.js
+          node tests/pi_owner_cloudflare_primary_authority_contract.mjs
           node tests/pi_owner_access_gate_contract.mjs
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -63,6 +67,29 @@ jobs:
           python -m unittest -v \
             tests.test_mmibkr_operator_console_worker_v1 \
             tests.test_mmibkr_operator_console_publisher_v1
+
+      - name: Dry-run isolated Cloudflare-owner signer bundle (no deploy)
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.131.2 deploy \
+            --dry-run \
+            --config cloudflare/pi-owner-authority/wrangler.jsonc \
+            --outdir "$RUNNER_TEMP/ccpi-owner-authority-dry-run"
+
+      - name: Record isolated signer artifact hashes
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/ccpi-owner-authority-dry-run"
+          find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          test -s SHA256SUMS.txt
+
+      - name: Attach public-source isolated signer bundle for protected Cloudflare admin deployment
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ccpi-owner-neutral-source-bundle-${{ github.sha }}
+          path: ${{ runner.temp }}/ccpi-owner-authority-dry-run/
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Dry-run canonical Worker bundle
         run: |

@@ -145,6 +145,48 @@ assert.equal((await call('/sign',replay)).status,403);
 const invalid=releaseReplace();
 invalid.approval.acknowledge_existing_live_mode_preserved=false;
 await assert.rejects(()=>validatePiOwnerApproval('replace',invalid.approval,invalid.request));
+// Cloudflare-held primary signer reuses the retained DO key and separate
+// root-agent Ed25519 domain. This is a source-level test, not live admission.
+function releaseRoot() {
+  const req = {
+    schema:'commandcenter.pi.release_request.v1',
+    node_id:'cc-pi4',request_id:'cloud-root-synthetic-20261114',
+    action:'pi.release.apply',source_repo:'XoticHaze/CommandCenter',
+    source_sha:hex40,expected_release:'r'+base('c',12),
+    created_at:iso(now-1000),expires_at:iso(now+240000),
+  };
+  return {
+    kind:'root_release',request:req,
+    approval:{
+      schema:'commandcenter.pi.release_request_approval.v1',
+      request_id:req.request_id,source_sha:req.source_sha,
+      expected_release:req.expected_release,expires_at:req.expires_at,
+    },
+    approve_exact_release:true,
+  };
+}
+const cloudRoot=releaseRoot();
+const cloudRootIssued=await call('/sign',cloudRoot);
+assert.equal(cloudRootIssued.status,201);
+const rootDomain='commandcenter.pi.release_request_approval.v1\0';
+assert.equal(cryptoVerify(null,Buffer.concat([
+  Buffer.from(rootDomain),Buffer.from(canonicalPiJson(cloudRoot.approval)),
+]),createPublicKey(info.public_key_pem),
+  Buffer.from(cloudRootIssued.body.signed_grant.signature_b64,'base64')),true);
+assert.equal(cryptoVerify(null,Buffer.concat([
+  Buffer.from('commandcenter.pi.bot_replace_approval.v1\0'),
+  Buffer.from(canonicalPiJson(cloudRoot.approval)),
+]),createPublicKey(info.public_key_pem),
+  Buffer.from(cloudRootIssued.body.signed_grant.signature_b64,'base64')),false);
+assert.equal((await call('/sign',cloudRoot)).body.recovered,true);
+assert.equal((await call('/sign',{...cloudRoot,
+  approval:{...cloudRoot.approval,source_sha:base('f',40)}})).status,403);
+assert.equal((await call('/sign',{...cloudRoot,
+  request:{...cloudRoot.request,expires_at:iso(now-1200)},
+  approval:{...cloudRoot.approval,expires_at:iso(now-1200)}})).status,403);
+assert.equal((await call('/sign',{...cloudRoot,
+  request:{...cloudRoot.request,source_repo:'XoticHaze/other'}})).status,403);
+
 const deniedEnv={...env,PI_OWNER_SIGNER_ALLOWED_EMAILS:'other@example.test'};
 const denied=new PiOwnerApprovalState({storage:new Storage()},deniedEnv);
 const d=await denied.fetch(new Request('https://pi-owner.internal/initialize',{
