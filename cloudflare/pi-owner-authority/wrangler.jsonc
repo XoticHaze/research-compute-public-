@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ccpi-owner-cloudflare-authority",
+  "account_id": "b33595eb85f346b0d1bf201810b4499a",
   "main": "src/index.js",
   "compatibility_date": "2026-11-13",
   "workers_dev": true,
