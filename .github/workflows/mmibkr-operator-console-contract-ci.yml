@@ -80,7 +80,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/ccpi-owner-authority-dry-run"
-          find . -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
           test -s SHA256SUMS.txt
 
       - name: Attach public-source isolated signer bundle for protected Cloudflare admin deployment
