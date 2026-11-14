@@ -127,6 +127,26 @@ globalThis.fetch=async (address,opts={})=>{
     content:Buffer.from(row.text).toString('base64')});
 };
 try {
+  // The browser can load an exact current CC proposal without receiving the
+  // private Git bearer. Loading never signs, submits, or mutates the queue.
+  assert.equal((await invoke('/api/proposal')).status,403,
+    'missing queue proposal must fail closed');
+  const reviewPath='pi-node/release-request.json';
+  const reviewText=canonicalPiJson(req);
+  queue.set(reviewPath,{sha:sha1(reviewText),text:reviewText});
+  assert.equal((await invoke('/api/proposal',undefined,{})).status,403,
+    'proposal read must also require Cloudflare Access identity');
+  const review=await invoke('/api/proposal');
+  assert.equal(review.status,200);
+  assert.equal(review.body.review_only,true);
+  assert.equal(review.body.cloudflare_signature_issued,false);
+  assert.deepEqual(review.body.request,req);
+  assert.equal(writes.length,0,'loading never submits or signs a grant');
+  const wrongText=canonicalPiJson({...req,source_repo:'XoticHaze/not-authorized'});
+  queue.set(reviewPath,{sha:sha1(wrongText),text:wrongText});
+  assert.equal((await invoke('/api/proposal')).status,403,
+    'wrong repository proposal must not be presented as ready');
+  queue.delete(reviewPath);
   assert.equal((await invoke('/api/approve-root',{
     request:{...req,source_repo:'XoticHaze/other'},
     approve_exact_release:true,
