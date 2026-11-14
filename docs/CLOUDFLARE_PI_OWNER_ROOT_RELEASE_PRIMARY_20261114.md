@@ -80,6 +80,15 @@ The Worker configuration pins neutral Cloudflare account
 Check independently reviewed PR/merge commit and public contract job, not a mutable branch label.
 Admin deploys the reviewed Worker with independent neutral-account access (Cloudflare dashboard or approved neutral Wrangler route), **never** an auto-deploy from GitHub. The standard dry-run bundle is produced by public source-contract CI without any signer key or token. The normal operator console, Fleet, WaterBoys and private live broker deployments are unchanged.
 
+**Pinned release artifact:** The public `MM-IBKR Operator Console Contract CI` job now also performs
+a *dry-run only* isolated signer build and uploads a `ccpi-owner-neutral-source-bundle-<workflow-commit-sha>`
+artifact containing the bundled Worker and a `SHA256SUMS.txt` manifest. It contains **no private keys,
+GitHub token, Access JWT or Cloudflare config values**. The independent neutral-account Cloudflare
+administrator must verify the reviewed commit, the artifact's source commit identity, its SHA-256,
+and the target `account_id` before uploading/deploying it. There is **no** GitHub-to-neutral
+automatic deployment and no deploy secret in the public Actions run. A successful public
+contract CI or uploaded artifact remains source evidence, not a protected root release.
+
 **Cloudflare Admin activation checklist (one-time only):**
 1. Under existing `Shared Compute Neutral Authorization` account, check the exact new Worker name `ccpi-owner-cloudflare-authority` and *only* the independent authenticated administrator may deploy it. Require an Access policy on **all** production/preview Worker traffic with a verified individual owner email allowlist, no broad email-domain bypass, and no machine-service-token membership in the signing group. Do not rely on Access UI visibility without the Worker itself verifying `ctx.access.aud` and direct `getIdentity().email`.
 2. Set **configuration** `PI_OWNER_ACCESS_AUD` to that Access application's actual immutable audience, and `PI_OWNER_SIGNER_ALLOWED_EMAILS` to the exact permitted owner email(s). Do not paste personal email or Access assertions into GitHub. Configure `PI_OWNER_INIT_CODE_SHA256` as the SHA-256 of a distinct owner-held high-entropy first-issue activation code; *never* commit the code or its unsalted reusable proof to GitHub. The code is used only once.
