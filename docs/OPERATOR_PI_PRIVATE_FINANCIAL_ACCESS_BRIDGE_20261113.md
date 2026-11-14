@@ -1,4 +1,15 @@
-# Existing operator Worker: private Pi live financial bridge (review, not deployed)
+# Existing operator Worker: private Pi live financial bridge (code deployed, finance locked)
+
+<!-- CURRENT_PROD_STAGE_20261114_WORKER_CODE_DEPLOYED -->
+## CURRENT RELEASE RESULT: Worker code in production; private money still locked (Nov 14, 2026 UTC)
+
+**Actual deployed, source frozen:** [PR #2148](https://github.com/XoticHaze/research-compute-public-/pull/2148) merged as `c65396629f657297ba90d5f9e7e00fd994519ff6`. Existing approved, encrypted [public deploy run #43537675732](https://github.com/XoticHaze/research-compute-public-/actions/runs/43537675732), with fire `ce6ba7d93912a2b8e5af6ff8371bf69bbab9e6d5`, finished **CONTRACT=SUCCESS; DEPLOY=SUCCESS**. Wrangler deployed `mmibkr-operator-console`, initial version `ef7354a8-fbd1-4d27-84e6-f71e1616cfca`; Cloudflare control-plane, Access email reconciliation, exact frozen private UI vault materialization, OIDC bindings, unauthenticated fail-close, R2 receipt publication and source destruction succeeded. Authoritative release receipt: `main:rendezvous/receipts/mmibkr-operator-console-deploy-r2.json`.
+
+**Still disabled/held:** finance machine Service Auth and protected secrets (no `PI_LIVE_FINANCE_INGEST_ENABLED=1` or `PI_LIVE_FINANCE_ORIGIN_ADMITTED=1`), protected Pi root financial reader (CommandCenter #1191) and fixed courier (MM #1655) not installed, newly selected V4 finance UI **not** source-vault/owner-approved or served (old frozen private UI `f6f6dcdcbad3df8c5d50cab5ac2652b4781a648d` was deployed). Do **not** repeat public Worker source CI/deploy to cure missing root/client credentials; follow source/credential/owner admission in MM-IBKR [#1654](https://github.com/XoticHaze/mm-IBKR/issues/1654). Neither this deployment nor a 403/503 proves live account money or trading authority.
+
+Rollback remains independently owner-gated: if the newly merged Worker source causes a served regression, use the existing reviewed public release/rollback workflow and the previously accepted immutable static source, never remove human Access protections or expose private source. The feature remains default OFF until separate admission.
+
+---
 
 Parent: private `XoticHaze/mm-IBKR#1654` and `#842`, consumer `#1655`; collector `XoticHaze/CommandCenter#1191`; current public Worker owner `XoticHaze/research-compute-public-`.
 
