@@ -1,0 +1,47 @@
+name: CCPI Neutral Owner Bootstrap Source Contract (Public, No Secrets)
+
+# Source-only syntactic review, pinned module provenance and Wrangler dry-run.
+# Never deploy neutral Cloudflare workers, create a token, issue a signing key,
+# or access GitHub private gate-control / Pi root through this workflow.
+on:
+  push:
+    branches:
+      - release/ccpi-neutral-owner-firstseal-20261114
+    paths:
+      - '.github/workflows/ccpi-neutral-owner-bootstrap-source-ci.yml'
+      - 'cloudflare/pi-owner-authority/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ccpi-neutral-owner-bootstrap-source-ci.yml'
+      - 'cloudflare/pi-owner-authority/**'
+
+permissions:
+  contents: read
+
+jobs:
+  standalone-source-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Verify local canonical signer module pinned and no external runtime imports
+        run: |
+          set -euo pipefail
+          test "$(git hash-object cloudflare/pi-owner-authority/src/pi_owner_approval.js)" = f6de8813cb8f8b022ff475465e065653b98558f8
+          ! grep -q '../../operator-console/' cloudflare/pi-owner-authority/src/index.js
+          node --check cloudflare/pi-owner-authority/src/index.js
+          node --check cloudflare/pi-owner-authority/src/pi_owner_approval.js
+      - name: Wrangler source-only bundle and dry-run
+        run: |
+          set -euo pipefail
+          cd cloudflare/pi-owner-authority
+          npx --yes wrangler@4.131.2 deploy --config wrangler.jsonc --dry-run --outdir "$RUNNER_TEMP/ccpi-neutral-owner-source-only"
+          test -d "$RUNNER_TEMP/ccpi-neutral-owner-source-only"
+          echo "CCPI_NEUTRAL_OWNER_DRY_RUN=PASS"
+          echo "CCPI_NEUTRAL_CLOUDFLARE_MUTATIONS=0"
+          echo "CCPI_NEUTRAL_SIGNING_KEYS_ISSUED=0"
