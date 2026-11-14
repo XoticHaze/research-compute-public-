@@ -95,6 +95,17 @@ test('real Worker machine POST and signed-human GET enforce origin, HMAC and fre
     assert.equal(actual.risk.pending_order_reservations_verified,false);
     assert.equal(Object.hasOwn(actual,'mac_hex'),false);
     assert.equal(Object.hasOwn(actual.source,'account_sha256'),false);
+    // The dedicated Access-locked Worker must not claim a full V4 app simply
+    // because the same financial API is present. Explicit serving approval
+    // and actual static assets are separate release gates.
+    assert.equal((await worker.fetch(request('/api/operator/live-account','GET',undefined,machine),env)).status,403);
+    assert.equal((await worker.fetch(request('/markets','GET',undefined,human),env)).status,404);
+    assert.equal((await worker.fetch(request('/portfolio','GET',undefined,human),env)).status,404);
+    assert.equal((await worker.fetch(request('/portfolio/positions','GET',undefined,human),env)).status,404);
+    env.MMIBKR_FULL_V4_ROUTES_ADMITTED='1';
+    assert.equal((await worker.fetch(request('/markets','GET',undefined,human),env)).status,503,
+      'a route flag without selected V4 assets must remain unavailable');
+    delete env.MMIBKR_FULL_V4_ROUTES_ADMITTED;
 
     const tampered=structuredClone(envelope);
     tampered.snapshot.account.net_liquidation.value='9999.99';
