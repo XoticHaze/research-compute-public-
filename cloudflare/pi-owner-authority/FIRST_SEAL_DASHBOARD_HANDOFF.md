@@ -32,6 +32,12 @@
 - https://developers.cloudflare.com/workers/ci-cd/builds/configuration/
 - https://developers.cloudflare.com/workers/ci-cd/builds/build-branches/
 
+## After first seal: no-copy normal owner review through existing CC queue
+
+Once independently approved and activated, ChatGPT/CommandCenter creates a fresh exact `pi.release.apply` **unsigned request** in the existing private Git inbox. Inside the Access-protected neutral Cloudflare UI, the owner selects **Load current CC proposal for review**. The Worker uses only its bounded `PI_OWNER_QUEUE_GITHUB_TOKEN` to GET the fixed inbox file, validates exact action/source/predecessor/TTL before showing the request, and never exposes the bearer to the browser. The owner reviews the visible JSON, checks explicit confirmation, and selects **Cloudflare-sign and dispatch once**; the one-use grant is then published before the same exact request. **Loading a proposal never signs or submits it**, and replay/expiry is rejected. The owner can check the same-ID Pi root outbox on the same page.
+
+This removes copy/paste of manually assembled release JSON as a normal release prerequisite, but does not bypass any key, Access, root approval or first-enrollment gate.
+
 ## Remaining Pi protected acceptance
 
 The canonical Pi root verifier source is merged in `XoticHaze/CommandCenter` at `617f01b34751bc73f1de0fc60e4c3b3451259f42`. Its immutable 39-file artifact is already published at `XoticHaze/CommandCenter-gate-control` `pi-node-release-artifacts` commit `615dca6b6acdedf40cd58caa1989c09261e2cbf3`, path `pi-node/artifacts/ccpi-update-617f01b34751`.
