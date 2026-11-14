@@ -10,12 +10,14 @@ on:
     paths:
       - '.github/workflows/ccpi-neutral-owner-bootstrap-source-ci.yml'
       - 'cloudflare/pi-owner-authority/**'
+      - 'tests/pi_owner_cloudflare_primary_authority_contract.mjs'
   pull_request:
     branches:
       - main
     paths:
       - '.github/workflows/ccpi-neutral-owner-bootstrap-source-ci.yml'
       - 'cloudflare/pi-owner-authority/**'
+      - 'tests/pi_owner_cloudflare_primary_authority_contract.mjs'
 
 permissions:
   contents: read
@@ -36,6 +38,7 @@ jobs:
           ! grep -q '../../operator-console/' cloudflare/pi-owner-authority/src/index.js
           node --check cloudflare/pi-owner-authority/src/index.js
           node --check cloudflare/pi-owner-authority/src/pi_owner_approval.js
+          node tests/pi_owner_cloudflare_primary_authority_contract.mjs
       - name: Wrangler source-only bundle and dry-run
         run: |
           set -euo pipefail
