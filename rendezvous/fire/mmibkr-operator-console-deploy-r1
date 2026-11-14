@@ -5,7 +5,7 @@
   "access_required": true,
   "public_fallback_allowed": false,
   "live_execution_allowed": false,
-  "reason": "owner_20261107_complete_existing_console_device_signed_root_release_transport_no_broker_or_pi_mutation",
-  "requested_by": "operator_20261107",
-  "request_id": "ccpi-root-owner-device-access-deploy-20261108042838238"
+  "reason": "operator_20261113_stage_merged_finance_worker_disabled_no_broker_changes",
+  "requested_by": "user_explicit_deploy_request_20261113",
+  "request_id": "MW-20261114005505222-locked-console-stage"
 }
