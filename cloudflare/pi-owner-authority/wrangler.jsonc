@@ -4,7 +4,7 @@
   "main": "src/index.js",
   "compatibility_date": "2026-11-13",
   "workers_dev": true,
-  // Deploy only with independently authenticated original-account Cloudflare
+  // Deploy only with independently authenticated neutral-account Cloudflare
   // administration; NEVER add this target to a GitHub Actions deploy workflow.
   // All sensitive bindings/flags must be configured by Cloudflare owner
   // *after* exact source and initial root trust review.
