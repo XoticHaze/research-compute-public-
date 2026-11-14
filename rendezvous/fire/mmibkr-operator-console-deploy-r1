@@ -1,11 +1,11 @@
 {
   "schema": "mmibkr-operator-console-deploy-fire-v1",
-  "source_sha": "f6f6dcdcbad3df8c5d50cab5ac2652b4781a648d",
+  "source_sha": "9986d3ceaf441aeac58cfacf2a476a9978b5f88c",
   "mode": "locked_private",
   "access_required": true,
   "public_fallback_allowed": false,
   "live_execution_allowed": false,
-  "reason": "operator_20261113_stage_merged_finance_worker_disabled_no_broker_changes",
-  "requested_by": "user_explicit_deploy_request_20261113",
-  "request_id": "MW-20261114005505222-locked-console-stage"
+  "reason": "approved_selected_v4_financial_ui_with_existing_access_worker_root_finance_flags_off",
+  "requested_by": "ManualWorker-MW-20261114024222319-on-explicit-user-rollout",
+  "request_id": "MW-20261114024222319-exact-selected-v4-release"
 }
