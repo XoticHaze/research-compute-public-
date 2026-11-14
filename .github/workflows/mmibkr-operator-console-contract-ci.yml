@@ -68,6 +68,14 @@ jobs:
             tests.test_mmibkr_operator_console_worker_v1 \
             tests.test_mmibkr_operator_console_publisher_v1
 
+      - name: Dry-run isolated Cloudflare-owner signer bundle (no deploy)
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.131.2 deploy \
+            --dry-run \
+            --config cloudflare/pi-owner-authority/wrangler.jsonc \
+            --outdir "$RUNNER_TEMP/ccpi-owner-authority-dry-run"
+
       - name: Dry-run canonical Worker bundle
         run: |
           set -euo pipefail
