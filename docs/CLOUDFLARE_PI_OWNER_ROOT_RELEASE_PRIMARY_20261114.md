@@ -22,6 +22,29 @@
 5. Reuse the existing scoped Cloudflare private-queue GitHub credential only after its binding and permissions are independently verified, and do not copy its value into any repository or user-visible report. Publish fixed typed signed grant **before** fixed typed request, and verify the same request ID in the Pi root outbox.
 6. Keep the existing offline device-held Ed25519 signer available only through a separately approved emergency recovery path. A local root-owned one-use approval is break-glass recovery, not a routine install flow. Never accept an unsigned Git request or a newly supplied public key as a root release grant.
 
+## Live Cloudflare owner-status receipt, 2026-11-14
+
+The operator opened the already-authenticated existing `/api/pi-owner/status` and supplied this exact sanitized status:
+
+```json
+{"schema":"commandcenter.pi.owner_signer_status.v1","initialized":false,"enrolled":false,"public_key_pem":null,"public_key_sha256":null,"signing_enabled":false,"github_transport_configured":false}
+```
+
+**Classification:** `PI_OWNER_CLOUDFLARE_DO_UNINITIALIZED__QUEUE_UNCONFIGURED`.
+This is authoritative live evidence about the *specific existing* `PI_OWNER_APPROVER` object identity `cc-pi4-owner-v1`, not evidence that all Cloudflare accounts lack keys. It decisively rules out *reusing* a `pi_owner_key_v1` keypair from this DO. Do not call code-backed key issuance a preexisting enrolled key. The previous `initialized`-unknown branch is now closed.
+
+Separate source inventory (read 2026-11-14):
+- Original-account `fleet-authority` uses X25519 ephemeral secret encryption, not detached Ed25519 root-release approvals.
+- Neutral-account maintenance authority has a P-256 ECDSA manifest signer with explicitly different role and scope.
+- Neutral-account broker release-ticket signer also uses P-256 ECDSA and is preseal. It is not an original-account Pi owner signer.
+- Existing Cloudflare Access JWT uses RS256 to authenticate the human session; the JWT does **not** cryptographically bind a particular root source SHA, predecessor, nonce and expiry as a detached root approval.
+
+Therefore no *verified compatible* Cloudflare-held root-approval key has been recovered. Unless independent owner custody inventory identifies another existing Ed25519 Pi-owner key and proves its authority, one **first issuance** inside Cloudflare is necessary. This must NOT involve a new phone/device-held key, new account, new broad Cloudflare token, GitHub secret export or unattended root enrollment. Reuse the existing Access allowlist, original account, DO infrastructure, typed Pi queues, and existing Cloudflare project permission boundaries wherever possible.
+
+**Critical cloud-owned deployment isolation:** Before initializing that key, create/admit an **independently Cloudflare-admin-deployed signer** in the original account with no GitHub-scoped Worker edit permission. Since the observed DO is empty, migrating its empty namespace or creating a new dedicated DO class does not risk losing retained signing material. The key must be created exactly once *only after* signer isolation and owner-authenticated activation. The GitHub-deployable `mmibkr-operator-console` must remain signing-disabled/HTTP 410. Owner still reviews each exact protected release with Access; the issuer signs one short-lived authorization and records one-use issuance.
+
+**Root bootstrapping remains independently protected:** Existing cc-pi4 root reports no accepted owner verifier PEM. Root worker PR #1185 is source-only. No GitHub edit alone can install root trust. Prefer an already provisioned Cloudflare/CC authenticated owner route for first trust enrollment; otherwise surface the first-seal requirement explicitly. Normal production acceptance remains a later Cloudflare-signed remote `pi.release.apply` with same-ID root `passed`, no Mac/device signer.
+
 ## Next owner-only, read-only admission probe (no Mac, no key creation)
 
 Open these existing Cloudflare Access-authenticated routes in the browser. They make no protected changes:
