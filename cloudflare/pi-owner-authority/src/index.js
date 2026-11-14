@@ -7,8 +7,8 @@ import {
   validatePiCloudRootReleaseApproval,
   publishPiRootReleaseGrant,
   readPiRootReleaseReceipt,
-} from '../../operator-console/src/pi_owner_approval.js';
-export { PiOwnerApprovalState } from '../../operator-console/src/pi_owner_approval.js';
+} from './pi_owner_approval.js';
+export { PiOwnerApprovalState } from './pi_owner_approval.js';
 
 const OWNER_ID = 'cc-pi4-owner-v1';
 const SHA256 = /^[a-f0-9]{64}$/;
