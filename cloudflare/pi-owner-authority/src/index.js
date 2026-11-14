@@ -102,6 +102,30 @@ function unsignedGrant(request) {
     expires_at:request.expires_at,
   };
 }
+async function readPendingCCRootRelease(env) {
+  // Fixed private Git transport, not arbitrary repository/path/URL input.
+  // The owner sees the current pending proposal and must explicitly review it.
+  const token=String(env.PI_OWNER_QUEUE_GITHUB_TOKEN||'');
+  if(token.length<20) throw Error('pi_owner_queue_credential_missing');
+  const url='https://api.github.com/repos/XoticHaze/CommandCenter-gate-control/'
+    +'contents/pi-node/release-request.json?ref=pi-node-inbox';
+  const remote=await fetch(url,{
+    headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json',
+      'x-github-api-version':'2022-11-28'},redirect:'manual',
+  });
+  if(!remote.ok) throw Error('pi_owner_pending_release_unavailable');
+  const file=await remote.json();
+  if(!/^[a-f0-9]{40}$/.test(String(file?.sha||''))
+      || file.encoding!=='base64'
+      || !Number.isInteger(file.size) || file.size<1 || file.size>4096
+      || typeof file.content!=='string') throw Error('pi_owner_pending_release_invalid');
+  const raw=atob(file.content.replace(/\\s/g,''));
+  if(raw.length>4096) throw Error('pi_owner_pending_release_oversized');
+  const request=JSON.parse(raw);
+  await validatePiCloudRootReleaseApproval(unsignedGrant(request),request);
+  return {schema:'commandcenter.pi.pending_root_review.v1',
+    request,review_only:true,cloudflare_signature_issued:false};
+}
 const page=`<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cloudflare Pi root approval</title>
@@ -124,6 +148,7 @@ one installed predecessor, expiry and request ID. Pi root independently verifies
 <label>Activation code</label><input id="enroll-code" type="password" autocomplete="off">
 <button id="enroll">Acknowledge verified root enrollment</button></section>
 <section><h2>Approve exact root release</h2>
+<button id="load-proposal">Load current CC proposal for review</button>
 <label>Exact fresh typed pi.release.apply request JSON</label><textarea id="request" spellcheck="false"></textarea>
 <p><label><input id="approved" type="checkbox" style="width:auto">
 I reviewed this exact source SHA, installed predecessor, expiry and request ID.</label></p>
@@ -143,6 +168,13 @@ catch(e){$('result').textContent='Denied: '+e.message}}
 async function refresh(){try{$('status').textContent=JSON.stringify(await api('status'),null,2)}
 catch(e){$('status').textContent='Denied: '+e.message}}
 $('refresh').onclick=refresh;
+$('load-proposal').onclick=()=>show(async()=>{
+  const proposal=await api('proposal');
+  $('request').value=JSON.stringify(proposal.request,null,2);
+  $('rid').value=proposal.request.request_id;
+  $('approved').checked=false;
+  return proposal;
+});
 $('initialize').onclick=()=>show(async()=>{const code=$('activation').value;$('activation').value='';
 return api('initialize',{activation_code:code,confirm_first_issue:true})});
 $('enroll').onclick=()=>show(async()=>{const code=$('enroll-code').value;$('enroll-code').value='';
@@ -167,6 +199,9 @@ export default {
         return new Response(client,{headers:{'content-type':'text/javascript; charset=utf-8','cache-control':'private, no-store','x-content-type-options':'nosniff'}});
       }
       if (request.method==='GET' && url.pathname==='/api/status') return response(await status(env));
+      if (request.method==='GET' && url.pathname==='/api/proposal') {
+        return response(await readPendingCCRootRelease(env));
+      }
       if (request.method==='GET' && url.pathname==='/api/receipt') {
         const id=url.searchParams.get('request_id');
         return response(await readPiRootReleaseReceipt(env,id));
