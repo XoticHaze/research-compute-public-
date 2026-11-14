@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ccpi-owner-cloudflare-authority",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-13",
+  "workers_dev": true,
+  // Deploy only with independently authenticated original-account Cloudflare
+  // administration; NEVER add this target to a GitHub Actions deploy workflow.
+  // All sensitive bindings/flags must be configured by Cloudflare owner
+  // *after* exact source and initial root trust review.
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PI_OWNER_APPROVER",
+        "class_name": "PiOwnerApprovalState"
+      }
+    ]
+  },
+  "exports": {
+    "PiOwnerApprovalState": {
+      "type": "durable-object",
+      "state": "created",
+      "storage": "sqlite"
+    }
+  }
+}
