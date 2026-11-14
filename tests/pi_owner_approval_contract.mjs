@@ -168,13 +168,13 @@ function releaseRoot() {
 const cloudRoot=releaseRoot();
 const cloudRootIssued=await call('/sign',cloudRoot);
 assert.equal(cloudRootIssued.status,201);
-const rootDomain='commandcenter.pi.release_request_approval.v1\\0';
+const rootDomain='commandcenter.pi.release_request_approval.v1\0';
 assert.equal(cryptoVerify(null,Buffer.concat([
   Buffer.from(rootDomain),Buffer.from(canonicalPiJson(cloudRoot.approval)),
 ]),createPublicKey(info.public_key_pem),
   Buffer.from(cloudRootIssued.body.signed_grant.signature_b64,'base64')),true);
 assert.equal(cryptoVerify(null,Buffer.concat([
-  Buffer.from('commandcenter.pi.bot_replace_approval.v1\\0'),
+  Buffer.from('commandcenter.pi.bot_replace_approval.v1\0'),
   Buffer.from(canonicalPiJson(cloudRoot.approval)),
 ]),createPublicKey(info.public_key_pem),
   Buffer.from(cloudRootIssued.body.signed_grant.signature_b64,'base64')),false);
