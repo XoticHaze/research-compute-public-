@@ -157,7 +157,8 @@ def materialize(c: dict, cipher: bytes, grant: dict, *, destination: Path, recei
         raise RuntimeError("private_web_source_identity_rejected")
     if not isinstance(files, dict) or not (1 <= len(files) <= MAX_FILES):
         raise RuntimeError("private_web_file_inventory_rejected")
-    if destination.exists() or receipt.exists():
+    manifest_path = destination.parent / (destination.name + ".manifest.json")
+    if destination.exists() or receipt.exists() or manifest_path.exists():
         raise RuntimeError("private_web_output_must_be_new")
     manifest_assets = {}
     validated = {}
@@ -190,8 +191,7 @@ def materialize(c: dict, cipher: bytes, grant: dict, *, destination: Path, recei
             "no_public_plaintext_source": True, "access_served_verified": False,
             "oidc_release_grant_verified": True,
         }
-        manifest_path = destination / "private_asset_overlay_manifest.json"
-        # Composer requires asset-only root; keep the manifest OUTSIDE it.
+        # Composer requires asset-only root. The private manifest is separate.
         manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
         os.chmod(manifest_path, 0o600)
         record = {
