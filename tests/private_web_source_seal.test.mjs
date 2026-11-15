@@ -1,9 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { webcrypto } from 'node:crypto';
 import { sealPrivateOverEmploy } from '../cloudflare/fleet-authority/src/private_web_source_seal.js';
 
-globalThis.crypto = webcrypto;
 const enc = new TextEncoder();
 const b64 = bytes => Buffer.from(bytes).toString('base64');
 const utf = text => enc.encode(text);
