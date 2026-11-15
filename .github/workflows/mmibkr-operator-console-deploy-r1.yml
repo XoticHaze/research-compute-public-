@@ -26,6 +26,7 @@ on:
       - 'tests/pi_owner_root_release_transport_contract.mjs'
       - 'tests/test_mmibkr_operator_console_access_reconcile_v1.py'
       - 'tests/test_mmibkr_operator_console_deploy_token_route_v1.py'
+      - 'tests/test_mmibkr_operator_console_pi_predeploy_gate_r1.py'
       - 'scripts/mmibkr_operator_console_deploy_token_route_v1.py'
       - 'tests/test_fleet_source_vault_contract_v1.py'
 
