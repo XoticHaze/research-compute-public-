@@ -73,7 +73,7 @@ class PrivateWebCapsuleTests(unittest.TestCase):
         self.assertFalse(result["access_served_verified"])
         for rel, raw in self.files.items():
             self.assertEqual((self.output / rel).read_bytes(), raw)
-        manifest = json.loads((self.output / "private_asset_overlay_manifest.json").read_text())
+        manifest = json.loads((self.root / "overlay.manifest.json").read_text())
         self.assertEqual(manifest["schema"], "commandcenter.private_web_static_overlay.v1")
         self.assertEqual(manifest["source_sha_claim"], "a" * 40)
         self.assertIs(manifest["oidc_release_grant_verified"], True)
