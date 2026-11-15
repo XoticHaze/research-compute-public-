@@ -25,7 +25,7 @@ def select_route(account: str, scoped: str, legacy: str, probe=None) -> str:
     if scoped and ready(scoped, account):
         return "scoped_r2"
     if legacy and ready(legacy, account):
-        return "legacy_existing"
+        return "legacy_fallback"
     raise ValueError("CLOUDFLARE_FLEET_WORKERS_SUBDOMAIN_AUTH_REQUIRED")
 
 
