@@ -99,7 +99,8 @@ function verifySpec(node) {
       || node.slug !== 'overemploy'
       || node.entrypoint !== EXACT_FILES[0]
       || !Array.isArray(node.files) || node.files.length !== EXACT_FILES.length
-      || node.files.some((f, i) => f !== EXACT_FILES[i])) {
+      || new Set(node.files).size !== EXACT_FILES.length
+      || node.files.some(name => !EXACT_FILES.includes(name))) {
     throw new Error('private_web_owner_asset_spec_mismatch');
   }
 }
