@@ -1380,7 +1380,7 @@ export class SourceExchange {
           || body.schema !== PRIVATE_WEB_CAPSULE_SCHEMA
           || !/^[a-z0-9][a-z0-9-]{15,63}$/.test(String(body.capsule_id || ''))
           || String(body.ciphertext_sha256 || '') !== expected
-          || !/^\\d{4,24}$/.test(runId)) {
+          || !/^\d{4,24}$/.test(runId)) {
         return json({ error: 'private_web_release_binding_rejected' }, 403);
       }
       const { privateJwk, keyId } = await this._vaultKeypair();

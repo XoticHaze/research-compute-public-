@@ -157,3 +157,19 @@ test('finite source-denial classifier never echoes unknown exception details', (
     'private_web_source_unclassified_denial');
   assert.equal(privateWebHeldReason(undefined), 'private_web_source_unclassified_denial');
 });
+
+test('real numeric GitHub run id passes the one-use Fleet key-release binding', async () => {
+  const { readFileSync } = await import('node:fs');
+  const source = readFileSync(
+    new URL('../cloudflare/fleet-authority/src/source_exchange.js', import.meta.url),
+    'utf8');
+  const section = source.split("const marker = 'private-web-key:'")[0]
+    .split("const required = ['schema', 'capsule_id'").at(-1);
+  const match = section.match(/\|\| !\/\^([^\n]+?)\/\.test\(runId\)\)/);
+  assert.ok(match, 'expected private-web key grant numeric run-id check');
+  const pattern = new RegExp('^' + match[1]);
+  assert.ok(pattern.test('43709911325'), 'actual GitHub run-id must be valid');
+  assert.equal(pattern.test('evil-run'), false);
+  assert.equal(pattern.test('1'), false);
+  assert.equal(pattern.test('9'.repeat(25)), false);
+});
