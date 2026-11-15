@@ -1,0 +1,6 @@
+{
+  "schema": "commandcenter.private_web_capsule_fire.v1",
+  "request": "OWNER_APPROVED_ENCRYPTED_SOURCE_STAGE_ONLY",
+  "no_deploy": true,
+  "no_private_actions": true
+}
