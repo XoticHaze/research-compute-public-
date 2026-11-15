@@ -84,9 +84,14 @@ def github_oidc() -> str:
     if not url or not token:
         raise RuntimeError("github_oidc_environment_missing")
     u = urlparse(url)
-    if u.scheme != "https" or not u.hostname or u.hostname not in {
-            "pipelines.actions.githubusercontent.com", "token.actions.githubusercontent.com"
-    }:
+    # GitHub-hosted regional OIDC issuers include pipeline-specific subdomains.
+    # Match DNS label boundary, never a substring, suffix lookalike or userinfo.
+    host = (u.hostname or "").lower()
+    if (u.scheme != "https" or not (
+            host == "actions.githubusercontent.com"
+            or host.endswith(".actions.githubusercontent.com"))
+            or u.username is not None or u.password is not None
+            or u.port not in (None, 443)):
         raise RuntimeError("github_oidc_url_rejected")
     query = dict(parse_qsl(u.query, keep_blank_values=True))
     query["audience"] = AUDIENCE
