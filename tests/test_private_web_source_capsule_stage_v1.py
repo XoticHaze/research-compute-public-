@@ -1,4 +1,6 @@
 import base64
+import io
+from urllib.error import HTTPError
 import hashlib
 import json
 import tempfile
@@ -79,6 +81,29 @@ class CapsuleStageTests(unittest.TestCase):
                   receipt_file=self.root / "receipts" / "123456.json",
                   token_factory=lambda: "fake", open_url=open_tamper)
         self.assertFalse((self.root / "capsules").exists())
+
+    def test_safe_cloudflare_hold_category_without_provider_echo(self):
+        def rejected(req, timeout):
+            body = json.dumps({
+                "error": "private_web_source_seal_not_admitted",
+                "held_reason": "private_web_source_stage_owner_approval_missing",
+                "ignored_sensitive": "never_display",
+            }).encode()
+            raise HTTPError(req.full_url, 403, "denied", {}, io.BytesIO(body))
+        with self.assertRaisesRegex(RuntimeError,
+                                   "^private_web_source_held:private_web_source_stage_owner_approval_missing$"):
+            fetch_capsule("123456", token_factory=lambda: "fake", open_url=rejected)
+
+    def test_unknown_cloudflare_body_maps_to_no_secret_code(self):
+        def rejected(req, timeout):
+            body = json.dumps({
+                "error": "provider_secret",
+                "held_reason": "SENSITIVE_UNTRUSTED_INFORMATION",
+            }).encode()
+            raise HTTPError(req.full_url, 403, "denied", {}, io.BytesIO(body))
+        with self.assertRaisesRegex(RuntimeError,
+                                   "^private_web_source_held:private_web_source_unclassified_denial$"):
+            fetch_capsule("123456", token_factory=lambda: "fake", open_url=rejected)
 
     def test_denied_worker_rejected_without_echoing_provider(self):
         def denied(req, timeout):

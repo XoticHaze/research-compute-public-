@@ -11,11 +11,25 @@ import os
 from pathlib import Path
 import re
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
 from scripts.private_web_capsule_consumer_v1 import capsule_input, github_oidc
 
 ENDPOINT = "https://fleet-authority.slenderiq.workers.dev/v1/source-vault/private-web/capsule"
 RUN_ID = re.compile(r"\d{4,24}\Z")
+SAFE_HELD = frozenset({
+    'private_web_source_stage_owner_approval_missing',
+    'private_web_owner_source_token_unavailable',
+    'private_web_owner_source_read_denied',
+    'private_web_owner_release_authority_not_admitted',
+    'private_web_owner_release_manifest_rejected',
+    'private_web_owner_asset_spec_mismatch',
+    'private_web_owner_source_digest_mismatch',
+    'private_web_inline_script_rejected',
+    'private_web_inline_event_handler_rejected',
+    'private_web_source_key_not_verified',
+    'private_web_source_unclassified_denial',
+})
 
 
 def fetch_capsule(run_id: str, *, token_factory=github_oidc, open_url=urlopen) -> dict:
@@ -32,8 +46,18 @@ def fetch_capsule(run_id: str, *, token_factory=github_oidc, open_url=urlopen) -
             if response.status != 200:
                 raise RuntimeError("private_web_stage_not_admitted")
             raw = response.read(1_500_001)
+    except HTTPError as exc:
+        # Fixed finite error categories only. Do not echo provider status bodies.
+        try:
+            node = json.loads(exc.read(512))
+            reason = node.get('held_reason') if isinstance(node, dict) else None
+            if (node.get('error') != 'private_web_source_seal_not_admitted'
+                    or reason not in SAFE_HELD):
+                reason = 'private_web_source_unclassified_denial'
+        except Exception:
+            reason = 'private_web_source_unclassified_denial'
+        raise RuntimeError('private_web_source_held:' + reason) from None
     except Exception:
-        # Never print Cloudflare error bodies or headers to public Actions.
         raise RuntimeError("private_web_stage_not_admitted") from None
     capsule, _ = capsule_input(raw)
     return capsule
@@ -73,6 +97,13 @@ def main():
         result = stage(run_id=args.run_id,
                        capsule_root=args.capsule_root,
                        receipt_file=args.receipt)
+    except RuntimeError as error:
+        message = str(error)
+        if message.startswith('private_web_source_held:'):
+            reason = message.split(':', 1)[1]
+            if reason in SAFE_HELD:
+                print('CC_PRIVATE_WEB_SOURCE_STAGE_HELD_REASON=' + reason)
+        raise SystemExit("CC_PRIVATE_WEB_SOURCE_STAGE=HELD_NOT_ADMITTED") from None
     except Exception:
         raise SystemExit("CC_PRIVATE_WEB_SOURCE_STAGE=HELD_NOT_ADMITTED") from None
     print("CC_PRIVATE_WEB_SOURCE_CAPSULE=ENCRYPTED_STAGED")
