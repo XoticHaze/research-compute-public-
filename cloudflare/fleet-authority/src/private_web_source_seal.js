@@ -179,3 +179,22 @@ export async function sealPrivateOverEmploy(env, sourceKey, {
     ciphertext_sha256: await digest(ciphertext),
   };
 }
+
+const HELD_REASONS = new Set([
+  'private_web_source_stage_owner_approval_missing',
+  'private_web_owner_source_token_unavailable',
+  'private_web_owner_source_read_denied',
+  'private_web_owner_release_authority_not_admitted',
+  'private_web_owner_release_manifest_rejected',
+  'private_web_owner_asset_spec_mismatch',
+  'private_web_owner_source_digest_mismatch',
+  'private_web_inline_script_rejected',
+  'private_web_inline_event_handler_rejected',
+  'private_web_source_key_not_verified',
+]);
+
+// Never return arbitrary provider exception text, private URLs, source SHA or token.
+export function privateWebHeldReason(error) {
+  const code = String(error?.message || '');
+  return HELD_REASONS.has(code) ? code : 'private_web_source_unclassified_denial';
+}
