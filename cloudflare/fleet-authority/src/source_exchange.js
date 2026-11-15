@@ -2,6 +2,7 @@ import {
   PI_GHCR_OPAQUE_PUBLISH_IDENTITY,
   resolvePiImageCandidate,
 } from './pi_opaque_ghcr.js';
+import { sealPrivateOverEmploy } from './private_web_source_seal.js';
 
 const GITHUB_ISSUER = 'https://token.actions.githubusercontent.com';
 const GITHUB_JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwks';
@@ -57,6 +58,12 @@ const CLOUD_CANARY_DEPLOY_IDENTITY = {
 };
 const CLOUD_CANARY_DEPLOY_APPROVED_SOURCE =
   '9a190fe66665c8f673d227a41c4544889a2cf2cb';
+
+const PRIVATE_WEB_SOURCE_CAPSULE_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref: 'XoticHaze/research-compute-public-/.github/workflows/cc-private-web-source-capsule-r1.yml@refs/heads/main',
+};
 
 const OPERATOR_CONSOLE_DEPLOY_IDENTITY = {
   repository: 'XoticHaze/research-compute-public-',
@@ -513,6 +520,7 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     const matchedBootstrap = matchesIdentity(claims, SOURCE_VAULT_BOOTSTRAP_IDENTITY);
     const matchedPiOpaquePublisher = matchesIdentity(claims, PI_GHCR_OPAQUE_PUBLISH_IDENTITY);
     const matchedOperatorDeploy = matchesIdentity(claims, OPERATOR_CONSOLE_DEPLOY_IDENTITY);
+    const matchedPrivateWebSourceCapsule = matchesIdentity(claims, PRIVATE_WEB_SOURCE_CAPSULE_IDENTITY);
     const matchedCloudCanaryDeploy = matchesIdentity(claims, CLOUD_CANARY_DEPLOY_IDENTITY);
     const matchedMissedTradeAudit = matchesIdentity(claims, MISSED_TRADE_AUDIT_IDENTITY);
     const matchedPaperAccountHygieneCoordinator = matchesIdentity(
@@ -576,6 +584,8 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
         || (matchedBootstrap && privateArchivePathAllowed)
         || (matchedPiOpaquePublisher && piOpaquePublisherPathAllowed)
         || (matchedOperatorDeploy && (operatorDeployPathAllowed || privateWebKeyReleasePathAllowed))
+        || (matchedPrivateWebSourceCapsule && claims.event_name === 'push'
+            && pathname === '/v1/source-vault/private-web/capsule')
         || (matchedCloudCanaryDeploy && cloudCanaryUnwrapPathAllowed)
         || (matchedLiveBotSourceUnwrap && liveBotSourceUnwrapPathAllowed)
         || (matchedMissedTradeAudit && operatorDeployPathAllowed)
@@ -645,6 +655,7 @@ function roleForRequest(method, pathname) {
     (method === 'POST' && pathname === '/v1/source-vault/pi-image-candidate')
     || (method === 'POST' && pathname === '/v1/source-vault/unwrap')
     || (method === 'POST' && pathname === '/v1/source-vault/private-web/unwrap')
+    || (method === 'POST' && pathname === '/v1/source-vault/private-web/capsule')
     || (method === 'GET' && /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname))
     || (method === 'POST' && pathname === '/v1/source-vault/private-archive/attest')
     ||
@@ -719,6 +730,34 @@ export async function handleSourceExchange(request, env) {
   headers.set('x-mmibkr-oidc-event', identity.event_name);
   headers.set('x-mmibkr-oidc-run-id', identity.run_id);
   headers.set('x-mmibkr-oidc-run-attempt', identity.run_attempt);
+
+  if (request.method === 'POST' && url.pathname === '/v1/source-vault/private-web/capsule') {
+    if (!matchesIdentity(identity, PRIVATE_WEB_SOURCE_CAPSULE_IDENTITY)
+        || identity.event_name !== 'push') {
+      return json({ error: 'private_web_source_issuer_denied' }, 403);
+    }
+    // Source pin and owner release permission are held ONLY inside the
+    // Cloudflare environment and private OverEmploy source. Never expose
+    // those in a public manifest, public Git source or release response.
+    try {
+      const keyResp = await stub.fetch(new Request(
+        'https://source-exchange.internal/v1/source-vault/public-key',
+        { method: 'GET', headers: { 'x-mmibkr-source-role': 'vault_public' } },
+      ));
+      if (!keyResp.ok) return json({ error: 'private_web_key_unavailable' }, 503);
+      const capsule = await sealPrivateOverEmploy(env, await keyResp.json());
+      return new Response(JSON.stringify(capsule), {
+        status: 200, headers: {
+          'content-type': 'application/json',
+          'cache-control': 'private, no-store',
+          'x-content-type-options': 'nosniff',
+        },
+      });
+    } catch {
+      // Deny without leaking the private token, SHA/ref, or GitHub response.
+      return json({ error: 'private_web_source_seal_not_admitted' }, 403);
+    }
+  }
 
   if (request.method === 'POST' && url.pathname === '/v1/source-vault/pi-image-candidate') {
     try {
