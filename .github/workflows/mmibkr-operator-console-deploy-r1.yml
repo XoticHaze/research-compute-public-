@@ -30,6 +30,7 @@ on:
       - 'tests/test_fleet_source_vault_contract_v1.py'
       - 'scripts/private_web_capsule_consumer_v1.py'
       - 'tests/test_private_web_capsule_consumer_v1.py'
+      - 'tests/test_private_web_console_fire_v1.py'
       - 'cloudflare/fleet-authority/src/source_exchange.js'
       - 'scripts/private_web_asset_composer_v1.py'
 
@@ -84,6 +85,7 @@ jobs:
           node tests/promotion_review_state_contract.mjs
           python -m pip install --disable-pip-version-check cryptography==46.0.1
           python -m unittest -v tests.test_private_web_capsule_consumer_v1
+          python -m unittest -v tests.test_private_web_console_fire_v1
           python -m unittest -v \
             tests.test_mmibkr_operator_console_worker_v1 \
             tests.test_mmibkr_operator_console_access_reconcile_v1 \
