@@ -30,6 +30,7 @@ on:
       - 'tests/test_fleet_source_vault_contract_v1.py'
       - 'scripts/private_web_capsule_consumer_v1.py'
       - 'tests/test_private_web_capsule_consumer_v1.py'
+      - 'tests/test_private_web_console_fire_v1.py'
       - 'cloudflare/fleet-authority/src/source_exchange.js'
       - 'scripts/private_web_asset_composer_v1.py'
 
@@ -84,6 +85,7 @@ jobs:
           node tests/promotion_review_state_contract.mjs
           python -m pip install --disable-pip-version-check cryptography==46.0.1
           python -m unittest -v tests.test_private_web_capsule_consumer_v1
+          python -m unittest -v tests.test_private_web_console_fire_v1
           python -m unittest -v \
             tests.test_mmibkr_operator_console_worker_v1 \
             tests.test_mmibkr_operator_console_access_reconcile_v1 \
@@ -133,17 +135,25 @@ jobs:
                   raise SystemExit('operator-console deployment fire request missing')
               node = json.loads(fire.read_text(encoding='utf-8'))
               requested = str(node.get('source_sha') or '').strip().lower()
+              private_web_id = str(node.get('private_web_capsule_id') or '').strip()
           else:
               event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
               requested = str((event.get('inputs') or {}).get('source_sha') or '').strip().lower()
+              private_web_id = ''
 
+          if private_web_id and not __import__('re').fullmatch(r'[a-z0-9][a-z0-9-]{15,63}', private_web_id):
+              raise SystemExit('CC_PRIVATE_WEB_FIRE_CAPSULE_ID_INVALID=1')
           if requested != canonical:
               raise SystemExit('operator-console deployment source must equal canonical accepted SHA')
           if len(canonical) != 40 or any(ch not in '0123456789abcdef' for ch in canonical):
               raise SystemExit('canonical source SHA invalid')
           with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as fh:
               fh.write('REQUEST_SOURCE_SHA=' + canonical + '\n')
+              fh.write('CC_PRIVATE_WEB_FIRE_REQUESTED=' + ('1' if private_web_id else '0') + '\n')
+              if private_web_id:
+                  fh.write('CC_PRIVATE_WEB_FIRE_CAPSULE_ID=' + private_web_id + '\n')
           print('MMIBKR_OPERATOR_CONSOLE_SOURCE=' + canonical)
+          print('CC_PRIVATE_WEB_FIRE_MODE=' + ('ENCRYPTED_OVERLAY_REQUESTED' if private_web_id else 'INCUMBENT_ONLY'))
           PY
 
       - name: Require owner-approved exact operator-console release source
@@ -242,6 +252,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # A source-pinned CC fire may select an OPAQUE capsule without new
+          # GitHub repository variables. Fleet still requires its independent
+          # exact ciphertext SHA approval and one-use OIDC key release.
+          if [ "${CC_PRIVATE_WEB_FIRE_REQUESTED:-0}" = '1' ]; then
+            if [ -n "${CC_PRIVATE_WEB_OPAQUE_CAPSULE_ID}" ] && [ "${CC_PRIVATE_WEB_OPAQUE_CAPSULE_ID}" != "${CC_PRIVATE_WEB_FIRE_CAPSULE_ID}" ]; then
+              echo 'CC_PRIVATE_WEB_FIRE_VARIABLE_ID_COLLISION=1'
+              exit 55
+            fi
+            CC_PRIVATE_WEB_RELEASE_REQUESTED=1
+            CC_PRIVATE_WEB_OPAQUE_CAPSULE_ID="${CC_PRIVATE_WEB_FIRE_CAPSULE_ID}"
+          fi
           # No cross-project publication occurs by default. Cloudflare Fleet
           # independently gates the exact approved ciphertext and OIDC caller.
           if [ "${CC_PRIVATE_WEB_RELEASE_REQUESTED}" != '1' ]; then
