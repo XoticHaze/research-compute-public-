@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sealPrivateOverEmploy } from '../cloudflare/fleet-authority/src/private_web_source_seal.js';
+import { sealPrivateOverEmploy, privateWebHeldReason } from '../cloudflare/fleet-authority/src/private_web_source_seal.js';
 
 const enc = new TextEncoder();
 const b64 = bytes => Buffer.from(bytes).toString('base64');
@@ -146,4 +146,14 @@ test('private source spec includes exactly four scoped files', async () => {
   await assert.rejects(sealPrivateOverEmploy(a.env, a.publicKey, {
     fetchImpl: a.fetchImpl,
   }), /asset_spec_mismatch/);
+});
+
+test('finite source-denial classifier never echoes unknown exception details', () => {
+  assert.equal(privateWebHeldReason(
+    new Error('private_web_source_stage_owner_approval_missing')),
+    'private_web_source_stage_owner_approval_missing');
+  assert.equal(privateWebHeldReason(
+    new Error('token-with-secret-or-private-source-sha')),
+    'private_web_source_unclassified_denial');
+  assert.equal(privateWebHeldReason(undefined), 'private_web_source_unclassified_denial');
 });
