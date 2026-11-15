@@ -42,7 +42,7 @@ def main() -> int:
     if not output:
         raise SystemExit("FLEET_AUTHORITY_GITHUB_OUTPUT_REQUIRED")
     with Path(output).open("a", encoding="utf-8") as stream:
-        stream.write("route=" + route + "\\n")
+        stream.write("route=" + route + "\n")
     print("FLEET_AUTHORITY_SELECTED_DEPLOY_ROUTE=" + route.upper())
     print("FLEET_AUTHORITY_WORKERS_SUBDOMAIN_PREFLIGHT=PASS")
     return 0
