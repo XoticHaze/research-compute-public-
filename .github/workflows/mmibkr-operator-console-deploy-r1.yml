@@ -28,6 +28,10 @@ on:
       - 'tests/test_mmibkr_operator_console_deploy_token_route_v1.py'
       - 'scripts/mmibkr_operator_console_deploy_token_route_v1.py'
       - 'tests/test_fleet_source_vault_contract_v1.py'
+      - 'scripts/private_web_capsule_consumer_v1.py'
+      - 'tests/test_private_web_capsule_consumer_v1.py'
+      - 'cloudflare/fleet-authority/src/source_exchange.js'
+      - 'scripts/private_web_asset_composer_v1.py'
 
 permissions:
   contents: read
@@ -61,6 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           node --check cloudflare/operator-console/src/index.js
+          node --check cloudflare/fleet-authority/src/source_exchange.js
           node tests/operator_console_runtime_union_freshness_contract.mjs
           node tests/pi_account_observation_contract.mjs
           node tests/pi_bot_live_observation_contract.mjs
@@ -77,6 +82,8 @@ jobs:
           node tests/pi_owner_access_gate_contract.mjs
           node --check cloudflare/operator-console/src/promotion_review_state.js
           node tests/promotion_review_state_contract.mjs
+          python -m pip install --disable-pip-version-check cryptography==46.0.1
+          python -m unittest -v tests.test_private_web_capsule_consumer_v1
           python -m unittest -v \
             tests.test_mmibkr_operator_console_worker_v1 \
             tests.test_mmibkr_operator_console_access_reconcile_v1 \
@@ -227,6 +234,48 @@ jobs:
             exit 41
           fi
           echo 'MMIBKR_OPERATOR_CONSOLE_BUILD=PASS'
+
+      - name: Compose only independently owner-approved encrypted private web overlay
+        env:
+          CC_PRIVATE_WEB_RELEASE_REQUESTED: ${{ vars.CC_PRIVATE_WEB_RELEASE_REQUESTED }}
+          CC_PRIVATE_WEB_OPAQUE_CAPSULE_ID: ${{ vars.CC_PRIVATE_WEB_OPAQUE_CAPSULE_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No cross-project publication occurs by default. Cloudflare Fleet
+          # independently gates the exact approved ciphertext and OIDC caller.
+          if [ "${CC_PRIVATE_WEB_RELEASE_REQUESTED}" != '1' ]; then
+            echo 'CC_PRIVATE_WEB_RELEASE=UNCHANGED_MM_ONLY'
+            exit 0
+          fi
+          if ! [[ "${CC_PRIVATE_WEB_OPAQUE_CAPSULE_ID}" =~ ^[a-z0-9][a-z0-9-]{15,63}$ ]]; then
+            echo 'CC_PRIVATE_WEB_CAPSULE_ID_INVALID=1'
+            exit 52
+          fi
+          capsule="$GITHUB_WORKSPACE/rendezvous/private-web-capsules/${CC_PRIVATE_WEB_OPAQUE_CAPSULE_ID}.json"
+          test -s "$capsule" || { echo 'CC_PRIVATE_WEB_ENCRYPTED_CAPSULE_NOT_STAGED=1'; exit 53; }
+          umask 077
+          python scripts/private_web_capsule_consumer_v1.py \
+            --capsule "$capsule" \
+            --authority-base "$FLEET_AUTHORITY_BASE" \
+            --run-id "$GITHUB_RUN_ID" \
+            --destination "$RUNNER_TEMP/private-web-overlay" \
+            --receipt "$RUNNER_TEMP/private-web-materialization.json"
+          test -s "$RUNNER_TEMP/private-web-overlay.manifest.json"
+          python scripts/private_web_asset_composer_v1.py \
+            --selected-dist "$GITHUB_WORKSPACE/cloudflare/operator-console/dist" \
+            --private-overlay "$RUNNER_TEMP/private-web-overlay" \
+            --overlay-manifest "$RUNNER_TEMP/private-web-overlay.manifest.json" \
+            --output-dist "$RUNNER_TEMP/private-web-composed-dist" \
+            --receipt "$RUNNER_TEMP/private-web-composition.json"
+          test -s "$RUNNER_TEMP/private-web-composed-dist/index.html"
+          if find "$RUNNER_TEMP/private-web-composed-dist" -type f -name '*.map' | grep -q .; then
+            echo 'CC_PRIVATE_WEB_COMPOSED_MAP_REJECTED=1'
+            exit 54
+          fi
+          rm -rf "$GITHUB_WORKSPACE/cloudflare/operator-console/dist"
+          mv "$RUNNER_TEMP/private-web-composed-dist" "$GITHUB_WORKSPACE/cloudflare/operator-console/dist"
+          echo 'CC_PRIVATE_WEB_ENCRYPTED_OVERLAY_COMPOSED=1'
 
       - name: Require Cloudflare deploy credential
         env:
@@ -1221,5 +1270,9 @@ jobs:
           set -euo pipefail
           rm -rf \
             "$RUNNER_TEMP/mmibkr-operator-console-source" \
+            "$RUNNER_TEMP/private-web-overlay" \
+            "$RUNNER_TEMP/private-web-overlay.manifest.json" \
+            "$RUNNER_TEMP/private-web-materialization.json" \
+            "$RUNNER_TEMP/private-web-composition.json" \
             "$GITHUB_WORKSPACE/cloudflare/operator-console/dist"
           echo 'MMIBKR_OPERATOR_CONSOLE_PRIVATE_SOURCE_DESTROYED=1'
