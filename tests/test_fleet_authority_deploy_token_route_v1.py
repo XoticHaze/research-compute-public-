@@ -15,7 +15,7 @@ class FleetAuthorityDeployTokenSelectionTests(unittest.TestCase):
     def test_legacy_fallback_when_scoped_lacks_subdomain(self):
         def probe(token, account):
             return token == "legacy"
-        self.assertEqual(select_route("account", "scoped", "legacy", probe), "legacy_existing")
+        self.assertEqual(select_route("account", "scoped", "legacy", probe), "legacy_fallback")
 
     def test_no_capable_token_fails_before_upload(self):
         with self.assertRaisesRegex(ValueError, "SUBDOMAIN_AUTH_REQUIRED"):
