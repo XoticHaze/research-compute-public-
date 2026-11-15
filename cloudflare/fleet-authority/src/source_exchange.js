@@ -2,7 +2,7 @@ import {
   PI_GHCR_OPAQUE_PUBLISH_IDENTITY,
   resolvePiImageCandidate,
 } from './pi_opaque_ghcr.js';
-import { sealPrivateOverEmploy } from './private_web_source_seal.js';
+import { sealPrivateOverEmploy, privateWebHeldReason } from './private_web_source_seal.js';
 
 const GITHUB_ISSUER = 'https://token.actions.githubusercontent.com';
 const GITHUB_JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwks';
@@ -753,9 +753,11 @@ export async function handleSourceExchange(request, env) {
           'x-content-type-options': 'nosniff',
         },
       });
-    } catch {
-      // Deny without leaking the private token, SHA/ref, or GitHub response.
-      return json({ error: 'private_web_source_seal_not_admitted' }, 403);
+    } catch (error) {
+      // Only a fixed local code crosses the OIDC boundary. No provider body,
+      // source SHA/ref, private URL, token or applicant content is emitted.
+      return json({ error: 'private_web_source_seal_not_admitted',
+        held_reason: privateWebHeldReason(error) }, 403);
     }
   }
 
