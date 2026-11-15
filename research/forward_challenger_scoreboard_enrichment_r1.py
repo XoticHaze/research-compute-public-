@@ -128,7 +128,12 @@ def _lane_currency_overlay(x: dict[str, Any]) -> dict[str, Any]:
             "Test whether a 5% cash-funded HEFA/DBEF overlay improves the frozen allocator beyond both the unchanged "
             "allocator and an equal IEFA/EFA overlay. No leverage and no allocator mutation."
         ),
-        "scientific_forward_credit": bool(x.get("scientific_forward_credit", False)),
+        # This BZH-merger overlay is still blocked on original source rights,
+        # adjusted-share entitlement and independently authenticated issuer.
+        # Producer eligibility is not the consumer's earned forward credit.
+        "scientific_forward_credit": False,
+        "observer_declared_prospective_eligibility": bool(x.get("scientific_forward_credit", False)),
+        "forward_credit_stage": "SOURCE_ONLY_ORIGINAL_BZH_RIGHTS_AND_ISSUER_UNADMITTED",
         "validation_grade": x.get("state"),
         "scorecard": x.get("scorecard"),
         "decision_use": x.get("decision_use"),
@@ -176,7 +181,9 @@ def enrich(
         "CURRENCY_HEDGE_ALLOCATOR_OVERLAY": {
             "present": True,
             "state": currency_overlay.get("state"),
-            "scientific_forward_credit": bool(currency_overlay.get("scientific_forward_credit", False)),
+            "scientific_forward_credit": False,
+            "observer_declared_prospective_eligibility": bool(currency_overlay.get("scientific_forward_credit", False)),
+            "forward_credit_stage": "SOURCE_ONLY_ORIGINAL_BZH_RIGHTS_AND_ISSUER_UNADMITTED",
         },
     }
 
@@ -261,6 +268,7 @@ def enrich(
     interpretation["currency_regime_context_is_not_timing_authority"] = True
     interpretation["currency_overlay_is_observation_not_allocator_mutation"] = True
     interpretation["currency_overlay_is_cash_funded_without_leverage"] = True
+    interpretation["currency_overlay_eligibility_is_not_earned_forward_credit"] = True
     return scoreboard
 
 
@@ -333,6 +341,12 @@ def self_test() -> None:
     assert by_id["P160_FIXED_P46_P47_COMBINATION"]["validation_grade"] == "PRESTART_DESCRIPTIVE_SHADOW"
     assert by_id["DEVELOPED_EXUS_CURRENCY_HEDGE"]["validation_grade"] == "AWAITING_ENTRY_SESSION"
     assert by_id["CURRENCY_HEDGE_ALLOCATOR_OVERLAY"]["validation_grade"] == "AWAITING_ENTRY_SESSION"
+    assert by_id["CURRENCY_HEDGE_ALLOCATOR_OVERLAY"]["observer_declared_prospective_eligibility"] is True
+    assert by_id["CURRENCY_HEDGE_ALLOCATOR_OVERLAY"]["scientific_forward_credit"] is False
+    assert by_id["CURRENCY_HEDGE_ALLOCATOR_OVERLAY"]["forward_credit_stage"] == "SOURCE_ONLY_ORIGINAL_BZH_RIGHTS_AND_ISSUER_UNADMITTED"
+    assert out["coverage"]["challenger_observers"]["CURRENCY_HEDGE_ALLOCATOR_OVERLAY"]["scientific_forward_credit"] is False
+    assert out["coverage"]["challenger_observers"]["CURRENCY_HEDGE_ALLOCATOR_OVERLAY"]["observer_declared_prospective_eligibility"] is True
+    assert out["interpretation"]["currency_overlay_eligibility_is_not_earned_forward_credit"] is True
     assert out["decision_chain"]["diversification"]["CURRENCY_HEDGE"]["regime_context"]["timing_authority"] is False
     assert out["decision_chain"]["diversification"]["CURRENCY_HEDGE_ALLOCATOR_OVERLAY"]["funding_source"] == "CASH_ONLY"
     assert out["interpretation"]["challenger_observers_do_not_grant_allocator_authority"] is True
@@ -343,6 +357,8 @@ def self_test() -> None:
     lane = _lane_currency_overlay(lagged)
     assert lane["source_health"]["common_calendar_precedes_requested_asof"] is True
     assert lane["timing"]["latest_common_market_date"] == "2026-10-19"
+    assert lane["observer_declared_prospective_eligibility"] is True
+    assert lane["scientific_forward_credit"] is False
     assert lane["scorecard"] is None and lane["boundaries"]["allocator_mutation"] is False
     assert enrich({"lanes": [], "coverage": {}, "actionable_context": [], "decision_chain": {}, "interpretation": {}}, p160, currency, lagged)["freshness"]["currency_overlay_common_calendar_precedes_requested_asof"] is True
     # An observer may be prospectively eligible without an independently
