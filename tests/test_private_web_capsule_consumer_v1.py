@@ -144,5 +144,43 @@ class PrivateWebCapsuleTests(unittest.TestCase):
             cloudflare_key_release(c, base="http://not-secure.local", run_id="123456", token="fake")
 
 
+    def test_regional_github_oidc_host_remains_github_domain_scoped(self):
+        import os
+        from unittest.mock import patch, MagicMock
+        from scripts.private_web_capsule_consumer_v1 import github_oidc
+        url = "https://pipelinesghubeus6.actions.githubusercontent.com/oidc?x=1"
+        fake = MagicMock()
+        fake.__enter__.return_value.read.return_value = b'{"value":"a.b.c"}'
+        env = {"ACTIONS_ID_TOKEN_REQUEST_URL": url,
+               "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "synthetic"}
+        with patch.dict(os.environ, env), patch(
+                "scripts.private_web_capsule_consumer_v1.urlopen", return_value=fake) as opened:
+            self.assertEqual(github_oidc(), "a.b.c")
+            requested = opened.call_args[0][0]
+            self.assertIn("audience=mmibkr-fleet-authority", requested.full_url)
+            self.assertEqual(requested.headers["Authorization"], "Bearer synthetic")
+
+    def test_oidc_suffix_lookalikes_and_userinfo_rejected_without_network(self):
+        import os
+        from unittest.mock import patch
+        from scripts.private_web_capsule_consumer_v1 import github_oidc
+        bad = (
+            "https://pipelines.actions.githubusercontent.com.evil.example/oidc",
+            "https://evil.example/?next=pipelines.actions.githubusercontent.com",
+            "https://attacker@pipelines.actions.githubusercontent.com/oidc",
+            "http://pipelines.actions.githubusercontent.com/oidc",
+            "https://pipelines.actions.githubusercontent.com:8443/oidc",
+        )
+        for value in bad:
+            with self.subTest(value=value), patch.dict(os.environ, {
+                    "ACTIONS_ID_TOKEN_REQUEST_URL": value,
+                    "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "synthetic"}), patch(
+                    "scripts.private_web_capsule_consumer_v1.urlopen") as opened:
+                with self.assertRaises(RuntimeError):
+                    github_oidc()
+                opened.assert_not_called()
+
+
+
 if __name__ == "__main__":
     unittest.main()
