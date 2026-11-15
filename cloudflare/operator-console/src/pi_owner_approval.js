@@ -4,6 +4,7 @@ const KEY_ID = 'ccpi-owner-bootstrap-ed25519-v1';
 const DOMAINS = Object.freeze({
   bootstrap: 'commandcenter.pi.bot_owner_bootstrap_approval.v1\u0000',
   replace: 'commandcenter.pi.bot_replace_approval.v1\u0000',
+  root_release: 'commandcenter.pi.release_request_approval.v1\u0000',
 });
 const B_FIELDS = [
   'schema', 'node_id', 'request_id', 'request_sha256', 'source_sha', 'image_ref',
@@ -19,6 +20,13 @@ const R_FIELDS = [
   'artifact_manifest_blob_sha', 'client_id', 'inspect_client_id',
   'expected_release', 'runtime_mode', 'acknowledge_existing_live_mode_preserved',
   'expires_at',
+];
+const ROOT_RELEASE_APPROVAL_FIELDS = [
+  'schema', 'request_id', 'source_sha', 'expected_release', 'expires_at',
+];
+const ROOT_RELEASE_REQUEST_FIELDS = [
+  'schema', 'node_id', 'request_id', 'action', 'source_repo',
+  'source_sha', 'expected_release', 'created_at', 'expires_at',
 ];
 const BASE_REQUEST = [
   'schema', 'node_id', 'request_id', 'action', 'source_repo', 'source_sha',
@@ -142,6 +150,40 @@ export async function validatePiOwnerApproval(kind, approval, request, now = Dat
   }
   return { request_id: request.request_id, approval_hash: await shaHex(raw) };
 }
+// Cloudflare-held signer: exact independent root release domain using the
+// retained DO Ed25519 identity. This validates an owner decision only; it
+// does NOT authorize the GitHub-deployable console to access signing custody.
+export async function validatePiCloudRootReleaseApproval(approval, request, now = Date.now()) {
+  strictFields(approval, ROOT_RELEASE_APPROVAL_FIELDS);
+  strictFields(request, ROOT_RELEASE_REQUEST_FIELDS);
+  if (approval.schema !== 'commandcenter.pi.release_request_approval.v1'
+      || request.schema !== 'commandcenter.pi.release_request.v1'
+      || request.node_id !== 'cc-pi4'
+      || request.action !== 'pi.release.apply'
+      || request.source_repo !== 'XoticHaze/CommandCenter'
+      || !REQ.test(request.request_id)
+      || !SHA40.test(request.source_sha)
+      || !/^r[0-9a-f]{12}$/.test(request.expected_release)
+      || approval.request_id !== request.request_id
+      || approval.source_sha !== request.source_sha
+      || approval.expected_release !== request.expected_release
+      || approval.expires_at !== request.expires_at) {
+    throw new Error('pi_owner_cloud_root_release_identity_mismatch');
+  }
+  const created = time(request.created_at);
+  const expires = time(request.expires_at);
+  if (created > now + 120000 || created >= expires || expires <= now
+      || expires - created > 3600000 || expires > now + 600000) {
+    throw new Error('pi_owner_cloud_root_release_not_fresh');
+  }
+  const raw = canonicalPiJson(approval);
+  if (te.encode(raw).length > 600
+      || /\b(?:broker_net_qty|password|account_number|private_key)\b/i.test(raw)) {
+    throw new Error('pi_owner_cloud_root_release_private_data_rejected');
+  }
+  return {request_id: request.request_id,
+    approval_hash: await shaHex(te.encode(raw))};
+}
 function b64(bytes) {
   let s = '';
   for (const b of new Uint8Array(bytes)) s += String.fromCharCode(b);
@@ -255,7 +297,9 @@ export class PiOwnerApprovalState {
             || !safeEq(String(this.env.PI_OWNER_ENROLLED_PUB_SHA256 || ''), entry.public_key_sha256)) {
           throw new Error('pi_owner_trust_anchor_not_activated');
         }
-        const accepted = await validatePiOwnerApproval(body.kind, body.approval, body.request);
+        const accepted = body.kind === 'root_release'
+          ? await validatePiCloudRootReleaseApproval(body.approval, body.request)
+          : await validatePiOwnerApproval(body.kind, body.approval, body.request);
         const storageKey = 'pi_owner_issued_v1/' + accepted.request_id;
         const previous = await this.ctx.storage.get(storageKey);
         if (previous) {

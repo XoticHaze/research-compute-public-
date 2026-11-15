@@ -1,9 +1,9 @@
 {
   "control_plane_pass": true,
-  "credential_selection": "scoped_r2",
-  "deploy_pass": false,
+  "credential_selection": "legacy_fallback",
+  "deploy_pass": true,
   "deployed_source_verified": true,
-  "fresh_deploy_confirmed": false,
+  "fresh_deploy_confirmed": true,
   "health_pass": true,
   "r2_confidential_execution_proven": false,
   "route": "github_actions",
@@ -11,5 +11,5 @@
   "worker": "fleet-authority",
   "worker_source_available": true,
   "workers_builds_required_for_future_redeploy": false,
-  "wrangler_outcome": "failure"
+  "wrangler_outcome": "success"
 }
