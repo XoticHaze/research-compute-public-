@@ -30,10 +30,10 @@ MAX_PLAIN = 1_000_000
 MAX_FILES = 32
 MAX_FILE = 512 * 1024
 ALLOWED = {".html", ".js", ".css", ".png", ".svg", ".webp", ".ico", ".woff2"}
-ID = re.compile(r"[a-z0-9][a-z0-9-]{15,63}\\Z")
-SHA = re.compile(r"[a-f0-9]{64}\\Z")
-SOURCE_SHA = re.compile(r"[a-f0-9]{40}\\Z")
-SLUG = re.compile(r"[a-z][a-z0-9-]{0,39}\\Z")
+ID = re.compile(r"[a-z0-9][a-z0-9-]{15,63}\Z")
+SHA = re.compile(r"[a-f0-9]{64}\Z")
+SOURCE_SHA = re.compile(r"[a-f0-9]{40}\Z")
+SLUG = re.compile(r"[a-z][a-z0-9-]{0,39}\Z")
 
 
 def b64(value: str) -> bytes:
@@ -103,7 +103,7 @@ def cloudflare_key_release(c: dict, *, base: str, run_id: str, token: str) -> di
     u = urlparse(base)
     if u.scheme != "https" or not u.hostname or u.path.strip("/") or u.query or u.fragment:
         raise ValueError("authority_origin_invalid")
-    if not re.fullmatch(r"\\d{4,24}", str(run_id)):
+    if not re.fullmatch(r"\d{4,24}", str(run_id)):
         raise ValueError("run_id_rejected")
     body = json.dumps({
         "schema": CAPSULE_SCHEMA, "capsule_id": c["capsule_id"],
@@ -192,7 +192,7 @@ def materialize(c: dict, cipher: bytes, grant: dict, *, destination: Path, recei
         }
         manifest_path = destination / "private_asset_overlay_manifest.json"
         # Composer requires asset-only root; keep the manifest OUTSIDE it.
-        manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\\n")
+        manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
         os.chmod(manifest_path, 0o600)
         record = {
             "schema": "commandcenter.private_web_release_materialization.v1",
@@ -203,7 +203,7 @@ def materialize(c: dict, cipher: bytes, grant: dict, *, destination: Path, recei
             "private_source_published_to_public_git": False,
         }
         receipt.parent.mkdir(parents=True, exist_ok=True)
-        receipt.write_text(json.dumps(record, sort_keys=True, indent=2) + "\\n")
+        receipt.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n")
         os.chmod(receipt, 0o600)
         return record
     except BaseException:
