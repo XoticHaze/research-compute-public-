@@ -19,6 +19,7 @@ on:
         type: choice
         options:
           - readonly
+          - readonly_private_bars
           - production_live_readonly
           - paper_submit_proof
           - paper_execute
@@ -162,6 +163,8 @@ jobs:
             scripts/ibkr_paper_warning_rescue_v1.py \
             scripts/ibkr_login_window_guard_v1.py \
             scripts/ibkr_post_auth_pipeline_v1.py \
+            scripts/ibkr_b1_private_bars_mode_v1.py \
+            tests/test_ibkr_b1_private_bars_mode_v1.py \
             tests/test_ibkr_post_auth_pipeline_contracts_v1.py \
             tests/test_forward_bar_multitimeframe_v2.py \
             scripts/ibkr_remote_selected_runtime_command_capsule_v2.py \
@@ -203,6 +206,7 @@ jobs:
           python -m unittest \
             tests.test_ibkr_b1_auth_contracts_v1 \
             tests.test_ibkr_paper_warning_rescue_v1 \
+            tests.test_ibkr_b1_private_bars_mode_v1 \
             tests.test_ibkr_post_auth_pipeline_contracts_v1 \
             tests.test_forward_bar_multitimeframe_v2 \
             tests.test_ibkr_b1_warm_state_workflow_v2 \
@@ -238,7 +242,7 @@ jobs:
       POST_AUTH_CONTRACTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.contracts_json || '{}' }}
       POST_AUTH_BAR_REQUESTS_JSON: ${{ github.event_name == 'workflow_dispatch' && inputs.bar_requests_json || '' }}
       POST_AUTH_INCLUDE_QUOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.include_quotes && '1' || '0' }}
-      IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'paper_execute' || inputs.mode == 'production_live_readonly') && inputs.read_return_recipient_b64 != '' && inputs.read_return_recipient_key_id != '' && '1' || '0' }}
+      IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'readonly_private_bars' || inputs.mode == 'paper_execute' || inputs.mode == 'production_live_readonly') && inputs.read_return_recipient_b64 != '' && inputs.read_return_recipient_key_id != '' && '1' || '0' }}
       IBKR_PRODUCTION_LIVE_READONLY_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'production_live_readonly' && '1' || '0' }}
       IBKR_ACCOUNT_SNAPSHOT_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_account_snapshot' && inputs.read_return_recipient_b64 != '' && inputs.read_return_recipient_key_id != '' && '1' || '0' }}
       IBKR_PAPER_PROOF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'paper_submit_proof' && '1' || '0' }}
@@ -266,6 +270,8 @@ jobs:
             scripts/ibkr_paper_warning_rescue_v1.py \
             scripts/ibkr_login_window_guard_v1.py \
             scripts/ibkr_post_auth_pipeline_v1.py \
+            scripts/ibkr_b1_private_bars_mode_v1.py \
+            tests/test_ibkr_b1_private_bars_mode_v1.py \
             tests/test_ibkr_post_auth_pipeline_contracts_v1.py \
             tests/test_forward_bar_multitimeframe_v2.py \
             scripts/ibkr_remote_selected_runtime_command_capsule_v2.py \
@@ -297,6 +303,7 @@ jobs:
           python -m unittest \
             tests.test_ibkr_b1_auth_contracts_v1 \
             tests.test_ibkr_paper_warning_rescue_v1 \
+            tests.test_ibkr_b1_private_bars_mode_v1 \
             tests.test_ibkr_post_auth_pipeline_contracts_v1 \
             tests.test_forward_bar_multitimeframe_v2 \
             tests.test_ibkr_warm_selected_runtime_activation_v1 \
@@ -341,7 +348,7 @@ jobs:
           echo 'IBKR_INITIAL_SELECTED_RUNTIME_BACKFILL_REQUEST_LOADED=1'
 
       - name: Validate optional encrypted warm read-return request
-        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'paper_execute' || inputs.mode == 'production_live_readonly') && (inputs.read_return_recipient_b64 != '' || inputs.read_return_recipient_key_id != '') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'readonly_private_bars' || inputs.mode == 'paper_execute' || inputs.mode == 'production_live_readonly') && (inputs.read_return_recipient_b64 != '' || inputs.read_return_recipient_key_id != '') }}
         env:
           READ_RETURN_MODE: ${{ inputs.mode }}
           READ_RETURN_RECIPIENT_B64: ${{ inputs.read_return_recipient_b64 }}
@@ -351,7 +358,7 @@ jobs:
           python - <<'PY'
           import base64, hashlib, os
           mode=os.environ.get('READ_RETURN_MODE')
-          if mode not in {'readonly','paper_execute','production_live_readonly'}:
+          if mode not in {'readonly','readonly_private_bars','paper_execute','production_live_readonly'}:
               raise SystemExit('encrypted detailed read return is admitted only in approved read-return modes')
           encoded=os.environ.get('READ_RETURN_RECIPIENT_B64','').strip()
           key_id=os.environ.get('READ_RETURN_RECIPIENT_KEY_ID','').strip()
@@ -393,6 +400,26 @@ jobs:
               raise SystemExit('paper account snapshot recipient fingerprint mismatch')
           print('IBKR_ACCOUNT_SNAPSHOT_RECIPIENT_VALID=1')
           PY
+
+      - name: Require exact encrypted-only market-data request before broker auth
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'readonly_private_bars' }}
+        env:
+          PRIVATE_BAR_SYMBOLS: ${{ inputs.symbols }}
+          PRIVATE_BAR_CONTRACTS: ${{ inputs.contracts_json }}
+          PRIVATE_BAR_REQUESTS: ${{ inputs.bar_requests_json }}
+          PRIVATE_BAR_RECIPIENT: ${{ inputs.read_return_recipient_b64 }}
+          PRIVATE_BAR_RECIPIENT_ID: ${{ inputs.read_return_recipient_key_id }}
+          PRIVATE_BAR_PROFILE: ${{ inputs.read_return_envelope_profile }}
+        run: |
+          set -euo pipefail
+          python scripts/ibkr_b1_private_bars_mode_v1.py \
+            --symbols "$PRIVATE_BAR_SYMBOLS" \
+            --contracts-json "$PRIVATE_BAR_CONTRACTS" \
+            --bar-requests-json "$PRIVATE_BAR_REQUESTS" \
+            --recipient-b64 "$PRIVATE_BAR_RECIPIENT" \
+            --recipient-key-id "$PRIVATE_BAR_RECIPIENT_ID" \
+            --profile "$PRIVATE_BAR_PROFILE"
+          echo 'IBKR_PRIVATE_BARS_PREAUTH_VALIDATED=1'
 
       - name: Obtain one-run sealed gateway environment
         run: |
@@ -1227,8 +1254,10 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      # Legacy public forward-bars artifact remains only for historical backfill.
+      # Explicit private contract-bar mode publishes encrypted return only.
       - name: Publish canonical session and forward-data handoff
-        if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1' && env.IBKR_PAPER_ACCOUNT_SNAPSHOT_MODE != '1' && env.IBKR_FORWARD_EXACT_TICKS_MODE != '1' && env.IBKR_PRODUCTION_LIVE_READONLY_MODE != '1'
+        if: env.IBKR_PAPER_ACCOUNT_HYGIENE_MODE != '1' && env.IBKR_PAPER_ACCOUNT_SNAPSHOT_MODE != '1' && env.IBKR_FORWARD_EXACT_TICKS_MODE != '1' && env.IBKR_PRODUCTION_LIVE_READONLY_MODE != '1' && inputs.mode != 'readonly_private_bars'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ibkr-cloudflare-readonly-b1-${{ github.run_id }}
