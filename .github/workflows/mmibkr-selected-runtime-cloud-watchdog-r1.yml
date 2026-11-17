@@ -178,53 +178,84 @@ jobs:
                   return None
               return receipt
 
+          # The latest 50 runs can all be failed owners. Search older accepted
+          # exact-source checkpoints before declaring the durable handoff lost.
+          # Never reuse failed, unaccepted or cross-source receipts.
           checkpoint_key=''
           checkpoint_sha=''
           checkpoint_source=''
           checkpoint_run_id=''
-          for run in body.get('workflow_runs') or []:
-              run_id=str(run.get('id') or '')
-              if not run_id.isdigit():
-                  continue
-              receipt=receipt_for(run)
-              if not isinstance(receipt, dict):
-                  continue
+          checkpoint_scanned_pages=0
+          checkpoint_successful_candidates=0
+          for page in range(1, 9):
+              if page == 1:
+                  page_body=body
+              else:
+                  page_req=Request(
+                      f'https://api.github.com/repos/{repo}/actions/workflows/{workflow}/runs?per_page=50&page={page}',
+                      headers=headers,
+                  )
+                  with urlopen(page_req, timeout=30) as response:
+                      page_body=json.loads(response.read().decode())
+              runs=page_body.get('workflow_runs') or []
+              checkpoint_scanned_pages+=1
+              for run in runs:
+                  if not (
+                      run.get('status') == 'completed'
+                      and run.get('conclusion') == 'success'
+                      and run.get('head_branch') == 'main'
+                      and run.get('event') in ('workflow_dispatch', 'push')
+                  ):
+                      continue
+                  checkpoint_successful_candidates+=1
+                  run_id=str(run.get('id') or '')
+                  if not run_id.isdigit():
+                      continue
+                  receipt=receipt_for(run)
+                  if not isinstance(receipt, dict):
+                      continue
 
-              saved_key=str(receipt.get('checkpoint_cache_key') or '').strip()
-              saved_sha=str(receipt.get('checkpoint_cache_sha256') or '').strip().lower()
-              if (
-                  receipt.get('checkpoint_cache_saved') is True
-                  and saved_key.startswith(checkpoint_prefix)
-                  and saved_key.endswith('-' + canonical_source)
-                  and len(saved_sha) == 64
-                  and all(ch in '0123456789abcdef' for ch in saved_sha)
-              ):
-                  checkpoint_key=saved_key
-                  checkpoint_sha=saved_sha
-                  checkpoint_source='saved_successor'
-                  checkpoint_run_id=run_id
-                  break
+                  saved_key=str(receipt.get('checkpoint_cache_key') or '').strip()
+                  saved_sha=str(receipt.get('checkpoint_cache_sha256') or '').strip().lower()
+                  if (
+                      receipt.get('checkpoint_cache_saved') is True
+                      and saved_key.startswith(checkpoint_prefix)
+                      and saved_key.endswith('-' + canonical_source)
+                      and len(saved_sha) == 64
+                      and all(ch in '0123456789abcdef' for ch in saved_sha)
+                  ):
+                      checkpoint_key=saved_key
+                      checkpoint_sha=saved_sha
+                      checkpoint_source='saved_successor'
+                      checkpoint_run_id=run_id
+                      break
 
-              predecessor_key=str(
-                  receipt.get('expected_predecessor_checkpoint_cache_key') or ''
-              ).strip()
-              predecessor_sha=str(
-                  receipt.get('expected_predecessor_checkpoint_sha256') or ''
-              ).strip().lower()
-              if (
-                  receipt.get('expected_predecessor_checkpoint_match') is True
-                  and receipt.get('checkpoint_restored') is True
-                  and receipt.get('predecessor_terminal_continuity_ready') is True
-                  and predecessor_key.startswith(checkpoint_prefix)
-                  and predecessor_key.endswith('-' + canonical_source)
-                  and len(predecessor_sha) == 64
-                  and all(ch in '0123456789abcdef' for ch in predecessor_sha)
-              ):
-                  checkpoint_key=predecessor_key
-                  checkpoint_sha=predecessor_sha
-                  checkpoint_source='verified_predecessor_reuse'
-                  checkpoint_run_id=run_id
+                  predecessor_key=str(
+                      receipt.get('expected_predecessor_checkpoint_cache_key') or ''
+                  ).strip()
+                  predecessor_sha=str(
+                      receipt.get('expected_predecessor_checkpoint_sha256') or ''
+                  ).strip().lower()
+                  if (
+                      receipt.get('expected_predecessor_checkpoint_match') is True
+                      and receipt.get('checkpoint_restored') is True
+                      and receipt.get('predecessor_terminal_continuity_ready') is True
+                      and predecessor_key.startswith(checkpoint_prefix)
+                      and predecessor_key.endswith('-' + canonical_source)
+                      and len(predecessor_sha) == 64
+                      and all(ch in '0123456789abcdef' for ch in predecessor_sha)
+                  ):
+                      checkpoint_key=predecessor_key
+                      checkpoint_sha=predecessor_sha
+                      checkpoint_source='verified_predecessor_reuse'
+                      checkpoint_run_id=run_id
+                      break
+              if checkpoint_key or len(runs) < 50:
                   break
+          print('MMIBKR_CLOUD_WATCHDOG_CHECKPOINT_SCANNED_PAGES='
+                +str(checkpoint_scanned_pages))
+          print('MMIBKR_CLOUD_WATCHDOG_CHECKPOINT_SUCCESSFUL_CANDIDATES='
+                +str(checkpoint_successful_candidates))
 
           if not checkpoint_key or not checkpoint_sha:
               print('MMIBKR_CLOUD_WATCHDOG=no_current_source_checkpoint')
