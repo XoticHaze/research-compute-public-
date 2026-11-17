@@ -12,7 +12,12 @@ import json
 import math
 import re
 from typing import Any
-from ibkr_post_auth_pipeline_v1 import parse_bar_requests, parse_contract_hints
+from pathlib import Path
+import sys
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from scripts.ibkr_post_auth_pipeline_v1 import parse_bar_requests, parse_contract_hints
 
 SYMBOL = re.compile(r"^[A-Z][A-Z0-9.-]{0,23}$")
 MAX_SYMBOLS = 12
