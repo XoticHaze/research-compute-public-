@@ -53,7 +53,7 @@ export async function writeReceipt(env,receipt) {
   const r=await fetch(ROOT+dest,{method:'PUT',headers:{
     ...headers(bearer),'content-type':'application/json'},
     body:JSON.stringify({message:'factory receipt '+receipt.request_id,
-      branch:BRANCH,content:b64utf8(body+'\\n')}),redirect:'manual'});
+      branch:BRANCH,content:b64utf8(body+'\n')}),redirect:'manual'});
   if(r.status!==201) throw Error('receipt_write_indeterminate');
   const got=await r.json();
   if(!SHA40.test(String(got?.content?.sha||'')) ||
