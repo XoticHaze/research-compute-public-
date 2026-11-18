@@ -1,4 +1,6 @@
 import { validateRequest, workerEditorPolicy } from './policy.js';
+import {readProposal,writeReceipt} from './queue.js';
+import {UI,SCRIPT} from './ui.js';
 
 // Permanent, reusable, ordinary-account management executor. It is NOT a
 // Cloudflare-neutral signer, an unrestricted shell, or a GitHub deploy token.
@@ -163,48 +165,101 @@ export class FactoryLedger {
     return record?response({ok:true}):response({error:'conflict'},409);
   }
 }
+async function executeOnce(env,req) {
+  await logState(env,req.request_id,'claim',
+    {request_id:req.request_id,operation:req.operation});
+  let result;
+  try {
+    result=req.operation==='ordinary_worker.create'
+      ?await ordinaryCreate(env,req):await issueEditor(env,req);
+  } catch {
+    await logState(env,req.request_id,'finish',
+      {request_id:req.request_id,result:{status:'failed_or_indeterminate'}});
+    return {schema:'commandcenter.cloudflare.factory_receipt.v1',
+      request_id:req.request_id,status:'failed_or_indeterminate',
+      retry_same_id:false};
+  }
+  await logState(env,req.request_id,'finish',{request_id:req.request_id,result});
+  return {schema:'commandcenter.cloudflare.factory_receipt.v1',
+    request_id:req.request_id,...result};
+}
+function sameOrigin(request,url) {
+  return request.headers.get('content-type')==='application/json'
+    && request.headers.get('origin')===url.origin
+    && request.headers.get('sec-fetch-site')==='same-origin';
+}
+async function jsonBody(request,max=MAX_BODY) {
+  const raw=await request.text();
+  if(!raw || new TextEncoder().encode(raw).length>max)
+    throw Error('bad_request');
+  return JSON.parse(raw);
+}
 export default {
   async fetch(request,env,ctx) {
     const url=new URL(request.url);
-    if (url.pathname!=='/v1/status' && url.pathname!=='/v1/execute')
-      return response({error:'not_found'},404);
+    if (!new Set(['/v1/status','/v1/execute','/v1/proposal',
+      '/v1/approve','/operator/factory','/operator/factory.js'])
+      .has(url.pathname)) return response({error:'not_found'},404);
     try {
       await ownerOnly(env,ctx);
       safeAccount(env);
-      if (url.pathname==='/v1/status'&&request.method==='GET') {
+      if(url.pathname==='/v1/status' && request.method==='GET')
         return response({schema:'commandcenter.cloudflare.factory_status.v1',
           admitted:enabled(env.FACTORY_EXECUTOR_ENABLED),
           ordinary_creation:enabled(env.FACTORY_CREATE_ENABLED),
           optional_scoped_editor:enabled(env.FACTORY_SCOPED_TOKEN_ENABLED),
+          proposal_only:env.FACTORY_PROPOSAL_ONLY!=='0',
           token_values_returned:false});
-      }
-      if (request.method!=='POST' ||
-          !enabled(env.FACTORY_EXECUTOR_ENABLED))
+      if(url.pathname==='/operator/factory' && request.method==='GET')
+        return new Response(UI,{headers:{
+          'content-type':'text/html; charset=utf-8',
+          'cache-control':'private, no-store',
+          'x-frame-options':'DENY',
+          'content-security-policy':"default-src 'none'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'",
+        }});
+      if(url.pathname==='/operator/factory.js' && request.method==='GET')
+        return new Response(SCRIPT,{headers:{
+          'content-type':'application/javascript; charset=utf-8',
+          'cache-control':'private, no-store',
+          'content-security-policy':"default-src 'none'",
+        }});
+      if(!enabled(env.FACTORY_EXECUTOR_ENABLED))
         return response({error:'not_admitted'},403);
-      if (request.headers.get('content-type')!=='application/json')
-        return response({error:'bad_request'},400);
-      const origin=request.headers.get('origin');
-      if(origin!==url.origin || request.headers.get('sec-fetch-site')!=='same-origin')
-        return response({error:'same_origin_required'},403);
-      const raw=await request.text();
-      if (!raw || new TextEncoder().encode(raw).length>MAX_BODY)
-        return response({error:'bad_request'},400);
-      const req=validateRequest(JSON.parse(raw));
-      await logState(env,req.request_id,'claim',
-        {request_id:req.request_id,operation:req.operation});
-      let result;
-      try {
-        result=req.operation==='ordinary_worker.create'
-          ?await ordinaryCreate(env,req):await issueEditor(env,req);
-      } catch {
-        await logState(env,req.request_id,'finish',
-          {request_id:req.request_id,result:{status:'failed_or_indeterminate'}});
-        return response({request_id:req.request_id,
-          status:'failed_or_indeterminate',retry_same_id:false},409);
+      if(url.pathname==='/v1/proposal' && request.method==='GET') {
+        const proposal=await readProposal(env);
+        return response({schema:'commandcenter.cloudflare.factory_pending.v1',
+          ...proposal,executed:false,owner_approval_required:true});
       }
-      await logState(env,req.request_id,'finish',{request_id:req.request_id,result});
-      return response({schema:'commandcenter.cloudflare.factory_receipt.v1',
-        request_id:req.request_id,...result});
+      if(request.method!=='POST' || !sameOrigin(request,url))
+        return response({error:'same_origin_required'},403);
+      if(url.pathname==='/v1/approve') {
+        const approval=await jsonBody(request,512);
+        if(!approval || Object.keys(approval).sort().join(',')!==
+              'expected_blob_sha,request_id' ||
+            !ID32.test(approval.request_id) ||
+            !/^[a-f0-9]{40}$/.test(approval.expected_blob_sha))
+          return response({error:'bad_approval'},400);
+        const {request:pending,blob_sha}=await readProposal(env);
+        if(pending.request_id!==approval.request_id ||
+            blob_sha!==approval.expected_blob_sha)
+          return response({error:'stale_proposal'},409);
+        const receipt=await executeOnce(env,pending);
+        try {
+          const persisted=await writeReceipt(env,receipt);
+          return response({...receipt,private_receipt_path:persisted.path},
+            receipt.status==='failed_or_indeterminate'?409:200);
+        } catch {
+          return response({request_id:pending.request_id,
+            status:'receipt_transport_unverified',retry_same_id:false},503);
+        }
+      }
+      if(url.pathname==='/v1/execute' &&
+          env.FACTORY_PROPOSAL_ONLY==='0') {
+        const req=validateRequest(await jsonBody(request));
+        const receipt=await executeOnce(env,req);
+        return response(receipt,receipt.status==='failed_or_indeterminate'?409:200);
+      }
+      return response({error:'forbidden'},403);
     } catch {
       return response({error:'denied_or_unavailable'},403);
     }
