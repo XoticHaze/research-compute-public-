@@ -10,8 +10,8 @@ import {
   readPiOwnerRootReceipt,
   publishPiRootReleaseGrant,
   readPiRootReleaseReceipt,
-} from '../../operator-console/src/pi_owner_approval.js';
-export { PiOwnerApprovalState } from '../../operator-console/src/pi_owner_approval.js';
+} from './pi_owner_approval.js';
+export { PiOwnerApprovalState } from './pi_owner_approval.js';
 
 const OWNER_ID = 'cc-pi4-owner-v1';
 const SHA256 = /^[a-f0-9]{64}$/;
@@ -144,6 +144,30 @@ async function readPendingBotRejoin(env) {
   return {schema:'commandcenter.pi.pending_bot_rejoin_review.v1',
     request,review_only:true,cloudflare_signature_issued:false};
 }
+async function readPendingCCRootRelease(env) {
+  // Fixed private Git transport, not arbitrary repository/path/URL input.
+  // The owner sees the current pending proposal and must explicitly review it.
+  const token=String(env.PI_OWNER_QUEUE_GITHUB_TOKEN||'');
+  if(token.length<20) throw Error('pi_owner_queue_credential_missing');
+  const url='https://api.github.com/repos/XoticHaze/CommandCenter-gate-control/'
+    +'contents/pi-node/root-release-proposal.json?ref=pi-node-inbox';
+  const remote=await fetch(url,{
+    headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json',
+      'x-github-api-version':'2022-11-28'},redirect:'manual',
+  });
+  if(!remote.ok) throw Error('pi_owner_pending_release_unavailable');
+  const file=await remote.json();
+  if(!/^[a-f0-9]{40}$/.test(String(file?.sha||''))
+      || file.encoding!=='base64'
+      || !Number.isInteger(file.size) || file.size<1 || file.size>4096
+      || typeof file.content!=='string') throw Error('pi_owner_pending_release_invalid');
+  const raw=atob(file.content.replace(/\s/g,''));
+  if(raw.length>4096) throw Error('pi_owner_pending_release_oversized');
+  const request=JSON.parse(raw);
+  await validatePiCloudRootReleaseApproval(unsignedGrant(request),request);
+  return {schema:'commandcenter.pi.pending_root_review.v1',
+    request,review_only:true,cloudflare_signature_issued:false};
+}
 const page=`<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cloudflare Pi root approval</title>
@@ -166,6 +190,7 @@ one installed predecessor, expiry and request ID. Pi root independently verifies
 <label>Activation code</label><input id="enroll-code" type="password" autocomplete="off">
 <button id="enroll">Acknowledge verified root enrollment</button></section>
 <section><h2>Approve exact root release</h2>
+<button id="load-proposal">Load non-executing root release proposal</button>
 <label>Exact fresh typed pi.release.apply request JSON</label><textarea id="request" spellcheck="false"></textarea>
 <p><label><input id="approved" type="checkbox" style="width:auto">
 I reviewed this exact source SHA, installed predecessor, expiry and request ID.</label></p>
@@ -200,6 +225,13 @@ $('initialize').onclick=()=>show(async()=>{const code=$('activation').value;$('a
 return api('initialize',{activation_code:code,confirm_first_issue:true})});
 $('enroll').onclick=()=>show(async()=>{const code=$('enroll-code').value;$('enroll-code').value='';
 return api('enroll',{activation_code:code,pi_enrolled_public_key_sha256:$('key-fp').value.trim(),confirm_independently_enrolled_on_pi:true})});
+$('load-proposal').onclick=()=>show(async()=>{
+  const proposal=await api('proposal');
+  $('request').value=JSON.stringify(proposal.request,null,2);
+  $('rid').value=proposal.request.request_id;
+  $('approved').checked=false;
+  return proposal;
+});
 $('approve').onclick=()=>show(async()=>{if(!$('approved').checked)throw Error('Exact owner review required');
 const request=JSON.parse($('request').value),res=await api('approve-root',{request,approve_exact_release:true});
 $('rid').value=request.request_id;$('approved').checked=false;return res});
@@ -243,6 +275,8 @@ export default {
         return new Response(client,{headers:{'content-type':'text/javascript; charset=utf-8','cache-control':'private, no-store','x-content-type-options':'nosniff'}});
       }
       if (request.method==='GET' && url.pathname==='/api/status') return response(await status(env));
+      if (request.method==='GET' && url.pathname==='/api/proposal')
+        return response(await readPendingCCRootRelease(env));
       if (request.method==='GET' && url.pathname==='/api/rejoin-proposal')
         return response(await readPendingBotRejoin(env));
       if (request.method==='GET' && url.pathname==='/api/rejoin-receipt') {
