@@ -174,6 +174,15 @@ try {
     expected_release:'r'+'b'.repeat(12),
     created_at:iso(Date.now()-1000),expires_at:iso(Date.now()+250000),
   };
+  // Proposal is inert: it is deliberately NOT the root worker's executable
+  // bot-release-request.json slot, so approval-first dispatch is possible.
+  const proposedRaw=canonicalPiJson(rejoin);
+  queue.set('pi-node/bot-rejoin-proposal.json',{sha:sha1(proposedRaw),text:proposedRaw});
+  assert.equal(queue.has('pi-node/bot-release-request.json'),false);
+  const staged=await invoke('/api/rejoin-proposal');
+  assert.equal(staged.status,200);
+  assert.equal(staged.body.request.request_id,rejoin.request_id);
+  assert.equal(staged.body.cloudflare_signature_issued,false);
   assert.equal((await invoke('/api/approve-rejoin',{
     request:rejoin,approve_exact_bot_rejoin:true,
   })).status,403,'rejoin separately disabled by default');
