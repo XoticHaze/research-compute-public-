@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "shared-compute-worker-factory",
+  "account_id": "ce43cd7b917d98a4bb4866d30eed99c0",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-18",
+  "workers_dev": true,
+  "preview_urls": false,
+  // An independently authenticated owner installs this only once.
+  // NEVER connect source/Builds after admin secrets are bound.
+  "durable_objects": {
+    "bindings": [{"name": "FACTORY_LEDGER", "class_name": "FactoryLedger"}]
+  },
+  "exports": {
+    "FactoryLedger": {"type": "durable-object", "state": "created", "storage": "sqlite"}
+  },
+  // The independent owner must add Cloudflare Access identity settings and
+  // Secrets Store bindings on the live Worker, after neutral-DENY proof.
+  "vars": {
+    "FACTORY_ACCOUNT_ID": "ce43cd7b917d98a4bb4866d30eed99c0",
+    "FACTORY_EXECUTOR_ENABLED": "0",
+    "FACTORY_CREATE_ENABLED": "0",
+    "FACTORY_SCOPED_TOKEN_ENABLED": "0"
+  }
+}
