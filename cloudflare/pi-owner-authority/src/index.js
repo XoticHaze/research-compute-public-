@@ -137,7 +137,7 @@ async function readPendingBotRejoin(env) {
       || file.encoding!=='base64' || !Number.isInteger(file.size)
       || file.size<1 || file.size>4096
       || typeof file.content!=='string') throw Error('pi_owner_pending_rejoin_invalid');
-  const raw=atob(file.content.replace(/\\s/g,''));
+  const raw=atob(file.content.replace(/\s/g,''));
   if(raw.length>4096) throw Error('pi_owner_pending_rejoin_oversize');
   const request=JSON.parse(raw);
   await validatePiCloudBotRejoinApproval(unsignedRejoinGrant(request),request);
