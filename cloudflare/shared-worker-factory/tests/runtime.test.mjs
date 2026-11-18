@@ -45,10 +45,10 @@ test('Durable Object refuses replay and unclaimed finish',async()=>{
   }}};
   const ledger=new FactoryLedger(state);
   const url='https://factory-ledger/claim';
-  const cmd=new Request(url,{method:'POST',headers:{'content-type':'application/json'},
+  const cmd=()=>new Request(url,{method:'POST',headers:{'content-type':'application/json'},
     body:JSON.stringify({request_id:'b'.repeat(32),operation:'ordinary_worker.create'})});
-  assert.equal((await ledger.fetch(cmd)).status,200);
-  assert.equal((await ledger.fetch(cmd)).status,409);
+  assert.equal((await ledger.fetch(cmd())).status,200);
+  assert.equal((await ledger.fetch(cmd())).status,409);
   const differentId=new Request('https://factory-ledger/finish',{method:'POST',
     headers:{'content-type':'application/json'},
     body:JSON.stringify({request_id:'c'.repeat(32),result:{status:'passed'}})});
