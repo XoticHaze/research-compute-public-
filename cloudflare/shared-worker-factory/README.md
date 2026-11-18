@@ -52,11 +52,21 @@ account ID pin, operation enable flag and request TTL. A bound Durable Object cl
 the request ID before any external API mutation and permanently rejects replay.
 An ambiguous API/readback failure is terminal/indeterminate, not silently retried.
 
-This is **NOT YET** a complete CommandCenter-invoked GitHub OIDC / signed-grant
-queue. Before automated CC execution, add a separately reviewed exact fixed
-private command inbox and independent owner approval to the same service, then
-demonstrate a same-ID root-to-terminal receipt. Never allow arbitrary URLs,
-Worker source upload, shell, secrets dump, or a GitHub-hosted bearer.
+The source now includes a fixed **private CommandCenter GitHub proposal lane**:
+\`XoticHaze/CommandCenter-gate-control\`, branch \`cloudflare-factory-inbox\`,
+inert \`cloudflare-factory/proposal.json\`, and immutable
+\`cloudflare-factory/results/<request-id>.json\`. The exact proposal SHA and
+request ID are rechecked before an independent Cloudflare Access owner clicks
+the one-shot approval in \`/operator/factory\`. The worker publishes its
+nonsecret same-ID result into the private GitHub outbox using the separate
+Cloudflare-bound \`FACTORY_QUEUE_GITHUB_TOKEN\`. No GitHub source write alone
+authorizes a Cloudflare mutation.
+
+This is **NOT YET** unattended CommandCenter OIDC / signed-grant execution.
+The queue token's specific repository/branch permissions, deployed owner UI,
+Cloudflare Secrets Store custody and terminal same-ID results require live
+independent acceptance. Never allow arbitrary URLs, Worker source upload,
+shell, secrets dump, or a GitHub-held privileged Cloudflare bearer.
 
 ### Cloudflare-side settings
 Initial Wrangler config targets **only original SlenderIQ** account
