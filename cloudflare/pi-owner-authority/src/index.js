@@ -128,7 +128,7 @@ async function readPendingBotRejoin(env) {
   if(token.length<20) throw Error('pi_owner_queue_credential_missing');
   const remote=await fetch(
     'https://api.github.com/repos/XoticHaze/CommandCenter-gate-control/'
-      +'contents/pi-node/bot-release-request.json?ref=pi-node-inbox',
+      +'contents/pi-node/bot-rejoin-proposal.json?ref=pi-node-inbox',
     {headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json',
       'x-github-api-version':'2022-11-28'},redirect:'manual'});
   if(!remote.ok) throw Error('pi_owner_pending_rejoin_unavailable');
