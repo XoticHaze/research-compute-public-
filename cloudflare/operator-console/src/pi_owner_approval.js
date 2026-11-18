@@ -5,6 +5,7 @@ const DOMAINS = Object.freeze({
   bootstrap: 'commandcenter.pi.bot_owner_bootstrap_approval.v1\u0000',
   replace: 'commandcenter.pi.bot_replace_approval.v1\u0000',
   root_release: 'commandcenter.pi.release_request_approval.v1\u0000',
+  rejoin: 'commandcenter.pi.bot_rejoin_approval.v1\u0000',
 });
 const B_FIELDS = [
   'schema', 'node_id', 'request_id', 'request_sha256', 'source_sha', 'image_ref',
@@ -20,6 +21,12 @@ const R_FIELDS = [
   'artifact_manifest_blob_sha', 'client_id', 'inspect_client_id',
   'expected_release', 'runtime_mode', 'acknowledge_existing_live_mode_preserved',
   'expires_at',
+];
+const REJOIN_APPROVAL_FIELDS = [
+  'schema', 'request_id', 'source_sha', 'image_ref', 'client_id',
+  'inspect_client_id', 'artifact_manifest_blob_sha', 'expected_release',
+  'expires_at', 'acknowledge_exact_existing_bot_restart',
+  'gateway_restart_forbidden', 'new_live_authority_granted',
 ];
 const ROOT_RELEASE_APPROVAL_FIELDS = [
   'schema', 'request_id', 'source_sha', 'expected_release', 'expires_at',
@@ -42,6 +49,7 @@ const QUEUE_REF = 'pi-node-inbox';
 const APPROVAL_PATHS = Object.freeze({
   bootstrap: 'pi-node/bot-owner-signed-approval.json',
   replace: 'pi-node/bot-replace-signed-approval.json',
+  rejoin: 'pi-node/bot-rejoin-signed-approval.json',
 });
 const REQUEST_PATH = 'pi-node/bot-release-request.json';
 const te = new TextEncoder();
@@ -184,6 +192,56 @@ export async function validatePiCloudRootReleaseApproval(approval, request, now 
   return {request_id: request.request_id,
     approval_hash: await shaHex(te.encode(raw))};
 }
+
+/** The incumbent Pi root worker already recognizes this exact separate domain.
+ * No generic Docker action, Gateway restart, orders, account values or new
+ * trading authority may be granted by this envelope.
+ */
+export async function validatePiCloudBotRejoinApproval(approval, request, now = Date.now()) {
+  strictFields(approval, REJOIN_APPROVAL_FIELDS);
+  strictFields(request, BASE_REQUEST);
+  if (approval.schema !== 'commandcenter.pi.bot_rejoin_approval.v1'
+      || request.schema !== 'commandcenter.pi.bot_release_request.v1'
+      || request.node_id !== 'cc-pi4'
+      || request.action !== 'pi.bot.rejoin_existing'
+      || request.source_repo !== 'XoticHaze/mm-IBKR'
+      || !REQ.test(request.request_id)
+      || !SHA40.test(request.source_sha)
+      || !IMAGE.test(request.image_ref)
+      || !SHA40.test(request.artifact_manifest_blob_sha)
+      || !/^r[0-9a-f]{12}$/.test(request.expected_release)
+      || !Number.isInteger(request.client_id)
+      || !Number.isInteger(request.inspect_client_id)
+      || request.client_id < 1 || request.client_id > 65535
+      || request.inspect_client_id < 1 || request.inspect_client_id > 65535
+      || [79, request.inspect_client_id].includes(request.client_id)
+      || request.inspect_client_id === 79
+      || approval.request_id !== request.request_id
+      || approval.source_sha !== request.source_sha
+      || approval.image_ref !== request.image_ref
+      || approval.client_id !== request.client_id
+      || approval.inspect_client_id !== request.inspect_client_id
+      || approval.artifact_manifest_blob_sha !== request.artifact_manifest_blob_sha
+      || approval.expected_release !== request.expected_release
+      || approval.expires_at !== request.expires_at
+      || approval.acknowledge_exact_existing_bot_restart !== true
+      || approval.gateway_restart_forbidden !== true
+      || approval.new_live_authority_granted !== false) {
+    throw new Error('pi_owner_cloud_bot_rejoin_identity_mismatch');
+  }
+  const created = time(request.created_at), expires = time(request.expires_at);
+  if (created > now + 120000 || created >= expires || expires <= now
+      || expires - created > 3600000 || expires > now + 600000) {
+    throw new Error('pi_owner_cloud_bot_rejoin_not_fresh');
+  }
+  const raw = canonicalPiJson(approval);
+  if (te.encode(raw).length > 1600
+      || /\b(?:broker_net_qty|password|account_number|private_key)\b/i.test(raw)) {
+    throw new Error('pi_owner_cloud_bot_rejoin_private_data_rejected');
+  }
+  return {request_id: request.request_id, approval_hash: await shaHex(te.encode(raw))};
+}
+
 function b64(bytes) {
   let s = '';
   for (const b of new Uint8Array(bytes)) s += String.fromCharCode(b);
@@ -299,7 +357,9 @@ export class PiOwnerApprovalState {
         }
         const accepted = body.kind === 'root_release'
           ? await validatePiCloudRootReleaseApproval(body.approval, body.request)
-          : await validatePiOwnerApproval(body.kind, body.approval, body.request);
+          : body.kind === 'rejoin'
+            ? await validatePiCloudBotRejoinApproval(body.approval, body.request)
+            : await validatePiOwnerApproval(body.kind, body.approval, body.request);
         const storageKey = 'pi_owner_issued_v1/' + accepted.request_id;
         const previous = await this.ctx.storage.get(storageKey);
         if (previous) {
@@ -381,11 +441,16 @@ async function githubPut(token, path, doc, old) {
 export async function publishPiOwnerGrant(env, kind, approval, request, signedGrant) {
   const token = String(env.PI_OWNER_QUEUE_GITHUB_TOKEN || '');
   if (token.length < 20) throw new Error('pi_owner_queue_credential_missing');
-  await validatePiOwnerApproval(kind, approval, request);
+  if (kind === 'rejoin') await validatePiCloudBotRejoinApproval(approval, request);
+  else await validatePiOwnerApproval(kind, approval, request);
   if (signedGrant?.key_id !== KEY_ID || signedGrant?.signature_b64?.length < 80) {
     throw new Error('pi_owner_signed_grant_missing');
   }
-  for (const key of [...(kind === 'bootstrap' ? B_FIELDS : R_FIELDS), 'key_id', 'signature_b64']) {
+  const fields = kind === 'bootstrap' ? B_FIELDS : kind === 'rejoin' ? REJOIN_APPROVAL_FIELDS : R_FIELDS;
+  if (!object(signedGrant) || Object.keys(signedGrant).length !== fields.length + 2) {
+    throw new Error('pi_owner_signed_grant_shape_mismatch');
+  }
+  for (const key of [...fields, 'key_id', 'signature_b64']) {
     if (!Object.hasOwn(signedGrant, key)) throw new Error('pi_owner_signed_grant_incomplete');
   }
   const requestOld = await githubFile(token, REQUEST_PATH);
