@@ -5,6 +5,9 @@ import {
   PiOwnerApprovalState,
   canonicalPiJson,
   validatePiCloudRootReleaseApproval,
+  validatePiCloudBotRejoinApproval,
+  publishPiOwnerGrant,
+  readPiOwnerRootReceipt,
   publishPiRootReleaseGrant,
   readPiRootReleaseReceipt,
 } from '../../operator-console/src/pi_owner_approval.js';
@@ -91,6 +94,7 @@ async function status(env) {
     first_issue_enabled:flag(env.PI_OWNER_FIRST_ISSUE_ENABLED),
     root_enroll_enabled:flag(env.PI_OWNER_FIRST_ENROLL_ENABLED),
     normal_release_enabled:flag(env.PI_OWNER_NORMAL_RELEASE_ENABLED),
+    bot_rejoin_enabled:flag(env.PI_OWNER_BOT_REJOIN_ENABLED),
   };
 }
 function unsignedGrant(request) {
@@ -101,6 +105,44 @@ function unsignedGrant(request) {
     expected_release:request.expected_release,
     expires_at:request.expires_at,
   };
+}
+
+function unsignedRejoinGrant(request) {
+  return {
+    schema:'commandcenter.pi.bot_rejoin_approval.v1',
+    request_id:request.request_id,
+    source_sha:request.source_sha,
+    image_ref:request.image_ref,
+    client_id:request.client_id,
+    inspect_client_id:request.inspect_client_id,
+    artifact_manifest_blob_sha:request.artifact_manifest_blob_sha,
+    expected_release:request.expected_release,
+    expires_at:request.expires_at,
+    acknowledge_exact_existing_bot_restart:true,
+    gateway_restart_forbidden:true,
+    new_live_authority_granted:false,
+  };
+}
+async function readPendingBotRejoin(env) {
+  const token=String(env.PI_OWNER_QUEUE_GITHUB_TOKEN||'');
+  if(token.length<20) throw Error('pi_owner_queue_credential_missing');
+  const remote=await fetch(
+    'https://api.github.com/repos/XoticHaze/CommandCenter-gate-control/'
+      +'contents/pi-node/bot-release-request.json?ref=pi-node-inbox',
+    {headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json',
+      'x-github-api-version':'2022-11-28'},redirect:'manual'});
+  if(!remote.ok) throw Error('pi_owner_pending_rejoin_unavailable');
+  const file=await remote.json();
+  if(!/^[a-f0-9]{40}$/.test(String(file?.sha||''))
+      || file.encoding!=='base64' || !Number.isInteger(file.size)
+      || file.size<1 || file.size>4096
+      || typeof file.content!=='string') throw Error('pi_owner_pending_rejoin_invalid');
+  const raw=atob(file.content.replace(/\\s/g,''));
+  if(raw.length>4096) throw Error('pi_owner_pending_rejoin_oversize');
+  const request=JSON.parse(raw);
+  await validatePiCloudBotRejoinApproval(unsignedRejoinGrant(request),request);
+  return {schema:'commandcenter.pi.pending_bot_rejoin_review.v1',
+    request,review_only:true,cloudflare_signature_issued:false};
 }
 const page=`<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -130,6 +172,17 @@ I reviewed this exact source SHA, installed predecessor, expiry and request ID.<
 <button id="approve">Cloudflare-sign and dispatch once</button>
 <label>Request ID for receipt</label><input id="rid"><button id="receipt">Check root receipt</button>
 <pre id="result"></pre></section>
+<section><h2>Bot-only namespace rejoin (no Gateway restart)</h2>
+<p>The Pi already has a bounded rejoin operation. This signs only the exact existing
+bot restart, retains the image, mounts and Gateway, and grants no live-order authority.</p>
+<button id="load-rejoin">Load current CC bot rejoin proposal</button>
+<label>Exact fresh pi.bot.rejoin_existing request JSON</label><textarea id="rejoin-request" spellcheck="false"></textarea>
+<p><label><input id="rejoin-approved" type="checkbox" style="width:auto">
+I approve only this exact existing bot restart, not Gateway restart or trading authority.</label></p>
+<button id="approve-rejoin">Sign and dispatch bot-only rejoin once</button>
+<label>Rejoin request ID for receipt</label><input id="rejoin-rid">
+<button id="rejoin-receipt">Check bot rejoin receipt</button>
+<pre id="rejoin-result"></pre></section>
 <script src="/owner.js" defer></script></body></html>`;
 const client=`const $=x=>document.getElementById(x);
 async function api(path,doc){
@@ -151,6 +204,29 @@ $('approve').onclick=()=>show(async()=>{if(!$('approved').checked)throw Error('E
 const request=JSON.parse($('request').value),res=await api('approve-root',{request,approve_exact_release:true});
 $('rid').value=request.request_id;$('approved').checked=false;return res});
 $('receipt').onclick=()=>show(()=>api('receipt?request_id='+encodeURIComponent($('rid').value.trim())));
+
+$('load-rejoin').onclick=()=>show(async()=>{
+ const proposal=await api('rejoin-proposal');
+ $('rejoin-request').value=JSON.stringify(proposal.request,null,2);
+ $('rejoin-rid').value=proposal.request.request_id;
+ $('rejoin-approved').checked=false;
+ return proposal;
+});
+$('approve-rejoin').onclick=async()=>{
+ try{
+  if(!$('rejoin-approved').checked)throw Error('Exact bot-only rejoin review required');
+  const request=JSON.parse($('rejoin-request').value);
+  const result=await api('approve-rejoin',{request,approve_exact_bot_rejoin:true});
+  $('rejoin-rid').value=request.request_id;
+  $('rejoin-approved').checked=false;
+  $('rejoin-result').textContent=JSON.stringify(result,null,2);
+ }catch(e){$('rejoin-result').textContent='Denied: '+e.message}
+};
+$('rejoin-receipt').onclick=async()=>{
+ try{$('rejoin-result').textContent=JSON.stringify(
+  await api('rejoin-receipt?request_id='+encodeURIComponent($('rejoin-rid').value.trim())),null,2)}
+ catch(e){$('rejoin-result').textContent='Denied: '+e.message}
+};
 refresh();`;
 const noStore={headers:{'content-type':'text/html; charset=utf-8','cache-control':'private, no-store',
 'x-content-type-options':'nosniff','referrer-policy':'no-referrer',
@@ -167,6 +243,11 @@ export default {
         return new Response(client,{headers:{'content-type':'text/javascript; charset=utf-8','cache-control':'private, no-store','x-content-type-options':'nosniff'}});
       }
       if (request.method==='GET' && url.pathname==='/api/status') return response(await status(env));
+      if (request.method==='GET' && url.pathname==='/api/rejoin-proposal')
+        return response(await readPendingBotRejoin(env));
+      if (request.method==='GET' && url.pathname==='/api/rejoin-receipt') {
+        return response(await readPiOwnerRootReceipt(env,url.searchParams.get('request_id')));
+      }
       if (request.method==='GET' && url.pathname==='/api/receipt') {
         const id=url.searchParams.get('request_id');
         return response(await readPiRootReleaseReceipt(env,id));
@@ -190,6 +271,23 @@ export default {
             || input.confirm_independently_enrolled_on_pi!==true)
           throw Error('independent_root_enrollment_required');
         return response(await doRequest(env,'POST','/enroll',{...input,operator:identity}),201);
+      }
+      if (url.pathname==='/api/approve-rejoin') {
+        strict(input,['request','approve_exact_bot_rejoin']);
+        if (!flag(env.PI_OWNER_BOT_REJOIN_ENABLED)
+            || !flag(env.PI_OWNER_SIGNER_ENABLED)
+            || input.approve_exact_bot_rejoin!==true)
+          throw Error('cloudflare_bot_rejoin_not_admitted');
+        const approval=unsignedRejoinGrant(input.request||{});
+        await validatePiCloudBotRejoinApproval(approval,input.request);
+        const issued=await doRequest(env,'POST','/sign',{
+          kind:'rejoin',request:input.request,approval,
+          approve_exact_release:true,operator:identity,
+        });
+        const dispatched=await publishPiOwnerGrant(
+          env,'rejoin',approval,input.request,issued.signed_grant);
+        return response({...dispatched,cloudflare_signature_issued:true,
+          root_execution_verified:false},202);
       }
       if (url.pathname==='/api/approve-root') {
         strict(input,['request','approve_exact_release']);
