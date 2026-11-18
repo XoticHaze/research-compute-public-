@@ -5,7 +5,7 @@ Owner: CommandCenter Shared Compute factory contract, separate from the protecte
 This is a *reusable account-level management service*, not a project-specific new deployment token.
 
 ## Why this exists
-The existing \`Shared Compute Worker Factory\` bootstrap/finalization scripts already encode
+The existing `Shared Compute Worker Factory` bootstrap/finalization scripts already encode
 a product-level Workers Admin allow plus **same-role Workers Admin DENY** for the
 three historical neutral reference Workers. The same-role DENY shape passed a disposable
 Cloudflare sentinel test. The final factory token, Secrets Store enrollment and permanent
@@ -15,12 +15,12 @@ until a replacement has real one-time terminal receipts.
 This component supplies the missing, bounded executor for *ordinary* Workers in the original
 SlenderIQ account. It CANNOT touch the separately administered
 Shared Compute Neutral Authorization account. It is **not** a way to auto-create
-\`ccpi-owner-cloudflare-authority\` there or to enroll Pi root keys.
+`ccpi-owner-cloudflare-authority` there or to enroll Pi root keys.
 
 ## Existing bootstrap: do not duplicate
-- Reconcile the existing \`Shared Compute Token Provisioner TEMP\` and \`WaterBoys GitHub Deploy\` metadata,
+- Reconcile the existing `Shared Compute Token Provisioner TEMP` and `WaterBoys GitHub Deploy` metadata,
   the finalization receipt, and actual active Cloudflare tokens first.
-- If an already-proven \`Shared Compute Worker Factory\` token exists, **do not create another**.
+- If an already-proven `Shared Compute Worker Factory` token exists, **do not create another**.
 - Independently prove same-role DENY against actual protected immutable Worker IDs and disposable sentinel;
   retain existing ordinary Worker create/delete and account separation.
 - Enroll the verified factory token directly in Cloudflare Secrets Store, not GitHub, chat,
@@ -28,15 +28,15 @@ Shared Compute Neutral Authorization account. It is **not** a way to auto-create
 - If any proof fails, stop and preserve existing working WaterBoys/other deployment authority.
 
 ## Operations (typed, strict, one-use)
-\`POST /v1/execute\`, exact JSON with \`schema=commandcenter.cloudflare.factory_request.v1\`,
-32 lowercase hex \`request_id\`, ordinary \`worker_name\`, and UTC Unix
-\`expires_at\` no more than 300 seconds ahead:
-- \`ordinary_worker.create\`: creates one **inert** ordinary Worker, with no Worker script,
+`POST /v1/execute`, exact JSON with `schema=commandcenter.cloudflare.factory_request.v1`,
+32 lowercase hex `request_id`, ordinary `worker_name`, and UTC Unix
+`expires_at` no more than 300 seconds ahead:
+- `ordinary_worker.create`: creates one **inert** ordinary Worker, with no Worker script,
   preview URLs or Workers.dev subdomain. Exact created name and immutable Worker ID are
   read back. No overwrite/delete, source upload or access-policy mutation is supported.
-- \`existing_worker.editor_token.issue\`: optional, **separately disabled by default**.
-  Requires exact existing \`worker_id\` matching the approved ordinary name plus
-  \`token_ttl_hours\` 1 through 168. Issues only a single-Worker Editor token,
+- `existing_worker.editor_token.issue`: optional, **separately disabled by default**.
+  Requires exact existing `worker_id` matching the approved ordinary name plus
+  `token_ttl_hours` 1 through 168. Issues only a single-Worker Editor token,
   stores it immediately in an approved Cloudflare Secrets Store, never exposes the
   bearer, and attempts to revoke a new token on storage failure.
 
@@ -53,13 +53,13 @@ the request ID before any external API mutation and permanently rejects replay.
 An ambiguous API/readback failure is terminal/indeterminate, not silently retried.
 
 The source now includes a fixed **private CommandCenter GitHub proposal lane**:
-\`XoticHaze/CommandCenter-gate-control\`, branch \`cloudflare-factory-inbox\`,
-inert \`cloudflare-factory/proposal.json\`, and immutable
-\`cloudflare-factory/results/<request-id>.json\`. The exact proposal SHA and
+`XoticHaze/CommandCenter-gate-control`, branch `cloudflare-factory-inbox`,
+inert `cloudflare-factory/proposal.json`, and immutable
+`cloudflare-factory/results/<request-id>.json`. The exact proposal SHA and
 request ID are rechecked before an independent Cloudflare Access owner clicks
-the one-shot approval in \`/operator/factory\`. The worker publishes its
+the one-shot approval in `/operator/factory`. The worker publishes its
 nonsecret same-ID result into the private GitHub outbox using the separate
-Cloudflare-bound \`FACTORY_QUEUE_GITHUB_TOKEN\`. No GitHub source write alone
+Cloudflare-bound `FACTORY_QUEUE_GITHUB_TOKEN`. No GitHub source write alone
 authorizes a Cloudflare mutation.
 
 This is **NOT YET** unattended CommandCenter OIDC / signed-grant execution.
@@ -70,28 +70,28 @@ shell, secrets dump, or a GitHub-held privileged Cloudflare bearer.
 
 ### Cloudflare-side settings
 Initial Wrangler config targets **only original SlenderIQ** account
-\`ce43cd7b917d98a4bb4866d30eed99c0\`.
-It configures the \`FACTORY_LEDGER\` SQLite Durable Object and leaves:
+`ce43cd7b917d98a4bb4866d30eed99c0`.
+It configures the `FACTORY_LEDGER` SQLite Durable Object and leaves:
 
-- \`FACTORY_EXECUTOR_ENABLED=0\`
-- \`FACTORY_CREATE_ENABLED=0\`
-- \`FACTORY_SCOPED_TOKEN_ENABLED=0\`
+- `FACTORY_EXECUTOR_ENABLED=0`
+- `FACTORY_CREATE_ENABLED=0`
+- `FACTORY_SCOPED_TOKEN_ENABLED=0`
 
 It never configures GitHub Builds or a GitHub Actions deploy.
 
 An independently authorized original-account administrator must deploy the reviewed
 immutable source, disconnect all GitHub deployment rights from this executor,
-create a Cloudflare Access app protecting **every path**, set \`FACTORY_ACCESS_AUD\`
-and \`FACTORY_ALLOWED_EMAILS\` for the exact owner, and bind only the
+create a Cloudflare Access app protecting **every path**, set `FACTORY_ACCESS_AUD`
+and `FACTORY_ALLOWED_EMAILS` for the exact owner, and bind only the
 preexisting/proven Cloudflare-side Secrets Store identities:
-\`FACTORY_WORKERS_ADMIN\`, optionally \`FACTORY_TOKEN_ISSUER\` (account tokens create
-only) and \`FACTORY_SECRET_WRITER\` (Secrets Store edit only), plus
-\`FACTORY_SECRETS_STORE_ID\`. Do not activate any mutation flags yet.
+`FACTORY_WORKERS_ADMIN`, optionally `FACTORY_TOKEN_ISSUER` (account tokens create
+only) and `FACTORY_SECRET_WRITER` (Secrets Store edit only), plus
+`FACTORY_SECRETS_STORE_ID`. Do not activate any mutation flags yet.
 
 After independent readback of active Worker version, binding isolation,
 neutral DENY, expected Owner Access, and immutable ledger identity,
-the owner may separately approve \`FACTORY_EXECUTOR_ENABLED\` and
-\`FACTORY_CREATE_ENABLED\`. Editor-token issuance requires a distinct approval.
+the owner may separately approve `FACTORY_EXECUTOR_ENABLED` and
+`FACTORY_CREATE_ENABLED`. Editor-token issuance requires a distinct approval.
 All routines must remain fail-closed before this.
 
 ### Production acceptance, not just source CI
@@ -106,9 +106,9 @@ All routines must remain fail-closed before this.
 6. Only then retire the legacy WaterBoys factory token, and only after checking downstream consumers.
 
 ## References
-- \`XoticHaze/CommandCenter/docs/security/SHARED_COMPUTE_WORKER_FACTORY_BOUNDARY_V1.md\`
-- \`XoticHaze/CommandCenter/docs/handoffs/CLOUDFLARE_WORKER_FACTORY_NEUTRAL_BOUNDARY_HANDOFF_20260929.md\`
-- \`scripts/finalize_shared_compute_worker_factory_macos.py\` (historical source, NOT default execution route)
+- `XoticHaze/CommandCenter/docs/security/SHARED_COMPUTE_WORKER_FACTORY_BOUNDARY_V1.md`
+- `XoticHaze/CommandCenter/docs/handoffs/CLOUDFLARE_WORKER_FACTORY_NEUTRAL_BOUNDARY_HANDOFF_20260929.md`
+- `scripts/finalize_shared_compute_worker_factory_macos.py` (historical source, NOT default execution route)
 - https://developers.cloudflare.com/workers/authorization/workers/
 - https://developers.cloudflare.com/secrets-store/integrations/workers/
 - https://developers.cloudflare.com/api/resources/accounts/subresources/tokens/methods/create/
