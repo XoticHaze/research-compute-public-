@@ -1,0 +1,39 @@
+name: CC Reusable Worker Factory Source Contract
+on:
+  pull_request:
+    paths:
+      - 'cloudflare/shared-worker-factory/**'
+      - '.github/workflows/cc-worker-factory-source-r1.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare/shared-worker-factory/**'
+      - '.github/workflows/cc-worker-factory-source-r1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout reviewed public source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Source syntax and exact offline contract
+        run: |
+          set -euo pipefail
+          cd cloudflare/shared-worker-factory
+          node --version
+          node --check src/index.js
+          node --check src/policy.js
+          node --test tests/*.test.mjs
+      - name: Confirm no deploy or credential route
+        run: |
+          set -euo pipefail
+          if grep -R -E 'secrets\.[A-Za-z_]+|wrangler deploy|cloudflare.*token.*echo' \
+              cloudflare/shared-worker-factory/tests; then
+            echo "Forbidden online side effect in offline tests" >&2
+            exit 1
+          fi
+          echo "PUBLIC_SOURCE_CONTRACT_ONLY_NO_CLOUDFLARE_MUTATION=PASS"
