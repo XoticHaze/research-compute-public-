@@ -222,12 +222,12 @@ try {
   assert.deepEqual({...rejoinGrant,key_id:undefined,signature_b64:undefined},
     {...expectedRejoinApproval,key_id:undefined,signature_b64:undefined});
   assert.equal(verifySignature(null,Buffer.concat([
-    Buffer.from('commandcenter.pi.bot_rejoin_approval.v1\\0'),
+    Buffer.from('commandcenter.pi.bot_rejoin_approval.v1\0'),
     Buffer.from(canonicalPiJson(expectedRejoinApproval)),
   ]),createPublicKey(issued.body.public_key_pem),
   Buffer.from(rejoinGrant.signature_b64,'base64')),true);
   assert.equal(verifySignature(null,Buffer.concat([
-    Buffer.from('commandcenter.pi.release_request_approval.v1\\0'),
+    Buffer.from('commandcenter.pi.release_request_approval.v1\0'),
     Buffer.from(canonicalPiJson(expectedRejoinApproval)),
   ]),createPublicKey(issued.body.public_key_pem),
   Buffer.from(rejoinGrant.signature_b64,'base64')),false,'rejoin cannot alias root release');
