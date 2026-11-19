@@ -89,3 +89,27 @@ test('sanitizer rejects false pair complete and wrong case identity',()=>{
  assert.equal(sanitizeFeedbackReceipt(receipt),null);
  assert.equal(sanitizeFeedbackReceipt({...receipt,case_id:'F01'}),null);
 });
+import {createFeedbackCaller} from '../local-probe/src/feedback_caller.js';
+const LOCAL='http://127.0.0.1:8787/feedback-pair';
+function localRequest(json){const body=JSON.stringify(json);return new Request(LOCAL,{method:'POST',headers:{'Content-Type':'application/json','Content-Length':String(Buffer.byteLength(body))},body});}
+test('local caller rejects arbitrary fields and nonlocal URLs before binding',async()=>{
+ const caller=createFeedbackCaller();let count=0;
+ const env={NVIDIA_SERVICE:{fetch:async()=>{count++;return {};}}};
+ assert.equal((await caller.fetch(localRequest({model_index:0,case_index:0,prompt:'secrets'}),env)).status,400);
+ assert.equal((await caller.fetch(new Request('https://example.com/feedback-pair',{method:'POST'}),env)).status,404);
+ assert.equal((await caller.fetch(localRequest({model_index:0,case_index:12}),env)).status,400);
+ assert.equal(count,0);
+});
+test('one-use caller returns only sanitized fixed receipt, cannot replay',async()=>{
+ const caller=createFeedbackCaller();let count=0;
+ const value=await runFeedbackPair({modelIndex:0,caseIndex:4,providerFetch:async()=>syntheticReply('route','haos')});
+ const env={NVIDIA_SERVICE:{fetch:async(req)=>{
+   count++;assert.equal(new URL(req.url).pathname,'/internal/diagnostics/nvidia-micro-feedback');
+   return new Response(JSON.stringify({...value,secret:'never-export'}),{status:200});
+ }}};
+ const first=await caller.fetch(localRequest({model_index:0,case_index:4}),env);
+ assert.equal(first.status,200);const data=await first.json();
+ assert.equal(data.case_id,'F05');assert(!JSON.stringify(data).includes('never-export'));
+ assert.equal((await caller.fetch(localRequest({model_index:0,case_index:4}),env)).status,409);
+ assert.equal(count,1);
+});
