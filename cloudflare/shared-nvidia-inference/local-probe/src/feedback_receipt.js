@@ -37,8 +37,15 @@ export function sanitizeFeedbackReceipt(v){
  if(v.provider_calls===2&&(baseline===null||lesson===null))return null;
  if(v.status==='pair_complete'&&
     (v.provider_calls!==2||baseline?.http_status!==200||lesson?.http_status!==200))return null;
- const lesson_delta=v.status==='pair_complete'&&[-1,0,1].includes(v.lesson_delta)?v.lesson_delta:null;
- const protected_regression=v.status==='pair_complete'&&v.protected_regression===true;
+ // Never trust a remotely asserted improvement/regression count. Recompute
+ // the exact pair comparison and fail closed if the receipt disagrees.
+ const expected_delta=v.status==='pair_complete'?(lesson.passed?1:0)-(baseline.passed?1:0):null;
+ const expected_protected_regression=v.status==='pair_complete'&&expected.protected&&
+      baseline.passed&&!lesson.passed;
+ if(v.status==='pair_complete' &&
+    (v.lesson_delta!==expected_delta||v.protected_regression!==expected_protected_regression))return null;
+ const lesson_delta=expected_delta;
+ const protected_regression=expected_protected_regression;
  return {schema:FEEDBACK_SCHEMA,model:v.model,model_index:v.model_index,
   case_id:v.case_id,case_index:v.case_index,category:v.category,protected:v.protected,
   status:v.status,provider_calls:v.provider_calls,elapsed_ms:v.elapsed_ms,
