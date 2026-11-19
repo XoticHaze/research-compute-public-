@@ -974,21 +974,34 @@ jobs:
           if [ "$POST_AUTH_INCLUDE_QUOTES" = "1" ]; then
             quote_args+=(--include-quotes)
           fi
-          python scripts/ibkr_post_auth_pipeline_v1.py \
-            --host 127.0.0.1 \
-            --port 4002 \
-            --client-id 78 \
-            --symbols "$POST_AUTH_SYMBOLS" \
-            --contracts-json "$POST_AUTH_CONTRACTS_JSON" \
-            --bar-requests-json "$POST_AUTH_BAR_REQUESTS_JSON" \
-            "${quote_args[@]}" \
-            --output "$RUNNER_TEMP/ibkr-post-auth-handoff.json" \
-            --bars-output "$RUNNER_TEMP/ibkr-forward-bars-v2.jsonl"
+          post_auth_argv=(python scripts/ibkr_post_auth_pipeline_v1.py
+            --host 127.0.0.1
+            --port 4002
+            --client-id 78
+            --symbols "$POST_AUTH_SYMBOLS"
+            --contracts-json "$POST_AUTH_CONTRACTS_JSON"
+            --bar-requests-json "$POST_AUTH_BAR_REQUESTS_JSON"
+            "${quote_args[@]}"
+            --output "$RUNNER_TEMP/ibkr-post-auth-handoff.json"
+            --bars-output "$RUNNER_TEMP/ibkr-forward-bars-v2.jsonl")
+          if [ "${{ inputs.mode }}" = readonly_private_bars ]; then
+            # Broker/P&L/price logs and failures stay in runner temp only.
+            if "${post_auth_argv[@]}" >"$RUNNER_TEMP/ibkr-b1-market-bars-private.log" 2>&1; then
+              rm -f "$RUNNER_TEMP/ibkr-b1-market-bars-private.log"
+              echo 'IBKR_PRIVATE_MARKET_BARS_POST_AUTH_READY=1'
+            else
+              rm -f "$RUNNER_TEMP/ibkr-b1-market-bars-private.log"
+              echo 'IBKR_PRIVATE_MARKET_BARS_POST_AUTH_FAILED=1'
+              exit 52
+            fi
+          else
+            "${post_auth_argv[@]}"
+          fi
           echo 'IBKR_CONSUMER_READY=1'
 
       - name: Encrypt optional detailed warm read snapshot for private consumer
         id: warm_read_return
-        if: env.IBKR_WARM_READ_RETURN_REQUESTED == '1' && env.IBKR_PRODUCTION_LIVE_READONLY_MODE != '1'
+        if: env.IBKR_WARM_READ_RETURN_REQUESTED == '1' && env.IBKR_PRODUCTION_LIVE_READONLY_MODE != '1' && inputs.mode != 'readonly_private_bars'
         env:
           READ_RETURN_RECIPIENT_B64: ${{ inputs.read_return_recipient_b64 }}
           READ_RETURN_RECIPIENT_KEY_ID: ${{ inputs.read_return_recipient_key_id }}
@@ -1010,8 +1023,27 @@ jobs:
           echo 'ready=1' >> "$GITHUB_OUTPUT"
           echo 'IBKR_WARM_READ_RETURN_ENCRYPTED=1'
 
+      - name: Encrypt private market bars without secondary account or execution reads
+        id: market_bars_return
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'readonly_private_bars' }}
+        env:
+          READ_RETURN_RECIPIENT_B64: ${{ inputs.read_return_recipient_b64 }}
+          READ_RETURN_RECIPIENT_KEY_ID: ${{ inputs.read_return_recipient_key_id }}
+        run: |
+          set -euo pipefail
+          python scripts/ibkr_b1_market_bars_return_v1.py \
+            --run-id "$GITHUB_RUN_ID" \
+            --public-head "$GITHUB_SHA" \
+            --handoff-file "$RUNNER_TEMP/ibkr-post-auth-handoff.json" \
+            --bars-file "$RUNNER_TEMP/ibkr-forward-bars-v2.jsonl" \
+            --recipient-b64 "$READ_RETURN_RECIPIENT_B64" \
+            --recipient-key-id "$READ_RETURN_RECIPIENT_KEY_ID" \
+            --output-dir "$RUNNER_TEMP/ibkr-warm-read-return"
+          echo 'ready=1' >> "$GITHUB_OUTPUT"
+          echo 'IBKR_PRIVATE_MARKET_BARS_ENCRYPTED=1'
+
       - name: Publish encrypted warm read return
-        if: steps.warm_read_return.outputs.ready == '1'
+        if: steps.warm_read_return.outputs.ready == '1' || steps.market_bars_return.outputs.ready == '1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -1412,6 +1444,7 @@ jobs:
             "$RUNNER_TEMP/ibkr-forward-exact-ticks-receipt.json" \
             "$RUNNER_TEMP/ibkr-paper-proof-return" \
             "$RUNNER_TEMP/ibkr-forward-exact-ticks-return" \
+            "$RUNNER_TEMP/ibkr-b1-market-bars-private.log" \
             "$RUNNER_TEMP/ibkr-warm-read-return" \
             "$RUNNER_TEMP/mm-ibkr-source" \
             "$RUNNER_TEMP/mmibkr-proof-data" \
