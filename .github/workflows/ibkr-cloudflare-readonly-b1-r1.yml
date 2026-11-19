@@ -165,6 +165,8 @@ jobs:
             scripts/ibkr_post_auth_pipeline_v1.py \
             scripts/ibkr_b1_private_bars_mode_v1.py \
             scripts/ibkr_b1_market_bars_return_v1.py \
+            scripts/ibkr_b1_market_bars_consumer_v1.py \
+            tests/test_ibkr_b1_market_bars_consumer_v1.py \
             tests/test_ibkr_b1_private_bars_mode_v1.py \
             tests/test_ibkr_b1_market_bars_return_v1.py \
             tests/test_ibkr_post_auth_pipeline_contracts_v1.py \
@@ -210,6 +212,7 @@ jobs:
             tests.test_ibkr_paper_warning_rescue_v1 \
             tests.test_ibkr_b1_private_bars_mode_v1 \
             tests.test_ibkr_b1_market_bars_return_v1 \
+            tests.test_ibkr_b1_market_bars_consumer_v1 \
             tests.test_ibkr_post_auth_pipeline_contracts_v1 \
             tests.test_forward_bar_multitimeframe_v2 \
             tests.test_ibkr_b1_warm_state_workflow_v2 \
@@ -275,6 +278,8 @@ jobs:
             scripts/ibkr_post_auth_pipeline_v1.py \
             scripts/ibkr_b1_private_bars_mode_v1.py \
             scripts/ibkr_b1_market_bars_return_v1.py \
+            scripts/ibkr_b1_market_bars_consumer_v1.py \
+            tests/test_ibkr_b1_market_bars_consumer_v1.py \
             tests/test_ibkr_b1_private_bars_mode_v1.py \
             tests/test_ibkr_b1_market_bars_return_v1.py \
             tests/test_ibkr_post_auth_pipeline_contracts_v1.py \
@@ -310,6 +315,7 @@ jobs:
             tests.test_ibkr_paper_warning_rescue_v1 \
             tests.test_ibkr_b1_private_bars_mode_v1 \
             tests.test_ibkr_b1_market_bars_return_v1 \
+            tests.test_ibkr_b1_market_bars_consumer_v1 \
             tests.test_ibkr_post_auth_pipeline_contracts_v1 \
             tests.test_forward_bar_multitimeframe_v2 \
             tests.test_ibkr_warm_selected_runtime_activation_v1 \
