@@ -30,11 +30,19 @@ class BoundaryReadWorkflowTests(unittest.TestCase):
         self.assertIn("IBKR_SNAPSHOT_BOUNDARY_REACHED_UTC=", self.text)
 
     def test_boundary_snapshot_is_readonly_client_evidence_even_inside_paper_execute(self):
+        warm_binding = next(
+            line for line in self.text.splitlines()
+            if "IBKR_WARM_READ_RETURN_REQUESTED:" in line
+        )
+        self.assertIn("github.event_name == 'workflow_dispatch'", warm_binding)
+        for mode in ("readonly", "readonly_private_bars", "paper_execute", "production_live_readonly"):
+            self.assertIn(f"inputs.mode == '{mode}'", warm_binding)
         self.assertIn(
-            "IBKR_WARM_READ_RETURN_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'readonly' || inputs.mode == 'paper_execute' || inputs.mode == 'production_live_readonly')",
+            "mode not in {'readonly','readonly_private_bars','paper_execute','production_live_readonly'}",
             self.text,
         )
-        self.assertIn("mode not in {'readonly','paper_execute','production_live_readonly'}", self.text)
+        self.assertIn("inputs.mode != 'readonly_private_bars'", self.text)
+        self.assertIn("- name: Encrypt private market bars without secondary account or execution reads", self.text)
         writable = self.text.index("api_read_only=yes")
         writable_end = self.text.index('echo "IBKR_GATEWAY_READ_ONLY_API=${api_read_only}"', writable)
         block = self.text[writable:writable_end]
