@@ -142,3 +142,12 @@ test('even perfect fictional feedback campaign is review-only, never executor ad
  assert.equal(x.advisory_review_candidate,true);
  assert.equal(x.automatic_model_promotion,false);assert.equal(x.protected_routing_allowed,false);
 });
+
+test('tampered improvement or protected-regression flags are rejected independently',async()=>{
+ const correct=await runFeedbackPair({modelIndex:0,caseIndex:4,
+    providerFetch:(()=>{let n=0;return async()=>++n===1?
+      syntheticReply('call','read_status'):syntheticReply('route','haos');})()});
+ assert(sanitizeFeedbackReceipt(correct));
+ assert.equal(sanitizeFeedbackReceipt({...correct,lesson_delta:-1}),null);
+ assert.equal(sanitizeFeedbackReceipt({...correct,protected_regression:true}),null);
+});
