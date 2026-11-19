@@ -113,3 +113,32 @@ test('one-use caller returns only sanitized fixed receipt, cannot replay',async(
  assert.equal((await caller.fetch(localRequest({model_index:0,case_index:4}),env)).status,409);
  assert.equal(count,1);
 });
+import {summarizeFeedbackCampaign} from '../local-probe/src/feedback_summary.js';
+test('campaign summary cannot promote the model from partial scored work',async()=>{
+ const r=await runFeedbackPair({modelIndex:0,caseIndex:4,providerFetch:async()=>syntheticReply('route','haos')});
+ const x=summarizeFeedbackCampaign([r]);
+ assert.equal(x.status,'incomplete_no_inference_claim');
+ assert.equal(x.advisory_review_candidate,false);
+ assert.equal(x.automatic_model_promotion,false);
+ assert.equal(x.protected_routing_allowed,false);
+});
+test('campaign summary rejects duplicate case identity or model mixing',async()=>{
+ const r=await runFeedbackPair({modelIndex:0,caseIndex:4,providerFetch:async()=>syntheticReply('route','haos')});
+ assert.throws(()=>summarizeFeedbackCampaign([r,r]));
+ const other=await runFeedbackPair({modelIndex:1,caseIndex:2,providerFetch:async()=>syntheticReply('investigate','receipts')});
+ assert.throws(()=>summarizeFeedbackCampaign([r,other]));
+});
+test('even perfect fictional feedback campaign is review-only, never executor admission',async()=>{
+ const receipts=[];
+ for(let i=0;i<FEEDBACK_HOLDOUTS.length;i++){
+   const fixture=FEEDBACK_HOLDOUTS[i];
+   receipts.push(await runFeedbackPair({modelIndex:0,caseIndex:i,
+     providerFetch:async()=>syntheticReply(fixture.action,fixture.route)}));
+ }
+ const x=summarizeFeedbackCampaign(receipts);
+ assert.equal(x.status,'fully_scored');assert.equal(x.paired_cases_completed,12);
+ assert.equal(x.baseline_passes,12);assert.equal(x.lesson_passes,12);
+ assert.equal(x.protected_cases_scored,5);assert.equal(x.protected_misses,0);
+ assert.equal(x.advisory_review_candidate,true);
+ assert.equal(x.automatic_model_promotion,false);assert.equal(x.protected_routing_allowed,false);
+});
