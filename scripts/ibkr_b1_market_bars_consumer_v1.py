@@ -119,11 +119,18 @@ def _decompress_bounded(data: bytes) -> bytes:
 
 def decode(*, folder: Path, private_key_file: Path,
            expected_run_id: str, expected_public_head: str,
-           expected_symbols: tuple[str, ...]) -> dict[str, Any]:
+           expected_symbols: tuple[str, ...],
+           expected_contract_ids: dict[str, list[str]]) -> dict[str, Any]:
     if not RUN_ID_RE.fullmatch(expected_run_id) or not HEAD_RE.fullmatch(expected_public_head):
         raise ValueError("market_bars_expected_run_head_invalid")
-    if not expected_symbols or len(set(expected_symbols)) != len(expected_symbols):
+    if (not expected_symbols or len(set(expected_symbols)) != len(expected_symbols)
+            or any(not re.fullmatch(r"[A-Z][A-Z0-9.-]{0,23}", s) for s in expected_symbols)):
         raise ValueError("market_bars_expected_symbol_scope_invalid")
+    if (type(expected_contract_ids) is not dict or set(expected_contract_ids) != set(expected_symbols)
+            or any(type(v) is not list or not v or any(
+                type(cid) is not str or re.fullmatch(r"conid:[1-9][0-9]*", cid) is None
+                for cid in v) for v in expected_contract_ids.values())):
+        raise ValueError("market_bars_expected_exact_contract_ids_missing")
     envelope = _load_envelope(folder)
     if str(envelope.get("run_id")) != expected_run_id:
         raise ValueError("market_bars_envelope_run_mismatch")
@@ -161,6 +168,11 @@ def decode(*, folder: Path, private_key_file: Path,
         raise ValueError("market_bars_payload_rows_invalid")
     if {str(c["symbol"]) for c in contracts} != set(expected_symbols):
         raise ValueError("market_bars_expected_contract_symbols_mismatch")
+    received_contracts = {symbol: set() for symbol in expected_symbols}
+    for contract in contracts:
+        received_contracts[contract["symbol"]].add(str(contract["contract_id"]))
+    if received_contracts != {symbol: set(ids) for symbol, ids in expected_contract_ids.items()}:
+        raise ValueError("market_bars_exact_contract_id_mismatch")
     allowed = {(str(c["symbol"]), str(c["asset_type"]), str(c["contract_id"]), str(c["bar_size"]))
                for c in contracts}
     if any(type(row) is not dict or set(row) != set(REQUIRED_COLUMNS) for row in bars):
@@ -198,7 +210,8 @@ def store_private_rows(payload: dict[str, Any], output_file: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     for key in ("return-dir", "recipient-private-key", "expected-run-id",
-                "expected-public-head", "expected-symbols", "private-output"):
+                "expected-public-head", "expected-symbols",
+                "expected-contract-ids-json", "private-output"):
         parser.add_argument("--" + key, required=True)
     args = parser.parse_args()
     names = tuple(x.strip().upper() for x in args.expected_symbols.split(",") if x.strip())
@@ -206,6 +219,7 @@ def main() -> None:
         folder=Path(args.return_dir), private_key_file=Path(args.recipient_private_key),
         expected_run_id=args.expected_run_id, expected_public_head=args.expected_public_head,
         expected_symbols=names,
+        expected_contract_ids=json.loads(args.expected_contract_ids_json),
     )
     store_private_rows(payload, Path(args.private_output))
     print("IBKR_PRIVATE_BARS_CONSUMED=" + json.dumps({
