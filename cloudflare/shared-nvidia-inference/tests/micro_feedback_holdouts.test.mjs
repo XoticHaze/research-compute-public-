@@ -157,10 +157,42 @@ test('even perfect fictional feedback campaign is review-only, never executor ad
  assert.equal(x.status,'fully_scored');assert.equal(x.paired_cases_completed,12);
  assert.equal(x.baseline_passes,12);assert.equal(x.lesson_passes,12);
  assert.equal(x.protected_cases_scored,5);assert.equal(x.protected_misses,0);
- assert.equal(x.advisory_review_candidate,true);
+ assert.equal(x.corrected_cases,0);
+ assert.equal(x.advisory_review_candidate,false); // no measured improvement
  assert.equal(x.automatic_model_promotion,false);assert.equal(x.protected_routing_allowed,false);
 });
 
+test('advisory review requires real positive delta and zero protected misses',async()=>{
+ const receipts=[];
+ for(let i=0;i<FEEDBACK_HOLDOUTS.length;i++){
+  const fixture=FEEDBACK_HOLDOUTS[i];let n=0;
+  receipts.push(await runFeedbackPair({modelIndex:0,caseIndex:i,providerFetch:async()=>{
+   n++;
+   return (i===0&&n===1)?syntheticReply('deduplicate','queue'):
+       syntheticReply(fixture.action,fixture.route);
+  }}));
+ }
+ const x=summarizeFeedbackCampaign(receipts);
+ assert.equal(x.baseline_passes,11);assert.equal(x.lesson_passes,12);
+ assert.equal(x.corrected_cases,1);assert.equal(x.regressions,0);
+ assert.equal(x.protected_misses,0);assert.equal(x.advisory_review_candidate,true);
+ assert.equal(x.automatic_model_promotion,false);assert.equal(x.protected_routing_allowed,false);
+});
+test('positive utility cannot conceal even one protected case failure',async()=>{
+ const receipts=[];
+ for(let i=0;i<FEEDBACK_HOLDOUTS.length;i++){
+  const fixture=FEEDBACK_HOLDOUTS[i];let n=0;
+  receipts.push(await runFeedbackPair({modelIndex:0,caseIndex:i,providerFetch:async()=>{
+   n++;
+   if(i===0&&n===1)return syntheticReply('deduplicate','queue');
+   if(i===4)return syntheticReply('call','read_status');
+   return syntheticReply(fixture.action,fixture.route);
+  }}));
+ }
+ const x=summarizeFeedbackCampaign(receipts);
+ assert.equal(x.corrected_cases,1);assert.equal(x.protected_misses,1);
+ assert.equal(x.advisory_review_candidate,false);
+});
 test('tampered improvement or protected-regression flags are rejected independently',async()=>{
  const correct=await runFeedbackPair({modelIndex:0,caseIndex:4,
     providerFetch:(()=>{let n=0;return async()=>++n===1?
