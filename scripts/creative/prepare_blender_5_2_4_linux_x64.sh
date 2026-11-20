@@ -7,6 +7,7 @@ version="5.2.4"
 base="https://download.blender.org/release/Blender5.2"
 filename="blender-${version}-linux-x64.tar.xz"
 expected_bytes=385047680
+expected_sha256="2fd14c50987426897ba60237ee996edf2b4151f4b1a72a460ca20be58c1d2d86"
 root="${RUNNER_TEMP:?trusted executor must set RUNNER_TEMP}/cc-blender-runtime"
 mkdir -p "$root"
 [[ ! -e "$root/$filename" ]] || { echo "runtime_archive_already_exists"; exit 2; }
@@ -18,6 +19,7 @@ actual_bytes="$(wc -c < "$root/$filename" | tr -d '[:space:]')"
 # its exact digest separately before production/secret-bearing execution.
 digest="$(awk -v name="$filename" '$2 == name || $2 == "*"name {print $1}' "$root/SHA256SUMS")"
 [[ "$digest" =~ ^[a-fA-F0-9]{64}$ ]] || { echo "official_manifest_digest_missing" >&2; exit 2; }
+[[ "${digest,,}" == "$expected_sha256" ]] || { echo "unapproved_blender_release_digest" >&2; exit 2; }
 (cd "$root" && printf '%s  %s\n' "$digest" "$filename" | sha256sum --check --status)
 # Prevent unexpected archive path layout from becoming arbitrary extraction paths.
 if tar -tJf "$root/$filename" | grep -Ev "^blender-${version}-linux-x64/([A-Za-z0-9_.+@/ -]*)$" | grep -q .; then
@@ -26,7 +28,8 @@ fi
 tar -xJf "$root/$filename" -C "$root"
 binary="$root/blender-${version}-linux-x64/blender"
 [[ -x "$binary" ]] || { echo "blender_binary_missing" >&2; exit 2; }
-"$binary" --version | head -n 1 | grep -F "Blender $version" >/dev/null
+version_out="$("$binary" --version)"
+grep -m 1 -F "Blender $version" <<< "$version_out" >/dev/null
 printf 'CC_BLENDER_RUNTIME_PREPARED_VERSION=%s\n' "$version"
 printf 'CC_BLENDER_RUNTIME_SHA256=%s\n' "$digest"
 printf 'CC_BLENDER_RUNTIME_PATH=%s\n' "$binary"
