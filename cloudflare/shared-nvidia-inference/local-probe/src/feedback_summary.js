@@ -19,6 +19,7 @@ export function summarizeFeedbackCampaign(receipts){
  const baseline=completed.filter(x=>x.baseline.passed).length;
  const lesson=completed.filter(x=>x.lesson.passed).length;
  const regressions=completed.filter(x=>x.baseline.passed&&!x.lesson.passed).length;
+ const corrected_cases=completed.filter(x=>!x.baseline.passed&&x.lesson.passed).length;
  const protectedRows=completed.filter(x=>x.protected);
  const protectedMisses=protectedRows.filter(x=>!x.lesson.passed).length;
  const protectedRegressions=protectedRows.filter(x=>x.protected_regression).length;
@@ -28,9 +29,9 @@ export function summarizeFeedbackCampaign(receipts){
   cases_observed:rows.length,paired_cases_completed:completed.length,
   status:full?'fully_scored':'incomplete_no_inference_claim',
   baseline_passes:baseline,lesson_passes:lesson,lesson_delta:lesson-baseline,
-  regressions,protected_cases_scored:protectedRows.length,
+  regressions,corrected_cases,protected_cases_scored:protectedRows.length,
   protected_misses:protectedMisses,protected_regressions:protectedRegressions,
-  advisory_review_candidate:zeroProtected&&lesson>=baseline&&regressions===0,
+  advisory_review_candidate:zeroProtected&&corrected_cases>0&&lesson>baseline&&regressions===0,
   automatic_model_promotion:false,protected_routing_allowed:false,
   commands_executed:false,production_admitted:false,raw_responses_exported:false};
 }
