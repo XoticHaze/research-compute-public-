@@ -1,0 +1,33 @@
+name: NVIDIA Feedback Holdout Contract (offline)
+on:
+  pull_request:
+    paths:
+      - 'cloudflare/shared-nvidia-inference/src/micro_feedback_*.js'
+      - 'cloudflare/shared-nvidia-inference/src/index.js'
+      - 'cloudflare/shared-nvidia-inference/local-probe/src/feedback_*.js'
+      - 'cloudflare/shared-nvidia-inference/local-probe/wrangler.feedback.jsonc'
+      - 'cloudflare/shared-nvidia-inference/tests/micro_feedback_holdouts.test.mjs'
+      - 'cloudflare/shared-nvidia-inference/tests/micro_feedback_baseline_evidence.test.mjs'
+      - 'cloudflare/shared-nvidia-inference/docs/MICRO_FEEDBACK_BASELINE_OBSERVED_20261119.v1.json'
+      - '.github/workflows/nvidia-feedback-holdout-offline.yml'
+permissions:
+  contents: read
+jobs:
+  feedback-source-isolation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Validate reviewed source and closed synthetic input surface
+        working-directory: cloudflare/shared-nvidia-inference
+        run: |
+          node --check src/index.js
+          node --check src/micro_feedback_holdouts.js
+          node --check src/micro_feedback_runner.js
+          node --check local-probe/src/feedback_caller.js
+          node --test tests/micro_feedback_holdouts.test.mjs tests/micro_feedback_baseline_evidence.test.mjs tests/micro_worker_benchmark.test.mjs
+      - name: Confirm no external inference or protected release was called
+        run: echo NVIDIA_FEEDBACK_OFFLINE_SOURCE_ONLY=PASS
