@@ -50,9 +50,9 @@
       "ref": "fe674e9b9cff72e9cf758c8bc6548124c6f8cf53"
     }
   },
-  "generated_at": "2026-11-19T04:32:18.807262+00:00",
+  "generated_at": "2026-11-20T04:20:23.641050+00:00",
   "latest_common_market_date": "2026-11-18",
-  "market_data_asof": "2026-11-18",
+  "market_data_asof": "2026-11-19",
   "market_sessions_observed_including_entry": 48,
   "program_id": "DEVELOPED_EXUS_CURRENCY_HEDGE",
   "regime_context": {
@@ -92,7 +92,7 @@
     }
   },
   "source": {
-    "panel_sha256": "112628fde9798cabfd12275c4f97a9129d25601be7c30d0eb934320d980249af",
+    "panel_sha256": "8cc6864c56c605d0d23a6c3bf0b2b901b37bb3290ee5a2e7c8c425e69bde3708",
     "provider": "Yahoo Finance via yfinance; research-only public data",
     "symbols": [
       "HEFA",
