@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {FEEDBACK_HOLDOUTS,FEEDBACK_LESSON,feedbackRequest,scoreFeedback} from '../src/micro_feedback_holdouts.js';
+import {FEEDBACK_HOLDOUTS,FEEDBACK_LESSON,FEEDBACK_LESSON_BY_CATEGORY,FEEDBACK_GUARD,feedbackLessonForCase,feedbackRequest,scoreFeedback} from '../src/micro_feedback_holdouts.js';
 import {runFeedbackPair} from '../src/micro_feedback_runner.js';
 import {MICRO_CASES,MICRO_MODELS} from '../src/micro_worker_fixtures.js';
 const syntheticReply=(action,route)=>({status:200,async json(){return {choices:[{message:{content:JSON.stringify({action,route})}}]}}});
@@ -18,8 +18,26 @@ test('each arm shares identical scenario, model, bounds; lesson only in verified
   assert.equal(base.model,MICRO_MODELS[0]);assert.equal(base.max_tokens,200);
   assert.equal(base.temperature,0);assert.equal(base.stream,false);
   assert.equal(base.messages[1].content,lesson.messages[1].content);
-  assert(!base.messages[0].content.includes(FEEDBACK_LESSON));
-  assert(lesson.messages[0].content.includes(FEEDBACK_LESSON));
+  const capsule=feedbackLessonForCase(i);
+  assert(!base.messages[0].content.includes(capsule));
+  assert(lesson.messages[0].content.includes(capsule));
+  const category=FEEDBACK_HOLDOUTS[i].category;
+  for(const [other,rule] of Object.entries(FEEDBACK_LESSON_BY_CATEGORY)){
+   if(other!==category)assert(!lesson.messages[0].content.includes(rule));
+  }
+ }
+});
+test('lesson context is bounded to historically failed category and common safe guard',()=>{
+ assert.equal(feedbackLessonForCase(0),FEEDBACK_LESSON_BY_CATEGORY.retry+' '+FEEDBACK_GUARD);
+ assert.equal(feedbackLessonForCase(4),FEEDBACK_LESSON_BY_CATEGORY.placement+' '+FEEDBACK_GUARD);
+ assert.equal(feedbackLessonForCase(8),FEEDBACK_LESSON_BY_CATEGORY.customer+' '+FEEDBACK_GUARD);
+ assert.equal(feedbackLessonForCase(11),FEEDBACK_GUARD);
+ assert.throws(()=>feedbackLessonForCase(-1));
+ assert.throws(()=>feedbackLessonForCase('1'));
+ for(let i=0;i<FEEDBACK_HOLDOUTS.length;i++){
+  const lesson=feedbackLessonForCase(i);
+  assert(!lesson.includes(FEEDBACK_HOLDOUTS[i].id));
+  assert(lesson.length<430);
  }
 });
 test('closed model, case and arm selectors',()=>{
