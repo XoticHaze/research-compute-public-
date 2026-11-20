@@ -99,21 +99,15 @@ def run(job, *, source_root, output_root, blender_binary):
         (work / "blender.log").write_text((result.stdout + "\n" + result.stderr)[-131072:])
         if result.returncode:
             raise RuntimeError("blender_child_failed")
-        files = {}
-        for name in EXPECTED:
-            path = work / name
-            if not path.is_file() or not 0 < path.stat().st_size <= 500_000_000:
-                raise RuntimeError("missing_or_invalid_output")
-            data = path.read_bytes()
-            if name == "arm.glb" and data[:4] != b"glTF":
-                raise RuntimeError("invalid_glb_signature")
-            if name == "preview.png" and data[:8] != b"\x89PNG\r\n\x1a\n":
-                raise RuntimeError("invalid_preview_signature")
-            files[name] = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+        # Verify there is actual animated glTF data, not merely a file with a GLB header.
+        from scripts.creative.blender_artifact_verify_v1 import verify_output_files
+        verification = verify_output_files(work)
         receipt = {"schema": OUTPUT_SCHEMA, "status": "SUCCESS", "job_sha256": digest(job),
-                   "created_at": datetime.now(timezone.utc).isoformat(), "blender_version": ".".join(version.groups()),
+                   "created_at": datetime.now(timezone.utc).isoformat(),
+                   "blender_version": ".".join(version.groups()),
                    "source_commit": actual_sha, "recipe_id": job["recipe_id"],
-                   "revision": job["revision"], "files": files}
+                   "revision": job["revision"], "files": verification["files"],
+                   "gltf": verification["gltf"], "preview": verification["preview"]}
         (work / "receipt.json").write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n")
         return receipt
     except Exception:
