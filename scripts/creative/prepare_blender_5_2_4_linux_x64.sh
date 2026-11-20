@@ -16,13 +16,23 @@ curl --fail --location --silent --show-error --retry 3 --max-time 30 "$base/blen
 actual_bytes="$(wc -c < "$root/$filename" | tr -d '[:space:]')"
 [[ "$actual_bytes" == "$expected_bytes" ]] || { echo "runtime_download_length_mismatch" >&2; exit 2; }
 # Blender's official release manifest is fetched from the same HTTPS origin; pin
-# its exact digest separately before production/secret-bearing execution.
+# and its hash must also match the independently pinned release archive SHA-256.
 digest="$(awk -v name="$filename" '$2 == name || $2 == "*"name {print $1}' "$root/SHA256SUMS")"
 [[ "$digest" =~ ^[a-fA-F0-9]{64}$ ]] || { echo "official_manifest_digest_missing" >&2; exit 2; }
 [[ "${digest,,}" == "$expected_sha256" ]] || { echo "unapproved_blender_release_digest" >&2; exit 2; }
 (cd "$root" && printf '%s  %s\n' "$digest" "$filename" | sha256sum --check --status)
-# Prevent unexpected archive path layout from becoming arbitrary extraction paths.
-if tar -tJf "$root/$filename" | grep -Ev "^blender-${version}-linux-x64/([A-Za-z0-9_.+@/ -]*)$" | grep -q .; then
+# Reject absolute and parent-traversal names before extraction.
+archive_root="blender-${version}-linux-x64"
+if ! tar -tJf "$root/$filename" | python3 -c '
+import sys
+from pathlib import PurePosixPath
+root = sys.argv[1]
+names = [line.rstrip("\\n") for line in sys.stdin]
+if not names: sys.exit(2)
+for name in names:
+    bits = PurePosixPath(name).parts
+    if name.startswith("/") or not bits or bits[0] != root or ".." in bits: sys.exit(3)
+' "$archive_root"; then
     echo "runtime_archive_path_rejected" >&2; exit 2
 fi
 tar -xJf "$root/$filename" -C "$root"
