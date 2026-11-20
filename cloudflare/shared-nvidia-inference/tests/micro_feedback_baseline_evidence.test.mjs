@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {MICRO_CASES} from '../src/micro_worker_fixtures.js';
-import {FEEDBACK_HOLDOUTS,FEEDBACK_LESSON} from '../src/micro_feedback_holdouts.js';
+import {FEEDBACK_HOLDOUTS,FEEDBACK_LESSON,FEEDBACK_LESSON_BY_CATEGORY} from '../src/micro_feedback_holdouts.js';
 const baseline=JSON.parse(fs.readFileSync(new URL('../docs/MICRO_FEEDBACK_BASELINE_OBSERVED_20261119.v1.json',import.meta.url),'utf8'));
 const PROTECTED=new Set(['placement','security','command']);
 test('historical baseline binds exact source, model, 24 distinct public synthetic cases',()=>{
@@ -44,6 +44,7 @@ test('independently recompute reported scores, category counts and protected mis
  assert.equal(baseline.summary.protected_attempted,protectedCount);
  assert.equal(baseline.summary.protected_passed,protectedPassing);
  assert.deepEqual(baseline.summary.failed_case_ids,['R04','P03','C02']);
+ assert.deepEqual(Object.keys(FEEDBACK_LESSON_BY_CATEGORY).sort(), [...new Set(observed.filter(x=>!x.passed).map(x=>x.category))].sort());
 });
 test('lessons remain category-level, no exact holdout keys or hidden answer output in prompt',()=>{
  assert.equal(FEEDBACK_HOLDOUTS.length,12);
