@@ -22,10 +22,16 @@ export function createQuoteArtifactCaller(){
    if(!env?.NVIDIA_SERVICE?.fetch)return reply(503,{error:"binding_unavailable"});
    if(input.stage===0)draftDone=true;else revisionDone=true;
    let response;
-   try{response=await env.NVIDIA_SERVICE.fetch(new Request(DEST,{
-     method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(input)}));
+   try{const body=JSON.stringify(input);
+     response=await env.NVIDIA_SERVICE.fetch(new Request(DEST,{
+       method:"POST",headers:{"Content-Type":"application/json","Content-Length":String(new TextEncoder().encode(body).length)},body}));
    }catch{return reply(503,{error:"binding_transport_unavailable"});}
    let receipt;try{receipt=await response.json();}catch{return reply(503,{error:"invalid_receipt"});}
+   if(receipt?.error && receipt.schema===undefined){
+     const known=new Set(["quote_step_selector_rejected","diagnostic_not_admitted",
+       "binding_unavailable","secret_unavailable","unavailable"]);
+     return reply(503,{error:known.has(receipt.error)?"upstream_"+receipt.error:"upstream_unclassified"});
+   }
    if(!receipt||receipt.schema!=="commandcenter.public_synthetic_quote_artifact_step.v1"||
      receipt.stage!==input.stage||receipt.model!=="poolside/laguna-xs-2.1"||
      receipt.provider_calls!==1||receipt.private_input_used!==false||
