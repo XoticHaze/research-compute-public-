@@ -99,6 +99,25 @@ def run(job, *, source_root, output_root, blender_binary):
         (work / "blender.log").write_text((result.stdout + "\n" + result.stderr)[-131072:])
         if result.returncode:
             raise RuntimeError("blender_child_failed")
+        # Reopen the exported GLB in a fresh Blender process and verify real
+        # scene meshes and animated actions, not only the glTF file signature.
+        verifier = Path(__file__).with_name("verify_glb_blender_v1.py").resolve()
+        if verifier != (source_root / "scripts/creative/verify_glb_blender_v1.py").resolve() or not verifier.is_file():
+            raise RuntimeError("fixed_glb_verifier_identity_mismatch")
+        verify_env = env.copy()
+        verify_env["CC_BLENDER_VERIFY_GLB"] = str(work / "arm.glb")
+        verify_env["CC_BLENDER_VERIFY_RESULT"] = str(work / "glb_import_verification.json")
+        verification_run = subprocess.run(
+            [str(binary), "--background", "--factory-startup", "--threads", "2",
+             "--python-exit-code", "1", "--python", str(verifier)],
+            env=verify_env, capture_output=True, text=True, timeout=100)
+        with (work / "blender.log").open("a") as log:
+            log.write(("\\n" + verification_run.stdout + "\\n" + verification_run.stderr)[-65536:])
+        if verification_run.returncode:
+            raise RuntimeError("blender_glb_reimport_failed")
+        verify_json = json.loads((work / "glb_import_verification.json").read_text())
+        if verify_json.get("status") != "PASS" or verify_json.get("action_count", 0) < 1:
+            raise RuntimeError("blender_glb_reimport_no_motion")
         # Verify there is actual animated glTF data, not merely a file with a GLB header.
         from scripts.creative.blender_artifact_verify_v1 import verify_output_files
         verification = verify_output_files(work)
@@ -107,7 +126,8 @@ def run(job, *, source_root, output_root, blender_binary):
                    "blender_version": ".".join(version.groups()),
                    "source_commit": actual_sha, "recipe_id": job["recipe_id"],
                    "revision": job["revision"], "files": verification["files"],
-                   "gltf": verification["gltf"], "preview": verification["preview"]}
+                   "gltf": verification["gltf"], "preview": verification["preview"],
+                   "independent_blender_reimport": verify_json}
         (work / "receipt.json").write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n")
         return receipt
     except Exception:
