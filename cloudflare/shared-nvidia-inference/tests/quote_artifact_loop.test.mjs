@@ -55,7 +55,7 @@ test("caller binds revision to exact initial source and rejects replay",async()=
  const mk=v=>{const body=JSON.stringify(v);return new Request("http://127.0.0.1:8787/quote-artifact-step",
  {method:"POST",headers:{"Content-Type":"application/json","Content-Length":String(Buffer.byteLength(body))},body});};
  let count=0;const env={NVIDIA_SERVICE:{fetch:async(req)=>{
-  count++;const body=await req.json();
+  count++;assert.equal(Number(req.headers.get("content-length")),Buffer.byteLength(await req.clone().text()));const body=await req.json();
   const r=await runQuoteStep({input:body,providerFetch:provider()});
   return new Response(JSON.stringify(r),{status:200});
  }}};
