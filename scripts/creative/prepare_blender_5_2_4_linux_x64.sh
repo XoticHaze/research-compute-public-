@@ -15,8 +15,8 @@ curl --fail --location --silent --show-error --retry 3 --max-time 360 "$base/$fi
 curl --fail --location --silent --show-error --retry 3 --max-time 30 "$base/blender-${version}.sha256" -o "$root/SHA256SUMS"
 actual_bytes="$(wc -c < "$root/$filename" | tr -d '[:space:]')"
 [[ "$actual_bytes" == "$expected_bytes" ]] || { echo "runtime_download_length_mismatch" >&2; exit 2; }
-# Blender's official release manifest is fetched from the same HTTPS origin; pin
-# and its hash must also match the independently pinned release archive SHA-256.
+# Fetch the official release manifest and independently enforce the pinned
+# published SHA-256 digest before extracting an executable.
 digest="$(awk -v name="$filename" '$2 == name || $2 == "*"name {print $1}' "$root/SHA256SUMS")"
 [[ "$digest" =~ ^[a-fA-F0-9]{64}$ ]] || { echo "official_manifest_digest_missing" >&2; exit 2; }
 [[ "${digest,,}" == "$expected_sha256" ]] || { echo "unapproved_blender_release_digest" >&2; exit 2; }
@@ -27,7 +27,7 @@ if ! tar -tJf "$root/$filename" | python3 -c '
 import sys
 from pathlib import PurePosixPath
 root = sys.argv[1]
-names = [line.rstrip("\\n") for line in sys.stdin]
+names = [line.rstrip("\n") for line in sys.stdin]
 if not names: sys.exit(2)
 for name in names:
     bits = PurePosixPath(name).parts
