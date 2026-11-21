@@ -7,7 +7,8 @@ const mk=(operation='ordinary_worker.create')=>({
   schema:SCHEMA,operation,request_id:'a'.repeat(32),
   worker_name:'example-project-worker',expires_at:now+120,
   ...(operation==='existing_worker.editor_token.issue'
-    ?{worker_id:'b'.repeat(32),token_ttl_hours:24}:{}),
+    ?{worker_id:'b'.repeat(32),token_ttl_hours:24}
+    : operation==='existing_worker.inspect'?{worker_id:'b'.repeat(32)}:{}),
 });
 test('ordinary create requires exact bounded fields and fresh expiry',()=>{
   assert.equal(validateRequest(mk(),now).operation,'ordinary_worker.create');
@@ -29,6 +30,14 @@ test('scoped credential issuance requires fixed existing worker and TTL',()=>{
   assert.equal(validateRequest(mk('existing_worker.editor_token.issue'),now).token_ttl_hours,24);
   assert.throws(()=>validateRequest({...mk('existing_worker.editor_token.issue'),token_ttl_hours:999},now));
   assert.throws(()=>validateRequest({...mk('existing_worker.editor_token.issue'),worker_id:'wrong'},now));
+});
+test('inspection is an exact one-use request with immutable Worker ID, no token TTL or arbitrary target',()=>{
+  assert.equal(validateRequest(mk('existing_worker.inspect'),now).worker_id,'b'.repeat(32));
+  assert.throws(()=>validateRequest({...mk('existing_worker.inspect'),worker_id:'wrong'},now));
+  assert.throws(()=>validateRequest({...mk('existing_worker.inspect'),token_ttl_hours:24},now));
+  assert.throws(()=>validateRequest({...mk('existing_worker.inspect'),worker_name:'reference-release-broker-v1'},now));
+  assert.throws(()=>validateRequest({...mk('existing_worker.inspect'),worker_name:'shared-compute-worker-factory'},now));
+  assert.throws(()=>validateRequest({...mk('existing_worker.inspect'),expires_at:now+301},now));
 });
 test('individual editor policy never grants product Admin or cross-account scope',()=>{
   const p=workerEditorPolicy('a'.repeat(32),'b'.repeat(32));

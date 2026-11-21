@@ -70,6 +70,23 @@ async function logState(env,requestId,op,body) {
       body:JSON.stringify(body)}));
   if (!res.ok) throw Error('request_replayed_or_ledger_unavailable');
 }
+async function inspectExisting(env,req) {
+  // Owner-only, exact immutable name + ID, original ordinary account only.
+  // This is not token enumeration, project deployment, signing or a mutation.
+  if (!enabled(env.FACTORY_INSPECT_ENABLED)) throw Error('operation_disabled');
+  const t=await token(env.FACTORY_WORKERS_ADMIN);
+  const found=await cf(t,'GET',
+    '/accounts/'+ORDINARY_ACCOUNT+'/workers/workers/'+req.worker_id,
+    undefined,[200]);
+  if (String(found?.id||'')!==req.worker_id ||
+      found?.name!==req.worker_name)
+    throw Error('worker_identity_rejected');
+  return {status:'existing_worker_identity_verified',
+    account_role:'ORIGINAL_SLENDERIQ_ORDINARY_ONLY',
+    worker_name:req.worker_name,worker_id:req.worker_id,
+    source_version_verified:false,service_deployment_verified:false,
+    bearer_returned:false,cloudflare_mutations:0};
+}
 async function ordinaryCreate(env,req) {
   if (!enabled(env.FACTORY_CREATE_ENABLED)) throw Error('operation_disabled');
   const t=await token(env.FACTORY_WORKERS_ADMIN);
@@ -170,8 +187,15 @@ async function executeOnce(env,req) {
     {request_id:req.request_id,operation:req.operation});
   let result;
   try {
-    result=req.operation==='ordinary_worker.create'
-      ?await ordinaryCreate(env,req):await issueEditor(env,req);
+    if (req.operation==='ordinary_worker.create') {
+      result=await ordinaryCreate(env,req);
+    } else if (req.operation==='existing_worker.editor_token.issue') {
+      result=await issueEditor(env,req);
+    } else if (req.operation==='existing_worker.inspect') {
+      result=await inspectExisting(env,req);
+    } else {
+      throw Error('unknown_operation');
+    }
   } catch {
     await logState(env,req.request_id,'finish',
       {request_id:req.request_id,result:{status:'failed_or_indeterminate'}});
@@ -207,6 +231,7 @@ export default {
         return response({schema:'commandcenter.cloudflare.factory_status.v1',
           admitted:enabled(env.FACTORY_EXECUTOR_ENABLED),
           ordinary_creation:enabled(env.FACTORY_CREATE_ENABLED),
+          exact_readonly_inspection:enabled(env.FACTORY_INSPECT_ENABLED),
           optional_scoped_editor:enabled(env.FACTORY_SCOPED_TOKEN_ENABLED),
           proposal_only:env.FACTORY_PROPOSAL_ONLY!=='0',
           token_values_returned:false});
