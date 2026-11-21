@@ -81,6 +81,7 @@ test('exact prior release CAS activates once, owner JWT serves bytes, same relea
  assert.equal((await siteReq()).status,404);
  const activated=await post('/v1/activate',activation);assert.equal(activated.status,200);assert.equal((await activated.json()).state,'ACTIVE');
  assert.equal((await post('/v1/activate',activation)).status,409);
+ assert.equal((await post('/v1/activate',{...activation,request_id:'22222222222222222222222222222222',expected_previous:'ffffffffffffffffffffffffffffffff'})).status,409);
  assert.equal((await siteReq()).status,403);
  assert.equal((await siteReq(await token('other-audience'))).status,403);
  const res=await siteReq(await token(aud));assert.equal(res.status,200);assert.equal(await res.text(),'hello');
@@ -89,6 +90,6 @@ test('exact prior release CAS activates once, owner JWT serves bytes, same relea
 test('no Cloudflare Admin bearer, worker create, issuer capability or arbitrary API host',()=>{
  assert.deepEqual(Object.keys(env).sort(),['ACCESS_ALLOWED_EMAILS_JSON','ACCESS_ISSUER','CONTENT','CONTROL_ACCESS_AUD','RELEASE_ENABLED','RELEASE_LEDGER']);
  assert.equal(validHost('malicious.com',project),false);
- assert.equal(validHost('pi-owner.apps.lifelatelycounseling.com','pi-owner'),true); // ordinary project id, cannot target protected parent zone
+ assert.equal(validHost('pi-owner.apps.lifelatelycounseling.com','pi-owner'),false);
  assert.equal(validPath('/ok.glb'),true);
 });
