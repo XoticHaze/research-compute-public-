@@ -37,6 +37,9 @@ function sourceMatches(input, raw, kind, identity) {
     && input.source_path === prefix + identity + '.json';
 }
 export function validatePiBotLiveEnvelope(input, now = Date.now(), sourceBinding = null) {
+  // A typed command status is not an independently root-attested observation.
+  // Fail closed until the exact immutable root-v2 publisher exists.
+  if (input?.schema !== 'mmibkr.pi_bot_live_observation_envelope.v2') reject();
   if (input?.schema === 'mmibkr.pi_bot_live_observation_envelope.v2') {
     if (!keys(input,rootEnvelopeKeys) || input.node_id!=='cc-pi4'
         || !sourceMatches(input, sourceBinding, 'root', input.record?.observation_id)
@@ -112,7 +115,8 @@ export function validatePiBotLiveEnvelope(input, now = Date.now(), sourceBinding
     resultCommitSha: input.result_commit_sha };
 }
 export function piBotLiveOperatorView(record, now = Date.now(), sourceBinding = null) {
-  if (!record || record.schema !== 'mmibkr.pi_bot_live_store.v1') reject();
+  if (!record || record.schema !== 'mmibkr.pi_bot_live_store.v1'
+      || record.envelope?.schema !== 'mmibkr.pi_bot_live_observation_envelope.v2') reject();
   const v=validatePiBotLiveEnvelope(record.envelope,now,sourceBinding);
   const stored=utc(record.stored_at_utc);
   if (!Number.isFinite(stored) || stored > now + NOW_SKEW_MS || now - stored > MAX_AGE_MS) reject();
@@ -139,7 +143,7 @@ function canonical(value) {
   return JSON.stringify(value);
 }
 export async function verifyPiBotRootDigest(envelope) {
-  if (envelope?.schema!=='mmibkr.pi_bot_live_observation_envelope.v2') return true;
+  if (envelope?.schema!=='mmibkr.pi_bot_live_observation_envelope.v2') reject();
   const record=envelope.record;
   if (!record || !record.snapshot || !hex64(record.snapshot_sha256)) reject();
   const bytes=new TextEncoder().encode(canonical(record.snapshot));

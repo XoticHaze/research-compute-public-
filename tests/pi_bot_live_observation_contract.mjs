@@ -32,11 +32,13 @@ function envelope(){
 const e=envelope()
 assert.throws(()=>validatePiBotLiveEnvelope(e,now),/pi_bot_observation_rejected/)
 assert.throws(()=>validatePiBotLiveEnvelope(e,now,JSON.stringify({...JSON.parse(SOURCE_BINDING),ref:'wrong'})),/pi_bot_observation_rejected/)
-assert.equal(validatePiBotLiveEnvelope(e,now,SOURCE_BINDING).replayId,rid)
+assert.throws(()=>validatePiBotLiveEnvelope(e,now,SOURCE_BINDING),/pi_bot_observation_rejected/)
+await assert.rejects(()=>verifyPiBotRootDigest(e),/pi_bot_observation_rejected/)
 const record={schema:'mmibkr.pi_bot_live_store.v1',envelope:e,
   stored_at_utc:'2026-11-01T04:19:35Z'}
-assert.equal(piBotLiveOperatorView(record,now,SOURCE_BINDING).live_switches_enabled,true)
-assert.equal(piBotLiveOperatorView(record,now,SOURCE_BINDING).permission_mutation_attempted,false)
+assert.throws(()=>piBotLiveOperatorView(record,now,SOURCE_BINDING),/pi_bot_observation_rejected/)
+// A genuine, syntactically valid typed-v1 receipt must never impersonate
+// a root-signed source, even with an otherwise matching private binding.
 const fail=x=>assert.throws(()=>validatePiBotLiveEnvelope(x,now,SOURCE_BINDING),/pi_bot_observation_rejected/)
 fail({...envelope(),source_path:'fixture/wrong/'+rid+'.json'})
 fail({...envelope(),source_ref:'wrong'})
@@ -45,7 +47,7 @@ fail({...envelope(),receipt:{...e.receipt,bot_started:true}})
 fail({...envelope(),receipt:{...e.receipt,live_status:{...observation,broker_submission_verified:true}}})
 fail({...envelope(),receipt:{...e.receipt,live_status:{...observation,live_switches_enabled:false}}})
 assert.throws(()=>piBotLiveOperatorView(record,now+12*60000,SOURCE_BINDING),/pi_bot_observation_rejected/)
-console.log('Authenticated Pi bot-origin public ingestion contract: PASS')
+console.log('Typed-v1 false-root rejection and private-source fail-close: PASS')
 
 
 // Recurring root-approved immutable observation, independently versioned
