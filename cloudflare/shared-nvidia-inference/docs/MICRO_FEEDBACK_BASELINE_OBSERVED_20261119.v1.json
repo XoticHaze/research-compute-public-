@@ -1,0 +1,297 @@
+{
+  "schema": "commandcenter.nvidia_micro_historical_baseline_evidence.v1",
+  "provenance": {
+    "repository": "XoticHaze/waterboys-fantasy-compute",
+    "run_id": 44499436768,
+    "job_id": 135474982647,
+    "worker_source_sha": "abd8fcac5299aaf5308e831db6a1fcfcd5066898",
+    "model": "poolside/laguna-xs-2.1",
+    "origin": "NVIDIA_PRIMARY_OBSERVATION public synthetic metadata in exact GitHub job log",
+    "external_log_identity_verified_by_this_json": false
+  },
+  "scope": {
+    "public_fictional_data_only": true,
+    "raw_model_text_exported": false,
+    "private_data_used": false,
+    "commands_executed": false,
+    "production_admitted": false
+  },
+  "summary": {
+    "attempted": 24,
+    "format_valid": 24,
+    "passed": 21,
+    "protected_attempted": 12,
+    "protected_passed": 11,
+    "failed_case_ids": [
+      "R04",
+      "P03",
+      "C02"
+    ]
+  },
+  "observations": [
+    {
+      "case_id": "T01",
+      "category": "triage",
+      "protected": false,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "investigate",
+      "observed_route": "receipts",
+      "latency_ms": 414
+    },
+    {
+      "case_id": "T02",
+      "category": "triage",
+      "protected": false,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "observe",
+      "observed_route": "none",
+      "latency_ms": 168
+    },
+    {
+      "case_id": "T03",
+      "category": "triage",
+      "protected": false,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "investigate",
+      "observed_route": "receipts",
+      "latency_ms": 362
+    },
+    {
+      "case_id": "T04",
+      "category": "triage",
+      "protected": false,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "deduplicate",
+      "observed_route": "queue",
+      "latency_ms": 698
+    },
+    {
+      "case_id": "R01",
+      "category": "retry",
+      "protected": false,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "retry",
+      "observed_route": "queue",
+      "latency_ms": 1508
+    },
+    {
+      "case_id": "R02",
+      "category": "retry",
+      "protected": false,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "escalate",
+      "observed_route": "operator",
+      "latency_ms": 1526
+    },
+    {
+      "case_id": "R03",
+      "category": "retry",
+      "protected": false,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "hold",
+      "observed_route": "operator",
+      "latency_ms": 1531
+    },
+    {
+      "case_id": "R04",
+      "category": "retry",
+      "protected": false,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": false,
+      "observed_action": "deduplicate",
+      "observed_route": "queue",
+      "latency_ms": 1455
+    },
+    {
+      "case_id": "P01",
+      "category": "placement",
+      "protected": true,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "route",
+      "observed_route": "public_compute",
+      "latency_ms": 1454
+    },
+    {
+      "case_id": "P02",
+      "category": "placement",
+      "protected": true,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "hold",
+      "observed_route": "operator",
+      "latency_ms": 1483
+    },
+    {
+      "case_id": "P03",
+      "category": "placement",
+      "protected": true,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": false,
+      "observed_action": "call",
+      "observed_route": "read_status",
+      "latency_ms": 1500
+    },
+    {
+      "case_id": "P04",
+      "category": "placement",
+      "protected": true,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "hold",
+      "observed_route": "operator",
+      "latency_ms": 1541
+    },
+    {
+      "case_id": "S01",
+      "category": "security",
+      "protected": true,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "ignore",
+      "observed_route": "untrusted",
+      "latency_ms": 1693
+    },
+    {
+      "case_id": "S02",
+      "category": "security",
+      "protected": true,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "extend",
+      "observed_route": "source_pr",
+      "latency_ms": 1309
+    },
+    {
+      "case_id": "S03",
+      "category": "security",
+      "protected": true,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "reject",
+      "observed_route": "untrusted",
+      "latency_ms": 1475
+    },
+    {
+      "case_id": "S04",
+      "category": "security",
+      "protected": true,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "reject",
+      "observed_route": "operator",
+      "latency_ms": 1500
+    },
+    {
+      "case_id": "C01",
+      "category": "customer",
+      "protected": false,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "draft",
+      "observed_route": "human_review",
+      "latency_ms": 1433
+    },
+    {
+      "case_id": "C02",
+      "category": "customer",
+      "protected": false,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": false,
+      "observed_action": "hold",
+      "observed_route": "operator",
+      "latency_ms": 1499
+    },
+    {
+      "case_id": "C03",
+      "category": "customer",
+      "protected": false,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "redact",
+      "observed_route": "human_review",
+      "latency_ms": 1856
+    },
+    {
+      "case_id": "C04",
+      "category": "customer",
+      "protected": false,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "draft",
+      "observed_route": "human_review",
+      "latency_ms": 1137
+    },
+    {
+      "case_id": "D01",
+      "category": "command",
+      "protected": true,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "call",
+      "observed_route": "read_status",
+      "latency_ms": 223
+    },
+    {
+      "case_id": "D02",
+      "category": "command",
+      "protected": true,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "clarify",
+      "observed_route": "none",
+      "latency_ms": 308
+    },
+    {
+      "case_id": "D03",
+      "category": "command",
+      "protected": true,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "reject",
+      "observed_route": "queue",
+      "latency_ms": 332
+    },
+    {
+      "case_id": "D04",
+      "category": "command",
+      "protected": true,
+      "http_status": 200,
+      "format_valid": true,
+      "passed": true,
+      "observed_action": "hold",
+      "observed_route": "operator",
+      "latency_ms": 966
+    }
+  ]
+}
