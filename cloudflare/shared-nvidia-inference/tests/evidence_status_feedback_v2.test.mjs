@@ -40,6 +40,12 @@ test('rejects false successes and duplicate controls',async()=>{
  assert.equal(admitFeedbackV2({...v,feedback:{...v.feedback,preserve_examples:[bad]}}),null);
  assert.equal(admitFeedbackV2({...v,feedback:{...v.feedback,preserve_examples:[{...bad,actual:3}]}}),null);
 });
+test('observed out-of-range Python integer is preserved, not misclassified',async()=>{
+ const v=await input();
+ const out={...bad,actual:987654};
+ assert.ok(admitFeedbackV2({...v,feedback:{...v.feedback,failing_examples:[out]}}));
+ assert.equal(admitFeedbackV2({...v,feedback:{...v.feedback,failing_examples:[{...bad,actual:1000001}]}}),null);
+});
 test('memory is allowlisted and capped by attempt count',async()=>{
  const v=await input();
  assert.equal(admitFeedbackV2({...v,feedback:{...v.feedback,rejected_strategy_ids:['queue_first']}}),null);
