@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cc-project-delivery",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-11-21",
+  "workers_dev": false,
+  "preview_urls": false,
+  "r2_buckets": [{"binding":"CONTENT","bucket_name":"cc-project-delivery-private"}],
+  "durable_objects": {"bindings":[{"name":"RELEASE_LEDGER","class_name":"ReleaseLedger"}]},
+  "migrations": [{"tag":"v1","new_sqlite_classes":["ReleaseLedger"]}],
+  "vars": {"RELEASE_ENABLED":"0"}
+}
