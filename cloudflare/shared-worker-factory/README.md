@@ -45,6 +45,16 @@ These operations are separate by design: ordinary Worker creation must not autom
 mint another token for each project. Once the generic manager is admitted, prefer
 reusing the manager for later reviewed deployments rather than multiplying credentials.
 
+### Optional unattended machine identity, read-only only, not admitted
+
+Source implements a **separately disabled** `POST /v1/machine/readiness` and `POST /v1/machine/inspect` for direct GitHub OIDC callers. Fixed issuer and live JWKS are inherited from the existing fleet-authority RS256 verification pattern, but the trust root is **strictly limited** to `XoticHaze/research-compute-public-` main, exact `.github/workflows/cc-factory-machine-readonly-r1.yml`, `workflow_dispatch`, GitHub-hosted public runner, short validity, exact audience, run ID, attempts, SHA and verified RSA signature. Merely possessing a GitHub Actions token or repository write grant cannot bypass this check. There is **no Cloudflare bearer in the public job**.
+
+The two new runtime flags `FACTORY_MACHINE_READONLY_ENABLED=0` and `FACTORY_MACHINE_INSPECT_ENABLED=0` are OFF by default. Readiness is only a sanitized machine-authenticated status, no credential binding or mutation required. Even machine `existing_worker.inspect` requires **four** independent gates (`MACHINE_READONLY`, `MACHINE_INSPECT`, `EXECUTOR`, `INSPECT`) plus the preexisting read-capable Cloudflare-held credential, matching Worker ID/name and one-use Durable Object ledger. **Machine creation, token issuance and Worker release are expressly NOT admitted** and have no OIDC dispatch path. Owner-only ordinary create/token workflow remains unchanged.
+
+Cloudflare Access currently protects **all** factory URLs, so a signed OIDC caller is *not expected to reach* the new path unless an independent owner admits a path-specific machine identity route or another separately authenticated transport. **Do not bypass all Access, add an account-wide machine permit, enable either flag, or deploy new code using the legacy GitHub writer**. The opt-in public workflow only sends a live request if both `workflow_dispatch` input `live_identity_probe=true` and owner-controlled `CC_FACTORY_MACHINE_READONLY_ADMITTED=1` variable are set; ordinary offline tests need neither. Run is no substitute for verified Cloudflare-side source deployment and independent cutover.
+
+Machine identity is **not** a protected approval grant. Future machine write operations need separate CommandCenter exact-project admission, signed/approved bounded requests, replay receipts and no ability to override protected neutral or factory source. The existing user Access owner route remains the protected administrative source of truth.
+
 ### Authentication and replay
 The first implementation uses **direct owner-authenticated Cloudflare Access**.
 The owner email and Access AUD must be independently configured. Every privileged
@@ -77,6 +87,8 @@ It configures the `FACTORY_LEDGER` SQLite Durable Object and leaves:
 - `FACTORY_EXECUTOR_ENABLED=0`
 - `FACTORY_CREATE_ENABLED=0`
 - `FACTORY_INSPECT_ENABLED=0`
+- `FACTORY_MACHINE_READONLY_ENABLED=0`
+- `FACTORY_MACHINE_INSPECT_ENABLED=0`
 - `FACTORY_SCOPED_TOKEN_ENABLED=0`
 
 It never configures GitHub Builds or a GitHub Actions deploy.
