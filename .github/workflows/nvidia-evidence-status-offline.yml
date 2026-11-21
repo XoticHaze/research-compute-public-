@@ -4,11 +4,14 @@ on:
   pull_request:
     paths:
       - cloudflare/shared-nvidia-inference/src/evidence_status_loop.js
+      - cloudflare/shared-nvidia-inference/src/evidence_status_feedback_v2.js
       - cloudflare/shared-nvidia-inference/src/index.js
       - cloudflare/shared-nvidia-inference/local-probe/src/evidence_status_caller.js
       - cloudflare/shared-nvidia-inference/local-probe/wrangler.evidence.jsonc
       - cloudflare/shared-nvidia-inference/tests/evidence_status_loop.test.mjs
       - cloudflare/shared-nvidia-inference/tests/evidence_status_caller.test.mjs
+      - cloudflare/shared-nvidia-inference/tests/evidence_status_feedback_v2.test.mjs
+      - cloudflare/shared-nvidia-inference/tests/evidence_status_feedback_caller_v2.test.mjs
       - .github/workflows/nvidia-evidence-status-offline.yml
 permissions:
   contents: read
@@ -27,6 +30,7 @@ jobs:
           set -euo pipefail
           node --check src/index.js
           node --check src/evidence_status_loop.js
+          node --check src/evidence_status_feedback_v2.js
           node --check local-probe/src/evidence_status_caller.js
-          node --test tests/evidence_status_loop.test.mjs tests/evidence_status_caller.test.mjs
+          node --test tests/evidence_status_loop.test.mjs tests/evidence_status_caller.test.mjs tests/evidence_status_feedback_v2.test.mjs tests/evidence_status_feedback_caller_v2.test.mjs
           echo NVIDIA_EVIDENCE_STATUS_OFFLINE_SOURCE=PASS
