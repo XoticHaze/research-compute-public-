@@ -42,7 +42,9 @@ function validRow(row,good){
    // A bounded interpreter can reject a specific case while parsing admitted source.
    return !good && row.actual===null;
  }
- if(!Number.isInteger(row.actual)||![-1,0,1,2,3,4,5,6,7].includes(row.actual))return false;
+ if(!Number.isSafeInteger(row.actual)||Math.abs(row.actual)>1000000)return false;
+ // Real model outputs may be outside the legal classification range; those
+ // out-of-range integers ARE the observed error and must not be erased.
  return good?row.actual===expected:row.actual!==expected;
 }
 
