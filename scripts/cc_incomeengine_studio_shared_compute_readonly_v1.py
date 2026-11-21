@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 
 ZONE='lifelatelycounseling.com'
 HOST='studio.'+ZONE
-OWNER_POLICY='CC Factory Owner Only'
+OWNER_POLICY='IncomeEngine Studio Owner Only'
 
 
 def exact_readback(read,account):
