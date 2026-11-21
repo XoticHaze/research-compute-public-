@@ -1,4 +1,5 @@
 import { validateRequest, workerEditorPolicy } from './policy.js';
+import {verifyFactoryMachineOidc} from './machine_oidc.js';
 import {readProposal,writeReceipt} from './queue.js';
 import {UI,SCRIPT} from './ui.js';
 
@@ -218,13 +219,64 @@ async function jsonBody(request,max=MAX_BODY) {
     throw Error('bad_request');
   return JSON.parse(raw);
 }
+async function machineReadOnly(request,env,url) {
+  // No owner impersonation. A directly verified GitHub OIDC principal does not
+  // imply any mutation, Cloudflare admin or protected neutral signing rights.
+  safeAccount(env);
+  if(request.method!=='POST' || !enabled(env.FACTORY_MACHINE_READONLY_ENABLED))
+    return response({error:'machine_route_not_admitted'},403);
+  const authorization=request.headers.get('authorization')||'';
+  const runId=request.headers.get('x-cc-github-run-id')||'';
+  if(!authorization.startsWith('Bearer ') || authorization.length>16010 ||
+     !/^[0-9]{4,20}$/.test(runId))
+    return response({error:'unauthorized_machine_identity'},401);
+  let machine;
+  try {machine=await verifyFactoryMachineOidc(authorization.slice(7),runId);}
+  catch {return response({error:'unauthorized_machine_identity'},401);}
+  if(url.pathname==='/v1/machine/readiness')
+    return response({
+      schema:'commandcenter.cloudflare.factory_machine_readiness.v1',
+      identity_verified:machine.identity_verified,
+      github_run_id:machine.run_id,
+      account_role:'ORIGINAL_SLENDERIQ_ORDINARY_ONLY',
+      generic_executor_admitted:enabled(env.FACTORY_EXECUTOR_ENABLED),
+      machine_inspection_admitted:enabled(env.FACTORY_MACHINE_INSPECT_ENABLED),
+      machine_creation_admitted:false,
+      credentials_or_private_keys_returned:false,
+      cloudflare_mutations:0
+    });
+  if(url.pathname!=='/v1/machine/inspect' ||
+     !enabled(env.FACTORY_EXECUTOR_ENABLED) ||
+     !enabled(env.FACTORY_MACHINE_INSPECT_ENABLED) ||
+     !enabled(env.FACTORY_INSPECT_ENABLED))
+    return response({error:'machine_operation_not_admitted'},403);
+  let payload;
+  try {payload=validateRequest(await jsonBody(request));}
+  catch {return response({error:'invalid_machine_request'},400);}
+  if(payload.operation!=='existing_worker.inspect')
+    return response({error:'machine_operation_not_admitted'},403);
+  // Reuses the same durable one-shot journal as owner-approved commands.
+  const receipt=await executeOnce(env,payload);
+  return response({
+    ...receipt,
+    github_run_id:machine.run_id,
+    identity_verified:true,
+    machine_path:true,
+    mutation_permissions_granted:false
+  },receipt.status==='failed_or_indeterminate'?409:200);
+}
+
 export default {
   async fetch(request,env,ctx) {
     const url=new URL(request.url);
     if (!new Set(['/v1/status','/v1/execute','/v1/proposal',
-      '/v1/approve','/operator/factory','/operator/factory.js'])
+      '/v1/approve','/operator/factory','/operator/factory.js',
+      '/v1/machine/readiness','/v1/machine/inspect'])
       .has(url.pathname)) return response({error:'not_found'},404);
     try {
+      if(url.pathname==='/v1/machine/readiness' ||
+         url.pathname==='/v1/machine/inspect')
+        return await machineReadOnly(request,env,url);
       await ownerOnly(env,ctx);
       safeAccount(env);
       if(url.pathname==='/v1/status' && request.method==='GET')
