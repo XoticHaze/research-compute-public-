@@ -1,5 +1,5 @@
 // One reusable private asset delivery Worker. No Cloudflare management APIs, no credentials, no dynamic Worker creation.
-import {SCHEMA,CONTROL_HOST,STUDIO_HOST,DELIVERY_ROOT,isId,isSha,validHost,validPath,validateManifest,validateActivation,contentType} from './policy.mjs';
+import {SCHEMA,CONTROL_HOST,STUDIO_HOST,DELIVERY_ROOT,isId,isSha,validHost,validHostSlot,validProject,hostPolicy,validPath,validateManifest,validateActivation,contentType} from './policy.mjs';
 import {verifiedOwner} from './auth.mjs';
 const MAX_META=90000;
 const RHEAD={'cache-control':'private, no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','x-robots-tag':'noindex, nofollow, noarchive','cross-origin-resource-policy':'same-origin'};
@@ -12,13 +12,14 @@ const hex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(
 async function sha256(b){return hex(await crypto.subtle.digest('SHA-256',b))}
 async function jsonBody(req){const raw=await data(req,MAX_META);return JSON.parse(new TextDecoder().decode(raw))}
 async function controllerAuth(req,env,fetcher){
+ hostPolicy(env);
  if(!env?.CONTENT||!env.RELEASE_LEDGER||env.RELEASE_ENABLED!=='1'||!env.CONTROL_ACCESS_AUD)throw Error('controller_held');
  return verifiedOwner(req.headers.get('Cf-Access-Jwt-Assertion'),env,env.CONTROL_ACCESS_AUD,fetcher);
 }
 async function siteAuth(req,env,aud,fetcher){return verifiedOwner(req.headers.get('Cf-Access-Jwt-Assertion'),env,aud,fetcher)}
 function jsonSameOrigin(req,u){return req.headers.get('origin')===u.origin&&req.headers.get('sec-fetch-site')==='same-origin'&&req.headers.get('content-type')==='application/json'}
 async function prepare(req,env){
- const manifest=validateManifest(await jsonBody(req));
+ const manifest=validateManifest(await jsonBody(req),undefined,hostPolicy(env));
  await route(env,manifest.hostname,'claim',{request_id:manifest.request_id});
  const key='pending/'+manifest.project_id+'/'+manifest.release_id+'.json';
  if(await env.CONTENT.head(key))throw Error('release_already_exists');
@@ -27,9 +28,9 @@ async function prepare(req,env){
 }
 async function upload(req,env,u){
  const parts=u.pathname.split('/').slice(3);const [project,releaseId,digest]=parts;
- if(parts.length!==3||!isId(releaseId)||!isSha(digest)||!validHost(project+'.'+DELIVERY_ROOT,project)&&!(project==='incomeengine-3d-studio'))throw Error('bad_upload_target');
+ if(parts.length!==3||!isId(releaseId)||!isSha(digest)||!validProject(project))throw Error('bad_upload_target');
  const pending=await env.CONTENT.get('pending/'+project+'/'+releaseId+'.json');if(!pending)throw Error('no_prepared_release');
- const manifest=JSON.parse(await pending.text());const expected=manifest.files.find(f=>f.sha256===digest);if(!expected)throw Error('file_not_manifested');
+ const manifest=JSON.parse(await pending.text());if(!validHost(manifest.hostname,manifest.project_id,hostPolicy(env)))throw Error('host_policy_changed');const expected=manifest.files.find(f=>f.sha256===digest);if(!expected)throw Error('file_not_manifested');
  if(manifest.expires_at<Math.floor(Date.now()/1000)-1800)throw Error('expired_pending_release');
  const length=Number(req.headers.get('content-length')||0);if(length>expected.bytes)throw Error('bad_size');
  const bytes=await data(req,expected.bytes);if(bytes.byteLength!==expected.bytes||await sha256(bytes)!==digest)throw Error('hash_mismatch');
@@ -38,7 +39,7 @@ async function upload(req,env,u){
  return reply({schema:SCHEMA,state:'BLOB_VERIFIED',sha256:digest,bytes:expected.bytes});
 }
 async function activate(req,env){
- const a=validateActivation(await jsonBody(req));
+ const a=validateActivation(await jsonBody(req),undefined,hostPolicy(env));
  const key='pending/'+a.project_id+'/'+a.release_id+'.json';const obj=await env.CONTENT.get(key);if(!obj)throw Error('not_prepared');
  const manifest=JSON.parse(await obj.text());if(manifest.hostname!==a.hostname||manifest.project_id!==a.project_id||manifest.release_id!==a.release_id)throw Error('identity_mismatch');
  for(const f of manifest.files){const blob=await env.CONTENT.head('blobs/'+f.sha256);if(!blob||blob.size!==f.bytes)throw Error('file_missing');}
@@ -47,10 +48,11 @@ async function activate(req,env){
 }
 async function serve(req,env,u,fetcher){
  const host=u.hostname;
- if(host===CONTROL_HOST||!env?.CONTENT||!env?.RELEASE_LEDGER)return no(404);
- if(host!==STUDIO_HOST && !/^[a-z][a-z0-9-]{2,39}\.apps\.lifelatelycounseling\.com$/.test(host))return no(404);
+ if(host===env?.CONTROL_HOSTNAME||!env?.CONTENT||!env?.RELEASE_LEDGER)return no(404);
+ let policy;try{policy=hostPolicy(env)}catch{return no(503)}
+ if(!validHostSlot(host,policy))return no(404);
  let active;try{active=await route(env,host,'current')}catch{return no(404)}
- if(!active?.project_id||!validHost(host,active.project_id)||!isId(active.release_id))return no(404);
+ if(!active?.project_id||!validHost(host,active.project_id,policy)||!isId(active.release_id))return no(404);
  try{await siteAuth(req,env,active.access_aud,fetcher)}catch{return no(403)}
  let path;try{path=decodeURI(u.pathname)}catch{return no(400)}
  if(path==='/')path='/index.html';if(!validPath(path))return no(404);
@@ -64,7 +66,7 @@ async function serve(req,env,u,fetcher){
 }
 export async function handleRequest(req,env,fetcher=fetch){
  let u;try{u=new URL(req.url)}catch{return no(400)}
- if(u.hostname===CONTROL_HOST){
+ if(u.hostname===env?.CONTROL_HOSTNAME){
   if(!['POST','PUT'].includes(req.method))return no(405);
   try{await controllerAuth(req,env,fetcher)}catch{return no(403)}
   try{
@@ -83,7 +85,7 @@ export async function handleRequest(req,env,fetcher=fetch){
 }
 export default{async fetch(req,env){return handleRequest(req,env)}};
 export class ReleaseLedger{
- constructor(state){this.state=state}
+ constructor(state,env){this.state=state;this.env=env}
  async fetch(req){
   const path=new URL(req.url).pathname;
   if(path==='/current'&&req.method==='GET'){
@@ -98,7 +100,7 @@ export class ReleaseLedger{
     if(path==='/claim'){await txn.put('used:'+obj.request_id,true);return {claimed:true}}
     const previous=await txn.get('active');
     if((previous?.release_id||null)!==obj.expected_previous||!isId(obj.release_id)||
-      !validHost(obj.hostname,obj.project_id)||typeof obj.access_aud!=='string'||obj.access_aud.length<8)throw Error('stale_or_invalid');
+      !validHost(obj.hostname,obj.project_id,hostPolicy(this.env))||typeof obj.access_aud!=='string'||obj.access_aud.length<8)throw Error('stale_or_invalid');
     await txn.put('used:'+obj.request_id,true);
     await txn.put('active',{project_id:obj.project_id,hostname:obj.hostname,release_id:obj.release_id,access_aud:obj.access_aud});
     return {previous:previous?.release_id||null};
