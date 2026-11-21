@@ -131,3 +131,72 @@ test('machine inspect rejects any mutation even with identity gate enabled',asyn
   assert.equal(result.status,403);
   assert.equal((await result.json()).error,'machine_operation_not_admitted');
 });
+
+
+test('machine exact-ID inspection uses original-account GET and shared one-use replay ledger',async()=>{
+  const {jwk,sign}=await makeIdentity(),jwt=await sign();
+  const workerId='b'.repeat(32), requestId='c'.repeat(32);
+  const name='ordinary-existing-worker';
+  const calls=[],claims=new Map();
+  const durable={
+    idFromName:()=> 'fixed-ledger',
+    get:()=>({fetch:async request=>{
+      const body=await request.json(),path=new URL(request.url).pathname;
+      if(path==='/claim') {
+        if(claims.has(body.request_id)) return new Response('{}',{status:409});
+        claims.set(body.request_id,'claimed');
+      } else if(path==='/finish') {
+        if(claims.get(body.request_id)!=='claimed') return new Response('{}',{status:409});
+        claims.set(body.request_id,'terminal');
+      } else return new Response('{}',{status:404});
+      return new Response('{}',{status:200});
+    }})
+  };
+  const env={
+    FACTORY_ACCOUNT_ID:'ce43cd7b917d98a4bb4866d30eed99c0',
+    FACTORY_EXECUTOR_ENABLED:'1',FACTORY_INSPECT_ENABLED:'1',
+    FACTORY_MACHINE_READONLY_ENABLED:'1',
+    FACTORY_MACHINE_INSPECT_ENABLED:'1',
+    FACTORY_WORKERS_ADMIN:{get:async()=> 'synthetic-nonsecret-placeholder'},
+    FACTORY_LEDGER:durable
+  };
+  const body={
+    schema:'commandcenter.cloudflare.factory_request.v1',
+    operation:'existing_worker.inspect',
+    request_id:requestId,worker_id:workerId,worker_name:name,
+    expires_at:Math.floor(Date.now()/1000)+120,
+  };
+  const req=()=>new Request('https://factory.example/v1/machine/inspect',{
+    method:'POST',headers:{authorization:'Bearer '+jwt,
+      'x-cc-github-run-id':RUN,'content-type':'application/json'},
+    body:JSON.stringify(body)});
+  const original=globalThis.fetch;
+  globalThis.fetch=async (url,init)=>{
+    const u=String(url);
+    if(u==='https://token.actions.githubusercontent.com/.well-known/jwks')
+      return new Response(JSON.stringify({keys:[{...jwk,kid:'test-only-key'}]}),{
+        status:200,headers:{'content-type':'application/json'}});
+    calls.push({url:u,method:init.method});
+    assert.equal(init.method,'GET');
+    assert.equal(u,'https://api.cloudflare.com/client/v4/accounts/'+
+      'ce43cd7b917d98a4bb4866d30eed99c0/workers/workers/'+workerId);
+    return new Response(JSON.stringify({success:true,result:{id:workerId,name}}),{
+      status:200,headers:{'content-type':'application/json'}});
+  };
+  try {
+    const first=await factory.fetch(req(),env,{});
+    assert.equal(first.status,200);
+    const receipt=await first.json();
+    assert.equal(receipt.status,'existing_worker_identity_verified');
+    assert.equal(receipt.machine_path,true);
+    assert.equal(receipt.identity_verified,true);
+    assert.equal(receipt.github_run_id,RUN);
+    assert.equal(receipt.cloudflare_mutations,0);
+    assert.equal(receipt.bearer_returned,false);
+    assert.equal(calls.length,1);
+    const replay=await factory.fetch(req(),env,{});
+    assert.equal(replay.status,403);
+    assert.equal(calls.length,1);
+    assert.equal(claims.get(requestId),'terminal');
+  } finally { globalThis.fetch=original; }
+});
