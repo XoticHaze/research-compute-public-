@@ -5,6 +5,7 @@ import {runSyntheticRoleBatch} from "./benchmark_runner.js";
 import {runMicroWorkerBatch} from "./micro_worker_benchmark.js";
 import {runFeedbackPair} from "./micro_feedback_runner.js";
 import {runQuoteStep,admitStep} from "./quote_artifact_loop.js";
+import {runStep as runEvidenceStep,admitStep as admitEvidenceStep} from "./evidence_status_loop.js";
 import {NvidiaProviderPacingQueue} from "./provider_pacing_queue.js";
 import {runFixedDraftPilot} from "./draft_pilot_runner.js";
 import {runFixedCodeRepair} from "./fixed_code_repair_runner.js";
@@ -304,6 +305,29 @@ export default {
         modelIndex:input.model_index,batch:input.batch,providerFetch:authFetch
       });
       return json(receipt.status==="batch_complete"?200:503,receipt);
+    }
+    // Independent fixed evidence-state source artifact qualification, advisory only.
+    if(request.method==="POST"&&url.pathname==="/internal/diagnostics/nvidia-evidence-status-step"&&!url.search){
+      if(env.CC_NVIDIA_DIAGNOSTIC_ENABLED!=="1")return json(503,{error:"diagnostic_not_admitted"});
+      const n=Number(request.headers.get("content-length"));
+      if(!Number.isInteger(n)||n<1||n>2000||request.headers.get("content-type")!=="application/json")
+        return json(400,{error:"evidence_status_step_selector_rejected"});
+      let input;
+      try{input=await request.json();}catch{return json(400,{error:"evidence_status_step_selector_rejected"});}
+      if(!admitEvidenceStep(input))return json(400,{error:"evidence_status_step_selector_rejected"});
+      if(typeof env.NVIDIA_API_KEY?.get!=="function")return json(503,{error:"binding_unavailable"});
+      let key;
+      try{key=await env.NVIDIA_API_KEY.get();}catch{return json(503,{error:"secret_unavailable"});}
+      if(typeof key!=="string"||key.length<8)return json(503,{error:"secret_unavailable"});
+      const authFetch=async(endpoint,options)=>{
+        const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
+        try{return await pacedProviderFetch(endpoint,{...options,headers:{
+          "Authorization":"Bearer "+key,"Content-Type":"application/json"
+        },redirect:"manual",signal:controller.signal});}
+        finally{clearTimeout(timer);}
+      };
+      const receipt=await runEvidenceStep({input,providerFetch:authFetch});
+      return json(receipt.status==="candidate_unexecuted"?200:503,receipt);
     }
     // Fixed fictional quote artifact draft/revision. Strict selectors, no tools.
     if(request.method==="POST"&&url.pathname==="/internal/diagnostics/nvidia-quote-artifact-step"&&!url.search){
