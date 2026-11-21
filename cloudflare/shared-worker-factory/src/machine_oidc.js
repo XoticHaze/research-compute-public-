@@ -8,6 +8,7 @@ const REPO = 'XoticHaze/research-compute-public-';
 const REF = 'refs/heads/main';
 const WORKFLOW = REPO+'/.github/workflows/cc-factory-machine-readonly-r1.yml@'+REF;
 const RUN = /^[0-9]{4,20}$/;
+const ATTEMPT = /^[1-9][0-9]{0,3}$/;
 const SHA40 = /^[a-f0-9]{40}$/;
 
 function decodeB64url(text) {
@@ -47,7 +48,7 @@ export async function verifyFactoryMachineOidc(jwt, requestedRunId) {
      String(claims.run_id)!==String(requestedRunId) ||
      !SHA40.test(String(claims.sha||'')) ||
      !SHA40.test(String(claims.workflow_sha||'')) ||
-     !RUN.test(String(claims.run_attempt||''))) throw Error('oidc_claims_rejected');
+     !ATTEMPT.test(String(claims.run_attempt||''))) throw Error('oidc_claims_rejected');
   const now=Math.floor(Date.now()/1000),exp=Number(claims.exp),
     iat=Number(claims.iat),nbf=claims.nbf===undefined?iat:Number(claims.nbf);
   if(![exp,iat,nbf].every(Number.isInteger) ||
