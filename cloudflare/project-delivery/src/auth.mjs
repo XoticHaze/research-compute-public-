@@ -9,7 +9,7 @@ export async function verifiedOwner(jwt,env,expectedAud,fetcher=fetch,now=Math.f
  let issuer;try{issuer=new URL(env.ACCESS_ISSUER)}catch{throw Error('issuer_unset')}
  if(issuer.protocol!=='https:'||issuer.pathname!=='/'||issuer.search||issuer.hash||!issuer.hostname.endsWith('.cloudflareaccess.com'))throw Error('issuer_invalid');
  if(c.iss!==issuer.origin||!(Array.isArray(c.aud)?c.aud:[c.aud]).includes(expectedAud)||
-   !Number.isFinite(c.exp)||!Number.isFinite(c.iat)||c.exp<=now-30||c.iat>now+30||
+   !Number.isFinite(c.exp)||!Number.isFinite(c.iat)||c.exp<=now-30||c.iat>now+30||(c.nbf!==undefined&&(!Number.isFinite(c.nbf)||c.nbf>now+30))||
    (c.nbf!==undefined&&(!Number.isFinite(c.nbf)||c.nbf>now+30)))throw Error('jwt_claims');
  let allowed;try{allowed=JSON.parse(env.ACCESS_ALLOWED_EMAILS_JSON)}catch{throw Error('emails_unset')}
  if(!Array.isArray(allowed)||!allowed.length||allowed.length>20||!allowed.every(e=>typeof e==='string'&&e.includes('@')))throw Error('emails_invalid');
