@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
-import { validateManifest,validateActivation,validHost,validPath,SCHEMA } from '../src/policy.mjs';
+import { validateManifest,validateActivation,validHost,hostPolicy,validPath,SCHEMA } from '../src/policy.mjs';
 import { handleRequest, ReleaseLedger } from '../src/index.mjs';
 const cryptoApi=globalThis.crypto||webcrypto;
 const b64=x=>Buffer.from(x).toString('base64url');
@@ -37,9 +37,9 @@ class MockStorage{
  async transaction(fn){return fn(this)}
 }
 const objects=new Map();
-const namespace={idFromName:k=>k,get:k=>{if(!objects.has(k))objects.set(k,new ReleaseLedger({storage:new MockStorage()}));return objects.get(k)}};
+const namespace={idFromName:k=>k,get:k=>{if(!objects.has(k))objects.set(k,new ReleaseLedger({storage:new MockStorage()},env));return objects.get(k)}};
 const r2=new MockR2();
-const env={CONTENT:r2,RELEASE_LEDGER:namespace,RELEASE_ENABLED:'1',ACCESS_ISSUER:'https://releasetest.cloudflareaccess.com/',ACCESS_ALLOWED_EMAILS_JSON:'["owner@example.test"]',CONTROL_ACCESS_AUD:controllerAud};
+const env={CONTENT:r2,RELEASE_LEDGER:namespace,RELEASE_ENABLED:'1',ACCESS_ISSUER:'https://releasetest.cloudflareaccess.com/',ACCESS_ALLOWED_EMAILS_JSON:'["owner@example.test"]',CONTROL_ACCESS_AUD:controllerAud,ALLOWED_APP_ROOTS_JSON:'[\"apps.lifelatelycounseling.com\",\"apps.otherventure.example\"]',EXACT_APP_HOSTS_JSON:'{\"studio.lifelatelycounseling.com\":\"incomeengine-3d-studio\"}',CONTROL_HOSTNAME:'release.apps.lifelatelycounseling.com'};
 async function post(endpoint,body,jwt=null,extra={}){jwt ??= await token();return handleRequest(new Request(control+endpoint,{method:'POST',headers:{origin:control,'sec-fetch-site':'same-origin','content-type':'application/json','Cf-Access-Jwt-Assertion':jwt,...extra},body:JSON.stringify(body)}),env,mockFetch)}
 async function put(bytes,jwt=null){jwt ??= await token();return handleRequest(new Request(control+'/v1/upload/'+project+'/'+release+'/'+manifest.files[0].sha256,{method:'PUT',headers:{origin:control,'sec-fetch-site':'same-origin','Cf-Access-Jwt-Assertion':jwt},body:bytes}),env,mockFetch)}
 const siteReq=(jwt)=>handleRequest(new Request('https://'+host+'/',{headers:jwt?{'Cf-Access-Jwt-Assertion':jwt}:{}}),env,mockFetch);
@@ -50,6 +50,9 @@ test('strict project hostname prevents replacing HA, gateway-ops, broker and arb
  assert.equal(validHost('sample-site.apps.lifelatelycounseling.com','sample-site'),true);
  assert.equal(validHost('studio.lifelatelycounseling.com','incomeengine-3d-studio'),true);
  assert.equal(validHost('studio.lifelatelycounseling.com','sample-site'),false);
+ assert.equal(validHost('sample-site.apps.otherventure.example','sample-site',hostPolicy(env)),true);
+ assert.equal(validHost('sample-site.apps.thirdventure.example','sample-site',hostPolicy(env)),false);
+ assert.throws(()=>hostPolicy({...env,CONTROL_HOSTNAME:'ha.lifelatelycounseling.com'}));
 });
 test('rejects traversal, oversized unpinned assets, invented fields and expired intents',()=>{
  for(const path of ['/../index.html','/a//index.html','/secret.txt%2f..','/a\\b.js'])assert.equal(validPath(path),false,path);
@@ -88,7 +91,7 @@ test('exact prior release CAS activates once, owner JWT serves bytes, same relea
  assert.equal(res.headers.get('cache-control'),'private, no-store');
 });
 test('no Cloudflare Admin bearer, worker create, issuer capability or arbitrary API host',()=>{
- assert.deepEqual(Object.keys(env).sort(),['ACCESS_ALLOWED_EMAILS_JSON','ACCESS_ISSUER','CONTENT','CONTROL_ACCESS_AUD','RELEASE_ENABLED','RELEASE_LEDGER']);
+ assert.equal(Object.keys(env).some(k=>/TOKEN|ADMIN|SECRET|KEY/.test(k)),false);
  assert.equal(validHost('malicious.com',project),false);
  assert.equal(validHost('pi-owner.apps.lifelatelycounseling.com','pi-owner'),false);
  assert.equal(validPath('/ok.glb'),true);

@@ -8,5 +8,5 @@
   "r2_buckets": [{"binding":"CONTENT","bucket_name":"cc-project-delivery-private"}],
   "durable_objects": {"bindings":[{"name":"RELEASE_LEDGER","class_name":"ReleaseLedger"}]},
   "migrations": [{"tag":"v1","new_sqlite_classes":["ReleaseLedger"]}],
-  "vars": {"RELEASE_ENABLED":"0"}
+  "vars": {"RELEASE_ENABLED":"0", "ALLOWED_APP_ROOTS_JSON":"[\"apps.lifelatelycounseling.com\"]", "EXACT_APP_HOSTS_JSON":"{\"studio.lifelatelycounseling.com\":\"incomeengine-3d-studio\"}", "CONTROL_HOSTNAME":"release.apps.lifelatelycounseling.com"}
 }
