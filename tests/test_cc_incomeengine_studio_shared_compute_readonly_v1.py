@@ -21,6 +21,8 @@ class StudioSharedComputeZoneReadOnly(unittest.TestCase):
             if 'dns_records?' in path:return True,200,[{'name':HOST,'type':'CNAME'}]
             if '/access/apps?' in path:return True,200,[{'domain':HOST,'name':'IE Studio'}]
             if '/access/policies?' in path:return True,200,[{'name':OWNER_POLICY}]
+            if path.endswith('/workers/scripts'):return True,200,[{'id':'incomeengine-3d-studio'}]
+            if path.endswith('/workers/scripts/incomeengine-3d-studio/settings'):return True,200,{'name':'incomeengine-3d-studio'}
             raise AssertionError(path)
         s=exact_readback(read,ACCOUNT)
         self.assertEqual(s['studio_dns_state'],'EXACT_RECORD_PRESENT')
@@ -28,7 +30,10 @@ class StudioSharedComputeZoneReadOnly(unittest.TestCase):
         self.assertEqual(s['owner_policy_state'],'NAMED_POLICY_VISIBLE')
         self.assertEqual(s['cloudflare_mutations'],0)
         self.assertFalse(s['homeassistant_mutated'])
-        self.assertEqual(len(paths),4)
+        self.assertEqual(len(paths),6)
+        self.assertEqual(s['studio_worker_exists'],'EXACT_SCRIPT_SETTINGS_VISIBLE')
+        self.assertEqual(s['studio_worker_settings_get_http'],200)
+        self.assertFalse(s['studio_worker_write_authorized'])
     def test_access_403_does_not_equate_to_absent_app(self):
         def read(method,path):
             if path.startswith('/zones?'):return True,200,[{'name':ZONE,'status':'active','id':'b'*32,'account':{'id':ACCOUNT}}]
