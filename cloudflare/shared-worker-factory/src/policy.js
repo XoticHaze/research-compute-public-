@@ -1,6 +1,6 @@
 // Shared Compute Worker Factory: bounded request contract. No credentials.
 export const SCHEMA = 'commandcenter.cloudflare.factory_request.v1';
-export const OPERATIONS = Object.freeze(['ordinary_worker.create', 'existing_worker.editor_token.issue']);
+export const OPERATIONS = Object.freeze(['ordinary_worker.create', 'existing_worker.editor_token.issue', 'existing_worker.inspect']);
 const NAME = /^[a-z][a-z0-9-]{5,57}[a-z0-9]$/;
 const HEX32 = /^[a-f0-9]{32}$/;
 const RESERVED = [
@@ -18,7 +18,8 @@ export function validateRequest(req, now = Math.floor(Date.now() / 1000)) {
     throw Error('bad_request');
   const base = ['schema', 'operation', 'request_id', 'worker_name', 'expires_at'];
   const extra = req.operation === 'existing_worker.editor_token.issue'
-    ? ['worker_id', 'token_ttl_hours'] : [];
+    ? ['worker_id', 'token_ttl_hours']
+    : req.operation === 'existing_worker.inspect' ? ['worker_id'] : [];
   const expected = [...base, ...extra].sort();
   if (Object.keys(req).sort().join(',') !== expected.join(',')
       || req.schema !== SCHEMA || !OPERATIONS.includes(req.operation)
@@ -30,6 +31,8 @@ export function validateRequest(req, now = Math.floor(Date.now() / 1000)) {
       && (!HEX32.test(req.worker_id) || !Number.isInteger(req.token_ttl_hours)
       || req.token_ttl_hours < 1 || req.token_ttl_hours > 168))
     throw Error('scoped_token_contract_rejected');
+  if (req.operation === 'existing_worker.inspect' && !HEX32.test(req.worker_id))
+    throw Error('worker_identity_rejected');
   return req;
 }
 export function workerEditorPolicy(account, workerId) {
