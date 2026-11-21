@@ -1,0 +1,30 @@
+name: CC Project Delivery Gateway Source Contract
+on:
+  pull_request:
+    paths:
+      - 'cloudflare/project-delivery/**'
+      - '.github/workflows/cc-project-delivery-source-r1.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare/project-delivery/**'
+      - '.github/workflows/cc-project-delivery-source-r1.yml'
+permissions:
+  contents: read
+jobs:
+  offline-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout reviewed public source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Bounded synthetic site release tests, no Cloudflare credentials
+        run: |
+          set -euo pipefail
+          cd cloudflare/project-delivery
+          node --version
+          node --check src/index.mjs
+          node --check src/policy.mjs
+          node --check src/auth.mjs
+          node --test tests/*.test.mjs
+          echo PROJECT_DELIVERY_SOURCE_ONLY_NO_CLOUDFLARE_MUTATION=PASS
