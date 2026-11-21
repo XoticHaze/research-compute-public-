@@ -8,14 +8,14 @@ const SHA = /^[a-f0-9]{64}$/;
 const PROJECT = /^[a-z][a-z0-9-]{1,38}[a-z0-9]$/;
 const FILE = /^\/[a-zA-Z0-9][a-zA-Z0-9._/-]{0,220}$/;
 const EXTS = new Set(['html','js','mjs','css','json','glb','gltf','stl','3mf','png','jpg','jpeg','svg','webp','woff2','txt','pdf','zip','wasm','ico','webmanifest']);
-const RESERVED = new Set(['release','ha','gateway-ops','www','root','api','admin','reference-release-broker-v1','reference-release-maintainer-v1','reference-maintenance-authority-v1','research-compute-public','ccpi-owner-cloudflare-authority']);
+const RESERVED = new Set(['release','ha','gateway-ops','www','root','api','admin','reference-release-broker-v1','reference-release-maintainer-v1','reference-maintenance-authority-v1','research-compute-public','ccpi-owner-cloudflare-authority','pi-owner','ccpi-owner','access','cloudflare','operator']);
 export function validHost(host, project) {
   if (typeof host !== 'string' || !PROJECT.test(project) || RESERVED.has(project)) return false;
   return (host === STUDIO_HOST && project === 'incomeengine-3d-studio') ||
     (host === `${project}.${DELIVERY_ROOT}` && !RESERVED.has(project));
 }
 export function validPath(path) {
-  if (typeof path !== 'string' || !FILE.test(path) || path.includes('..') || path.includes('//') || path.includes('\\') || path.includes('%')) return false;
+  if (typeof path !== 'string' || !FILE.test(path) || path.includes('..') || path.includes('/./') || path.includes('//') || path.includes('\\') || path.includes('%')) return false;
   const ext=path.split('.').pop().toLowerCase();return EXTS.has(ext);
 }
 export function validateManifest(m, now = Math.floor(Date.now()/1000)) {
