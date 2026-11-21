@@ -24,7 +24,11 @@ def exact_readback(read,account):
         'owner_policy_get_http':None,'owner_policy_state':'UNKNOWN',
         'private_data_exported':False,'credential_values_exported':False,
         'hosted_deployed':False,'cloudflare_mutations':0,
-        'studio_deployment_admitted':False,'homeassistant_mutated':False}
+        'studio_deployment_admitted':False,'homeassistant_mutated':False,
+        'workers_scripts_list_get_http':None,
+        'studio_worker_settings_get_http':None,
+        'studio_worker_exists':'UNKNOWN',
+        'studio_worker_write_authorized':False}
     ok,status,zones=read('GET','/zones?'+urlencode({'name':ZONE,'per_page':50}))
     evidence['zone_get_http']=status
     if not ok or not isinstance(zones,list):return evidence
@@ -48,6 +52,17 @@ def exact_readback(read,account):
     if ok and isinstance(policies,list):
         exact=[p for p in policies if isinstance(p,dict) and p.get('name')==OWNER_POLICY]
         evidence['owner_policy_state']='NAMED_POLICY_VISIBLE' if len(exact)==1 else 'NOT_UNIQUE_OR_ABSENT'
+    # Independent exact-name Workers GETs only. Read status never grants write.
+    ok,status,scripts=read('GET',f'/accounts/{account}/workers/scripts')
+    evidence['workers_scripts_list_get_http']=status
+    if ok and isinstance(scripts,list):
+        matched=[s for s in scripts if isinstance(s,dict) and s.get('id')=='incomeengine-3d-studio']
+        evidence['studio_worker_exists']='EXACT_SCRIPT_LISTED' if len(matched)==1 else 'NOT_IN_RETURNED_LIST'
+    ok,status,settings=read('GET',f'/accounts/{account}/workers/scripts/incomeengine-3d-studio/settings')
+    evidence['studio_worker_settings_get_http']=status
+    if ok and isinstance(settings,dict):
+        evidence['studio_worker_exists']='EXACT_SCRIPT_SETTINGS_VISIBLE'
+    # Never infer edit/deploy authority from GET 200 or deny from GET 403.
     return evidence
 
 
