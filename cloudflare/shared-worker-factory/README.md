@@ -34,6 +34,7 @@ Shared Compute Neutral Authorization account. It is **not** a way to auto-create
 - `ordinary_worker.create`: creates one **inert** ordinary Worker, with no Worker script,
   preview URLs or Workers.dev subdomain. Exact created name and immutable Worker ID are
   read back. No overwrite/delete, source upload or access-policy mutation is supported.
+- `existing_worker.inspect`: **separately disabled by default**, owner-only exact account-pinned GET for a preexisting ordinary Worker. Requires immutable `worker_id` and matching `worker_name`, both checked against Cloudflare. Returns a sanitized `existing_worker_identity_verified` receipt with `cloudflare_mutations=0` and flags that source version and live deployment were **not** verified. Never returns bearer tokens, enumerates account tokens, edits protected Workers or issues an approval.
 - `existing_worker.editor_token.issue`: optional, **separately disabled by default**.
   Requires exact existing `worker_id` matching the approved ordinary name plus
   `token_ttl_hours` 1 through 168. Issues only a single-Worker Editor token,
@@ -75,6 +76,7 @@ It configures the `FACTORY_LEDGER` SQLite Durable Object and leaves:
 
 - `FACTORY_EXECUTOR_ENABLED=0`
 - `FACTORY_CREATE_ENABLED=0`
+- `FACTORY_INSPECT_ENABLED=0`
 - `FACTORY_SCOPED_TOKEN_ENABLED=0`
 
 It never configures GitHub Builds or a GitHub Actions deploy.
@@ -93,6 +95,11 @@ neutral DENY, expected Owner Access, and immutable ledger identity,
 the owner may separately approve `FACTORY_EXECUTOR_ENABLED` and
 `FACTORY_CREATE_ENABLED`. Editor-token issuance requires a distinct approval.
 All routines must remain fail-closed before this.
+
+
+### Inspection admission and exact downstream use
+
+After the original-account legacy write-isolation proof and Access AUD/owner settings are verified, an independently approved `FACTORY_INSPECT_ENABLED=1` may expose the exact-name/id read-only command. This is not an early activation shortcut: it still needs `FACTORY_EXECUTOR_ENABLED=1`, a securely bound `FACTORY_WORKERS_ADMIN` read-capable credential, the existing one-shot Durable Object, and ordinary account scope. Readback proves only the exact Worker identity; reviewed source hash, deployed script version, binding parity and domain serving require **independent** separate readbacks. This operation is intended as a diagnostic precursor to general typed reviewed-release support, **not** a substitute for releasing or accepting a Worker.
 
 ### Production acceptance, not just source CI
 1. No GitHub secret or public artifact contains privileged Cloudflare bearer.
