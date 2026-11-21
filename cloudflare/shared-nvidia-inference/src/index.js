@@ -6,6 +6,7 @@ import {runMicroWorkerBatch} from "./micro_worker_benchmark.js";
 import {runFeedbackPair} from "./micro_feedback_runner.js";
 import {runQuoteStep,admitStep} from "./quote_artifact_loop.js";
 import {runStep as runEvidenceStep,admitStep as admitEvidenceStep} from "./evidence_status_loop.js";
+import {runStepV2,admitFeedbackV2,verifySourceHash} from "./evidence_status_feedback_v2.js";
 import {NvidiaProviderPacingQueue} from "./provider_pacing_queue.js";
 import {runFixedDraftPilot} from "./draft_pilot_runner.js";
 import {runFixedCodeRepair} from "./fixed_code_repair_runner.js";
@@ -327,6 +328,32 @@ export default {
         finally{clearTimeout(timer);}
       };
       const receipt=await runEvidenceStep({input,providerFetch:authFetch});
+      return json(receipt.status==="candidate_unexecuted"?200:503,receipt);
+    }
+    // Versioned, source-hash-bound repair diagnostics. No new authority: the
+    // same existing internal Service Binding, secret and provider pacing apply.
+    // The existing v1 source and route remain untouched for pinned approval.
+    if(request.method==="POST"&&url.pathname==="/internal/diagnostics/nvidia-evidence-status-v2"&&!url.search){
+      if(env.CC_NVIDIA_DIAGNOSTIC_ENABLED!=="1")return json(503,{error:"diagnostic_not_admitted"});
+      const n=Number(request.headers.get("content-length"));
+      if(!Number.isInteger(n)||n<1||n>3800||request.headers.get("content-type")!=="application/json")
+        return json(400,{error:"evidence_feedback_v2_selector_rejected"});
+      let input;
+      try{input=await request.json();}catch{return json(400,{error:"evidence_feedback_v2_selector_rejected"});}
+      if(!admitFeedbackV2(input))return json(400,{error:"evidence_feedback_v2_selector_rejected"});
+      if(!await verifySourceHash(input.source,input.feedback.source_sha256))
+        return json(400,{error:"evidence_feedback_source_mismatch"});
+      if(typeof env.NVIDIA_API_KEY?.get!=="function")return json(503,{error:"binding_unavailable"});
+      let key;try{key=await env.NVIDIA_API_KEY.get();}catch{return json(503,{error:"secret_unavailable"});}
+      if(typeof key!=="string"||key.length<8)return json(503,{error:"secret_unavailable"});
+      const authFetch=async(endpoint,options)=>{
+        const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
+        try{return await pacedProviderFetch(endpoint,{...options,headers:{
+          "Authorization":"Bearer "+key,"Content-Type":"application/json"
+        },redirect:"manual",signal:controller.signal});}
+        finally{clearTimeout(timer);}
+      };
+      const receipt=await runStepV2({input,providerFetch:authFetch});
       return json(receipt.status==="candidate_unexecuted"?200:503,receipt);
     }
     // Fixed fictional quote artifact draft/revision. Strict selectors, no tools.
