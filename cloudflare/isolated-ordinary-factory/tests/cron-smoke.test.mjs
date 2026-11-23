@@ -42,7 +42,7 @@ test('Cron exists but defaults completely disabled with zero Cloudflare calls',a
     globalThis.fetch=()=>{throw Error('network_called_while_disabled');};
     try {
       await mod.default.scheduled({cron:CRON},env(),{});
-      await mod.default.scheduled({cron:'* * * * *'},env({
+      await mod.default.scheduled({cron:'0 0 * * *'},env({
         FACTORY_SCHEDULED_POLL_ENABLED:'1',
         FACTORY_EXECUTOR_ENABLED:'1',FACTORY_CREATE_ENABLED:'1'}),{});
     }finally{globalThis.fetch=original;}
