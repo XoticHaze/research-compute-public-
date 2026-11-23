@@ -3,12 +3,14 @@ on:
   pull_request:
     paths:
       - 'cloudflare/shared-worker-factory/**'
+      - 'cloudflare/isolated-ordinary-factory/**'
       - 'cloudflare/ordinary-scratch-releases/**'
       - '.github/workflows/cc-worker-factory-source-r1.yml'
   push:
     branches: [main]
     paths:
       - 'cloudflare/shared-worker-factory/**'
+      - 'cloudflare/isolated-ordinary-factory/**'
       - 'cloudflare/ordinary-scratch-releases/**'
       - '.github/workflows/cc-worker-factory-source-r1.yml'
 
@@ -30,6 +32,14 @@ jobs:
           node --check src/index.js
           node --check src/policy.js
           node --test tests/*.test.mjs
+      - name: Reproduce pinned isolated ordinary-account bootstrap offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/isolated-ordinary-factory/scripts/prepare.mjs
+          node --test cloudflare/isolated-ordinary-factory/tests/*.test.mjs
+          test ! -f cloudflare/isolated-ordinary-factory/.generated/manifest.json
+          echo "FACTORY_NEW_ACCOUNT_BOOTSTRAP_SOURCE_TESTS=PASS"
       - name: Verify pinned A/B scratch sources, not live Worker deployments
         shell: bash
         run: |
