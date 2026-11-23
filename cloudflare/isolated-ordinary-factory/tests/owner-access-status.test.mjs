@@ -9,7 +9,7 @@ import {build} from '../scripts/prepare.mjs';
 // No real owner email, AUD, Cloudflare token, or API call. Exercise the actual
 // pinned-derived factory fetch handler with synthetic ctx.access identity.
 const ACCOUNT='ab'.repeat(16);
-const AUD='aud-'+'9a'.repeat(32);
+const AUD='9a'.repeat(32); // Access application audience tag, exactly 64 hex chars
 const ALLOWED='owner@example.test';
 const URL='https://cc-ordinary-worker-factory.example.test';
 async function fixture(fn) {
@@ -36,6 +36,7 @@ async function fixture(fn) {
 }
 test('matching Cloudflare Access exact AUD and owner email grants status only, all operations off',async()=>{
   await fixture(async({call})=>{
+    assert.match(AUD,/^[a-f0-9]{64}$/);
     const res=await call();
     assert.equal(res.status,200);
     assert.equal(res.headers.get('cache-control'),'private, no-store');
@@ -49,9 +50,9 @@ test('matching Cloudflare Access exact AUD and owner email grants status only, a
     assert.ok(!JSON.stringify(data).includes(AUD));
   });
 });
-test('missing ctx.access, mismatched AUD prefix and other email all deny owner status',async()=>{
+test('missing ctx.access, incorrectly prefixed AUD and other email deny owner status',async()=>{
   await fixture(async({call,identity})=>{
-    for (const ctx of [{},identity(AUD.slice(4),ALLOWED),
+    for (const ctx of [{},identity('aud-'+AUD,ALLOWED),
         identity(AUD,'other@example.test'),identity(AUD,'')]) {
       const res=await call('/v1/status',ctx);
       assert.equal(res.status,403);
