@@ -21,6 +21,10 @@ def exact_readback(read,account):
         'zone_get_http':None,'exact_active_zone_owner':'NOT_VERIFIED',
         'studio_dns_get_http':None,'studio_dns_state':'UNKNOWN',
         'access_apps_get_http':None,'exact_studio_access_app':'UNKNOWN',
+        'studio_access_audience_metadata':'UNVERIFIED',
+        'access_organization_get_http':None,
+        'studio_access_team_domain_metadata':'UNVERIFIED',
+        'owner_policy_single_email_selector_metadata':'UNVERIFIED',
         'owner_policy_get_http':None,'owner_policy_state':'UNKNOWN',
         'private_data_exported':False,'credential_values_exported':False,
         'hosted_deployed':False,'cloudflare_mutations':0,
@@ -47,11 +51,38 @@ def exact_readback(read,account):
     if ok and isinstance(apps,list):
         matched=[a for a in apps if isinstance(a,dict) and (a.get('domain')==HOST or HOST in (a.get('self_hosted_domains') or []))]
         evidence['exact_studio_access_app']='EXACT_HOST_APP_PRESENT' if len(matched)==1 else 'NO_UNIQUE_STUDIO_APP_VISIBLE'
+        # Presence only. Never emit AUD, identities or team domain on public runners.
+        if len(matched)==1:
+            aud=matched[0].get('aud')
+            evidence['studio_access_audience_metadata']=(
+                'EXACT_APP_AUDIENCE_PRESENT' if isinstance(aud,str) and 8<=len(aud)<=512
+                else 'EXACT_APP_AUDIENCE_ABSENT_OR_INVALID')
+    ok,status,organization=read('GET',f'/accounts/{account}/access/organizations')
+    evidence['access_organization_get_http']=status
+    if ok and isinstance(organization,dict):
+        auth_domain=organization.get('auth_domain')
+        evidence['studio_access_team_domain_metadata']=(
+            'NEUTRAL_TEAM_DOMAIN_PRESENT'
+            if isinstance(auth_domain,str) and bool(re.fullmatch(
+                r'[a-z0-9.-]+\.cloudflareaccess\.com',auth_domain)) and len(auth_domain)<=253
+            else 'NEUTRAL_TEAM_DOMAIN_ABSENT_OR_INVALID')
     ok,status,policies=read('GET',f'/accounts/{account}/access/policies?per_page=100')
     evidence['owner_policy_get_http']=status
     if ok and isinstance(policies,list):
         exact=[p for p in policies if isinstance(p,dict) and p.get('name')==OWNER_POLICY]
         evidence['owner_policy_state']='NAMED_POLICY_VISIBLE' if len(exact)==1 else 'NOT_UNIQUE_OR_ABSENT'
+        if len(exact)==1:
+            policy=exact[0]
+            include=policy.get('include')
+            has_email=(isinstance(include,list) and len(include)==1
+                and isinstance(include[0],dict)
+                and isinstance(include[0].get('email'),dict)
+                and isinstance(include[0]['email'].get('email'),str)
+                and bool(re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',
+                    include[0]['email']['email'])))
+            evidence['owner_policy_single_email_selector_metadata']=(
+                'EXACT_NAMED_POLICY_HAS_SINGLE_EMAIL_SELECTOR'
+                if has_email else 'OWNER_SELECTOR_NOT_VERIFIED')
     # Independent exact-name Workers GETs only. Read status never grants write.
     ok,status,scripts=read('GET',f'/accounts/{account}/workers/scripts')
     evidence['workers_scripts_list_get_http']=status
