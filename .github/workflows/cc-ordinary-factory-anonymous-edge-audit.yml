@@ -1,0 +1,38 @@
+name: CC Isolated Ordinary Factory Anonymous Edge Audit
+on:
+  pull_request:
+    paths:
+      - 'cloudflare/isolated-ordinary-factory/scripts/anonymous_access_probe.py'
+      - 'cloudflare/isolated-ordinary-factory/tests/test_anonymous_access_probe.py'
+      - '.github/workflows/cc-ordinary-factory-anonymous-edge-audit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare/isolated-ordinary-factory/scripts/anonymous_access_probe.py'
+      - 'cloudflare/isolated-ordinary-factory/tests/test_anonymous_access_probe.py'
+      - '.github/workflows/cc-ordinary-factory-anonymous-edge-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  anonymous-only:
+    name: GET-only factory Access challenge
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Checkout reviewed public source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Offline failure-mode checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s cloudflare/isolated-ordinary-factory/tests -p 'test_anonymous_access_probe.py' -v
+      - name: Access anonymous fixed-target GET without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
+          python3 cloudflare/isolated-ordinary-factory/scripts/anonymous_access_probe.py
