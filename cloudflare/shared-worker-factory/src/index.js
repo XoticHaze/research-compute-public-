@@ -1,5 +1,6 @@
 import { validateRequest, workerEditorPolicy } from './policy.js';
 import {verifyFactoryMachineOidc} from './machine_oidc.js';
+import {stageScratchVersion} from './scratch_stage.js';
 import {readProposal,writeReceipt} from './queue.js';
 import {UI,SCRIPT} from './ui.js';
 
@@ -194,6 +195,11 @@ async function executeOnce(env,req) {
       result=await issueEditor(env,req);
     } else if (req.operation==='existing_worker.inspect') {
       result=await inspectExisting(env,req);
+    } else if (req.operation==='existing_worker.scratch_version.stage') {
+      // Separate stage flag, never a live deploy or source-replacement command.
+      if (!enabled(env.FACTORY_STAGE_VERSION_ENABLED))
+        throw Error('operation_disabled');
+      result=await stageScratchVersion(env,req);
     } else {
       throw Error('unknown_operation');
     }
@@ -285,6 +291,7 @@ export default {
           ordinary_creation:enabled(env.FACTORY_CREATE_ENABLED),
           exact_readonly_inspection:enabled(env.FACTORY_INSPECT_ENABLED),
           optional_scoped_editor:enabled(env.FACTORY_SCOPED_TOKEN_ENABLED),
+          scratch_version_stage_only:enabled(env.FACTORY_STAGE_VERSION_ENABLED),
           proposal_only:env.FACTORY_PROPOSAL_ONLY!=='0',
           token_values_returned:false});
       if(url.pathname==='/operator/factory' && request.method==='GET')
