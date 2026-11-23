@@ -45,6 +45,50 @@ These operations are separate by design: ordinary Worker creation must not autom
 mint another token for each project. Once the generic manager is admitted, prefer
 reusing the manager for later reviewed deployments rather than multiplying credentials.
 
+### Bounded scratch version staging, off-traffic only, NOT deployed
+
+Source now supports a **fourth independently disabled typed operation**:
+`existing_worker.scratch_version.stage`. It is owner-Access-authenticated,
+not a machine-OIDC write grant. All original `FACTORY_EXECUTOR_ENABLED` /
+one-use Durable Object claim / private queue receipt controls still apply.
+**`FACTORY_STAGE_VERSION_ENABLED=0` is the additional mandatory gate.**
+The live deployed factory is unchanged and must not have this flag enabled
+without independent owner source/version, credential isolation and replay admission.
+
+Exact request keys: `schema`, `operation`, `request_id`, `worker_name`,
+`worker_id`, `source_commit` (40-hex public repository commit),
+`source_sha256` (64-hex), `expires_at` (≤300 seconds). The Worker
+must be a disposable `cc-scratch-*` name, **not WaterBoys, NVIDIA,
+Fleet Authority, MM-IBKR, the factory itself or any protected neutral Worker**.
+The code path verifies the immutable existing Worker ID and name via fixed
+original SlenderIQ Cloudflare GET, fetches a single reviewed public module from
+`XoticHaze/research-compute-public-` at exact
+`cloudflare/ordinary-scratch-releases/<worker_name>/worker.mjs`,
+enforces a 32 KiB maximum, verifies the complete SHA-256 digest, then uploads
+**one off-traffic version** using the current official Cloudflare
+`POST /accounts/<account_id>/workers/scripts/<script_name>/versions`
+multipart API. It receives a version UUID and returns a sanitized digest,
+worker ID and staging-only receipt. There is **no deployment POST, 100%
+traffic switch, custom domain, route, secrets or token issuance**.
+An indeterminate POST result is terminal/replay-closed, never blindly retried.
+
+The two **source-only** disposable test projects are:
+`cloudflare/ordinary-scratch-releases/cc-scratch-proof-a/worker.mjs` and
+`cc-scratch-proof-b/worker.mjs`. They are **not created as Cloudflare
+Workers** and their mere presence does not prove an installed factory.
+These are reusable first/second-project acceptance fixtures, not a
+production publishing engine. Their fully resolved commit and source-file
+SHA256 must be frozen into an approved typed proposal when live authorized.
+The next extension after a successful admitted two-project stage/readback
+must support exact existing production Worker settings/asset binding
+preservation and independently approved deployment promotion. Do not widen
+this scratch stage to production or neutral Workers by changing a prefix.
+
+The Cloudflare upload operation is documented at
+https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/versions/methods/create/
+and explicitly **uploads without deploying to the network**. Its existence
+is a source contract, not a verified live HTTP acceptance.
+
 ### Optional unattended machine identity, read-only only, not admitted
 
 Source implements a **separately disabled** `POST /v1/machine/readiness` and `POST /v1/machine/inspect` for direct GitHub OIDC callers. Fixed issuer and live JWKS are inherited from the existing fleet-authority RS256 verification pattern, but the trust root is **strictly limited** to `XoticHaze/research-compute-public-` main, exact `.github/workflows/cc-factory-machine-readonly-r1.yml`, `workflow_dispatch`, GitHub-hosted public runner, short validity, exact audience, run ID, attempts, SHA and verified RSA signature. Merely possessing a GitHub Actions token or repository write grant cannot bypass this check. There is **no Cloudflare bearer in the public job**.
@@ -90,6 +134,7 @@ It configures the `FACTORY_LEDGER` SQLite Durable Object and leaves:
 - `FACTORY_MACHINE_READONLY_ENABLED=0`
 - `FACTORY_MACHINE_INSPECT_ENABLED=0`
 - `FACTORY_SCOPED_TOKEN_ENABLED=0`
+- `FACTORY_STAGE_VERSION_ENABLED=0`
 
 It never configures GitHub Builds or a GitHub Actions deploy.
 
