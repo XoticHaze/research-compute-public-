@@ -25,6 +25,8 @@ def execute_sealed_job(
     work_root: Path,
     ciphertext_root: Path,
     blender_binary: str,
+    sealed_form_inputs: dict | None = None,
+    placement_validator = None,
 ) -> dict:
     raw = open_capsule(
         request_envelope, recipient_private_b64=worker_private_b64,
@@ -36,6 +38,21 @@ def execute_sealed_job(
         raise ValueError("sealed_job_shape_invalid")
     if request["schema"] != REQUEST_SCHEMA:
         raise ValueError("sealed_job_schema_invalid")
+    # Opt-in exact FORM v23 private-encrypted recipe. A *trusted* harness must
+    # provide both separately received A1 ciphertext parts and an
+    # independent protected issuer/nonce verifier. Neither may be supplied in
+    # the job itself. Existing industrial-arm demo semantics remain unchanged.
+    if isinstance(request["job"], dict):
+        from scripts.creative.form_v23_fixed_payload_v1 import RECIPE as FORM_RECIPE
+        if request["job"].get("recipe_id") == FORM_RECIPE:
+            if sealed_form_inputs is None or not callable(placement_validator):
+                raise PermissionError("form_signed_placement_and_encrypted_input_required")
+            from scripts.creative.form_v23_fixed_sealed_worker_v1 import execute_admitted_form_v23
+            return execute_admitted_form_v23(
+                request_envelope, sealed_form_inputs, run_id=run_id,
+                worker_private_b64=worker_private_b64, source_root=source_root,
+                work_root=work_root, ciphertext_root=ciphertext_root,
+                blender_binary=blender_binary, placement_validator=placement_validator)
     job = validate(request["job"])
     recipient = request["result_recipient_public_b64"]
     if not isinstance(recipient, str) or len(recipient) > 200:
