@@ -34,11 +34,12 @@ def _approved_checkout(root:Path, job:dict):
 
 
 def _safe_root(root:Path, other:Path):
-    root=Path(root).resolve();other=Path(other).resolve()
+    given_root=Path(root);given_other=Path(other)
+    if given_root.is_symlink() or given_other.is_symlink():
+        raise ValueError("symlink_root_rejected")
+    root=given_root.resolve();other=given_other.resolve()
     if root==other or root in other.parents or other in root.parents:
         raise ValueError("protected_work_and_ciphertext_roots_must_not_overlap")
-    if root.is_symlink() or other.is_symlink():
-        raise ValueError("symlink_root_rejected")
     return root,other
 
 
