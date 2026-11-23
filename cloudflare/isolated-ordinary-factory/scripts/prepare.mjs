@@ -76,7 +76,7 @@ export function build(accountId,{outDir=OUT}={}){
   src['policy.js']=exactlyOnce(src['policy.js'],'const RESERVED = [',
     "const RESERVED = [\n  'cc-ordinary-worker-factory',",'protected_factory_name');
   src['queue.js']=exactlyOnce(src['queue.js'],
-    "if (!env.FACTORY_QUEUE_GITHUB_TOKEN ||\n       typeof env.FACTORY_QUEUE_GITHUB_TOKEN.get!=='function')\n    throw Error('queue_binding_absent');\n  const value=await env.FACTORY_QUEUE_GITHUB_TOKEN.get();",
+    "if (!env.FACTORY_QUEUE_GITHUB_TOKEN ||\n      typeof env.FACTORY_QUEUE_GITHUB_TOKEN.get!=='function')\n    throw Error('queue_binding_absent');\n  const value=await env.FACTORY_QUEUE_GITHUB_TOKEN.get();",
     "if (!env.FACTORY_QUEUE_GITHUB_TOKEN ||\n      (typeof env.FACTORY_QUEUE_GITHUB_TOKEN!=='string' &&\n       typeof env.FACTORY_QUEUE_GITHUB_TOKEN.get!=='function'))\n    throw Error('queue_binding_absent');\n  const value=typeof env.FACTORY_QUEUE_GITHUB_TOKEN==='string'?\n    env.FACTORY_QUEUE_GITHUB_TOKEN:await env.FACTORY_QUEUE_GITHUB_TOKEN.get();",
     'github_queue_secret_runtime');
   const config={
