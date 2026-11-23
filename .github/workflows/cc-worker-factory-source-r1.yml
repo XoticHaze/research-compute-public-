@@ -55,7 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           npx --yes wrangler@4.131.2 auth create --help | grep -F 'Create or re-authenticate a named auth profile'
-          npx --yes wrangler@4.131.2 whoami --help | grep -F 'profile'
+          npx --yes wrangler@4.131.2 deploy --help | grep -F -- '--profile'\n          npx --yes wrangler@4.131.2 auth list --help | grep -F 'auth list'
           echo "PINNED_WRANGLER_NAMED_PROFILE_COMMANDS=PASS"
       - name: Verify pinned A/B scratch sources, not live Worker deployments
         shell: bash
