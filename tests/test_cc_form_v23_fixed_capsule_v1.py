@@ -186,6 +186,13 @@ class FixedProductCrypto(unittest.TestCase):
                 placement_validator=lambda **kw:(_ for _ in ()).throw(PermissionError('issuer_missing')))
             self.assertFalse((root/'work').exists())
 
+    def test_symlink_work_root_is_rejected_before_native_staging(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            (root/'owned').mkdir();(root/'separate').mkdir()
+            (root/'link').symlink_to(root/'owned',target_is_directory=True)
+            with self.assertRaises(ValueError):worker._safe_root(root/'link',root/'separate')
+
     def test_wrong_run_is_rejected_before_placement_callback(self):
         req={"schema":"commandcenter.blender_sealed_request.v1","job":self.job,
              "result_recipient_public_b64":self.owner_pub}
