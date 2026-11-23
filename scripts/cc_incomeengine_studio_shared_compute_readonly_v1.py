@@ -23,6 +23,7 @@ def exact_readback(read,account):
         'access_apps_get_http':None,'exact_studio_access_app':'UNKNOWN',
         'studio_access_audience_metadata':'UNVERIFIED',
         'access_organization_get_http':None,
+        'zone_access_organization_get_http':None,
         'studio_access_team_domain_metadata':'UNVERIFIED',
         'owner_policy_single_email_selector_metadata':'UNVERIFIED',
         'owner_policy_get_http':None,'owner_policy_state':'UNKNOWN',
@@ -59,6 +60,15 @@ def exact_readback(read,account):
                 else 'EXACT_APP_AUDIENCE_ABSENT_OR_INVALID')
     ok,status,organization=read('GET',f'/accounts/{account}/access/organizations')
     evidence['access_organization_get_http']=status
+    # Account GET may be 403 for zone-limited Cloudflare credentials.
+    # The same endpoint also accepts the already-verified active zone ID.
+    # Do not expand token scope or confuse scope denial with missing data.
+    if not ok or not isinstance(organization,dict):
+        zok,zstatus,zorganization=read('GET',f'/zones/{zid}/access/organizations')
+        evidence['zone_access_organization_get_http']=zstatus
+        if zok and isinstance(zorganization,dict):
+            organization=zorganization
+            ok=True
     if ok and isinstance(organization,dict):
         auth_domain=organization.get('auth_domain')
         evidence['studio_access_team_domain_metadata']=(
