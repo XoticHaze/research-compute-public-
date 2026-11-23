@@ -64,6 +64,12 @@ export function build(accountId,{outDir=OUT}={}){
     "const ORDINARY_ACCOUNT = '"+account+"';",'worker_account_pin');
   src['index.js']=exactlyOnce(src['index.js'],OLD_TOKEN,NEW_TOKEN,'runtime_cloudflare_secret');
   src['index.js']=src['index.js'].replaceAll('ORIGINAL_SLENDERIQ_ORDINARY_ONLY','CC_ISOLATED_ORDINARY_ONLY');
+
+  const CRON_HANDLER="\n  async scheduled(controller,env,ctx) {\n    if (controller?.cron!=='*/5 * * * *' ||\n        env.FACTORY_SCHEDULED_POLL_ENABLED!=='1' ||\n        env.FACTORY_EXECUTOR_ENABLED!=='1' ||\n        env.FACTORY_CREATE_ENABLED!=='1' ||\n        env.FACTORY_PROPOSAL_ONLY!=='1') return;\n    safeAccount(env);\n    // Existing fixed private GitHub branch, validation, TTL and DO replay guard.\n    const proposal=await readProposal(env);\n    if (proposal.request.operation!=='ordinary_worker.create' ||\n        !/^cc-scratch-proof-[ab]$/.test(proposal.request.worker_name))\n      throw Error('cron_operation_not_admitted');\n    const receipt=await executeOnce(env,proposal.request);\n    if (receipt.status!=='created_inert')\n      throw Error('cron_failed_or_indeterminate');\n    await writeReceipt(env,receipt);\n  },\n";
+  // Append a scheduled() handler to the single pinned default-export object.
+  src['index.js']=exactlyOnce(src['index.js'],
+    '\n  },\n};','\n  },\n'+CRON_HANDLER+'};',
+    'cron_handler_exact_default_export');
   src['scratch_stage.js']=exactlyOnce(src['scratch_stage.js'],
     "const ACCOUNT='ce43cd7b917d98a4bb4866d30eed99c0';",
     "const ACCOUNT='"+account+"';",'scratch_account_pin');
@@ -83,6 +89,7 @@ export function build(accountId,{outDir=OUT}={}){
     '$schema':'node_modules/wrangler/config-schema.json',
     name:FACTORY_NAME,account_id:account,main:'src/index.js',
     compatibility_date:'2026-11-23',workers_dev:true,preview_urls:false,
+    triggers:{crons:['*/5 * * * *']},
     durable_objects:{bindings:[{name:'FACTORY_LEDGER',class_name:'FactoryLedger'}]},
     exports:{FactoryLedger:{type:'durable-object',state:'created',storage:'sqlite'}},
     vars:{
@@ -92,6 +99,7 @@ export function build(accountId,{outDir=OUT}={}){
       // configured only after Worker Access All traffic is installed. Never
       // emit them as blank vars: Wrangler would later overwrite their runtime
       // secrets during a code-only deploy.
+      FACTORY_SCHEDULED_POLL_ENABLED:'0',
       FACTORY_EXECUTOR_ENABLED:'0', FACTORY_CREATE_ENABLED:'0',
       FACTORY_INSPECT_ENABLED:'0', FACTORY_SCOPED_TOKEN_ENABLED:'0',
       FACTORY_STAGE_VERSION_ENABLED:'0',
