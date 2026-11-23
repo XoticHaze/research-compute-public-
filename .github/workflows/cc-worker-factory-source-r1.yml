@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           node cloudflare/isolated-ordinary-factory/scripts/prepare.mjs --account-id abababababababababababababababab
-          node -e 'const c=require("./cloudflare/isolated-ordinary-factory/.generated/wrangler.jsonc"); if(c.account_id!=="abababababababababababababababab"||Object.entries(c.vars).some(([k,v])=>k.endsWith("_ENABLED")&&v!=="0")) process.exit(1);'
+          node -e 'const c=JSON.parse(require("fs").readFileSync("./cloudflare/isolated-ordinary-factory/.generated/wrangler.jsonc","utf8")); if(c.account_id!=="abababababababababababababababab"||Object.entries(c.vars).some(([k,v])=>k.endsWith("_ENABLED")&&v!=="0")) process.exit(1);'
           npx --yes wrangler@4.131.2 deploy --dry-run --config cloudflare/isolated-ordinary-factory/.generated/wrangler.jsonc --outdir /tmp/cc-isolated-factory-dryrun
           echo "NEW_ACCOUNT_FACTORY_WRANGLER_DRY_RUN_NO_DEPLOY=PASS"
       - name: Verify pinned A/B scratch sources, not live Worker deployments
