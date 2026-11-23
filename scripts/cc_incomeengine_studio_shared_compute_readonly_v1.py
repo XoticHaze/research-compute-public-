@@ -64,7 +64,7 @@ def exact_readback(read,account):
         evidence['studio_access_team_domain_metadata']=(
             'NEUTRAL_TEAM_DOMAIN_PRESENT'
             if isinstance(auth_domain,str) and bool(re.fullmatch(
-                r'[a-z0-9.-]+\\.cloudflareaccess\\.com',auth_domain)) and len(auth_domain)<=253
+                r'[a-z0-9.-]+\.cloudflareaccess\.com',auth_domain)) and len(auth_domain)<=253
             else 'NEUTRAL_TEAM_DOMAIN_ABSENT_OR_INVALID')
     ok,status,policies=read('GET',f'/accounts/{account}/access/policies?per_page=100')
     evidence['owner_policy_get_http']=status
@@ -78,7 +78,7 @@ def exact_readback(read,account):
                 and isinstance(include[0],dict)
                 and isinstance(include[0].get('email'),dict)
                 and isinstance(include[0]['email'].get('email'),str)
-                and bool(re.fullmatch(r'[^\\s@]+@[^\\s@]+\\.[^\\s@]+',
+                and bool(re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',
                     include[0]['email']['email'])))
             evidence['owner_policy_single_email_selector_metadata']=(
                 'EXACT_NAMED_POLICY_HAS_SINGLE_EMAIL_SELECTOR'
