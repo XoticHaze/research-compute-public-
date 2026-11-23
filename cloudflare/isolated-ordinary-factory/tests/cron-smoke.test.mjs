@@ -8,7 +8,7 @@ import {build} from '../scripts/prepare.mjs';
 
 const ACCOUNT='ab'.repeat(16);
 const SHA='b'.repeat(40), ID='c'.repeat(32), RUN='a'.repeat(32);
-const CRON='*/5 * * * *';
+const CRON='* * * * *';
 const API='https://api.cloudflare.com/client/v4/accounts/'+ACCOUNT;
 const ROOT='https://api.github.com/repos/XoticHaze/CommandCenter-gate-control/contents/';
 async function withFixture(fn) {
