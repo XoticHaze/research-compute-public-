@@ -40,6 +40,29 @@ class StudioSharedComputeZoneReadOnly(unittest.TestCase):
         self.assertEqual(s['studio_worker_exists'],'EXACT_SCRIPT_SETTINGS_VISIBLE')
         self.assertEqual(s['studio_worker_settings_get_http'],200)
         self.assertFalse(s['studio_worker_write_authorized'])
+    def test_zone_scoped_organization_fallback_uses_verified_zone_without_values(self):
+        calls=[]
+        def read(method,path):
+            self.assertEqual(method,'GET');calls.append(path)
+            if path.startswith('/zones?'):return True,200,[{
+                'name':ZONE,'status':'active','id':'b'*32,'account':{'id':ACCOUNT}}]
+            if '/dns_records?' in path:return False,403,None
+            if '/access/apps?' in path:return True,200,[{
+                'domain':HOST,'name':'IncomeEngine 3D Studio','aud':'audience-present-123'}]
+            if path==f'/accounts/{ACCOUNT}/access/organizations':
+                return False,403,None
+            if path==f'/zones/{"b"*32}/access/organizations':
+                return True,200,{'auth_domain':'neutral-team.cloudflareaccess.com'}
+            if '/access/policies?' in path:return True,200,[{
+                'name':OWNER_POLICY,'include':[{'email':{'email':'owner@example.test'}}]}]
+            if '/workers/' in path:return False,403,None
+            raise AssertionError(path)
+        s=exact_readback(read,ACCOUNT)
+        self.assertEqual(s['access_organization_get_http'],403)
+        self.assertEqual(s['zone_access_organization_get_http'],200)
+        self.assertEqual(s['studio_access_team_domain_metadata'],'NEUTRAL_TEAM_DOMAIN_PRESENT')
+        self.assertNotIn('neutral-team.cloudflareaccess.com',str(s))
+        self.assertEqual(s['cloudflare_mutations'],0)
     def test_access_403_does_not_equate_to_absent_app(self):
         def read(method,path):
             if path.startswith('/zones?'):return True,200,[{'name':ZONE,'status':'active','id':'b'*32,'account':{'id':ACCOUNT}}]
