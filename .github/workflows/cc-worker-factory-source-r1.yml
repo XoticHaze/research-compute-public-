@@ -40,6 +40,16 @@ jobs:
           node --test cloudflare/isolated-ordinary-factory/tests/*.test.mjs
           test ! -f cloudflare/isolated-ordinary-factory/.generated/manifest.json
           echo "FACTORY_NEW_ACCOUNT_BOOTSTRAP_SOURCE_TESTS=PASS"
+      - name: Build pinned new-account factory with Wrangler dry-run only
+        shell: bash
+        env:
+          WRANGLER_SEND_METRICS: "false"
+        run: |
+          set -euo pipefail
+          node cloudflare/isolated-ordinary-factory/scripts/prepare.mjs --account-id abababababababababababababababab
+          node -e 'const c=require("./cloudflare/isolated-ordinary-factory/.generated/wrangler.jsonc"); if(c.account_id!=="abababababababababababababababab"||Object.entries(c.vars).some(([k,v])=>k.endsWith("_ENABLED")&&v!=="0")) process.exit(1);'
+          npx --yes wrangler@4.131.2 deploy --dry-run --config cloudflare/isolated-ordinary-factory/.generated/wrangler.jsonc --outdir /tmp/cc-isolated-factory-dryrun
+          echo "NEW_ACCOUNT_FACTORY_WRANGLER_DRY_RUN_NO_DEPLOY=PASS"
       - name: Verify pinned A/B scratch sources, not live Worker deployments
         shell: bash
         run: |
