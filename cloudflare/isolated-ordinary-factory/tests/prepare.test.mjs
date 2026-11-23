@@ -30,8 +30,8 @@ test('pinned modules compile into exact account and explicit fail-closed flags',
     assert.equal(cfg.account_id,ID);
     assert.equal(cfg.vars.FACTORY_ACCOUNT_ID,ID);
     assert.equal(cfg.vars.FACTORY_INSTALLATION_ROLE,'CC_ISOLATED_ORDINARY_ONLY');
-    assert.equal(cfg.vars.FACTORY_ACCESS_AUD,'');
-    assert.equal(cfg.vars.FACTORY_ALLOWED_EMAILS,'');
+    assert.equal(cfg.vars.FACTORY_ACCESS_AUD,undefined);
+    assert.equal(cfg.vars.FACTORY_ALLOWED_EMAILS,undefined);
     for(const key of Object.keys(cfg.vars).filter(x=>x.endsWith('_ENABLED')))
       assert.equal(cfg.vars[key],'0',key);
     assert.equal(cfg.vars.FACTORY_PROPOSAL_ONLY,'1');
@@ -50,6 +50,11 @@ test('pinned modules compile into exact account and explicit fail-closed flags',
       assert.ok(!s.includes(PROTECTED_ACCOUNT_IDS[1]));
       assert.ok(!s.includes('ORIGINAL_SLENDERIQ_ORDINARY_ONLY'));
     }
+    assert.match(ix,/ctx\.access/);
+    assert.match(ix,/env\.FACTORY_ACCESS_AUD/);
+    assert.match(ix,/env\.FACTORY_ALLOWED_EMAILS/);
+    assert.ok(!readFileSync(join(dir,'wrangler.jsonc'),'utf8').includes('"FACTORY_ACCESS_AUD"'));
+    assert.ok(!readFileSync(join(dir,'wrangler.jsonc'),'utf8').includes('"FACTORY_ALLOWED_EMAILS"'));
     assert.match(ix,RegExp(ID));
     assert.match(st,RegExp(ID));
     assert.match(po,/cc-ordinary-worker-factory/);

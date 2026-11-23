@@ -88,7 +88,10 @@ export function build(accountId,{outDir=OUT}={}){
     vars:{
       FACTORY_ACCOUNT_ID:account,
       FACTORY_INSTALLATION_ROLE:'CC_ISOLATED_ORDINARY_ONLY',
-      FACTORY_ACCESS_AUD:'', FACTORY_ALLOWED_EMAILS:'',
+// Access AUD and owner-email allowlist are Cloudflare Worker ENCRYPTED SECRETS,
+      // configured only after Worker Access All traffic is installed. Never
+      // emit them as blank vars: Wrangler would later overwrite their runtime
+      // secrets during a code-only deploy.
       FACTORY_EXECUTOR_ENABLED:'0', FACTORY_CREATE_ENABLED:'0',
       FACTORY_INSPECT_ENABLED:'0', FACTORY_SCOPED_TOKEN_ENABLED:'0',
       FACTORY_STAGE_VERSION_ENABLED:'0',
