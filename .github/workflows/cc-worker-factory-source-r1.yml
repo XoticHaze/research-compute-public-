@@ -3,11 +3,13 @@ on:
   pull_request:
     paths:
       - 'cloudflare/shared-worker-factory/**'
+      - 'cloudflare/ordinary-scratch-releases/**'
       - '.github/workflows/cc-worker-factory-source-r1.yml'
   push:
     branches: [main]
     paths:
       - 'cloudflare/shared-worker-factory/**'
+      - 'cloudflare/ordinary-scratch-releases/**'
       - '.github/workflows/cc-worker-factory-source-r1.yml'
 
 permissions:
@@ -28,6 +30,17 @@ jobs:
           node --check src/index.js
           node --check src/policy.js
           node --test tests/*.test.mjs
+      - name: Verify pinned A/B scratch sources, not live Worker deployments
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/ordinary-scratch-releases/cc-scratch-proof-a/worker.mjs
+          node --check cloudflare/ordinary-scratch-releases/cc-scratch-proof-b/worker.mjs
+          printf '%s  %s\n' \
+            '9d3ce1adcd34da626000d1d7a5fc2bd27a887da6b3dd12278bbc578f278af921' 'cloudflare/ordinary-scratch-releases/cc-scratch-proof-a/worker.mjs' \
+            'b7335d64457347b61316765962c3b0c34aae9f2d0b7776ddd152cb71a18bc322' 'cloudflare/ordinary-scratch-releases/cc-scratch-proof-b/worker.mjs' \
+            | sha256sum --check -
+          echo "FACTORY_SCRATCH_A_B_PINNED_PUBLIC_SOURCE_ONLY_PASS=1"
       - name: Confirm no deploy or credential route
         run: |
           set -euo pipefail
