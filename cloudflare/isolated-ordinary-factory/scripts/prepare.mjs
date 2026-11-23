@@ -65,7 +65,7 @@ export function build(accountId,{outDir=OUT}={}){
   src['index.js']=exactlyOnce(src['index.js'],OLD_TOKEN,NEW_TOKEN,'runtime_cloudflare_secret');
   src['index.js']=src['index.js'].replaceAll('ORIGINAL_SLENDERIQ_ORDINARY_ONLY','CC_ISOLATED_ORDINARY_ONLY');
 
-  const CRON_HANDLER="\n  async scheduled(controller,env,ctx) {\n    if (controller?.cron!=='*/5 * * * *' ||\n        env.FACTORY_SCHEDULED_POLL_ENABLED!=='1' ||\n        env.FACTORY_EXECUTOR_ENABLED!=='1' ||\n        env.FACTORY_CREATE_ENABLED!=='1' ||\n        env.FACTORY_PROPOSAL_ONLY!=='1') return;\n    safeAccount(env);\n    // Existing fixed private GitHub branch, validation, TTL and DO replay guard.\n    const proposal=await readProposal(env);\n    if (proposal.request.operation!=='ordinary_worker.create' ||\n        !/^cc-scratch-proof-[ab]$/.test(proposal.request.worker_name))\n      throw Error('cron_operation_not_admitted');\n    const receipt=await executeOnce(env,proposal.request);\n    if (receipt.status!=='created_inert')\n      throw Error('cron_failed_or_indeterminate');\n    await writeReceipt(env,receipt);\n  },\n";
+  const CRON_HANDLER="\n  async scheduled(controller,env,ctx) {\n    if (controller?.cron!=='* * * * *' ||\n        env.FACTORY_SCHEDULED_POLL_ENABLED!=='1' ||\n        env.FACTORY_EXECUTOR_ENABLED!=='1' ||\n        env.FACTORY_CREATE_ENABLED!=='1' ||\n        env.FACTORY_PROPOSAL_ONLY!=='1') return;\n    safeAccount(env);\n    // Existing fixed private GitHub branch, validation, TTL and DO replay guard.\n    const proposal=await readProposal(env);\n    if (proposal.request.operation!=='ordinary_worker.create' ||\n        !/^cc-scratch-proof-[ab]$/.test(proposal.request.worker_name))\n      throw Error('cron_operation_not_admitted');\n    const receipt=await executeOnce(env,proposal.request);\n    if (receipt.status!=='created_inert')\n      throw Error('cron_failed_or_indeterminate');\n    await writeReceipt(env,receipt);\n  },\n";
   // Append a scheduled() handler to the single pinned default-export object.
   src['index.js']=exactlyOnce(src['index.js'],
     '\n  },\n};','\n  },\n'+CRON_HANDLER+'};',
@@ -89,7 +89,7 @@ export function build(accountId,{outDir=OUT}={}){
     '$schema':'node_modules/wrangler/config-schema.json',
     name:FACTORY_NAME,account_id:account,main:'src/index.js',
     compatibility_date:'2026-11-23',workers_dev:true,preview_urls:false,
-    triggers:{crons:['*/5 * * * *']},
+    triggers:{crons:['* * * * *']},
     durable_objects:{bindings:[{name:'FACTORY_LEDGER',class_name:'FactoryLedger'}]},
     exports:{FactoryLedger:{type:'durable-object',state:'created',storage:'sqlite'}},
     vars:{
