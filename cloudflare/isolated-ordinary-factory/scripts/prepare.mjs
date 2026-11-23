@@ -65,7 +65,7 @@ export function build(accountId,{outDir=OUT}={}){
   src['index.js']=exactlyOnce(src['index.js'],OLD_TOKEN,NEW_TOKEN,'runtime_cloudflare_secret');
   src['index.js']=src['index.js'].replaceAll('ORIGINAL_SLENDERIQ_ORDINARY_ONLY','CC_ISOLATED_ORDINARY_ONLY');
 
-  const CRON_HANDLER="\n  async scheduled(controller,env,ctx) {\n    if (controller?.cron!=='*/5 * * * *' ||\n        env.FACTORY_SCHEDULED_POLL_ENABLED!=='1' ||\n        env.FACTORY_EXECUTOR_ENABLED!=='1' ||\n        env.FACTORY_CREATE_ENABLED!=='1' ||\n        env.FACTORY_PROPOSAL_ONLY!=='1') return;\n    safeAccount(env);\n    // Existing fixed private GitHub branch, validation, TTL and DO replay guard.\n    const proposal=await readProposal(env);\n    if (proposal.request.operation!=='ordinary_worker.create' ||\n        !/^cc-scratch-proof-[ab]$/.test(proposal.request.worker_name))\n      throw Error('cron_operation_not_admitted');\n    const receipt=await executeOnce(env,proposal.request);\n    if (receipt.status!=='created_inert')\n      throw Error('cron_failed_or_indeterminate');\n    await writeReceipt(env,receipt);\n  },\n";
+  const CRON_HANDLER="\n  async scheduled(controller,env,ctx) {\n    if (controller?.cron!=='* * * * *' ||\n        env.FACTORY_SCHEDULED_POLL_ENABLED!=='1' ||\n        env.FACTORY_EXECUTOR_ENABLED!=='1' ||\n        env.FACTORY_CREATE_ENABLED!=='1' ||\n        env.FACTORY_PROPOSAL_ONLY!=='1') return;\n    safeAccount(env);\n    // Existing fixed private GitHub branch, validation, TTL and DO replay guard.\n    let proposal;\n    try { proposal=await readProposal(env); }\n    catch(error) {\n      if(error?.message==='proposal_absent') return;\n      throw error;\n    }\n    if (proposal.request.operation!=='ordinary_worker.create' ||\n        !/^cc-scratch-proof-[ab]$/.test(proposal.request.worker_name))\n      throw Error('cron_operation_not_admitted');\n    const receipt=await executeOnce(env,proposal.request);\n    if (receipt.status!=='created_inert')\n      throw Error('cron_failed_or_indeterminate');\n    await writeReceipt(env,receipt);\n    await consumeProposal(env,proposal.blob_sha);\n  },\n";
   // Append a scheduled() handler to the single pinned default-export object.
   src['index.js']=exactlyOnce(src['index.js'],
     '\n  },\n};','\n  },\n'+CRON_HANDLER+'};',
@@ -85,11 +85,14 @@ export function build(accountId,{outDir=OUT}={}){
     "if (!env.FACTORY_QUEUE_GITHUB_TOKEN ||\n      typeof env.FACTORY_QUEUE_GITHUB_TOKEN.get!=='function')\n    throw Error('queue_binding_absent');\n  const value=await env.FACTORY_QUEUE_GITHUB_TOKEN.get();",
     "if (!env.FACTORY_QUEUE_GITHUB_TOKEN ||\n      (typeof env.FACTORY_QUEUE_GITHUB_TOKEN!=='string' &&\n       typeof env.FACTORY_QUEUE_GITHUB_TOKEN.get!=='function'))\n    throw Error('queue_binding_absent');\n  const value=typeof env.FACTORY_QUEUE_GITHUB_TOKEN==='string'?\n    env.FACTORY_QUEUE_GITHUB_TOKEN:await env.FACTORY_QUEUE_GITHUB_TOKEN.get();",
     'github_queue_secret_runtime');
+  src['queue.js']=exactlyOnce(src['queue.js'],"  if (!r.ok) throw Error('proposal_unavailable');","  if (r.status===404) throw Error('proposal_absent');\n  if (!r.ok) throw Error('proposal_unavailable');",'queue_404_absent_distinct_from_auth_failure');
+  src['queue.js']+="\nexport async function consumeProposal(env,blobSha) {\n  if(!SHA40.test(String(blobSha||'')))throw Error('proposal_sha_rejected');\n  const bearer=await queueToken(env);\n  const response=await fetch(ROOT+PROPOSAL,{\n    method:'DELETE',headers:{...headers(bearer),'content-type':'application/json'},\n    body:JSON.stringify({message:'factory consume '+blobSha.slice(0,10),\n      sha:blobSha,branch:BRANCH}),redirect:'manual'\n  });\n  if(response.status!==200)throw Error('proposal_consume_indeterminate');\n  const data=await response.json();\n  if(!SHA40.test(String(data?.commit?.sha||'')))\n    throw Error('proposal_consume_indeterminate');\n  return {consumed:true,cloudflare_mutations:0};\n}\n";
+  src['index.js']=exactlyOnce(src['index.js'],"import {readProposal,writeReceipt} from './queue.js';","import {readProposal,writeReceipt,consumeProposal} from './queue.js';",'fixed_queue_consume_import');
   const config={
     '$schema':'node_modules/wrangler/config-schema.json',
     name:FACTORY_NAME,account_id:account,main:'src/index.js',
     compatibility_date:'2026-11-23',workers_dev:true,preview_urls:false,
-    triggers:{crons:['*/5 * * * *']},
+    triggers:{crons:['* * * * *']},
     durable_objects:{bindings:[{name:'FACTORY_LEDGER',class_name:'FactoryLedger'}]},
     exports:{FactoryLedger:{type:'durable-object',state:'created',storage:'sqlite'}},
     vars:{

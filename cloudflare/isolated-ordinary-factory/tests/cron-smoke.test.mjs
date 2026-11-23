@@ -8,7 +8,7 @@ import {build} from '../scripts/prepare.mjs';
 
 const ACCOUNT='ab'.repeat(16);
 const SHA='b'.repeat(40), ID='c'.repeat(32), RUN='a'.repeat(32);
-const CRON='*/5 * * * *';
+const CRON='* * * * *';
 const API='https://api.cloudflare.com/client/v4/accounts/'+ACCOUNT;
 const ROOT='https://api.github.com/repos/XoticHaze/CommandCenter-gate-control/contents/';
 async function withFixture(fn) {
@@ -42,7 +42,7 @@ test('Cron exists but defaults completely disabled with zero Cloudflare calls',a
     globalThis.fetch=()=>{throw Error('network_called_while_disabled');};
     try {
       await mod.default.scheduled({cron:CRON},env(),{});
-      await mod.default.scheduled({cron:'* * * * *'},env({
+      await mod.default.scheduled({cron:'0 0 * * *'},env({
         FACTORY_SCHEDULED_POLL_ENABLED:'1',
         FACTORY_EXECUTOR_ENABLED:'1',FACTORY_CREATE_ENABLED:'1'}),{});
     }finally{globalThis.fetch=original;}
@@ -98,6 +98,13 @@ test('one fixed scratch create executes exactly once and writes private receipt 
       const target=String(url);calls.push({url:target,method:init.method||'GET'});
       if(target.startsWith(ROOT)){
         assert.equal(init.headers.authorization,'Bearer '+githubToken);
+        if(init.method==='DELETE'){
+          assert.equal(target,ROOT+'cloudflare-factory/proposal.json');
+          const request=JSON.parse(init.body);
+          assert.equal(request.sha,SHA);
+          assert.equal(request.branch,'cloudflare-factory-inbox');
+          return new Response(JSON.stringify({commit:{sha:SHA}}),{status:200});
+        }
         if(init.method==='PUT'){
           const payload=JSON.parse(init.body);
           const receipt=JSON.parse(atob(payload.content));
@@ -130,10 +137,32 @@ test('one fixed scratch create executes exactly once and writes private receipt 
       assert.equal(journal.get(RUN),'terminal');
       assert.equal(calls.filter(x=>x.method==='POST').length,1);
       assert.equal(calls.filter(x=>x.method==='PUT').length,1);
+      assert.equal(calls.filter(x=>x.method==='DELETE').length,1);
       const before=calls.filter(x=>x.method==='POST').length;
       await assert.rejects(mod.default.scheduled({cron:CRON},accepted,{}));
       assert.equal(calls.filter(x=>x.method==='POST').length,before);
     }finally{globalThis.fetch=original;}
+  });
+});
+test('missing proposal 404 is idle; auth failure 403 is not treated as empty queue',async()=>{
+  await withFixture(async({mod})=>{
+    const original=globalThis.fetch;
+    const ready=env({FACTORY_SCHEDULED_POLL_ENABLED:'1',
+      FACTORY_EXECUTOR_ENABLED:'1',FACTORY_CREATE_ENABLED:'1',
+      FACTORY_QUEUE_GITHUB_TOKEN:'synthetic-github-token-long-enough'});
+    try {
+      let calls=0;
+      globalThis.fetch=async(url,init)=>{calls++;
+        assert.ok(String(url).startsWith(ROOT));
+        return new Response('{}',{status:404});
+      };
+      await mod.default.scheduled({cron:CRON},ready,{});
+      assert.equal(calls,1);
+      globalThis.fetch=async(url,init)=>
+        new Response('{}',{status:403});
+      await assert.rejects(mod.default.scheduled({cron:CRON},ready,{}),
+        /proposal_unavailable/);
+    } finally {globalThis.fetch=original;}
   });
 });
 test('wrong account refuses cron before reading a private proposal',async()=>{
