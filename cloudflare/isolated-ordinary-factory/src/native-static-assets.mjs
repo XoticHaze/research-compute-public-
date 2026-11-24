@@ -6,6 +6,7 @@ const ACCOUNT='de1c728bdb163060d946122c857f3653';
 const API='https://api.cloudflare.com/client/v4/accounts/'+ACCOUNT;
 const HEX32=/^[a-f0-9]{32}$/;
 const HEX64=/^[a-f0-9]{64}$/;
+const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const TARGET='cc-app-static-assets-proof';
 const MAX_FILE=2*1024*1024,MAX_TOTAL=4*1024*1024,MAX_FILES=12;
 const MIME=Object.freeze({html:'text/html; charset=utf-8',css:'text/css; charset=utf-8',js:'application/javascript; charset=utf-8',json:'application/json',png:'image/png',glb:'model/gltf-binary',txt:'text/plain; charset=utf-8'});
@@ -79,12 +80,25 @@ export async function uploadAssetSet(t,entries,readBytes,admin,fetcher=fetch){
   // Returned only to same runtime caller. Never serialize this object in a receipt.
   return {completion,asset_count:entries.length,asset_bytes:total,uploaded_hash_count:seen.size};
 }
-export function staticVersionMetadata(completion,sourceDigest){
-  requireThat(jwtLike(completion)&&HEX64.test(sourceDigest),'static_version_metadata_invalid');
+export function staticVersionMetadata(completion,releaseDigest){
+  requireThat(jwtLike(completion)&&HEX64.test(releaseDigest),'static_version_metadata_invalid');
   // Mandatory Worker-first authorization. No public ingress or deployment here.
-  return {main_module:'worker.mjs',compatibility_date:'2026-11-18',bindings:[{type:'assets',name:'ASSETS'}],assets:{jwt:completion,config:{run_worker_first:true,not_found_handling:'404-page',html_handling:'none'}},annotations:{'workers/tag':'cc-static-'+sourceDigest}};
+  return {main_module:'worker.mjs',compatibility_date:'2026-11-18',bindings:[{type:'assets',name:'ASSETS'}],assets:{jwt:completion,config:{run_worker_first:true,not_found_handling:'404-page',html_handling:'none'}},annotations:{'workers/tag':'cc-static-'+releaseDigest}};
 }
 export function staticReceipt(result){
   requireThat(result&&Number.isInteger(result.asset_count)&&Number.isInteger(result.asset_bytes)&&Number.isInteger(result.uploaded_hash_count),'static_receipt_invalid');
   return {asset_count:result.asset_count,asset_bytes:result.asset_bytes,uploaded_hash_count:result.uploaded_hash_count,asset_upload_completed:true,version_staged:false,production_promoted:false,bearer_returned:false};
+}
+
+// Existing dispatcher must own immutable package resolution and live identity,
+// deployment/ingress verification, tag reconciliation and one-use request ledger.
+// This low-level adapter does not promote or enable ingress.
+export async function createStaticVersion(t,upload,source,sourceDigest,releaseDigest,admin,fetcher=fetch){
+  target(t);
+  requireThat(source instanceof Uint8Array&&source.length>0&&source.length<=512*1024&&HEX64.test(sourceDigest)&&await digest(source)===sourceDigest,'static_module_digest_mismatch');
+  const metadata=staticVersionMetadata(upload?.completion,releaseDigest);
+  const payload={...metadata,modules:[{name:'worker.mjs',content_type:'application/javascript+module',content_base64:base64(source)}]};
+  const made=await request(fetcher,'/workers/workers/'+t.worker_id+'/versions?deploy=false',admin,payload,[200,201]);
+  requireThat(UUID.test(made.result.id),'static_version_identity_invalid');
+  return {...staticReceipt(upload),version_id:made.result.id,version_created_off_traffic:true,version_readback_verified:false};
 }
