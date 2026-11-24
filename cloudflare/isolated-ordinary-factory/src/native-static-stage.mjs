@@ -187,8 +187,8 @@ export async function runStaticPrivateRelease(env,req,readAccess,fetcher=fetch){
     phase='access';const access=await accessConfig(env,fetcher,readAccess,req);
     // The tag includes exact manifest, Access app ID and a digest of issuer/AUD,
     // not owner identity or secret values. One initial protected release only.
-    const accessHash=await sha(new TextEncoder().encode(access.issuer+'\n'+access.config.ACCESS_AUD));
-    const tag='cc-static-private-'+req.source_sha256+'-'+access.appId+'-'+accessHash.slice(0,16);
+    const accessHash=await sha(new TextEncoder().encode(JSON.stringify([req.source_sha256,access.appId,access.issuer,access.config.ACCESS_AUD])));
+    const tag='cc-static-private-'+accessHash;
     phase='base_readback';
     const base=await verifyVersion(fetcher,admin,req,req.version_id,m,{requireInert:false});
     const path='/workers/workers/'+CANARY_ID+'/versions';
@@ -242,6 +242,7 @@ export async function runStaticPrivateRelease(env,req,readAccess,fetcher=fetch){
     if(openAttempted&&admin){
       try{
         await targetIdentity(fetcher,admin,req);
+        mutation=true;
         await cfWrite(fetcher,admin,'PATCH','/workers/workers/'+CANARY_ID,{subdomain:{enabled:false,previews_enabled:false}});
         const w=await targetIdentity(fetcher,admin,req);
         closed=w.subdomain?.enabled===false&&w.subdomain.previews_enabled===false;
