@@ -18,11 +18,15 @@ export function scheduledRootPermit(env, request, now = Date.now()) {
       ||!UTC.test(p.not_before)||!UTC.test(p.expires_at)) throw Error('scheduled_root_permit_invalid');
   const start=Date.parse(p.not_before), end=Date.parse(p.expires_at);
   if(!Number.isFinite(start)||!Number.isFinite(end)||start>now||end<=now
+      ||new Date(start).toISOString()!==p.not_before.replace('Z','.000Z')
+      ||new Date(end).toISOString()!==p.expires_at.replace('Z','.000Z')
       ||end-start>24*3600000) throw Error('scheduled_root_permit_not_fresh');
-  if(request?.schema!=='commandcenter.pi.release_request.v1'
+  const requestEnd=Date.parse(request?.expires_at);
+  if(!Number.isFinite(requestEnd)||requestEnd<=now||requestEnd>end
+      ||request?.schema!=='commandcenter.pi.release_request.v1'
       ||request.action!=='pi.release.apply'||request.node_id!=='cc-pi4'
       ||request.source_repo!=='XoticHaze/CommandCenter'||request.source_sha!==p.source_sha
-      ||request.expected_release!==p.expected_release||Date.parse(request.expires_at)>end)
+      ||request.expected_release!==p.expected_release)
     throw Error('scheduled_root_request_not_permitted');
   return p;
 }
