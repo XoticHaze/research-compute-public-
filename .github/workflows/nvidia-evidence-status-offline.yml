@@ -1,0 +1,36 @@
+name: NVIDIA Evidence-State Feedback Source Offline Contract
+# Public fictional source verification; no provider, secrets, Cloudflare mutation, or production code execution.
+on:
+  pull_request:
+    paths:
+      - cloudflare/shared-nvidia-inference/src/evidence_status_loop.js
+      - cloudflare/shared-nvidia-inference/src/evidence_status_feedback_v2.js
+      - cloudflare/shared-nvidia-inference/src/index.js
+      - cloudflare/shared-nvidia-inference/local-probe/src/evidence_status_caller.js
+      - cloudflare/shared-nvidia-inference/local-probe/wrangler.evidence.jsonc
+      - cloudflare/shared-nvidia-inference/tests/evidence_status_loop.test.mjs
+      - cloudflare/shared-nvidia-inference/tests/evidence_status_caller.test.mjs
+      - cloudflare/shared-nvidia-inference/tests/evidence_status_feedback_v2.test.mjs
+      - cloudflare/shared-nvidia-inference/tests/evidence_status_feedback_caller_v2.test.mjs
+      - .github/workflows/nvidia-evidence-status-offline.yml
+permissions:
+  contents: read
+jobs:
+  fixed-synthetic-source-and-receipt:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Independently test fixed source, one-use caller, and existing shared binding
+        working-directory: cloudflare/shared-nvidia-inference
+        run: |
+          set -euo pipefail
+          node --check src/index.js
+          node --check src/evidence_status_loop.js
+          node --check src/evidence_status_feedback_v2.js
+          node --check local-probe/src/evidence_status_caller.js
+          node --test tests/evidence_status_loop.test.mjs tests/evidence_status_caller.test.mjs tests/evidence_status_feedback_v2.test.mjs tests/evidence_status_feedback_caller_v2.test.mjs
+          echo NVIDIA_EVIDENCE_STATUS_OFFLINE_SOURCE=PASS
