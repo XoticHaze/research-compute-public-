@@ -65,3 +65,17 @@ test("actual fixed fixture through mocked provider and one-use service binding",
  assert.equal(receipt.candidate.cards.length,6);assert.equal(receipt.candidate.cards[0].rationale_present,true);
  assert.equal((await caller.fetch(req(),env)).status,409);assert.equal(calls,1);
 });
+
+test("actual Worker route is disabled by default and rejects wrong image before secret lookup",async()=>{
+ const {default:worker}=await import("../src/index.js");
+ const body=JSON.stringify(wrong);
+ const request=()=>new Request("https://cc-shared-nvidia-inference.invalid/internal/diagnostics/nvidia-visual-fixture",
+  {method:"POST",headers:{"Content-Type":"application/json","Content-Length":String(body.length)},body});
+ let secretReads=0;
+ const key={get:async()=>{secretReads++;throw Error("secret lookup must not happen")}};
+ const disabled=await worker.fetch(request(),{CC_NVIDIA_DIAGNOSTIC_ENABLED:"0",NVIDIA_API_KEY:key});
+ assert.equal(disabled.status,503);assert.equal((await disabled.json()).error,"diagnostic_not_admitted");
+ const rejected=await worker.fetch(request(),{CC_NVIDIA_DIAGNOSTIC_ENABLED:"1",NVIDIA_API_KEY:key});
+ assert.equal(rejected.status,400);assert.equal((await rejected.json()).error,"fixed_visual_fixture_rejected");
+ assert.equal(secretReads,0);
+});
