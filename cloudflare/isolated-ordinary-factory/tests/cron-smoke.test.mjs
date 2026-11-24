@@ -144,24 +144,32 @@ test('one fixed scratch create executes exactly once and writes private receipt 
     }finally{globalThis.fetch=original;}
   });
 });
-test('missing proposal 404 is idle; auth failure 403 is not treated as empty queue',async()=>{
+test('missing proposal 404 is idle only after authenticated fixed directory verification',async()=>{
   await withFixture(async({mod})=>{
     const original=globalThis.fetch;
-    const ready=env({FACTORY_SCHEDULED_POLL_ENABLED:'1',
-      FACTORY_EXECUTOR_ENABLED:'1',FACTORY_CREATE_ENABLED:'1',
+    const ready=env({FACTORY_SCHEDULED_POLL_ENABLED:'1',FACTORY_EXECUTOR_ENABLED:'1',FACTORY_CREATE_ENABLED:'1',
       FACTORY_QUEUE_GITHUB_TOKEN:'synthetic-github-token-long-enough'});
+    const proposal=ROOT+'cloudflare-factory/proposal.json?ref=cloudflare-factory-inbox';
+    const directory=ROOT+'cloudflare-factory?ref=cloudflare-factory-inbox';
+    const attempts={path:'cloudflare-factory/attempts',type:'dir'};
     try {
-      let calls=0;
-      globalThis.fetch=async(url,init)=>{calls++;
-        assert.ok(String(url).startsWith(ROOT));
-        return new Response('{}',{status:404});
+      const calls=[];
+      globalThis.fetch=async(url,init)=>{
+        calls.push(String(url));
+        assert.equal(init.headers.authorization,'Bearer '+ready.FACTORY_QUEUE_GITHUB_TOKEN);
+        assert.equal(init.redirect,'manual');
+        return new Response(JSON.stringify(url===proposal?{}:[attempts]),{status:url===proposal?404:200});
       };
       await mod.default.scheduled({cron:CRON},ready,{});
-      assert.equal(calls,1);
-      globalThis.fetch=async(url,init)=>
-        new Response('{}',{status:403});
-      await assert.rejects(mod.default.scheduled({cron:CRON},ready,{}),
-        /proposal_unavailable/);
+      assert.deepEqual(calls,[proposal,directory]);
+      globalThis.fetch=async()=>new Response('{}',{status:404});
+      await assert.rejects(mod.default.scheduled({cron:CRON},ready,{}),/queue_repository_or_branch_unavailable/);
+      globalThis.fetch=async(url)=>new Response(JSON.stringify(url===proposal?{}:[attempts,{path:'cloudflare-factory/proposal.json',type:'file'}]),{status:url===proposal?404:200});
+      await assert.rejects(mod.default.scheduled({cron:CRON},ready,{}),/proposal_read_inconsistent/);
+      globalThis.fetch=async(url)=>new Response(JSON.stringify(url===proposal?{}:[]),{status:url===proposal?404:200});
+      await assert.rejects(mod.default.scheduled({cron:CRON},ready,{}),/queue_directory_identity_unverified/);
+      globalThis.fetch=async()=>new Response('{}',{status:403});
+      await assert.rejects(mod.default.scheduled({cron:CRON},ready,{}),/proposal_unavailable/);
     } finally {globalThis.fetch=original;}
   });
 });
