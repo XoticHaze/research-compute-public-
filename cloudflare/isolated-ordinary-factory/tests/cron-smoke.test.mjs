@@ -289,6 +289,7 @@ test('stage-only cron uploads a pinned scratch version with no deployment or cre
           assert.equal(receipt.version_id,version);
           assert.equal(receipt.source_sha256,digest);
           assert.equal(receipt.live_serving_verified,false);
+          assert.equal(receipt.version_content_readback_verified,true);
           return new Response(JSON.stringify({content:{sha:SHA,path:'cloudflare-factory/results/'+RUN+'.json'}}),{status:201});
         }
         if(method==='DELETE')return new Response(JSON.stringify({commit:{sha:SHA}}),{status:200});
@@ -301,9 +302,12 @@ test('stage-only cron uploads a pinned scratch version with no deployment or cre
       }
       if(target===API+'/workers/workers/'+ID && method==='GET')
         return new Response(JSON.stringify({success:true,result:{id:ID,name:req.worker_name}}),{status:200});
-      assert.equal(target,API+'/workers/scripts/cc-scratch-proof-b/versions');
+      const path=API+'/workers/workers/'+ID+'/versions';
+      if(target===path+'?page=1&per_page=100' && method==='GET')return new Response(JSON.stringify({success:true,result:[]}),{status:200});
+      if(target===path+'/'+version+'?include=modules' && method==='GET')return new Response(JSON.stringify({success:true,result:{id:version,main_module:'worker.mjs',compatibility_date:'2026-11-18',bindings:[],modules:[{name:'worker.mjs',content_type:'application/javascript+module',content_base64:btoa(source)}]}}),{status:200});
+      assert.equal(target,path+'?deploy=false');
       assert.equal(method,'POST');
-      assert.equal(await init.body.get('worker.mjs').text(),source);
+      assert.equal(atob(JSON.parse(init.body).modules[0].content_base64),source);
       return new Response(JSON.stringify({success:true,result:{id:version}}),{status:201});
     };
     try{
