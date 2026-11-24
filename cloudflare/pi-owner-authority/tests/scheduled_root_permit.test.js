@@ -5,7 +5,8 @@ import {PiOwnerApprovalState} from '../src/pi_owner_approval.js';
 globalThis.crypto ||= webcrypto;
 
 const now=Date.now(), iso=t=>new Date(t).toISOString().replace(/\.\d{3}Z$/,'Z');
-const permit={schema:'commandcenter.pi.scheduled_root_permit.v1',permit_id:'a'.repeat(32),
+const manifest='d'.repeat(64), rid='ccpi2-'+manifest+'-'+'e'.repeat(16);
+const permit={schema:'commandcenter.pi.scheduled_root_permit.v2',permit_id:'a'.repeat(32),request_id:rid,manifest_sha256:manifest,
   source_sha:'b'.repeat(40),expected_release:'r'+'c'.repeat(12),
   not_before:iso(now-60000),expires_at:iso(now+3600000)};
 const keys=await crypto.subtle.generateKey('Ed25519',true,['sign','verify']);
@@ -24,7 +25,7 @@ function fixture(overrides={}, enrolled=true){
     transaction:fn=>{const work=tail.then(()=>fn(storage));tail=work.catch(()=>{});return work;}};
   return {instance:new PiOwnerApprovalState({storage},{...env,...overrides}),rows};
 }
-function body(id='test-root-123',overrides={}){
+function body(id=rid,overrides={}){
   const request={schema:'commandcenter.pi.release_request.v1',action:'pi.release.apply',node_id:'cc-pi4',
     source_repo:'XoticHaze/CommandCenter',source_sha:permit.source_sha,expected_release:permit.expected_release,
     request_id:id,created_at:iso(now-1000),expires_at:iso(now+300000),...overrides};
@@ -44,7 +45,7 @@ test('scope and expiry are exact',async()=>{
   const {instance}=fixture();
   for(const changes of [{source_sha:'d'.repeat(40)},{expected_release:'r'+'d'.repeat(12)},
     {expires_at:'invalid'},{action:'pi.bot.rejoin_existing'},{expires_at:iso(now+7200000)}])
-    assert.equal((await invoke(instance,body('test-root-123',changes))).status,403);
+    assert.equal((await invoke(instance,body(rid,changes))).status,403);
 });
 test('one-use permit, same-ID recovery, actual Ed25519 verification',async()=>{
   const {instance,rows}=fixture();
@@ -56,12 +57,12 @@ test('one-use permit, same-ID recovery, actual Ed25519 verification',async()=>{
   const canonical=JSON.stringify(Object.fromEntries(Object.entries(unsigned).sort(([a],[b])=>a<b?-1:a>b?1:0)))+'\n';
   assert.equal(await crypto.subtle.verify('Ed25519',keys.publicKey,Buffer.from(signature_b64,'base64'),
     new TextEncoder().encode('commandcenter.pi.release_request_approval.v1\0'+canonical)),true);
-  assert.equal((await invoke(instance,body('test-root-456'))).status,403);
-  assert.equal(rows.get('pi_owner_scheduled_permit_v1/'+permit.permit_id).request_id,'test-root-123');
+  assert.equal((await invoke(instance,body('ccpi2-'+'f'.repeat(64)+'-'+'e'.repeat(16)))).status,403);
+  assert.equal(rows.get('pi_owner_scheduled_permit_v1/'+permit.permit_id).request_id,rid);
 });
 test('concurrent IDs cannot issue twice; owner HTTP signer still requires owner',async()=>{
   const {instance,rows}=fixture();
-  const responses=await Promise.all([invoke(instance),invoke(instance,body('test-root-456'))]);
+  const responses=await Promise.all([invoke(instance),invoke(instance,body('ccpi2-'+'f'.repeat(64)+'-'+'e'.repeat(16)))]);
   assert.equal(responses.filter(r=>r.status===201).length,1);
   assert.equal([...rows.keys()].filter(k=>k.startsWith('pi_owner_issued_v1/')).length,1);
   assert.equal((await invoke(instance,body(),'/sign')).status,403);
