@@ -135,7 +135,7 @@ async function readPendingBotRejoin(env) {
     'https://api.github.com/repos/XoticHaze/CommandCenter-gate-control/'
       +'contents/pi-node/bot-rejoin-proposal.json?ref=pi-node-inbox',
     {headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json',
-      'x-github-api-version':'2022-11-28'},redirect:'manual'});
+      'x-github-api-version':'2022-11-28','user-agent':'commandcenter-pi-owner-authority-v1'},redirect:'manual'});
   if(!remote.ok) throw Error('pi_owner_pending_rejoin_unavailable');
   const file=await remote.json();
   if(!/^[a-f0-9]{40}$/.test(String(file?.sha||''))
@@ -158,7 +158,7 @@ async function readPendingCCRootRelease(env) {
     +'contents/pi-node/root-release-proposal.json?ref=pi-node-inbox';
   const remote=await fetch(url,{
     headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json',
-      'x-github-api-version':'2022-11-28'},redirect:'manual',
+      'x-github-api-version':'2022-11-28','user-agent':'commandcenter-pi-owner-authority-v1'},redirect:'manual',
   });
   if(!remote.ok) throw Error('pi_owner_pending_release_unavailable');
   const file=await remote.json();

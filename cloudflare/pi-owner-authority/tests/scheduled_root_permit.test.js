@@ -66,3 +66,28 @@ test('concurrent IDs cannot issue twice; owner HTTP signer still requires owner'
   assert.equal([...rows.keys()].filter(k=>k.startsWith('pi_owner_issued_v1/')).length,1);
   assert.equal((await invoke(instance,body(),'/sign')).status,403);
 });
+
+test('queue read includes explicit GitHub client identity and reports only categorical upstream status',async()=>{
+  const {readPiRootReleaseReceipt}=await import('../src/pi_owner_approval.js');
+  const id='synthetic-root-receipt';
+  const receipt={schema:'commandcenter.pi.release_result.v1',node_id:'cc-pi4',
+    request_id:id,action:'pi.release.apply',source_sha:'a'.repeat(40),status:'passed'};
+  const raw=JSON.stringify(receipt),original=globalThis.fetch;
+  const fakeEnv={PI_OWNER_QUEUE_GITHUB_TOKEN:'synthetic-only-not-a-real-token'};
+  let status=200,reported=receipt;
+  globalThis.fetch=async(url,opts)=>{
+    assert.equal(url,'https://api.github.com/repos/XoticHaze/CommandCenter-gate-control/contents/pi-node/release-results/'+id+'.json?ref=pi-node-outbox');
+    assert.equal(opts.headers['user-agent'],'commandcenter-pi-owner-authority-v1');
+    assert.equal(opts.headers.authorization,'Bearer '+fakeEnv.PI_OWNER_QUEUE_GITHUB_TOKEN);
+    assert.equal(opts.redirect,'manual');
+    return {status,ok:status===200,json:async()=>({sha:'b'.repeat(40),encoding:'base64',
+      content:Buffer.from(JSON.stringify(reported)).toString('base64'),size:Buffer.byteLength(raw)})};
+  };
+  try {
+    assert.equal((await readPiRootReleaseReceipt(fakeEnv,id)).root_receipt_verified,true);
+    status=403;await assert.rejects(readPiRootReleaseReceipt(fakeEnv,id),/pi_owner_root_release_receipt_http_403/);
+    status=404;assert.equal((await readPiRootReleaseReceipt(fakeEnv,id)).status,'PENDING');
+    status=200;reported={...receipt,request_id:'wrong-id'};
+    await assert.rejects(readPiRootReleaseReceipt(fakeEnv,id),/pi_owner_root_release_receipt_identity_invalid/);
+  } finally {globalThis.fetch=original;}
+});

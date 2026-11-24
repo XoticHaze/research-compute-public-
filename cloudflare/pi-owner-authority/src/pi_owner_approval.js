@@ -426,7 +426,7 @@ async function githubFile(token, path) {
     + '?ref=' + encodeURIComponent(QUEUE_REF);
   const response = await fetch(url, {
     headers: {'authorization':'Bearer ' + token, 'accept':'application/vnd.github+json',
-      'x-github-api-version':'2022-11-28'}, redirect:'manual',
+      'x-github-api-version':'2022-11-28','user-agent':'commandcenter-pi-owner-authority-v1'}, redirect:'manual',
   });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error('pi_owner_private_queue_read_unavailable');
@@ -454,7 +454,7 @@ async function githubPut(token, path, doc, old) {
   const response = await fetch(url, {
     method:'PUT', redirect:'manual',
     headers:{'authorization':'Bearer ' + token, 'accept':'application/vnd.github+json',
-      'content-type':'application/json', 'x-github-api-version':'2022-11-28'},
+      'content-type':'application/json', 'x-github-api-version':'2022-11-28','user-agent':'commandcenter-pi-owner-authority-v1'},
     body:JSON.stringify(body),
   });
   if (!response.ok) throw new Error('pi_owner_private_queue_write_failed');
@@ -518,7 +518,7 @@ export async function readPiOwnerRootReceipt(env, requestId) {
     + resultPath + '?ref=pi-node-outbox';
   const response = await fetch(url, {
     headers: {'authorization':'Bearer ' + token, 'accept':'application/vnd.github+json',
-      'x-github-api-version':'2022-11-28'}, redirect:'manual',
+      'x-github-api-version':'2022-11-28','user-agent':'commandcenter-pi-owner-authority-v1'}, redirect:'manual',
   });
   if (response.status === 404) {
     return {schema:'commandcenter.pi.owner_root_result_projection.v1',
@@ -597,12 +597,12 @@ export async function readPiRootReleaseReceipt(env,requestId) {
     +path+'?ref=pi-node-outbox';
   const response=await fetch(url,{
     headers:{'authorization':'Bearer '+token,'accept':'application/vnd.github+json',
-      'x-github-api-version':'2022-11-28'},redirect:'manual',
+      'x-github-api-version':'2022-11-28','user-agent':'commandcenter-pi-owner-authority-v1'},redirect:'manual',
   });
   if(response.status===404)return{
     schema:'commandcenter.pi.root_release_result_projection.v1',
     request_id:requestId,status:'PENDING',root_receipt_verified:false};
-  if(!response.ok)throw new Error('pi_owner_root_release_receipt_unavailable');
+  if(!response.ok)throw new Error('pi_owner_root_release_receipt_http_'+response.status);
   const file=await response.json();
   if(!SHA40.test(file?.sha||'')||file.encoding!=='base64'
       ||typeof file.content!=='string'||file.size>8192){
