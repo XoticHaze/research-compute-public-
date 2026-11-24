@@ -388,3 +388,70 @@ test('fixed read-only queue probe works with create and stage disabled, receipt 
     }finally{globalThis.fetch=original;}
   });
 });
+
+test('isolated version API reconciles existing exact content without duplicate write',async()=>{
+  await withFixture(async({manifest})=>{
+    // Use the generated module directly through a separate fixture below.
+    assert.equal(manifest.cloudflare_mutations,0);
+  });
+  const dir=mkdtempSync(join(tmpdir(),'cc-id-stage-reconcile-'));
+  try{
+    build(ACCOUNT,{outDir:dir});
+    const {stageScratchVersion}=await import(pathToFileURL(join(dir,'src','scratch_stage.js')).href);
+    const source='export default {fetch(){return new Response("scratch");}};';
+    const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(source))),v=>v.toString(16).padStart(2,'0')).join('');
+    const id='12345678-1234-1234-1234-123456789abc';
+    const req={worker_name:'cc-scratch-proof-a',worker_id:ID,source_commit:SHA,source_sha256:digest};
+    const path=API+'/workers/workers/'+ID;
+    let calls=[];
+    const mock=async(url,init)=>{
+      calls.push(init.method);assert.equal(init.method,'GET');
+      if(url.startsWith('https://raw.githubusercontent.com/'))return new Response(source);
+      const result=url===path?{id:ID,name:req.worker_name}:url===path+'/versions?page=1&per_page=100'?[{id}]:{id,main_module:'worker.mjs',compatibility_date:'2026-11-18',bindings:[],modules:[{name:'worker.mjs',content_type:'application/javascript+module',content_base64:btoa(source)}]};
+      return Response.json({success:true,result});
+    };
+    const receipt=await stageScratchVersion(env({FACTORY_STAGE_VERSION_ENABLED:'1',FACTORY_WORKERS_ADMIN:'synthetic-token-long-enough'}),req,mock);
+    assert.equal(receipt.status,'staged_off_traffic');assert.equal(receipt.reused_existing_version,true);assert.equal(receipt.cloudflare_mutations,0);assert.equal(calls.length,4);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+test('isolated release requires explicit admission and predecessor; verifies content and deployment',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'cc-id-release-'));
+  try{
+    build(ACCOUNT,{outDir:dir});
+    const {promoteScratchVersion}=await import(pathToFileURL(join(dir,'src','scratch_stage.js')).href);
+    const source='export default {fetch(){return new Response("scratch");}};';
+    const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(source))),v=>v.toString(16).padStart(2,'0')).join('');
+    const id='12345678-1234-1234-1234-123456789abc',dep='22345678-1234-1234-1234-123456789abc';
+    const req={worker_name:'cc-scratch-proof-a',worker_id:ID,source_commit:SHA,source_sha256:digest,version_id:id,expected_active_version_id:null};
+    const path=API+'/workers/workers/'+ID, dp=API+'/workers/scripts/cc-scratch-proof-a/deployments';
+    let calls=[],deployed=false;
+    const mock=async(url,init)=>{
+      calls.push({url,method:init.method});
+      if(url===path)return Response.json({success:true,result:{id:ID,name:req.worker_name}});
+      if(url===path+'/versions/'+id+'?include=modules')return Response.json({success:true,result:{id,main_module:'worker.mjs',compatibility_date:'2026-11-18',bindings:[],modules:[{name:'worker.mjs',content_type:'application/javascript+module',content_base64:btoa(source)}]}});
+      assert.equal(url,dp);
+      if(init.method==='POST'){assert.deepEqual(JSON.parse(init.body),{strategy:'percentage',versions:[{version_id:id,percentage:100}]});deployed=true;return Response.json({success:true,result:{id:dep}});}
+      return Response.json({success:true,result:{deployments:deployed?[{id:dep,created_on:'2026-11-24T00:00:00Z',versions:[{version_id:id,percentage:100}]}]:[]}});
+    };
+    const e=env({FACTORY_WORKERS_ADMIN:'synthetic-token-long-enough'});
+    assert.equal((await promoteScratchVersion(e,req,mock)).status,'failed_or_indeterminate');assert.equal(calls.length,0);
+    e.FACTORY_SCRATCH_RELEASE_ENABLED='1';
+    const wrong=await promoteScratchVersion(e,{...req,expected_active_version_id:id},mock);
+    assert.equal(wrong.diagnostic.category,'deployment_predecessor_mismatch');assert.equal(calls.filter(x=>x.method==='POST').length,0);
+    const ok=await promoteScratchVersion(e,req,mock);
+    assert.equal(ok.status,'promoted_verified');assert.equal(ok.public_ingress_changed,false);assert.equal(ok.version_id,id);assert.equal(calls.filter(x=>x.method==='POST').length,1);
+    const again=await promoteScratchVersion(e,req,mock);
+    assert.equal(again.diagnostic.category,'deployment_predecessor_mismatch');assert.equal(calls.filter(x=>x.method==='POST').length,1);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+test('isolated stage returns bounded numeric API diagnostics with no bearer',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'cc-id-stage-diagnostic-'));
+  try{
+    build(ACCOUNT,{outDir:dir});
+    const {stageScratchVersion}=await import(pathToFileURL(join(dir,'src','scratch_stage.js')).href);
+    const token='synthetic-token-long-enough';
+    const req={worker_name:'cc-scratch-proof-a',worker_id:ID,source_commit:SHA,source_sha256:'f'.repeat(64)};
+    const receipt=await stageScratchVersion(env({FACTORY_STAGE_VERSION_ENABLED:'1',FACTORY_WORKERS_ADMIN:token}),req,async()=>Response.json({success:false,errors:[{code:10000,message:token}]},{status:403}));
+    assert.equal(receipt.diagnostic.phase,'worker_identity');assert.equal(receipt.diagnostic.http_status,403);assert.deepEqual(receipt.diagnostic.api_error_codes,[10000]);assert.equal(JSON.stringify(receipt).includes(token),false);assert.equal(receipt.diagnostic.mutation_attempted,false);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
