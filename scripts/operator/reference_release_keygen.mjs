@@ -32,18 +32,34 @@ async function makePair() {
 
 const outDir = process.argv[2];
 if (!outDir) throw new Error('output_directory_required');
-fs.mkdirSync(outDir, { recursive: true });
+// A signer is a one-time identity, not a regenerable build artifact.
+// Refuse symlinks, unsafe directory permissions and populated directories
+// BEFORE generating any signing material. A rerun must never rotate keys.
+fs.mkdirSync(outDir, { recursive: true, mode: 0o700 });
+const folder = fs.lstatSync(outDir);
+if (!folder.isDirectory() || folder.isSymbolicLink()) {
+  throw new Error('key_output_directory_invalid');
+}
+if ((folder.mode & 0o077) !== 0) {
+  throw new Error('key_output_directory_not_private');
+}
+if (fs.readdirSync(outDir).length !== 0) {
+  throw new Error('key_output_directory_not_empty');
+}
+const writeNew = (filename, value) => fs.writeFileSync(
+  path.join(outDir, filename), value, { mode:0o600, flag:'wx' },
+);
 
 const broker = await makePair();
 const authority = await makePair();
 
-fs.writeFileSync(path.join(outDir, 'broker-private.jwk'), JSON.stringify(broker.privateJwk) + '\n', { mode: 0o600 });
-fs.writeFileSync(path.join(outDir, 'broker-public.b64'), broker.publicB64 + '\n', { mode: 0o600 });
-fs.writeFileSync(path.join(outDir, 'broker-key-id.txt'), broker.keyId + '\n', { mode: 0o600 });
+writeNew('broker-private.jwk', JSON.stringify(broker.privateJwk) + '\n');
+writeNew('broker-public.b64', broker.publicB64 + '\n');
+writeNew('broker-key-id.txt', broker.keyId + '\n');
 
-fs.writeFileSync(path.join(outDir, 'authority-private.pkcs8.b64'), authority.privatePkcs8B64 + '\n', { mode: 0o600 });
-fs.writeFileSync(path.join(outDir, 'authority-public.b64'), authority.publicB64 + '\n', { mode: 0o600 });
-fs.writeFileSync(path.join(outDir, 'authority-key-id.txt'), authority.keyId + '\n', { mode: 0o600 });
+writeNew('authority-private.pkcs8.b64', authority.privatePkcs8B64 + '\n');
+writeNew('authority-public.b64', authority.publicB64 + '\n');
+writeNew('authority-key-id.txt', authority.keyId + '\n');
 
 console.log('REFERENCE_KEYGEN_PASS=1');
 console.log('BROKER_KEY_ID=' + broker.keyId);

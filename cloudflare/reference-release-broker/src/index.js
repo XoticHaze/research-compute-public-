@@ -1,4 +1,5 @@
 import { verifyAuthorityIntent } from './intent.js';
+export { BrokerSignerVault } from './signer_vault.js';
 import {
   callerPolicySha256,
   validateOidcCallerPolicy,
@@ -124,6 +125,77 @@ async function importBrokerSigner(privateJwkText) {
   };
 }
 
+// Existing JWK-secret mode stays as the unchanged deployment default.
+// Vault mode is deliberate source/config + independent Cloudflare approval,
+// NEVER an implicit result of GitHub code publication or public GET.
+function signerMode(env) {
+  const mode = String(env.BROKER_SIGNER_MODE || 'legacy-jwk-v1');
+  if (mode !== 'legacy-jwk-v1' && mode !== 'vault-v1') {
+    throw new Error('broker_signer_unconfigured');
+  }
+  return mode;
+}
+function signerStub(env) {
+  if (!env.BROKER_SIGNER_VAULT
+      || typeof env.BROKER_SIGNER_VAULT.idFromName !== 'function'
+      || typeof env.BROKER_SIGNER_VAULT.get !== 'function') {
+    throw new Error('broker_signer_unconfigured');
+  }
+  return env.BROKER_SIGNER_VAULT.get(
+    env.BROKER_SIGNER_VAULT.idFromName('cc809:broker-ticket-p256:v1')
+  );
+}
+async function checkedPublic(record) {
+  if (!record || typeof record.public_b64 !== 'string'
+      || !/^sha256:[0-9a-f]{64}$/.test(record.key_id)) {
+    throw new Error('broker_signer_unconfigured');
+  }
+  const raw = b64ToBytes(record.public_b64);
+  if (raw.length !== 65 || raw[0] !== 4
+      || 'sha256:' + await sha256Hex(raw) !== record.key_id) {
+    throw new Error('broker_signer_unconfigured');
+  }
+  await crypto.subtle.importKey(
+    'raw', raw, {name:'ECDSA', namedCurve:'P-256'}, false, ['verify']
+  );
+  return {public_b64:record.public_b64, keyId:record.key_id};
+}
+async function signerPublic(env) {
+  if (signerMode(env) === 'vault-v1') {
+    const result = await signerStub(env).fetch('https://signer-vault/public-key');
+    if (!result.ok) throw new Error('broker_signer_unconfigured');
+    return checkedPublic(await result.json());
+  }
+  const signer = await importBrokerSigner(env.BROKER_SIGNING_PRIVATE_JWK);
+  const jwk = JSON.parse(env.BROKER_SIGNING_PRIVATE_JWK);
+  const publicKey = await crypto.subtle.importKey('jwk', brokerPublicJwkFromPrivate(jwk),
+    {name:'ECDSA', namedCurve:'P-256'}, true, ['verify']);
+  const raw = new Uint8Array(await crypto.subtle.exportKey('raw', publicKey));
+  let text = '';
+  for (let i = 0; i < raw.length; i += 0x8000) {
+    text += String.fromCharCode(...raw.subarray(i, i+0x8000));
+  }
+  return checkedPublic({public_b64:btoa(text), key_id:signer.keyId});
+}
+async function signTicket(env, expectedKeyId, claims, now) {
+  if (signerMode(env) === 'vault-v1') {
+    const result = await signerStub(env).fetch('https://signer-vault/sign-ticket', {
+      method:'POST', headers:{'content-type':'application/json'},
+      body:JSON.stringify({expected_key_id:expectedKeyId, claims}),
+    });
+    if (!result.ok) throw new Error('broker_signer_unconfigured');
+    const node = await result.json();
+    if (!node || node.ok !== true || !node.ticket
+        || node.ticket.signer_key_id !== expectedKeyId) {
+      throw new Error('broker_signer_unconfigured');
+    }
+    return node.ticket;
+  }
+  const signer = await importBrokerSigner(env.BROKER_SIGNING_PRIVATE_JWK);
+  if (signer.keyId !== expectedKeyId) throw new Error('broker_signer_unconfigured');
+  return signReleaseTicket(signer.privateKey, signer.keyId, claims, now);
+}
+
 function policyFromEnv(env) {
   const policy = {
     audience: EXPECTED_AUDIENCE,
@@ -156,16 +228,14 @@ async function assertBrokerReady(env) {
   if (typeof env.AUTHORITY_PUBLIC_B64 !== 'string' || !env.AUTHORITY_PUBLIC_B64) {
     throw new Error('authority_key_unconfigured');
   }
-  if (typeof env.BROKER_SIGNING_PRIVATE_JWK !== 'string' || !env.BROKER_SIGNING_PRIVATE_JWK) {
-    throw new Error('broker_signer_unconfigured');
-  }
+
   const raw = b64ToBytes(env.AUTHORITY_PUBLIC_B64);
   if (raw.length !== 33 && raw.length !== 65) {
     throw new Error('authority_public_point_invalid');
   }
   await crypto.subtle.importKey('raw', raw, {name:'ECDSA',namedCurve:'P-256'},
                                 false,['verify']);
-  await importBrokerSigner(env.BROKER_SIGNING_PRIVATE_JWK);
+  await signerPublic(env);
 }
 
 async function handleRelease(request, env) {
@@ -173,9 +243,7 @@ async function handleRelease(request, env) {
   if (typeof env.AUTHORITY_PUBLIC_B64 !== 'string' || !env.AUTHORITY_PUBLIC_B64) {
     throw new Error('authority_key_unconfigured');
   }
-  if (typeof env.BROKER_SIGNING_PRIVATE_JWK !== 'string' || !env.BROKER_SIGNING_PRIVATE_JWK) {
-    throw new Error('broker_signer_unconfigured');
-  }
+
 
   const auth = String(request.headers.get('authorization') || '');
   if (!auth.startsWith('Bearer ') || auth.length > 16384) throw new Error('oidc_missing');
@@ -195,7 +263,7 @@ async function handleRelease(request, env) {
 
   const policy = policyFromEnv(env);
   const claims = await verifyGithubOidc(auth.slice(7));
-  const signer = await importBrokerSigner(env.BROKER_SIGNING_PRIVATE_JWK);
+  const signer = await signerPublic(env);
   const now = Math.floor(Date.now() / 1000);
   // Verify the signed GitHub JWT's immutable, public principal and exact
   // reusable-workflow measurement before using it to match a private intent.
@@ -255,8 +323,8 @@ async function handleRelease(request, env) {
     worker_key_id: workerKeyId,
     admission_not_after: admissionNotAfter,
   };
-  const ticket = await signReleaseTicket(
-    signer.privateKey,
+  const ticket = await signTicket(
+    env,
     signer.keyId,
     ticketClaims,
     now,
@@ -275,6 +343,46 @@ export class GrantLedger {
 
   async fetch(request) {
     const url = new URL(request.url);
+    // Internal Durable Object storage primitive ONLY. The public Worker index
+    // has no route to this method. A future independent Ed25519 verifier must
+    // authenticate issuance BEFORE invoking this isolated placement namespace.
+    if (request.method === 'POST' && url.pathname === '/consume-placement') {
+      let body;
+      try {
+        const text = await request.text();
+        if (!text || text.length > 512) throw new Error('invalid_size');
+        body = JSON.parse(text);
+      } catch { return json({ error: 'placement_input_rejected' }, 400); }
+      const required = new Set(['nonce','issuer_id']);
+      if (!body || Array.isArray(body) || typeof body !== 'object'
+          || Object.keys(body).length !== required.size
+          || Object.keys(body).some(key => !required.has(key))
+          || !/^[0-9a-f]{32}$/.test(body.nonce)
+          || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(body.issuer_id)
+          || String(body.issuer_id).includes('..')) {
+        return json({ error: 'placement_input_rejected' }, 400);
+      }
+      // Bind the opaque nonce to the actual Durable Object name. An internal
+      // caller must resolve idFromName('placement:' + nonce). A caller-supplied
+      // request body cannot choose another object and reset replay protection.
+      // Cloudflare exposes the original name via state.id.name; undefined
+      // (newUniqueId/idFromString) is deliberately rejected.
+      if (this.state.id?.name !== 'placement:' + body.nonce) {
+        return json({ error: 'placement_nonce_object_mismatch' }, 400);
+      }
+      const consumed = await this.state.storage.transaction(async (txn) => {
+        // Keep the placement key separate from the broker release grant.
+        const key = 'placement-consumed';
+        if (await txn.get(key)) return false;
+        await txn.put(key, {
+          nonce: body.nonce, issuer_id: body.issuer_id,
+          consumed_at: Math.floor(Date.now() / 1000),
+        });
+        return true;
+      });
+      return consumed ? json({ ok: true }, 200)
+                      : json({ error: 'placement_nonce_already_consumed' }, 409);
+    }
     if (request.method !== 'POST' || url.pathname !== '/consume') {
       return json({ error: 'not_found' }, 404);
     }
@@ -324,22 +432,10 @@ export default {
     }
     if (request.method === 'GET' && url.pathname === '/v1/public-key') {
       try {
-        const raw = JSON.parse(env.BROKER_SIGNING_PRIVATE_JWK || '{}');
-        const pub = brokerPublicJwkFromPrivate(raw);
-        const publicKey = await crypto.subtle.importKey(
-          'jwk', pub, { name: 'ECDSA', namedCurve: 'P-256' }, true, ['verify']
-        );
-        const publicRaw = new Uint8Array(await crypto.subtle.exportKey('raw', publicKey));
-        let text = '';
-        for (let i = 0; i < publicRaw.length; i += 0x8000) {
-          text += String.fromCharCode(...publicRaw.subarray(i, i + 0x8000));
-        }
-        return json({
-          public_b64: btoa(text),
-          key_id: 'sha256:' + await sha256Hex(publicRaw),
-        }, 200);
+        const publicSigner = await signerPublic(env);
+        return json({public_b64:publicSigner.public_b64, key_id:publicSigner.keyId}, 200);
       } catch {
-        return json({ error: 'unavailable' }, 503);
+        return json({error:'unavailable'}, 503);
       }
     }
     if (request.method !== 'POST' || url.pathname !== '/v1/release') {
@@ -357,5 +453,43 @@ export default {
       if (code === 'grant_consume_rejected') return json({ error: 'conflict' }, 409);
       return json({ error: 'rejected' }, 400);
     }
+  },
+  async scheduled(_controller, env) {
+    // Independently controlled Cloudflare administrator installs BOTH:
+    // a reviewed vault-mode version and an expiry-bound first-issue secret.
+    // No public endpoint or GitHub workflow can activate initial issuance.
+    if (signerMode(env) !== 'vault-v1') return;
+    const approval = String(env.BROKER_FIRST_SEAL_APPROVAL_ID || '');
+    if (!approval) return; // no admin first-issue approval; NO mutation
+    if (!/^cc809-[0-9a-f]{32}$/.test(approval)) {
+      throw new Error('first_seal_approval_invalid');
+    }
+    const notAfter = Number(env.BROKER_FIRST_SEAL_APPROVAL_NOT_AFTER);
+    const now = Math.floor(Date.now()/1000);
+    if (!Number.isInteger(notAfter) || notAfter <= now || notAfter > now+172800) {
+      throw new Error('first_seal_approval_expired');
+    }
+    // Require the separate grant authority's verifier and the original
+    // exact single-use ledger/policy BEFORE the non-rotatable first issuance.
+    if (!env.GRANT_LEDGER || typeof env.GRANT_LEDGER.idFromName !== 'function'
+        || typeof env.GRANT_LEDGER.get !== 'function') {
+      throw new Error('grant_ledger_unconfigured');
+    }
+    policyFromEnv(env);
+    if (!env.AUTHORITY_PUBLIC_B64) throw new Error('authority_key_unconfigured');
+    const raw = b64ToBytes(env.AUTHORITY_PUBLIC_B64);
+    if (raw.length !== 33 && raw.length !== 65) {
+      throw new Error('authority_key_unconfigured');
+    }
+    await crypto.subtle.importKey('raw', raw,
+      {name:'ECDSA',namedCurve:'P-256'}, false, ['verify']);
+    const result = await signerStub(env).fetch('https://signer-vault/initial-seal', {
+      method:'POST', headers:{'content-type':'application/json'},
+      body:JSON.stringify({approval_id:approval, not_after:notAfter}),
+    });
+    if (!result.ok) throw new Error('first_seal_rejected');
+    // A replay with the same approval returns the existing key; a new
+    // approval can NEVER overwrite or rotate it.
+    await signerPublic(env);
   },
 };

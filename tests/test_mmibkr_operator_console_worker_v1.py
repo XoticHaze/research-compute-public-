@@ -263,9 +263,13 @@ class OperatorConsoleWorkerContractTests(unittest.TestCase):
         bindings = config["durable_objects"]["bindings"]
         self.assertEqual(
             bindings,
-            [{"name": "OPERATOR_STATE", "class_name": "OperatorState"}],
+            [
+                {"name": "OPERATOR_STATE", "class_name": "OperatorState"},
+                {"name": "PI_OWNER_APPROVER", "class_name": "PiOwnerApprovalState"},
+            ],
         )
         self.assertEqual(config["exports"]["OperatorState"]["storage"], "sqlite")
+        self.assertEqual(config["exports"]["PiOwnerApprovalState"]["storage"], "sqlite")
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("this.ctx.storage.transaction(async (txn) =>", text)
         self.assertIn("await txn.get('latest')", text)

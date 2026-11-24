@@ -1,3 +1,9 @@
+import {
+  PI_GHCR_OPAQUE_PUBLISH_IDENTITY,
+  resolvePiImageCandidate,
+} from './pi_opaque_ghcr.js';
+import { sealPrivateOverEmploy, privateWebHeldReason } from './private_web_source_seal.js';
+
 const GITHUB_ISSUER = 'https://token.actions.githubusercontent.com';
 const GITHUB_JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwks';
 const EXPECTED_AUDIENCE = 'mmibkr-fleet-authority';
@@ -52,6 +58,12 @@ const CLOUD_CANARY_DEPLOY_IDENTITY = {
 };
 const CLOUD_CANARY_DEPLOY_APPROVED_SOURCE =
   '9a190fe66665c8f673d227a41c4544889a2cf2cb';
+
+const PRIVATE_WEB_SOURCE_CAPSULE_IDENTITY = {
+  repository: 'XoticHaze/research-compute-public-',
+  ref: 'refs/heads/main',
+  workflow_ref: 'XoticHaze/research-compute-public-/.github/workflows/cc-private-web-source-capsule-r1.yml@refs/heads/main',
+};
 
 const OPERATOR_CONSOLE_DEPLOY_IDENTITY = {
   repository: 'XoticHaze/research-compute-public-',
@@ -234,6 +246,8 @@ const ALLOWED_PRIVATE_EVENTS = new Set(['push', 'workflow_dispatch', 'schedule']
 
 const SOURCE_VAULT_PUBLIC_KEY_SCHEMA = 'mmibkr-source-vault-public-key-v1';
 const SOURCE_VAULT_UNWRAP_SCHEMA = 'mmibkr-source-vault-unwrap-v2';
+const PRIVATE_WEB_CAPSULE_SCHEMA = 'commandcenter.private_web_ciphertext_capsule.v1';
+const PRIVATE_WEB_KEY_RELEASE_SCHEMA = 'commandcenter.private_web_key_release.v1';
 const SOURCE_VAULT_RSA_PRIVATE_KEY = 'vault:rsa-oaep:private-jwk';
 const SOURCE_VAULT_RSA_PUBLIC_KEY = 'vault:rsa-oaep:public-jwk';
 const SOURCE_VAULT_RSA_KEY_ID = 'vault:rsa-oaep:key-id';
@@ -504,7 +518,9 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
     const matchedUiBuild = matchesIdentity(claims, UI_BUILD_VALIDATION_IDENTITY);
     const matchedLiveBotSourceUnwrap = matchesIdentity(claims, LIVE_BOT_SOURCE_UNWRAP_IDENTITY);
     const matchedBootstrap = matchesIdentity(claims, SOURCE_VAULT_BOOTSTRAP_IDENTITY);
+    const matchedPiOpaquePublisher = matchesIdentity(claims, PI_GHCR_OPAQUE_PUBLISH_IDENTITY);
     const matchedOperatorDeploy = matchesIdentity(claims, OPERATOR_CONSOLE_DEPLOY_IDENTITY);
+    const matchedPrivateWebSourceCapsule = matchesIdentity(claims, PRIVATE_WEB_SOURCE_CAPSULE_IDENTITY);
     const matchedCloudCanaryDeploy = matchesIdentity(claims, CLOUD_CANARY_DEPLOY_IDENTITY);
     const matchedMissedTradeAudit = matchesIdentity(claims, MISSED_TRADE_AUDIT_IDENTITY);
     const matchedPaperAccountHygieneCoordinator = matchesIdentity(
@@ -540,7 +556,16 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
       /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname)
       || pathname === '/v1/source-vault/private-archive/attest'
     );
+    const piOpaquePublisherPathAllowed = (
+      claims.event_name === 'push'
+      && (pathname === '/v1/source-vault/pi-image-candidate'
+          || privateArchivePathAllowed)
+    );
     const operatorDeployPathAllowed = pathname === '/v1/source-vault/unwrap';
+    const privateWebKeyReleasePathAllowed = (
+      pathname === '/v1/source-vault/private-web/unwrap'
+      && claims.event_name === 'push'
+    );
     const cloudCanaryUnwrapPathAllowed = (
       pathname === '/v1/source-vault/unwrap'
       && claims.event_name === 'push'
@@ -557,7 +582,10 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
         matchedRuntime
         || (matchedUiBuild && privateArchivePathAllowed)
         || (matchedBootstrap && privateArchivePathAllowed)
-        || (matchedOperatorDeploy && operatorDeployPathAllowed)
+        || (matchedPiOpaquePublisher && piOpaquePublisherPathAllowed)
+        || (matchedOperatorDeploy && (operatorDeployPathAllowed || privateWebKeyReleasePathAllowed))
+        || (matchedPrivateWebSourceCapsule && claims.event_name === 'push'
+            && pathname === '/v1/source-vault/private-web/capsule')
         || (matchedCloudCanaryDeploy && cloudCanaryUnwrapPathAllowed)
         || (matchedLiveBotSourceUnwrap && liveBotSourceUnwrapPathAllowed)
         || (matchedMissedTradeAudit && operatorDeployPathAllowed)
@@ -624,7 +652,10 @@ export async function verifySourceExchangeOidc(jwt, callerRunId, role, pathname 
 
 function roleForRequest(method, pathname) {
   if (
-    (method === 'POST' && pathname === '/v1/source-vault/unwrap')
+    (method === 'POST' && pathname === '/v1/source-vault/pi-image-candidate')
+    || (method === 'POST' && pathname === '/v1/source-vault/unwrap')
+    || (method === 'POST' && pathname === '/v1/source-vault/private-web/unwrap')
+    || (method === 'POST' && pathname === '/v1/source-vault/private-web/capsule')
     || (method === 'GET' && /^\/v1\/source-vault\/private-archive\/[0-9a-f]{40}$/.test(pathname))
     || (method === 'POST' && pathname === '/v1/source-vault/private-archive/attest')
     ||
@@ -700,11 +731,74 @@ export async function handleSourceExchange(request, env) {
   headers.set('x-mmibkr-oidc-run-id', identity.run_id);
   headers.set('x-mmibkr-oidc-run-attempt', identity.run_attempt);
 
+  if (request.method === 'POST' && url.pathname === '/v1/source-vault/private-web/capsule') {
+    if (!matchesIdentity(identity, PRIVATE_WEB_SOURCE_CAPSULE_IDENTITY)
+        || identity.event_name !== 'push') {
+      return json({ error: 'private_web_source_issuer_denied' }, 403);
+    }
+    // Source pin and owner release permission are held ONLY inside the
+    // Cloudflare environment and private OverEmploy source. Never expose
+    // those in a public manifest, public Git source or release response.
+    try {
+      const keyResp = await stub.fetch(new Request(
+        'https://source-exchange.internal/v1/source-vault/public-key',
+        { method: 'GET', headers: { 'x-mmibkr-source-role': 'vault_public' } },
+      ));
+      if (!keyResp.ok) return json({ error: 'private_web_key_unavailable' }, 503);
+      const capsule = await sealPrivateOverEmploy(env, await keyResp.json());
+      return new Response(JSON.stringify(capsule), {
+        status: 200, headers: {
+          'content-type': 'application/json',
+          'cache-control': 'private, no-store',
+          'x-content-type-options': 'nosniff',
+        },
+      });
+    } catch (error) {
+      // Only a fixed local code crosses the OIDC boundary. No provider body,
+      // source SHA/ref, private URL, token or applicant content is emitted.
+      return json({ error: 'private_web_source_seal_not_admitted',
+        held_reason: privateWebHeldReason(error) }, 403);
+    }
+  }
+
+  if (request.method === 'POST' && url.pathname === '/v1/source-vault/pi-image-candidate') {
+    try {
+      const approved = await resolvePiImageCandidate(env);
+      return new Response(JSON.stringify({
+        schema: 'mmibkr.pi_ghcr_opaque_candidate.v1',
+        source_sha: approved.source_sha,
+        native_brokerless_suites: approved.native_brokerless_suites,
+        publication_only: true,
+        broker_authorized: false,
+      }), {
+        status: 200,
+        headers: {
+          'content-type': 'application/json',
+          'cache-control': 'private, no-store',
+          'x-content-type-options': 'nosniff',
+        },
+      });
+    } catch {
+      return json({ error: 'private_pi_candidate_unavailable' }, 503);
+    }
+  }
+
   const privateArchiveMatch = url.pathname.match(/^\/v1\/source-vault\/private-archive\/([0-9a-f]{40})$/);
   if (request.method === 'GET' && privateArchiveMatch) {
     const sourceSha = privateArchiveMatch[1];
     if (!isPrivateSourceStreamApproved(sourceSha, identity)) {
-      return json({ error: 'private_source_sha_not_approved' }, 403);
+      if (!matchesIdentity(identity, PI_GHCR_OPAQUE_PUBLISH_IDENTITY)
+          || identity.event_name !== 'push') {
+        return json({ error: 'private_source_sha_not_approved' }, 403);
+      }
+      try {
+        const approved = await resolvePiImageCandidate(env);
+        if (approved.source_sha !== sourceSha) {
+          return json({ error: 'private_source_sha_not_approved' }, 403);
+        }
+      } catch {
+        return json({ error: 'private_pi_candidate_unavailable' }, 503);
+      }
     }
     const sourceToken = String(env.MMIBKR_PRIVATE_SOURCE_TOKEN || '');
     if (!sourceToken || sourceToken.length > 512 || /[\r\n\0]/.test(sourceToken)) {
@@ -813,6 +907,13 @@ export class SourceExchange {
     const grants = await this.ctx.storage.list({ prefix: 'streamgrant:', limit: 100 });
     for (const [key, value] of grants) {
       if (!value || now - Number(value.created_at_ms || 0) <= PRIVATE_SOURCE_STREAM_GRANT_TTL_MS) continue;
+      await this.ctx.storage.delete(key);
+    }
+    // A one-use release marker may only outlive the original OIDC token.
+    // Expiry is for bounded storage; exact run identity cannot be replayed.
+    const webMarkers = await this.ctx.storage.list({ prefix: 'private-web-key:', limit: 100 });
+    for (const [key, value] of webMarkers) {
+      if (!value || now - Number(value.created_at_ms || 0) <= 7 * 24 * 3600 * 1000) continue;
       await this.ctx.storage.delete(key);
     }
   }
@@ -1150,10 +1251,25 @@ export class SourceExchange {
       const streamId = String(body?.stream_id || '');
       const expectedArchiveBytes = Number(body?.expected_archive_bytes || 0);
       const runtimeIdentity = this._producerIdentity(request);
+      // This second gate is enforced inside the Durable Object. It must
+      // independently pin the new publisher to the same private candidate.
+      let opaqueApprovedExactSource = false;
+      if (
+        matchesIdentity(runtimeIdentity, PI_GHCR_OPAQUE_PUBLISH_IDENTITY)
+        && runtimeIdentity.event_name === 'push'
+      ) {
+        try {
+          const candidate = await resolvePiImageCandidate(this.env);
+          opaqueApprovedExactSource = candidate.source_sha === sourceSha;
+        } catch {
+          opaqueApprovedExactSource = false;
+        }
+      }
       if (
         body?.schema !== FLEET_PRIVATE_SOURCE_STREAM_SCHEMA
         || !/^\d{4,24}$/.test(runId)
-        || !isPrivateSourceStreamApproved(sourceSha, runtimeIdentity)
+        || !(isPrivateSourceStreamApproved(sourceSha, runtimeIdentity)
+             || opaqueApprovedExactSource)
         || !/^[0-9a-f-]{36}$/.test(streamId)
         || !Number.isInteger(expectedArchiveBytes)
         || expectedArchiveBytes < 0
@@ -1231,6 +1347,83 @@ export class SourceExchange {
         private_attestation_stored: true,
         source_transport: 'fleet_authority_oidc_private_archive_stream',
         private_source_token_exposed: false,
+      }, 200);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/v1/source-vault/private-web/unwrap') {
+      // Isolated static web-release domain, NOT the MM source vault approval.
+      // Only the exact approved public console deploy workflow can obtain one
+      // key for one Cloudflare-owner-approved ciphertext digest. No source SHA,
+      // applicant data or broker permissions are available in this endpoint.
+      if (role !== 'consumer') return json({ error: 'forbidden' }, 403);
+      const identity = this._producerIdentity(request);
+      if (!matchesIdentity(identity, OPERATOR_CONSOLE_DEPLOY_IDENTITY)
+          || identity.event_name !== 'push') return json({ error: 'forbidden' }, 403);
+      const expected = String(this.env.CC_PRIVATE_WEB_APPROVED_CIPHERTEXT_SHA256 || '').trim();
+      if (this.env.CC_PRIVATE_WEB_RELEASE_ENABLED !== '1'
+          || !/^[a-f0-9]{64}$/.test(expected)) {
+        return json({ error: 'private_web_release_not_approved' }, 403);
+      }
+      let body;
+      try {
+        const text = await request.text();
+        if (text.length > 8192) return json({ error: 'request_too_large' }, 413);
+        body = JSON.parse(text);
+      } catch {
+        return json({ error: 'invalid_json' }, 400);
+      }
+      const required = ['schema', 'capsule_id', 'ciphertext_sha256', 'key_id', 'sealed_key_b64'];
+      const runId = String(request.headers.get('x-mmibkr-oidc-run-id') || '');
+      if (!body || typeof body !== 'object' || Array.isArray(body)
+          || Object.keys(body).length !== required.length
+          || required.some((key) => !Object.hasOwn(body, key))
+          || body.schema !== PRIVATE_WEB_CAPSULE_SCHEMA
+          || !/^[a-z0-9][a-z0-9-]{15,63}$/.test(String(body.capsule_id || ''))
+          || String(body.ciphertext_sha256 || '') !== expected
+          || !/^\d{4,24}$/.test(runId)) {
+        return json({ error: 'private_web_release_binding_rejected' }, 403);
+      }
+      const { privateJwk, keyId } = await this._vaultKeypair();
+      if (String(body.key_id || '') !== keyId) {
+        return json({ error: 'private_web_vault_key_mismatch' }, 403);
+      }
+      let sealedKey;
+      try {
+        sealedKey = b64ToBytes(String(body.sealed_key_b64 || ''));
+      } catch {
+        return json({ error: 'private_web_sealed_key_rejected' }, 400);
+      }
+      if (sealedKey.length < 128 || sealedKey.length > 1024) {
+        return json({ error: 'private_web_sealed_key_rejected' }, 400);
+      }
+      let masterKey;
+      try {
+        const key = await crypto.subtle.importKey(
+          'jwk', privateJwk, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['decrypt']);
+        masterKey = new Uint8Array(await crypto.subtle.decrypt(
+          { name: 'RSA-OAEP' }, key, sealedKey));
+      } catch {
+        return json({ error: 'private_web_sealed_key_decrypt_rejected' }, 403);
+      }
+      if (masterKey.length !== 32) {
+        return json({ error: 'private_web_key_length_rejected' }, 403);
+      }
+      const marker = 'private-web-key:' + runId;
+      const inserted = await this.ctx.storage.transaction(async (txn) => {
+        if (await txn.get(marker)) return false;
+        await txn.put(marker, {
+          created_at_ms: Date.now(), capsule_id: body.capsule_id,
+          ciphertext_sha256: expected, workflow_ref: identity.workflow_ref,
+        });
+        return true;
+      });
+      if (!inserted) return json({ error: 'private_web_key_replay_rejected' }, 409);
+      return json({
+        schema: PRIVATE_WEB_KEY_RELEASE_SCHEMA, ok: true, approved: true,
+        capsule_id: body.capsule_id, ciphertext_sha256: expected, run_id: runId,
+        master_key_b64: bytesToB64(masterKey),
+        private_source_token_exposed: false,
+        broker_mutation_authority: false,
       }, 200);
     }
 

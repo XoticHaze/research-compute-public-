@@ -27,6 +27,28 @@ def _utc_now() -> pd.Timestamp:
     return pd.Timestamp(datetime.now(timezone.utc))
 
 
+def _first_public_yahoo_ohlc_violation(rows: list[dict]) -> dict | None:
+    """Identify the first public provider OHLC failure; never repair a price.
+
+    Mirrors the shared bar contract's 1e-7 relative high/low tolerance for
+    diagnostic provenance only. The shared validator remains authoritative.
+    """
+    for row in rows:
+        o, h, l, close = (float(row[k]) for k in ("open", "high", "low", "close"))
+        scale = max(abs(o), abs(h), abs(l), abs(close), 1.0)
+        high_gap = max(o, close, l) - h
+        low_gap = l - min(o, close, h)
+        if high_gap > 1e-7 * scale or low_gap > 1e-7 * scale:
+            return {
+                "symbol": str(row["symbol"]),
+                "session": pd.Timestamp(row["timestamp"]).date().isoformat(),
+                "kind": "HIGH_BELOW_OHLC" if high_gap > 1e-7 * scale else "LOW_ABOVE_OHLC",
+                "relative_gap": round(max(high_gap, low_gap) / scale, 10),
+                "provider": "yahoo_adjusted_research_only",
+            }
+    return None
+
+
 def _yahoo_normalized() -> pd.DataFrame:
     raw = yf.download(
         list(U), start="2005-01-01", auto_adjust=True, progress=False,
@@ -54,7 +76,20 @@ def _yahoo_normalized() -> pd.DataFrame:
                 "wap": np.nan,
                 "bar_count": np.nan,
             })
-    return normalize_frame(rows)
+    try:
+        return normalize_frame(rows)
+    except ValueError as exc:
+        if "invariant failed beyond numeric tolerance" not in str(exc):
+            raise
+        offending = _first_public_yahoo_ohlc_violation(rows)
+        if offending is None:
+            raise
+        # Public Yahoo symbol/date/dimension only. No price repair, dropping,
+        # tolerance change, alternate source, private payload or hidden fallback.
+        raise ValueError(
+            "P46_PUBLIC_YAHOO_ADJUSTED_OHLC_SOURCE_INVALID "
+            + json.dumps(offending, sort_keys=True)
+        ) from exc
 
 
 def _ibkr_shape_fixture() -> dict:
@@ -108,6 +143,46 @@ def _feature_cutoff(px: pd.DataFrame, observed_at: pd.Timestamp) -> pd.Timestamp
         return latest
     # During a live month, do not leak partial-month data into the monthly decision.
     return observed_month.start_time - pd.Timedelta(days=1)
+
+
+
+def _official_prior_feature_month_health(px: pd.DataFrame, observed_at: pd.Timestamp) -> dict:
+    """Reject incomplete prior-month source even when every ticker misses the same day.
+
+    This is a source-admission gate, not a new P46 feature or a second calendar.
+    The prior month is selected from observation time, never from last source row.
+    """
+    required = observed_at.tz_convert(None).to_period("M") - 1
+    first = required.start_time
+    last = required.end_time.normalize()
+    try:
+        import exchange_calendars as xc
+
+        nyse = xc.get_calendar("XNYS").sessions_in_range(first, last).tz_localize(None)
+        nasdaq = xc.get_calendar("XNAS").sessions_in_range(first, last).tz_localize(None)
+    except Exception as exc:
+        raise RuntimeError("P46_OFFICIAL_CALENDAR_UNAVAILABLE") from exc
+    if not nyse.equals(nasdaq):
+        raise RuntimeError("P46_OFFICIAL_CALENDAR_CONFLICT")
+    actual = pd.DatetimeIndex(px.index[px.index.to_period("M") == required]).normalize()
+    missing = nyse.difference(actual)
+    extra = actual.difference(nyse)
+    if not actual.equals(nyse):
+        raise RuntimeError(
+            "P46_PRIOR_MONTH_SOURCE_INCOMPLETE: "
+            f"required={required} expected={len(nyse)} observed={len(actual)} "
+            f"missing={list(missing.strftime('%Y-%m-%d'))} "
+            f"extra={list(extra.strftime('%Y-%m-%d'))}"
+        )
+    return {
+        "required_feature_month": str(required),
+        "expected_official_sessions": int(len(nyse)),
+        "observed_common_sessions": int(len(actual)),
+        "last_official_session": str(nyse[-1].date()),
+        "last_observed_session": str(actual[-1].date()),
+        "calendar_authority": "exchange_calendars_XNYS_XNAS_agree",
+        "source_complete": True,
+    }
 
 
 def _decision(px: pd.DataFrame, observed_at: pd.Timestamp) -> dict:
@@ -204,6 +279,7 @@ def main() -> None:
     bars = _yahoo_normalized()
     fixture = _ibkr_shape_fixture()
     px, excluded_partial, completed_cutoff = _completed_common_close_panel(bars, observed_at)
+    official_feature_month_health = _official_prior_feature_month_health(px, observed_at)
     decision = _decision(px, observed_at)
     shakedown = _shakedown_mark(px)
     latest_bar = pd.Timestamp(px.index.max()).tz_localize("UTC")
@@ -244,6 +320,7 @@ def main() -> None:
             "completed_bar_authority": "existing_forward_prospective_cohort_ledger_18_30_ET",
             "calendar_age_days": int((observed_at.normalize() - latest_bar.normalize()).days),
             "all_universe_members_present": list(px.columns) == list(U),
+            "prior_feature_month_official_calendar": official_feature_month_health,
         },
         "decision": decision,
         "operational_shadow": shakedown,

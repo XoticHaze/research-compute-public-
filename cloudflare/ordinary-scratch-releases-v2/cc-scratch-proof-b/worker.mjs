@@ -1,0 +1,2 @@
+// Public inert release fixture v2, no bindings or private data.
+export default {async fetch(request){const url=new URL(request.url);if(request.method!=='GET'||url.pathname!=='/health')return new Response(null,{status:404});return new Response(JSON.stringify({schema:'commandcenter.factory.scratch.v1',project:'beta',revision:2}),{headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});}};

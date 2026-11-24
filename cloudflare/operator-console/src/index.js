@@ -1,3 +1,8 @@
+import { piOwnerApprovalPage, piOwnerApprovalClientJs } from './pi_owner_approval_ui.js';
+import { PiOwnerApprovalState, publishPiOwnerGrant, readPiOwnerRootReceipt, publishPiRootReleaseGrant, readPiRootReleaseReceipt } from './pi_owner_approval.js';
+import { verifyPiOwnerDeviceGrant } from './pi_owner_device_grant.js';
+export { PiOwnerApprovalState } from './pi_owner_approval.js';
+
 import {
   machinePromotionProjection,
   readPromotionState,
@@ -8,6 +13,8 @@ import {
 import { validatePiObservationEnvelope, piOperatorView, piReplayIdentity, verifyPiOutboxSnapshotDigest } from './pi_account_observation.js';
 import { nextPiReplayLedger } from './pi_replay_ledger.js';
 import { validatePiBotLiveEnvelope, piBotLiveOperatorView, verifyPiBotRootDigest } from './pi_bot_live_observation.js';
+import { FINANCE_MAX_BYTES, verifyPrivateFinancial, storePrivateFinancial, readPrivateFinancial,
+  requireFinancePublisherAdmission, requireFinanceServiceClaims } from './pi_live_financial_private.js';
 
 const GITHUB_ISSUER = 'https://token.actions.githubusercontent.com';
 const GITHUB_JWKS = 'https://token.actions.githubusercontent.com/.well-known/jwks';
@@ -296,6 +303,19 @@ async function verifySnapshotReader(request) {
     run_id: callerRunId,
     run_attempt: String(claims.run_attempt || ''),
   };
+}
+
+async function verifyPiFinancePublisher(request, env) {
+  // This is a separately admitted Cloudflare Access Service Auth *machine*.
+  // The existing human allowlisted JWT and GitHub OIDC observers are never
+  // eligible for private money publication.
+  requireFinancePublisherAdmission(env);
+  const issuer = normalizeTeamDomain(env.ACCESS_TEAM_DOMAIN);
+  const assertion = request.headers.get('cf-access-jwt-assertion');
+  if (!assertion || assertion.length > 16384) throw new Error('pi_finance_access_assertion_required');
+  const claims = await verifyRs256Jwt(assertion, issuer + '/cdn-cgi/access/certs');
+  requireFinanceServiceClaims(claims, env, issuer);
+  return true;
 }
 
 function normalizeTeamDomain(value) {
@@ -688,6 +708,11 @@ function stateStub(env) {
   return env.OPERATOR_STATE.get(id);
 }
 
+function piOwnerStub(env) {
+  if (!env.PI_OWNER_APPROVER) throw new Error('pi_owner_approver_binding_missing');
+  return env.PI_OWNER_APPROVER.get(env.PI_OWNER_APPROVER.idFromName('cc-pi4-owner-v1'));
+}
+
 function secureAssetResponse(response) {
   const headers = new Headers(response.headers);
   headers.set('cache-control', 'private, no-store');
@@ -713,6 +738,31 @@ export class OperatorState {
 
   async fetch(request) {
     const url = new URL(request.url);
+
+    if (request.method === 'POST' && url.pathname === '/pi-finance/store') {
+      // Internal Durable Object private state. Never accept money from a
+      // browser, public Git status, paper snapshot or unverified signer.
+      let receipt;
+      try {
+        requireFinancePublisherAdmission(this.env);
+        const incoming = await request.json();
+        if (!incoming || !incoming.envelope) throw new Error('missing_finance_envelope');
+        receipt = await storePrivateFinancial(this.ctx.storage, incoming.envelope, this.env);
+      } catch {
+        return json({error:'pi_financial_private_store_rejected'},503);
+      }
+      return json(receipt, receipt.accepted ? 201 : 200);
+    }
+    if (request.method === 'GET' && url.pathname === '/pi-finance/latest') {
+      try {
+        if (this.env.PI_LIVE_FINANCE_ORIGIN_ADMITTED !== '1')
+          throw new Error('pi_financial_not_admitted');
+        const payload = await readPrivateFinancial(this.ctx.storage, this.env);
+        return json(payload, 200);
+      } catch {
+        return json({error:'pi_financial_stale_or_unverified'},503);
+      }
+    }
 
     if (request.method === 'POST' && url.pathname === '/pi/store') {
       let envelope;
@@ -939,6 +989,50 @@ export class OperatorState {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    if (request.method === 'POST' && url.pathname === '/v1/pi-live-financial') {
+      // The owner-approved, Access-service-authenticated direct Pi path.
+      // This never reads or writes Git and cannot grant broker authorization.
+      try { await verifyPiFinancePublisher(request, env); }
+      catch { return json({error:'pi_financial_machine_not_admitted'},403); }
+      const statedSize = Number(request.headers.get('content-length') || 0);
+      if (!Number.isFinite(statedSize) || statedSize > FINANCE_MAX_BYTES) {
+        return json({error:'pi_financial_payload_too_large'},413);
+      }
+      let body, count=0;
+      const chunks=[];
+      try {
+        const stream = request.body?.getReader();
+        if (!stream) throw new Error('empty_body');
+        while (true) {
+          const {done,value} = await stream.read();
+          if (done) break;
+          count += value?.byteLength || 0;
+          if (count > FINANCE_MAX_BYTES) {
+            await stream.cancel().catch(() => {});
+            return json({error:'pi_financial_payload_too_large'},413);
+          }
+          chunks.push(value);
+        }
+        if (!count) throw new Error('empty_body');
+        const raw=new Uint8Array(count); let at=0;
+        for (const chunk of chunks) { raw.set(chunk,at); at+=chunk.byteLength; }
+        body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(raw));
+        await verifyPrivateFinancial(body,env);
+      } catch {
+        return json({error:'pi_financial_envelope_rejected'},400);
+      }
+      const stored=await stateStub(env).fetch(new Request('https://operator-state.internal/pi-finance/store',{
+        method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({envelope:body}),
+      }));
+      if (!stored.ok) return stored;
+      const accepted=await stored.json();
+      if (accepted.ok !== true || accepted.broker_mutation_authority !== false) {
+        return json({error:'pi_financial_durable_store_unverified'},502);
+      }
+      return json({ok:true,accepted:accepted.accepted === true,
+        durable_readback_verified:true,broker_mutation_authority:false},202);
+    }
 
     if (request.method === 'POST' && url.pathname === '/v1/pi-bot-live-status') {
       // Same approved exact-source OIDC publisher, distinct bot-origin action
@@ -1171,6 +1265,13 @@ export default {
       return json({ error: 'access_denied' }, 403);
     }
 
+    if (request.method === 'GET' && url.pathname === '/operator/pi-owner-approval') {
+      return piOwnerApprovalPage();
+    }
+    if (request.method === 'GET' && url.pathname === '/operator/pi-owner-approval.js') {
+      return piOwnerApprovalClientJs();
+    }
+
     // This dedicated Access-locked host is the operator console, not the
     // full MM backend. React's generic '/' route targets unsupported Markets.
     if (request.method === 'GET' && url.pathname === '/') {
@@ -1189,6 +1290,84 @@ export default {
         static_assets_configured: Boolean(env.ASSETS),
         live_execution_allowed: false,
       });
+    }
+
+    // Independent on-device Ed25519 signature. The GitHub-deployable Worker
+    // never creates, imports or persists the operator's private signing key.
+    if (request.method === 'GET' && url.pathname === '/api/pi-owner/device-status') {
+      return json({schema:'commandcenter.pi.device_signing_transport.v1',
+        device_signer_required:true, worker_signing_retired:true,
+        owner_public_key_configured:Boolean(env.PI_OWNER_ROOT_PUBLIC_KEY_PEM
+          && env.PI_OWNER_ENROLLED_PUB_SHA256),
+        private_queue_transport_configured:Boolean(env.PI_OWNER_QUEUE_GITHUB_TOKEN),
+        legacy_worker_signer_disabled:env.PI_OWNER_SIGNER_ENABLED !== '1',
+      },200);
+    }
+    if (request.method === 'POST' && url.pathname === '/api/pi-owner/dispatch-signed') {
+      if (!operatorDecisionRequestIsSameOrigin(request)) {
+        return json({error:'pi_owner_origin_rejected'},403);
+      }
+      let input;
+      try {
+        const raw=await request.text();
+        if (new TextEncoder().encode(raw).length>10000) return json({error:'pi_owner_payload_too_large'},413);
+        input=JSON.parse(raw);
+        if (!input || typeof input !== 'object' || input.approve_exact_release !== true) {
+          return json({error:'pi_owner_explicit_review_required'},403);
+        }
+      } catch {
+        return json({error:'pi_owner_payload_rejected'},400);
+      }
+      let verified;
+      try {
+        verified=await verifyPiOwnerDeviceGrant(env, accessIdentity,
+          input.kind,input.request,input.approval,input.signed_grant);
+      } catch (error) {
+        return json({error:'pi_owner_independent_signature_rejected',
+          reason:String(error?.message || 'invalid_approval')},403);
+      }
+      try {
+        const receipt=input.kind==='root_release'
+          ? await publishPiRootReleaseGrant(env,input.request,input.signed_grant)
+          : await publishPiOwnerGrant(
+            env,input.kind,input.approval,input.request,input.signed_grant);
+        return json({...receipt,ok:true,signer_key_sha256:verified.key_sha256,
+          independent_device_signature_verified:true,
+          pi_root_execution_verified:false},202);
+      } catch(error) {
+        return json({error:'pi_owner_signed_grant_transport_failed',
+          reason:String(error?.message || 'queue_unavailable'),
+          request_id:verified.request_id,signature_verified:true,
+          pi_root_execution_verified:false},503);
+      }
+    }
+    if (request.method === 'GET' && url.pathname === '/api/pi-owner/receipt') {
+      try {
+        const result = url.searchParams.get('kind')==='root_release'
+          ? await readPiRootReleaseReceipt(env,url.searchParams.get('request_id'))
+          : await readPiOwnerRootReceipt(
+            env, url.searchParams.get('request_id'),
+          );
+        return json(result, result.status === 'PENDING' ? 202 : 200);
+      } catch {
+        return json({error:'pi_owner_root_outbox_read_unavailable'},503);
+      }
+    }
+    if (request.method === 'GET' && url.pathname === '/api/pi-owner/status') {
+      try {
+        return await piOwnerStub(env).fetch(new Request('https://pi-owner.internal/status'));
+      } catch {
+        return json({error:'pi_owner_status_unavailable'},503);
+      }
+    }
+
+    if (request.method === 'POST' && (
+      url.pathname === '/api/pi-owner/initialize'
+      || url.pathname === '/api/pi-owner/enroll'
+      || url.pathname === '/api/pi-owner/approve'
+    )) {
+      return json({error:'pi_owner_cloud_private_key_issuer_retired',
+        next:'sign_locally_then_dispatch_signed_grant'},410);
     }
 
     if (request.method === 'GET' && url.pathname === '/api/promotion-review') {
@@ -1230,6 +1409,17 @@ export default {
       catch { return json({error:'pi_bot_observation_stale_or_unverified'},503); }
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/operator/live-account') {
+      // The existing human Access email+RS256 identity was checked above.
+      // Never return HMAC, account hash or machine credentials.
+      const result=await stateStub(env).fetch(new Request('https://operator-state.internal/pi-finance/latest'));
+      return new Response(result.body,{status:result.status,headers:{
+        'content-type':'application/json; charset=utf-8',
+        'cache-control':'private, no-store, max-age=0',
+        'pragma':'no-cache','x-content-type-options':'nosniff',
+      }});
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/pi-account-observation') {
       // Cloudflare Access already authenticated the human above. No browser broker socket.
       const stored = await stateStub(env).fetch(new Request('https://operator-state.internal/pi/latest'));
@@ -1268,6 +1458,14 @@ export default {
       '/operator/forward-execution',
       '/operator/promotion-review',
     ]);
+    // Full V4 route publication is a separate protected release from the
+    // existing dedicated Bot Console. A real exact-build/served acceptance
+    // must set this owner-managed gate; a generic SPA fallback never grants it.
+    if (env.MMIBKR_FULL_V4_ROUTES_ADMITTED === '1') {
+      for (const route of ['/markets', '/portfolio', '/portfolio/positions']) {
+        dedicatedBrowserRoutes.add(route);
+      }
+    }
     const staticAssetPath = url.pathname.startsWith('/assets/')
       || /\.(?:ico|svg|png|webp|jpe?g|gif|webmanifest|txt|js|css|woff2?|ttf)$/.test(url.pathname);
     if (!dedicatedBrowserRoutes.has(url.pathname) && !staticAssetPath) {

@@ -1,0 +1,79 @@
+name: CC Factory Machine Readonly R1
+# Optional exact GitHub OIDC identity probe for the existing ordinary factory.
+# Never creates Workers, publishes source, issues tokens or changes Access.
+on:
+  workflow_dispatch:
+    inputs:
+      live_identity_probe:
+        description: 'Only after independently admitted Worker/Access machine route'
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  machine-identity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Offline bounded OIDC contract, no Cloudflare credential or mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cloudflare/shared-worker-factory
+          node --check src/machine_oidc.js
+          node --check src/index.js
+          node --test tests/machine-oidc.test.mjs
+      - name: Exact-source machine-only identity probe when separately admitted
+        if: ${{ inputs.live_identity_probe == true && vars.CC_FACTORY_MACHINE_READONLY_ADMITTED == '1' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No Cloudflare bearer. The only credential is an ephemeral GitHub
+          # OIDC identity token minted for THIS exact workflow run.
+          jwt="$(python - <<'PY'
+          import json,os,urllib.parse,urllib.request
+          audience='commandcenter-cloudflare-factory-readonly-v1'
+          source=os.environ['ACTIONS_ID_TOKEN_REQUEST_URL']
+          joiner='&' if '?' in source else '?'
+          url=source+joiner+urllib.parse.urlencode({'audience':audience})
+          req=urllib.request.Request(url,headers={
+            'Authorization':'Bearer '+os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN'],
+            'Accept':'application/json'},method='GET')
+          with urllib.request.urlopen(req,timeout=15) as response:
+            node=json.load(response)
+          value=node.get('value','')
+          if not isinstance(value,str) or len(value)<100 or len(value)>16000:
+            raise SystemExit('OIDC_IDENTITY_UNAVAILABLE')
+          print(value)
+          PY
+          )"
+          body="$RUNNER_TEMP/cc-factory-machine-readiness.json"
+          status="$(curl --silent --show-error --max-time 20 --max-redirs 0 \
+            --output "$body" --write-out '%{http_code}' \
+            --request POST \
+            --header 'Authorization: Bearer '"$jwt" \
+            --header 'x-cc-github-run-id: '"$GITHUB_RUN_ID" \
+            'https://shared-compute-worker-factory.slenderiq.workers.dev/v1/machine/readiness')"
+          unset jwt
+          if [ "$status" != 200 ]; then
+            echo "FACTORY_MACHINE_READINESS=NOT_ADMITTED_OR_ACCESS_BLOCKED_HTTP_$status"
+            exit 1
+          fi
+          python - "$body" <<'PY'
+          import json,sys
+          node=json.load(open(sys.argv[1]))
+          if node.get('schema')!='commandcenter.cloudflare.factory_machine_readiness.v1':
+            raise SystemExit('MACHINE_SOURCE_SCHEMA_MISMATCH')
+          if node.get('identity_verified') is not True:
+            raise SystemExit('MACHINE_OIDC_IDENTITY_REJECTED')
+          if str(node.get('github_run_id'))!=__import__('os').environ['GITHUB_RUN_ID']:
+            raise SystemExit('MACHINE_RUN_ID_MISMATCH')
+          if node.get('machine_creation_admitted') is not False:
+            raise SystemExit('UNEXPECTED_CREATE_AUTHORITY')
+          if node.get('cloudflare_mutations')!=0:
+            raise SystemExit('UNEXPECTED_CLOUDFLARE_MUTATION')
+          print('FACTORY_GITHUB_OIDC_MACHINE_IDENTITY_READONLY=PASS')
+          PY

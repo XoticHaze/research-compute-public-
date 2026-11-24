@@ -1,0 +1,80 @@
+name: CC Reusable Worker Factory Source Contract
+on:
+  pull_request:
+    paths:
+      - 'cloudflare/shared-worker-factory/**'
+      - 'cloudflare/isolated-ordinary-factory/**'
+      - 'cloudflare/ordinary-scratch-releases/**'
+      - '.github/workflows/cc-worker-factory-source-r1.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare/shared-worker-factory/**'
+      - 'cloudflare/isolated-ordinary-factory/**'
+      - 'cloudflare/ordinary-scratch-releases/**'
+      - '.github/workflows/cc-worker-factory-source-r1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout reviewed public source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Source syntax and exact offline contract
+        run: |
+          set -euo pipefail
+          cd cloudflare/shared-worker-factory
+          node --version
+          node --check src/index.js
+          node --check src/policy.js
+          node --test tests/*.test.mjs
+      - name: Reproduce pinned isolated ordinary-account bootstrap offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/isolated-ordinary-factory/scripts/prepare.mjs
+          node --test cloudflare/isolated-ordinary-factory/tests/*.test.mjs
+          test ! -f cloudflare/isolated-ordinary-factory/.generated/manifest.json
+          echo "FACTORY_NEW_ACCOUNT_BOOTSTRAP_SOURCE_TESTS=PASS"
+      - name: Build pinned new-account factory with Wrangler dry-run only
+        shell: bash
+        env:
+          WRANGLER_SEND_METRICS: "false"
+        run: |
+          set -euo pipefail
+          node cloudflare/isolated-ordinary-factory/scripts/prepare.mjs --account-id abababababababababababababababab
+          node -e 'const c=JSON.parse(require("fs").readFileSync("./cloudflare/isolated-ordinary-factory/.generated/wrangler.jsonc","utf8")); if(c.account_id!=="abababababababababababababababab"||Object.entries(c.vars).some(([k,v])=>k.endsWith("_ENABLED")&&v!=="0")) process.exit(1);'
+          npx --yes wrangler@4.131.2 deploy --dry-run --config cloudflare/isolated-ordinary-factory/.generated/wrangler.jsonc --outdir /tmp/cc-isolated-factory-dryrun
+          echo "NEW_ACCOUNT_FACTORY_WRANGLER_DRY_RUN_NO_DEPLOY=PASS"
+      - name: Verify pinned Wrangler named-profile commands without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.131.2 auth create --help | grep -F 'Create or re-authenticate a named auth profile'
+          npx --yes wrangler@4.131.2 deploy --help | grep -F -- '--profile'
+          npx --yes wrangler@4.131.2 auth list --help | grep -F 'auth list'
+          echo "PINNED_WRANGLER_NAMED_PROFILE_COMMANDS=PASS"
+      - name: Verify pinned A/B scratch sources, not live Worker deployments
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/ordinary-scratch-releases/cc-scratch-proof-a/worker.mjs
+          node --check cloudflare/ordinary-scratch-releases/cc-scratch-proof-b/worker.mjs
+          printf '%s  %s\n' \
+            '9d3ce1adcd34da626000d1d7a5fc2bd27a887da6b3dd12278bbc578f278af921' 'cloudflare/ordinary-scratch-releases/cc-scratch-proof-a/worker.mjs' \
+            'b7335d64457347b61316765962c3b0c34aae9f2d0b7776ddd152cb71a18bc322' 'cloudflare/ordinary-scratch-releases/cc-scratch-proof-b/worker.mjs' \
+            | sha256sum --check -
+          echo "FACTORY_SCRATCH_A_B_PINNED_PUBLIC_SOURCE_ONLY_PASS=1"
+      - name: Confirm no deploy or credential route
+        run: |
+          set -euo pipefail
+          if grep -R -E 'secrets\.[A-Za-z_]+|wrangler deploy|cloudflare.*token.*echo' \
+              cloudflare/shared-worker-factory/tests; then
+            echo "Forbidden online side effect in offline tests" >&2
+            exit 1
+          fi
+          echo "PUBLIC_SOURCE_CONTRACT_ONLY_NO_CLOUDFLARE_MUTATION=PASS"

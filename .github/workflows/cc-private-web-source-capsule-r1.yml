@@ -1,0 +1,107 @@
+name: CC Private Web Encrypted Capsule Stage R1
+
+# No private Actions, no private GitHub checkout, no unencrypted app bytes.
+# Only explicit public main fire marker requests an owner-approved seal.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'rendezvous/fire/cc-private-web-source-capsule-r1'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/cc-private-web-source-capsule-r1.yml'
+      - 'cloudflare/fleet-authority/src/private_web_source_seal.js'
+      - 'cloudflare/fleet-authority/src/source_exchange.js'
+      - 'scripts/private_web_source_capsule_stage_v1.py'
+      - 'tests/private_web_source_seal.test.mjs'
+      - 'tests/test_private_web_source_capsule_stage_v1.py'
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: cc-private-web-source-capsule-r1
+  cancel-in-progress: false
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Test narrow web-source sealing contract without private data
+        run: |
+          set -euo pipefail
+          node --check cloudflare/fleet-authority/src/private_web_source_seal.js
+          node --check cloudflare/fleet-authority/src/source_exchange.js
+          node --test tests/private_web_source_seal.test.mjs
+          python -m pip install --disable-pip-version-check cryptography==46.0.1
+          python -m unittest -v tests.test_private_web_source_capsule_stage_v1
+
+  stage:
+    needs: contract
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.16'
+      - name: Require existing CC public typed release fire
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          fire = Path('rendezvous/fire/cc-private-web-source-capsule-r1')
+          if not fire.is_file() or fire.stat().st_size > 2048:
+              raise SystemExit('CC_PRIVATE_WEB_STAGE_EXPLICIT_FIRE_REQUIRED=1')
+          node = json.loads(fire.read_text())
+          if node != {'schema': 'commandcenter.private_web_capsule_fire.v1',
+                      'request': 'OWNER_APPROVED_ENCRYPTED_SOURCE_STAGE_ONLY',
+                      'no_deploy': True, 'no_private_actions': True}:
+              raise SystemExit('CC_PRIVATE_WEB_STAGE_FIRE_CONTRACT_REJECTED=1')
+          PY
+      - name: Stage owner-approved ciphertext using existing Fleet Cloudflare authority
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          umask 077
+          python -m pip install --disable-pip-version-check cryptography==46.0.1
+          mkdir -p rendezvous/private-web-capsules rendezvous/receipts/private-web-source-stage
+          python -m scripts.private_web_source_capsule_stage_v1 \
+            --run-id "$GITHUB_RUN_ID" \
+            --capsule-root rendezvous/private-web-capsules \
+            --receipt "rendezvous/receipts/private-web-source-stage/$GITHUB_RUN_ID.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          receipt = json.loads((Path('rendezvous/receipts/private-web-source-stage')
+                                / (os.environ['GITHUB_RUN_ID'] + '.json')).read_text())
+          file = Path('rendezvous/private-web-capsules') / (receipt['capsule_id'] + '.json')
+          if (not file.is_file() or receipt['state'] != 'CIPHERTEXT_STAGED_NOT_DEPLOYED'
+                  or receipt['private_source_sha_published'] is not False
+                  or receipt['applicant_plaintext_published'] is not False
+                  or receipt['hosted_deployed'] is not False):
+              raise SystemExit('CC_PRIVATE_WEB_STAGE_FINAL_PRIVACY_REJECTED')
+          PY
+      - name: Publish only ciphertext and non-sensitive immutable stage receipt
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add rendezvous/private-web-capsules rendezvous/receipts/private-web-source-stage
+          git commit -m 'private-web: publish opaque encrypted capsule and bounded receipt'
+          git pull --rebase origin main
+          git push origin HEAD:main
+          echo 'CC_PRIVATE_WEB_PUBLIC_CIPHERTEXT_STAGE=PASS'

@@ -664,7 +664,7 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("privateArchivePathAllowed", text)
         self.assertIn("(matchedBootstrap && privateArchivePathAllowed)", text)
 
-    def test_operator_console_deploy_identity_is_vault_unwrap_only(self):
+    def test_operator_console_deploy_identity_is_exact_unwrap_or_private_web_key_only(self):
         text = SOURCE.read_text(encoding="utf-8")
         self.assertIn("OPERATOR_CONSOLE_DEPLOY_IDENTITY", text)
         self.assertIn(
@@ -674,10 +674,19 @@ class FleetSourceVaultContractTests(unittest.TestCase):
         self.assertIn("matchedOperatorDeploy", text)
         self.assertIn("operatorDeployPathAllowed", text)
         self.assertIn("pathname === '/v1/source-vault/unwrap'", text)
+        self.assertIn("privateWebKeyReleasePathAllowed", text)
+        self.assertIn("pathname === '/v1/source-vault/private-web/unwrap'", text)
+        self.assertIn("&& claims.event_name === 'push'", text)
         self.assertIn(
-            "(matchedOperatorDeploy && operatorDeployPathAllowed)",
+            "(matchedOperatorDeploy && (operatorDeployPathAllowed || privateWebKeyReleasePathAllowed))",
             text,
         )
+        # The existing missed-trade audit must NEVER receive the new web key.
+        self.assertIn("(matchedMissedTradeAudit && operatorDeployPathAllowed)", text)
+        # Cloudflare, not public Git source or request params, holds the approval.
+        self.assertIn("this.env.CC_PRIVATE_WEB_RELEASE_ENABLED !== '1'", text)
+        self.assertIn("this.env.CC_PRIVATE_WEB_APPROVED_CIPHERTEXT_SHA256", text)
+        self.assertIn("private_web_key_replay_rejected", text)
 
     def test_missed_trade_audit_identity_is_vault_unwrap_only(self):
         text = SOURCE.read_text(encoding="utf-8")

@@ -103,7 +103,14 @@ for role in roles:
   raise SystemExit('BINDINGS_NOT_IN_VERSION_RESPONSE='+role)
  b={str(x.get('name')):x for x in rows if isinstance(x,dict) and x.get('name')}
  print('REMOTE_BINDING_NAMES_'+role+'='+','.join(sorted(b)),flush=True)
- require('BROKER_EDITOR_TOKEN' not in b,'BROKER_EDITOR_ABSENT_'+role,role)
+ if role==roles[0]:
+  require('BROKER_EDITOR_TOKEN' not in b,'BROKER_EDITOR_ABSENT_ON_AUTHORITY',role)
+ else:
+  # Only metadata is inspected; never retrieve or print a bearer value.
+  editor=b.get('BROKER_EDITOR_TOKEN') or {}
+  require(str(editor.get('type') or '') in
+   ('secrets_store_secret','secret_store_secret','secrets_store'),
+   'BROKER_EDITOR_SECRETS_STORE_BOUND_ON_MAINTAINER',role)
  require('BROKER_SIGNING_PRIVATE_JWK' not in b,'BROKER_SIGNER_ABSENT_'+role,role)
  origin=b.get('BROKER_PUBLIC_ORIGIN') or {}
  require(origin.get('type') in ('plain_text','text') and
@@ -129,5 +136,5 @@ for role in roles:
 print('REMOTE_ACTIVE_VERSION_BINDINGS_AUDIT_PASS=1',flush=True)
 print('REMOTE_WORKERS_DEV_AND_CRON=AUDIT_STILL_PENDING',flush=True)
 print('CLOUDFLARE_MUTATIONS=NONE',flush=True)
-print('NEXT_GATE=remote_ingress_cron_evidence_then_isolated_secret_provisioning',flush=True)
+print('NEXT_GATE=effective_binding_readback_then_independent_signer_seal',flush=True)
 PY

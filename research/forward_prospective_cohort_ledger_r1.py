@@ -28,6 +28,12 @@ SUPPORTED = {"HOMEBUILDERS", "SEMICONDUCTOR_SHARED_RIDGE"}
 SEMICONDUCTOR_VARIANT_START_SIGNAL_DATE = "2026-09-30"
 SEMICONDUCTOR_VOL_LOOKBACK_SESSIONS = 20
 SEMICONDUCTOR_VOL_MIN_SESSIONS = 15
+# The published native universe has 13 names; a positive-signal subset is not
+# an equal-weight 13-name investable benchmark, even when its average is finite.
+FROZEN_SEMICONDUCTOR_UNIVERSE = frozenset((
+    "AMAT", "APH", "KLAC", "LRCX", "TXN", "NXPI", "ADI",
+    "NVDA", "AMD", "MU", "AVGO", "MRVL", "MCHP",
+))
 
 SESSION_SETTLE_ET = dt_time(18, 30)
 
@@ -825,6 +831,21 @@ def _matched_after_cost_projections(cohorts: list[dict[str, Any]]) -> dict[str, 
         identity = str(cohort["cohort_id"])
         result = cohort.get("resolution") or {}
         benchmarks = result.get("benchmarks") or {}
+        members = cohort.get("symbols")
+        # The legacy terminal resolver averages only positive selected names,
+        # despite naming that return equal_weight_13. Do not upgrade that
+        # selected-positive average to a full-13 matched control for a partial
+        # breadth cohort. Preserve its immutable original terminal result.
+        if (not isinstance(members, list) or len(members) != 13
+                or any(type(s) is not str for s in members)
+                or set(members) != FROZEN_SEMICONDUCTOR_UNIVERSE):
+            out[identity] = {
+                "status": "FULL_13_EQUAL_WEIGHT_CONTROL_NOT_OBSERVED",
+                "positive_member_count": len(members) if isinstance(members, list) else None,
+                "original_resolution_mutated": False,
+                "alpha_or_promotion_authority": False,
+            }
+            continue
         keys = (
             (result, "ticker_book_net_return_bps"),
             (benchmarks, "equal_weight_13_return_bps"),
@@ -1058,6 +1079,7 @@ def self_test() -> None:
     # separately from their frozen original gross/net and cost contract.
     terminal = {
         "cohort_id": "FROZEN_H20", "program_id": "SEMICONDUCTOR_SHARED_RIDGE",
+        "symbols": sorted(FROZEN_SEMICONDUCTOR_UNIVERSE),
         "status": "RESOLVED", "stock_round_trip_cost_bps": 25.0,
         "industry_round_trip_cost_bps": 10.0,
         "resolution": {"ticker_book_net_return_bps": 895.5707,
@@ -1070,6 +1092,12 @@ def self_test() -> None:
     assert projected["ticker_minus_smh_net_bps"] == -8.3719
     assert projected["original_resolution_mutated"] is False
     assert json.dumps(terminal, sort_keys=True) == original_terminal
+    partial = {**terminal, "cohort_id": "FROZEN_H20_PARTIAL", "symbols": ["AMAT", "APH"]}
+    scoped = _matched_after_cost_projections([partial])["FROZEN_H20_PARTIAL"]
+    assert scoped["status"] == "FULL_13_EQUAL_WEIGHT_CONTROL_NOT_OBSERVED"
+    assert scoped["positive_member_count"] == 2
+    assert scoped["alpha_or_promotion_authority"] is False
+    assert partial["resolution"] == terminal["resolution"]
     print("FORWARD_PROSPECTIVE_COHORT_LEDGER_SELF_TEST=PASS")
 
 

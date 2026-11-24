@@ -36,6 +36,18 @@ class SelectedRuntimeCloudWatchdogVisibilityTests(unittest.TestCase):
         )
         compile(code, "<MM-IBKR watchdog inline owner>", "exec")
 
+    def test_historical_owner_checkpoints_are_paged_but_only_accepted_receipts_qualify(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("for page in range(1, 9):", workflow)
+        self.assertIn("page={page}", workflow)
+        self.assertIn("if checkpoint_key or len(runs) < 50:", workflow)
+        self.assertIn("checkpoint_scanned_pages+=1", workflow)
+        self.assertIn("run.get('conclusion') == 'success'", workflow)
+        self.assertIn("run.get('head_branch') == 'main'", workflow)
+        self.assertIn("checkpoint_receipt_origin_admitted(run, receipt, canonical_source)", workflow)
+        self.assertIn("receipt=receipt_for(run)", workflow)
+        self.assertIn("MMIBKR_CLOUD_WATCHDOG_CHECKPOINT_SCANNED_PAGES=", workflow)
+
     def test_warning_does_not_change_source_or_mutation_policy(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         # A workflow pin can advance independently of this observability PR.
