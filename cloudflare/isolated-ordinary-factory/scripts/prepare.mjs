@@ -109,6 +109,29 @@ export function build(accountId,{outDir=OUT}={}){
     "    if (req.operation==='ordinary_worker.create') {",
     "    if (req.operation==='factory.queue_probe') {\n      const detail={category:'binding_unavailable',binding_type:'absent',http_status:null,api_error_codes:[]};\n      let bearer;\n      const binding=env.FACTORY_WORKERS_ADMIN;\n      detail.binding_type=typeof binding==='string'?'secret_text':binding && typeof binding.get==='function'?'secrets_store_secret':'absent_or_unsupported';\n      try { bearer=await token(binding); } catch {}\n      if(bearer && !/^[A-Za-z0-9._~+\\\\/=-]+$/.test(bearer)) { detail.category='credential_format_rejected'; bearer=undefined; }\n      if(bearer) {\n        detail.category='transport_failure';\n        let resp;\n        try {resp=await fetch(API+'/accounts/'+ORDINARY_ACCOUNT+'/workers/workers/'+req.worker_id,{method:'GET',headers:{authorization:'Bearer '+bearer,accept:'application/json'},redirect:'manual'});} catch {}\n        if(resp) {\n          detail.http_status=resp.status;\n          detail.category=resp.status===401?'authentication_rejected':resp.status===403?'authorization_rejected':resp.status===404?'resource_not_found_or_hidden':resp.status===429?'rate_limited':resp.status>=500?'upstream_error':resp.status===200?'response_unverified':'unexpected_http_status';\n          let data;\n          try {data=await resp.json();} catch {}\n          if(data && Array.isArray(data.errors)) detail.api_error_codes=data.errors.map(e=>e?.code).filter(c=>Number.isSafeInteger(c)&&c>=0&&c<=99999999).slice(0,8);\n          if(resp.status===200) detail.category=!data?'invalid_json':data.success!==true?'api_success_false':data.result?.id!==req.worker_id || data.result?.name!=='cc-ordinary-worker-factory'?'identity_mismatch':'verified';\n        }\n      }\n      result={status:'queue_probe_complete',worker_name:'cc-ordinary-worker-factory',github_queue_read_verified:true,cloudflare_admin_read_verified:detail.category==='verified',cloudflare_admin_diagnostic:detail,access_runtime_diagnostic:env.FACTORY_ACCESS_ADMIN?await verifyAccountAccess(env):{status:'access_binding_not_enrolled'},cloudflare_mutations:0,bearer_returned:false};\n    } else if (req.operation==='ordinary_worker.create') {",'fixed_readonly_probe_execution');
   if(account==='de1c728bdb163060d946122c857f3653') src['queue.js']=exactlyOnce(src['queue.js'],"!ID32.test(parsed.worker_id)","parsed.worker_id!=='822f7bffea8a499990fc92d1ae90b4ee'",'production_probe_identity_pin');
+  // Native static release uses the same private queue, one-shot ledger and
+  // existing credentials. Exact isolated canary only; no new mutation flags.
+  src['native-static-assets.mjs']=readFileSync(join(PACKAGE,'src','native-static-assets.mjs'),'utf8');
+  src['native-static-stage.mjs']=readFileSync(join(PACKAGE,'src','native-static-stage.mjs'),'utf8');
+  src['index.js']="import {runStaticVersion} from './native-static-stage.mjs';\n"+src['index.js'];
+  src['index.js']=exactlyOnce(src['index.js'],
+    "    } else if (req.operation==='existing_worker.ordinary_version.verify') {",
+    "    } else if (req.operation==='existing_worker.static_version.stage'||req.operation==='existing_worker.static_version.verify') {\n      result=await runStaticVersion(env,req);\n    } else if (req.operation==='existing_worker.ordinary_version.verify') {",'native_static_dispatch');
+  src['index.js']=exactlyOnce(src['index.js'],
+    "    if(!create && !stage && !probe && !promote && !serve && !verify && !privateServe)",
+    "    const staticRelease=req.worker_name==='cc-app-static-assets-proof' && ['existing_worker.static_version.stage','existing_worker.static_version.verify'].includes(req.operation) && env.FACTORY_STAGE_VERSION_ENABLED==='1' && env.FACTORY_SCRATCH_RELEASE_ENABLED==='1';\n    if(!create && !stage && !probe && !promote && !serve && !verify && !privateServe && !staticRelease)",'native_static_cron_admission');
+  src['index.js']=exactlyOnce(src['index.js'],
+    "privateServe?'private_ingress_verified':verify?'version_verified':'staged_off_traffic'",
+    "privateServe?'private_ingress_verified':(verify||req.operation==='existing_worker.static_version.verify')?'version_verified':'staged_off_traffic'",'native_static_receipt_status');
+  src['policy.js']=exactlyOnce(src['policy.js'],
+    "'existing_worker.ordinary_version.verify']);",
+    "'existing_worker.ordinary_version.verify','existing_worker.static_version.stage','existing_worker.static_version.verify']);",'native_static_operation');
+  src['policy.js']=exactlyOnce(src['policy.js'],
+    "    : (req.operation === 'existing_worker.ordinary_version.verify'||",
+    "    : req.operation === 'existing_worker.static_version.stage' ? ['worker_id','source_commit','source_sha256']\n    : req.operation === 'existing_worker.static_version.verify' ? ['worker_id','source_commit','source_sha256','version_id']\n    : (req.operation === 'existing_worker.ordinary_version.verify'||",'native_static_fields');
+  src['policy.js']=exactlyOnce(src['policy.js'],
+    "  return req;",
+    "  if(req.operation.startsWith('existing_worker.static_version.')&&(req.worker_name!=='cc-app-static-assets-proof'||!HEX32.test(req.worker_id)||!/^[a-f0-9]{40}$/.test(req.source_commit)||!/^[a-f0-9]{64}$/.test(req.source_sha256)||(req.operation==='existing_worker.static_version.verify'&&!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(req.version_id))))throw Error('native_static_contract_rejected');\n  return req;",'native_static_contract');
   const config={
     '$schema':'node_modules/wrangler/config-schema.json',
     name:FACTORY_NAME,account_id:account,main:'src/index.js',
