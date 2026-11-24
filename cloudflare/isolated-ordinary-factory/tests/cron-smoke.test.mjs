@@ -511,3 +511,26 @@ test('managed ordinary app uses fixed private package and exact owner tag, no cr
     const ok=await stageScratchVersion(e,req,mock);assert.equal(ok.status,'staged_off_traffic');assert.equal(writes,1);
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('workerd redirect compatibility: stage rejects redirect responses without following or leaking bearer',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'cc-workerd-redirect-'));
+  try{
+    build(ACCOUNT,{outDir:dir});
+    const {stageScratchVersion}=await import(pathToFileURL(join(dir,'src','scratch_stage.js')).href);
+    const req={worker_name:'cc-scratch-proof-a',worker_id:ID,source_commit:SHA,source_sha256:'f'.repeat(64)};
+    const e=env({FACTORY_STAGE_VERSION_ENABLED:'1',FACTORY_WORKERS_ADMIN:'synthetic-cloudflare-token-long-enough'});
+    let calls=0;
+    const mock=async(url,init)=>{
+      calls++;
+      assert.equal(init.redirect,'manual');
+      assert.equal(url,API+'/workers/workers/'+ID);
+      assert.equal(init.method,'GET');
+      return new Response(null,{status:302,headers:{location:'https://example.invalid/'}});
+    };
+    const receipt=await stageScratchVersion(e,req,mock);
+    assert.equal(calls,1);assert.equal(receipt.status,'failed_or_indeterminate');
+    assert.equal(receipt.diagnostic.http_status,302);assert.equal(receipt.diagnostic.mutation_attempted,false);
+    assert.equal(JSON.stringify(receipt).includes('synthetic-'),false);
+    assert.equal(readFileSync(join(dir,'src','scratch_stage.js'),'utf8').includes("redirect:'error'"),false);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
