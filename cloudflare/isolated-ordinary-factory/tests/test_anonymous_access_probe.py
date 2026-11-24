@@ -11,6 +11,12 @@ class AnonymousAccessProbeSafety(unittest.TestCase):
     def test_cloudflare_access_redirect_accepted(self):
         url="https://cc-ordinary-deployments.cloudflareaccess.com/cdn-cgi/access/login/abc?opaque=sensitive"
         self.assertEqual(probe.classify(302,url),"ACCESS_LOGIN_REDIRECT_VERIFIED")
+    def test_proof_same_host_access_redirect_accepted(self):
+        url=probe.PROOF_ROOT+"cdn-cgi/access/login/abc"
+        self.assertEqual(probe.classify(302,url),"ACCESS_LOGIN_REDIRECT_VERIFIED")
+    def test_unadmitted_target_rejected_before_network(self):
+        with self.assertRaises(ValueError):
+            probe.probe("https://example.org/")
     def test_direct_factory_status_is_failure(self):
         body=b'{"schema":"commandcenter.cloudflare.factory_status.v1","admitted":false}'
         self.assertEqual(probe.classify(200,body=body),
