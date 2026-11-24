@@ -1,10 +1,11 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "ccpi-owner-cloudflare-authority",
+  "name": "research-compute-public",
   "account_id": "b33595eb85f346b0d1bf201810b4499a",
   "main": "src/index.js",
   "compatibility_date": "2026-11-13",
-  "workers_dev": true,
+  "workers_dev": false,
+  "preview_urls": false,
   // Deploy only with independently authenticated neutral-account Cloudflare
   // administration; NEVER add this target to a GitHub Actions deploy workflow.
   // All sensitive bindings/flags must be configured by Cloudflare owner
