@@ -1,3 +1,4 @@
+import { scheduledRootPermit } from './scheduled_root_permit.js';
 // Pi owner grants use the installed cc-pi4 root verifier byte contract.
 // Source implementation only: no signing identity, root key or queue authority is installed by this file.
 const KEY_ID = 'ccpi-owner-bootstrap-ed25519-v1';
@@ -305,7 +306,10 @@ export class PiOwnerApprovalState {
       const raw = await request.text();
       if (te.encode(raw).length > 8192) return json({error:'pi_owner_payload_oversize'},413);
       const body = JSON.parse(raw);
-      requireOwner(this.env, body.operator);
+      // Only the protected Worker's scheduled path calls this DO endpoint.
+      // Never forward it through the HTTP owner API or a Git-controlled service.
+      const scheduled = url.pathname === '/sign-scheduled-root';
+      if (!scheduled) requireOwner(this.env, body.operator);
       if (url.pathname === '/initialize') {
         await requireActivation(this.env, body.activation_code);
         let entry = await this.ctx.storage.get('pi_owner_key_v1');
@@ -345,13 +349,19 @@ export class PiOwnerApprovalState {
         await this.ctx.storage.put('pi_owner_enrollment_v1', enrollment);
         return json({recorded: true, pi_root_independent_readback: false},201);
       }
-      if (url.pathname === '/sign') {
+      if (url.pathname === '/sign' || scheduled) {
+        let permit = null;
+        if (scheduled) {
+          strictFields(body,['kind','request','approval']);
+          if (body.kind !== 'root_release') throw Error('scheduled_root_kind_invalid');
+          permit = scheduledRootPermit(this.env, body.request);
+        }
         if (this.env.PI_OWNER_SIGNER_ENABLED !== '1'
             || !this.env.PI_OWNER_QUEUE_GITHUB_TOKEN) throw new Error('pi_owner_protected_activation_incomplete');
         const entry = await this.ctx.storage.get('pi_owner_key_v1');
         const enrolled = await this.ctx.storage.get('pi_owner_enrollment_v1');
         if (!entry || !enrolled || enrolled.key_sha256 !== entry.public_key_sha256
-            || body.approve_exact_release !== true
+            || (!scheduled && body.approve_exact_release !== true)
             || !safeEq(String(this.env.PI_OWNER_ENROLLED_PUB_SHA256 || ''), entry.public_key_sha256)) {
           throw new Error('pi_owner_trust_anchor_not_activated');
         }
@@ -361,7 +371,16 @@ export class PiOwnerApprovalState {
             ? await validatePiCloudBotRejoinApproval(body.approval, body.request)
             : await validatePiOwnerApproval(body.kind, body.approval, body.request);
         const storageKey = 'pi_owner_issued_v1/' + accepted.request_id;
+        const permitKey = permit ? 'pi_owner_scheduled_permit_v1/' + permit.permit_id : null;
         const previous = await this.ctx.storage.get(storageKey);
+        if (permitKey) {
+          const used = await this.ctx.storage.get(permitKey);
+          if (used && (used.request_id !== accepted.request_id
+              || used.approval_hash !== accepted.approval_hash))
+            throw Error('scheduled_root_permit_consumed');
+          if (previous && (!used || previous.permit_id !== permit.permit_id))
+            throw Error('scheduled_root_existing_grant_not_bound');
+        }
         if (previous) {
           if (previous.approval_hash !== accepted.approval_hash) {
             return json({error:'pi_owner_request_id_replay_conflict'},409);
@@ -377,9 +396,18 @@ export class PiOwnerApprovalState {
         const signedGrant = {...body.approval, key_id: KEY_ID, signature_b64: b64(signature)};
         const result = await this.ctx.storage.transaction(async (txn) => {
           if (await txn.get(storageKey)) return false;
+          if (permitKey) {
+            if (await txn.get(permitKey)) return false;
+            // Consume the independent permit atomically with its one grant.
+            // Retries may recover the identical grant, never issue a new ID.
+            await txn.put(permitKey,{request_id:accepted.request_id,
+              approval_hash:accepted.approval_hash});
+          }
           await txn.put(storageKey, {approval_hash:accepted.approval_hash,
             signed_grant:signedGrant, issued_at_utc:new Date().toISOString(),
-            operator_email:body.operator.email, kind:body.kind});
+            operator_email:scheduled?null:body.operator.email, kind:body.kind,
+            authorization_class:scheduled?'neutral_scheduled_permit':'access_owner',
+            permit_id:permit?.permit_id||null});
           return true;
         });
         if (!result) return json({error:'pi_owner_concurrent_issue_retry'},409);
