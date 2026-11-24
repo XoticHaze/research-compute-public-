@@ -332,13 +332,15 @@ test('fixed read-only queue probe works with create and stage disabled, receipt 
       else return new Response('{}',{status:404});
       return new Response('{}',{status:200});
     }})};
-    let receipt, adminStatus=200;
+    let receipt, adminStatus=200, adminMode='normal';
     globalThis.fetch=async(url,init)=>{
       const target=String(url),method=init.method||'GET';calls.push({target,method});
       if(target.startsWith(API)){
         assert.equal(method,'GET');assert.equal(target,API+'/workers/workers/'+ID);
         assert.equal(init.headers.authorization,'Bearer '+cloud);
-        return new Response(JSON.stringify({success:adminStatus===200,result:{id:ID,name:req.worker_name}}),{status:adminStatus});
+        if(adminMode==='transport') throw Error('do-not-export-'+cloud);
+        if(adminMode==='invalid_json') return new Response('not JSON',{status:200});
+        return new Response(JSON.stringify({success:adminStatus===200,result:{id:adminMode==='wrong_id'?RUN:ID,name:req.worker_name},errors:adminStatus===200?[]:[{code:10000,message:'do-not-export-'+cloud}]}),{status:adminStatus});
       }
       assert.ok(target.startsWith(ROOT));assert.equal(init.headers.authorization,'Bearer '+github);
       if(method==='PUT'){receipt=JSON.parse(atob(JSON.parse(init.body).content));
@@ -352,6 +354,7 @@ test('fixed read-only queue probe works with create and stage disabled, receipt 
       await mod.default.scheduled({cron:CRON},ready,{});
       assert.equal(receipt.status,'queue_probe_complete');assert.equal(receipt.github_queue_read_verified,true);
       assert.equal(receipt.cloudflare_admin_read_verified,true);assert.equal(receipt.cloudflare_mutations,0);
+      assert.equal(receipt.cloudflare_admin_diagnostic.category,'verified');
       assert.ok(!JSON.stringify(receipt).includes(github));assert.ok(!JSON.stringify(receipt).includes(cloud));
       assert.deepEqual(calls.map(x=>x.method),['GET','GET','PUT','DELETE']);
       await assert.rejects(mod.default.scheduled({cron:CRON},ready,{}));
@@ -359,7 +362,22 @@ test('fixed read-only queue probe works with create and stage disabled, receipt 
       journal.clear();calls.length=0;adminStatus=403;
       await mod.default.scheduled({cron:CRON},ready,{});
       assert.equal(receipt.status,'queue_probe_complete');assert.equal(receipt.cloudflare_admin_read_verified,false);
+      assert.equal(receipt.cloudflare_admin_diagnostic.category,'authorization_rejected');
+      assert.deepEqual(receipt.cloudflare_admin_diagnostic.api_error_codes,[10000]);
+      assert.equal(receipt.cloudflare_admin_diagnostic.http_status,403);
+      assert.ok(!JSON.stringify(receipt).includes(cloud));
       assert.equal(receipt.cloudflare_mutations,0);
+      for(const [mode,status,expected] of [['normal',401,'authentication_rejected'],['normal',404,'resource_not_found_or_hidden'],['transport',200,'transport_failure'],['invalid_json',200,'invalid_json'],['wrong_id',200,'identity_mismatch']]) {
+        journal.clear();calls.length=0;adminMode=mode;adminStatus=status;
+        await mod.default.scheduled({cron:CRON},ready,{});
+        assert.equal(receipt.cloudflare_admin_diagnostic.category,expected);
+        assert.ok(!JSON.stringify(receipt).includes(cloud));
+        assert.equal(receipt.cloudflare_mutations,0);
+      }
+      journal.clear();calls.length=0;
+      await mod.default.scheduled({cron:CRON},{...ready,FACTORY_WORKERS_ADMIN:undefined},{});
+      assert.equal(receipt.cloudflare_admin_diagnostic.category,'binding_unavailable');
+      assert.equal(calls.filter(x=>x.target.startsWith(API)).length,0);
       journal.clear();calls.length=0;req.worker_name='wrong-worker';
       await assert.rejects(mod.default.scheduled({cron:CRON},ready,{}),/queue_probe_contract_rejected/);
       assert.equal(calls.length,1);
