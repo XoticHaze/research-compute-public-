@@ -1,3 +1,4 @@
+import { scheduledRootPermit } from './scheduled_root_permit.js';
 // Independently administered neutral-account Cloudflare ONLY Pi root authorization service.
 // This script MUST NOT be deployed by GitHub-controlled Worker credentials.
 // No private key is accepted from a request, repository, or caller.
@@ -88,6 +89,10 @@ async function status(env) {
     initialized:raw.initialized===true,
     enrolled:raw.enrolled===true,
     public_key_sha256:typeof raw.public_key_sha256==='string'?raw.public_key_sha256:null,
+    // Public trust anchor only; the status endpoint already requires Access.
+    // Recover the existing key without rotation if initial response was lost.
+    public_key_pem:typeof raw.public_key_pem==='string'?raw.public_key_pem:null,
+    scheduled_root_enabled:flag(env.PI_OWNER_SCHEDULED_ROOT_ENABLED),
     queue_configured:Boolean(env.PI_OWNER_QUEUE_GITHUB_TOKEN),
     root_public_fingerprint_configured:SHA256.test(String(env.PI_OWNER_ENROLLED_PUB_SHA256||'')),
     isolated_cloudflare_signer_enabled:flag(env.PI_OWNER_SIGNER_ENABLED),
@@ -264,6 +269,30 @@ const noStore={headers:{'content-type':'text/html; charset=utf-8','cache-control
 'x-content-type-options':'nosniff','referrer-policy':'no-referrer',
 'content-security-policy':"default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"}};
 export default {
+  async scheduled(controller,env,ctx) {
+    // No HTTP route, caller-supplied identity or arbitrary root scope.
+    // Cloudflare-owned cron consumes one pre-admitted exact source permit.
+    if (!flag(env.PI_OWNER_SCHEDULED_ROOT_ENABLED)) return;
+    try {
+      const proposal=await readPendingCCRootRelease(env);
+      const request=proposal.request;
+      scheduledRootPermit(env,request);
+      const approval=unsignedGrant(request);
+      await validatePiCloudRootReleaseApproval(approval,request);
+      const issued=await doRequest(env,'POST','/sign-scheduled-root',{
+        kind:'root_release',request,approval,
+      });
+      const dispatched=await publishPiRootReleaseGrant(env,request,issued.signed_grant);
+      // Only public-safe immutable transport metadata; never key/signature/body.
+      console.log(JSON.stringify({event:'scheduled_root_grant_dispatched',
+        request_id:dispatched.request_id,
+        recovered_exact_same_id:dispatched.recovered_exact_same_id}));
+    } catch {
+      // Missing/expired proposals and consumed permits are normal quiet polls.
+      // The actual root outbox remains the only terminal execution receipt.
+      console.log('scheduled_root_no_dispatch');
+    }
+  },
   async fetch(request,env,ctx) {
     let identity;
     try { identity=await owner(request,env,ctx); }
