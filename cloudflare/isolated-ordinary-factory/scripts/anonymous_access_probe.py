@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 TARGET = ("https://cc-ordinary-worker-factory."
           "cc-ordinary-deployments.workers.dev/v1/status")
 SCHEMA = "commandcenter.cloudflare.factory_status.v1"
+PROOF_ROOT = "https://cc-app-factory-proof.cc-ordinary-deployments.workers.dev/"
+TARGETS = {"factory_status": TARGET, "proof_root": PROOF_ROOT, "proof_health": PROOF_ROOT+"health"}
 
 
 def classify(status, redirect_url="", content_type="", body=b""):
@@ -25,7 +27,7 @@ def classify(status, redirect_url="", content_type="", body=b""):
         if parsed.scheme == "https" and (
                 path.startswith("/cdn-cgi/access/") and (
                     host.endswith(".cloudflareaccess.com") or
-                    host == "cc-ordinary-worker-factory.cc-ordinary-deployments.workers.dev")):
+                    host in ("cc-ordinary-worker-factory.cc-ordinary-deployments.workers.dev", "cc-app-factory-proof.cc-ordinary-deployments.workers.dev"))):
             return "ACCESS_LOGIN_REDIRECT_VERIFIED"
         return "REDIRECT_UNCLASSIFIED"
     if status in (401, 403):
@@ -36,11 +38,13 @@ def classify(status, redirect_url="", content_type="", body=b""):
     return "UNVERIFIED"
 
 
-def probe():
+def probe(target=TARGET):
+    if target not in TARGETS.values():
+        raise ValueError("TARGET_NOT_ADMITTED")
     class NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, req, fp, code, msg, headers, newurl):
             return None
-    req = urllib.request.Request(TARGET, headers={
+    req = urllib.request.Request(target, headers={
         "Accept": "application/json",
         "User-Agent": "cc-factory-anonymous-edge-audit-v1",
     }, method="GET")
@@ -55,28 +59,31 @@ def probe():
 
 
 def main():
-    try:
-        status, location, content_type, body = probe()
-        result = classify(status, location, content_type, body)
-    except (TimeoutError, urllib.error.URLError, OSError, ValueError):
-        status, result = None, "NETWORK_UNVERIFIED"
+    observations = {}
+    for name, target in TARGETS.items():
+        try:
+            status, location, content_type, body = probe(target)
+            result = classify(status, location, content_type, body)
+        except (TimeoutError, urllib.error.URLError, OSError, ValueError):
+            status, result = None, "NETWORK_UNVERIFIED"
+        observations[name] = {"http_status": status, "classification": result}
+    accepted = ("ACCESS_LOGIN_REDIRECT_VERIFIED", "ACCESS_DENIAL_PAGE_VERIFIED")
+    factory = observations["factory_status"]
     receipt = {
-        "schema": "commandcenter.cloudflare.factory.anonymous_access_probe.v1",
+        "schema": "commandcenter.cloudflare.factory.anonymous_access_probe.v2",
         "account_role": "CC_ISOLATED_ORDINARY_ONLY",
-        "worker": "cc-ordinary-worker-factory",
         "observation_time_utc": datetime.now(timezone.utc).isoformat(),
-        "http_status": status,
-        "classification": result,
-        "cloudflare_mutations": 0,
-        "credentials_sent": False,
-        "cookies_sent": False,
-        "identity_returned": False,
-        "no_mac_required": True,
+        "observations": observations,
+        "factory_edge_verified": factory["classification"] in accepted,
+        "proof_edge_verified": all(observations[n]["classification"] in accepted for n in ("proof_root", "proof_health")),
+        "proof_login_challenge_verified": all(observations[n]["classification"] == "ACCESS_LOGIN_REDIRECT_VERIFIED" for n in ("proof_root", "proof_health")),
+        "cloudflare_mutations": 0, "credentials_sent": False, "cookies_sent": False,
+        "identity_returned": False, "no_mac_required": True,
     }
     print(json.dumps(receipt, sort_keys=True))
-    # Access gate specifically identified; unclassified denial is not approval.
-    return 0 if result in ("ACCESS_LOGIN_REDIRECT_VERIFIED",
-                           "ACCESS_DENIAL_PAGE_VERIFIED") else 1
+    # An unclassified proof denial is diagnostic, not an accepted edge milestone.
+    # Preserve the prior mandatory factory edge assertion.
+    return 0 if receipt["factory_edge_verified"] else 1
 
 
 if __name__ == "__main__":
