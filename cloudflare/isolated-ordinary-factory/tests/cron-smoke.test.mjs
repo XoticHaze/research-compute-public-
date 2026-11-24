@@ -177,3 +177,75 @@ test('wrong account refuses cron before reading a private proposal',async()=>{
     }finally{globalThis.fetch=before;}
   });
 });
+
+test('terminal Cloudflare failure writes a private failure receipt and consumes only the exact proposal',async()=>{
+  await withFixture(async({mod})=>{
+    const calls=[],journal=new Map();
+    const req={schema:'commandcenter.cloudflare.factory_request.v1',
+      operation:'ordinary_worker.create',request_id:RUN,worker_name:'cc-scratch-proof-b',
+      expires_at:Math.floor(Date.now()/1000)+240};
+    const ledger={idFromName:x=>x,get:()=>({fetch:async request=>{
+      const data=await request.json(),mode=new URL(request.url).pathname;
+      if(mode==='/claim'){
+        if(journal.has(data.request_id))return new Response('{}',{status:409});
+        journal.set(data.request_id,'claimed');
+      }else if(mode==='/finish'){
+        if(journal.get(data.request_id)!=='claimed')return new Response('{}',{status:409});
+        journal.set(data.request_id,'terminal');
+      }else return new Response('{}',{status:404});
+      return new Response('{}',{status:200});
+    }})};
+    const original=globalThis.fetch;
+    globalThis.fetch=async(url,init)=>{
+      const target=String(url);calls.push(init.method||'GET');
+      if(target.startsWith(API))return new Response('{}',{status:403});
+      assert.ok(target.startsWith(ROOT));
+      if(init.method==='PUT'){
+        const payload=JSON.parse(init.body),receipt=JSON.parse(atob(payload.content));
+        assert.equal(receipt.status,'failed_or_indeterminate');
+        assert.equal(receipt.retry_same_id,false);
+        assert.equal(receipt.worker_name,req.worker_name);
+        assert.equal(receipt.operation,req.operation);
+        return new Response(JSON.stringify({content:{sha:SHA,path:'cloudflare-factory/results/'+RUN+'.json'}}),{status:201});
+      }
+      if(init.method==='DELETE'){
+        assert.equal(JSON.parse(init.body).sha,SHA);
+        return new Response(JSON.stringify({commit:{sha:SHA}}),{status:200});
+      }
+      const raw=JSON.stringify(req);
+      return new Response(JSON.stringify({sha:SHA,type:'file',encoding:'base64',size:raw.length,path:'cloudflare-factory/proposal.json',content:btoa(raw)}),{status:200});
+    };
+    try{
+      const ready=env({FACTORY_SCHEDULED_POLL_ENABLED:'1',FACTORY_EXECUTOR_ENABLED:'1',FACTORY_CREATE_ENABLED:'1',
+        FACTORY_QUEUE_GITHUB_TOKEN:'synthetic-github-token-long-enough',
+        FACTORY_WORKERS_ADMIN:'synthetic-cloudflare-token-long-enough',FACTORY_LEDGER:ledger});
+      await mod.default.scheduled({cron:CRON},ready,{});
+      assert.equal(journal.get(RUN),'terminal');
+      assert.deepEqual(calls,['GET','POST','PUT','DELETE']);
+      await assert.rejects(mod.default.scheduled({cron:CRON},ready,{}));
+      assert.equal(calls.filter(x=>x==='POST').length,1);
+    }finally{globalThis.fetch=original;}
+  });
+});
+test('stage operation requires its own flag and never borrows create authority',async()=>{
+  await withFixture(async({mod})=>{
+    const original=globalThis.fetch;
+    let calls=0;
+    const req={schema:'commandcenter.cloudflare.factory_request.v1',
+      operation:'existing_worker.scratch_version.stage',request_id:RUN,worker_name:'cc-scratch-proof-a',
+      worker_id:ID,source_commit:SHA,source_sha256:'d'.repeat(64),
+      expires_at:Math.floor(Date.now()/1000)+240};
+    globalThis.fetch=async(url)=>{
+      calls++;assert.ok(String(url).startsWith(ROOT));
+      const raw=JSON.stringify(req);
+      return new Response(JSON.stringify({sha:SHA,type:'file',encoding:'base64',size:raw.length,path:'cloudflare-factory/proposal.json',content:btoa(raw)}),{status:200});
+    };
+    try{
+      await assert.rejects(mod.default.scheduled({cron:CRON},env({
+        FACTORY_SCHEDULED_POLL_ENABLED:'1',FACTORY_EXECUTOR_ENABLED:'1',FACTORY_CREATE_ENABLED:'1',
+        FACTORY_STAGE_VERSION_ENABLED:'0',FACTORY_QUEUE_GITHUB_TOKEN:'synthetic-github-token-long-enough'
+      }),{}),/cron_operation_not_admitted/);
+      assert.equal(calls,1);
+    }finally{globalThis.fetch=original;}
+  });
+});
