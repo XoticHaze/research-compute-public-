@@ -55,6 +55,9 @@ test('real generated dispatcher/policy registers bounded stage and verify, with 
     const p=await import(pathToFileURL(join(d,'src','policy.js')).href);
     assert.equal(p.validateRequest(req).operation,req.operation);
     assert.equal(p.validateRequest({...req,operation:'existing_worker.static_version.verify',version_id:version}).version_id,version);
+    assert.match(ix,/runStaticPrivateRelease\(env,req,readAccountAccess\)/);
+    assert.equal(p.validateRequest({...req,operation:'existing_worker.static_version.serve_private',version_id:version}).version_id,version);
+    assert.throws(()=>p.validateRequest({...req,operation:'existing_worker.static_version.serve_private'}));
     for(const patch of [{worker_name:'cc-app-agent-fabric'},{worker_id:'bad'},{source_sha256:'bad'},{asset_path:'arbitrary'}])
       assert.throws(()=>p.validateRequest({...req,...patch}));
     assert.equal(readFileSync(join(d,'src','native-static-stage.mjs'),'utf8').includes('runStaticVersion'),true);
