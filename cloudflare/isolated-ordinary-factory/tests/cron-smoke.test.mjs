@@ -318,3 +318,51 @@ test('stage-only cron uploads a pinned scratch version with no deployment or cre
     }finally{globalThis.fetch=original;}
   });
 });
+
+test('fixed read-only queue probe works with create and stage disabled, receipt contains no secrets',async()=>{
+  await withFixture(async({mod})=>{
+    const original=globalThis.fetch, calls=[], journal=new Map();
+    const req={schema:'commandcenter.cloudflare.factory_request.v1',operation:'factory.queue_probe',
+      request_id:RUN,worker_name:'cc-ordinary-worker-factory',worker_id:ID,expires_at:Math.floor(Date.now()/1000)+200};
+    const github='synthetic-github-token-long-enough', cloud='synthetic-cloudflare-token-long-enough';
+    const ledger={idFromName:x=>x,get:()=>({fetch:async request=>{
+      const data=await request.json(),mode=new URL(request.url).pathname;
+      if(mode==='/claim'){if(journal.has(data.request_id))return new Response('{}',{status:409});journal.set(data.request_id,'claimed');}
+      else if(mode==='/finish'){if(journal.get(data.request_id)!=='claimed')return new Response('{}',{status:409});journal.set(data.request_id,'terminal');}
+      else return new Response('{}',{status:404});
+      return new Response('{}',{status:200});
+    }})};
+    let receipt, adminStatus=200;
+    globalThis.fetch=async(url,init)=>{
+      const target=String(url),method=init.method||'GET';calls.push({target,method});
+      if(target.startsWith(API)){
+        assert.equal(method,'GET');assert.equal(target,API+'/workers/workers/'+ID);
+        assert.equal(init.headers.authorization,'Bearer '+cloud);
+        return new Response(JSON.stringify({success:adminStatus===200,result:{id:ID,name:req.worker_name}}),{status:adminStatus});
+      }
+      assert.ok(target.startsWith(ROOT));assert.equal(init.headers.authorization,'Bearer '+github);
+      if(method==='PUT'){receipt=JSON.parse(atob(JSON.parse(init.body).content));
+        return new Response(JSON.stringify({content:{sha:SHA,path:'cloudflare-factory/results/'+RUN+'.json'}}),{status:201});}
+      if(method==='DELETE')return new Response(JSON.stringify({commit:{sha:SHA}}),{status:200});
+      const raw=JSON.stringify(req);return new Response(JSON.stringify({sha:SHA,type:'file',encoding:'base64',size:raw.length,path:'cloudflare-factory/proposal.json',content:btoa(raw)}),{status:200});
+    };
+    const ready=env({FACTORY_SCHEDULED_POLL_ENABLED:'1',FACTORY_EXECUTOR_ENABLED:'1',FACTORY_CREATE_ENABLED:'0',FACTORY_STAGE_VERSION_ENABLED:'0',
+      FACTORY_QUEUE_GITHUB_TOKEN:{get:async()=>github},FACTORY_WORKERS_ADMIN:cloud,FACTORY_LEDGER:ledger});
+    try{
+      await mod.default.scheduled({cron:CRON},ready,{});
+      assert.equal(receipt.status,'queue_probe_complete');assert.equal(receipt.github_queue_read_verified,true);
+      assert.equal(receipt.cloudflare_admin_read_verified,true);assert.equal(receipt.cloudflare_mutations,0);
+      assert.ok(!JSON.stringify(receipt).includes(github));assert.ok(!JSON.stringify(receipt).includes(cloud));
+      assert.deepEqual(calls.map(x=>x.method),['GET','GET','PUT','DELETE']);
+      await assert.rejects(mod.default.scheduled({cron:CRON},ready,{}));
+      assert.equal(calls.filter(x=>x.target.startsWith(API)).length,1);
+      journal.clear();calls.length=0;adminStatus=403;
+      await mod.default.scheduled({cron:CRON},ready,{});
+      assert.equal(receipt.status,'queue_probe_complete');assert.equal(receipt.cloudflare_admin_read_verified,false);
+      assert.equal(receipt.cloudflare_mutations,0);
+      journal.clear();calls.length=0;req.worker_name='wrong-worker';
+      await assert.rejects(mod.default.scheduled({cron:CRON},ready,{}),/queue_probe_contract_rejected/);
+      assert.equal(calls.length,1);
+    }finally{globalThis.fetch=original;}
+  });
+});
