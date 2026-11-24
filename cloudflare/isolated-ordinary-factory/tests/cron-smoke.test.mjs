@@ -455,3 +455,59 @@ test('isolated stage returns bounded numeric API diagnostics with no bearer',asy
     assert.equal(receipt.diagnostic.phase,'worker_identity');assert.equal(receipt.diagnostic.http_status,403);assert.deepEqual(receipt.diagnostic.api_error_codes,[10000]);assert.equal(JSON.stringify(receipt).includes(token),false);assert.equal(receipt.diagnostic.mutation_attempted,false);
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('serve admitted scratch only on verified active version and exact subdomain',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'cc-serve-'));
+  try{
+    build(ACCOUNT,{outDir:dir});
+    const {serveScratchVersion}=await import(pathToFileURL(join(dir,'src','scratch_stage.js')).href);
+    const source='export default {fetch(){return new Response("scratch");}};';
+    const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(source))),v=>v.toString(16).padStart(2,'0')).join('');
+    const id='12345678-1234-1234-1234-123456789abc',dep='22345678-1234-1234-1234-123456789abc';
+    const req={worker_name:'cc-scratch-proof-a',worker_id:ID,source_commit:SHA,source_sha256:digest,version_id:id};
+    const host='https://cc-scratch-proof-a.cc-ordinary-deployments.workers.dev',path=API+'/workers/workers/'+ID,dp=API+'/workers/scripts/cc-scratch-proof-a/deployments';
+    let calls=[],enabled=false;
+    const mock=async(url,init)=>{
+      calls.push({url,method:init.method});
+      if(url===host+'/health'){assert.equal(init.headers.authorization,undefined);return Response.json({schema:'commandcenter.factory.scratch.v1',project:'alpha'});}
+      if(url===path && init.method==='PATCH'){assert.deepEqual(JSON.parse(init.body),{subdomain:{enabled:true,previews_enabled:false}});enabled=true;return Response.json({success:true,result:{id:ID}});}
+      if(url===path)return Response.json({success:true,result:{id:ID,name:req.worker_name,subdomain:{enabled,previews_enabled:false,url:host}}});
+      if(url===path+'/versions/'+id+'?include=modules')return Response.json({success:true,result:{id,main_module:'worker.mjs',compatibility_date:'2026-11-18',bindings:[],modules:[{name:'worker.mjs',content_type:'application/javascript+module',content_base64:btoa(source)}]}});
+      assert.equal(url,dp);return Response.json({success:true,result:{deployments:[{id:dep,created_on:'2026-11-24T00:00:00Z',versions:[{version_id:id,percentage:100}]}]}});
+    };
+    const e=env({FACTORY_WORKERS_ADMIN:'synthetic-token-long-enough',FACTORY_SCRATCH_RELEASE_ENABLED:'1'});
+    const ok=await serveScratchVersion(e,req,mock);
+    assert.equal(ok.status,'served_verified');assert.equal(ok.health_revision,1);assert.equal(ok.live_serving_verified,true);
+    assert.equal(calls.filter(x=>x.method==='PATCH').length,1);
+    const second=await serveScratchVersion(e,req,mock);
+    assert.equal(second.cloudflare_mutations,0);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+test('managed ordinary app uses fixed private package and exact owner tag, no credentials in uploaded code',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'cc-ordinary-private-'));
+  try{
+    build(ACCOUNT,{outDir:dir});
+    const {stageScratchVersion}=await import(pathToFileURL(join(dir,'src','scratch_stage.js')).href);
+    const source='export default {fetch(){return new Response("ordinary app");}};';
+    const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(source))),v=>v.toString(16).padStart(2,'0')).join('');
+    const id='12345678-1234-1234-1234-123456789abc';
+    const req={operation:'existing_worker.ordinary_version.stage',worker_name:'cc-app-example',worker_id:ID,source_commit:SHA,source_sha256:digest};
+    const path=API+'/workers/workers/'+ID;
+    const repoPath='cloudflare-factory/releases/cc-app-example/worker.mjs';
+    let writes=0,tagged=false;
+    const mock=async(url,init)=>{
+      if(url===path)return Response.json({success:true,result:{id:ID,name:req.worker_name,tags:tagged?['cc-ordinary-factory-managed-v1']:[]}});
+      if(url===ROOT+repoPath+'?ref='+SHA){assert.equal(init.headers.authorization,'Bearer synthetic-github-token-long-enough');return Response.json({type:'file',path:repoPath,sha:SHA,encoding:'base64',size:source.length,content:btoa(source)});}
+      if(url===path+'/versions?page=1&per_page=100')return Response.json({success:true,result:[]});
+      if(url===path+'/versions/'+id+'?include=modules')return Response.json({success:true,result:{id,main_module:'worker.mjs',compatibility_date:'2026-11-18',bindings:[],modules:[{name:'worker.mjs',content_type:'application/javascript+module',content_base64:btoa(source)}]}});
+      assert.equal(url,path+'/versions?deploy=false');assert.equal(init.method,'POST');writes++;
+      assert.equal(init.headers.authorization,'Bearer synthetic-cloudflare-token-long-enough');
+      const body=JSON.parse(init.body);assert.deepEqual(body.bindings,[]);assert.equal(atob(body.modules[0].content_base64),source);assert.equal(JSON.stringify(body).includes('synthetic-'),false);
+      return Response.json({success:true,result:{id}},{status:201});
+    };
+    const e=env({FACTORY_STAGE_VERSION_ENABLED:'1',FACTORY_SCRATCH_RELEASE_ENABLED:'1',FACTORY_WORKERS_ADMIN:'synthetic-cloudflare-token-long-enough',FACTORY_QUEUE_GITHUB_TOKEN:'synthetic-github-token-long-enough'});
+    const deny=await stageScratchVersion(e,req,mock);assert.equal(deny.diagnostic.category,'worker_not_factory_managed');assert.equal(writes,0);
+    tagged=true;
+    const ok=await stageScratchVersion(e,req,mock);assert.equal(ok.status,'staged_off_traffic');assert.equal(writes,1);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
