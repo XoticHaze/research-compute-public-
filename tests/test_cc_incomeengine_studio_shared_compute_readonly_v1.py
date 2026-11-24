@@ -1,7 +1,7 @@
 import unittest,sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from scripts.cc_incomeengine_studio_shared_compute_readonly_v1 import exact_readback,ZONE,HOST,OWNER_POLICY
+from scripts.cc_incomeengine_studio_shared_compute_readonly_v1 import exact_readback,ZONE,HOST,OWNER_POLICY,edge_issuer,account_edge_issuer
 ACCOUNT='a'*32
 class StudioSharedComputeZoneReadOnly(unittest.TestCase):
     def test_foreign_zone_does_not_proceed(self):
@@ -73,4 +73,34 @@ class StudioSharedComputeZoneReadOnly(unittest.TestCase):
         self.assertEqual(s['studio_dns_state'],'UNKNOWN')
         self.assertEqual(s['studio_access_audience_metadata'],'UNVERIFIED')
         self.assertEqual(s['studio_access_team_domain_metadata'],'UNVERIFIED')
+    def test_exact_edge_issuer_and_no_cross_host_redirect(self):
+        good='https://neutral-team.cloudflareaccess.com/cdn-cgi/access/login/'+HOST
+        self.assertEqual(edge_issuer(HOST,302,good),'neutral-team.cloudflareaccess.com')
+        for bad in [good.replace('https:','http:'),good.replace('.com/','.com.evil/'),good.replace(HOST,'wrong.example.test')]:
+            self.assertIsNone(edge_issuer(HOST,302,bad))
+        self.assertIsNone(edge_issuer(HOST,200,good))
+    def test_edge_fallback_same_account_fixed_sibling_and_conflict(self):
+        gateway='gateway-ops.'+ZONE
+        apps=[{'domain':h,'type':'self_hosted','id':'11111111-2222-4333-8444-555555555555','aud':'audience-present'} for h in [HOST,gateway,'unrelated.example.test']]
+        seen=[]
+        def probe(h):
+            seen.append(h)
+            return (302,'https://neutral-team.cloudflareaccess.com/cdn-cgi/access/login/'+h) if h==gateway else (404,None)
+        self.assertEqual(account_edge_issuer(apps,probe),(True,2,False))
+        self.assertEqual(seen,[HOST,gateway])
+        def conflict(h):
+            return 302,'https://'+('one' if h==HOST else 'two')+'.cloudflareaccess.com/cdn-cgi/access/login/'+h
+        self.assertEqual(account_edge_issuer(apps,conflict),(False,2,True))
+    def test_live_edge_path_does_not_repeat_denied_organization_reads(self):
+        calls=[]
+        def read(method,p):
+            calls.append(p)
+            if p.startswith('/zones?'):return True,200,[{'name':ZONE,'status':'active','id':'b'*32,'account':{'id':ACCOUNT}}]
+            if '/access/apps?' in p:return True,200,[{'domain':HOST,'type':'self_hosted','id':'11111111-2222-4333-8444-555555555555','aud':'audience-present'}]
+            return False,403,None
+        e=exact_readback(read,ACCOUNT,lambda h:(302,'https://neutral-team.cloudflareaccess.com/cdn-cgi/access/login/'+h))
+        self.assertFalse(any('/access/organizations' in p for p in calls))
+        self.assertEqual(e['studio_access_team_domain_metadata'],'SAME_ACCOUNT_ACCESS_EDGE_ISSUER_PRESENT')
+        self.assertNotIn('neutral-team.cloudflareaccess.com',str(e))
+        self.assertEqual(e['cloudflare_mutations'],0)
 if __name__=='__main__':unittest.main()
