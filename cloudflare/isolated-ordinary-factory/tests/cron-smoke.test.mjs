@@ -249,3 +249,64 @@ test('stage operation requires its own flag and never borrows create authority',
     }finally{globalThis.fetch=original;}
   });
 });
+
+test('stage-only cron uploads a pinned scratch version with no deployment or create call',async()=>{
+  await withFixture(async({mod})=>{
+    const calls=[],journal=new Map();
+    const source='export default {fetch(){return new Response("scratch B");}};';
+    const bytes=new TextEncoder().encode(source);
+    const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+    const version='12345678-1234-1234-1234-123456789abc';
+    const req={schema:'commandcenter.cloudflare.factory_request.v1',operation:'existing_worker.scratch_version.stage',
+      request_id:RUN,worker_name:'cc-scratch-proof-b',worker_id:ID,source_commit:SHA,source_sha256:digest,
+      expires_at:Math.floor(Date.now()/1000)+240};
+    const ledger={idFromName:x=>x,get:()=>({fetch:async request=>{
+      const data=await request.json(),mode=new URL(request.url).pathname;
+      if(mode==='/claim'){
+        if(journal.has(data.request_id))return new Response('{}',{status:409});
+        journal.set(data.request_id,'claimed');
+      }else if(mode==='/finish'){
+        if(journal.get(data.request_id)!=='claimed')return new Response('{}',{status:409});
+        journal.set(data.request_id,'terminal');
+      }else return new Response('{}',{status:404});
+      return new Response('{}',{status:200});
+    }})};
+    const original=globalThis.fetch;
+    globalThis.fetch=async(url,init)=>{
+      const target=String(url),method=init.method||'GET';calls.push({target,method});
+      if(target.startsWith(ROOT)){
+        if(method==='PUT'){
+          const receipt=JSON.parse(atob(JSON.parse(init.body).content));
+          assert.equal(receipt.status,'staged_off_traffic');
+          assert.equal(receipt.version_id,version);
+          assert.equal(receipt.source_sha256,digest);
+          assert.equal(receipt.live_serving_verified,false);
+          return new Response(JSON.stringify({content:{sha:SHA,path:'cloudflare-factory/results/'+RUN+'.json'}}),{status:201});
+        }
+        if(method==='DELETE')return new Response(JSON.stringify({commit:{sha:SHA}}),{status:200});
+        const raw=JSON.stringify(req);
+        return new Response(JSON.stringify({sha:SHA,type:'file',encoding:'base64',size:raw.length,path:'cloudflare-factory/proposal.json',content:btoa(raw)}),{status:200});
+      }
+      if(target==='https://raw.githubusercontent.com/XoticHaze/research-compute-public-/'+SHA+'/cloudflare/ordinary-scratch-releases/cc-scratch-proof-b/worker.mjs'){
+        assert.equal(init.headers.authorization,undefined);
+        return new Response(source,{status:200});
+      }
+      if(target===API+'/workers/workers/'+ID && method==='GET')
+        return new Response(JSON.stringify({success:true,result:{id:ID,name:req.worker_name}}),{status:200});
+      assert.equal(target,API+'/workers/scripts/cc-scratch-proof-b/versions');
+      assert.equal(method,'POST');
+      assert.equal(await init.body.get('worker.mjs').text(),source);
+      return new Response(JSON.stringify({success:true,result:{id:version}}),{status:201});
+    };
+    try{
+      await mod.default.scheduled({cron:CRON},env({
+        FACTORY_SCHEDULED_POLL_ENABLED:'1',FACTORY_EXECUTOR_ENABLED:'1',FACTORY_CREATE_ENABLED:'0',
+        FACTORY_STAGE_VERSION_ENABLED:'1',FACTORY_QUEUE_GITHUB_TOKEN:'synthetic-github-token-long-enough',
+        FACTORY_WORKERS_ADMIN:'synthetic-cloudflare-token-long-enough',FACTORY_LEDGER:ledger}),{});
+      assert.equal(journal.get(RUN),'terminal');
+      assert.equal(calls.filter(x=>x.method==='POST').length,1);
+      assert.equal(calls.filter(x=>x.target.includes('/deployments')).length,0);
+      assert.equal(calls.filter(x=>x.method==='PUT').length,1);
+    }finally{globalThis.fetch=original;}
+  });
+});
