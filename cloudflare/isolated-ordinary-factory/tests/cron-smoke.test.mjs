@@ -534,3 +534,38 @@ test('workerd redirect compatibility: stage rejects redirect responses without f
     assert.equal(readFileSync(join(dir,'src','scratch_stage.js'),'utf8').includes("redirect:'error'"),false);
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('exact existing ordinary version readback supports API timestamp and optional bindings, never writes',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'cc-ordinary-reconcile-'));
+  try{
+    build(ACCOUNT,{outDir:dir});
+    const {verifyOrdinaryVersion}=await import(pathToFileURL(join(dir,'src','scratch_stage.js')).href);
+    const source='export default {fetch(){return new Response("ordinary app");}};';
+    const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(source))),v=>v.toString(16).padStart(2,'0')).join('');
+    const id='12345678-1234-1234-1234-123456789abc';
+    const req={worker_name:'cc-app-example',worker_id:ID,source_commit:SHA,source_sha256:digest,version_id:id};
+    const path=API+'/workers/workers/'+ID;
+    let calls=[],variant='timestamp';
+    const fetcher=async(url,init)=>{
+      calls.push({url,method:init.method});assert.equal(init.method,'GET');
+      if(url===path)return Response.json({success:true,result:{id:ID,name:req.worker_name,tags:['cc-ordinary-factory-managed-v1'],subdomain:{enabled:false,previews_enabled:false}}});
+      if(url===path+'/versions/'+id+'?include=modules'){
+        const v={id,main_module:'worker.mjs',compatibility_date:'2026-11-18T00:00:00Z',modules:[{name:'worker.mjs',content_type:'application/javascript+module',content_base64:btoa(source)}]};
+        if(variant==='timestamp')v.env={};
+        if(variant==='bad-binding')v.bindings=[{name:'PRIVATE',type:'secret_text'}];
+        if(variant==='wrong-date')v.compatibility_date='2026-11-17T00:00:00Z';
+        return Response.json({success:true,result:v});
+      }
+      if(url===API+'/workers/scripts/cc-app-example/versions/'+id)return Response.json({success:true,result:{id,resources:{bindings:[],script_runtime:{compatibility_date:'2026-11-18',compatibility_flags:[]}}}});
+      assert.equal(url,API+'/workers/scripts/cc-app-example/deployments');
+      return Response.json({success:true,result:{deployments:[]}});
+    };
+    const e=env({FACTORY_SCRATCH_RELEASE_ENABLED:'1',FACTORY_WORKERS_ADMIN:'synthetic-token-long-enough'});
+    const a=await verifyOrdinaryVersion(e,req,fetcher);
+    assert.equal(a.status,'version_verified');assert.equal(a.active_version_id,null);assert.equal(a.cloudflare_mutations,0);assert.equal(a.version_checks.content_sha256_match,true);
+    variant='omitted';const b=await verifyOrdinaryVersion(e,req,fetcher);assert.equal(b.status,'version_verified');assert.equal(b.version_checks.legacy_metadata_verified,true);
+    variant='bad-binding';const c=await verifyOrdinaryVersion(e,req,fetcher);assert.equal(c.diagnostic.category,'version_bindings_not_empty');assert.equal(c.diagnostic.version_checks.binding_count,1);assert.equal(JSON.stringify(c).includes('PRIVATE'),false);
+    variant='wrong-date';const d=await verifyOrdinaryVersion(e,req,fetcher);assert.equal(d.diagnostic.category,'version_compatibility_date_mismatch');
+    assert.ok(calls.every(c=>c.method==='GET'));
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
