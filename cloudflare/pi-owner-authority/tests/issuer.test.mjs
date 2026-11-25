@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash,generateKeyPairSync} from 'node:crypto';
-import {issueIndependentReleasePermit,issuerPublicIdentity} from '../src/independent_release_issuer.mjs';
+import {bindReviewedManifest,issueIndependentReleasePermit,issuerPublicIdentity} from '../src/independent_release_issuer.mjs';
 import {scheduledRootPermit} from '../src/scheduled_root_permit.js';
 const {privateKey:key}=generateKeyPairSync('ed25519');
 const {privateKey:root}=generateKeyPairSync('ed25519');
@@ -21,3 +21,11 @@ function fixture(n='1',gen='r'+'a'.repeat(12)){
 test('two distinct reviews signed and verified by exact Worker source, same issuer configuration',async()=>{for(const n of ['1','2']){const a=fixture(n);const e=issueIndependentReleasePermit(a,now);assert.deepEqual(await scheduledRootPermit(env,a.request,e,now),e.permit);assert.deepEqual(issueIndependentReleasePermit(a,now),e);}});
 test('missing review, tampered digest, expired review, wrong predecessor, wrong key all fail closed',()=>{const a=fixture();for(const patch of [{review:null},{manifestBytes:Buffer.from('changed')},{review:{...a.review,expires_at:iso(now-1)}},{priorReceipt:{...a.priorReceipt,status:'indeterminate'}},{priorReceipt:{...a.priorReceipt,message:'exact main source accepted; new generation r000000000000'}},{rootFingerprint:identity.sha256}])assert.throws(()=>issueIndependentReleasePermit({...a,...patch},now));});
 test('Worker denies forged envelope, cross-request reuse, disabled service and root-key confusion',async()=>{const a=fixture(),b=fixture('2'),e=issueIndependentReleasePermit(a,now);for(const [v,r,p] of [[env,a.request,{...e,signature_b64:Buffer.alloc(64).toString('base64')}],[env,b.request,e],[{...env,PI_OWNER_SCHEDULED_ROOT_ENABLED:'0'},a.request,e],[{...env,PI_OWNER_ENROLLED_PUB_SHA256:identity.sha256},a.request,e]])await assert.rejects(scheduledRootPermit(v,r,p,now));});
+
+// Regression fixture for the narrow independent manifest-review boundary.
+test('preapproved manifest binds exactly once to a fresh matching request shape',()=>{
+  const a=fixture(),{request_id:unused,...fields}=a.review;
+  const review={...fields,schema:'commandcenter.pi.independent_manifest_review.v1'};
+  assert.deepEqual(bindReviewedManifest(a.request,review,now),a.review);
+  for(const [r,m] of [[{...a.request,source_sha:'f'.repeat(40)},review],[{...a.request,request_id:'ccpi2-'+'f'.repeat(64)+'-'+'1'.repeat(16)},review],[{...a.request,expected_release:'r'+'f'.repeat(12)},review],[a.request,{...review,expires_at:iso(now+1000)}],[a.request,{...review,extra:true}],[{...a.request,action:'pi.bot.rejoin'},review],[{...a.request,expires_at:iso(now+660000)},{...review,expires_at:iso(now+720000)}],[a.request,{...review,review_id:123}]])assert.throws(()=>bindReviewedManifest(r,m,now));
+});
