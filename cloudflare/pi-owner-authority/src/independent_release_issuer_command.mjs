@@ -30,7 +30,8 @@ function bindOnce(review,request){
   need(/^[a-f0-9]{32}$/.test(review.review_id),'review_id_invalid');
   const dir=ROOT+'/review-bindings';privateDir(dir);
   const path=dir+'/'+review.review_id+'.json';
-  const raw=Buffer.from(canonical({review_id:review.review_id,request_id:request.request_id,manifest_sha256:review.manifest_sha256}));
+  const request_sha256=createHash('sha256').update(canonical(Object.fromEntries(Object.keys(request).sort().map(k=>[k,request[k]])))).digest('hex');
+  const raw=Buffer.from(canonical({review_id:review.review_id,request_id:request.request_id,manifest_sha256:review.manifest_sha256,request_sha256}));
   let fd;
   try{fd=openSync(path,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);}
   catch(e){if(e.code!=='EEXIST')throw e;need(privateFile(path,4096).equals(raw),'review_already_bound');return;}
@@ -71,7 +72,7 @@ function main(){
   const manifest=blob('pi-node/artifacts/ccpi-update-'+request.source_sha.slice(0,12)+'/manifest.json',ARTIFACT,20000);
   const envelope=issueIndependentReleasePermit({request,review,manifestBytes:manifest.raw,priorRequest,priorReceipt,key,rootFingerprint});
   const old=blob(PERMIT,INBOX,2048,true);
-  if(old){const existing=parse(old);if(canonical(existing)===canonical(envelope)){console.log('EXACT_PERMIT_ALREADY_PUBLISHED');return;}
+  if(old){const existing=parse(old);if(canonical(existing)===canonical(envelope)){bindOnce(review,request);console.log('EXACT_PERMIT_ALREADY_PUBLISHED');return;}
     need(existing.schema===envelope.schema&&existing.permit?.request_id!==request.request_id&&existing.permit?.permit_id!==envelope.permit.permit_id&&Number.isFinite(Date.parse(existing.permit?.expires_at))&&Date.parse(existing.permit.expires_at)<=Date.now()-120000,'permit_slot_occupied_or_replay');}
   // Recheck the proposal and prior request immediately before CAS. No executable request is written here.
   need(blob('pi-node/root-release-proposal.json',INBOX,4096).sha===proposal.sha&&blob('pi-node/release-request.json',INBOX,4096).sha===prior.sha,'queue_changed');
