@@ -625,8 +625,14 @@ export async function publishPiRootReleaseGrant(env, request, signedGrant, requi
     if(!priorReq)throw Error('scheduled_root_prior_request_missing');
     const previous=JSON.parse(priorReq.text);
     const terminal=await readPiRootReleaseReceipt(env,previous.request_id);
-    if(terminal.root_receipt_verified!==true||terminal.status!=='passed'||terminal.source_sha!==previous.source_sha
-        ||terminal.predecessor!==previous.expected_release||terminal.accepted_generation!==request.expected_release)
+    const priorIdentity=terminal.root_receipt_verified===true&&terminal.replay_allowed===false&&
+      terminal.source_sha===previous.source_sha&&terminal.predecessor===previous.expected_release;
+    // A fresh independently signed permit may request recovery of the same
+    // predecessor after a known failure. The root journal, not this projection,
+    // determines whether the accepted generation is actually stable.
+    const priorPassed=terminal.status==='passed'&&terminal.accepted_generation===request.expected_release;
+    const priorFailed=terminal.status==='failed'&&previous.expected_release===request.expected_release;
+    if(!priorIdentity||!(priorPassed||priorFailed))
       throw Error('scheduled_root_prior_terminal_or_generation_unverified');
   }
   if ((!oldRequestExact && !queueSlotFree(priorReq,request.request_id,Date.now()))
@@ -684,5 +690,6 @@ export async function readPiRootReleaseReceipt(env,requestId) {
     predecessor:typeof receipt.predecessor==='string'?receipt.predecessor:null,
     finished_at:typeof receipt.finished_at==='string'?receipt.finished_at:null,
     accepted_generation:receipt.status==='passed'&&receipt.replay_allowed===false?(/^exact main source accepted; new generation (r[0-9a-f]{12})$/.exec(String(receipt.message||''))?.[1]||null):null,
+    replay_allowed:receipt.replay_allowed===false?false:null,
     root_receipt_verified:true,active_generation_readback_verified:false};
 }
