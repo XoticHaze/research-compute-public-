@@ -1,4 +1,4 @@
-import { scheduledRootPermit } from './scheduled_root_permit.js';
+import { scheduledRootPermit, validateIndependentIssuerIdentity } from './scheduled_root_permit.js';
 // Pi owner grants use the installed cc-pi4 root verifier byte contract.
 // Source implementation only: no signing identity, root key or queue authority is installed by this file.
 const KEY_ID = 'ccpi-owner-bootstrap-ed25519-v1';
@@ -283,6 +283,9 @@ async function requireActivation(env, code) {
     throw new Error('pi_owner_independent_activation_required');
   }
 }
+const ISSUER_STATE='pi_owner_independent_release_issuer_v1';
+function staticIssuer(env){return Boolean(env.PI_OWNER_RELEASE_ISSUER_SPKI_B64||env.PI_OWNER_RELEASE_ISSUER_SHA256);}
+function issuerEnrollable(env){return env.PI_OWNER_ISSUER_OWNER_ENROLL_ENABLED==='1'&&!staticIssuer(env);}
 export class PiOwnerApprovalState {
   constructor(ctx, env) {
     this.ctx = ctx;
@@ -294,7 +297,11 @@ export class PiOwnerApprovalState {
       if (request.method === 'GET' && url.pathname === '/status') {
         const key = await this.ctx.storage.get('pi_owner_key_v1');
         const enrollment = await this.ctx.storage.get('pi_owner_enrollment_v1');
-        return json({ schema: 'commandcenter.pi.owner_signer_status.v1',
+        const issuer=await this.ctx.storage.get(ISSUER_STATE);
+        return json({ independent_release_issuer_configured:staticIssuer(this.env)||issuer?.active===true,
+          independent_release_issuer_fingerprint:staticIssuer(this.env)?this.env.PI_OWNER_RELEASE_ISSUER_SHA256||null:issuer?.active===true?issuer.sha256:null,
+          issuer_owner_enrollment_enabled:issuerEnrollable(this.env),
+          schema: 'commandcenter.pi.owner_signer_status.v1',
           initialized: Boolean(key), enrolled: Boolean(enrollment),
           public_key_pem: key?.public_key_pem || null,
           public_key_sha256: key?.public_key_sha256 || null,
@@ -349,12 +356,54 @@ export class PiOwnerApprovalState {
         await this.ctx.storage.put('pi_owner_enrollment_v1', enrollment);
         return json({recorded: true, pi_root_independent_readback: false},201);
       }
+      if (url.pathname === '/admit-issuer' || url.pathname === '/revoke-issuer') {
+        if(!issuerEnrollable(this.env)||this.env.PI_OWNER_SIGNER_ENABLED!=='1'||
+           this.env.PI_OWNER_NORMAL_RELEASE_ENABLED!=='1'||this.env.PI_OWNER_SCHEDULED_ROOT_PERMIT)
+          throw Error('independent_issuer_enrollment_not_admitted');
+        const entry=await this.ctx.storage.get('pi_owner_key_v1');
+        const enrolled=await this.ctx.storage.get('pi_owner_enrollment_v1');
+        if(!entry||!enrolled||entry.public_key_sha256!==enrolled.key_sha256||
+           entry.public_key_sha256!==this.env.PI_OWNER_ENROLLED_PUB_SHA256)
+          throw Error('pi_owner_trust_anchor_not_activated');
+        const admit=url.pathname==='/admit-issuer';
+        strictFields(body,admit?['spki_b64','sha256','confirm_independent_custody','operator']:
+          ['sha256','confirm_revoke','operator']);
+        if(admit){
+          if(body.confirm_independent_custody!==true)throw Error('independent_custody_confirmation_required');
+          await validateIndependentIssuerIdentity(body.spki_b64,body.sha256,entry.public_key_sha256);
+        }else if(body.confirm_revoke!==true||!SHA64.test(String(body.sha256||'')))
+          throw Error('issuer_revocation_confirmation_required');
+        const record=await this.ctx.storage.transaction(async txn=>{
+          const old=await txn.get(ISSUER_STATE);
+          if(admit && old?.active===true) {
+            if(old.sha256===body.sha256&&old.spki_b64===body.spki_b64)return old;
+            throw Error('active_issuer_requires_explicit_revocation');
+          }
+          if(!admit&&(!old?.active||old.sha256!==body.sha256))throw Error('issuer_revocation_identity_mismatch');
+          const next={active:admit,sha256:body.sha256,revision:(old?.revision||0)+1,
+            observed_at_utc:new Date().toISOString(),operator_email:body.operator.email,
+            ...(admit?{spki_b64:body.spki_b64}:{})};
+          await txn.put(ISSUER_STATE,next);
+          return next;
+        });
+        return json({schema:'commandcenter.pi.independent_issuer_admission.v1',
+          active:record.active,sha256:record.sha256,revision:record.revision,
+          observed_at_utc:record.observed_at_utc},200);
+      }
       if (url.pathname === '/sign' || scheduled) {
-        let permit = null;
+        let permit = null, issuerRevision=null;
         if (scheduled) {
           strictFields(body,['kind','request','approval','permit_envelope']);
           if (body.kind !== 'root_release') throw Error('scheduled_root_kind_invalid');
-          permit = await scheduledRootPermit(this.env, body.request, body.permit_envelope);
+          let permitEnv=this.env;
+          if(body.permit_envelope!==null&&!staticIssuer(this.env)){
+            const issuer=await this.ctx.storage.get(ISSUER_STATE);
+            if(!issuerEnrollable(this.env)||issuer?.active!==true)throw Error('independent_issuer_not_enrolled');
+            issuerRevision=issuer.revision;
+            permitEnv={...this.env,PI_OWNER_RELEASE_ISSUER_SPKI_B64:issuer.spki_b64,
+              PI_OWNER_RELEASE_ISSUER_SHA256:issuer.sha256};
+          }
+          permit = await scheduledRootPermit(permitEnv, body.request, body.permit_envelope);
         }
         if (this.env.PI_OWNER_SIGNER_ENABLED !== '1'
             || !this.env.PI_OWNER_QUEUE_GITHUB_TOKEN) throw new Error('pi_owner_protected_activation_incomplete');
@@ -395,6 +444,10 @@ export class PiOwnerApprovalState {
           te.encode(DOMAINS[body.kind] + canonicalPiJson(body.approval)));
         const signedGrant = {...body.approval, key_id: KEY_ID, signature_b64: b64(signature)};
         const result = await this.ctx.storage.transaction(async (txn) => {
+          if(issuerRevision!==null){
+            const current=await txn.get(ISSUER_STATE);
+            if(current?.active!==true||current.revision!==issuerRevision)throw Error('independent_issuer_changed_before_issue');
+          }
           if (await txn.get(storageKey)) return false;
           if (permitKey) {
             if (await txn.get(permitKey)) return false;
