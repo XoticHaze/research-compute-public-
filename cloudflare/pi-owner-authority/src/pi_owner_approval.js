@@ -352,9 +352,9 @@ export class PiOwnerApprovalState {
       if (url.pathname === '/sign' || scheduled) {
         let permit = null;
         if (scheduled) {
-          strictFields(body,['kind','request','approval']);
+          strictFields(body,['kind','request','approval','permit_envelope']);
           if (body.kind !== 'root_release') throw Error('scheduled_root_kind_invalid');
-          permit = scheduledRootPermit(this.env, body.request);
+          permit = await scheduledRootPermit(this.env, body.request, body.permit_envelope);
         }
         if (this.env.PI_OWNER_SIGNER_ENABLED !== '1'
             || !this.env.PI_OWNER_QUEUE_GITHUB_TOKEN) throw new Error('pi_owner_protected_activation_incomplete');
