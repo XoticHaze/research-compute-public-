@@ -31,7 +31,7 @@ function body(id=rid,overrides={}){
     request_id:id,created_at:iso(now-1000),expires_at:iso(now+300000),...overrides};
   const approval={schema:'commandcenter.pi.release_request_approval.v1',request_id:id,
     source_sha:request.source_sha,expected_release:request.expected_release,expires_at:request.expires_at};
-  return {kind:'root_release',request,approval};
+  return {kind:'root_release',request,approval,permit_envelope:null};
 }
 async function invoke(instance,payload=body(),path='/sign-scheduled-root'){
   return instance.fetch(new Request('https://test.invalid'+path,{method:'POST',body:JSON.stringify(payload)}));
@@ -91,4 +91,34 @@ test('queue read includes explicit GitHub client identity and reports only categ
     status=200;reported={...receipt,request_id:'wrong-id'};
     await assert.rejects(readPiRootReleaseReceipt(fakeEnv,id),/pi_owner_root_release_receipt_identity_invalid/);
   } finally {globalThis.fetch=original;}
+});
+
+test('persistent independently signed permits: two fresh IDs, no Worker reconfiguration, forged and replayed grants denied',async()=>{
+  const issuer=await crypto.subtle.generateKey('Ed25519',true,['sign','verify']);
+  const spki=Buffer.from(await crypto.subtle.exportKey('spki',issuer.publicKey));
+  const fp=Buffer.from(await crypto.subtle.digest('SHA-256',spki)).toString('hex');
+  const {instance,rows}=fixture({PI_OWNER_SCHEDULED_ROOT_PERMIT:undefined,
+    PI_OWNER_RELEASE_ISSUER_SPKI_B64:spki.toString('base64'),PI_OWNER_RELEASE_ISSUER_SHA256:fp});
+  const make=async(p)=>{
+    const canonical=JSON.stringify(Object.fromEntries(Object.entries(p).sort(([a],[b])=>a<b?-1:a>b?1:0)))+'\n';
+    const sig=await crypto.subtle.sign('Ed25519',issuer.privateKey,new TextEncoder().encode('commandcenter.pi.independent_release_permit.v1\0'+canonical));
+    return {schema:'commandcenter.pi.independent_release_permit.v1',permit:p,signature_b64:Buffer.from(sig).toString('base64')};
+  };
+  const a=body();a.permit_envelope=await make(permit);
+  const forged=structuredClone(a);forged.permit_envelope.signature_b64=Buffer.alloc(64).toString('base64');
+  assert.equal((await invoke(instance,forged)).status,403);
+  const unsigned=body();assert.equal((await invoke(instance,unsigned)).status,403);
+  assert.equal((await invoke(instance,a)).status,201);
+  assert.equal((await invoke(instance,a)).status,200);
+  const next={...permit,permit_id:'1'.repeat(32),request_id:'ccpi2-'+'f'.repeat(64)+'-'+'2'.repeat(16),
+    manifest_sha256:'f'.repeat(64),source_sha:'3'.repeat(40),expected_release:'r'+'4'.repeat(12)};
+  const b=body(next.request_id,{source_sha:next.source_sha,expected_release:next.expected_release});
+  b.permit_envelope=await make(next);
+  const reused=structuredClone(b);reused.permit_envelope=await make({...next,permit_id:permit.permit_id});
+  assert.equal((await invoke(instance,reused)).status,403);
+  assert.equal((await invoke(instance,b)).status,201);
+  assert.equal([...rows.keys()].filter(k=>k.startsWith('pi_owner_issued_v1/')).length,2);
+  const sameRoot=fixture({PI_OWNER_SCHEDULED_ROOT_PERMIT:undefined,
+    PI_OWNER_RELEASE_ISSUER_SPKI_B64:Buffer.from(der).toString('base64'),PI_OWNER_RELEASE_ISSUER_SHA256:fingerprint});
+  assert.equal((await invoke(sameRoot.instance,a)).status,403);
 });
