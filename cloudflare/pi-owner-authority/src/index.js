@@ -300,7 +300,7 @@ export default {
       const issued=await doRequest(env,'POST','/sign-scheduled-root',{
         kind:'root_release',request,approval,permit_envelope:permitEnvelope,
       });
-      const dispatched=await publishPiRootReleaseGrant(env,request,issued.signed_grant);
+      const dispatched=await publishPiRootReleaseGrant(env,request,issued.signed_grant,true);
       // Only public-safe immutable transport metadata; never key/signature/body.
       console.log(JSON.stringify({event:'scheduled_root_grant_dispatched',
         request_id:dispatched.request_id,
