@@ -39,6 +39,15 @@ function decode(value, len) {
   if(bytes.length!==len||btoa(String.fromCharCode(...bytes))!==value) throw Error('independent_permit_encoding');
   return bytes;
 }
+export async function validateIndependentIssuerIdentity(spki_b64, fingerprint, rootFingerprint) {
+  const spki=decode(spki_b64,44);
+  const actual=[...new Uint8Array(await crypto.subtle.digest('SHA-256',spki))]
+    .map(x=>x.toString(16).padStart(2,'0')).join('');
+  if(!/^[0-9a-f]{64}$/.test(String(rootFingerprint||''))||
+     !/^[0-9a-f]{64}$/.test(String(fingerprint||''))||actual!==fingerprint||fingerprint===rootFingerprint)
+    throw Error('independent_permit_issuer_not_admitted');
+  return crypto.subtle.importKey('spki',spki,'Ed25519',false,['verify']);
+}
 // Independent release reviewer signs an exact permit in a distinct domain.
 // A Git queue write supplies transport only; it never confers signing authority.
 export async function scheduledRootPermit(env, request, envelope = null, now = Date.now()) {
@@ -52,13 +61,8 @@ export async function scheduledRootPermit(env, request, envelope = null, now = D
       ||!Object.hasOwn(envelope,'permit')||!Object.hasOwn(envelope,'signature_b64'))
     throw Error('independent_permit_shape');
   const p=permitForRequest(env,request,envelope.permit,now);
-  const spki=decode(env.PI_OWNER_RELEASE_ISSUER_SPKI_B64,44);
-  const fingerprint=[...new Uint8Array(await crypto.subtle.digest('SHA-256',spki))]
-    .map(x=>x.toString(16).padStart(2,'0')).join('');
-  if(!/^[0-9a-f]{64}$/.test(String(env.PI_OWNER_RELEASE_ISSUER_SHA256||''))
-      ||fingerprint!==env.PI_OWNER_RELEASE_ISSUER_SHA256
-      ||fingerprint===env.PI_OWNER_ENROLLED_PUB_SHA256) throw Error('independent_permit_issuer_not_admitted');
-  const key=await crypto.subtle.importKey('spki',spki,'Ed25519',false,['verify']);
+  const key=await validateIndependentIssuerIdentity(env.PI_OWNER_RELEASE_ISSUER_SPKI_B64,
+    env.PI_OWNER_RELEASE_ISSUER_SHA256,env.PI_OWNER_ENROLLED_PUB_SHA256);
   if(!await crypto.subtle.verify('Ed25519',key,decode(envelope.signature_b64,64),
       new TextEncoder().encode(DOMAIN+canonical(p)))) throw Error('independent_permit_signature_invalid');
   return p;
