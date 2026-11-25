@@ -93,7 +93,9 @@ async function status(env) {
     // Recover the existing key without rotation if initial response was lost.
     public_key_pem:typeof raw.public_key_pem==='string'?raw.public_key_pem:null,
     scheduled_root_enabled:flag(env.PI_OWNER_SCHEDULED_ROOT_ENABLED),
-    independent_release_issuer_configured:Boolean(env.PI_OWNER_RELEASE_ISSUER_SPKI_B64 && SHA256.test(String(env.PI_OWNER_RELEASE_ISSUER_SHA256||''))),
+    independent_release_issuer_configured:raw.independent_release_issuer_configured===true,
+    independent_release_issuer_fingerprint:raw.independent_release_issuer_fingerprint||null,
+    issuer_owner_enrollment_enabled:raw.issuer_owner_enrollment_enabled===true,
     bootstrap_permit_configured:Boolean(env.PI_OWNER_SCHEDULED_ROOT_PERMIT),
     queue_configured:Boolean(env.PI_OWNER_QUEUE_GITHUB_TOKEN),
     root_public_fingerprint_configured:SHA256.test(String(env.PI_OWNER_ENROLLED_PUB_SHA256||'')),
@@ -211,6 +213,14 @@ one installed predecessor, expiry and request ID. Pi root independently verifies
 <label>Pi-verified public SPKI SHA-256</label><input id="key-fp">
 <label>Activation code</label><input id="enroll-code" type="password" autocomplete="off">
 <button id="enroll">Acknowledge verified root enrollment</button></section>
+<section><h2>Independent machine issuer admission</h2>
+<p>One-time enrollment of a separately operated, reviewed release issuer. Public key only. Do not enter private keys or accept a key supplied by a Git proposal. Revocation stops subsequent issuance; a previously issued permit may remain valid until expiry.</p>
+<label>Independently verified issuer SPKI (base64)</label><input id="issuer-spki" autocomplete="off">
+<label>Independently verified SHA-256 fingerprint</label><input id="issuer-fp" autocomplete="off">
+<p><label><input id="issuer-confirm" type="checkbox" style="width:auto">I independently verified the issuer identity, protected key custody and review scope.</label></p>
+<button id="issuer-admit">Admit exact issuer</button>
+<p><label><input id="issuer-revoke-confirm" type="checkbox" style="width:auto">Revoke the exact fingerprint above.</label></p>
+<button id="issuer-revoke">Revoke issuer</button><pre id="issuer-result"></pre></section>
 <section><h2>Approve exact root release</h2>
 <button id="load-proposal">Load non-executing root release proposal</button>
 <label>Exact fresh typed pi.release.apply request JSON</label><textarea id="request" spellcheck="false"></textarea>
@@ -243,6 +253,17 @@ catch(e){$('result').textContent='Denied: '+e.message}}
 async function refresh(){try{$('status').textContent=JSON.stringify(await api('status'),null,2)}
 catch(e){$('status').textContent='Denied: '+e.message}}
 $('refresh').onclick=refresh;
+async function issuerAction(admit){
+ try{
+  if(!$(admit?'issuer-confirm':'issuer-revoke-confirm').checked)throw Error('Explicit independent review required');
+  const sha256=$('issuer-fp').value.trim();
+  const result=await api(admit?'admit-issuer':'revoke-issuer',admit?{spki_b64:$('issuer-spki').value.trim(),sha256,confirm_independent_custody:true}:{sha256,confirm_revoke:true});
+  $('issuer-result').textContent=JSON.stringify(result,null,2);
+  $('issuer-confirm').checked=false;$('issuer-revoke-confirm').checked=false;await refresh();
+ }catch(e){$('issuer-result').textContent='Denied: '+e.message}
+}
+$('issuer-admit').onclick=()=>issuerAction(true);
+$('issuer-revoke').onclick=()=>issuerAction(false);
 $('initialize').onclick=()=>show(async()=>{const code=$('activation').value;$('activation').value='';
 return api('initialize',{activation_code:code,confirm_first_issue:true})});
 $('enroll').onclick=()=>show(async()=>{const code=$('enroll-code').value;$('enroll-code').value='';
@@ -294,7 +315,11 @@ export default {
       const proposal=await readPendingCCRootRelease(env);
       const request=proposal.request;
       const permitEnvelope=env.PI_OWNER_SCHEDULED_ROOT_PERMIT ? null : await readIndependentPermit(env);
-      await scheduledRootPermit(env,request,permitEnvelope);
+      // Static bootstrap and pre-bound issuer remain verified at both layers.
+      // A later owner-enrolled issuer lives only in protected DO storage; the DO
+      // validates that signature and checks its revision during atomic issuance.
+      if(permitEnvelope===null||env.PI_OWNER_RELEASE_ISSUER_SPKI_B64||env.PI_OWNER_RELEASE_ISSUER_SHA256)
+        await scheduledRootPermit(env,request,permitEnvelope);
       const approval=unsignedGrant(request);
       await validatePiCloudRootReleaseApproval(approval,request);
       const issued=await doRequest(env,'POST','/sign-scheduled-root',{
@@ -336,6 +361,13 @@ export default {
       if (request.method!=='POST') return response({error:'unsupported_owner_route'},404);
       requireBrowser(request);
       const input=await body(request);
+      if (url.pathname==='/api/admit-issuer'||url.pathname==='/api/revoke-issuer') {
+        if(!flag(env.PI_OWNER_ISSUER_OWNER_ENROLL_ENABLED)||env.PI_OWNER_SCHEDULED_ROOT_PERMIT)
+          throw Error('independent_issuer_enrollment_not_admitted');
+        const admit=url.pathname==='/api/admit-issuer';
+        strict(input,admit?['spki_b64','sha256','confirm_independent_custody']:['sha256','confirm_revoke']);
+        return response(await doRequest(env,'POST',admit?'/admit-issuer':'/revoke-issuer',{...input,operator:identity}));
+      }
       if (url.pathname==='/api/initialize') {
         strict(input,['activation_code','confirm_first_issue']);
         if (!flag(env.PI_OWNER_FIRST_ISSUE_ENABLED)
