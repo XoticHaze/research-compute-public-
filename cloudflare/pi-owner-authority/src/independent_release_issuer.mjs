@@ -40,7 +40,12 @@ export function issueIndependentReleasePermit({request,review,manifestBytes,prio
   const m=JSON.parse(manifestBytes.toString('utf8'));
   need(exact(m,['schema','source_repo','source_sha','source_ref','expected_release','file_count','files'])&&m.schema==='commandcenter.pi.release_artifact.v1'&&m.source_repo===r.source_repo&&m.source_sha===r.source_sha&&m.source_ref==='main'&&m.expected_release===r.expected_release&&m.files&&typeof m.files==='object'&&!Array.isArray(m.files)&&m.file_count===Object.keys(m.files).length&&m.file_count>=23&&m.file_count<=80&&Object.values(m.files).every(x=>typeof x==='string'&&HEX40.test(x)),'manifest_identity_mismatch');
   const p=priorReceipt, q=priorRequest;
-  need(q?.schema==='commandcenter.pi.release_request.v1'&&q.node_id==='cc-pi4'&&q.action==='pi.release.apply'&&q.source_repo===r.source_repo&&HEX40.test(q.source_sha)&&GEN.test(q.expected_release)&&q.request_id!==r.request_id&&p?.schema==='commandcenter.pi.release_result.v1'&&p.node_id==='cc-pi4'&&p.action==='pi.release.apply'&&p.request_id===q.request_id&&p.source_sha===q.source_sha&&p.predecessor===q.expected_release&&p.status==='passed'&&p.replay_allowed===false&&p.message==='exact main source accepted; new generation '+r.expected_release,'prior_terminal_unverified');
+  need(q?.schema==='commandcenter.pi.release_request.v1'&&q.node_id==='cc-pi4'&&q.action==='pi.release.apply'&&q.source_repo===r.source_repo&&HEX40.test(q.source_sha)&&GEN.test(q.expected_release)&&q.request_id!==r.request_id&&p?.schema==='commandcenter.pi.release_result.v1'&&p.node_id==='cc-pi4'&&p.action==='pi.release.apply'&&p.request_id===q.request_id&&p.source_sha===q.source_sha&&p.predecessor===q.expected_release&&p.replay_allowed===false,'prior_terminal_unverified');
+  // A failed terminal proves the old invocation ended, not that rollback succeeded.
+  // The independent review binds the expected predecessor; the root worker must
+  // verify its stable accepted generation before executing this fresh request.
+  need((p.status==='passed'&&p.message==='exact main source accepted; new generation '+r.expected_release)||
+    (p.status==='failed'&&q.expected_release===r.expected_release),'prior_generation_unverified');
   const identity=issuerPublicIdentity(key);
   need(HEX64.test(rootFingerprint)&&identity.sha256!==rootFingerprint,'issuer_must_be_distinct');
   // The review ID is the one-use permit ID. The signer atomically consumes it.
