@@ -12,6 +12,16 @@ const hash=b=>createHash('sha256').update(b).digest('hex');
 function need(ok,code){if(!ok)throw Error(code);}
 function exact(obj,fields){return obj&&typeof obj==='object'&&!Array.isArray(obj)&&Object.keys(obj).length===fields.length&&fields.every(k=>Object.hasOwn(obj,k));}
 function timestamp(v){need(typeof v==='string'&&UTC.test(v),'timestamp_shape');const t=Date.parse(v);need(Number.isFinite(t)&&new Date(t).toISOString()===v.replace('Z','.000Z'),'timestamp_invalid');return t;}
+// A protected reviewer may approve an exact immutable artifact before a fresh request exists.
+// The same review ID is retained as the one-use permit ID; never infer approval from Git.
+export function bindReviewedManifest(request,review,now=Date.now()){
+  const r=request,a=review;
+  need(exact(a,['schema','review_id','source_sha','manifest_sha256','expected_release','not_before','expires_at'])&&a.schema==='commandcenter.pi.independent_manifest_review.v1'&&typeof a.review_id==='string'&&ID.test(a.review_id)&&typeof a.manifest_sha256==='string'&&HEX64.test(a.manifest_sha256)&&typeof a.source_sha==='string'&&HEX40.test(a.source_sha)&&typeof a.expected_release==='string'&&GEN.test(a.expected_release),'manifest_review_invalid');
+  need(exact(r,['schema','node_id','request_id','action','source_repo','source_sha','expected_release','created_at','expires_at'])&&r.schema==='commandcenter.pi.release_request.v1'&&r.node_id==='cc-pi4'&&r.action==='pi.release.apply'&&r.source_repo==='XoticHaze/CommandCenter'&&typeof r.request_id==='string'&&RID.test(r.request_id)&&RID.exec(r.request_id)[1]===a.manifest_sha256&&r.source_sha===a.source_sha&&r.expected_release===a.expected_release,'manifest_review_mismatch');
+  const start=timestamp(r.created_at),end=timestamp(r.expires_at),aStart=timestamp(a.not_before),aEnd=timestamp(a.expires_at);
+  need(start<=now&&end>now&&end>start&&end-start<=600000&&aStart<=now&&aEnd>now&&end<=aEnd&&aEnd-aStart<=86400000,'manifest_review_not_fresh');
+  return {schema:'commandcenter.pi.independent_release_review.v1',review_id:a.review_id,request_id:r.request_id,source_sha:a.source_sha,manifest_sha256:a.manifest_sha256,expected_release:a.expected_release,not_before:a.not_before,expires_at:a.expires_at};
+}
 export function issuerPublicIdentity(key){
   need(key?.type==='private'&&key.asymmetricKeyType==='ed25519','issuer_key_invalid');
   const spki=createPublicKey(key).export({format:'der',type:'spki'});
