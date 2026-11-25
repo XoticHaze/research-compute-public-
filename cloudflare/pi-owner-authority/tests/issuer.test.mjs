@@ -29,3 +29,18 @@ test('preapproved manifest binds exactly once to a fresh matching request shape'
   assert.deepEqual(bindReviewedManifest(a.request,review,now),a.review);
   for(const [r,m] of [[{...a.request,source_sha:'f'.repeat(40)},review],[{...a.request,request_id:'ccpi2-'+'f'.repeat(64)+'-'+'1'.repeat(16)},review],[{...a.request,expected_release:'r'+'f'.repeat(12)},review],[a.request,{...review,expires_at:iso(now+1000)}],[a.request,{...review,extra:true}],[{...a.request,action:'pi.bot.rejoin'},review],[{...a.request,expires_at:iso(now+660000)},{...review,expires_at:iso(now+720000)}],[a.request,{...review,review_id:123}]])assert.throws(()=>bindReviewedManifest(r,m,now));
 });
+
+test('fresh reviewed correction can follow failed terminal only at its prior predecessor',async()=>{
+  const a=fixture('3','r'+'c'.repeat(12));
+  a.priorReceipt={...a.priorReceipt,status:'failed',message:'fixed command failed'};
+  const e=issueIndependentReleasePermit(a,now);
+  assert.deepEqual(await scheduledRootPermit(env,a.request,e,now),e.permit);
+  for(const priorReceipt of [
+    {...a.priorReceipt,status:'indeterminate'},
+    {...a.priorReceipt,replay_allowed:true},
+    {...a.priorReceipt,source_sha:'f'.repeat(40)},
+    {...a.priorReceipt,predecessor:'r'+'f'.repeat(12)}
+  ])assert.throws(()=>issueIndependentReleasePermit({...a,priorReceipt},now));
+  const other=fixture('4');
+  assert.throws(()=>issueIndependentReleasePermit({...other,priorReceipt:{...other.priorReceipt,status:'failed'}},now));
+});
