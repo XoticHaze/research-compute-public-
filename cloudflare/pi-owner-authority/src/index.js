@@ -93,6 +93,8 @@ async function status(env) {
     // Recover the existing key without rotation if initial response was lost.
     public_key_pem:typeof raw.public_key_pem==='string'?raw.public_key_pem:null,
     scheduled_root_enabled:flag(env.PI_OWNER_SCHEDULED_ROOT_ENABLED),
+    independent_release_issuer_configured:Boolean(env.PI_OWNER_RELEASE_ISSUER_SPKI_B64 && SHA256.test(String(env.PI_OWNER_RELEASE_ISSUER_SHA256||''))),
+    bootstrap_permit_configured:Boolean(env.PI_OWNER_SCHEDULED_ROOT_PERMIT),
     queue_configured:Boolean(env.PI_OWNER_QUEUE_GITHUB_TOKEN),
     root_public_fingerprint_configured:SHA256.test(String(env.PI_OWNER_ENROLLED_PUB_SHA256||'')),
     isolated_cloudflare_signer_enabled:flag(env.PI_OWNER_SIGNER_ENABLED),
@@ -148,6 +150,21 @@ async function readPendingBotRejoin(env) {
   await validatePiCloudBotRejoinApproval(unsignedRejoinGrant(request),request);
   return {schema:'commandcenter.pi.pending_bot_rejoin_review.v1',
     request,review_only:true,cloudflare_signature_issued:false};
+}
+async function readIndependentPermit(env) {
+  const token=String(env.PI_OWNER_QUEUE_GITHUB_TOKEN||'');
+  if(token.length<20) throw Error('pi_owner_queue_credential_missing');
+  const url='https://api.github.com/repos/XoticHaze/CommandCenter-gate-control/contents/pi-node/root-release-permit.json?ref=pi-node-inbox';
+  const remote=await fetch(url,{headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json',
+    'x-github-api-version':'2022-11-28','user-agent':'commandcenter-pi-owner-authority-v1'},redirect:'manual'});
+  if(!remote.ok) throw Error('independent_permit_unavailable');
+  const file=await remote.json();
+  if(!/^[a-f0-9]{40}$/.test(String(file?.sha||''))||file.encoding!=='base64'
+      ||!Number.isInteger(file.size)||file.size<1||file.size>2048||typeof file.content!=='string')
+    throw Error('independent_permit_file_invalid');
+  const raw=atob(file.content.replace(/\s/g,''));
+  if(raw.length>2048||raw.length!==file.size) throw Error('independent_permit_file_invalid');
+  return JSON.parse(raw);
 }
 async function readPendingCCRootRelease(env) {
   // Fixed private Git transport, not arbitrary repository/path/URL input.
@@ -276,11 +293,12 @@ export default {
     try {
       const proposal=await readPendingCCRootRelease(env);
       const request=proposal.request;
-      scheduledRootPermit(env,request);
+      const permitEnvelope=env.PI_OWNER_SCHEDULED_ROOT_PERMIT ? null : await readIndependentPermit(env);
+      await scheduledRootPermit(env,request,permitEnvelope);
       const approval=unsignedGrant(request);
       await validatePiCloudRootReleaseApproval(approval,request);
       const issued=await doRequest(env,'POST','/sign-scheduled-root',{
-        kind:'root_release',request,approval,
+        kind:'root_release',request,approval,permit_envelope:permitEnvelope,
       });
       const dispatched=await publishPiRootReleaseGrant(env,request,issued.signed_grant);
       // Only public-safe immutable transport metadata; never key/signature/body.
