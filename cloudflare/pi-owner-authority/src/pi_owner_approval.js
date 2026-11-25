@@ -556,7 +556,7 @@ export async function readPiOwnerRootReceipt(env, requestId) {
 // Root-agent one-shot updates use a distinct fixed inbox + Ed25519 domain.
 // The caller must verify the owner's *device-held* detached signature before
 // reaching this transport. The existing Pi root worker re-verifies independently.
-export async function publishPiRootReleaseGrant(env, request, signedGrant) {
+export async function publishPiRootReleaseGrant(env, request, signedGrant, requirePriorTerminal=false) {
   const token=String(env.PI_OWNER_QUEUE_GITHUB_TOKEN||'');
   if(token.length<20)throw new Error('pi_owner_queue_credential_missing');
   const requestPath='pi-node/release-request.json';
@@ -568,6 +568,14 @@ export async function publishPiRootReleaseGrant(env, request, signedGrant) {
   }
   const oldGrantExact=priorGrant?.text===canonicalPiJson(signedGrant);
   const oldRequestExact=priorReq?.text===canonicalPiJson(request);
+  if(requirePriorTerminal && !oldRequestExact){
+    if(!priorReq)throw Error('scheduled_root_prior_request_missing');
+    const previous=JSON.parse(priorReq.text);
+    const terminal=await readPiRootReleaseReceipt(env,previous.request_id);
+    if(terminal.root_receipt_verified!==true||terminal.status!=='passed'||terminal.source_sha!==previous.source_sha
+        ||terminal.predecessor!==previous.expected_release||terminal.accepted_generation!==request.expected_release)
+      throw Error('scheduled_root_prior_terminal_or_generation_unverified');
+  }
   if ((!oldRequestExact && !queueSlotFree(priorReq,request.request_id,Date.now()))
       ||(!oldGrantExact && !queueSlotFree(priorGrant,request.request_id,Date.now()))) {
     throw new Error('pi_owner_root_release_queue_occupied_or_replay');
@@ -622,5 +630,6 @@ export async function readPiRootReleaseReceipt(env,requestId) {
     source_sha:typeof receipt.source_sha==='string'?receipt.source_sha:null,
     predecessor:typeof receipt.predecessor==='string'?receipt.predecessor:null,
     finished_at:typeof receipt.finished_at==='string'?receipt.finished_at:null,
+    accepted_generation:receipt.status==='passed'&&receipt.replay_allowed===false?(/^exact main source accepted; new generation (r[0-9a-f]{12})$/.exec(String(receipt.message||''))?.[1]||null):null,
     root_receipt_verified:true,active_generation_readback_verified:false};
 }
