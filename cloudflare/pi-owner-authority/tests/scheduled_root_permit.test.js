@@ -122,3 +122,36 @@ test('persistent independently signed permits: two fresh IDs, no Worker reconfig
     PI_OWNER_RELEASE_ISSUER_SPKI_B64:Buffer.from(der).toString('base64'),PI_OWNER_RELEASE_ISSUER_SHA256:fingerprint});
   assert.equal((await invoke(sameRoot.instance,a)).status,403);
 });
+
+test('dispatcher recovers only fresh exact reviewed successor of a terminal failure',async()=>{
+  const {publishPiRootReleaseGrant}=await import('../src/pi_owner_approval.js');
+  const request=body().request;
+  const previous={...request,request_id:'ccpi2-'+'a'.repeat(64)+'-'+'b'.repeat(16),
+    source_sha:'a'.repeat(40),created_at:iso(now-900000),expires_at:iso(now-180000)};
+  const base={schema:'commandcenter.pi.release_result.v1',node_id:'cc-pi4',action:request.action,
+    request_id:previous.request_id,source_sha:previous.source_sha,predecessor:previous.expected_release,
+    status:'failed',replay_allowed:false,message:'fixed command failed'};
+  const original=globalThis.fetch;
+  let receipt=base,writes=[];
+  const file=doc=>({sha:'b'.repeat(40),encoding:'base64',content:Buffer.from(JSON.stringify(doc)).toString('base64'),size:Buffer.byteLength(JSON.stringify(doc))});
+  globalThis.fetch=async(url,opts)=>{
+    if(opts.method==='PUT'){writes.push(url);return {ok:true,status:200,json:async()=>({content:{sha:'c'.repeat(40)}})};}
+    if(url.includes('/release-results/'))return {ok:true,status:200,json:async()=>file(receipt)};
+    if(url.includes('/release-request.json'))return {ok:true,status:200,json:async()=>file(previous)};
+    if(url.includes('/release-signed-approval.json'))return {ok:true,status:200,json:async()=>file(previous)};
+    throw Error('unexpected synthetic URL');
+  };
+  try {
+    for(const value of [{...base,status:'indeterminate'},{...base,replay_allowed:true},
+        {...base,predecessor:'r'+'f'.repeat(12)},{...base,source_sha:'f'.repeat(40)}]){
+      receipt=value;await assert.rejects(publishPiRootReleaseGrant(env,request,{request_id:request.request_id},true));
+      assert.equal(writes.length,0);
+    }
+    receipt=base;
+    await assert.rejects(publishPiRootReleaseGrant(env,{...request,expected_release:'r'+'f'.repeat(12)},{request_id:request.request_id},true));
+    assert.equal(writes.length,0);
+    const result=await publishPiRootReleaseGrant(env,request,{request_id:request.request_id},true);
+    assert.equal(result.root_receipt_verified,false);
+    assert.equal(writes.length,2);
+  } finally {globalThis.fetch=original;}
+});
