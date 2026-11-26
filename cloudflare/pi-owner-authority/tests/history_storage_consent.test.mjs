@@ -106,8 +106,8 @@ test('real Ed25519 domain-separated signature rejects sibling domains and action
   await validatePiHistoryStorageConsent(grant,req);
   const keys=await crypto.subtle.generateKey('Ed25519',false,['sign','verify']);
   const encoder=new TextEncoder();
-  const storageDomain='commandcenter.pi.history_storage_approval.v1\\u0000';
-  const rootReleaseDomain='commandcenter.pi.release_request_approval.v1\\u0000';
+  const storageDomain='commandcenter.pi.history_storage_approval.v1\u0000';
+  const rootReleaseDomain='commandcenter.pi.release_request_approval.v1\u0000';
   const storageMessage=encoder.encode(storageDomain+canonicalPiJson(grant));
   const signature=await crypto.subtle.sign('Ed25519',keys.privateKey,storageMessage);
   assert.equal(new Uint8Array(signature).length,64);
