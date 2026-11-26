@@ -715,13 +715,27 @@ export async function readPiStorageConsentReceipt(env, requestId) {
   const raw = new TextDecoder().decode(unb64(file.content.replace(/\s/g,'')));
   if (te.encode(raw).length > 8192) throw new Error('pi_owner_history_storage_receipt_oversize');
   const receipt = JSON.parse(raw);
+  const validPassedCode =
+    (receipt.action === 'pi.storage.maintenance_consent.apply'
+      && receipt.code === 'CONSENT_ROOT_READBACK_VERIFIED')
+    || (receipt.action === 'pi.storage.maintenance_consent.revoke'
+      && ['CONSENT_REVOKED','CONSENT_ALREADY_ABSENT'].includes(receipt.code));
   if (receipt?.schema !== 'commandcenter.pi.history_storage_consent_result.v1'
       || receipt.node_id !== 'cc-pi4' || receipt.request_id !== requestId
       || !['pi.storage.maintenance_consent.apply',
               'pi.storage.maintenance_consent.revoke'].includes(receipt.action)
       || !['passed','failed','indeterminate'].includes(receipt.status)
       || receipt.replay_allowed !== false
-      || receipt.broker_mutation_attempted !== false) {
+      || receipt.read_only !== false
+      || receipt.broker_mutation_attempted !== false
+      || receipt.gateway_mutation_attempted !== false
+      || receipt.unique_content_deleted !== false
+      || !/^r[0-9a-f]{12}$/.test(receipt.release_id || '')
+      || receipt.helper_git_blob !== STORAGE_HELPER_BLOB
+      || receipt.scope !== STORAGE_SCOPE
+      || !SHA64.test(receipt.request_sha256 || '')
+      || (receipt.status === 'passed'
+        && (!SHA64.test(receipt.signed_grant_sha256 || '') || !validPassedCode))) {
     throw new Error('pi_owner_history_storage_receipt_identity_invalid');
   }
   return {
