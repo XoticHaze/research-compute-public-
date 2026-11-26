@@ -1,6 +1,7 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { buildOwnerApprovedPve7Grant, validatePve7SigningRequest,
-         pve7Payload, validatePve7IssuedEnvelope } from "./pve7-grant.mjs";
+         pve7Payload, validatePve7IssuedEnvelope,
+         PVE7_ENVELOPE, PVE7_SIG_FORMAT } from "./pve7-grant.mjs";
 const TARGET_WORKER = "reference-release-broker-v1";
 const SOURCE_REPOSITORY = "XoticHaze/research-compute-public-";
 const SOURCE_PREFIX = "cloudflare/reference-release-broker/src/";
