@@ -13,7 +13,6 @@
   },
   "source_target": "Existing neutral Pi signer only; do not create a Worker from historical wrangler bootstrap name",
   "last_observed_active_worker": "research-compute-public",
-  "historical_wranger_source_name": "ccpi-owner-cloudflare-authority",
   "companion_private_pr": "XoticHaze/CommandCenter#1342",
   "purpose": "history_storage apply/revoke only, strict exact release/helper/scope/expiry",
   "default_off_flag": "PI_OWNER_HISTORY_STORAGE_ENABLED",
@@ -37,5 +36,6 @@
     "Authorized source-pin update only after independent review, not CI-green shortcut",
     "Separate owner-signed exact grant through existing authenticated Access and typed Git queue",
     "Fresh same-ID root consent receipt and two actual maintenance cursor readbacks"
-  ]
+  ],
+  "historical_wrangler_source_name": "ccpi-owner-cloudflare-authority"
 }
