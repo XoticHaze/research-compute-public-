@@ -40,14 +40,6 @@ jobs:
           echo "HISTORY_CONSENT_LOCAL_SOURCE_TESTS_FINISHED=1"
           echo "NEUTRAL_CLOUDFLARE_MUTATIONS=0"
           echo "PI_PRODUCTION_MUTATIONS=0"
-      - name: Verify local canonical signer module pinned and no external runtime imports
-        run: |
-          set -euo pipefail
-          test "$(git hash-object cloudflare/pi-owner-authority/src/pi_owner_approval.js)" = 1e209395ac28e39b220762f67c27d8b8826b3fce
-          ! grep -q '../../operator-console/' cloudflare/pi-owner-authority/src/index.js
-          node --check cloudflare/pi-owner-authority/src/index.js
-          node --check cloudflare/pi-owner-authority/src/pi_owner_approval.js
-          node tests/pi_owner_cloudflare_primary_authority_contract.mjs
       - name: Wrangler source-only bundle and dry-run
         run: |
           set -euo pipefail
@@ -57,3 +49,11 @@ jobs:
           echo "CCPI_NEUTRAL_OWNER_DRY_RUN=PASS"
           echo "CCPI_NEUTRAL_CLOUDFLARE_MUTATIONS=0"
           echo "CCPI_NEUTRAL_SIGNING_KEYS_ISSUED=0"
+      - name: Verify local canonical signer module pinned and no external runtime imports
+        run: |
+          set -euo pipefail
+          test "$(git hash-object cloudflare/pi-owner-authority/src/pi_owner_approval.js)" = 1e209395ac28e39b220762f67c27d8b8826b3fce
+          ! grep -q '../../operator-console/' cloudflare/pi-owner-authority/src/index.js
+          node --check cloudflare/pi-owner-authority/src/index.js
+          node --check cloudflare/pi-owner-authority/src/pi_owner_approval.js
+          node tests/pi_owner_cloudflare_primary_authority_contract.mjs
