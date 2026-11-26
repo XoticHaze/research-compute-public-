@@ -516,3 +516,47 @@ console.log('REFERENCE_MAINTAINER_PUBLIC_CI_SYNTHETIC_ONLY=1');
   console.log('PVE7_ISSUER_RUNTIME_REPLAY_DENY_AND_DEFAULT_OFF_PASS=1');
   console.log('PVE7_ISSUER_PROVIDER_PRODUCTION_NOT_TESTED=1');
 }
+
+
+// Existing neutral maintainer service-binding bridge, intentionally OFF at
+// source defaults and separate from BROKER_EDITOR_TOKEN. This is NOT PVE root
+// enrollment; test only the genuine in-memory Worker -> Worker -> DO path.
+{
+  const config=JSON.parse(fs.readFileSync(
+    'cloudflare/reference-release-maintainer/wrangler.jsonc','utf8'));
+  assert.equal(config.vars.PVE7_MAINTAINER_CALLER_ENABLED,'0');
+  assert.equal(config.workers_dev,false);
+  assert.equal(config.services.find(x=>x.binding==='MAINTENANCE_AUTHORITY')?.service,
+    'reference-maintenance-authority-v1');
+  const maintainer=new module.default();
+  maintainer.env={
+    CLOUDFLARE_ACCOUNT_ID:account,
+    PVE7_MAINTAINER_CALLER_ENABLED:'0',
+    MAINTENANCE_AUTHORITY:actualAuthority,
+    BROKER_EDITOR_TOKEN:{get:()=>{throw Error('broker_editor_must_not_be_accessed');}}
+  };
+  await assert.rejects(()=>maintainer.issuePve7OwnerPinnedGrant(),
+    /pve7_maintainer_caller_disabled/);
+  maintainer.env.PVE7_MAINTAINER_CALLER_ENABLED='1';
+  maintainer.env.CLOUDFLARE_ACCOUNT_ID='ffffffffffffffffffffffffffffffff';
+  await assert.rejects(()=>maintainer.issuePve7OwnerPinnedGrant(),
+    /neutral_cloudflare_account_mismatch/);
+  maintainer.env.CLOUDFLARE_ACCOUNT_ID=account;
+  maintainer.env.MAINTENANCE_AUTHORITY=null;
+  await assert.rejects(()=>maintainer.issuePve7OwnerPinnedGrant(),
+    /pve7_authority_binding_unconfigured/);
+  maintainer.env.MAINTENANCE_AUTHORITY=actualAuthority;
+  await assert.rejects(()=>maintainer.issuePve7OwnerPinnedGrant(),
+    /pve7_signing_disabled/);
+  authEnv.PVE7_OWNER_APPROVAL_SHA256='a'.repeat(64);
+  authEnv.PVE7_RELEASE_SIGNING_ENABLED='1';
+  const bridged=await maintainer.issuePve7OwnerPinnedGrant();
+  assert.deepEqual(bridged,
+    authStorage.get('pve7_release_grant:pve7-ci-single-request').envelope,
+    'bridge must return only the unchanged DO-committed approved grant');
+  assert.equal(maintainer.issuePve7OwnerPinnedGrant.length,0);
+  assert.equal((await maintainer.fetch()).status,404);
+  console.log('PVE7_EXISTING_MAINTAINER_BRIDGE_PASS=1');
+  console.log('PVE7_BRIDGE_DEFAULT_DENY_CROSS_ACCOUNT_DENY_PASS=1');
+  console.log('PVE7_BRIDGE_NO_PROTECTED_ROOT_MUTATION=1');
+}
