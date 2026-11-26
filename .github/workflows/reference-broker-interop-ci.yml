@@ -90,6 +90,8 @@ jobs:
         run: node tests/reference_placement_claim_attestation.mjs
       - name: Prove actual neutral maintainer preflight, source integrity and remote-commit rollback behavior
         run: node tests/reference_release_maintainer_runtime_interop.mjs
+      - name: Qualify existing authority PVE7 exact single-release grant and P-256 interoperability
+        run: node --test cloudflare/reference-maintenance-authority/test/pve7-grant.test.mjs
       - name: Verify private one-shot LIVE broker intent issuer using independent P256 signer and journal
         run: PYTHONDONTWRITEBYTECODE=1 python -B -m unittest -v tests.test_reference_private_intent_authority_adapter_v1
       - name: Verify one-time independent private grant signer installation and SQLite atomic replay
