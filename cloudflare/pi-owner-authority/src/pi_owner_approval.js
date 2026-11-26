@@ -41,8 +41,8 @@ const STORAGE_CONSENT_REQUEST_FIELDS = [
   'helper_git_blob', 'scope', 'created_at', 'expires_at',
 ];
 const STORAGE_CONSENT_GRANT_FIELDS = [
-  'schema', 'node_id', 'request_id', 'expected_release',
-  'helper_git_blob', 'scope', 'expires_at',
+  'schema', 'node_id', 'request_id', 'action', 'expected_release',
+  'helper_git_blob', 'scope', 'created_at', 'expires_at',
 ];
 const STORAGE_HELPER_BLOB = 'd83c712b657a2e1b40c1a829ced48ab49de4da8f';
 const STORAGE_SCOPE = 'LOSSLESS_IDENTICAL_27A_27B_ONLY';
@@ -185,6 +185,8 @@ export async function validatePiHistoryStorageConsent(approval, request, now = D
       || approval.schema !== 'commandcenter.pi.history_storage_grant.v1'
       || approval.node_id !== 'cc-pi4'
       || approval.request_id !== request.request_id
+      || approval.action !== request.action
+      || approval.created_at !== request.created_at
       || approval.expected_release !== request.expected_release
       || approval.helper_git_blob !== request.helper_git_blob
       || approval.scope !== STORAGE_SCOPE
