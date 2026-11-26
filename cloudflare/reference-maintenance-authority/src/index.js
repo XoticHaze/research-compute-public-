@@ -184,6 +184,22 @@ export class AuthorityState {
       const payload = pve7Payload(owner.grant);
       const payloadSha = await sha256Hex(payload);
       const slot = "pve7_release_grant:" + owner.grant.request_id;
+      // Perform WebCrypto before entering the storage transaction. The
+      // transaction contains only KV operations; its existing create-once
+      // ledger remains authoritative for concurrent and replayed requests.
+      // Two signatures can differ, but only the committed envelope is returned.
+      const privateKey = await this.importPrivate();
+      const signature = new Uint8Array(await crypto.subtle.sign(
+        {name:"ECDSA", hash:"SHA-256"}, privateKey, payload
+      ));
+      if (signature.length !== 64) throw new Error("pve7_signature_format");
+      const result = {
+        schema:PVE7_ENVELOPE,
+        grant:owner.grant,
+        signer_key_id:this.key.key_id,
+        signature_format:PVE7_SIG_FORMAT,
+        signature_b64:bytesToB64(signature)
+      };
       const envelope = await this.state.storage.transaction(async txn => {
         const prior = await txn.get(slot);
         if (prior) {
@@ -194,18 +210,6 @@ export class AuthorityState {
           }
           return prior.envelope;
         }
-        const privateKey = await this.importPrivate();
-        const signature = new Uint8Array(await crypto.subtle.sign(
-          {name:"ECDSA", hash:"SHA-256"}, privateKey, payload
-        ));
-        if (signature.length !== 64) throw new Error("pve7_signature_format");
-        const result = {
-          schema:PVE7_ENVELOPE,
-          grant:owner.grant,
-          signer_key_id:this.key.key_id,
-          signature_format:PVE7_SIG_FORMAT,
-          signature_b64:bytesToB64(signature)
-        };
         await txn.put(slot,{payload_sha256:payloadSha,envelope:result});
         return result;
       });
