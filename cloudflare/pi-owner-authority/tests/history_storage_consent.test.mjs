@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { webcrypto } from 'node:crypto';
+import { webcrypto, createHash } from 'node:crypto';
 import ownerWorker from '../src/index.js';
 import {
   validatePiHistoryStorageConsent, readPiStorageConsentReceipt,
@@ -80,6 +80,65 @@ test('history signer defaults disabled, cannot be activated by Git body',async()
   const result=await answer.json();
   assert.equal(result.error,'pi_owner_protected_activation_incomplete');
 });
+test('pre-enrolled existing signer issues and recovers exact storage grant using ephemeral key only',async()=>{
+  const [req,approval]=sample();
+  const keys=await crypto.subtle.generateKey('Ed25519',true,['sign','verify']);
+  const pkcs8=await crypto.subtle.exportKey('pkcs8',keys.privateKey);
+  const spki=await crypto.subtle.exportKey('spki',keys.publicKey);
+  const digest=createHash('sha256').update(Buffer.from(spki)).digest('hex');
+  const state=new Map([
+    ['pi_owner_key_v1',{
+      private_pkcs8_b64:Buffer.from(pkcs8).toString('base64'),
+      public_key_sha256:digest,
+      public_key_pem:'EPHEMERAL_TEST_KEY_NOT_DEPLOYED',
+    }],
+    ['pi_owner_enrollment_v1',{key_sha256:digest}],
+  ]);
+  const storage={
+    get:async key=>state.get(key),
+    transaction:async fn=>fn({
+      get:async key=>state.get(key),
+      put:async (key,value)=>{state.set(key,value);},
+    }),
+  };
+  const env={
+    PI_OWNER_SIGNER_ENABLED:'1',PI_OWNER_HISTORY_STORAGE_ENABLED:'1',
+    PI_OWNER_QUEUE_GITHUB_TOKEN:'offline-credential-not-a-live-token',
+    PI_OWNER_SIGNER_ALLOWED_EMAILS:'owner@example.invalid',
+    PI_OWNER_ENROLLED_PUB_SHA256:digest,
+  };
+  const worker=new PiOwnerApprovalState({storage},env);
+  const operator={email:'owner@example.invalid',
+    sub:'cf-access-authenticated:owner@example.invalid'};
+  const call=async(r,g)=>{
+    const response=await worker.fetch(new Request('https://pi-owner.internal/sign',{
+      method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({kind:'history_storage',request:r,approval:g,
+        approve_exact_storage_consent:true,operator}),
+    }));
+    return {status:response.status,doc:await response.json()};
+  };
+  const first=await call(req,approval);
+  assert.equal(first.status,201);
+  assert.equal(first.doc.recovered,false);
+  assert.equal(first.doc.key_sha256,digest);
+  assert.equal(first.doc.signed_grant.request_id,req.request_id);
+  assert.equal(first.doc.signed_grant.key_id,'ccpi-owner-bootstrap-ed25519-v1');
+  const encoded=new TextEncoder().encode(
+    'commandcenter.pi.history_storage_approval.v1\u0000'+canonicalPiJson(approval));
+  assert.equal(await crypto.subtle.verify('Ed25519',keys.publicKey,
+    Buffer.from(first.doc.signed_grant.signature_b64,'base64'),encoded),true);
+  const retry=await call(req,approval);
+  assert.equal(retry.status,200);
+  assert.equal(retry.doc.recovered,true);
+  assert.equal(retry.doc.signed_grant.signature_b64,first.doc.signed_grant.signature_b64);
+  const changed={...req,expires_at:new Date(Date.parse(req.expires_at)+60000).toISOString()};
+  const changedGrant={...approval,expires_at:changed.expires_at};
+  const blocked=await call(changed,changedGrant);
+  assert.equal(blocked.status,409);
+  assert.equal(blocked.doc.error,'pi_owner_request_id_replay_conflict');
+});
+
 test('root_release and rejoin signatures cannot masquerade as history storage',async()=>{
   const [req,grant]=sample();
   for(const mutation of [
