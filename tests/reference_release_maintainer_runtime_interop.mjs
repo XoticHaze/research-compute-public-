@@ -359,9 +359,20 @@ for(const scenario of [
 // Durable Object crypto source and independently verifies its signed manifest.
 const authSource=fs.readFileSync('cloudflare/reference-maintenance-authority/src/index.js','utf8');
 assert.ok(authSource.includes('import { WorkerEntrypoint } from "cloudflare:workers";'));
+// The source-only Cloudflare Worker now imports a sibling PVE grant module.
+// The CI harness loads the Worker via data:, where relative imports cannot
+// resolve. Replace ONLY the relative import with the exact checked-out
+// sibling's absolute data URL. Production Worker imports are unchanged.
+const pveGrantSource=fs.readFileSync(
+  'cloudflare/reference-maintenance-authority/src/pve7-grant.mjs','utf8');
+const pveGrantUrl='data:text/javascript;base64,'+
+  Buffer.from(pveGrantSource).toString('base64');
 const authCode=authSource.replace(
   'import { WorkerEntrypoint } from "cloudflare:workers";','class WorkerEntrypoint {}'
-);
+).replace('from "./pve7-grant.mjs"',
+  'from "'+pveGrantUrl+'"');
+assert.ok(!authCode.includes('from "./pve7-grant.mjs"'),
+  'sibling PVE module must be resolved for in-memory CI loading');
 const authModule=await import('data:text/javascript;base64,'+
   Buffer.from(authCode).toString('base64'));
 const authStorage=new Map();
