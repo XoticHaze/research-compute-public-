@@ -1,6 +1,6 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { buildOwnerApprovedPve7Grant, validatePve7SigningRequest,
-         pve7Payload, PVE7_ENVELOPE, PVE7_SIG_FORMAT } from "./pve7-grant.mjs";
+         pve7Payload, validatePve7IssuedEnvelope } from "./pve7-grant.mjs";
 const TARGET_WORKER = "reference-release-broker-v1";
 const SOURCE_REPOSITORY = "XoticHaze/research-compute-public-";
 const SOURCE_PREFIX = "cloudflare/reference-release-broker/src/";
@@ -437,12 +437,7 @@ export default class ReferenceMaintenanceAuthority extends WorkerEntrypoint {
     });
     if (!response.ok) throw new Error("pve7_grant_not_admitted");
     const envelope = await response.json();
-    if (envelope?.schema !== PVE7_ENVELOPE ||
-        envelope?.signer_key_id !== approved.signer_key_id ||
-        envelope?.signature_format !== PVE7_SIG_FORMAT) {
-      throw new Error("pve7_grant_result_mismatch");
-    }
-    return envelope;
+    return validatePve7IssuedEnvelope(envelope, approved);
   }
 
   async authorize(input) {
