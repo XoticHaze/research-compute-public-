@@ -456,3 +456,63 @@ const authInput={
 assert.equal(checks,23);
 console.log('REFERENCE_MAINTAINER_ACTUAL_SOURCE_PREFLIGHT_AND_ROLLBACK_PASS='+checks);
 console.log('REFERENCE_MAINTAINER_PUBLIC_CI_SYNTHETIC_ONLY=1');
+
+
+// Exercise the ACTUAL authority Worker -> Durable Object PVE signing branch,
+// not just the pure grant module. Earlier source-only tests could pass despite
+// a missing import for the envelope schema/algorithm in this branch. Ephemeral
+// local P-256 key only, no Cloudflare API/production grant/deployment.
+{
+  const pve = await import(pveGrantUrl);
+  const publicInfo = await actualAuthority.publicKey();
+  const now = Date.now();
+  const owner = {
+    PVE7_RELEASE_SIGNING_ENABLED:'1',
+    PVE7_APPROVED_SOURCE_SHA:pve.PVE7_SOURCE,
+    PVE7_OWNER_APPROVAL_SHA256:'a'.repeat(64),
+    PVE7_EXPECTED_AUTHORITY_KEY_ID:publicInfo.key_id,
+    PVE7_RELEASE_ID:'pve7-ci-single-release',
+    PVE7_REQUEST_ID:'pve7-ci-single-request',
+    PVE7_NOT_BEFORE:new Date(now-5000).toISOString(),
+    PVE7_EXPIRES_AT:new Date(now+600000).toISOString()
+  };
+  Object.assign(authEnv,owner);
+  authState.env=authEnv;
+  let transactions=0;
+  authState.state.storage.transaction=async fn=>{
+    transactions++;
+    return fn({
+      get:key=>authStorage.get(key),
+      put:(key,value)=>authStorage.set(key,value)
+    });
+  };
+  const issued=await actualAuthority.issuePve7ApprovedGrant();
+  assert.equal(issued.schema,pve.PVE7_ENVELOPE);
+  assert.equal(issued.signature_format,pve.PVE7_SIG_FORMAT);
+  assert.equal(issued.signer_key_id,publicInfo.key_id);
+  assert.equal(issued.grant.source_sha,pve.PVE7_SOURCE);
+  assert.equal(issued.grant.operation,pve.PVE7_SCOPE);
+  assert.deepEqual(issued.grant.files,pve.PVE7_FILES);
+  const point=Buffer.from(publicInfo.public_b64,'base64');
+  const key=await webcrypto.subtle.importKey('raw',point,
+    {name:'ECDSA',namedCurve:'P-256'},false,['verify']);
+  assert.equal(await webcrypto.subtle.verify(
+    {name:'ECDSA',hash:'SHA-256'},key,
+    Buffer.from(issued.signature_b64,'base64'),
+    pve.pve7Payload(issued.grant)),true,'actual DO PVE signature must verify');
+  const replay=await actualAuthority.issuePve7ApprovedGrant();
+  assert.deepEqual(replay,issued,'same-request signature must be create-once stable');
+  assert.equal(transactions,2);
+  authEnv.PVE7_OWNER_APPROVAL_SHA256='b'.repeat(64);
+  await assert.rejects(()=>actualAuthority.issuePve7ApprovedGrant(),
+    /pve7_request_replay_drift/);
+  authEnv.PVE7_RELEASE_SIGNING_ENABLED='0';
+  await assert.rejects(()=>actualAuthority.issuePve7ApprovedGrant(),
+    /pve7_signing_disabled/);
+  const publicResponse=await actualAuthority.fetch(
+    new Request('https://authority.example/pve7-sign',{method:'POST'}));
+  assert.equal(publicResponse.status,404);
+  console.log('PVE7_ISSUER_RUNTIME_CROSS_FUNCTION_PASS=1');
+  console.log('PVE7_ISSUER_RUNTIME_REPLAY_DENY_AND_DEFAULT_OFF_PASS=1');
+  console.log('PVE7_ISSUER_PROVIDER_PRODUCTION_NOT_TESTED=1');
+}
