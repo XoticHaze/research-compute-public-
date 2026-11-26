@@ -7,8 +7,8 @@
   "original_protected_main_signer_git_blob": "1e209395ac28e39b220762f67c27d8b8826b3fce",
   "new_candidate_git_blobs": {
     "cloudflare/pi-owner-authority/src/index.js": "f3b2ec21e40875f2d13aa62630cbf663edebaea4",
-    "cloudflare/pi-owner-authority/src/pi_owner_approval.js": "bb8710df8021ccf7fcbeb4375834c46a8de045c1",
-    "cloudflare/pi-owner-authority/tests/history_storage_consent.test.mjs": "0a980eaea854e8f21b7a33f53a03344ac268c957",
+    "cloudflare/pi-owner-authority/src/pi_owner_approval.js": "b7b823b356a5cfce4cbbd045ae3a1571ba18fdae",
+    "cloudflare/pi-owner-authority/tests/history_storage_consent.test.mjs": "6c048894ee660a15749801c91e59bd71fab5a170",
     ".github/workflows/ccpi-neutral-owner-bootstrap-source-ci.yml": "f142c0dfc344c63fc6314e5cfbff56da600dfe93"
   },
   "source_target": "Existing neutral Pi signer only; do not create a Worker from historical wrangler bootstrap name",
@@ -19,9 +19,9 @@
   "no_live_trading_or_gateway_authority": true,
   "no_private_github_actions_compute": true,
   "qualification": {
-    "public_run_id": 45903386147,
-    "public_job_id": 140194272952,
-    "source_only_node_tests_passed": 9,
+    "public_run_id": 45903993078,
+    "public_job_id": 140196253473,
+    "source_only_node_tests_passed": 10,
     "source_only_node_tests_failed": 0,
     "full_workflow": "FAILED_AT_PRIOR_CANONICAL_SIGNER_HASH_PIN",
     "original_blob_pin_unchanged": true,
@@ -38,7 +38,8 @@
     "Fresh same-ID root consent receipt and two actual maintenance cursor readbacks"
   ],
   "historical_wrangler_source_name": "ccpi-owner-cloudflare-authority",
-  "tested_candidate_head_sha": "ca4d0bb2b63c9aadc99b7b375b5fade5b7bd7d4a",
-  "companion_private_candidate_head_sha": "ab3f4c5967e11b86a2cc2bfd9a249d36252d3bab",
-  "owner_must_approve_exact_staged_cc_proposal": true
+  "tested_candidate_head_sha": "4ccefa90fe1b66bddab5009d169dc3c90dc28aa3",
+  "companion_private_candidate_head_sha": "b64cac46e2ffcd0d4e795c0e29a2d4d0725d4b8a",
+  "owner_must_approve_exact_staged_cc_proposal": true,
+  "current_review_notes": "Exact staged-CC proposal mismatch denied prior to signer, actual offline ephemeral Ed25519 DO issuance/recovery/replay tested, failed-root result redacts noncanonical release and expiry; original live signer key/Worker untouched."
 }
