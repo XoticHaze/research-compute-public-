@@ -379,6 +379,24 @@ export default class ReferenceReleaseMaintainer extends WorkerEntrypoint {
     };
   }
 
+  // Private, owner-gated bridge to the already installed maintenance authority.
+  // This uses the EXISTING MAINTENANCE_AUTHORITY service binding, never the
+  // broker-only Editor token, GitHub, public HTTP or a caller-owned request.
+  // A separate approved PVE root ingress remains necessary downstream.
+  async issuePve7OwnerPinnedGrant() {
+    if (String(this.env?.PVE7_MAINTAINER_CALLER_ENABLED || "0") !== "1") {
+      throw new Error("pve7_maintainer_caller_disabled");
+    }
+    if (String(this.env?.CLOUDFLARE_ACCOUNT_ID || "") !== EXPECTED_NEUTRAL_ACCOUNT_ID) {
+      throw new Error("neutral_cloudflare_account_mismatch");
+    }
+    if (!this.env.MAINTENANCE_AUTHORITY ||
+        typeof this.env.MAINTENANCE_AUTHORITY.issuePve7ApprovedGrant !== "function") {
+      throw new Error("pve7_authority_binding_unconfigured");
+    }
+    return this.env.MAINTENANCE_AUTHORITY.issuePve7ApprovedGrant();
+  }
+
   async maintain(wrapper) {
     return maintainManifest(wrapper, this.env);
   }
