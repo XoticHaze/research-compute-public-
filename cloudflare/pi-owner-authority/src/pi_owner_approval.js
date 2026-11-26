@@ -6,6 +6,7 @@ const DOMAINS = Object.freeze({
   replace: 'commandcenter.pi.bot_replace_approval.v1\u0000',
   root_release: 'commandcenter.pi.release_request_approval.v1\u0000',
   rejoin: 'commandcenter.pi.bot_rejoin_approval.v1\u0000',
+  history_storage: 'commandcenter.pi.history_storage_approval.v1\u0000',
 });
 const B_FIELDS = [
   'schema', 'node_id', 'request_id', 'request_sha256', 'source_sha', 'image_ref',
@@ -35,6 +36,18 @@ const ROOT_RELEASE_REQUEST_FIELDS = [
   'schema', 'node_id', 'request_id', 'action', 'source_repo',
   'source_sha', 'expected_release', 'created_at', 'expires_at',
 ];
+const STORAGE_CONSENT_REQUEST_FIELDS = [
+  'schema', 'node_id', 'request_id', 'action', 'expected_release',
+  'helper_git_blob', 'scope', 'created_at', 'expires_at',
+];
+const STORAGE_CONSENT_GRANT_FIELDS = [
+  'schema', 'node_id', 'request_id', 'expected_release',
+  'helper_git_blob', 'scope', 'expires_at',
+];
+const STORAGE_HELPER_BLOB = 'd83c712b657a2e1b40c1a829ced48ab49de4da8f';
+const STORAGE_SCOPE = 'LOSSLESS_IDENTICAL_27A_27B_ONLY';
+const STORAGE_REQUEST = 'pi-node/storage-consent-request.json';
+const STORAGE_GRANT = 'pi-node/storage-consent-signed-approval.json';
 const BASE_REQUEST = [
   'schema', 'node_id', 'request_id', 'action', 'source_repo', 'source_sha',
   'image_ref', 'client_id', 'inspect_client_id', 'artifact_manifest_blob_sha',
@@ -158,6 +171,39 @@ export async function validatePiOwnerApproval(kind, approval, request, now = Dat
   }
   return { request_id: request.request_id, approval_hash: await shaHex(raw) };
 }
+/** Exact storage-only consent. No key, Worker or broker scope is created. */
+export async function validatePiHistoryStorageConsent(approval, request, now = Date.now()) {
+  strictFields(request, STORAGE_CONSENT_REQUEST_FIELDS);
+  strictFields(approval, STORAGE_CONSENT_GRANT_FIELDS);
+  if (request.schema !== 'commandcenter.pi.history_storage_request.v1'
+      || request.node_id !== 'cc-pi4'
+      || request.action !== 'pi.storage.maintenance_consent.apply'
+      || !REQ.test(request.request_id)
+      || !/^r[0-9a-f]{12}$/.test(request.expected_release)
+      || request.helper_git_blob !== STORAGE_HELPER_BLOB
+      || request.scope !== STORAGE_SCOPE
+      || approval.schema !== 'commandcenter.pi.history_storage_grant.v1'
+      || approval.node_id !== 'cc-pi4'
+      || approval.request_id !== request.request_id
+      || approval.expected_release !== request.expected_release
+      || approval.helper_git_blob !== request.helper_git_blob
+      || approval.scope !== STORAGE_SCOPE
+      || approval.expires_at !== request.expires_at) {
+    throw new Error('pi_owner_history_storage_scope_mismatch');
+  }
+  const created = time(request.created_at), expires = time(request.expires_at);
+  if (created > now + 120000 || created >= expires || expires <= now
+      || expires - created > 3600000 || expires > now + 3600000) {
+    throw new Error('pi_owner_history_storage_expired_or_overlong');
+  }
+  const raw = canonicalPiJson(approval);
+  if (te.encode(raw).length > 1024
+      || /\\b(?:password|token|private_key|broker_net_qty|account_number)\\b/i.test(raw)) {
+    throw new Error('pi_owner_history_storage_data_rejected');
+  }
+  return {request_id: request.request_id, approval_hash: await shaHex(te.encode(raw))};
+}
+
 // Cloudflare-held signer: exact independent root release domain using the
 // retained DO Ed25519 identity. This validates an owner decision only; it
 // does NOT authorize the GitHub-deployable console to access signing custody.
@@ -347,11 +393,16 @@ export class PiOwnerApprovalState {
       }
       if (url.pathname === '/sign') {
         if (this.env.PI_OWNER_SIGNER_ENABLED !== '1'
-            || !this.env.PI_OWNER_QUEUE_GITHUB_TOKEN) throw new Error('pi_owner_protected_activation_incomplete');
+            || !this.env.PI_OWNER_QUEUE_GITHUB_TOKEN
+            || (body.kind === 'history_storage'
+                && (this.env.PI_OWNER_HISTORY_STORAGE_ENABLED !== '1'
+                    || body.approve_exact_storage_consent !== true))) {
+          throw new Error('pi_owner_protected_activation_incomplete');
+        }
         const entry = await this.ctx.storage.get('pi_owner_key_v1');
         const enrolled = await this.ctx.storage.get('pi_owner_enrollment_v1');
         if (!entry || !enrolled || enrolled.key_sha256 !== entry.public_key_sha256
-            || body.approve_exact_release !== true
+            || (body.kind !== 'history_storage' && body.approve_exact_release !== true)
             || !safeEq(String(this.env.PI_OWNER_ENROLLED_PUB_SHA256 || ''), entry.public_key_sha256)) {
           throw new Error('pi_owner_trust_anchor_not_activated');
         }
@@ -359,7 +410,9 @@ export class PiOwnerApprovalState {
           ? await validatePiCloudRootReleaseApproval(body.approval, body.request)
           : body.kind === 'rejoin'
             ? await validatePiCloudBotRejoinApproval(body.approval, body.request)
-            : await validatePiOwnerApproval(body.kind, body.approval, body.request);
+            : body.kind === 'history_storage'
+              ? await validatePiHistoryStorageConsent(body.approval, body.request)
+              : await validatePiOwnerApproval(body.kind, body.approval, body.request);
         const storageKey = 'pi_owner_issued_v1/' + accepted.request_id;
         const previous = await this.ctx.storage.get(storageKey);
         if (previous) {
