@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 import {
-  validatePiHistoryStorageConsent, canonicalPiJson, PiOwnerApprovalState,
+  validatePiHistoryStorageConsent, readPiStorageConsentReceipt,
+  canonicalPiJson, PiOwnerApprovalState,
 } from '../src/pi_owner_approval.js';
 
 // Offline contract tests. No Cloudflare account, token, Git fetch or private key.
@@ -117,4 +118,50 @@ test('real Ed25519 domain-separated signature rejects sibling domains and action
   const revoked={...grant,action:'pi.storage.maintenance_consent.revoke'};
   assert.equal(await crypto.subtle.verify('Ed25519',keys.publicKey,signature,
     encoder.encode(storageDomain+canonicalPiJson(revoked))),false);
+});
+
+test('root consent receipt projection rejects scope, hash and mutation drift',async()=>{
+  const id='ccpi-history-receipt-fixture';
+  const pristine={
+    schema:'commandcenter.pi.history_storage_consent_result.v1',
+    node_id:'cc-pi4',request_id:id,
+    action:'pi.storage.maintenance_consent.apply',
+    release_id:'rf20bfd283e35',helper_git_blob:HELPER,
+    scope:'LOSSLESS_IDENTICAL_27A_27B_ONLY',
+    expires_at:'2026-11-26T15:00:00+00:00',
+    status:'passed',code:'CONSENT_ROOT_READBACK_VERIFIED',
+    request_sha256:'a'.repeat(64),signed_grant_sha256:'b'.repeat(64),
+    read_only:false,broker_mutation_attempted:false,
+    gateway_mutation_attempted:false,unique_content_deleted:false,
+    replay_allowed:false,started_at:'2026-11-26T14:10:00+00:00',
+    finished_at:'2026-11-26T14:10:01+00:00',
+  };
+  const original=globalThis.fetch;
+  let receipt=pristine;
+  globalThis.fetch=async()=>new Response(JSON.stringify({
+    sha:'c'.repeat(40),encoding:'base64',
+    content:Buffer.from(JSON.stringify(receipt)).toString('base64'),
+    size:Buffer.byteLength(JSON.stringify(receipt)),
+  }),{status:200,headers:{'content-type':'application/json'}});
+  try {
+    const env={PI_OWNER_QUEUE_GITHUB_TOKEN:'x'.repeat(32)};
+    const projected=await readPiStorageConsentReceipt(env,id);
+    assert.equal(projected.status,'passed');
+    assert.equal(projected.root_receipt_verified,true);
+    assert.equal(projected.maintenance_batch_verified,false);
+    for(const modification of [
+      {scope:'ALL_FILES'},{helper_git_blob:'0'.repeat(40)},
+      {request_sha256:null},{signed_grant_sha256:null},
+      {status:'passed',code:'UNAUTHORIZED_ACTION'},
+      {broker_mutation_attempted:true},{gateway_mutation_attempted:true},
+      {unique_content_deleted:true},{replay_allowed:true},
+      {read_only:true},{release_id:'other'},
+    ]){
+      receipt={...pristine,...modification};
+      await assert.rejects(readPiStorageConsentReceipt(env,id),
+        /pi_owner_history_storage_receipt_identity_invalid/);
+    }
+  } finally {
+    globalThis.fetch=original;
+  }
 });
