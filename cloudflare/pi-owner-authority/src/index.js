@@ -6,6 +6,9 @@ import {
   canonicalPiJson,
   validatePiCloudRootReleaseApproval,
   validatePiCloudBotRejoinApproval,
+  validatePiHistoryStorageConsent,
+  publishPiStorageConsentGrant,
+  readPiStorageConsentReceipt,
   publishPiOwnerGrant,
   readPiOwnerRootReceipt,
   publishPiRootReleaseGrant,
@@ -95,6 +98,7 @@ async function status(env) {
     root_enroll_enabled:flag(env.PI_OWNER_FIRST_ENROLL_ENABLED),
     normal_release_enabled:flag(env.PI_OWNER_NORMAL_RELEASE_ENABLED),
     bot_rejoin_enabled:flag(env.PI_OWNER_BOT_REJOIN_ENABLED),
+    history_storage_enabled:flag(env.PI_OWNER_HISTORY_STORAGE_ENABLED),
   };
 }
 function unsignedGrant(request) {
@@ -103,6 +107,18 @@ function unsignedGrant(request) {
     request_id:request.request_id,
     source_sha:request.source_sha,
     expected_release:request.expected_release,
+    expires_at:request.expires_at,
+  };
+}
+
+function unsignedHistoryStorageGrant(request) {
+  return {
+    schema:'commandcenter.pi.history_storage_grant.v1',
+    node_id:'cc-pi4',
+    request_id:request.request_id,
+    expected_release:request.expected_release,
+    helper_git_blob:request.helper_git_blob,
+    scope:'LOSSLESS_IDENTICAL_27A_27B_ONLY',
     expires_at:request.expires_at,
   };
 }
@@ -123,6 +139,30 @@ function unsignedRejoinGrant(request) {
     new_live_authority_granted:false,
   };
 }
+async function readPendingHistoryStorage(env) {
+  // This proposal is NONEXECUTING, read from exactly one existing CC inbox path.
+  const token=String(env.PI_OWNER_QUEUE_GITHUB_TOKEN||'');
+  if(token.length<20) throw Error('pi_owner_queue_credential_missing');
+  const remote=await fetch('https://api.github.com/repos/XoticHaze/CommandCenter-gate-control/'
+    +'contents/pi-node/storage-consent-proposal.json?ref=pi-node-inbox',
+    {headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json',
+       'x-github-api-version':'2022-11-28'},redirect:'manual'});
+  if(!remote.ok) throw Error('pi_owner_storage_proposal_unavailable');
+  const file=await remote.json();
+  if(!/^[a-f0-9]{40}$/.test(String(file?.sha||''))
+      || file.encoding!=='base64'||!Number.isInteger(file.size)
+      || file.size<1||file.size>2048||typeof file.content!=='string'){
+    throw Error('pi_owner_storage_proposal_invalid');
+  }
+  const raw=atob(file.content.replace(/\s/g,''));
+  if(raw.length>2048) throw Error('pi_owner_storage_proposal_oversize');
+  const request=JSON.parse(raw);
+  await validatePiHistoryStorageConsent(unsignedHistoryStorageGrant(request),request);
+  return {schema:'commandcenter.pi.history_storage_proposal.v1',
+    request,review_only:true,cloudflare_signature_issued:false,
+    root_consent_installed:false};
+}
+
 async function readPendingBotRejoin(env) {
   const token=String(env.PI_OWNER_QUEUE_GITHUB_TOKEN||'');
   if(token.length<20) throw Error('pi_owner_queue_credential_missing');
