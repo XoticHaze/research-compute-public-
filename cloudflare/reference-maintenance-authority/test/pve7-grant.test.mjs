@@ -8,7 +8,8 @@ import { join } from 'node:path';
 import {
   PVE7_DOMAIN, PVE7_SOURCE, PVE7_SCOPE, PVE7_SCHEMA, PVE7_FILES,
   PVE7_ENVELOPE, PVE7_SIG_FORMAT, canonicalPve7, pve7Payload,
-  buildOwnerApprovedPve7Grant,validatePve7SigningRequest,validatePve7Grant
+  buildOwnerApprovedPve7Grant,validatePve7SigningRequest,validatePve7Grant,
+  validatePve7IssuedEnvelope
 } from '../src/pve7-grant.mjs';
 const now=Date.parse('2026-11-26T12:00:00.000Z');
 const env={PVE7_RELEASE_SIGNING_ENABLED:'1',PVE7_APPROVED_SOURCE_SHA:PVE7_SOURCE,
@@ -75,4 +76,25 @@ test('pure signed payload matches openssl native ECDSA SHA256',async()=>{
     assert.equal(PVE7_ENVELOPE,'commandcenter.pve7.existing_authority_envelope.v1');
     assert.equal(PVE7_SIG_FORMAT,'ecdsa-p256-sha256-p1363');
   }finally{rmSync(dir,{recursive:true,force:true})}
+});
+
+// The service-bound issuer validates its Durable Object's returned envelope
+// against the exact owner-pinned request, not only the signature header.
+// This check is shape/scope validation; the PVE root independently verifies
+// the real P-256 signature before staging any files.
+test('service-bound return matches the exact owner-approved grant',()=>{
+  const approved=request();
+  const envelope={schema:PVE7_ENVELOPE,grant:approved.grant,
+    signer_key_id:approved.signer_key_id,signature_format:PVE7_SIG_FORMAT,
+    signature_b64:'A'.repeat(86)+'=='};
+  assert.equal(validatePve7IssuedEnvelope(envelope,approved),envelope);
+  denied(()=>validatePve7IssuedEnvelope({...envelope,grant:{...envelope.grant,
+    request_id:'unapproved-request'}},approved));
+  denied(()=>validatePve7IssuedEnvelope({...envelope,grant:{...envelope.grant,
+    files:{...envelope.grant.files,'arbitrary.sh':{sha256:'0'.repeat(64)}}}},approved));
+  denied(()=>validatePve7IssuedEnvelope({...envelope,
+    signer_key_id:'sha256:'+'0'.repeat(64)},approved));
+  denied(()=>validatePve7IssuedEnvelope({...envelope,command:'shell'},approved));
+  denied(()=>validatePve7IssuedEnvelope({...envelope,signature_b64:''},approved));
+  denied(()=>validatePve7IssuedEnvelope({...envelope,signature_format:'ed25519'},approved));
 });
