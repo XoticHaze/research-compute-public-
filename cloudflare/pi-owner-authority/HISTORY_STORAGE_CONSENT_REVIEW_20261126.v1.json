@@ -1,0 +1,41 @@
+{
+  "schema": "commandcenter.pi.history_storage_signer_source_review.v1",
+  "source_only": true,
+  "production_deploy_verified": false,
+  "active_cloudflare_signing_key_accessed": false,
+  "cloudflare_admin_mutation_attempted": false,
+  "original_protected_main_signer_git_blob": "1e209395ac28e39b220762f67c27d8b8826b3fce",
+  "new_candidate_git_blobs": {
+    "cloudflare/pi-owner-authority/src/index.js": "080fd2ef96362472b0a18ed840b07428d1608b64",
+    "cloudflare/pi-owner-authority/src/pi_owner_approval.js": "bb8710df8021ccf7fcbeb4375834c46a8de045c1",
+    "cloudflare/pi-owner-authority/tests/history_storage_consent.test.mjs": "3bb015eedeb7d8a358b6477082816dad5a2e8097",
+    ".github/workflows/ccpi-neutral-owner-bootstrap-source-ci.yml": "f142c0dfc344c63fc6314e5cfbff56da600dfe93"
+  },
+  "source_target": "Existing neutral Pi signer only; do not create a Worker from historical wrangler bootstrap name",
+  "last_observed_active_worker": "research-compute-public",
+  "historical_wranger_source_name": "ccpi-owner-cloudflare-authority",
+  "companion_private_pr": "XoticHaze/CommandCenter#1342",
+  "purpose": "history_storage apply/revoke only, strict exact release/helper/scope/expiry",
+  "default_off_flag": "PI_OWNER_HISTORY_STORAGE_ENABLED",
+  "no_live_trading_or_gateway_authority": true,
+  "no_private_github_actions_compute": true,
+  "qualification": {
+    "public_run_id": 45836107217,
+    "public_job_id": 139965283655,
+    "source_only_node_tests_passed": 8,
+    "source_only_node_tests_failed": 0,
+    "full_workflow": "FAILED_AT_PRIOR_CANONICAL_SIGNER_HASH_PIN",
+    "original_blob_pin_unchanged": true,
+    "wrangler_dry_run": "SKIPPED",
+    "native_pi_python_tests": "NOT_EXECUTED",
+    "protected_release_installed": false
+  },
+  "gates": [
+    "Independent exact source review and explicit authorization of the new signer purpose",
+    "Active deployed Worker identity/version and ownership reconciliation, no duplicate Worker or signer",
+    "Approved and tested exact native Pi root release and sufficient verified disk/inodes",
+    "Authorized source-pin update only after independent review, not CI-green shortcut",
+    "Separate owner-signed exact grant through existing authenticated Access and typed Git queue",
+    "Fresh same-ID root consent receipt and two actual maintenance cursor readbacks"
+  ]
+}
