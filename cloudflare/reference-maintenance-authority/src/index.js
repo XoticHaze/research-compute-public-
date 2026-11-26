@@ -1,4 +1,6 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
+import { buildOwnerApprovedPve7Grant, validatePve7SigningRequest,
+         pve7Payload, PVE7_ENVELOPE, PVE7_SIG_FORMAT } from "./pve7-grant.mjs";
 const TARGET_WORKER = "reference-release-broker-v1";
 const SOURCE_REPOSITORY = "XoticHaze/research-compute-public-";
 const SOURCE_PREFIX = "cloudflare/reference-release-broker/src/";
@@ -104,8 +106,9 @@ async function fetchCandidateHashes(sourceSha) {
 }
 
 export class AuthorityState {
-  constructor(state) {
+  constructor(state, env) {
     this.state = state;
+    this.env = env;
     this.ready = state.blockConcurrencyWhile(async () => {
       let key = await state.storage.get("signing_key");
       if (!key) {
@@ -169,6 +172,44 @@ export class AuthorityState {
         signer_key_id: this.key.key_id,
         signature_format: SIGNATURE_FORMAT,
       });
+    }
+    // A private service-bound, independently owner-pinned one-release extension.
+    // Neither an HTTP ingress nor a caller-provided grant/target/path.
+    // This shares the existing key ONLY if its protected owner explicitly
+    // approves cross-domain scope; the default signing flag is disabled.
+    if (request.method === "POST" && url.pathname === "/pve7-sign") {
+      const candidate = await request.json().catch(() => null);
+      const owner = validatePve7SigningRequest(candidate, this.env);
+      if (owner.signer_key_id !== this.key.key_id) throw new Error("pve7_owner_key_not_enrolled");
+      const payload = pve7Payload(owner.grant);
+      const payloadSha = await sha256Hex(payload);
+      const slot = "pve7_release_grant:" + owner.grant.request_id;
+      const envelope = await this.state.storage.transaction(async txn => {
+        const prior = await txn.get(slot);
+        if (prior) {
+          if (prior.payload_sha256 !== payloadSha ||
+              prior.envelope?.schema !== PVE7_ENVELOPE ||
+              prior.envelope?.signer_key_id !== this.key.key_id) {
+            throw new Error("pve7_request_replay_drift");
+          }
+          return prior.envelope;
+        }
+        const privateKey = await this.importPrivate();
+        const signature = new Uint8Array(await crypto.subtle.sign(
+          {name:"ECDSA", hash:"SHA-256"}, privateKey, payload
+        ));
+        if (signature.length !== 64) throw new Error("pve7_signature_format");
+        const result = {
+          schema:PVE7_ENVELOPE,
+          grant:owner.grant,
+          signer_key_id:this.key.key_id,
+          signature_format:PVE7_SIG_FORMAT,
+          signature_b64:bytesToB64(signature)
+        };
+        await txn.put(slot,{payload_sha256:payloadSha,envelope:result});
+        return result;
+      });
+      return json(envelope);
     }
     if (request.method === "POST" && url.pathname === "/verify") {
       const wrapper = await request.json().catch(()=>null);
@@ -377,6 +418,27 @@ export default class ReferenceMaintenanceAuthority extends WorkerEntrypoint {
       throw new Error("maintenance_manifest_rejected");
     }
     return body.manifest;
+  }
+
+  // This RPC has no caller-supplied grant, paths, URLs or arbitrary actions.
+  // Public fetch() is unchanged (404); an owner-admitted service binding is
+  // still required to invoke it after explicit protected signing admission.
+  async issuePve7ApprovedGrant() {
+    const approved = buildOwnerApprovedPve7Grant(this.env);
+    const stub = await stateStub(this.env);
+    const response = await stub.fetch("https://authority-state/pve7-sign", {
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify(approved)
+    });
+    if (!response.ok) throw new Error("pve7_grant_not_admitted");
+    const envelope = await response.json();
+    if (envelope?.schema !== PVE7_ENVELOPE ||
+        envelope?.signer_key_id !== approved.signer_key_id ||
+        envelope?.signature_format !== PVE7_SIG_FORMAT) {
+      throw new Error("pve7_grant_result_mismatch");
+    }
+    return envelope;
   }
 
   async authorize(input) {
