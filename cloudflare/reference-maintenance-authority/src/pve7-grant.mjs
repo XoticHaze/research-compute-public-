@@ -83,4 +83,22 @@ export function pve7Payload(grant,nowMs=Date.now()) {
   validatePve7Grant(grant,nowMs);
   return new TextEncoder().encode(PVE7_DOMAIN+canonicalPve7(grant));
 }
+// Defense-in-depth at the service-binding boundary. The root materializer
+// still independently verifies the P-256 signature and exact trust policy.
+// A valid-looking response from a Durable Object must never widen the
+// owner-pinned request identity, scope, source or file set.
+export function validatePve7IssuedEnvelope(envelope, approved) {
+  need(exact(envelope,['schema','grant','signer_key_id','signature_format','signature_b64']),
+       'pve7_issued_envelope_shape');
+  need(envelope.schema===PVE7_ENVELOPE && envelope.signature_format===SIG_FORMAT
+       && envelope.signer_key_id===approved.signer_key_id,
+       'pve7_issued_envelope_identity');
+  need(canonicalPve7(envelope.grant)===canonicalPve7(approved.grant),
+       'pve7_issued_envelope_grant_mismatch');
+  need(typeof envelope.signature_b64==='string' &&
+       /^[A-Za-z0-9+/]{86}==$/.test(envelope.signature_b64),
+       'pve7_issued_signature_shape');
+  return envelope;
+}
+
 export {SIG_FORMAT as PVE7_SIG_FORMAT};
