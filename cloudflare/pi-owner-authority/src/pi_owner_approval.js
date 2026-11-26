@@ -720,6 +720,10 @@ export async function readPiStorageConsentReceipt(env, requestId) {
       && receipt.code === 'CONSENT_ROOT_READBACK_VERIFIED')
     || (receipt.action === 'pi.storage.maintenance_consent.revoke'
       && ['CONSENT_REVOKED','CONSENT_ALREADY_ABSENT'].includes(receipt.code));
+  const expiryValid = typeof receipt?.expires_at === 'string'
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/.test(receipt.expires_at)
+    && Number.isFinite(Date.parse(receipt.expires_at));
+  const releaseValid = /^r[0-9a-f]{12}$/.test(receipt?.release_id || '');
   if (receipt?.schema !== 'commandcenter.pi.history_storage_consent_result.v1'
       || receipt.node_id !== 'cc-pi4' || receipt.request_id !== requestId
       || !['pi.storage.maintenance_consent.apply',
@@ -730,7 +734,8 @@ export async function readPiStorageConsentReceipt(env, requestId) {
       || receipt.broker_mutation_attempted !== false
       || receipt.gateway_mutation_attempted !== false
       || receipt.unique_content_deleted !== false
-      || !/^r[0-9a-f]{12}$/.test(receipt.release_id || '')
+      || (!releaseValid && (receipt.status === 'passed' || receipt.release_id !== null))
+      || (!expiryValid && (receipt.status === 'passed' || receipt.expires_at !== null))
       || receipt.helper_git_blob !== STORAGE_HELPER_BLOB
       || receipt.scope !== STORAGE_SCOPE
       || !SHA64.test(receipt.request_sha256 || '')
