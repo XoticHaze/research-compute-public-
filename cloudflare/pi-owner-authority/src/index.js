@@ -248,6 +248,16 @@ I approve only this exact existing bot restart, not Gateway restart or trading a
 <label>Rejoin request ID for receipt</label><input id="rejoin-rid">
 <button id="rejoin-receipt">Check bot rejoin receipt</button>
 <pre id="rejoin-result"></pre></section>
+
+<section><h2>Lossless history storage consent (separately owner-approved)</h2>
+<p>Only identical 14TH27A/27B history maintenance; no immediate sweep, protected release or live trading. Disabled unless independently enabled.</p>
+<button id="load-storage">Load non-executing consent proposal</button>
+<label>Exact fresh typed request</label><textarea id="storage-request" spellcheck="false"></textarea>
+<p><label><input id="storage-approved" type="checkbox" style="width:auto"> I approve only this release, helper, lossless scope and expiry.</label></p>
+<button id="approve-storage">Sign and dispatch exact history consent</button>
+<label>Storage request ID</label><input id="storage-rid">
+<button id="storage-receipt">Check root consent receipt</button>
+<pre id="storage-result"></pre></section>
 <script src="/owner.js" defer></script></body></html>`;
 const client=`const $=x=>document.getElementById(x);
 async function api(path,doc){
@@ -298,6 +308,31 @@ $('rejoin-receipt').onclick=async()=>{
  try{$('rejoin-result').textContent=JSON.stringify(
   await api('rejoin-receipt?request_id='+encodeURIComponent($('rejoin-rid').value.trim())),null,2)}
  catch(e){$('rejoin-result').textContent='Denied: '+e.message}
+};
+
+$('load-storage').onclick=async()=>{
+ try{
+  const proposal=await api('storage-proposal');
+  $('storage-request').value=JSON.stringify(proposal.request,null,2);
+  $('storage-rid').value=proposal.request.request_id;
+  $('storage-approved').checked=false;
+  $('storage-result').textContent=JSON.stringify(proposal,null,2);
+ }catch(e){$('storage-result').textContent='Denied: '+e.message}
+};
+$('approve-storage').onclick=async()=>{
+ try{
+  if(!$('storage-approved').checked)throw Error('Exact storage-only owner review required');
+  const request=JSON.parse($('storage-request').value);
+  const result=await api('approve-storage',{request,approve_exact_storage_consent:true});
+  $('storage-rid').value=request.request_id;
+  $('storage-approved').checked=false;
+  $('storage-result').textContent=JSON.stringify(result,null,2);
+ }catch(e){$('storage-result').textContent='Denied: '+e.message}
+};
+$('storage-receipt').onclick=async()=>{
+ try{$('storage-result').textContent=JSON.stringify(await api(
+   'storage-receipt?request_id='+encodeURIComponent($('storage-rid').value.trim())),null,2)}
+ catch(e){$('storage-result').textContent='Denied: '+e.message}
 };
 refresh();`;
 const noStore={headers:{'content-type':'text/html; charset=utf-8','cache-control':'private, no-store',
