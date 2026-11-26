@@ -116,7 +116,7 @@ function unsignedHistoryStorageGrant(request) {
     schema:'commandcenter.pi.history_storage_grant.v1',
     node_id:'cc-pi4',
     request_id:request.request_id,
-    action:'pi.storage.maintenance_consent.apply',
+    action:request.action,
     expected_release:request.expected_release,
     helper_git_blob:request.helper_git_blob,
     scope:'LOSSLESS_IDENTICAL_27A_27B_ONLY',
@@ -252,11 +252,11 @@ I approve only this exact existing bot restart, not Gateway restart or trading a
 <pre id="rejoin-result"></pre></section>
 
 <section><h2>Lossless history storage consent (separately owner-approved)</h2>
-<p>Only identical 14TH27A/27B history maintenance; no immediate sweep, protected release or live trading. Disabled unless independently enabled.</p>
+<p>Exact apply or revoke of identical 14TH27A/27B history-maintenance consent; no immediate sweep, protected release or live trading. Revocation stops new batches, but does not interrupt an already admitted batch. Disabled unless independently enabled.</p>
 <button id="load-storage">Load non-executing consent proposal</button>
 <label>Exact fresh typed request</label><textarea id="storage-request" spellcheck="false"></textarea>
-<p><label><input id="storage-approved" type="checkbox" style="width:auto"> I approve only this release, helper, lossless scope and expiry.</label></p>
-<button id="approve-storage">Sign and dispatch exact history consent</button>
+<p><label><input id="storage-approved" type="checkbox" style="width:auto"> I approve this exact apply or revoke action, installed release, helper, lossless scope and expiry.</label></p>
+<button id="approve-storage">Sign and dispatch exact history consent action</button>
 <label>Storage request ID</label><input id="storage-rid">
 <button id="storage-receipt">Check root consent receipt</button>
 <pre id="storage-result"></pre></section>
