@@ -394,6 +394,13 @@ export default {
             || input.approve_exact_storage_consent!==true) {
           throw Error('cloudflare_history_storage_not_admitted');
         }
+        // Owner may approve ONLY the exact separate, nonexecuting CC proposal.
+        // A hand-edited browser request or changed proposal must not obtain a
+        // signer grant without the established review/publish stage.
+        const staged=await readPendingHistoryStorage(env);
+        if(canonicalPiJson(staged.request)!==canonicalPiJson(input.request)) {
+          throw Error('pi_owner_history_storage_proposal_mismatch');
+        }
         const approval=unsignedHistoryStorageGrant(input.request||{});
         await validatePiHistoryStorageConsent(approval,input.request);
         const issued=await doRequest(env,'POST','/sign',{
