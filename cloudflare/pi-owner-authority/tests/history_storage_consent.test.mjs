@@ -100,3 +100,21 @@ test('owner-signed revocation is distinct and cannot authorize application',asyn
   const changedGrant={...grant,action:'pi.storage.maintenance_consent.apply'};
   await assert.rejects(validatePiHistoryStorageConsent(changedGrant,req),Error);
 });
+
+test('real Ed25519 domain-separated signature rejects sibling domains and action drift',async()=>{
+  const [req,grant]=sample();
+  await validatePiHistoryStorageConsent(grant,req);
+  const keys=await crypto.subtle.generateKey('Ed25519',false,['sign','verify']);
+  const encoder=new TextEncoder();
+  const storageDomain='commandcenter.pi.history_storage_approval.v1\\u0000';
+  const rootReleaseDomain='commandcenter.pi.release_request_approval.v1\\u0000';
+  const storageMessage=encoder.encode(storageDomain+canonicalPiJson(grant));
+  const signature=await crypto.subtle.sign('Ed25519',keys.privateKey,storageMessage);
+  assert.equal(new Uint8Array(signature).length,64);
+  assert.equal(await crypto.subtle.verify('Ed25519',keys.publicKey,signature,storageMessage),true);
+  assert.equal(await crypto.subtle.verify('Ed25519',keys.publicKey,signature,
+    encoder.encode(rootReleaseDomain+canonicalPiJson(grant))),false);
+  const revoked={...grant,action:'pi.storage.maintenance_consent.revoke'};
+  assert.equal(await crypto.subtle.verify('Ed25519',keys.publicKey,signature,
+    encoder.encode(storageDomain+canonicalPiJson(revoked))),false);
+});
