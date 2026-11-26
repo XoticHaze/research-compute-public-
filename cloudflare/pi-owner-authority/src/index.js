@@ -354,6 +354,10 @@ export default {
         return response(await readPendingCCRootRelease(env));
       if (request.method==='GET' && url.pathname==='/api/rejoin-proposal')
         return response(await readPendingBotRejoin(env));
+      if (request.method==='GET' && url.pathname==='/api/storage-proposal')
+        return response(await readPendingHistoryStorage(env));
+      if (request.method==='GET' && url.pathname==='/api/storage-receipt')
+        return response(await readPiStorageConsentReceipt(env,url.searchParams.get('request_id')));
       if (request.method==='GET' && url.pathname==='/api/rejoin-receipt') {
         return response(await readPiOwnerRootReceipt(env,url.searchParams.get('request_id')));
       }
@@ -380,6 +384,24 @@ export default {
             || input.confirm_independently_enrolled_on_pi!==true)
           throw Error('independent_root_enrollment_required');
         return response(await doRequest(env,'POST','/enroll',{...input,operator:identity}),201);
+      }
+      if (url.pathname==='/api/approve-storage') {
+        strict(input,['request','approve_exact_storage_consent']);
+        if (!flag(env.PI_OWNER_HISTORY_STORAGE_ENABLED)
+            || !flag(env.PI_OWNER_SIGNER_ENABLED)
+            || input.approve_exact_storage_consent!==true) {
+          throw Error('cloudflare_history_storage_not_admitted');
+        }
+        const approval=unsignedHistoryStorageGrant(input.request||{});
+        await validatePiHistoryStorageConsent(approval,input.request);
+        const issued=await doRequest(env,'POST','/sign',{
+          kind:'history_storage',request:input.request,approval,
+          approve_exact_storage_consent:true,operator:identity,
+        });
+        const dispatched=await publishPiStorageConsentGrant(
+          env,input.request,issued.signed_grant);
+        return response({...dispatched,cloudflare_signature_issued:true,
+          root_execution_verified:false,maintenance_batch_verified:false},202);
       }
       if (url.pathname==='/api/approve-rejoin') {
         strict(input,['request','approve_exact_bot_rejoin']);
