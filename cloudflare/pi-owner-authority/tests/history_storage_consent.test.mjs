@@ -20,7 +20,8 @@ function sample(now=Date.now()){
   };
   const grant={
     schema:'commandcenter.pi.history_storage_grant.v1', node_id:'cc-pi4',
-    request_id:req.request_id,expected_release:req.expected_release,
+    request_id:req.request_id,action:req.action,created_at:req.created_at,
+    expected_release:req.expected_release,
     helper_git_blob:req.helper_git_blob, scope:req.scope,expires_at:req.expires_at,
   };
   return [req,grant];
