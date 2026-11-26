@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
+import ownerWorker from '../src/index.js';
 import {
   validatePiHistoryStorageConsent, readPiStorageConsentReceipt,
   canonicalPiJson, PiOwnerApprovalState,
@@ -163,5 +164,44 @@ test('root consent receipt projection rejects scope, hash and mutation drift',as
     }
   } finally {
     globalThis.fetch=original;
+  }
+});
+
+test('owner cannot sign a hand-edited storage request not matching staged CC proposal',async()=>{
+  const [staged]=sample();
+  const changed={...staged,request_id:'history-consent-other-20261126'};
+  const raw=canonicalPiJson(staged);
+  const prior=globalThis.fetch;
+  let signerCalled=false;
+  globalThis.fetch=async url=>{
+    assert.match(String(url),/storage-consent-proposal\\.json/);
+    return new Response(JSON.stringify({
+      sha:'a'.repeat(40), encoding:'base64',
+      content:Buffer.from(raw).toString('base64'), size:Buffer.byteLength(raw),
+    }),{status:200});
+  };
+  const env={
+    PI_OWNER_ACCESS_AUD:'owner-aud-test',
+    PI_OWNER_SIGNER_ALLOWED_EMAILS:'owner@example.invalid',
+    PI_OWNER_SIGNER_ENABLED:'1',PI_OWNER_HISTORY_STORAGE_ENABLED:'1',
+    PI_OWNER_QUEUE_GITHUB_TOKEN:'x'.repeat(32),
+    PI_OWNER_APPROVER:{get:()=>{signerCalled=true;throw Error('signer must not run');}},
+  };
+  const ctx={access:{aud:'owner-aud-test',getIdentity:async()=>({email:'owner@example.invalid'})}};
+  try{
+    const request=new Request('https://owner.test/api/approve-storage',{
+      method:'POST',headers:{
+        origin:'https://owner.test','content-type':'application/json',
+        'sec-fetch-site':'same-origin',
+      },body:JSON.stringify({
+        request:changed,approve_exact_storage_consent:true,
+      }),
+    });
+    const answer=await ownerWorker.fetch(request,env,ctx);
+    assert.equal(answer.status,403);
+    assert.deepEqual(await answer.json(),{error:'pi_owner_history_storage_proposal_mismatch'});
+    assert.equal(signerCalled,false);
+  }finally{
+    globalThis.fetch=prior;
   }
 });
