@@ -88,3 +88,15 @@ test('root_release and rejoin signatures cannot masquerade as history storage',a
     await assert.rejects(validatePiHistoryStorageConsent({...grant,...mutation},req),Error);
   }
 });
+
+test('owner-signed revocation is distinct and cannot authorize application',async()=>{
+  const [req,grant]=sample();
+  req.action='pi.storage.maintenance_consent.revoke';
+  grant.action=req.action;
+  const authorized=await validatePiHistoryStorageConsent(grant,req);
+  assert.equal(authorized.request_id,req.request_id);
+  const changed={...req,action:'pi.storage.maintenance_consent.apply'};
+  await assert.rejects(validatePiHistoryStorageConsent(grant,changed),Error);
+  const changedGrant={...grant,action:'pi.storage.maintenance_consent.apply'};
+  await assert.rejects(validatePiHistoryStorageConsent(changedGrant,req),Error);
+});
