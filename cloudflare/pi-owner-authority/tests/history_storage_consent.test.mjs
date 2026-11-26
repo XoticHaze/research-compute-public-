@@ -174,7 +174,7 @@ test('owner cannot sign a hand-edited storage request not matching staged CC pro
   const prior=globalThis.fetch;
   let signerCalled=false;
   globalThis.fetch=async url=>{
-    assert.match(String(url),/storage-consent-proposal\\.json/);
+    assert.match(String(url),/storage-consent-proposal\.json/);
     return new Response(JSON.stringify({
       sha:'a'.repeat(40), encoding:'base64',
       content:Buffer.from(raw).toString('base64'), size:Buffer.byteLength(raw),
