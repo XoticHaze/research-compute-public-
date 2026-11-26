@@ -63,7 +63,8 @@ test('expiry, future and overlong windows fail closed',async()=>{
 test('history signer defaults disabled, cannot be activated by Git body',async()=>{
   const state=new PiOwnerApprovalState({
     storage:{get:async()=>null,transaction:async()=>{throw Error('unexpected')}}
-  },{PI_OWNER_SIGNER_ENABLED:'1',PI_OWNER_QUEUE_GITHUB_TOKEN:'not-a-real-secret'});
+  },{PI_OWNER_SIGNER_ENABLED:'1',PI_OWNER_QUEUE_GITHUB_TOKEN:'not-a-real-secret',
+    PI_OWNER_SIGNER_ALLOWED_EMAILS:'owner@example.invalid'});
   const [req,approval]=sample();
   const answer=await state.fetch(new Request('https://pi-owner.internal/sign',{
     method:'POST',headers:{'content-type':'application/json'},
