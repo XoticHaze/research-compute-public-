@@ -39,6 +39,6 @@
   ],
   "historical_wrangler_source_name": "ccpi-owner-cloudflare-authority",
   "tested_candidate_head_sha": "ca4d0bb2b63c9aadc99b7b375b5fade5b7bd7d4a",
-  "compion_private_candidate_head_sha": "ab3f4c5967e11b86a2cc2bfd9a249d36252d3bab",
+  "companion_private_candidate_head_sha": "ab3f4c5967e11b86a2cc2bfd9a249d36252d3bab",
   "owner_must_approve_exact_staged_cc_proposal": true
 }
