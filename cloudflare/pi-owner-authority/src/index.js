@@ -116,9 +116,11 @@ function unsignedHistoryStorageGrant(request) {
     schema:'commandcenter.pi.history_storage_grant.v1',
     node_id:'cc-pi4',
     request_id:request.request_id,
+    action:'pi.storage.maintenance_consent.apply',
     expected_release:request.expected_release,
     helper_git_blob:request.helper_git_blob,
     scope:'LOSSLESS_IDENTICAL_27A_27B_ONLY',
+    created_at:request.created_at,
     expires_at:request.expires_at,
   };
 }
