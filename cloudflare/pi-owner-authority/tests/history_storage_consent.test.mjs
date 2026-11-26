@@ -150,6 +150,21 @@ test('root consent receipt projection rejects scope, hash and mutation drift',as
     assert.equal(projected.status,'passed');
     assert.equal(projected.root_receipt_verified,true);
     assert.equal(projected.maintenance_batch_verified,false);
+    const safeFailure={
+      ...pristine,status:'failed',code:'STORAGE_SCOPE_OR_RELEASE_INVALID',
+      release_id:null,expires_at:null,signed_grant_sha256:null,
+    };
+    receipt=safeFailure;
+    const denied=await readPiStorageConsentReceipt(env,id);
+    assert.equal(denied.status,'failed');
+    assert.equal(denied.release_id,null);
+    assert.equal(denied.expires_at,null);
+    for(const mutation of [{release_id:'../secret'},{expires_at:'password=private'}]){
+      receipt={...safeFailure,...mutation};
+      await assert.rejects(readPiStorageConsentReceipt(env,id),
+        /pi_owner_history_storage_receipt_identity_invalid/);
+    }
+    receipt=pristine;
     for(const modification of [
       {scope:'ALL_FILES'},{helper_git_blob:'0'.repeat(40)},
       {request_sha256:null},{signed_grant_sha256:null},
