@@ -6,9 +6,9 @@
   "cloudflare_admin_mutation_attempted": false,
   "original_protected_main_signer_git_blob": "1e209395ac28e39b220762f67c27d8b8826b3fce",
   "new_candidate_git_blobs": {
-    "cloudflare/pi-owner-authority/src/index.js": "080fd2ef96362472b0a18ed840b07428d1608b64",
+    "cloudflare/pi-owner-authority/src/index.js": "f3b2ec21e40875f2d13aa62630cbf663edebaea4",
     "cloudflare/pi-owner-authority/src/pi_owner_approval.js": "bb8710df8021ccf7fcbeb4375834c46a8de045c1",
-    "cloudflare/pi-owner-authority/tests/history_storage_consent.test.mjs": "3bb015eedeb7d8a358b6477082816dad5a2e8097",
+    "cloudflare/pi-owner-authority/tests/history_storage_consent.test.mjs": "0a980eaea854e8f21b7a33f53a03344ac268c957",
     ".github/workflows/ccpi-neutral-owner-bootstrap-source-ci.yml": "f142c0dfc344c63fc6314e5cfbff56da600dfe93"
   },
   "source_target": "Existing neutral Pi signer only; do not create a Worker from historical wrangler bootstrap name",
@@ -19,9 +19,9 @@
   "no_live_trading_or_gateway_authority": true,
   "no_private_github_actions_compute": true,
   "qualification": {
-    "public_run_id": 45836107217,
-    "public_job_id": 139965283655,
-    "source_only_node_tests_passed": 8,
+    "public_run_id": 45903386147,
+    "public_job_id": 140194272952,
+    "source_only_node_tests_passed": 9,
     "source_only_node_tests_failed": 0,
     "full_workflow": "FAILED_AT_PRIOR_CANONICAL_SIGNER_HASH_PIN",
     "original_blob_pin_unchanged": true,
@@ -37,5 +37,8 @@
     "Separate owner-signed exact grant through existing authenticated Access and typed Git queue",
     "Fresh same-ID root consent receipt and two actual maintenance cursor readbacks"
   ],
-  "historical_wrangler_source_name": "ccpi-owner-cloudflare-authority"
+  "historical_wrangler_source_name": "ccpi-owner-cloudflare-authority",
+  "tested_candidate_head_sha": "ca4d0bb2b63c9aadc99b7b375b5fade5b7bd7d4a",
+  "compion_private_candidate_head_sha": "ab3f4c5967e11b86a2cc2bfd9a249d36252d3bab",
+  "owner_must_approve_exact_staged_cc_proposal": true
 }
