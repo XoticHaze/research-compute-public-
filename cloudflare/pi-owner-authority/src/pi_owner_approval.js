@@ -177,7 +177,8 @@ export async function validatePiHistoryStorageConsent(approval, request, now = D
   strictFields(approval, STORAGE_CONSENT_GRANT_FIELDS);
   if (request.schema !== 'commandcenter.pi.history_storage_request.v1'
       || request.node_id !== 'cc-pi4'
-      || request.action !== 'pi.storage.maintenance_consent.apply'
+      || !['pi.storage.maintenance_consent.apply',
+             'pi.storage.maintenance_consent.revoke'].includes(request.action)
       || !REQ.test(request.request_id)
       || !/^r[0-9a-f]{12}$/.test(request.expected_release)
       || request.helper_git_blob !== STORAGE_HELPER_BLOB
@@ -680,7 +681,7 @@ export async function publishPiStorageConsentGrant(env, request, signedGrant) {
     : await githubPut(token, STORAGE_REQUEST, request, priorRequest);
   return {
     schema:'commandcenter.pi.history_storage_consent_dispatch.v1',
-    action:'pi.storage.maintenance_consent.apply',
+    action:request.action,
     request_id:request.request_id, branch:QUEUE_REF,
     signed_grant_blob_sha:grantBlob, request_blob_sha:requestBlob,
     recovered_exact_same_id:Boolean(oldReqExact || oldGrantExact),
@@ -716,7 +717,8 @@ export async function readPiStorageConsentReceipt(env, requestId) {
   const receipt = JSON.parse(raw);
   if (receipt?.schema !== 'commandcenter.pi.history_storage_consent_result.v1'
       || receipt.node_id !== 'cc-pi4' || receipt.request_id !== requestId
-      || receipt.action !== 'pi.storage.maintenance_consent.apply'
+      || !['pi.storage.maintenance_consent.apply',
+              'pi.storage.maintenance_consent.revoke'].includes(receipt.action)
       || !['passed','failed','indeterminate'].includes(receipt.status)
       || receipt.replay_allowed !== false
       || receipt.broker_mutation_attempted !== false) {
