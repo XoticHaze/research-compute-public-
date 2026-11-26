@@ -649,3 +649,85 @@ export async function readPiRootReleaseReceipt(env,requestId) {
     finished_at:typeof receipt.finished_at==='string'?receipt.finished_at:null,
     root_receipt_verified:true,active_generation_readback_verified:false};
 }
+
+
+/** Private owner-reviewed approval-first mailbox using the existing Git queue.
+ * No public route, new DO, new Git credential or root mutation at publication.
+ */
+export async function publishPiStorageConsentGrant(env, request, signedGrant) {
+  const token = String(env.PI_OWNER_QUEUE_GITHUB_TOKEN || '');
+  if (token.length < 20) throw new Error('pi_owner_queue_credential_missing');
+  const {key_id, signature_b64, ...unsigned} = signedGrant || {};
+  await validatePiHistoryStorageConsent(unsigned, request);
+  if (key_id !== KEY_ID || typeof signature_b64 !== 'string'
+      || !/^[A-Za-z0-9+/]{86}==$/i.test(signature_b64)) {
+    throw new Error('pi_owner_history_storage_signature_shape_invalid');
+  }
+  const priorRequest = await githubFile(token, STORAGE_REQUEST);
+  const priorGrant = await githubFile(token, STORAGE_GRANT);
+  const oldReqExact = priorRequest?.text === canonicalPiJson(request);
+  const oldGrantExact = priorGrant?.text === canonicalPiJson(signedGrant);
+  if ((!oldReqExact && !queueSlotFree(priorRequest, request.request_id, Date.now()))
+      || (!oldGrantExact && !queueSlotFree(priorGrant, request.request_id, Date.now()))
+      || (oldReqExact && !oldGrantExact)) {
+    throw new Error('pi_owner_history_storage_queue_occupied_or_replay');
+  }
+  const grantBlob = oldGrantExact ? priorGrant.sha
+    : await githubPut(token, STORAGE_GRANT, signedGrant, priorGrant);
+  const requestBlob = oldReqExact ? priorRequest.sha
+    : await githubPut(token, STORAGE_REQUEST, request, priorRequest);
+  return {
+    schema:'commandcenter.pi.history_storage_consent_dispatch.v1',
+    action:'pi.storage.maintenance_consent.apply',
+    request_id:request.request_id, branch:QUEUE_REF,
+    signed_grant_blob_sha:grantBlob, request_blob_sha:requestBlob,
+    recovered_exact_same_id:Boolean(oldReqExact || oldGrantExact),
+    root_receipt_verified:false, maintenance_batch_verified:false,
+    broker_mutation_attempted:false, protected_mutation_claimed:false,
+  };
+}
+
+export async function readPiStorageConsentReceipt(env, requestId) {
+  if (typeof requestId !== 'string' || !REQ.test(requestId)) {
+    throw new Error('pi_owner_history_storage_receipt_id_invalid');
+  }
+  const token = String(env.PI_OWNER_QUEUE_GITHUB_TOKEN || '');
+  if (token.length < 20) throw new Error('pi_owner_queue_credential_missing');
+  const path = 'pi-node/storage-consent-results/' + requestId + '.json';
+  const url = 'https://api.github.com/repos/' + QUEUE_REPO + '/contents/'
+    + path + '?ref=pi-node-outbox';
+  const response = await fetch(url, {redirect:'manual',
+    headers:{authorization:'Bearer ' + token, accept:'application/vnd.github+json',
+      'x-github-api-version':'2022-11-28'}});
+  if (response.status === 404) {
+    return {schema:'commandcenter.pi.history_storage_consent_projection.v1',
+      request_id:requestId, status:'PENDING', root_receipt_verified:false};
+  }
+  if (!response.ok) throw new Error('pi_owner_history_storage_receipt_unavailable');
+  const file = await response.json();
+  if (!SHA40.test(file?.sha || '') || file.encoding !== 'base64'
+      || typeof file.content !== 'string' || file.size > 8192) {
+    throw new Error('pi_owner_history_storage_receipt_file_invalid');
+  }
+  const raw = new TextDecoder().decode(unb64(file.content.replace(/\\s/g,'')));
+  if (te.encode(raw).length > 8192) throw new Error('pi_owner_history_storage_receipt_oversize');
+  const receipt = JSON.parse(raw);
+  if (receipt?.schema !== 'commandcenter.pi.history_storage_consent_result.v1'
+      || receipt.node_id !== 'cc-pi4' || receipt.request_id !== requestId
+      || receipt.action !== 'pi.storage.maintenance_consent.apply'
+      || !['passed','failed','indeterminate'].includes(receipt.status)
+      || receipt.replay_allowed !== false
+      || receipt.broker_mutation_attempted !== false) {
+    throw new Error('pi_owner_history_storage_receipt_identity_invalid');
+  }
+  return {
+    schema:'commandcenter.pi.history_storage_consent_projection.v1',
+    request_id:requestId, action:receipt.action, status:receipt.status,
+    code:typeof receipt.code==='string'?receipt.code:null,
+    release_id:typeof receipt.release_id==='string'?receipt.release_id:null,
+    expires_at:typeof receipt.expires_at==='string'?receipt.expires_at:null,
+    finished_at:typeof receipt.finished_at==='string'?receipt.finished_at:null,
+    root_receipt_verified:true, maintenance_batch_verified:false,
+    protected_release_verified:false,
+  };
+}
