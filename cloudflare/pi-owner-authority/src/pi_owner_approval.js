@@ -198,7 +198,7 @@ export async function validatePiHistoryStorageConsent(approval, request, now = D
   }
   const raw = canonicalPiJson(approval);
   if (te.encode(raw).length > 1024
-      || /\\b(?:password|token|private_key|broker_net_qty|account_number)\\b/i.test(raw)) {
+      || /\b(?:password|token|private_key|broker_net_qty|account_number)\b/i.test(raw)) {
     throw new Error('pi_owner_history_storage_data_rejected');
   }
   return {request_id: request.request_id, approval_hash: await shaHex(te.encode(raw))};
@@ -709,7 +709,7 @@ export async function readPiStorageConsentReceipt(env, requestId) {
       || typeof file.content !== 'string' || file.size > 8192) {
     throw new Error('pi_owner_history_storage_receipt_file_invalid');
   }
-  const raw = new TextDecoder().decode(unb64(file.content.replace(/\\s/g,'')));
+  const raw = new TextDecoder().decode(unb64(file.content.replace(/\s/g,'')));
   if (te.encode(raw).length > 8192) throw new Error('pi_owner_history_storage_receipt_oversize');
   const receipt = JSON.parse(raw);
   if (receipt?.schema !== 'commandcenter.pi.history_storage_consent_result.v1'
