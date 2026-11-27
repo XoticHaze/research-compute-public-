@@ -17,12 +17,12 @@
     "cloudflare/pi-owner-authority/tests/issuer.test.mjs": "47f2c9b61ca545bce5133eecd8308a013b3d1f55",
     "cloudflare/pi-owner-authority/wrangler.jsonc": "b70e769e369e795526da436df5c3119ab20c314b",
     "cloudflare/pi-owner-authority/SCHEDULED_ROOT_RELEASE.md": "5f0f1046a35bee5f8e0416865df9c9c4535aed31",
-    ".github/workflows/ccpi-neutral-owner-bootstrap-source-ci.yml": "e4fe45e1a94e6867d24314f14570eed6c935151d",
+    ".github/workflows/ccpi-neutral-owner-bootstrap-source-ci.yml": "1eb16b22be35a28bf716d5782967dc5a6f080fa4",
     "cloudflare/pi-owner-authority/tests/history_storage_consent.test.mjs": "68249ce00263f2c35f790291ec86cfca2c353304"
   },
   "existing_worker": "research-compute-public",
   "preserve_protected_canonical_pin": "1e209395ac28e39b220762f67c27d8b8826b3fce",
-  "qualification": "SOURCE_REVIEW_PENDING_RETEST",
+  "qualification": "SOURCE_REVIEW_PENDING_ISSUER_CORE_NATIVE_RETEST_AND_PROTECTED_ADMISSION",
   "constraints": [
     "Existing signer, DO and root key only",
     "Scheduled path remains root-release-only and independently permitted",
@@ -44,5 +44,17 @@
     "failed": 1,
     "reason": "Mock returned stale bytes and old SHA after PUT; production readback correctly denied.",
     "production_checks_unchanged": true
+  },
+  "source_test_scope_extension": {
+    "schema": "commandcenter.pi.issuer_core_source_qualification_extension.v1",
+    "public_workflow_git_blob": "1eb16b22be35a28bf716d5782967dc5a6f080fa4",
+    "source_change_commit": "5c050fc7dae5373dda0365dedc31b095361a0da2",
+    "checks": [
+      "node syntax of both issuer modules",
+      "issuer.test.mjs included alongside scheduled permit and enrollment suites"
+    ],
+    "production_deploy_authorized": false,
+    "protected_canonical_pin_unchanged": true,
+    "source_test_result": "PENDING_NEW_NATIVE_PUBLIC_WORKFLOW"
   }
 }
