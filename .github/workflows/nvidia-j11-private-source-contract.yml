@@ -1,0 +1,29 @@
+name: NVIDIA J11 Private Route Source Contract
+on:
+  push:
+    branches: [experiment/nvidia-j11-fixed-session-turn-20261125]
+    paths:
+      - 'cloudflare/shared-nvidia-inference/**'
+      - '.github/workflows/nvidia-j11-private-source-contract.yml'
+permissions:
+  contents: read
+jobs:
+  j11-offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: No Cloudflare credentials, no NVIDIA requests, source tests only
+        working-directory: cloudflare/shared-nvidia-inference
+        run: |
+          set -euo pipefail
+          node --check src/index.js
+          node --check src/j11_fixed_turn.js
+          node --check src/j11_private_route.js
+          node --check local-probe/src/j11_caller.js
+          node --test tests/j11*.test.mjs
