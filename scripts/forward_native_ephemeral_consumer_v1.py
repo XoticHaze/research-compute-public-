@@ -230,7 +230,14 @@ def _run(cmd: list[str], root: Path, timeout: int = 1200) -> None:
         raise RuntimeError(f"private native harness failed rc={run.returncode}")
 
 
-def _execute(root: Path, harness: str, adapter_script: Path) -> tuple[Path, Path | None, Path]:
+def _execute(root: Path, harness: str, adapter_script: Path, replay_request: dict | None = None) -> tuple[Path, Path | None, Path]:
+    if replay_request is not None:
+        # Opt-in only inside a trusted encrypted capsule. The unchanged frozen
+        # source is executed with its existing --asof date and monthly refit.
+        if harness != "semiconductor_shared_ridge_three_book_v1":
+            raise RuntimeError("bounded replay unsupported for this harness")
+        from forward_native_bounded_replay_r1 import execute_bounded
+        return execute_bounded(root, adapter_script, replay_request)
     spec = HARNESS_SPECS[harness]
     adapter = root / "artifacts" / f"forward_program_adapter_{spec['program_id'].lower()}.json"
     adapter.parent.mkdir(parents=True, exist_ok=True)
@@ -341,7 +348,12 @@ def consume(
     with tempfile.TemporaryDirectory(prefix="forward-native-") as td:
         root = Path(td)
         manifest = _safe_extract(plaintext, root, harness)
-        native, book, adapter = _execute(root, harness, adapter_script)
+        replay_request = manifest.get("replay_request")
+        if replay_request is not None and sanitized_adapter_output is not None:
+            # The original rescue workflow writes one public sanitized adapter;
+            # a multi-date historical return must remain encrypted end-to-end.
+            raise RuntimeError("bounded replay requires encrypted-only return")
+        native, book, adapter = _execute(root, harness, adapter_script, replay_request)
         if sanitized_adapter_output is not None:
             sanitized_adapter_output.parent.mkdir(parents=True, exist_ok=True)
             sanitized_adapter_output.write_bytes(adapter.read_bytes())
