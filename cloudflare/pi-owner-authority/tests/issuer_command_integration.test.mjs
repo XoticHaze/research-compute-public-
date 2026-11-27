@@ -16,7 +16,7 @@ const iso=t=>new Date(t).toISOString().replace(/\.\d{3}Z$/,'Z');
 const hex=b=>createHash('sha256').update(b).digest('hex');
 const gitHash=b=>createHash('sha1').update('blob '+b.length+'\0').update(b).digest('hex');
 const ORIGIN='repos/XoticHaze/CommandCenter-gate-control/contents/';
-const FAKE_GH=String.raw\`#!/usr/bin/env node
+const FAKE_GH=String.raw`#!/usr/bin/env node
 const fs=require('node:fs'), crypto=require('node:crypto');
 const args=process.argv.slice(2);
 const target=args.find(s=>s.startsWith('repos/XoticHaze/CommandCenter-gate-control/contents/'));
@@ -25,7 +25,7 @@ const rest=target.slice('repos/XoticHaze/CommandCenter-gate-control/contents/'.l
 const p=rest.split('?')[0], ref=(new URL('https://synthetic.invalid/?'+(rest.split('?')[1]||''))).searchParams.get('ref')||'pi-node-inbox';
 const db=JSON.parse(fs.readFileSync(process.env.MOCK_GH_DB,'utf8'));
 const key=ref+'/'+p, old=db[key];
-const gitHash=b=>crypto.createHash('sha1').update('blob '+b.length+'\\0').update(b).digest('hex');
+const gitHash=b=>crypto.createHash('sha1').update('blob '+b.length+'\0').update(b).digest('hex');
 if(!args.includes('PUT')) {
  if(!old){process.stderr.write('gh: Not Found (HTTP 404)');process.exit(1);}
  const raw=Buffer.from(old,'base64');
@@ -40,7 +40,7 @@ if(!args.includes('PUT')) {
  fs.writeFileSync(process.env.MOCK_GH_DB,JSON.stringify(db));
  process.stdout.write(JSON.stringify({content:{sha:gitHash(raw)}}));
 }
-\`;
+`;
 test('actual fixed Linux publisher: local review, one-use journal, private Git mock, exact recovery and denial',()=>{
   const dir=mkdtempSync(join(tmpdir(),'ccpi-issuer-synthetic-'));
   try {
