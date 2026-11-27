@@ -169,45 +169,83 @@ async function readPendingCCRootRelease(env) {
     request,review_only:true,cloudflare_signature_issued:false};
 }
 const page=`<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cloudflare Pi root approval</title>
-<style>body{font:16px system-ui;margin:2rem auto;max-width:48rem;padding:1rem;background:#101822;color:#e8f1ff}
-section{border:1px solid #455872;border-radius:10px;padding:1rem;margin:1rem 0}
-textarea,input{box-sizing:border-box;width:100%;padding:.6rem;color:#fff;background:#192a3c;border:1px solid #8ba5c9}
-textarea{height:9rem}button{margin:.5rem 0;padding:.7rem 1rem}
-pre{white-space:pre-wrap;overflow-wrap:anywhere}small{color:#aebed0}</style></head><body>
-<h1>Cloudflare primary Pi root release</h1>
-<p>This is the separately protected Cloudflare owner signer. Each request binds one source SHA,
-one installed predecessor, expiry and request ID. Pi root independently verifies before installation.</p>
-<section><h2>Readiness</h2><button id="refresh">Check protected signer</button><pre id="status"></pre></section>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101822">
+<title>Pi bot recovery</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{font:16px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0 auto;max-width:42rem;padding:clamp(.75rem,3vw,1.25rem);padding-bottom:calc(1.5rem + env(safe-area-inset-bottom));background:#101822;color:#e8f1ff}
+header{padding:.25rem .1rem .75rem}
+h1{font-size:1.55rem;line-height:1.2;margin:.2rem 0 .55rem}
+h2{font-size:1.12rem;margin:0 0 .45rem}
+p{margin:.35rem 0 .8rem;color:#c5d2e2}
+.eyebrow{font-size:.75rem;letter-spacing:.09em;text-transform:uppercase;color:#9db5d4;font-weight:700}
+section{border:1px solid #455872;border-radius:14px;padding:1rem;margin:.85rem 0;background:#142132}
+#bot-rejoin{border-color:#6285b4;box-shadow:0 0 0 1px #6285b433}
+button{display:block;width:100%;min-height:48px;margin:.55rem 0;padding:.78rem 1rem;border:1px solid #7895b8;border-radius:10px;background:#20344c;color:#fff;font:600 1rem system-ui;cursor:pointer;touch-action:manipulation}
+button.primary{background:#245b91;border-color:#5d9bd6}
+button:disabled{opacity:.45;cursor:not-allowed}
+label{display:block;margin:.75rem 0 .35rem;color:#d7e3f2}
+input:not([type=checkbox]),textarea{display:block;width:100%;min-height:46px;padding:.7rem;border:1px solid #647e9f;border-radius:9px;background:#0e1a28;color:#fff;font:inherit}
+input[readonly],textarea[readonly]{color:#b9c9dc}
+input[type=checkbox]{width:22px;height:22px;flex:0 0 22px;margin:.1rem 0 0;accent-color:#62a5e8}
+.checkbox-row{display:flex;align-items:flex-start;gap:.65rem;padding:.6rem 0}
+.checkbox-row label{margin:0;line-height:1.4}
+textarea{min-height:8rem;font:12px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.82rem;color:#d5e2f2;margin:.65rem 0 0}
+#rejoin-summary{margin:.8rem 0;padding:.8rem;border-radius:10px;background:#0d1b2a;border:1px solid #405b7c;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.92rem}
+#rejoin-result{min-height:1.5rem}
+details{margin:.65rem 0;border-top:1px solid #34465d;padding:.55rem 0}
+summary{display:flex;align-items:center;min-height:44px;cursor:pointer;font-weight:650;color:#dce9f8}
+.advanced{margin:1rem 0;border:1px solid #455872;border-radius:12px;padding:.3rem .9rem .8rem;background:#111d2b}
+.advanced>summary{min-height:52px}
+.advanced section{background:#101c2a}
+small{color:#aebed0}
+@media(min-width:640px){body{padding-top:1.5rem}#bot-rejoin{padding:1.25rem}}
+</style></head><body>
+<header>
+<p class="eyebrow">Protected owner control</p>
+<h1>Pi bot recovery</h1>
+<p>One exact bot-only restart. The existing Gateway stays running. No live-order authority is granted.</p>
+</header>
+<section id="bot-rejoin">
+<h2>Bot-only namespace rejoin</h2>
+<p>Load the current request, check its target and expiry, then approve once.</p>
+<button id="load-rejoin" class="primary">Load current bot rejoin</button>
+<div id="rejoin-summary" hidden></div>
+<details id="rejoin-details" hidden><summary>Inspect exact request JSON</summary>
+<textarea id="rejoin-request" spellcheck="false" readonly></textarea></details>
+<div class="checkbox-row"><input id="rejoin-approved" type="checkbox" disabled>
+<label for="rejoin-approved">I approve only this exact existing bot restart. No Gateway restart or trading authority.</label></div>
+<button id="approve-rejoin" class="primary" disabled>Sign and dispatch bot restart once</button>
+<label for="rejoin-rid">Request ID</label><input id="rejoin-rid" readonly autocomplete="off">
+<button id="rejoin-receipt" disabled>Check bot rejoin receipt</button>
+<pre id="rejoin-result" role="status" aria-live="polite"></pre>
+</section>
+<section id="readiness">
+<h2>Signer readiness</h2>
+<button id="refresh">Refresh signer status</button>
+<details><summary>View technical status</summary><pre id="status"></pre></details>
+</section>
+<details class="advanced"><summary>Advanced owner operations</summary>
+<section><h2>Approve exact root release</h2>
+<button id="load-proposal">Load non-executing root release proposal</button>
+<label for="request">Exact fresh typed pi.release.apply request JSON</label><textarea id="request" spellcheck="false"></textarea>
+<div class="checkbox-row"><input id="approved" type="checkbox"><label for="approved">I reviewed this exact source SHA, installed predecessor, expiry and request ID.</label></div>
+<button id="approve">Cloudflare-sign and dispatch once</button>
+<label for="rid">Request ID for receipt</label><input id="rid"><button id="receipt">Check root receipt</button>
+<pre id="result"></pre></section>
 <section><h2>One-time owner initialization</h2>
 <p><small>Only when independently approved and first issuance is enabled by Cloudflare admin.</small></p>
-<label>Owner activation code (not saved)</label><input id="activation" type="password" autocomplete="off">
+<label for="activation">Owner activation code (not saved)</label><input id="activation" type="password" autocomplete="off">
 <button id="initialize">Issue initial Cloudflare Ed25519 key</button></section>
 <section><h2>One-time public-key enrollment acknowledgement</h2>
 <p><small>Only after independent root-side PEM fingerprint verification.</small></p>
-<label>Pi-verified public SPKI SHA-256</label><input id="key-fp">
-<label>Activation code</label><input id="enroll-code" type="password" autocomplete="off">
+<label for="key-fp">Pi-verified public SPKI SHA-256</label><input id="key-fp">
+<label for="enroll-code">Activation code</label><input id="enroll-code" type="password" autocomplete="off">
 <button id="enroll">Acknowledge verified root enrollment</button></section>
-<section><h2>Approve exact root release</h2>
-<button id="load-proposal">Load non-executing root release proposal</button>
-<label>Exact fresh typed pi.release.apply request JSON</label><textarea id="request" spellcheck="false"></textarea>
-<p><label><input id="approved" type="checkbox" style="width:auto">
-I reviewed this exact source SHA, installed predecessor, expiry and request ID.</label></p>
-<button id="approve">Cloudflare-sign and dispatch once</button>
-<label>Request ID for receipt</label><input id="rid"><button id="receipt">Check root receipt</button>
-<pre id="result"></pre></section>
-<section><h2>Bot-only namespace rejoin (no Gateway restart)</h2>
-<p>The Pi already has a bounded rejoin operation. This signs only the exact existing
-bot restart, retains the image, mounts and Gateway, and grants no live-order authority.</p>
-<button id="load-rejoin">Load current CC bot rejoin proposal</button>
-<label>Exact fresh pi.bot.rejoin_existing request JSON</label><textarea id="rejoin-request" spellcheck="false"></textarea>
-<p><label><input id="rejoin-approved" type="checkbox" style="width:auto">
-I approve only this exact existing bot restart, not Gateway restart or trading authority.</label></p>
-<button id="approve-rejoin">Sign and dispatch bot-only rejoin once</button>
-<label>Rejoin request ID for receipt</label><input id="rejoin-rid">
-<button id="rejoin-receipt">Check bot rejoin receipt</button>
-<pre id="rejoin-result"></pre></section>
+</details>
 <script src="/owner.js" defer></script></body></html>`;
 const client=`const $=x=>document.getElementById(x);
 async function api(path,doc){
@@ -237,28 +275,71 @@ const request=JSON.parse($('request').value),res=await api('approve-root',{reque
 $('rid').value=request.request_id;$('approved').checked=false;return res});
 $('receipt').onclick=()=>show(()=>api('receipt?request_id='+encodeURIComponent($('rid').value.trim())));
 
-$('load-rejoin').onclick=()=>show(async()=>{
- const proposal=await api('rejoin-proposal');
- $('rejoin-request').value=JSON.stringify(proposal.request,null,2);
- $('rejoin-rid').value=proposal.request.request_id;
- $('rejoin-approved').checked=false;
- return proposal;
-});
+let loadedRejoin=null;
+function rejoinControls(ready){
+ $('rejoin-approved').disabled=!ready;
+ $('approve-rejoin').disabled=!ready;
+ $('rejoin-receipt').disabled=!$('rejoin-rid').value.trim();
+}
+function showRejoinSummary(request){
+ const digest=String(request.image_ref||'').split('@sha256:')[1]||'unavailable';
+ const expiry=new Date(request.expires_at);
+ const expiryText=Number.isNaN(expiry.getTime())?request.expires_at:expiry.toLocaleString();
+ $('rejoin-summary').textContent=[
+  'Request: '+request.request_id,
+  'Node: '+request.node_id+'  |  Existing release: '+request.expected_release,
+  'Expires: '+expiryText,
+  'Source: '+request.source_sha,
+  'Image SHA-256: '+digest,
+  'Gateway restart: forbidden',
+  'New live-order authority: none'
+ ].join('\n');
+ $('rejoin-summary').hidden=false;
+ $('rejoin-details').hidden=false;
+}
+$('load-rejoin').onclick=async()=>{
+ loadedRejoin=null;rejoinControls(false);$('rejoin-approved').checked=false;
+ $('rejoin-result').textContent='Loading current proposal…';
+ $('rejoin-summary').hidden=true;$('rejoin-details').hidden=true;
+ try{
+  const proposal=await api('rejoin-proposal'),request=proposal.request;
+  if(proposal.review_only!==true||proposal.cloudflare_signature_issued!==false
+     ||request?.action!=='pi.bot.rejoin_existing'||request?.node_id!=='cc-pi4')
+    throw Error('Unexpected proposal shape or scope');
+  if(!Number.isFinite(Date.parse(request.expires_at))||Date.parse(request.expires_at)<=Date.now())
+    throw Error('Proposal expired; request a fresh proposal');
+  loadedRejoin=request;
+  $('rejoin-request').value=JSON.stringify(request,null,2);
+  $('rejoin-rid').value=request.request_id;
+  showRejoinSummary(request);rejoinControls(true);
+  $('rejoin-result').textContent='Review the exact target above, then confirm to sign once. No signature has been issued yet.';
+ }catch(e){$('rejoin-result').textContent='Not loaded: '+e.message;rejoinControls(false)}
+};
 $('approve-rejoin').onclick=async()=>{
  try{
-  if(!$('rejoin-approved').checked)throw Error('Exact bot-only rejoin review required');
+  if(!loadedRejoin||!$('rejoin-approved').checked)throw Error('Load and explicitly approve the exact request first');
   const request=JSON.parse($('rejoin-request').value);
+  if(JSON.stringify(request)!==JSON.stringify(loadedRejoin))throw Error('Request text changed; reload the current proposal');
+  if(Date.parse(request.expires_at)<=Date.now())throw Error('Proposal expired; reload a fresh proposal');
+  const current=await api('rejoin-proposal');
+  if(current.review_only!==true||current.cloudflare_signature_issued!==false
+     ||JSON.stringify(current.request)!==JSON.stringify(loadedRejoin))
+    throw Error('Current proposal changed; reload before signing');
   const result=await api('approve-rejoin',{request,approve_exact_bot_rejoin:true});
   $('rejoin-rid').value=request.request_id;
-  $('rejoin-approved').checked=false;
+  $('rejoin-approved').checked=false;loadedRejoin=null;rejoinControls(false);
   $('rejoin-result').textContent=JSON.stringify(result,null,2);
- }catch(e){$('rejoin-result').textContent='Denied: '+e.message}
+ }catch(e){$('rejoin-result').textContent='Not signed: '+e.message}
 };
 $('rejoin-receipt').onclick=async()=>{
- try{$('rejoin-result').textContent=JSON.stringify(
-  await api('rejoin-receipt?request_id='+encodeURIComponent($('rejoin-rid').value.trim())),null,2)}
- catch(e){$('rejoin-result').textContent='Denied: '+e.message}
+ try{
+  const id=$('rejoin-rid').value.trim();
+  if(!id)throw Error('Load or enter a request ID first');
+  $('rejoin-result').textContent=JSON.stringify(
+   await api('rejoin-receipt?request_id='+encodeURIComponent(id)),null,2);
+ }catch(e){$('rejoin-result').textContent='Receipt unavailable: '+e.message}
 };
+rejoinControls(false);
 refresh();`;
 const noStore={headers:{'content-type':'text/html; charset=utf-8','cache-control':'private, no-store',
 'x-content-type-options':'nosniff','referrer-policy':'no-referrer',
