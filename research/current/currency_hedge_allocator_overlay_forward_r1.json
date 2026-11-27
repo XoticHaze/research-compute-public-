@@ -28,9 +28,9 @@
   "entry_date": "2026-10-19",
   "forward_session_clock_semantics": "forward_sessions is legacy inclusive-entry count; elapsed_close_to_close_sessions is the cross-program comparable elapsed clock",
   "forward_sessions": 1,
-  "generated_at": "2026-11-26T06:24:36.121144+00:00",
+  "generated_at": "2026-11-27T06:14:34.790443+00:00",
   "latest_common_market_date": "2026-10-19",
-  "market_data_asof": "2026-11-25",
+  "market_data_asof": "2026-11-26",
   "market_sessions_observed_including_entry": 1,
   "positions": {
     "hedged_challenger": {
