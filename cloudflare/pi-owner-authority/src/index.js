@@ -1,3 +1,4 @@
+import { scheduledRootPermit } from './scheduled_root_permit.js';
 // Independently administered neutral-account Cloudflare ONLY Pi root authorization service.
 // This script MUST NOT be deployed by GitHub-controlled Worker credentials.
 // No private key is accepted from a request, repository, or caller.
@@ -88,6 +89,14 @@ async function status(env) {
     initialized:raw.initialized===true,
     enrolled:raw.enrolled===true,
     public_key_sha256:typeof raw.public_key_sha256==='string'?raw.public_key_sha256:null,
+    // Public trust anchor only; the status endpoint already requires Access.
+    // Recover the existing key without rotation if initial response was lost.
+    public_key_pem:typeof raw.public_key_pem==='string'?raw.public_key_pem:null,
+    scheduled_root_enabled:flag(env.PI_OWNER_SCHEDULED_ROOT_ENABLED),
+    independent_release_issuer_configured:raw.independent_release_issuer_configured===true,
+    independent_release_issuer_fingerprint:raw.independent_release_issuer_fingerprint||null,
+    issuer_owner_enrollment_enabled:raw.issuer_owner_enrollment_enabled===true,
+    bootstrap_permit_configured:Boolean(env.PI_OWNER_SCHEDULED_ROOT_PERMIT),
     queue_configured:Boolean(env.PI_OWNER_QUEUE_GITHUB_TOKEN),
     root_public_fingerprint_configured:SHA256.test(String(env.PI_OWNER_ENROLLED_PUB_SHA256||'')),
     isolated_cloudflare_signer_enabled:flag(env.PI_OWNER_SIGNER_ENABLED),
@@ -130,7 +139,7 @@ async function readPendingBotRejoin(env) {
     'https://api.github.com/repos/XoticHaze/CommandCenter-gate-control/'
       +'contents/pi-node/bot-rejoin-proposal.json?ref=pi-node-inbox',
     {headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json',
-      'x-github-api-version':'2022-11-28'},redirect:'manual'});
+      'x-github-api-version':'2022-11-28','user-agent':'commandcenter-pi-owner-authority-v1'},redirect:'manual'});
   if(!remote.ok) throw Error('pi_owner_pending_rejoin_unavailable');
   const file=await remote.json();
   if(!/^[a-f0-9]{40}$/.test(String(file?.sha||''))
@@ -144,6 +153,21 @@ async function readPendingBotRejoin(env) {
   return {schema:'commandcenter.pi.pending_bot_rejoin_review.v1',
     request,review_only:true,cloudflare_signature_issued:false};
 }
+async function readIndependentPermit(env) {
+  const token=String(env.PI_OWNER_QUEUE_GITHUB_TOKEN||'');
+  if(token.length<20) throw Error('pi_owner_queue_credential_missing');
+  const url='https://api.github.com/repos/XoticHaze/CommandCenter-gate-control/contents/pi-node/root-release-permit.json?ref=pi-node-inbox';
+  const remote=await fetch(url,{headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json',
+    'x-github-api-version':'2022-11-28','user-agent':'commandcenter-pi-owner-authority-v1'},redirect:'manual'});
+  if(!remote.ok) throw Error('independent_permit_unavailable');
+  const file=await remote.json();
+  if(!/^[a-f0-9]{40}$/.test(String(file?.sha||''))||file.encoding!=='base64'
+      ||!Number.isInteger(file.size)||file.size<1||file.size>2048||typeof file.content!=='string')
+    throw Error('independent_permit_file_invalid');
+  const raw=atob(file.content.replace(/\s/g,''));
+  if(raw.length>2048||raw.length!==file.size) throw Error('independent_permit_file_invalid');
+  return JSON.parse(raw);
+}
 async function readPendingCCRootRelease(env) {
   // Fixed private Git transport, not arbitrary repository/path/URL input.
   // The owner sees the current pending proposal and must explicitly review it.
@@ -153,7 +177,7 @@ async function readPendingCCRootRelease(env) {
     +'contents/pi-node/root-release-proposal.json?ref=pi-node-inbox';
   const remote=await fetch(url,{
     headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json',
-      'x-github-api-version':'2022-11-28'},redirect:'manual',
+      'x-github-api-version':'2022-11-28','user-agent':'commandcenter-pi-owner-authority-v1'},redirect:'manual',
   });
   if(!remote.ok) throw Error('pi_owner_pending_release_unavailable');
   const file=await remote.json();
@@ -189,6 +213,14 @@ one installed predecessor, expiry and request ID. Pi root independently verifies
 <label>Pi-verified public SPKI SHA-256</label><input id="key-fp">
 <label>Activation code</label><input id="enroll-code" type="password" autocomplete="off">
 <button id="enroll">Acknowledge verified root enrollment</button></section>
+<section><h2>Independent machine issuer admission</h2>
+<p>One-time enrollment of a separately operated, reviewed release issuer. Public key only. Do not enter private keys or accept a key supplied by a Git proposal. Revocation stops subsequent issuance; a previously issued permit may remain valid until expiry.</p>
+<label>Independently verified issuer SPKI (base64)</label><input id="issuer-spki" autocomplete="off">
+<label>Independently verified SHA-256 fingerprint</label><input id="issuer-fp" autocomplete="off">
+<p><label><input id="issuer-confirm" type="checkbox" style="width:auto">I independently verified the issuer identity, protected key custody and review scope.</label></p>
+<button id="issuer-admit">Admit exact issuer</button>
+<p><label><input id="issuer-revoke-confirm" type="checkbox" style="width:auto">Revoke the exact fingerprint above.</label></p>
+<button id="issuer-revoke">Revoke issuer</button><pre id="issuer-result"></pre></section>
 <section><h2>Approve exact root release</h2>
 <button id="load-proposal">Load non-executing root release proposal</button>
 <label>Exact fresh typed pi.release.apply request JSON</label><textarea id="request" spellcheck="false"></textarea>
@@ -221,6 +253,17 @@ catch(e){$('result').textContent='Denied: '+e.message}}
 async function refresh(){try{$('status').textContent=JSON.stringify(await api('status'),null,2)}
 catch(e){$('status').textContent='Denied: '+e.message}}
 $('refresh').onclick=refresh;
+async function issuerAction(admit){
+ try{
+  if(!$(admit?'issuer-confirm':'issuer-revoke-confirm').checked)throw Error('Explicit independent review required');
+  const sha256=$('issuer-fp').value.trim();
+  const result=await api(admit?'admit-issuer':'revoke-issuer',admit?{spki_b64:$('issuer-spki').value.trim(),sha256,confirm_independent_custody:true}:{sha256,confirm_revoke:true});
+  $('issuer-result').textContent=JSON.stringify(result,null,2);
+  $('issuer-confirm').checked=false;$('issuer-revoke-confirm').checked=false;await refresh();
+ }catch(e){$('issuer-result').textContent='Denied: '+e.message}
+}
+$('issuer-admit').onclick=()=>issuerAction(true);
+$('issuer-revoke').onclick=()=>issuerAction(false);
 $('initialize').onclick=()=>show(async()=>{const code=$('activation').value;$('activation').value='';
 return api('initialize',{activation_code:code,confirm_first_issue:true})});
 $('enroll').onclick=()=>show(async()=>{const code=$('enroll-code').value;$('enroll-code').value='';
@@ -264,6 +307,35 @@ const noStore={headers:{'content-type':'text/html; charset=utf-8','cache-control
 'x-content-type-options':'nosniff','referrer-policy':'no-referrer',
 'content-security-policy':"default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"}};
 export default {
+  async scheduled(controller,env,ctx) {
+    // No HTTP route, caller-supplied identity or arbitrary root scope.
+    // Cloudflare-owned cron consumes one pre-admitted exact source permit.
+    if (!flag(env.PI_OWNER_SCHEDULED_ROOT_ENABLED)) return;
+    try {
+      const proposal=await readPendingCCRootRelease(env);
+      const request=proposal.request;
+      const permitEnvelope=env.PI_OWNER_SCHEDULED_ROOT_PERMIT ? null : await readIndependentPermit(env);
+      // Static bootstrap and pre-bound issuer remain verified at both layers.
+      // A later owner-enrolled issuer lives only in protected DO storage; the DO
+      // validates that signature and checks its revision during atomic issuance.
+      if(permitEnvelope===null||env.PI_OWNER_RELEASE_ISSUER_SPKI_B64||env.PI_OWNER_RELEASE_ISSUER_SHA256)
+        await scheduledRootPermit(env,request,permitEnvelope);
+      const approval=unsignedGrant(request);
+      await validatePiCloudRootReleaseApproval(approval,request);
+      const issued=await doRequest(env,'POST','/sign-scheduled-root',{
+        kind:'root_release',request,approval,permit_envelope:permitEnvelope,
+      });
+      const dispatched=await publishPiRootReleaseGrant(env,request,issued.signed_grant,true);
+      // Only public-safe immutable transport metadata; never key/signature/body.
+      console.log(JSON.stringify({event:'scheduled_root_grant_dispatched',
+        request_id:dispatched.request_id,
+        recovered_exact_same_id:dispatched.recovered_exact_same_id}));
+    } catch {
+      // Missing/expired proposals and consumed permits are normal quiet polls.
+      // The actual root outbox remains the only terminal execution receipt.
+      console.log('scheduled_root_no_dispatch');
+    }
+  },
   async fetch(request,env,ctx) {
     let identity;
     try { identity=await owner(request,env,ctx); }
@@ -289,6 +361,13 @@ export default {
       if (request.method!=='POST') return response({error:'unsupported_owner_route'},404);
       requireBrowser(request);
       const input=await body(request);
+      if (url.pathname==='/api/admit-issuer'||url.pathname==='/api/revoke-issuer') {
+        if(!flag(env.PI_OWNER_ISSUER_OWNER_ENROLL_ENABLED)||env.PI_OWNER_SCHEDULED_ROOT_PERMIT)
+          throw Error('independent_issuer_enrollment_not_admitted');
+        const admit=url.pathname==='/api/admit-issuer';
+        strict(input,admit?['spki_b64','sha256','confirm_independent_custody']:['sha256','confirm_revoke']);
+        return response(await doRequest(env,'POST',admit?'/admit-issuer':'/revoke-issuer',{...input,operator:identity}));
+      }
       if (url.pathname==='/api/initialize') {
         strict(input,['activation_code','confirm_first_issue']);
         if (!flag(env.PI_OWNER_FIRST_ISSUE_ENABLED)
