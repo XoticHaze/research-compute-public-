@@ -54,14 +54,14 @@
   "decision_at": "2026-09-11T10:20:31+00:00",
   "forward": {
     "challenger_if_flattened_now": {
-      "annualized_vol": 0.1298537454232251,
-      "cumulative_return": -0.05699813950870014,
-      "days": 53,
+      "annualized_vol": 0.12848539080542024,
+      "cumulative_return": -0.05623341569118223,
+      "days": 54,
       "max_drawdown": -0.09299092152903987,
-      "sharpe_rf0": -2.0837839952141266
+      "sharpe_rf0": -2.037721170520609
     },
-    "challenger_minus_incumbent_cumulative": 0.0557247570338496,
-    "challenger_minus_matched_cumulative": 0.0006381444185258323,
+    "challenger_minus_incumbent_cumulative": 0.0553751889729962,
+    "challenger_minus_matched_cumulative": 0.0006721359641735924,
     "challenger_observations": [
       {
         "alt_return": 0.0007907144576513314,
@@ -698,6 +698,18 @@
         "net_return": -0.0013746387594067433,
         "post_close_alt_weight": 0.5231974178607066,
         "post_close_core_weight": 0.47680258213929305
+      },
+      {
+        "alt_return": 0.0003950317468246478,
+        "core_return": 0.0012558555540645169,
+        "date": "2026-11-25",
+        "entry_endpoint_cost": 0.0,
+        "gross_return": 0.0008054747608835942,
+        "monthly_rebalance_cost": 0.0,
+        "monthly_rebalance_traded_notional": 0.0,
+        "net_return": 0.0008054747608835942,
+        "post_close_alt_weight": 0.5229828479662064,
+        "post_close_core_weight": 0.4770171520337932
       }
     ],
     "comparison_cost_basis": {
@@ -707,19 +719,19 @@
     },
     "first_close": "2026-09-11",
     "incumbent": {
-      "annualized_vol": 0.2654867941377847,
-      "cumulative_return": -0.11272289654254974,
-      "days": 53,
+      "annualized_vol": 0.2630711299711445,
+      "cumulative_return": -0.11160860466417843,
+      "days": 54,
       "max_drawdown": -0.18671538963890089,
-      "sharpe_rf0": -2.0084080261518658
+      "sharpe_rf0": -1.9670382202527623
     },
-    "latest_close": "2026-11-24",
+    "latest_close": "2026-11-25",
     "matched_control_if_flattened_now": {
-      "annualized_vol": 0.12985499374686632,
-      "cumulative_return": -0.05763628392722597,
-      "days": 53,
+      "annualized_vol": 0.12850307388394236,
+      "cumulative_return": -0.056905551655355824,
+      "days": 54,
       "max_drawdown": -0.09368038339608253,
-      "sharpe_rf0": -2.1085197802193365
+      "sharpe_rf0": -2.0632660196648867
     },
     "matched_control_observations": [
       {
@@ -1357,10 +1369,22 @@
         "net_return": -0.0012155629539403533,
         "post_close_alt_weight": 0.5228538208209905,
         "post_close_core_weight": 0.47714617917900976
+      },
+      {
+        "alt_return": 0.00032746183928611394,
+        "core_return": 0.0012558555540645169,
+        "date": "2026-11-25",
+        "entry_endpoint_cost": 0.0,
+        "gross_return": 0.0007704413530664363,
+        "monthly_rebalance_cost": 0.0,
+        "monthly_rebalance_traded_notional": 0.0,
+        "net_return": 0.0007704413530664363,
+        "post_close_alt_weight": 0.5226223855969322,
+        "post_close_core_weight": 0.47737761440306803
       }
     ]
   },
-  "observed_at": "2026-11-25T10:22:04.468350+00:00",
+  "observed_at": "2026-11-26T09:59:19.124826+00:00",
   "operator_note": "Research shadow only. Always display diversification deltas together with capital opportunity cost versus the unchanged incumbent. No allocation, runtime, broker, or live-trading authority.",
   "parent": "SENIOR_CLO_CARRY_ALPHA / P249+P266",
   "schema": "research.forward_senior_clo_current_core_shadow_r1",
