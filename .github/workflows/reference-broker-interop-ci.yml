@@ -5,8 +5,8 @@ on:
     branches: [main]
     paths:
       - 'cloudflare/reference-release-broker/**'
-      - 'cloudflare/reference-release-maintainer/src/index.js'
-      - 'cloudflare/reference-maintenance-authority/src/index.js'
+      - 'cloudflare/reference-release-maintainer/**'
+      - 'cloudflare/reference-maintenance-authority/**'
       - 'tests/reference_release_maintainer_runtime_interop.mjs'
       - 'scripts/reference_release_grant_v1.py'
       - 'scripts/reference_private_intent_authority_adapter_v1.py'
@@ -40,8 +40,8 @@ on:
   pull_request:
     paths:
       - 'cloudflare/reference-release-broker/**'
-      - 'cloudflare/reference-release-maintainer/src/index.js'
-      - 'cloudflare/reference-maintenance-authority/src/index.js'
+      - 'cloudflare/reference-release-maintainer/**'
+      - 'cloudflare/reference-maintenance-authority/**'
       - 'tests/reference_release_maintainer_runtime_interop.mjs'
       - 'tests/reference_release_broker_policy.mjs'
       - 'tests/reference_release_broker_endpoint_interop.mjs'
@@ -92,6 +92,18 @@ jobs:
         run: node tests/reference_release_maintainer_runtime_interop.mjs
       - name: Qualify existing authority PVE7 exact single-release grant and P-256 interoperability
         run: node --test cloudflare/reference-maintenance-authority/test/pve7-grant.test.mjs
+      - name: Source-only bundle existing neutral authority and maintainer via pinned Wrangler
+        run: |
+          set -euo pipefail
+          # --dry-run is mandatory; never deploy neutral production or load a credential.
+          npx --yes wrangler@4.135.0 deploy --dry-run \
+            --config cloudflare/reference-maintenance-authority/wrangler.jsonc \
+            --outdir "$RUNNER_TEMP/reference-maintenance-authority-pve7-dry-run"
+          npx --yes wrangler@4.135.0 deploy --dry-run \
+            --config cloudflare/reference-release-maintainer/wrangler.jsonc \
+            --outdir "$RUNNER_TEMP/reference-release-maintainer-pve7-dry-run"
+          echo PVE7_EXISTING_NEUTRAL_AUTHORITY_WRANGLER_DRY_RUN=PASS
+          echo PVE7_NEUTRAL_PROVIDER_DEPLOYMENT_NOT_ATTEMPTED=1
       - name: Verify private one-shot LIVE broker intent issuer using independent P256 signer and journal
         run: PYTHONDONTWRITEBYTECODE=1 python -B -m unittest -v tests.test_reference_private_intent_authority_adapter_v1
       - name: Verify one-time independent private grant signer installation and SQLite atomic replay
