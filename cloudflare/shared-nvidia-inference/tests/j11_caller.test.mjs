@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createJ11Caller} from '../local-probe/src/j11_caller.js';
+const sel={fixture_blob:'a459d065e6188ea8b01ab1a5b2c721789587982d',task_id:'A',observed_routes:[]};
+function request(s=sel,url='http://127.0.0.1:8787/j11-once'){const body=JSON.stringify(s);return new Request(url,{method:'POST',headers:{'content-type':'application/json','content-length':String(body.length)},body});}
+function result(s=sel){return {schema:'commandcenter.nvidia.j11_candidate_turn.v1',fixture_blob:sel.fixture_blob,task_id:s.task_id,observed_routes:s.observed_routes,model:'poolside/laguna-xs-2.1',status:'candidate_unexecuted',http_status:200,provider_attempt_upper_bound:1,prompt_tokens:24,completion_tokens:8,elapsed_ms:12,action:{kind:'read',route:'mailbox'},private_input_used:false,model_action_executed:false,production_admitted:false}}
+const env={NVIDIA_SERVICE:{fetch:async()=>Response.json(result())}};
+test('one bound fictional call and replay denied',async()=>{const caller=createJ11Caller();const r=await caller.fetch(request(),env);assert.equal(r.status,200);const d=await r.json();assert.equal(d.action.route,'mailbox');assert.equal((await caller.fetch(request(),env)).status,409);});
+test('rejects public origin, caller prompt and URL tricks',async()=>{for(const uri of ['https://evil.example/j11-once','http://127.0.0.1:8787/j11-once?x=1'])assert.equal((await createJ11Caller().fetch(request(sel,uri),env)).status,404);assert.equal((await createJ11Caller().fetch(request({...sel,prompt:'secret'}),env)).status,400);});
+test('missing binding or malformed provider receipt never claims success',async()=>{assert.equal((await createJ11Caller().fetch(request(),{})).status,503);const x=createJ11Caller();const bad={NVIDIA_SERVICE:{fetch:async()=>Response.json({...result(),production_admitted:true})}};assert.equal((await x.fetch(request(),bad)).status,502);assert.equal((await x.fetch(request(),bad)).status,409);});
+test('no blind repeat on provider transport exception',async()=>{let calls=0;const caller=createJ11Caller(),bad={NVIDIA_SERVICE:{fetch:async()=>{calls++;throw Error('transport')}}};assert.equal((await caller.fetch(request(),bad)).status,503);assert.equal((await caller.fetch(request(),bad)).status,409);assert.equal(calls,1);});
