@@ -133,13 +133,27 @@ test('dispatcher recovers only fresh exact reviewed successor of a terminal fail
     status:'failed',replay_allowed:false,message:'fixed command failed'};
   const original=globalThis.fetch;
   let receipt=base,writes=[];
-  const file=doc=>({sha:'b'.repeat(40),encoding:'base64',content:Buffer.from(JSON.stringify(doc)).toString('base64'),size:Buffer.byteLength(JSON.stringify(doc))});
-  globalThis.fetch=async(url,opts)=>{
-    if(opts.method==='PUT'){writes.push(url);return {ok:true,status:200,json:async()=>({content:{sha:'c'.repeat(40)}})};}
-    if(url.includes('/release-results/'))return {ok:true,status:200,json:async()=>file(receipt)};
-    if(url.includes('/release-request.json'))return {ok:true,status:200,json:async()=>file(previous)};
-    if(url.includes('/release-signed-approval.json'))return {ok:true,status:200,json:async()=>file(previous)};
-    throw Error('unexpected synthetic URL');
+  // Model the actual Contents API: a conditional PUT changes both the Git
+  // blob identity and the exact bytes subsequently returned by GET.
+  const file=(raw,sha='b'.repeat(40))=>({sha,encoding:'base64',
+    content:Buffer.from(raw).toString('base64'),size:Buffer.byteLength(raw)});
+  const requestPath='/release-request.json',grantPath='/release-signed-approval.json';
+  const files=new Map([[requestPath,file(JSON.stringify(previous))],
+    [grantPath,file(JSON.stringify(previous))]]);
+  globalThis.fetch=async(url,opts={})=>{
+    if(url.includes('/release-results/'))return {ok:true,status:200,
+      json:async()=>file(JSON.stringify(receipt))};
+    const path=[requestPath,grantPath].find(p=>url.includes(p));
+    if(!path)throw Error('unexpected synthetic URL');
+    if(opts.method==='PUT'){
+      const body=JSON.parse(opts.body);
+      assert.equal(body.sha,files.get(path).sha);
+      const raw=Buffer.from(body.content,'base64').toString('utf8');
+      const sha=(path===grantPath?'c':'d').repeat(40);
+      files.set(path,file(raw,sha));writes.push(path);
+      return {ok:true,status:200,json:async()=>({content:{sha}})};
+    }
+    return {ok:true,status:200,json:async()=>files.get(path)};
   };
   try {
     for(const value of [{...base,status:'indeterminate'},{...base,replay_allowed:true},
@@ -152,6 +166,9 @@ test('dispatcher recovers only fresh exact reviewed successor of a terminal fail
     assert.equal(writes.length,0);
     const result=await publishPiRootReleaseGrant(env,request,{request_id:request.request_id},true);
     assert.equal(result.root_receipt_verified,false);
-    assert.equal(writes.length,2);
+    assert.deepEqual(writes,[grantPath,requestPath]);
+    const recovered=await publishPiRootReleaseGrant(env,request,{request_id:request.request_id},true);
+    assert.equal(recovered.recovered_exact_same_id,true);
+    assert.deepEqual(writes,[grantPath,requestPath]);
   } finally {globalThis.fetch=original;}
 });

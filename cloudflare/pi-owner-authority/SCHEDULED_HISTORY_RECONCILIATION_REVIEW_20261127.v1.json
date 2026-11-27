@@ -12,7 +12,7 @@
     "cloudflare/pi-owner-authority/src/scheduled_root_permit.js": "039447d887f0228ed81702c23ce3d6f277e798b4",
     "cloudflare/pi-owner-authority/src/independent_release_issuer.mjs": "bc0538d7ae2db1302417caa2f7488cc88682fb49",
     "cloudflare/pi-owner-authority/src/independent_release_issuer_command.mjs": "f5d5382f97b126c49a2e4a7bce1801b446c325cb",
-    "cloudflare/pi-owner-authority/tests/scheduled_root_permit.test.js": "86296f3c326ac1da87e83f8f9f0c5d2b001b6aa1",
+    "cloudflare/pi-owner-authority/tests/scheduled_root_permit.test.js": "22a8986135c6bb1d3f9ee9bdd1e0772e5c57028f",
     "cloudflare/pi-owner-authority/tests/issuer_enrollment.test.mjs": "1b9823cc10f4c578b064b6eac177c0fd6b6bf48d",
     "cloudflare/pi-owner-authority/tests/issuer.test.mjs": "47f2c9b61ca545bce5133eecd8308a013b3d1f55",
     "cloudflare/pi-owner-authority/wrangler.jsonc": "b70e769e369e795526da436df5c3119ab20c314b",
@@ -22,7 +22,7 @@
   },
   "existing_worker": "research-compute-public",
   "preserve_protected_canonical_pin": "1e209395ac28e39b220762f67c27d8b8826b3fce",
-  "qualification": "SOURCE_REVIEW_PENDING_TESTS",
+  "qualification": "SOURCE_REVIEW_PENDING_RETEST",
   "constraints": [
     "Existing signer, DO and root key only",
     "Scheduled path remains root-release-only and independently permitted",
@@ -35,5 +35,14 @@
     "Independent issuer custody/admission and current deployed fingerprint readback",
     "Review and native root capacity/install",
     "History, ordinary transport and bot runtime acceptance"
-  ]
+  ],
+  "source_test_first_attempt": {
+    "head": "d8b7cc246d5b8c16e1aa7e3062072eee5598098e",
+    "run_id": 45990079896,
+    "job_id": 140475375690,
+    "passed": 19,
+    "failed": 1,
+    "reason": "Mock returned stale bytes and old SHA after PUT; production readback correctly denied.",
+    "production_checks_unchanged": true
+  }
 }
