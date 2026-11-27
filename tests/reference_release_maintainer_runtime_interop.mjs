@@ -560,3 +560,47 @@ console.log('REFERENCE_MAINTAINER_PUBLIC_CI_SYNTHETIC_ONLY=1');
   console.log('PVE7_BRIDGE_DEFAULT_DENY_CROSS_ACCOUNT_DENY_PASS=1');
   console.log('PVE7_BRIDGE_NO_PROTECTED_ROOT_MUTATION=1');
 }
+
+
+// Independently reusable, read-only key-identity readback for the PVE root
+// trust enrollment review. This does NOT admit, sign or dispatch a release.
+{
+  const publicInfo=await actualAuthority.publicKey();
+  const maintainer=new module.default();
+  maintainer.env={
+    CLOUDFLARE_ACCOUNT_ID:account,
+    MAINTENANCE_AUTHORITY:actualAuthority,
+    BROKER_EDITOR_TOKEN:{get:()=>{throw Error('editor_token_must_not_be_used_for_public_key');}}
+  };
+  authEnv.PVE7_RELEASE_SIGNING_ENABLED='0';
+  const identity=await maintainer.pve7AuthorityPublicIdentity();
+  assert.deepEqual(identity,{
+    schema:'commandcenter.pve7.authority_public_identity.v1',
+    signer_worker:'reference-maintenance-authority-v1',
+    key_id:publicInfo.key_id,
+    public_b64:publicInfo.public_b64,
+    private_key_exported:false,
+  });
+  assert.equal(identity.key_id,'sha256:'+sha(Buffer.from(identity.public_b64,'base64')));
+  assert.equal((await maintainer.fetch()).status,404);
+  maintainer.env.CLOUDFLARE_ACCOUNT_ID='ffffffffffffffffffffffffffffffff';
+  await assert.rejects(()=>maintainer.pve7AuthorityPublicIdentity(),
+    /neutral_cloudflare_account_mismatch/);
+  maintainer.env.CLOUDFLARE_ACCOUNT_ID=account;
+  maintainer.env.MAINTENANCE_AUTHORITY=null;
+  await assert.rejects(()=>maintainer.pve7AuthorityPublicIdentity(),
+    /pve7_public_identity_binding_unconfigured/);
+  maintainer.env.MAINTENANCE_AUTHORITY={
+    publicKey:async()=>({...publicInfo,key_id:'sha256:'+'f'.repeat(64)})
+  };
+  await assert.rejects(()=>maintainer.pve7AuthorityPublicIdentity(),
+    /pve7_public_identity_rejected/);
+  maintainer.env.MAINTENANCE_AUTHORITY={
+    publicKey:async()=>({...publicInfo,public_b64:Buffer.alloc(65).toString('base64')})
+  };
+  await assert.rejects(()=>maintainer.pve7AuthorityPublicIdentity(),
+    /pve7_public_identity_rejected/);
+  assert.equal(maintainer.pve7AuthorityPublicIdentity.length,0);
+  console.log('PVE7_AUTHORITY_PUBLIC_IDENTITY_READBACK_PASS=1');
+  console.log('PVE7_AUTHORITY_PUBLIC_IDENTITY_NO_EDITOR_NO_SIGNING_PASS=1');
+}
