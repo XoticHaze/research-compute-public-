@@ -1,0 +1,20 @@
+{
+  "schema": "commandcenter.nvidia.j11_fixed_turn_source_control.v1",
+  "source_ref": "00d9674662ed2b8f3e84e4ff5288063ad8241f1d",
+  "source_blob": "e5f25cd1197e1b78c35d71bdd3c9ab92625ea820",
+  "fixture_blob": "a459d065e6188ea8b01ab1a5b2c721789587982d",
+  "checks": [
+    "fixed selector",
+    "reject caller prompt",
+    "reject unknown route",
+    "reject unseen evidence",
+    "reject duplicate read",
+    "no unread evidence in prompt",
+    "single fixed provider request and candidate receipt",
+    "rate limit stops"
+  ],
+  "passed": 8,
+  "live_provider_calls": 0,
+  "mock_provider_fetch": true,
+  "production_admitted": false
+}
