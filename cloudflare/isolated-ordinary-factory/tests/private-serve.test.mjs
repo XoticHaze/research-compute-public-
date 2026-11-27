@@ -21,6 +21,7 @@ async function fixture(fn){
  finally{rmSync(dir,{recursive:true,force:true});}
 }
 function mock({edge=302,override=false,already=false}={}){
+ let edgeIndex=0;
  let enabled=already;
  const calls=[];
  const fetcher=async(target,init)=>{
@@ -29,7 +30,8 @@ function mock({edge=302,override=false,already=false}={}){
   assert.equal(init.redirect,'manual');
   if(target.startsWith(url)){
    assert.equal(init.headers.authorization,undefined);
-   return new Response(null,{status:edge,headers:edge===302?{location:'https://test.cloudflareaccess.com/cdn-cgi/access/login/test?opaque=secret'}:{}});
+   const observed=Array.isArray(edge)?edge[Math.min(edgeIndex++,edge.length-1)]:edge;
+   return new Response(null,{status:observed,headers:observed===302?{location:'https://test.cloudflareaccess.com/cdn-cgi/access/login/test?opaque=secret'}:{}});
   }
   const isAccess=path.startsWith('/access/');
   assert.equal(init.headers.authorization,'Bearer '+(isAccess?access:workers));
@@ -75,4 +77,24 @@ test('already enabled authenticated ingress verifies without mutation',()=>fixtu
  const m=mock({already:true});const r=await fn(env,req,m.fetcher);
  assert.equal(r.status,'private_ingress_verified');assert.equal(r.cloudflare_mutations,0);
  assert.equal(m.calls.filter(c=>c.method==='PATCH').length,0);
+}));
+
+test('new route propagation 404 retries only with verified owner policy and succeeds',()=>fixture(async fn=>{
+ const m=mock({edge:[404,404,302,302]});const delays=[];
+ const r=await fn(env,req,m.fetcher,async ms=>{delays.push(ms)});
+ assert.equal(r.status,'private_ingress_verified');assert.deepEqual(delays,[3000,7000]);
+ assert.equal(m.calls.filter(c=>c.method==='PATCH').length,1);assert.equal(m.enabled(),true);
+ assert.ok(m.calls.filter(c=>c.path==='/access/apps?page=1&per_page=100').length>=4);
+}));
+test('persistent 404 closes newly opened ingress; no indefinite polling',()=>fixture(async fn=>{
+ const m=mock({edge:404});const delays=[];
+ const r=await fn(env,req,m.fetcher,async ms=>{delays.push(ms)});
+ assert.equal(r.status,'failed_or_indeterminate');assert.equal(r.ingress_closed_verified,true);
+ assert.deepEqual(delays,[3000,7000,15000,25000]);assert.equal(m.enabled(),false);
+}));
+test('non-404 after propagation attempt stops and closes, no further retry',()=>fixture(async fn=>{
+ const m=mock({edge:[404,200]});const delays=[];
+ const r=await fn(env,req,m.fetcher,async ms=>{delays.push(ms)});
+ assert.equal(r.status,'failed_or_indeterminate');assert.equal(r.ingress_closed_verified,true);
+ assert.deepEqual(delays,[3000]);assert.equal(m.enabled(),false);
 }));
