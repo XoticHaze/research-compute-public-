@@ -379,6 +379,49 @@ export default class ReferenceReleaseMaintainer extends WorkerEntrypoint {
     };
   }
 
+  // Read-only verification identity for independent PVE root owner enrollment.
+  // Reuses the EXISTING authority publicKey() service-binding RPC and verifies
+  // its point on-curve plus sha256 fingerprint before returning nonsecret bytes.
+  // Available while signing is disabled; never reads BROKER_EDITOR_TOKEN or DO
+  // private signing key, deploys a Worker, or stages a PVE root release.
+  async pve7AuthorityPublicIdentity() {
+    if (String(this.env?.CLOUDFLARE_ACCOUNT_ID || "") !== EXPECTED_NEUTRAL_ACCOUNT_ID) {
+      throw new Error("neutral_cloudflare_account_mismatch");
+    }
+    if (!this.env.MAINTENANCE_AUTHORITY ||
+        typeof this.env.MAINTENANCE_AUTHORITY.publicKey !== "function") {
+      throw new Error("pve7_public_identity_binding_unconfigured");
+    }
+    const node = await this.env.MAINTENANCE_AUTHORITY.publicKey();
+    let keyId;
+    try { keyId = await verifiedBrokerKeyId(node); }
+    catch { throw new Error("pve7_public_identity_rejected"); }
+    return {
+      schema:"commandcenter.pve7.authority_public_identity.v1",
+      signer_worker:"reference-maintenance-authority-v1",
+      key_id:keyId, public_b64:node.public_b64,
+      private_key_exported:false,
+    };
+  }
+
+  // Private, owner-gated bridge to the already installed maintenance authority.
+  // This uses the EXISTING MAINTENANCE_AUTHORITY service binding, never the
+  // broker-only Editor token, GitHub, public HTTP or a caller-owned request.
+  // A separate approved PVE root ingress remains necessary downstream.
+  async issuePve7OwnerPinnedGrant() {
+    if (String(this.env?.PVE7_MAINTAINER_CALLER_ENABLED || "0") !== "1") {
+      throw new Error("pve7_maintainer_caller_disabled");
+    }
+    if (String(this.env?.CLOUDFLARE_ACCOUNT_ID || "") !== EXPECTED_NEUTRAL_ACCOUNT_ID) {
+      throw new Error("neutral_cloudflare_account_mismatch");
+    }
+    if (!this.env.MAINTENANCE_AUTHORITY ||
+        typeof this.env.MAINTENANCE_AUTHORITY.issuePve7ApprovedGrant !== "function") {
+      throw new Error("pve7_authority_binding_unconfigured");
+    }
+    return this.env.MAINTENANCE_AUTHORITY.issuePve7ApprovedGrant();
+  }
+
   async maintain(wrapper) {
     return maintainManifest(wrapper, this.env);
   }

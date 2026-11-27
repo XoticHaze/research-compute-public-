@@ -359,9 +359,20 @@ for(const scenario of [
 // Durable Object crypto source and independently verifies its signed manifest.
 const authSource=fs.readFileSync('cloudflare/reference-maintenance-authority/src/index.js','utf8');
 assert.ok(authSource.includes('import { WorkerEntrypoint } from "cloudflare:workers";'));
+// The source-only Cloudflare Worker now imports a sibling PVE grant module.
+// The CI harness loads the Worker via data:, where relative imports cannot
+// resolve. Replace ONLY the relative import with the exact checked-out
+// sibling's absolute data URL. Production Worker imports are unchanged.
+const pveGrantSource=fs.readFileSync(
+  'cloudflare/reference-maintenance-authority/src/pve7-grant.mjs','utf8');
+const pveGrantUrl='data:text/javascript;base64,'+
+  Buffer.from(pveGrantSource).toString('base64');
 const authCode=authSource.replace(
   'import { WorkerEntrypoint } from "cloudflare:workers";','class WorkerEntrypoint {}'
-);
+).replace('from "./pve7-grant.mjs"',
+  'from "'+pveGrantUrl+'"');
+assert.ok(!authCode.includes('from "./pve7-grant.mjs"'),
+  'sibling PVE module must be resolved for in-memory CI loading');
 const authModule=await import('data:text/javascript;base64,'+
   Buffer.from(authCode).toString('base64'));
 const authStorage=new Map();
@@ -445,3 +456,151 @@ const authInput={
 assert.equal(checks,23);
 console.log('REFERENCE_MAINTAINER_ACTUAL_SOURCE_PREFLIGHT_AND_ROLLBACK_PASS='+checks);
 console.log('REFERENCE_MAINTAINER_PUBLIC_CI_SYNTHETIC_ONLY=1');
+
+
+// Exercise the ACTUAL authority Worker -> Durable Object PVE signing branch,
+// not just the pure grant module. Earlier source-only tests could pass despite
+// a missing import for the envelope schema/algorithm in this branch. Ephemeral
+// local P-256 key only, no Cloudflare API/production grant/deployment.
+{
+  const pve = await import(pveGrantUrl);
+  const publicInfo = await actualAuthority.publicKey();
+  const now = Date.now();
+  const owner = {
+    PVE7_RELEASE_SIGNING_ENABLED:'1',
+    PVE7_APPROVED_SOURCE_SHA:pve.PVE7_SOURCE,
+    PVE7_OWNER_APPROVAL_SHA256:'a'.repeat(64),
+    PVE7_EXPECTED_AUTHORITY_KEY_ID:publicInfo.key_id,
+    PVE7_RELEASE_ID:'pve7-ci-single-release',
+    PVE7_REQUEST_ID:'pve7-ci-single-request',
+    PVE7_NOT_BEFORE:new Date(now-5000).toISOString(),
+    PVE7_EXPIRES_AT:new Date(now+600000).toISOString()
+  };
+  Object.assign(authEnv,owner);
+  authState.env=authEnv;
+  let transactions=0;
+  authState.state.storage.transaction=async fn=>{
+    transactions++;
+    return fn({
+      get:key=>authStorage.get(key),
+      put:(key,value)=>authStorage.set(key,value)
+    });
+  };
+  const issued=await actualAuthority.issuePve7ApprovedGrant();
+  assert.equal(issued.schema,pve.PVE7_ENVELOPE);
+  assert.equal(issued.signature_format,pve.PVE7_SIG_FORMAT);
+  assert.equal(issued.signer_key_id,publicInfo.key_id);
+  assert.equal(issued.grant.source_sha,pve.PVE7_SOURCE);
+  assert.equal(issued.grant.operation,pve.PVE7_SCOPE);
+  assert.deepEqual(issued.grant.files,pve.PVE7_FILES);
+  const point=Buffer.from(publicInfo.public_b64,'base64');
+  const key=await webcrypto.subtle.importKey('raw',point,
+    {name:'ECDSA',namedCurve:'P-256'},false,['verify']);
+  assert.equal(await webcrypto.subtle.verify(
+    {name:'ECDSA',hash:'SHA-256'},key,
+    Buffer.from(issued.signature_b64,'base64'),
+    pve.pve7Payload(issued.grant)),true,'actual DO PVE signature must verify');
+  const replay=await actualAuthority.issuePve7ApprovedGrant();
+  assert.deepEqual(replay,issued,'same-request signature must be create-once stable');
+  assert.equal(transactions,2);
+  authEnv.PVE7_OWNER_APPROVAL_SHA256='b'.repeat(64);
+  await assert.rejects(()=>actualAuthority.issuePve7ApprovedGrant(),
+    /pve7_request_replay_drift/);
+  authEnv.PVE7_RELEASE_SIGNING_ENABLED='0';
+  await assert.rejects(()=>actualAuthority.issuePve7ApprovedGrant(),
+    /pve7_signing_disabled/);
+  const publicResponse=await actualAuthority.fetch(
+    new Request('https://authority.example/pve7-sign',{method:'POST'}));
+  assert.equal(publicResponse.status,404);
+  console.log('PVE7_ISSUER_RUNTIME_CROSS_FUNCTION_PASS=1');
+  console.log('PVE7_ISSUER_RUNTIME_REPLAY_DENY_AND_DEFAULT_OFF_PASS=1');
+  console.log('PVE7_ISSUER_PROVIDER_PRODUCTION_NOT_TESTED=1');
+}
+
+
+// Existing neutral maintainer service-binding bridge, intentionally OFF at
+// source defaults and separate from BROKER_EDITOR_TOKEN. This is NOT PVE root
+// enrollment; test only the genuine in-memory Worker -> Worker -> DO path.
+{
+  const config=JSON.parse(fs.readFileSync(
+    'cloudflare/reference-release-maintainer/wrangler.jsonc','utf8'));
+  assert.equal(config.vars.PVE7_MAINTAINER_CALLER_ENABLED,'0');
+  assert.equal(config.workers_dev,false);
+  assert.equal(config.services.find(x=>x.binding==='MAINTENANCE_AUTHORITY')?.service,
+    'reference-maintenance-authority-v1');
+  const maintainer=new module.default();
+  maintainer.env={
+    CLOUDFLARE_ACCOUNT_ID:account,
+    PVE7_MAINTAINER_CALLER_ENABLED:'0',
+    MAINTENANCE_AUTHORITY:actualAuthority,
+    BROKER_EDITOR_TOKEN:{get:()=>{throw Error('broker_editor_must_not_be_accessed');}}
+  };
+  await assert.rejects(()=>maintainer.issuePve7OwnerPinnedGrant(),
+    /pve7_maintainer_caller_disabled/);
+  maintainer.env.PVE7_MAINTAINER_CALLER_ENABLED='1';
+  maintainer.env.CLOUDFLARE_ACCOUNT_ID='ffffffffffffffffffffffffffffffff';
+  await assert.rejects(()=>maintainer.issuePve7OwnerPinnedGrant(),
+    /neutral_cloudflare_account_mismatch/);
+  maintainer.env.CLOUDFLARE_ACCOUNT_ID=account;
+  maintainer.env.MAINTENANCE_AUTHORITY=null;
+  await assert.rejects(()=>maintainer.issuePve7OwnerPinnedGrant(),
+    /pve7_authority_binding_unconfigured/);
+  maintainer.env.MAINTENANCE_AUTHORITY=actualAuthority;
+  await assert.rejects(()=>maintainer.issuePve7OwnerPinnedGrant(),
+    /pve7_signing_disabled/);
+  authEnv.PVE7_OWNER_APPROVAL_SHA256='a'.repeat(64);
+  authEnv.PVE7_RELEASE_SIGNING_ENABLED='1';
+  const bridged=await maintainer.issuePve7OwnerPinnedGrant();
+  assert.deepEqual(bridged,
+    authStorage.get('pve7_release_grant:pve7-ci-single-request').envelope,
+    'bridge must return only the unchanged DO-committed approved grant');
+  assert.equal(maintainer.issuePve7OwnerPinnedGrant.length,0);
+  assert.equal((await maintainer.fetch()).status,404);
+  console.log('PVE7_EXISTING_MAINTAINER_BRIDGE_PASS=1');
+  console.log('PVE7_BRIDGE_DEFAULT_DENY_CROSS_ACCOUNT_DENY_PASS=1');
+  console.log('PVE7_BRIDGE_NO_PROTECTED_ROOT_MUTATION=1');
+}
+
+
+// Independently reusable, read-only key-identity readback for the PVE root
+// trust enrollment review. This does NOT admit, sign or dispatch a release.
+{
+  const publicInfo=await actualAuthority.publicKey();
+  const maintainer=new module.default();
+  maintainer.env={
+    CLOUDFLARE_ACCOUNT_ID:account,
+    MAINTENANCE_AUTHORITY:actualAuthority,
+    BROKER_EDITOR_TOKEN:{get:()=>{throw Error('editor_token_must_not_be_used_for_public_key');}}
+  };
+  authEnv.PVE7_RELEASE_SIGNING_ENABLED='0';
+  const identity=await maintainer.pve7AuthorityPublicIdentity();
+  assert.deepEqual(identity,{
+    schema:'commandcenter.pve7.authority_public_identity.v1',
+    signer_worker:'reference-maintenance-authority-v1',
+    key_id:publicInfo.key_id,
+    public_b64:publicInfo.public_b64,
+    private_key_exported:false,
+  });
+  assert.equal(identity.key_id,'sha256:'+sha(Buffer.from(identity.public_b64,'base64')));
+  assert.equal((await maintainer.fetch()).status,404);
+  maintainer.env.CLOUDFLARE_ACCOUNT_ID='ffffffffffffffffffffffffffffffff';
+  await assert.rejects(()=>maintainer.pve7AuthorityPublicIdentity(),
+    /neutral_cloudflare_account_mismatch/);
+  maintainer.env.CLOUDFLARE_ACCOUNT_ID=account;
+  maintainer.env.MAINTENANCE_AUTHORITY=null;
+  await assert.rejects(()=>maintainer.pve7AuthorityPublicIdentity(),
+    /pve7_public_identity_binding_unconfigured/);
+  maintainer.env.MAINTENANCE_AUTHORITY={
+    publicKey:async()=>({...publicInfo,key_id:'sha256:'+'f'.repeat(64)})
+  };
+  await assert.rejects(()=>maintainer.pve7AuthorityPublicIdentity(),
+    /pve7_public_identity_rejected/);
+  maintainer.env.MAINTENANCE_AUTHORITY={
+    publicKey:async()=>({...publicInfo,public_b64:Buffer.alloc(65).toString('base64')})
+  };
+  await assert.rejects(()=>maintainer.pve7AuthorityPublicIdentity(),
+    /pve7_public_identity_rejected/);
+  assert.equal(maintainer.pve7AuthorityPublicIdentity.length,0);
+  console.log('PVE7_AUTHORITY_PUBLIC_IDENTITY_READBACK_PASS=1');
+  console.log('PVE7_AUTHORITY_PUBLIC_IDENTITY_NO_EDITOR_NO_SIGNING_PASS=1');
+}

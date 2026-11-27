@@ -28,6 +28,14 @@
   },
   "vars": {
     "AUTO_APPLY_ENABLED": "0",
+    "PVE7_RELEASE_SIGNING_ENABLED": "0",
+    "PVE7_APPROVED_SOURCE_SHA": "",
+    "PVE7_OWNER_APPROVAL_SHA256": "",
+    "PVE7_EXPECTED_AUTHORITY_KEY_ID": "",
+    "PVE7_RELEASE_ID": "",
+    "PVE7_REQUEST_ID": "",
+    "PVE7_NOT_BEFORE": "",
+    "PVE7_EXPIRES_AT": "",
     "APPROVED_BROKER_SOURCE_SHA": "",
     "BROKER_PUBLIC_ORIGIN": "https://reference-release-broker-v1.shared-compute-neutral-authorization.workers.dev"
   },

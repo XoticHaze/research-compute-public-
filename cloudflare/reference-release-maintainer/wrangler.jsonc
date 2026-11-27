@@ -39,6 +39,7 @@
     }
   },
   "vars": {
-    "BROKER_PUBLIC_ORIGIN": "https://reference-release-broker-v1.shared-compute-neutral-authorization.workers.dev"
+    "BROKER_PUBLIC_ORIGIN": "https://reference-release-broker-v1.shared-compute-neutral-authorization.workers.dev",
+    "PVE7_MAINTAINER_CALLER_ENABLED": "0"
   }
 }
