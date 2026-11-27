@@ -1,0 +1,64 @@
+{
+  "schema": "commandcenter.pi.signer_lineage_reconciliation_review.v1",
+  "source_only": true,
+  "source_parents": {
+    "history_consent": "bed973e2a8841292ffb4caa68e01cbeb9e408896",
+    "scheduled_root": "5257eda3aba9c2fd3a98aaa8532e46c05de2077a",
+    "common_base": "bde4b486ac3642ce28da69a23e74feebcfe525a5"
+  },
+  "candidate_blobs": {
+    "cloudflare/pi-owner-authority/src/index.js": "39ab82b21019afa35ba16167df2a8fd69e540e22",
+    "cloudflare/pi-owner-authority/src/pi_owner_approval.js": "c5da2999f0b3d35c8689f087026b62f5ffc5f16a",
+    "cloudflare/pi-owner-authority/src/scheduled_root_permit.js": "039447d887f0228ed81702c23ce3d6f277e798b4",
+    "cloudflare/pi-owner-authority/src/independent_release_issuer.mjs": "bc0538d7ae2db1302417caa2f7488cc88682fb49",
+    "cloudflare/pi-owner-authority/src/independent_release_issuer_command.mjs": "f5d5382f97b126c49a2e4a7bce1801b446c325cb",
+    "cloudflare/pi-owner-authority/tests/scheduled_root_permit.test.js": "22a8986135c6bb1d3f9ee9bdd1e0772e5c57028f",
+    "cloudflare/pi-owner-authority/tests/issuer_enrollment.test.mjs": "1b9823cc10f4c578b064b6eac177c0fd6b6bf48d",
+    "cloudflare/pi-owner-authority/tests/issuer.test.mjs": "47f2c9b61ca545bce5133eecd8308a013b3d1f55",
+    "cloudflare/pi-owner-authority/wrangler.jsonc": "b70e769e369e795526da436df5c3119ab20c314b",
+    "cloudflare/pi-owner-authority/SCHEDULED_ROOT_RELEASE.md": "5f0f1046a35bee5f8e0416865df9c9c4535aed31",
+    ".github/workflows/ccpi-neutral-owner-bootstrap-source-ci.yml": "ba1ec72f769bf497fa385484076eec028462419b",
+    "cloudflare/pi-owner-authority/tests/history_storage_consent.test.mjs": "68249ce00263f2c35f790291ec86cfca2c353304",
+    "cloudflare/pi-owner-authority/tests/issuer_command_integration.test.mjs": "35499ac99e407415ba18eba736907be366996bd7"
+  },
+  "existing_worker": "research-compute-public",
+  "preserve_protected_canonical_pin": "1e209395ac28e39b220762f67c27d8b8826b3fce",
+  "qualification": "PUBLIC_NATIVE_26_OF_26__PROTECTED_SIGNER_PIN_AND_LIVE_ISSUER_ADMISSION_HELD",
+  "constraints": [
+    "Existing signer, DO and root key only",
+    "Scheduled path remains root-release-only and independently permitted",
+    "History remains explicit owner approval with distinct domain",
+    "No new live trading authority",
+    "No production deployment from this workflow",
+    "Do not overwrite live source or bypass review pin"
+  ],
+  "remaining": [
+    "Independent issuer custody/admission and current deployed fingerprint readback",
+    "Review and native root capacity/install",
+    "History, ordinary transport and bot runtime acceptance"
+  ],
+  "source_test_first_attempt": {
+    "head": "d8b7cc246d5b8c16e1aa7e3062072eee5598098e",
+    "run_id": 45990079896,
+    "job_id": 140475375690,
+    "passed": 19,
+    "failed": 1,
+    "reason": "Mock returned stale bytes and old SHA after PUT; production readback correctly denied.",
+    "production_checks_unchanged": true
+  },
+  "source_test_scope_extension": {
+    "schema": "commandcenter.pi.issuer_core_and_publisher_synthetic_qualification.v1",
+    "public_workflow_git_blob": "ba1ec72f769bf497fa385484076eec028462419b",
+    "publisher_integration_git_blob": "35499ac99e407415ba18eba736907be366996bd7",
+    "native_public_run_id": 46017038283,
+    "native_public_job_id": 140566697259,
+    "native_tests_passed": 26,
+    "native_tests_failed": 0,
+    "wrangler_source_only_dry_run": "PASS",
+    "full_workflow": "EXPECTED_FAILURE_UNCHANGED_PROTECTED_CANONICAL_SIGNER_PIN",
+    "issuer_host_installed": false,
+    "independent_review_producer_installed": false,
+    "issuer_enrolled_in_live_do": false,
+    "pi_root_release_executed": false
+  }
+}

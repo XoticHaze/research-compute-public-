@@ -1,3 +1,4 @@
+import { scheduledRootPermit, validateIndependentIssuerIdentity } from './scheduled_root_permit.js';
 // Pi owner grants use the installed cc-pi4 root verifier byte contract.
 // Source implementation only: no signing identity, root key or queue authority is installed by this file.
 const KEY_ID = 'ccpi-owner-bootstrap-ed25519-v1';
@@ -6,6 +7,7 @@ const DOMAINS = Object.freeze({
   replace: 'commandcenter.pi.bot_replace_approval.v1\u0000',
   root_release: 'commandcenter.pi.release_request_approval.v1\u0000',
   rejoin: 'commandcenter.pi.bot_rejoin_approval.v1\u0000',
+  history_storage: 'commandcenter.pi.history_storage_approval.v1\u0000',
 });
 const B_FIELDS = [
   'schema', 'node_id', 'request_id', 'request_sha256', 'source_sha', 'image_ref',
@@ -35,6 +37,18 @@ const ROOT_RELEASE_REQUEST_FIELDS = [
   'schema', 'node_id', 'request_id', 'action', 'source_repo',
   'source_sha', 'expected_release', 'created_at', 'expires_at',
 ];
+const STORAGE_CONSENT_REQUEST_FIELDS = [
+  'schema', 'node_id', 'request_id', 'action', 'expected_release',
+  'helper_git_blob', 'scope', 'created_at', 'expires_at',
+];
+const STORAGE_CONSENT_GRANT_FIELDS = [
+  'schema', 'node_id', 'request_id', 'action', 'expected_release',
+  'helper_git_blob', 'scope', 'created_at', 'expires_at',
+];
+const STORAGE_HELPER_BLOB = 'd83c712b657a2e1b40c1a829ced48ab49de4da8f';
+const STORAGE_SCOPE = 'LOSSLESS_IDENTICAL_27A_27B_ONLY';
+const STORAGE_REQUEST = 'pi-node/storage-consent-request.json';
+const STORAGE_GRANT = 'pi-node/storage-consent-signed-approval.json';
 const BASE_REQUEST = [
   'schema', 'node_id', 'request_id', 'action', 'source_repo', 'source_sha',
   'image_ref', 'client_id', 'inspect_client_id', 'artifact_manifest_blob_sha',
@@ -158,6 +172,42 @@ export async function validatePiOwnerApproval(kind, approval, request, now = Dat
   }
   return { request_id: request.request_id, approval_hash: await shaHex(raw) };
 }
+/** Exact storage-only consent. No key, Worker or broker scope is created. */
+export async function validatePiHistoryStorageConsent(approval, request, now = Date.now()) {
+  strictFields(request, STORAGE_CONSENT_REQUEST_FIELDS);
+  strictFields(approval, STORAGE_CONSENT_GRANT_FIELDS);
+  if (request.schema !== 'commandcenter.pi.history_storage_request.v1'
+      || request.node_id !== 'cc-pi4'
+      || !['pi.storage.maintenance_consent.apply',
+             'pi.storage.maintenance_consent.revoke'].includes(request.action)
+      || !REQ.test(request.request_id)
+      || !/^r[0-9a-f]{12}$/.test(request.expected_release)
+      || request.helper_git_blob !== STORAGE_HELPER_BLOB
+      || request.scope !== STORAGE_SCOPE
+      || approval.schema !== 'commandcenter.pi.history_storage_grant.v1'
+      || approval.node_id !== 'cc-pi4'
+      || approval.request_id !== request.request_id
+      || approval.action !== request.action
+      || approval.created_at !== request.created_at
+      || approval.expected_release !== request.expected_release
+      || approval.helper_git_blob !== request.helper_git_blob
+      || approval.scope !== STORAGE_SCOPE
+      || approval.expires_at !== request.expires_at) {
+    throw new Error('pi_owner_history_storage_scope_mismatch');
+  }
+  const created = time(request.created_at), expires = time(request.expires_at);
+  if (created > now + 120000 || created >= expires || expires <= now
+      || expires - created > 3600000 || expires > now + 3600000) {
+    throw new Error('pi_owner_history_storage_expired_or_overlong');
+  }
+  const raw = canonicalPiJson(approval);
+  if (te.encode(raw).length > 1024
+      || /\b(?:password|token|private_key|broker_net_qty|account_number)\b/i.test(raw)) {
+    throw new Error('pi_owner_history_storage_data_rejected');
+  }
+  return {request_id: request.request_id, approval_hash: await shaHex(te.encode(raw))};
+}
+
 // Cloudflare-held signer: exact independent root release domain using the
 // retained DO Ed25519 identity. This validates an owner decision only; it
 // does NOT authorize the GitHub-deployable console to access signing custody.
@@ -282,6 +332,9 @@ async function requireActivation(env, code) {
     throw new Error('pi_owner_independent_activation_required');
   }
 }
+const ISSUER_STATE='pi_owner_independent_release_issuer_v1';
+function staticIssuer(env){return Boolean(env.PI_OWNER_RELEASE_ISSUER_SPKI_B64||env.PI_OWNER_RELEASE_ISSUER_SHA256);}
+function issuerEnrollable(env){return env.PI_OWNER_ISSUER_OWNER_ENROLL_ENABLED==='1'&&!staticIssuer(env);}
 export class PiOwnerApprovalState {
   constructor(ctx, env) {
     this.ctx = ctx;
@@ -293,7 +346,11 @@ export class PiOwnerApprovalState {
       if (request.method === 'GET' && url.pathname === '/status') {
         const key = await this.ctx.storage.get('pi_owner_key_v1');
         const enrollment = await this.ctx.storage.get('pi_owner_enrollment_v1');
-        return json({ schema: 'commandcenter.pi.owner_signer_status.v1',
+        const issuer=await this.ctx.storage.get(ISSUER_STATE);
+        return json({ independent_release_issuer_configured:staticIssuer(this.env)||issuer?.active===true,
+          independent_release_issuer_fingerprint:staticIssuer(this.env)?this.env.PI_OWNER_RELEASE_ISSUER_SHA256||null:issuer?.active===true?issuer.sha256:null,
+          issuer_owner_enrollment_enabled:issuerEnrollable(this.env),
+          schema: 'commandcenter.pi.owner_signer_status.v1',
           initialized: Boolean(key), enrolled: Boolean(enrollment),
           public_key_pem: key?.public_key_pem || null,
           public_key_sha256: key?.public_key_sha256 || null,
@@ -305,7 +362,10 @@ export class PiOwnerApprovalState {
       const raw = await request.text();
       if (te.encode(raw).length > 8192) return json({error:'pi_owner_payload_oversize'},413);
       const body = JSON.parse(raw);
-      requireOwner(this.env, body.operator);
+      // Only the protected Worker's scheduled path calls this DO endpoint.
+      // Never forward it through the HTTP owner API or a Git-controlled service.
+      const scheduled = url.pathname === '/sign-scheduled-root';
+      if (!scheduled) requireOwner(this.env, body.operator);
       if (url.pathname === '/initialize') {
         await requireActivation(this.env, body.activation_code);
         let entry = await this.ctx.storage.get('pi_owner_key_v1');
@@ -345,13 +405,66 @@ export class PiOwnerApprovalState {
         await this.ctx.storage.put('pi_owner_enrollment_v1', enrollment);
         return json({recorded: true, pi_root_independent_readback: false},201);
       }
-      if (url.pathname === '/sign') {
+      if (url.pathname === '/admit-issuer' || url.pathname === '/revoke-issuer') {
+        if(!issuerEnrollable(this.env)||this.env.PI_OWNER_SIGNER_ENABLED!=='1'||
+           this.env.PI_OWNER_NORMAL_RELEASE_ENABLED!=='1'||this.env.PI_OWNER_SCHEDULED_ROOT_PERMIT)
+          throw Error('independent_issuer_enrollment_not_admitted');
+        const entry=await this.ctx.storage.get('pi_owner_key_v1');
+        const enrolled=await this.ctx.storage.get('pi_owner_enrollment_v1');
+        if(!entry||!enrolled||entry.public_key_sha256!==enrolled.key_sha256||
+           entry.public_key_sha256!==this.env.PI_OWNER_ENROLLED_PUB_SHA256)
+          throw Error('pi_owner_trust_anchor_not_activated');
+        const admit=url.pathname==='/admit-issuer';
+        strictFields(body,admit?['spki_b64','sha256','confirm_independent_custody','operator']:
+          ['sha256','confirm_revoke','operator']);
+        if(admit){
+          if(body.confirm_independent_custody!==true)throw Error('independent_custody_confirmation_required');
+          await validateIndependentIssuerIdentity(body.spki_b64,body.sha256,entry.public_key_sha256);
+        }else if(body.confirm_revoke!==true||!SHA64.test(String(body.sha256||'')))
+          throw Error('issuer_revocation_confirmation_required');
+        const record=await this.ctx.storage.transaction(async txn=>{
+          const old=await txn.get(ISSUER_STATE);
+          if(admit && old?.active===true) {
+            if(old.sha256===body.sha256&&old.spki_b64===body.spki_b64)return old;
+            throw Error('active_issuer_requires_explicit_revocation');
+          }
+          if(!admit&&(!old?.active||old.sha256!==body.sha256))throw Error('issuer_revocation_identity_mismatch');
+          const next={active:admit,sha256:body.sha256,revision:(old?.revision||0)+1,
+            observed_at_utc:new Date().toISOString(),operator_email:body.operator.email,
+            ...(admit?{spki_b64:body.spki_b64}:{})};
+          await txn.put(ISSUER_STATE,next);
+          return next;
+        });
+        return json({schema:'commandcenter.pi.independent_issuer_admission.v1',
+          active:record.active,sha256:record.sha256,revision:record.revision,
+          observed_at_utc:record.observed_at_utc},200);
+      }
+      if (url.pathname === '/sign' || scheduled) {
+        let permit = null, issuerRevision=null;
+        if (scheduled) {
+          strictFields(body,['kind','request','approval','permit_envelope']);
+          if (body.kind !== 'root_release') throw Error('scheduled_root_kind_invalid');
+          let permitEnv=this.env;
+          if(body.permit_envelope!==null&&!staticIssuer(this.env)){
+            const issuer=await this.ctx.storage.get(ISSUER_STATE);
+            if(!issuerEnrollable(this.env)||issuer?.active!==true)throw Error('independent_issuer_not_enrolled');
+            issuerRevision=issuer.revision;
+            permitEnv={...this.env,PI_OWNER_RELEASE_ISSUER_SPKI_B64:issuer.spki_b64,
+              PI_OWNER_RELEASE_ISSUER_SHA256:issuer.sha256};
+          }
+          permit = await scheduledRootPermit(permitEnv, body.request, body.permit_envelope);
+        }
         if (this.env.PI_OWNER_SIGNER_ENABLED !== '1'
-            || !this.env.PI_OWNER_QUEUE_GITHUB_TOKEN) throw new Error('pi_owner_protected_activation_incomplete');
+            || !this.env.PI_OWNER_QUEUE_GITHUB_TOKEN
+            || (body.kind === 'history_storage'
+                && (this.env.PI_OWNER_HISTORY_STORAGE_ENABLED !== '1'
+                    || body.approve_exact_storage_consent !== true))) {
+          throw new Error('pi_owner_protected_activation_incomplete');
+        }
         const entry = await this.ctx.storage.get('pi_owner_key_v1');
         const enrolled = await this.ctx.storage.get('pi_owner_enrollment_v1');
         if (!entry || !enrolled || enrolled.key_sha256 !== entry.public_key_sha256
-            || body.approve_exact_release !== true
+            || (!scheduled && body.kind !== 'history_storage' && body.approve_exact_release !== true)
             || !safeEq(String(this.env.PI_OWNER_ENROLLED_PUB_SHA256 || ''), entry.public_key_sha256)) {
           throw new Error('pi_owner_trust_anchor_not_activated');
         }
@@ -359,9 +472,20 @@ export class PiOwnerApprovalState {
           ? await validatePiCloudRootReleaseApproval(body.approval, body.request)
           : body.kind === 'rejoin'
             ? await validatePiCloudBotRejoinApproval(body.approval, body.request)
-            : await validatePiOwnerApproval(body.kind, body.approval, body.request);
+            : body.kind === 'history_storage'
+              ? await validatePiHistoryStorageConsent(body.approval, body.request)
+              : await validatePiOwnerApproval(body.kind, body.approval, body.request);
         const storageKey = 'pi_owner_issued_v1/' + accepted.request_id;
+        const permitKey = permit ? 'pi_owner_scheduled_permit_v1/' + permit.permit_id : null;
         const previous = await this.ctx.storage.get(storageKey);
+        if (permitKey) {
+          const used = await this.ctx.storage.get(permitKey);
+          if (used && (used.request_id !== accepted.request_id
+              || used.approval_hash !== accepted.approval_hash))
+            throw Error('scheduled_root_permit_consumed');
+          if (previous && (!used || previous.permit_id !== permit.permit_id))
+            throw Error('scheduled_root_existing_grant_not_bound');
+        }
         if (previous) {
           if (previous.approval_hash !== accepted.approval_hash) {
             return json({error:'pi_owner_request_id_replay_conflict'},409);
@@ -376,10 +500,23 @@ export class PiOwnerApprovalState {
           te.encode(DOMAINS[body.kind] + canonicalPiJson(body.approval)));
         const signedGrant = {...body.approval, key_id: KEY_ID, signature_b64: b64(signature)};
         const result = await this.ctx.storage.transaction(async (txn) => {
+          if(issuerRevision!==null){
+            const current=await txn.get(ISSUER_STATE);
+            if(current?.active!==true||current.revision!==issuerRevision)throw Error('independent_issuer_changed_before_issue');
+          }
           if (await txn.get(storageKey)) return false;
+          if (permitKey) {
+            if (await txn.get(permitKey)) return false;
+            // Consume the independent permit atomically with its one grant.
+            // Retries may recover the identical grant, never issue a new ID.
+            await txn.put(permitKey,{request_id:accepted.request_id,
+              approval_hash:accepted.approval_hash});
+          }
           await txn.put(storageKey, {approval_hash:accepted.approval_hash,
             signed_grant:signedGrant, issued_at_utc:new Date().toISOString(),
-            operator_email:body.operator.email, kind:body.kind});
+            operator_email:scheduled?null:body.operator.email, kind:body.kind,
+            authorization_class:scheduled?'neutral_scheduled_permit':'access_owner',
+            permit_id:permit?.permit_id||null});
           return true;
         });
         if (!result) return json({error:'pi_owner_concurrent_issue_retry'},409);
@@ -398,7 +535,7 @@ async function githubFile(token, path) {
     + '?ref=' + encodeURIComponent(QUEUE_REF);
   const response = await fetch(url, {
     headers: {'authorization':'Bearer ' + token, 'accept':'application/vnd.github+json',
-      'x-github-api-version':'2022-11-28'}, redirect:'manual',
+      'x-github-api-version':'2022-11-28','user-agent':'commandcenter-pi-owner-authority-v1'}, redirect:'manual',
   });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error('pi_owner_private_queue_read_unavailable');
@@ -426,7 +563,7 @@ async function githubPut(token, path, doc, old) {
   const response = await fetch(url, {
     method:'PUT', redirect:'manual',
     headers:{'authorization':'Bearer ' + token, 'accept':'application/vnd.github+json',
-      'content-type':'application/json', 'x-github-api-version':'2022-11-28'},
+      'content-type':'application/json', 'x-github-api-version':'2022-11-28','user-agent':'commandcenter-pi-owner-authority-v1'},
     body:JSON.stringify(body),
   });
   if (!response.ok) throw new Error('pi_owner_private_queue_write_failed');
@@ -490,7 +627,7 @@ export async function readPiOwnerRootReceipt(env, requestId) {
     + resultPath + '?ref=pi-node-outbox';
   const response = await fetch(url, {
     headers: {'authorization':'Bearer ' + token, 'accept':'application/vnd.github+json',
-      'x-github-api-version':'2022-11-28'}, redirect:'manual',
+      'x-github-api-version':'2022-11-28','user-agent':'commandcenter-pi-owner-authority-v1'}, redirect:'manual',
   });
   if (response.status === 404) {
     return {schema:'commandcenter.pi.owner_root_result_projection.v1',
@@ -528,7 +665,7 @@ export async function readPiOwnerRootReceipt(env, requestId) {
 // Root-agent one-shot updates use a distinct fixed inbox + Ed25519 domain.
 // The caller must verify the owner's *device-held* detached signature before
 // reaching this transport. The existing Pi root worker re-verifies independently.
-export async function publishPiRootReleaseGrant(env, request, signedGrant) {
+export async function publishPiRootReleaseGrant(env, request, signedGrant, requirePriorTerminal=false) {
   const token=String(env.PI_OWNER_QUEUE_GITHUB_TOKEN||'');
   if(token.length<20)throw new Error('pi_owner_queue_credential_missing');
   const requestPath='pi-node/release-request.json';
@@ -540,6 +677,20 @@ export async function publishPiRootReleaseGrant(env, request, signedGrant) {
   }
   const oldGrantExact=priorGrant?.text===canonicalPiJson(signedGrant);
   const oldRequestExact=priorReq?.text===canonicalPiJson(request);
+  if(requirePriorTerminal && !oldRequestExact){
+    if(!priorReq)throw Error('scheduled_root_prior_request_missing');
+    const previous=JSON.parse(priorReq.text);
+    const terminal=await readPiRootReleaseReceipt(env,previous.request_id);
+    const priorIdentity=terminal.root_receipt_verified===true&&terminal.replay_allowed===false&&
+      terminal.source_sha===previous.source_sha&&terminal.predecessor===previous.expected_release;
+    // A fresh independently signed permit may request recovery of the same
+    // predecessor after a known failure. The root journal, not this projection,
+    // determines whether the accepted generation is actually stable.
+    const priorPassed=terminal.status==='passed'&&terminal.accepted_generation===request.expected_release;
+    const priorFailed=terminal.status==='failed'&&previous.expected_release===request.expected_release;
+    if(!priorIdentity||!(priorPassed||priorFailed))
+      throw Error('scheduled_root_prior_terminal_or_generation_unverified');
+  }
   if ((!oldRequestExact && !queueSlotFree(priorReq,request.request_id,Date.now()))
       ||(!oldGrantExact && !queueSlotFree(priorGrant,request.request_id,Date.now()))) {
     throw new Error('pi_owner_root_release_queue_occupied_or_replay');
@@ -569,12 +720,12 @@ export async function readPiRootReleaseReceipt(env,requestId) {
     +path+'?ref=pi-node-outbox';
   const response=await fetch(url,{
     headers:{'authorization':'Bearer '+token,'accept':'application/vnd.github+json',
-      'x-github-api-version':'2022-11-28'},redirect:'manual',
+      'x-github-api-version':'2022-11-28','user-agent':'commandcenter-pi-owner-authority-v1'},redirect:'manual',
   });
   if(response.status===404)return{
     schema:'commandcenter.pi.root_release_result_projection.v1',
     request_id:requestId,status:'PENDING',root_receipt_verified:false};
-  if(!response.ok)throw new Error('pi_owner_root_release_receipt_unavailable');
+  if(!response.ok)throw new Error('pi_owner_root_release_receipt_http_'+response.status);
   const file=await response.json();
   if(!SHA40.test(file?.sha||'')||file.encoding!=='base64'
       ||typeof file.content!=='string'||file.size>8192){
@@ -594,5 +745,109 @@ export async function readPiRootReleaseReceipt(env,requestId) {
     source_sha:typeof receipt.source_sha==='string'?receipt.source_sha:null,
     predecessor:typeof receipt.predecessor==='string'?receipt.predecessor:null,
     finished_at:typeof receipt.finished_at==='string'?receipt.finished_at:null,
+    accepted_generation:receipt.status==='passed'&&receipt.replay_allowed===false?(/^exact main source accepted; new generation (r[0-9a-f]{12})$/.exec(String(receipt.message||''))?.[1]||null):null,
+    replay_allowed:receipt.replay_allowed===false?false:null,
     root_receipt_verified:true,active_generation_readback_verified:false};
+}
+
+
+/** Private owner-reviewed approval-first mailbox using the existing Git queue.
+ * No public route, new DO, new Git credential or root mutation at publication.
+ */
+export async function publishPiStorageConsentGrant(env, request, signedGrant) {
+  const token = String(env.PI_OWNER_QUEUE_GITHUB_TOKEN || '');
+  if (token.length < 20) throw new Error('pi_owner_queue_credential_missing');
+  const {key_id, signature_b64, ...unsigned} = signedGrant || {};
+  await validatePiHistoryStorageConsent(unsigned, request);
+  if (key_id !== KEY_ID || typeof signature_b64 !== 'string'
+      || !/^[A-Za-z0-9+/]{86}==$/i.test(signature_b64)) {
+    throw new Error('pi_owner_history_storage_signature_shape_invalid');
+  }
+  const priorRequest = await githubFile(token, STORAGE_REQUEST);
+  const priorGrant = await githubFile(token, STORAGE_GRANT);
+  const oldReqExact = priorRequest?.text === canonicalPiJson(request);
+  const oldGrantExact = priorGrant?.text === canonicalPiJson(signedGrant);
+  if ((!oldReqExact && !queueSlotFree(priorRequest, request.request_id, Date.now()))
+      || (!oldGrantExact && !queueSlotFree(priorGrant, request.request_id, Date.now()))
+      || (oldReqExact && !oldGrantExact)) {
+    throw new Error('pi_owner_history_storage_queue_occupied_or_replay');
+  }
+  const grantBlob = oldGrantExact ? priorGrant.sha
+    : await githubPut(token, STORAGE_GRANT, signedGrant, priorGrant);
+  const requestBlob = oldReqExact ? priorRequest.sha
+    : await githubPut(token, STORAGE_REQUEST, request, priorRequest);
+  return {
+    schema:'commandcenter.pi.history_storage_consent_dispatch.v1',
+    action:request.action,
+    request_id:request.request_id, branch:QUEUE_REF,
+    signed_grant_blob_sha:grantBlob, request_blob_sha:requestBlob,
+    recovered_exact_same_id:Boolean(oldReqExact || oldGrantExact),
+    root_receipt_verified:false, maintenance_batch_verified:false,
+    broker_mutation_attempted:false, protected_mutation_claimed:false,
+  };
+}
+
+export async function readPiStorageConsentReceipt(env, requestId) {
+  if (typeof requestId !== 'string' || !REQ.test(requestId)) {
+    throw new Error('pi_owner_history_storage_receipt_id_invalid');
+  }
+  const token = String(env.PI_OWNER_QUEUE_GITHUB_TOKEN || '');
+  if (token.length < 20) throw new Error('pi_owner_queue_credential_missing');
+  const path = 'pi-node/storage-consent-results/' + requestId + '.json';
+  const url = 'https://api.github.com/repos/' + QUEUE_REPO + '/contents/'
+    + path + '?ref=pi-node-outbox';
+  const response = await fetch(url, {redirect:'manual',
+    headers:{authorization:'Bearer ' + token, accept:'application/vnd.github+json',
+      'x-github-api-version':'2022-11-28'}});
+  if (response.status === 404) {
+    return {schema:'commandcenter.pi.history_storage_consent_projection.v1',
+      request_id:requestId, status:'PENDING', root_receipt_verified:false};
+  }
+  if (!response.ok) throw new Error('pi_owner_history_storage_receipt_unavailable');
+  const file = await response.json();
+  if (!SHA40.test(file?.sha || '') || file.encoding !== 'base64'
+      || typeof file.content !== 'string' || file.size > 8192) {
+    throw new Error('pi_owner_history_storage_receipt_file_invalid');
+  }
+  const raw = new TextDecoder().decode(unb64(file.content.replace(/\s/g,'')));
+  if (te.encode(raw).length > 8192) throw new Error('pi_owner_history_storage_receipt_oversize');
+  const receipt = JSON.parse(raw);
+  const validPassedCode =
+    (receipt.action === 'pi.storage.maintenance_consent.apply'
+      && receipt.code === 'CONSENT_ROOT_READBACK_VERIFIED')
+    || (receipt.action === 'pi.storage.maintenance_consent.revoke'
+      && ['CONSENT_REVOKED','CONSENT_ALREADY_ABSENT'].includes(receipt.code));
+  const expiryValid = typeof receipt?.expires_at === 'string'
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/.test(receipt.expires_at)
+    && Number.isFinite(Date.parse(receipt.expires_at));
+  const releaseValid = /^r[0-9a-f]{12}$/.test(receipt?.release_id || '');
+  if (receipt?.schema !== 'commandcenter.pi.history_storage_consent_result.v1'
+      || receipt.node_id !== 'cc-pi4' || receipt.request_id !== requestId
+      || !['pi.storage.maintenance_consent.apply',
+              'pi.storage.maintenance_consent.revoke'].includes(receipt.action)
+      || !['passed','failed','indeterminate'].includes(receipt.status)
+      || receipt.replay_allowed !== false
+      || receipt.read_only !== false
+      || receipt.broker_mutation_attempted !== false
+      || receipt.gateway_mutation_attempted !== false
+      || receipt.unique_content_deleted !== false
+      || (!releaseValid && (receipt.status === 'passed' || receipt.release_id !== null))
+      || (!expiryValid && (receipt.status === 'passed' || receipt.expires_at !== null))
+      || receipt.helper_git_blob !== STORAGE_HELPER_BLOB
+      || receipt.scope !== STORAGE_SCOPE
+      || !SHA64.test(receipt.request_sha256 || '')
+      || (receipt.status === 'passed'
+        && (!SHA64.test(receipt.signed_grant_sha256 || '') || !validPassedCode))) {
+    throw new Error('pi_owner_history_storage_receipt_identity_invalid');
+  }
+  return {
+    schema:'commandcenter.pi.history_storage_consent_projection.v1',
+    request_id:requestId, action:receipt.action, status:receipt.status,
+    code:typeof receipt.code==='string'?receipt.code:null,
+    release_id:typeof receipt.release_id==='string'?receipt.release_id:null,
+    expires_at:typeof receipt.expires_at==='string'?receipt.expires_at:null,
+    finished_at:typeof receipt.finished_at==='string'?receipt.finished_at:null,
+    root_receipt_verified:true, maintenance_batch_verified:false,
+    protected_release_verified:false,
+  };
 }

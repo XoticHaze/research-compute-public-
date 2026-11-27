@@ -1,0 +1,60 @@
+{
+  "schema": "commandcenter.pi.history_storage_signer_source_review.v1",
+  "source_only": true,
+  "production_deploy_verified": false,
+  "active_cloudflare_signing_key_accessed": false,
+  "cloudflare_admin_mutation_attempted": false,
+  "original_protected_main_signer_git_blob": "1e209395ac28e39b220762f67c27d8b8826b3fce",
+  "new_candidate_git_blobs": {
+    "cloudflare/pi-owner-authority/src/index.js": "f3b2ec21e40875f2d13aa62630cbf663edebaea4",
+    "cloudflare/pi-owner-authority/src/pi_owner_approval.js": "b7b823b356a5cfce4cbbd045ae3a1571ba18fdae",
+    "cloudflare/pi-owner-authority/tests/history_storage_consent.test.mjs": "6c048894ee660a15749801c91e59bd71fab5a170",
+    ".github/workflows/ccpi-neutral-owner-bootstrap-source-ci.yml": "c583bba085ea9c2d0923e425e7b9b2ce4162dd1f"
+  },
+  "source_target": "Existing neutral Pi signer only; do not create a Worker from historical wrangler bootstrap name",
+  "last_observed_active_worker": "research-compute-public",
+  "companion_private_pr": "XoticHaze/CommandCenter#1342",
+  "purpose": "history_storage apply/revoke only, strict exact release/helper/scope/expiry",
+  "default_off_flag": "PI_OWNER_HISTORY_STORAGE_ENABLED",
+  "no_live_trading_or_gateway_authority": true,
+  "no_private_github_actions_compute": true,
+  "qualification": {
+    "public_run_id": 45908038315,
+    "public_job_id": 140209436085,
+    "source_only_node_tests_passed": 10,
+    "source_only_node_tests_failed": 0,
+    "full_workflow": "FAILED_AT_UNCHANGED_PROTECTED_CANONICAL_SIGNER_HASH_PIN",
+    "original_blob_pin_unchanged": true,
+    "wrangler_dry_run": "PASSED",
+    "native_pi_python_tests": "PROPOSAL_ONLY_4_OF_4_AGENT_LOCAL_PASS_ROOT_SUITE_NOT_EXECUTED",
+    "protected_release_installed": false
+  },
+  "gates": [
+    "Independent exact source review and explicit authorization of the new signer purpose",
+    "Active deployed Worker identity/version and ownership reconciliation, no duplicate Worker or signer",
+    "Approved and tested exact native Pi root release and sufficient verified disk/inodes",
+    "Authorized source-pin update only after independent review, not CI-green shortcut",
+    "Separate owner-signed exact grant through existing authenticated Access and typed Git queue",
+    "Fresh same-ID root consent receipt and two actual maintenance cursor readbacks"
+  ],
+  "historical_wrangler_source_name": "ccpi-owner-cloudflare-authority",
+  "tested_candidate_head_sha": "4ccefa90fe1b66bddab5009d169dc3c90dc28aa3",
+  "companion_private_candidate_head_sha": "b64cac46e2ffcd0d4e795c0e29a2d4d0725d4b8a",
+  "owner_must_approve_exact_staged_cc_proposal": true,
+  "current_review_notes": "Exact staged-CC proposal mismatch denied prior to signer, actual offline ephemeral Ed25519 DO issuance/recovery/replay tested, failed-root result redacts noncanonical release and expiry; original live signer key/Worker untouched.",
+  "source_build_qualification": {
+    "source_head": "cdfd6d2be9269de2ba8250764ea9b907fea01609",
+    "run_id": 45908038315,
+    "job_id": 140209436085,
+    "isolated_node_tests": {
+      "passed": 10,
+      "failed": 0
+    },
+    "wrangler_source_only_dry_run": "PASSED",
+    "old_canonical_signer_git_pin": "1e209395ac28e39b220762f67c27d8b8826b3fce",
+    "protected_pin_gate": "FAILED_AS_EXPECTED_NOT_BYPASSED",
+    "cloudflare_production_mutations": 0,
+    "signer_private_key_used": false
+  },
+  "reviewed_source_head_sha": "cdfd6d2be9269de2ba8250764ea9b907fea01609"
+}
