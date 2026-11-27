@@ -68,7 +68,7 @@
           "intramonth_one_way_turnover": 0.27075305111407666,
           "intramonth_reset_count": 52,
           "month_boundary_count": 2,
-          "month_boundary_one_way_turnover": 0.39016458888367866
+          "month_boundary_one_way_turnover": 0.3901645888836787
         },
         "p249_plus_p266": {
           "intramonth_one_way_turnover": 0.3187745477383689,
@@ -424,7 +424,7 @@
           "legacy_monthly_fee_nav_total": 0.00589630610943471,
           "max_drawdown": -0.18799731535629804,
           "monthly_rebalances_including_initial": 3,
-          "realized_month_boundary_one_way_turnover_including_initial": 1.4112093200083973,
+          "realized_month_boundary_one_way_turnover_including_initial": 1.411209320008397,
           "terminal_nav": 0.8708767374439936
         },
         "p249_plus_p266": {
@@ -1366,14 +1366,14 @@
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-11-26T09:30:34.961421+00:00",
+  "observed_at": "2026-11-27T09:40:04.349950+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_health": {
     "all_expected_exchange_sessions_present": true,
     "all_symbols_share_latest_date": true,
     "common_session_lags_source_max": false,
-    "completed_session_request_date": "2026-11-25",
+    "completed_session_request_date": "2026-11-26",
     "exchange_calendar": "NYSE:pandas_market_calendars==5.5.0:exchange_calendars==4.13.2",
     "expected_completed_exchange_sessions": 55,
     "in_progress_session_excluded": true,
