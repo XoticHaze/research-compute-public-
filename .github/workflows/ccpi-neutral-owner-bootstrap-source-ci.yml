@@ -39,6 +39,7 @@ jobs:
           node --check cloudflare/pi-owner-authority/src/index.js
           node --check cloudflare/pi-owner-authority/src/pi_owner_approval.js
           node tests/pi_owner_cloudflare_primary_authority_contract.mjs
+          node --test cloudflare/pi-owner-authority/tests/owner_mobile_ui.test.mjs
       - name: Wrangler source-only bundle and dry-run
         run: |
           set -euo pipefail
