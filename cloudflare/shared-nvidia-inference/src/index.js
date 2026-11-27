@@ -13,6 +13,8 @@ import {runFixedCodeRepair} from "./fixed_code_repair_runner.js";
 import {runCodeRoleCase} from "./code_role_suite_runner.js";
 import {runDiscoveryCase} from "./role_discovery_runner.js";
 import {verifyFixture,runVisualFixture,MAX_BODY_BYTES} from "./visual_fixture_runner.js";
+import {admitSelector as admitJ11Selector,runFixedJ11Turn} from "./j11_fixed_turn.js";
+import {handleJ11PrivateRoute} from "./j11_private_route.js";
 const ORIGIN = "https://integrate.api.nvidia.com";
 const MODEL = "openai/gpt-oss-20b";
 const RUN_PATH = "/internal/diagnostics/nvidia";
@@ -168,6 +170,11 @@ export async function probeNvidia(env, doFetch = fetch) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    // Fixed J11 fictional model turn through the incumbent Service Binding.
+    // Shares disabled-by-default diagnostic gating; never a public Worker URL.
+    if(url.pathname==="/internal/diagnostics/nvidia-j11")
+      return handleJ11PrivateRoute(request,env,{admitSelector:admitJ11Selector,
+        runFixedJ11Turn,pacedProviderFetch});
     // Existing Service Binding route only; public Worker and previews remain
     // disabled. No caller-authored prompts, tool execution, or target hosts.
     // Fixed five-skill discovery research behind the EXISTING private Service
