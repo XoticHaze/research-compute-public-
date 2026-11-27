@@ -79,6 +79,15 @@ test('history signer defaults disabled, cannot be activated by Git body',async()
   assert.equal(answer.status,403);
   const result=await answer.json();
   assert.equal(result.error,'pi_owner_protected_activation_incomplete');
+  // Even an enabled scheduled path may authorize only exact root-release
+  // permits, not history or bot rejoin. No Git or owner impersonation.
+  const crossScope = await state.fetch(new Request('https://pi-owner.internal/sign-scheduled-root',{
+    method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({kind:'history_storage',request:req,approval,permit_envelope:null}),
+  }));
+  assert.equal(crossScope.status,403);
+  assert.equal((await crossScope.json()).error,'scheduled_root_kind_invalid');
+
 });
 test('pre-enrolled existing signer issues and recovers exact storage grant using ephemeral key only',async()=>{
   const [req,approval]=sample();

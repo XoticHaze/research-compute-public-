@@ -36,7 +36,9 @@ jobs:
           set -euo pipefail
           node --check cloudflare/pi-owner-authority/src/index.js
           node --check cloudflare/pi-owner-authority/src/pi_owner_approval.js
-          node --test cloudflare/pi-owner-authority/tests/history_storage_consent.test.mjs
+          node --test cloudflare/pi-owner-authority/tests/history_storage_consent.test.mjs \
+            cloudflare/pi-owner-authority/tests/scheduled_root_permit.test.js \
+            cloudflare/pi-owner-authority/tests/issuer_enrollment.test.mjs
           echo "HISTORY_CONSENT_LOCAL_SOURCE_TESTS_FINISHED=1"
           echo "NEUTRAL_CLOUDFLARE_MUTATIONS=0"
           echo "PI_PRODUCTION_MUTATIONS=0"
