@@ -65,30 +65,30 @@
     "implicit_target_reset_turnover_audit": {
       "arms": {
         "p249_core": {
-          "intramonth_one_way_turnover": 0.27075305111407666,
-          "intramonth_reset_count": 52,
+          "intramonth_one_way_turnover": 0.2735120859368173,
+          "intramonth_reset_count": 53,
           "month_boundary_count": 2,
-          "month_boundary_one_way_turnover": 0.3901645888836787
+          "month_boundary_one_way_turnover": 0.3901645888836788
         },
         "p249_plus_p266": {
-          "intramonth_one_way_turnover": 0.3187745477383689,
-          "intramonth_reset_count": 52,
+          "intramonth_one_way_turnover": 0.3215070611535472,
+          "intramonth_reset_count": 53,
           "month_boundary_count": 2,
-          "month_boundary_one_way_turnover": 0.3735466223383599
+          "month_boundary_one_way_turnover": 0.37354662233835995
         }
       },
       "not_actual_trades_or_funded_monthly_hold": true,
       "not_fee_adjusted_or_alpha_credit": true,
-      "scored_sessions": 55,
+      "scored_sessions": 56,
       "source": "exact_already_scored_daily_returns_and_frozen_month_targets",
       "status": "DIAGNOSTIC_ONLY_UNCHARGED_IMPLICIT_RESETS",
-      "transitions": 54
+      "transitions": 55
     },
-    "latest_close": "2026-11-25",
+    "latest_close": "2026-11-27",
     "monthly_hold_drift_diagnostic": {
       "arms": {
         "p249_core": {
-          "cumulative_return": -0.12912326255600637,
+          "cumulative_return": -0.11085848933109821,
           "daily_nav": [
             {
               "date": "2026-09-10",
@@ -419,16 +419,22 @@
               "holding_month": "2026-11",
               "monthly_rebalance": false,
               "nav": 0.8708767374439936
+            },
+            {
+              "date": "2026-11-27",
+              "holding_month": "2026-11",
+              "monthly_rebalance": false,
+              "nav": 0.8891415106689018
             }
           ],
           "legacy_monthly_fee_nav_total": 0.00589630610943471,
           "max_drawdown": -0.18799731535629804,
           "monthly_rebalances_including_initial": 3,
-          "realized_month_boundary_one_way_turnover_including_initial": 1.411209320008397,
-          "terminal_nav": 0.8708767374439936
+          "realized_month_boundary_one_way_turnover_including_initial": 1.4112093200083973,
+          "terminal_nav": 0.8891415106689018
         },
         "p249_plus_p266": {
-          "cumulative_return": -0.12695370920514693,
+          "cumulative_return": -0.10798939135739061,
           "daily_nav": [
             {
               "date": "2026-09-10",
@@ -759,22 +765,28 @@
               "holding_month": "2026-11",
               "monthly_rebalance": false,
               "nav": 0.8730462907948531
+            },
+            {
+              "date": "2026-11-27",
+              "holding_month": "2026-11",
+              "monthly_rebalance": false,
+              "nav": 0.8920106086426094
             }
           ],
           "legacy_monthly_fee_nav_total": 0.006111215743243678,
           "max_drawdown": -0.18592275900459332,
           "monthly_rebalances_including_initial": 3,
           "realized_month_boundary_one_way_turnover_including_initial": 1.384623693317824,
-          "terminal_nav": 0.8730462907948531
+          "terminal_nav": 0.8920106086426094
         }
       },
       "legacy_month_costs_preserved_not_actual_drift_turnover_pricing": true,
-      "matched_relative_wealth_bp": 24.91228962237635,
-      "monthly_drift_minus_constant_target_relative_bp": -2.7150886794169438,
+      "matched_relative_wealth_bp": 32.26818160305234,
+      "monthly_drift_minus_constant_target_relative_bp": -4.5414992754500005,
       "no_new_original_issuer_or_execution_provenance": true,
       "not_broker_or_alpha_credit": true,
-      "original_constant_target_relative_wealth_bp": 27.627378301793293,
-      "scored_sessions": 55,
+      "original_constant_target_relative_wealth_bp": 36.809680878502334,
+      "scored_sessions": 56,
       "source": "exact_existing_yfinance_adjusted_close_scored_returns_and_frozen_month_targets",
       "status": "SAME_SOURCE_MONTHLY_HOLD_DRIFT_DIAGNOSTIC"
     },
@@ -1346,67 +1358,77 @@
         "p249_plus_p266_gross": 0.0012558555540645169,
         "p249_plus_p266_net": 0.0012558555540645169,
         "satellite_increment_net": 0.0011237899712242263
+      },
+      {
+        "cost_detail": null,
+        "date": "2026-11-27",
+        "holding_month": "2026-11",
+        "p249_core_gross": 0.020965986214731155,
+        "p249_core_net": 0.020965986214731155,
+        "p249_plus_p266_gross": 0.021900885194547574,
+        "p249_plus_p266_net": 0.021900885194547574,
+        "satellite_increment_net": 0.000934898979816419
       }
     ],
     "p249_core_net": {
-      "annualized_vol": 0.2527565481470988,
-      "cumulative_return": -0.12968304923312457,
-      "days": 55,
+      "annualized_vol": 0.25530476741317853,
+      "cumulative_return": -0.11143599604089949,
+      "days": 56,
       "max_drawdown": -0.18885027429853152,
-      "sharpe_rf0": -2.389739460941395
+      "sharpe_rf0": -1.9540929523506796
     },
     "p249_plus_p266_net": {
-      "annualized_vol": 0.26275031619900313,
-      "cumulative_return": -0.1272785916689947,
-      "days": 55,
+      "annualized_vol": 0.26537915590600125,
+      "cumulative_return": -0.10816522029831355,
+      "days": 56,
       "max_drawdown": -0.18671538963890133,
-      "sharpe_rf0": -2.241212511870117
+      "sharpe_rf0": -1.8080154390133236
     },
-    "satellite_increment_cumulative": 0.0031415456366632455
+    "satellite_increment_cumulative": 0.004079381644290336
   },
   "identity_note": "The legacy implementation filename used local alias P279 before a concurrent canonical-parent collision was detected. P279 is not this workload's parent identity.",
   "interpretation": "This observer measures the already-frozen research identities prospectively. It never allocates capital, changes portfolio weights, modifies StrategySpec/runtime, or submits broker orders.",
-  "observed_at": "2026-11-27T09:40:04.349950+00:00",
+  "observed_at": "2026-11-28T08:54:52.288416+00:00",
   "parent": "P249/P266/P278",
   "schema": "research.forward_p249_p266_shadow_r1",
   "source_health": {
     "all_expected_exchange_sessions_present": true,
     "all_symbols_share_latest_date": true,
     "common_session_lags_source_max": false,
-    "completed_session_request_date": "2026-11-26",
+    "completed_session_request_date": "2026-11-27",
     "exchange_calendar": "NYSE:pandas_market_calendars==5.5.0:exchange_calendars==4.13.2",
-    "expected_completed_exchange_sessions": 55,
+    "expected_completed_exchange_sessions": 56,
     "in_progress_session_excluded": true,
     "lagging_symbols_vs_source_max": [],
     "latest_by_symbol": {
-      "AVDV": "2026-11-25",
-      "AVUV": "2026-11-25",
-      "DBC": "2026-11-25",
-      "GLD": "2026-11-25",
-      "IGV": "2026-11-25",
-      "IHI": "2026-11-25",
-      "ITA": "2026-11-25",
-      "IYT": "2026-11-25",
-      "KRE": "2026-11-25",
-      "QQQ": "2026-11-25",
-      "SOXX": "2026-11-25",
-      "SPY": "2026-11-25",
-      "TLT": "2026-11-25",
-      "XAR": "2026-11-25",
-      "XBI": "2026-11-25",
-      "XHB": "2026-11-25",
-      "XME": "2026-11-25",
-      "XOP": "2026-11-25",
-      "XPH": "2026-11-25",
-      "XRT": "2026-11-25",
-      "XSD": "2026-11-25",
-      "XSW": "2026-11-25",
-      "XTN": "2026-11-25"
+      "AVDV": "2026-11-27",
+      "AVUV": "2026-11-27",
+      "DBC": "2026-11-27",
+      "GLD": "2026-11-27",
+      "IGV": "2026-11-27",
+      "IHI": "2026-11-27",
+      "ITA": "2026-11-27",
+      "IYT": "2026-11-27",
+      "KRE": "2026-11-27",
+      "QQQ": "2026-11-27",
+      "SOXX": "2026-11-27",
+      "SPY": "2026-11-27",
+      "TLT": "2026-11-27",
+      "XAR": "2026-11-27",
+      "XBI": "2026-11-27",
+      "XHB": "2026-11-27",
+      "XME": "2026-11-27",
+      "XOP": "2026-11-27",
+      "XPH": "2026-11-27",
+      "XRT": "2026-11-27",
+      "XSD": "2026-11-27",
+      "XSW": "2026-11-27",
+      "XTN": "2026-11-27"
     },
-    "latest_scored_common_session": "2026-11-25",
-    "observed_completed_exchange_sessions": 55,
+    "latest_scored_common_session": "2026-11-27",
+    "observed_completed_exchange_sessions": 56,
     "provider": "yfinance_adjusted_close",
-    "source_max_date": "2026-11-25",
+    "source_max_date": "2026-11-27",
     "unresolved_forward_gap": null
   },
   "source_pins": {
